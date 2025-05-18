@@ -28,7 +28,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import Papa from 'papaparse'
 
@@ -42,8 +42,8 @@ function handleFile(event) {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        csvData.value = results.data
-        headers.value = results.meta.fields
+          csvData.value = results.data
+          headers.value = results.meta.fields
       }
     })
     console.log(`CSV data : ${JSON.stringify(csvData.value)}`);
