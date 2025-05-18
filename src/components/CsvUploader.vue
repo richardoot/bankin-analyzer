@@ -39,14 +39,14 @@ function handleFile(event) {
   const file = event.target.files[0]
   if (file) {
     Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-          csvData.value = results.data
-          headers.value = results.meta.fields
-      }
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+            console.log(`Headers data : ${JSON.stringify(results.meta.fields)}`);
+            csvData.value = results.data
+            headers.value = results.meta.fields
+        }
     })
-    console.log(`CSV data : ${JSON.stringify(csvData.value)}`);
   }
 }
 </script>
@@ -99,6 +99,9 @@ th, td {
 th {
   background: #f0f9f5;
   color: #42b983;
+}
+td {
+  color: #333;
 }
 .info {
   color: #888;
