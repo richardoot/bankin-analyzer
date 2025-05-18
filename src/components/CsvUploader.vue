@@ -30,18 +30,24 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import Papa from 'papaparse'
+import * as Papa from 'papaparse'
+import type { ParseResult } from 'papaparse'
+const csvData = ref<Array<CsvRow>>([])
+const headers = ref<Array<string> | undefined>([])
 
-const csvData = ref([])
-const headers = ref([])
+type CsvRow = {
+  [key: string]: string | number;
+}
 
-function handleFile(event) {
-  const file = event.target.files[0]
-  if (file) {
+function handleFile(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const files = target.files;
+  if (files && files[0]) {
+    const file = files[0];
     Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
-        complete: (results) => {
+        complete: (results: ParseResult<CsvRow>) => {
             console.log(`Headers data : ${JSON.stringify(results.meta.fields)}`);
             csvData.value = results.data
             headers.value = results.meta.fields
