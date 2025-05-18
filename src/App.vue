@@ -1,30 +1,44 @@
-<script setup>
-import HelloWorld from './components/HelloWorld.vue'
-</script>
-
 <template>
-  <div>
-    <a href="https://vite.dev" target="_blank">
-      <img src="/vite.svg" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://vuejs.org/" target="_blank">
-      <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-    </a>
+  <div class="container">
+    <header>
+      <h1>Bankin Analyzer</h1>
+      <p>
+        Importez votre fichier CSV de dépenses exporté depuis l’application Bankin.<br>
+        Visualisez et analysez facilement vos transactions.
+      </p>
+    </header>
+    <section>
+      <CsvUploader />
+    </section>
   </div>
-  <HelloWorld msg="Vite + Vue" />
 </template>
 
+<script setup>
+import CsvUploader from './components/CsvUploader.vue'
+</script>
+
 <style scoped>
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+.container {
+  max-width: 700px;
+  margin: 40px auto;
+  padding: 32px;
+  background: #f8fafc;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px #0001;
+  font-family: 'Segoe UI', Arial, sans-serif;
 }
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
+header {
+  text-align: center;
+  margin-bottom: 32px;
 }
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
+h1 {
+  color: #42b983;
+  margin-bottom: 8px;
+}
+section {
+  background: #fff;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px #0001;
 }
 </style>
