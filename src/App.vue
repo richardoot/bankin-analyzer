@@ -8,13 +8,20 @@
       </p>
     </header>
     <section>
-      <CsvUploader />
+      <CsvUploader @data-parsed="expenses = $event" />
+      <DataAnalyzer :expenses="expenses" />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
+import { CsvRow } from './types'
+
 import CsvUploader from './components/CsvUploader.vue'
+import DataAnalyzer from './components/DataAnalyzer.vue'
+
+const expenses = ref<Array<CsvRow>>([])
 </script>
 
 <style scoped>

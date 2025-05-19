@@ -32,12 +32,14 @@
 import { ref } from 'vue'
 import * as Papa from 'papaparse'
 import type { ParseResult } from 'papaparse'
+import type { CsvRow } from '../types'
+
 const csvData = ref<Array<CsvRow>>([])
 const headers = ref<Array<string> | undefined>([])
 
-type CsvRow = {
-  [key: string]: string | number;
-}
+const emit = defineEmits<{
+  (e: 'data-parsed', data: any[]): void
+}>()
 
 function handleFile(event: Event) {
   const target = event.target as HTMLInputElement;
@@ -51,6 +53,7 @@ function handleFile(event: Event) {
             console.log(`Headers data : ${JSON.stringify(results.meta.fields)}`);
             csvData.value = results.data
             headers.value = results.meta.fields
+            emit('data-parsed', results.data)
         }
     })
   }
