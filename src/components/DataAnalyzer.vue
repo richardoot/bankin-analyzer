@@ -49,15 +49,17 @@
       </div>
     </div>
 
-    <!-- Sélection du compte -->
+    <!-- Filtre principal par compte -->
     <div class="filter-section">
-      <label for="account-filter">Filtrer par compte:</label>
-      <select id="account-filter" v-model="selectedAccount" class="account-select">
-        <option value="all">Tous les comptes</option>
-        <option v-for="account in uniqueAccounts" :key="account" :value="account">
-          {{ account }}
-        </option>
-      </select>
+      <div class="filter-group">
+        <label for="account-filter">Filtrer par compte:</label>
+        <select id="account-filter" v-model="selectedAccount" class="filter-select">
+          <option value="all">Tous les comptes</option>
+          <option v-for="account in uniqueAccounts" :key="account" :value="account">
+            {{ account }}
+          </option>
+        </select>
+      </div>
     </div>
 
     <!-- Graphiques -->
@@ -100,11 +102,26 @@
 
       <!-- Tableau des transactions -->
       <div class="chart-box transactions-table">
-        <h4>
-          Transactions 
-          {{ selectedAccount !== 'all' ? `(${selectedAccount})` : '' }}
-          {{ transactionType === 'expenses' ? '(Dépenses)' : transactionType === 'income' ? '(Revenus)' : '' }}
-        </h4>
+        <div class="transactions-header">
+          <h4>
+            Transactions 
+            {{ selectedAccount !== 'all' ? `(${selectedAccount})` : '' }}
+            {{ transactionType === 'expenses' ? '(Dépenses)' : transactionType === 'income' ? '(Revenus)' : '' }}
+            {{ selectedCategory !== 'all' ? `- ${selectedCategory}` : '' }}
+          </h4>
+          
+          <!-- Filtre par catégorie -->
+          <div class="category-filter">
+            <label for="category-filter">Filtrer par catégorie:</label>
+            <select id="category-filter" v-model="selectedCategory" class="filter-select">
+              <option value="all">Toutes les catégories</option>
+              <option v-for="category in uniqueCategories" :key="category" :value="category">
+                {{ category }}
+              </option>
+            </select>
+          </div>
+        </div>
+        
         <div class="table-container">
           <table>
             <thead>
@@ -116,7 +133,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(expense, index) in filteredExpensesByType.slice(0, 10)" :key="index">
+              <tr v-for="(expense, index) in finalFilteredTransactions.slice(0, MAX_TRANSACTIONS)" :key="index">
                 <td>{{ formatDate(expense.Date) }}</td>
                 <td class="description">{{ expense.Description }}</td>
                 <td>{{ expense.Catégorie || 'Non catégorisé' }}</td>
@@ -127,8 +144,11 @@
               </tr>
             </tbody>
           </table>
-          <div class="table-footer" v-if="filteredExpensesByType.length > 10">
-            <span>Affichage des 10 premières transactions sur {{ filteredExpensesByType.length }}</span>
+          <div class="table-footer" v-if="finalFilteredTransactions.length > MAX_TRANSACTIONS">
+            <span>Affichage des {{ MAX_TRANSACTIONS }} premières transactions sur {{ finalFilteredTransactions.length }}</span>
+          </div>
+          <div v-else class="table-footer">
+            <span>Il y a {{ finalFilteredTransactions.length }} transactions</span>
           </div>
         </div>
       </div>
@@ -147,6 +167,8 @@ import { CsvRow } from '../types'
 import { Chart, registerables } from 'chart.js'
 import { Doughnut, Bar, Pie } from 'vue-chartjs'
 
+const MAX_TRANSACTIONS = 50
+
 // Enregistrer tous les composants Chart.js nécessaires
 Chart.register(...registerables)
 
@@ -160,6 +182,7 @@ const emit = defineEmits<{
 
 // États pour le filtrage
 const selectedAccount = ref('all')
+const selectedCategory = ref('all')
 const transactionType = ref('all') // 'all', 'expenses', 'income'
 
 // Obtenir la liste des comptes uniques
@@ -171,6 +194,16 @@ const uniqueAccounts = computed(() => {
     }
   })
   return Array.from(accounts)
+})
+
+// Obtenir la liste des catégories uniques
+const uniqueCategories = computed(() => {
+  const categories = new Set<string>()
+  props.expenses.forEach(expense => {
+    const category = expense.Catégorie?.trim() || 'Non catégorisé'
+    categories.add(category)
+  })
+  return Array.from(categories).sort()
 })
 
 // Filtrer par compte
@@ -189,6 +222,18 @@ const filteredExpensesByType = computed(() => {
     return filteredByAccount.value.filter(expense => parseFloat(expense.Montant) < 0)
   } else {
     return filteredByAccount.value.filter(expense => parseFloat(expense.Montant) > 0)
+  }
+})
+
+// Filtrer par catégorie
+const finalFilteredTransactions = computed(() => {
+  if (selectedCategory.value === 'all') {
+    return filteredExpensesByType.value
+  } else {
+    return filteredExpensesByType.value.filter(expense => {
+      const category = expense.Catégorie?.trim() || 'Non catégorisé'
+      return category === selectedCategory.value
+    })
   }
 })
 
@@ -525,15 +570,23 @@ function goBack() {
 .filter-section {
   margin: 20px 0;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+}
+
+.filter-group {
+  display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.account-select {
+.filter-select {
   padding: 8px 12px;
   border-radius: 4px;
   border: 1px solid #ddd;
   background: white;
+  color: #333;
   font-size: 14px;
   min-width: 200px;
 }
@@ -551,6 +604,21 @@ function goBack() {
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   height: 350px;
+}
+
+.transactions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.category-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .transactions-table {
@@ -639,6 +707,21 @@ h4 {
   
   .chart-box {
     flex: 1 0 45%;
+  }
+}
+
+@media (max-width: 768px) {
+  .filter-section, .transactions-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .filter-group, .category-filter {
+    width: 100%;
+  }
+  
+  .filter-select {
+    flex-grow: 1;
   }
 }
 </style>
