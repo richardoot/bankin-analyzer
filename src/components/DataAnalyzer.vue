@@ -2,27 +2,69 @@
   <div v-if="expenses.length">
     <h3>Analyse des dépenses</h3>
     
+    <!-- Onglets pour choisir entre dépenses et revenus -->
+    <div class="tabs">
+      <button 
+        :class="['tab-btn', { active: transactionType === 'all' }]" 
+        @click="transactionType = 'all'">
+        Toutes les transactions
+      </button>
+      <button 
+        :class="['tab-btn', { active: transactionType === 'expenses' }]" 
+        @click="transactionType = 'expenses'">
+        Dépenses
+      </button>
+      <button 
+        :class="['tab-btn', { active: transactionType === 'income' }]" 
+        @click="transactionType = 'income'">
+        Revenus
+      </button>
+    </div>
+    
     <!-- Résumé chiffré -->
     <div class="summary-cards">
       <div class="card">
-        <div class="card-value">{{ expenses.length }}</div>
+        <div class="card-value">{{ filteredExpensesByType.length }}</div>
         <div class="card-label">Transactions</div>
       </div>
       <div class="card">
-        <div class="card-value">{{ totalAmount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}</div>
-        <div class="card-label">Total</div>
+        <div class="card-value" :class="{
+          'negative': transactionType === 'expenses' || (transactionType === 'all' && totalAmount < 0), 
+          'positive': transactionType === 'income' || (transactionType === 'all' && totalAmount > 0)
+        }">
+          {{ Math.abs(totalAmount).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}
+          <span class="card-sign">{{ totalAmount < 0 ? '-' : '+' }}</span>
+        </div>
+        <div class="card-label">{{ transactionType === 'income' ? 'Total revenus' : transactionType === 'expenses' ? 'Total dépenses' : 'Solde' }}</div>
       </div>
       <div class="card">
-        <div class="card-value">{{ averageAmount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}</div>
-        <div class="card-label">Moyenne</div>
+        <div class="card-value">
+          {{ Math.abs(averageAmount).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}
+        </div>
+        <div class="card-label">Moyenne par transaction</div>
       </div>
+      <div class="card">
+        <div class="card-value">{{ uniqueAccounts.length }}</div>
+        <div class="card-label">Comptes</div>
+      </div>
+    </div>
+
+    <!-- Sélection du compte -->
+    <div class="filter-section">
+      <label for="account-filter">Filtrer par compte:</label>
+      <select id="account-filter" v-model="selectedAccount" class="account-select">
+        <option value="all">Tous les comptes</option>
+        <option v-for="account in uniqueAccounts" :key="account" :value="account">
+          {{ account }}
+        </option>
+      </select>
     </div>
 
     <!-- Graphiques -->
     <div class="charts-container">
       <!-- Graphique par catégorie -->
       <div class="chart-box">
-        <h4>Dépenses par catégorie</h4>
+        <h4>{{ transactionType === 'income' ? 'Revenus' : 'Dépenses' }} par catégorie</h4>
         <Doughnut 
           :data="categoryChartData" 
           :options="chartOptions"
@@ -37,6 +79,59 @@
           :options="chartOptions"
         />
       </div>
+
+      <!-- Graphique répartition par compte -->
+      <div class="chart-box" v-if="selectedAccount === 'all'">
+        <h4>Répartition par compte</h4>
+        <Pie
+          :data="accountChartData"
+          :options="chartOptions"
+        />
+      </div>
+
+      <!-- Balance dépenses/revenus -->
+      <div class="chart-box" v-if="transactionType === 'all'">
+        <h4>Balance dépenses/revenus</h4>
+        <Bar
+          :data="balanceChartData"
+          :options="balanceChartOptions"
+        />
+      </div>
+
+      <!-- Tableau des transactions -->
+      <div class="chart-box transactions-table">
+        <h4>
+          Transactions 
+          {{ selectedAccount !== 'all' ? `(${selectedAccount})` : '' }}
+          {{ transactionType === 'expenses' ? '(Dépenses)' : transactionType === 'income' ? '(Revenus)' : '' }}
+        </h4>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Catégorie</th>
+                <th>Montant</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(expense, index) in filteredExpensesByType.slice(0, 10)" :key="index">
+                <td>{{ formatDate(expense.Date) }}</td>
+                <td class="description">{{ expense.Description }}</td>
+                <td>{{ expense.Catégorie || 'Non catégorisé' }}</td>
+                <td :class="{'negative': parseFloat(expense.Montant) < 0, 'positive': parseFloat(expense.Montant) > 0}">
+                  {{ Math.abs(parseFloat(expense.Montant)).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}
+                  <span class="sign">{{ parseFloat(expense.Montant) < 0 ? '-' : '+' }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="table-footer" v-if="filteredExpensesByType.length > 10">
+            <span>Affichage des 10 premières transactions sur {{ filteredExpensesByType.length }}</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <button @click="goBack" class="back-btn">Retour à l'importation</button>
@@ -50,7 +145,7 @@
 import { computed, ref } from 'vue'
 import { CsvRow } from '../types'
 import { Chart, registerables } from 'chart.js'
-import { Doughnut, Bar } from 'vue-chartjs'
+import { Doughnut, Bar, Pie } from 'vue-chartjs'
 
 // Enregistrer tous les composants Chart.js nécessaires
 Chart.register(...registerables)
@@ -63,23 +158,79 @@ const emit = defineEmits<{
   (e: 'back'): void
 }>()
 
-// Calculer les totaux
+// États pour le filtrage
+const selectedAccount = ref('all')
+const transactionType = ref('all') // 'all', 'expenses', 'income'
+
+// Obtenir la liste des comptes uniques
+const uniqueAccounts = computed(() => {
+  const accounts = new Set<string>()
+  props.expenses.forEach(expense => {
+    if (expense.Compte) {
+      accounts.add(expense.Compte)
+    }
+  })
+  return Array.from(accounts)
+})
+
+// Filtrer par compte
+const filteredByAccount = computed(() => {
+  if (selectedAccount.value === 'all') {
+    return props.expenses
+  }
+  return props.expenses.filter(expense => expense.Compte === selectedAccount.value)
+})
+
+// Filtrer par type de transaction (dépense/revenu)
+const filteredExpensesByType = computed(() => {
+  if (transactionType.value === 'all') {
+    return filteredByAccount.value
+  } else if (transactionType.value === 'expenses') {
+    return filteredByAccount.value.filter(expense => parseFloat(expense.Montant) < 0)
+  } else {
+    return filteredByAccount.value.filter(expense => parseFloat(expense.Montant) > 0)
+  }
+})
+
+// Calculer les totaux sur les transactions filtrées
 const totalAmount = computed(() =>
-  props.expenses.reduce((sum, e) => sum + (parseFloat(e.Montant) || 0), 0)
+  filteredExpensesByType.value.reduce((sum, e) => sum + (parseFloat(e.Montant) || 0), 0)
 )
 
 const averageAmount = computed(() =>
-  props.expenses.length ? totalAmount.value / props.expenses.length : 0
+  filteredExpensesByType.value.length ? totalAmount.value / filteredExpensesByType.value.length : 0
 )
 
-// Préparer les données par catégorie
+// Formatter les dates
+function formatDate(dateStr: string | undefined): string {
+  if (!dateStr) return 'N/A'
+  
+  try {
+    // Gestion des différents formats de date
+    let date: Date
+    if (dateStr.includes('/')) {
+      // Format "DD/MM/YYYY"
+      const [day, month, year] = dateStr.split('/').map(Number)
+      date = new Date(year, month - 1, day)
+    } else {
+      // Format "YYYY-MM-DD"
+      date = new Date(dateStr)
+    }
+    
+    return date.toLocaleDateString('fr-FR')
+  } catch (e) {
+    return dateStr
+  }
+}
+
+// Préparer les données par catégorie (sur les dépenses filtrées)
 const categoryData = computed(() => {
   const categories = {} as Record<string, number>
   
-  props.expenses.forEach(expense => {
+  filteredExpensesByType.value.forEach(expense => {
     // Utiliser la catégorie ou "Non catégorisé" si manquante
     const category = expense.Catégorie?.trim() || 'Non catégorisé'
-    const amount = parseFloat(expense.Montant) || 0
+    const amount = Math.abs(parseFloat(expense.Montant) || 0)
     
     if (!categories[category]) {
       categories[category] = 0
@@ -113,11 +264,11 @@ const categoryChartData = computed(() => {
   }
 })
 
-// Préparer les données par mois
+// Préparer les données par mois (pour tous les types de transactions)
 const monthlyData = computed(() => {
-  const months = {} as Record<string, number>
+  const months = {} as Record<string, { expenses: number; income: number }>
   
-  props.expenses.forEach(expense => {
+  filteredByAccount.value.forEach(expense => {
     // Extraire le mois-année (format: "YYYY-MM")
     const dateStr = expense.Date
     if (!dateStr) return
@@ -138,9 +289,14 @@ const monthlyData = computed(() => {
     const amount = parseFloat(expense.Montant) || 0
     
     if (!months[monthKey]) {
-      months[monthKey] = 0
+      months[monthKey] = { expenses: 0, income: 0 }
     }
-    months[monthKey] += amount
+    
+    if (amount < 0) {
+      months[monthKey].expenses += Math.abs(amount)
+    } else {
+      months[monthKey].income += amount
+    }
   })
   
   // Trier par date chronologique
@@ -155,22 +311,88 @@ const monthlyData = computed(() => {
       
       obj[displayKey] = value
       return obj
-    }, {} as Record<string, number>)
+    }, {} as Record<string, { expenses: number; income: number }>)
 })
 
 // Données pour le graphique en barres (évolution mensuelle)
 const monthlyChartData = computed(() => {
   const data = monthlyData.value
+  const labels = Object.keys(data)
+  let values: Array<number> = []
+  
+  if (transactionType.value === 'expenses') {
+    values = labels.map(label => data[label].expenses)
+  } else if (transactionType.value === 'income') {
+    values = labels.map(label => data[label].income)
+  } else {
+    values = labels.map(label => data[label].income - data[label].expenses)
+  }
   
   return {
-    labels: Object.keys(data),
+    labels,
     datasets: [{
-      label: 'Montant total',
-      data: Object.values(data),
-      backgroundColor: '#42b983',
-      borderColor: '#42b983',
+      label: transactionType.value === 'expenses' ? 'Dépenses' : 
+             transactionType.value === 'income' ? 'Revenus' : 'Solde',
+      data: values,
+      backgroundColor: transactionType.value === 'expenses' ? '#e74c3c' : 
+                        transactionType.value === 'income' ? '#42b983' : '#3498db',
+      borderColor: transactionType.value === 'expenses' ? '#e74c3c' : 
+                    transactionType.value === 'income' ? '#42b983' : '#3498db',
       borderWidth: 1
     }]
+  }
+})
+
+// Données pour le graphique en camembert (comptes)
+const accountChartData = computed(() => {
+  const accounts = {} as Record<string, number>
+  
+  // Utiliser les transactions filtrées par type
+  filteredExpensesByType.value.forEach(expense => {
+    const account = expense.Compte?.trim() || 'Non spécifié'
+    const amount = Math.abs(parseFloat(expense.Montant) || 0)
+    
+    if (!accounts[account]) {
+      accounts[account] = 0
+    }
+    accounts[account] += amount
+  })
+  
+  return {
+    labels: Object.keys(accounts),
+    datasets: [{
+      data: Object.values(accounts),
+      backgroundColor: [
+        '#42b983', '#2c3e50', '#E46651', '#00D8FF', '#DD1B16'
+      ],
+      borderWidth: 1
+    }]
+  }
+})
+
+// Données pour le graphique de balance revenus/dépenses
+const balanceChartData = computed(() => {
+  const data = monthlyData.value
+  const labels = Object.keys(data)
+  
+  return {
+    labels,
+    datasets: [
+      {
+        label: 'Revenus',
+        data: labels.map(label => data[label].income),
+        backgroundColor: '#42b983',
+        borderColor: '#42b983',
+        borderWidth: 1
+      },
+      {
+        label: 'Dépenses',
+        data: labels.map(label => data[label].expenses),
+        backgroundColor: '#e74c3c',
+        borderColor: '#e74c3c',
+        borderWidth: 1
+      }
+    ]
   }
 })
 
@@ -196,14 +418,67 @@ const chartOptions = ref({
   }
 })
 
+// Options spéciales pour le graphique de balance
+const balanceChartOptions = computed(() => ({
+  ...chartOptions.value,
+  scales: {
+    x: {
+      stacked: false,
+    },
+    y: {
+      stacked: false,
+      ticks: {
+        callback: function(value: any) {
+          return new Intl.NumberFormat('fr-FR', {
+            style: 'currency', 
+            currency: 'EUR',
+            maximumFractionDigits: 0
+          }).format(value)
+        }
+      }
+    }
+  }
+}))
+
 function goBack() {
   emit('back')
 }
 </script>
 
 <style scoped>
+.tabs {
+  display: flex;
+  margin-bottom: 20px;
+  background: #f5f8fa;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 10px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  color: #555;
+  font-weight: 500;
+  transition: all 0.3s;
+  border-bottom: 3px solid transparent;
+}
+
+.tab-btn:hover {
+  background: rgba(66, 185, 131, 0.1);
+}
+
+.tab-btn.active {
+  background: white;
+  color: #42b983;
+  border-bottom: 3px solid #42b983;
+}
+
 .summary-cards {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   margin: 20px 0;
   gap: 15px;
@@ -213,7 +488,8 @@ function goBack() {
   background-color: #f5f8fa;
   border-radius: 8px;
   padding: 15px;
-  flex: 1;
+  flex: 1 0 20%;
+  min-width: 120px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   text-align: center;
 }
@@ -222,12 +498,44 @@ function goBack() {
   font-size: 1.5rem;
   font-weight: bold;
   color: #42b983;
+  position: relative;
+}
+
+.card-value.negative {
+  color: #e74c3c;
+}
+
+.card-value.positive {
+  color: #42b983;
+}
+
+.card-sign {
+  position: absolute;
+  font-size: 0.8em;
+  top: 0;
+  right: -15px;
 }
 
 .card-label {
   font-size: 0.9rem;
   color: #666;
   margin-top: 5px;
+}
+
+.filter-section {
+  margin: 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.account-select {
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  background: white;
+  font-size: 14px;
+  min-width: 200px;
 }
 
 .charts-container {
@@ -243,6 +551,60 @@ function goBack() {
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   height: 350px;
+}
+
+.transactions-table {
+  height: auto;
+  max-height: 500px;
+}
+
+.table-container {
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+th {
+  background-color: #f8f8f8;
+  font-weight: 600;
+  color: #333;
+}
+
+.description {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.negative {
+  color: #e74c3c;
+}
+
+.positive {
+  color: #42b983;
+}
+
+.sign {
+  font-size: 0.8em;
+  margin-left: 2px;
+}
+
+.table-footer {
+  padding: 10px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #888;
 }
 
 h4 {
