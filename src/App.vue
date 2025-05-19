@@ -8,8 +8,8 @@
       </p>
     </header>
     <section>
-      <CsvUploader @data-parsed="expenses = $event" />
-      <DataAnalyzer :expenses="expenses" />
+      <CsvUploader v-if="!isDataAccepted" @data-parsed="handleDataParsed" @data-accepted="acceptData" />
+      <DataAnalyzer v-else :expenses="expenses" @back="isDataAccepted = false" />
     </section>
   </div>
 </template>
@@ -22,6 +22,15 @@ import CsvUploader from './components/CsvUploader.vue'
 import DataAnalyzer from './components/DataAnalyzer.vue'
 
 const expenses = ref<Array<CsvRow>>([])
+const isDataAccepted = ref(false)
+
+function handleDataParsed(data: CsvRow[]) {
+  expenses.value = data
+}
+
+function acceptData() {
+  isDataAccepted.value = true
+}
 </script>
 
 <style scoped>

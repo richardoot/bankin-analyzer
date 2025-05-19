@@ -21,6 +21,7 @@
         </table>
       </div>
       <p class="info">Total lignes importées : {{ csvData.length }}</p>
+      <button @click="acceptData" class="accept-btn">Analyser ces données</button>
     </div>
     <div v-else class="info">
       <p>Aucun fichier importé pour le moment.</p>
@@ -39,6 +40,7 @@ const headers = ref<Array<string> | undefined>([])
 
 const emit = defineEmits<{
   (e: 'data-parsed', data: any[]): void
+  (e: 'data-accepted'): void
 }>()
 
 function handleFile(event: Event) {
@@ -57,6 +59,10 @@ function handleFile(event: Event) {
         }
     })
   }
+}
+
+function acceptData() {
+  emit('data-accepted')
 }
 </script>
 
@@ -116,5 +122,20 @@ td {
   color: #888;
   margin-top: 10px;
   text-align: center;
+}
+.accept-btn {
+  background: #42b983;
+  color: #fff;
+  padding: 10px 22px;
+  border-radius: 6px;
+  font-weight: 600;
+  margin-top: 20px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+  box-shadow: 0 2px 8px #42b98322;
+}
+.accept-btn:hover {
+  background: #36996b;
 }
 </style>
