@@ -49,7 +49,7 @@
       </div>
     </div>
 
-    <!-- Filtre principal par compte -->
+    <!-- Filtres principaux -->
     <div class="filter-section">
       <div class="filter-group">
         <label for="account-filter">Filtrer par compte:</label>
@@ -59,6 +59,59 @@
             {{ account }}
           </option>
         </select>
+      </div>
+      <button @click="showAdvancedFilters = !showAdvancedFilters" class="advanced-filter-btn">
+        {{ showAdvancedFilters ? 'Masquer filtres avancés' : 'Filtres avancés' }}
+      </button>
+    </div>
+    
+    <!-- Panneau de filtrage avancé -->
+    <div v-if="showAdvancedFilters" class="advanced-filters">
+      <h4>Filtrage avancé</h4>
+      
+      <!-- Sélecteur de compte pour l'exclusion -->
+      <div class="filter-section">
+        <div class="filter-group">
+          <label>Filtrer pour le compte:</label>
+          <select v-model="filterAccountForExclusion" class="filter-select">
+            <option value="all">Tous les comptes</option>
+            <option v-for="account in uniqueAccounts" :key="account" :value="account">
+              {{ account }}
+            </option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="filter-section">
+        <div class="filter-group exclude-categories">
+          <label>
+            Masquer des catégories 
+            {{ filterAccountForExclusion !== 'all' ? `pour ${filterAccountForExclusion}` : '' }}:
+          </label>
+          <div class="checkbox-container">
+            <div v-for="category in filteredCategoriesToExclude" :key="category" class="checkbox-item">
+              <input 
+                type="checkbox" 
+                :id="'exclude-' + filterAccountForExclusion + '-' + category" 
+                v-model="currentAccountExclusions" 
+                :value="category"
+                @change="updateExcludedCategories"
+              />
+              <label :for="'exclude-' + filterAccountForExclusion + '-' + category">{{ category }}</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="filter-info" v-if="hasAnyExclusions">
+        <p v-for="(exclusions, account) in categoryExclusionsByAccount" :key="account" v-show="exclusions.length > 0">
+          <strong>{{ exclusions.length }} catégorie(s) masquée(s) pour {{ account }}:</strong>
+          {{ exclusions.join(', ') }}
+        </p>
+        <p v-if="excludedCategories.length > 0">
+          <strong>{{ excludedCategories.length }} catégorie(s) masquée(s) pour tous les comptes:</strong>
+          {{ excludedCategories.join(', ') }}
+        </p>
       </div>
     </div>
 
@@ -188,6 +241,10 @@ const emit = defineEmits<{
 const selectedAccount = ref('all')
 const selectedCategory = ref('all')
 const transactionType = ref('all') // 'all', 'expenses', 'income'
+const showAdvancedFilters = ref(false)
+const excludedCategories = ref<string[]>([])
+const filterAccountForExclusion = ref('all')
+const categoryExclusionsByAccount = ref<Record<string, string[]>>({})
 
 // Obtenir la liste des comptes uniques
 const uniqueAccounts = computed(() => {
@@ -218,6 +275,73 @@ const uniqueCategories = computed(() => {
   return Array.from(categories).sort()
 })
 
+// Catégories filtrées selon le type de transaction actuel et le compte sélectionné pour le panneau d'exclusion
+const filteredCategoriesToExclude = computed(() => {
+  const account = filterAccountForExclusion.value
+  const categories = new Set<string>()
+  
+  props.expenses.forEach(expense => {
+    // Si on filtre pour un compte spécifique et que le compte ne correspond pas, on ignore
+    if (account !== 'all' && expense.Compte !== account) return
+    
+    const amount = parseFloat(expense.Montant)
+    
+    // Pour le type "all" ou selon le type sélectionné
+    if (transactionType.value === 'all' || 
+        (transactionType.value === 'expenses' && amount < 0) || 
+        (transactionType.value === 'income' && amount > 0)) {
+      
+      // Pour les revenus, utiliser la sous-catégorie
+      if (amount > 0) {
+        const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+        categories.add(subCategory)
+      } 
+      // Pour les dépenses, utiliser la catégorie normale
+      else {
+        const category = expense.Catégorie?.trim() || 'Non catégorisé'
+        categories.add(category)
+      }
+    }
+  })
+  
+  return Array.from(categories).sort()
+})
+
+// Les exclusions de catégories pour le compte actuellement sélectionné dans le panneau de filtrage avancé
+const currentAccountExclusions = computed({
+  get() {
+    const account = filterAccountForExclusion.value
+    if (account === 'all') {
+      return [...excludedCategories.value]
+    } else {
+      return categoryExclusionsByAccount.value[account] || []
+    }
+  },
+  set(value: string[]) {
+    const account = filterAccountForExclusion.value
+    if (account === 'all') {
+      excludedCategories.value = value
+    } else {
+      if (!categoryExclusionsByAccount.value[account]) {
+        categoryExclusionsByAccount.value[account] = []
+      }
+      categoryExclusionsByAccount.value[account] = value
+    }
+  }
+})
+
+// Indique s'il y a des exclusions (pour l'interface)
+const hasAnyExclusions = computed(() => {
+  return excludedCategories.value.length > 0 || 
+         Object.values(categoryExclusionsByAccount.value).some(exclusions => exclusions.length > 0)
+})
+
+// Mise à jour des exclusions lors d'un changement
+function updateExcludedCategories() {
+  // Cette fonction existe uniquement pour réagir aux changements de cases à cocher
+  // La logique de mise à jour est gérée par le computed setter de currentAccountExclusions
+}
+
 // Filtrer par compte
 const filteredByAccount = computed(() => {
   if (selectedAccount.value === 'all') {
@@ -226,15 +350,43 @@ const filteredByAccount = computed(() => {
   return props.expenses.filter(expense => expense.Compte === selectedAccount.value)
 })
 
-// Filtrer par type de transaction (dépense/revenu)
+// Filtrer par type de transaction et exclure les catégories filtrées
 const filteredExpensesByType = computed(() => {
-  if (transactionType.value === 'all') {
-    return filteredByAccount.value
-  } else if (transactionType.value === 'expenses') {
-    return filteredByAccount.value.filter(expense => parseFloat(expense.Montant) < 0)
-  } else {
-    return filteredByAccount.value.filter(expense => parseFloat(expense.Montant) > 0)
+  // D'abord filtrer par type de transaction
+  let filtered = filteredByAccount.value
+  
+  if (transactionType.value === 'expenses') {
+    filtered = filtered.filter(expense => parseFloat(expense.Montant) < 0)
+  } else if (transactionType.value === 'income') {
+    filtered = filtered.filter(expense => parseFloat(expense.Montant) > 0)
   }
+  
+  // Ensuite exclure les catégories filtrées globalement
+  if (excludedCategories.value.length > 0) {
+    filtered = filtered.filter(expense => {
+      const amount = parseFloat(expense.Montant)
+      const categoryToCheck = amount > 0 
+        ? expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+        : expense.Catégorie?.trim() || 'Non catégorisé'
+      
+      return !excludedCategories.value.includes(categoryToCheck)
+    })
+  }
+  
+  // Exclure les catégories filtrées par compte spécifique
+  filtered = filtered.filter(expense => {
+    const account = expense.Compte
+    if (!account || !categoryExclusionsByAccount.value[account]) return true
+    
+    const amount = parseFloat(expense.Montant)
+    const categoryToCheck = amount > 0 
+      ? expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+      : expense.Catégorie?.trim() || 'Non catégorisé'
+    
+    return !categoryExclusionsByAccount.value[account].includes(categoryToCheck)
+  })
+  
+  return filtered
 })
 
 // Filtrer par catégorie
@@ -346,7 +498,7 @@ const categoryChartData = computed(() => {
 const monthlyData = computed(() => {
   const months = {} as Record<string, { expenses: number; income: number }>
   
-  filteredByAccount.value.forEach(expense => {
+  filteredExpensesByType.value.forEach(expense => {
     // Extraire le mois-année (format: "YYYY-MM")
     const dateStr = expense.Date
     if (!dateStr) return
@@ -622,6 +774,62 @@ function goBack() {
   color: #333;
   font-size: 14px;
   min-width: 200px;
+}
+
+.advanced-filter-btn {
+  padding: 8px 16px;
+  background: #f0f0f0;
+  color: #555;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.advanced-filter-btn:hover {
+  background: #e0e0e0;
+}
+
+.advanced-filters {
+  margin: 10px 0 20px;
+  padding: 15px;
+  background: #f9f9f9;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.checkbox-container {
+  display: flex;
+  flex-wrap: wrap;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.checkbox-item {
+  flex: 0 0 33.33%;
+  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+}
+
+.checkbox-item input {
+  margin-right: 8px;
+}
+
+.exclude-categories {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.filter-info {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: #f0f5ff;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #555;
 }
 
 .charts-container {
