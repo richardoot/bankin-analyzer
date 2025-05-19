@@ -4,7 +4,7 @@ export type CsvRow = {
   Description: string;
   Compte: string;
   'Catégorie': string;
-  'Sous-Categorie': string;
+  'Sous-Catégorie': string;
   Note: string;
   Pointée: string;
   [key: string]: string | number;

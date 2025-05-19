@@ -136,7 +136,11 @@
               <tr v-for="(expense, index) in finalFilteredTransactions.slice(0, MAX_TRANSACTIONS)" :key="index">
                 <td>{{ formatDate(expense.Date) }}</td>
                 <td class="description">{{ expense.Description }}</td>
-                <td>{{ expense.Catégorie || 'Non catégorisé' }}</td>
+                <td>
+                  {{ parseFloat(expense.Montant) > 0 
+                      ? (expense['Sous-Catégorie'] || 'Non catégorisé') 
+                      : (expense.Catégorie || 'Non catégorisé') }}
+                </td>
                 <td :class="{'negative': parseFloat(expense.Montant) < 0, 'positive': parseFloat(expense.Montant) > 0}">
                   {{ Math.abs(parseFloat(expense.Montant)).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}
                   <span class="sign">{{ parseFloat(expense.Montant) < 0 ? '-' : '+' }}</span>
@@ -200,8 +204,16 @@ const uniqueAccounts = computed(() => {
 const uniqueCategories = computed(() => {
   const categories = new Set<string>()
   props.expenses.forEach(expense => {
-    const category = expense.Catégorie?.trim() || 'Non catégorisé'
-    categories.add(category)
+    // Pour les revenus (montant > 0), utiliser la sous-catégorie
+    const amount = parseFloat(expense.Montant)
+    if (amount > 0) {
+      const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+      categories.add(subCategory)
+    } else {
+      // Pour les dépenses, utiliser la catégorie normale
+      const category = expense.Catégorie?.trim() || 'Non catégorisé'
+      categories.add(category)
+    }
   })
   return Array.from(categories).sort()
 })
@@ -231,8 +243,18 @@ const finalFilteredTransactions = computed(() => {
     return filteredExpensesByType.value
   } else {
     return filteredExpensesByType.value.filter(expense => {
-      const category = expense.Catégorie?.trim() || 'Non catégorisé'
-      return category === selectedCategory.value
+      const amount = parseFloat(expense.Montant)
+      
+      // Pour les revenus, comparer avec la sous-catégorie
+      if (amount > 0) {
+        const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+        return subCategory === selectedCategory.value
+      } 
+      // Pour les dépenses, comparer avec la catégorie normale
+      else {
+        const category = expense.Catégorie?.trim() || 'Non catégorisé'
+        return category === selectedCategory.value
+      }
     })
   }
 })
@@ -273,14 +295,25 @@ const categoryData = computed(() => {
   const categories = {} as Record<string, number>
   
   filteredExpensesByType.value.forEach(expense => {
-    // Utiliser la catégorie ou "Non catégorisé" si manquante
-    const category = expense.Catégorie?.trim() || 'Non catégorisé'
-    const amount = Math.abs(parseFloat(expense.Montant) || 0)
+    const amount = parseFloat(expense.Montant) || 0
+    const absAmount = Math.abs(amount)
     
-    if (!categories[category]) {
-      categories[category] = 0
+    // Pour les revenus (montant > 0), utiliser la sous-catégorie
+    if (amount > 0) {
+      const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+      if (!categories[subCategory]) {
+        categories[subCategory] = 0
+      }
+      categories[subCategory] += absAmount
+    } 
+    // Pour les dépenses, utiliser la catégorie normale
+    else {
+      const category = expense.Catégorie?.trim() || 'Non catégorisé'
+      if (!categories[category]) {
+        categories[category] = 0
+      }
+      categories[category] += absAmount
     }
-    categories[category] += amount
   })
   
   // Trier par montant décroissant
