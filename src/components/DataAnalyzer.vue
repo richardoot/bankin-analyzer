@@ -21,6 +21,11 @@
       </button>
     </div>
     
+    <!-- Information sur les remboursements associés -->
+    <div v-if="Object.keys(reimbursementAssociations).length > 0 && transactionType === 'expenses'" class="reimbursement-info">
+      <i class="info-icon">ℹ️</i> Les montants des dépenses affichés sont nets des remboursements associés
+    </div>
+    
     <!-- Résumé chiffré -->
     <div class="summary-cards">
       <div class="card">
@@ -147,6 +152,69 @@
           <strong>{{ jointAccounts.length }} compte(s) joint(s):</strong>
           {{ jointAccounts.join(', ') }}
         </p>
+      </div>
+      
+      <!-- Section pour les associations de remboursements -->
+      <div class="filter-section">
+        <div class="filter-group exclude-categories">
+          <div class="section-header">
+            <label>Associations remboursements/dépenses:</label>
+            <div class="tooltip-icon" title="Associer des catégories de remboursements à des catégories de dépenses pour déduire automatiquement les remboursements des dépenses">?</div>
+          </div>
+          
+          <div v-if="Object.keys(reimbursementAssociations).length > 0" class="existing-associations">
+            <h5>Associations existantes:</h5>
+            <div v-for="(expenseCategory, incomeCategory) in reimbursementAssociations" :key="incomeCategory" class="association-item">
+              <div class="association-details">
+                <span class="income-category">{{ incomeCategory }}</span>
+                <span class="association-arrow">➔</span>
+                <span class="expense-category">{{ expenseCategory }}</span>
+                <div class="association-amounts">
+                  <span class="income-amount">{{ getCategoryTotal(incomeCategory, true).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}</span>
+                  <span class="association-separator">/</span>
+                  <span class="expense-amount">{{ getCategoryTotal(expenseCategory, false).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}</span>
+                </div>
+              </div>
+              <button class="remove-association-btn" @click="removeReimbursementAssociation(incomeCategory)">
+                <span class="remove-icon">×</span>
+              </button>
+            </div>
+          </div>
+          
+          <div class="new-association">
+            <h5>Nouvelle association:</h5>
+            <div v-if="availableIncomeCategories.length && availableExpenseCategories.length" class="association-form">
+              <div class="association-selects">
+                <select class="filter-select" v-model="newAssociationIncome">
+                  <option value="" disabled selected>Choisir un remboursement</option>
+                  <option v-for="category in availableIncomeCategories" :key="category" :value="category">
+                    {{ category }} ({{ getCategoryTotal(category, true).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }})
+                  </option>
+                </select>
+                <span class="association-arrow">➔</span>
+                <select class="filter-select" v-model="newAssociationExpense">
+                  <option value="" disabled selected>Choisir une dépense</option>
+                  <option v-for="category in availableExpenseCategories" :key="category" :value="category">
+                    {{ category }} ({{ getCategoryTotal(category, false).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }})
+                  </option>
+                </select>
+              </div>
+              <button 
+                class="add-association-btn" 
+                @click="addReimbursementAssociation(newAssociationIncome, newAssociationExpense)"
+                :disabled="!newAssociationIncome || !newAssociationExpense"
+              >
+                Associer
+              </button>
+            </div>
+            <p v-else class="no-categories-message">
+              Aucune catégorie disponible pour créer de nouvelles associations
+            </p>
+            <p v-if="showAssociationError" class="association-error">
+              {{ showAssociationError }}
+            </p>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -299,6 +367,11 @@ const filterAccountForExclusion = ref('all')
 const categoryExclusionsByAccount = ref<Record<string, string[]>>({})
 // Comptes joints (dont les montants sont divisés par 2)
 const jointAccounts = ref<string[]>([])
+// Association entre catégories de remboursements (revenus) et catégories de dépenses
+const reimbursementAssociations = ref<Record<string, string>>({}) // clé: catégorie de remboursement, valeur: catégorie de dépense
+const showAssociationError = ref<string | null>(null)
+const newAssociationIncome = ref('')
+const newAssociationExpense = ref('')
 
 // Obtenir la liste des comptes uniques
 const uniqueAccounts = computed(() => {
@@ -403,6 +476,41 @@ const hasAnyExclusions = computed(() => {
          Object.values(categoryExclusionsByAccount.value).some(exclusions => exclusions.length > 0)
 })
 
+// Obtenir les catégories de dépenses uniquement
+const expenseCategories = computed(() => {
+  const categories = new Set<string>()
+  props.expenses.forEach(expense => {
+    const amount = parseFloat(expense.Montant)
+    if (amount < 0) {
+      const category = expense.Catégorie?.trim() || 'Non catégorisé'
+      categories.add(category)
+    }
+  })
+  return Array.from(categories).sort()
+})
+
+// Obtenir les catégories de revenus uniquement
+const incomeCategories = computed(() => {
+  const categories = new Set<string>()
+  props.expenses.forEach(expense => {
+    const amount = parseFloat(expense.Montant)
+    if (amount > 0) {
+      const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+      categories.add(subCategory)
+    }
+  })
+  return Array.from(categories).sort()
+})
+
+// Vérifier si une catégorie est déjà associée
+const isAlreadyAssociated = (category: string) => {
+  // Vérifier si la catégorie est déjà une clé (remboursement)
+  if (reimbursementAssociations.value[category]) return true
+  
+  // Vérifier si la catégorie est déjà une valeur (dépense associée)
+  return Object.values(reimbursementAssociations.value).includes(category)
+}
+
 // Mise à jour des exclusions lors d'un changement
 function updateExcludedCategories() {
   // Cette fonction existe uniquement pour réagir aux changements de cases à cocher
@@ -479,9 +587,184 @@ const finalFilteredTransactions = computed(() => {
 })
 
 // Calculer les totaux sur les transactions filtrées
-const totalAmount = computed(() =>
-  filteredExpensesByType.value.reduce((sum, e) => sum + getAdjustedAmount(e), 0)
-)
+const totalAmount = computed(() => {
+  // Si nous sommes dans l'onglet "Dépenses", prendre en compte les remboursements pour calculer les montants nets
+  if (transactionType.value === 'expenses') {
+    // Créer une copie des dépenses filtrées pour travailler dessus
+    const filteredExpenses = [...filteredExpensesByType.value]
+    
+    // Collecter d'abord tous les remboursements par catégorie et par compte
+    const reimbursingCategories = new Set(Object.keys(reimbursementAssociations.value))
+    const reimbursementsByCategory = {} as Record<string, number>
+    
+    // Calculer les montants des remboursements depuis toutes les transactions
+    filteredByAccount.value.forEach(expense => {
+      const amount = getAdjustedAmount(expense)
+      if (amount > 0) {
+        const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+        if (reimbursingCategories.has(subCategory)) {
+          const targetExpenseCategory = reimbursementAssociations.value[subCategory]
+          if (!reimbursementsByCategory[targetExpenseCategory]) {
+            reimbursementsByCategory[targetExpenseCategory] = 0
+          }
+          reimbursementsByCategory[targetExpenseCategory] += amount
+        }
+      }
+    })
+    
+    // Calculer le montant total en tenant compte des remboursements
+    let total = 0
+    filteredExpenses.forEach(expense => {
+      const amount = getAdjustedAmount(expense)
+      if (amount < 0) {
+        const category = expense.Catégorie?.trim() || 'Non catégorisé'
+        const absAmount = Math.abs(amount)
+        
+        // Vérifier s'il y a des remboursements pour cette catégorie
+        if (reimbursementsByCategory[category]) {
+          // Calculer le montant net après remboursement
+          const netAmount = Math.max(0, absAmount - reimbursementsByCategory[category])
+          
+          // Mettre à jour le remboursement restant pour cette catégorie
+          reimbursementsByCategory[category] = Math.max(0, reimbursementsByCategory[category] - absAmount)
+          
+          // Ajouter au total
+          total -= netAmount
+        } else {
+          // Pas de remboursement, ajouter le montant complet
+          total += amount
+        }
+      }
+    })
+    
+    return total
+  } 
+  // Pour les autres onglets, utiliser la somme normale
+  else {
+    return filteredExpensesByType.value.reduce((sum, e) => sum + getAdjustedAmount(e), 0)
+  }
+})
+
+// Calculer le total pour une catégorie spécifique
+function getCategoryTotal(categoryName: string, isIncome: boolean): number {
+  // Identifier les catégories spéciales
+  const isReimbursedExpenseCategory = !isIncome && Object.values(reimbursementAssociations.value).includes(categoryName);
+  const isReimbursementCategory = isIncome && Object.keys(reimbursementAssociations.value).includes(categoryName);
+  
+  // Pour les catégories de remboursements (revenus), toujours utiliser filteredByAccount
+  // pour avoir accès à tous les revenus, même dans l'onglet "Dépenses"
+  if (isIncome) {
+    return filteredByAccount.value.reduce((sum, expense) => {
+      const amount = getAdjustedAmount(expense)
+      
+      if (amount > 0) {
+        const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+        if (subCategory === categoryName) {
+          return sum + amount
+        }
+      }
+      return sum
+    }, 0)
+  } 
+  // Pour une catégorie de dépense remboursée, calculer le montant net (dépense - remboursement)
+  else if (isReimbursedExpenseCategory) {
+    // Calculer le montant total des dépenses pour cette catégorie
+    const totalExpense = filteredByAccount.value.reduce((sum, expense) => {
+      const amount = getAdjustedAmount(expense)
+      
+      if (amount < 0) {
+        const category = expense.Catégorie?.trim() || 'Non catégorisé'
+        if (category === categoryName) {
+          return sum + Math.abs(amount)
+        }
+      }
+      return sum
+    }, 0)
+    
+    // Calculer le montant total des remboursements pour cette catégorie
+    const totalReimbursement = filteredByAccount.value.reduce((sum, expense) => {
+      const amount = getAdjustedAmount(expense)
+      
+      if (amount > 0) {
+        const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+        const associatedExpenseCategory = reimbursementAssociations.value[subCategory]
+        
+        if (associatedExpenseCategory === categoryName) {
+          return sum + amount
+        }
+      }
+      return sum
+    }, 0)
+    
+    // Le montant net est le total des dépenses moins les remboursements (mais jamais négatif)
+    return Math.max(0, totalExpense - totalReimbursement)
+  }
+  // Pour les dépenses normales dans le contexte des associations, utiliser également filteredByAccount
+  // lorsque l'on est dans l'onglet "Revenus" pour toujours montrer les dépenses disponibles
+  else if (transactionType.value === 'income') {
+    // Dans l'onglet Revenus, utiliser filteredByAccount pour voir toutes les dépenses
+    return filteredByAccount.value.reduce((sum, expense) => {
+      const amount = getAdjustedAmount(expense)
+      
+      if (amount < 0) {
+        const category = expense.Catégorie?.trim() || 'Non catégorisé'
+        if (category === categoryName) {
+          return sum + Math.abs(amount)
+        }
+      }
+      return sum
+    }, 0)
+  }
+  // Pour les autres cas (dépenses normales non associées dans l'onglet dépenses ou tous), 
+  // utiliser filteredExpensesByType pour respecter le filtrage actuel
+  else {
+    return filteredExpensesByType.value.reduce((sum, expense) => {
+      const amount = getAdjustedAmount(expense)
+      
+      if (amount < 0) {
+        const category = expense.Catégorie?.trim() || 'Non catégorisé'
+        if (category === categoryName) {
+          return sum + Math.abs(amount)
+        }
+      }
+      return sum
+    }, 0)
+  }
+}
+
+// Ajouter une association de remboursement
+function addReimbursementAssociation(incomeCategory: string, expenseCategory: string) {
+  // Vérifier les montants
+  const incomeTotal = getCategoryTotal(incomeCategory, true)
+  const expenseTotal = getCategoryTotal(expenseCategory, false)
+  
+  if (incomeTotal > expenseTotal) {
+    showAssociationError.value = `Erreur: Le montant des remboursements (${incomeTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}) est supérieur aux dépenses (${expenseTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}) pour cette catégorie`
+    return false
+  }
+  
+  // Tout est bon, ajouter l'association
+  reimbursementAssociations.value[incomeCategory] = expenseCategory
+  showAssociationError.value = null
+  return true
+}
+
+// Supprimer une association de remboursement
+function removeReimbursementAssociation(incomeCategory: string) {
+  delete reimbursementAssociations.value[incomeCategory]
+  showAssociationError.value = null
+}
+
+// Obtenir les catégories de revenus disponibles pour les associations (non encore associées)
+const availableIncomeCategories = computed(() => {
+  return incomeCategories.value.filter(category => !reimbursementAssociations.value[category])
+})
+
+// Obtenir les catégories de dépenses disponibles pour les associations (non encore associées)
+const availableExpenseCategories = computed(() => {
+  const usedExpenseCategories = Object.values(reimbursementAssociations.value)
+  return expenseCategories.value.filter(category => !usedExpenseCategories.includes(category))
+})
 
 const averageAmount = computed(() =>
   filteredExpensesByType.value.length ? totalAmount.value / filteredExpensesByType.value.length : 0
@@ -512,26 +795,91 @@ function formatDate(dateStr: string | undefined): string {
 // Préparer les données par catégorie (sur les dépenses filtrées)
 const categoryData = computed(() => {
   const categories = {} as Record<string, number>
+  const reimbursingCategories = new Set(Object.keys(reimbursementAssociations.value))
+  const reimbursedCategories = new Set(Object.values(reimbursementAssociations.value))
+  const reimbursementAmounts = {} as Record<string, number>
   
-  filteredExpensesByType.value.forEach(expense => {
+  // D'abord, calculer tous les montants de remboursement par catégorie
+  // Important: utiliser filteredByAccount pour avoir accès à TOUS les remboursements même dans l'onglet "Dépenses"
+  filteredByAccount.value.forEach(expense => {
     const amount = getAdjustedAmount(expense)
-    const absAmount = Math.abs(amount)
     
-    // Pour les revenus (montant > 0), utiliser la sous-catégorie
+    // Pour les revenus (montant > 0), calculer les remboursements
     if (amount > 0) {
       const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
-      if (!categories[subCategory]) {
-        categories[subCategory] = 0
+      
+      // Si c'est une catégorie de remboursement, on accumule son montant
+      if (reimbursingCategories.has(subCategory)) {
+        const targetExpenseCategory = reimbursementAssociations.value[subCategory]
+        if (!reimbursementAmounts[targetExpenseCategory]) {
+          reimbursementAmounts[targetExpenseCategory] = 0
+        }
+        reimbursementAmounts[targetExpenseCategory] += amount
+      } 
+      // On n'ajoute les revenus aux catégories que si on est sur tous les types ou les revenus et que ce n'est pas un remboursement
+      else if (!reimbursingCategories.has(subCategory) && (transactionType.value === 'all' || transactionType.value === 'income')) {
+        if (!categories[subCategory]) {
+          categories[subCategory] = 0
+        }
+        categories[subCategory] += amount
       }
-      categories[subCategory] += absAmount
-    } 
-    // Pour les dépenses, utiliser la catégorie normale
-    else {
+    }
+  })
+  
+  // Créer une copie du dictionnaire de remboursements pour ne pas modifier directement les valeurs
+  const processedReimbursements = {} as Record<string, number>
+  for (const category in reimbursementAmounts) {
+    processedReimbursements[category] = reimbursementAmounts[category]
+  }
+  
+  // Pour l'onglet "Dépenses", créer une copie des montants de remboursement pour ne pas les modifier directement
+  // car on va décompter les montants de remboursement au fur et à mesure
+  const reimbursementsCopy = { ...reimbursementAmounts };
+  
+  // Ensuite, ajouter les dépenses en soustrayant les remboursements
+  filteredExpensesByType.value.forEach(expense => {
+    const amount = getAdjustedAmount(expense)
+    
+    // Pour les dépenses (montant < 0)
+    if (amount < 0) {
       const category = expense.Catégorie?.trim() || 'Non catégorisé'
+      const absAmount = Math.abs(amount)
+      
+      // Initialiser la catégorie si nécessaire
       if (!categories[category]) {
         categories[category] = 0
       }
-      categories[category] += absAmount
+      
+      // Cas spécial pour les catégories remboursées dans l'onglet Dépenses
+      if (transactionType.value === 'expenses' && reimbursedCategories.has(category)) {
+        // Récupérer le montant de remboursement disponible pour cette catégorie
+        const reimbursement = reimbursementsCopy[category] || 0;
+        
+        // Appliquer le remboursement à cette dépense
+        if (reimbursement > 0) {
+          // Si le remboursement est supérieur à la dépense
+          if (reimbursement >= absAmount) {
+            // La dépense est entièrement remboursée
+            reimbursementsCopy[category] = reimbursement - absAmount;
+            // Ne pas ajouter au total (car entièrement remboursé)
+          } 
+          // Si le remboursement est inférieur à la dépense
+          else {
+            // Ajouter seulement la partie non remboursée
+            categories[category] += (absAmount - reimbursement);
+            // Le remboursement est entièrement utilisé
+            reimbursementsCopy[category] = 0;
+          }
+        }
+        // Si pas de remboursement restant, ajouter le montant complet
+        else {
+          categories[category] += absAmount;
+        }
+      }
+      // Pour les catégories non remboursées ou dans autres onglets
+      else if (transactionType.value !== 'expenses' || !reimbursedCategories.has(category)) {
+        categories[category] += absAmount;
+      }
     }
   })
   
@@ -564,13 +912,14 @@ const categoryChartData = computed(() => {
 // Préparer les données par mois (pour tous les types de transactions)
 const monthlyData = computed(() => {
   const months = {} as Record<string, { expenses: number; income: number }>
+  const reimbursingCategories = new Set(Object.keys(reimbursementAssociations.value))
+  const reimbursedCategories = new Set(Object.values(reimbursementAssociations.value))
+  const monthReimbursements = {} as Record<string, Record<string, number>>
   
-  filteredExpensesByType.value.forEach(expense => {
-    // Extraire le mois-année (format: "YYYY-MM")
-    const dateStr = expense.Date
-    if (!dateStr) return
+  // Initialiser la structure pour tous les mois concernés
+  const initMonthKey = (dateStr: string): string | null => {
+    if (!dateStr) return null
     
-    // Le format de date peut varier selon l'export Bankin - adapter si nécessaire
     let monthKey
     if (dateStr.includes('/')) {
       // Format "DD/MM/YYYY"
@@ -580,19 +929,104 @@ const monthlyData = computed(() => {
       // Format "YYYY-MM-DD"
       monthKey = dateStr.substring(0, 7)
     } else {
-      return
+      return null
     }
-    
-    const amount = getAdjustedAmount(expense)
     
     if (!months[monthKey]) {
       months[monthKey] = { expenses: 0, income: 0 }
     }
     
+    if (!monthReimbursements[monthKey]) {
+      monthReimbursements[monthKey] = {}
+    }
+    
+    return monthKey
+  }
+  
+  // Première passe : collecter tous les remboursements par mois et catégorie
+  // Important: utiliser filteredByAccount pour avoir accès à TOUS les remboursements
+  filteredByAccount.value.forEach(expense => {
+    const monthKey = initMonthKey(expense.Date)
+    if (!monthKey) return
+    
+    const amount = getAdjustedAmount(expense)
+    
+    // Pour les revenus (remboursements)
+    if (amount > 0) {
+      const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+      
+      // Si c'est un remboursement associé à une catégorie de dépense
+      if (reimbursingCategories.has(subCategory)) {
+        const targetExpenseCategory = reimbursementAssociations.value[subCategory]
+        if (!monthReimbursements[monthKey][targetExpenseCategory]) {
+          monthReimbursements[monthKey][targetExpenseCategory] = 0
+        }
+        monthReimbursements[monthKey][targetExpenseCategory] += amount
+      }
+      // Si c'est un revenu normal (non remboursement)
+      else if ((transactionType.value === 'all' || transactionType.value === 'income')) {
+        months[monthKey].income += amount
+      }
+    }
+  })
+  
+  // Pour chaque mois, créer une copie des remboursements pour ne pas les modifier directement
+  const processedMonthReimbursements = {} as Record<string, Record<string, number>>
+  for (const monthKey in monthReimbursements) {
+    processedMonthReimbursements[monthKey] = { ...monthReimbursements[monthKey] }
+  }
+  
+  // Deuxième passe : calculer les revenus et dépenses en tenant compte des remboursements
+  // Utiliser les transactions filtrées pour respecter les filtres d'affichage
+  let transactionsToProcess = filteredByAccount.value
+  if (transactionType.value === 'expenses') {
+    transactionsToProcess = transactionsToProcess.filter(expense => getAdjustedAmount(expense) < 0)
+  }
+  
+  transactionsToProcess.forEach(expense => {
+    const monthKey = initMonthKey(expense.Date)
+    if (!monthKey) return
+    
+    const amount = getAdjustedAmount(expense)
+    
+    // Pour les dépenses
     if (amount < 0) {
-      months[monthKey].expenses += Math.abs(amount)
-    } else {
-      months[monthKey].income += amount
+      const category = expense.Catégorie?.trim() || 'Non catégorisé'
+      const absAmount = Math.abs(amount)
+      
+      // Si cette catégorie est associée à des remboursements
+      if (reimbursedCategories.has(category)) {
+        // Récupérer le montant de remboursement disponible pour ce mois et cette catégorie
+        const reimbursement = (processedMonthReimbursements[monthKey] || {})[category] || 0
+        
+        // Si un remboursement est disponible
+        if (reimbursement > 0) {
+          // Si le remboursement est supérieur à la dépense
+          if (reimbursement >= absAmount) {
+            // La dépense est entièrement remboursée
+            processedMonthReimbursements[monthKey][category] = reimbursement - absAmount
+            // Ne rien ajouter aux dépenses si on est dans l'onglet "Dépenses"
+            if (transactionType.value !== 'expenses') {
+              months[monthKey].expenses += 0
+            }
+          }
+          // Si le remboursement est inférieur à la dépense
+          else {
+            // Ajouter seulement la partie non remboursée
+            months[monthKey].expenses += (absAmount - reimbursement)
+            // Le remboursement est entièrement utilisé
+            processedMonthReimbursements[monthKey][category] = 0
+          }
+        }
+        // Si pas de remboursement disponible
+        else {
+          months[monthKey].expenses += absAmount
+        }
+      }
+      // Pour les dépenses sans remboursement
+      else {
+        months[monthKey].expenses += absAmount
+      }
     }
   })
   
@@ -1061,6 +1495,142 @@ th {
   align-items: center;
   gap: 8px;
   color: #555;
+}
+
+.existing-associations {
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.new-association {
+  margin-top: 15px;
+}
+
+h5 {
+  margin: 5px 0 10px 0;
+  font-size: 0.95rem;
+  color: #444;
+}
+
+.association-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background-color: #f0f5ff;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.association-details {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.association-arrow {
+  margin: 0 8px;
+  color: #7957d5;
+  font-weight: bold;
+}
+
+.income-category {
+  color: #42b983;
+  font-weight: 500;
+}
+
+.expense-category {
+  color: #e74c3c;
+  font-weight: 500;
+}
+
+.association-amounts {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 4px;
+}
+
+.income-amount {
+  color: #42b983;
+}
+
+.expense-amount {
+  color: #e74c3c;
+}
+
+.association-separator {
+  margin: 0 5px;
+  color: #999;
+}
+
+.association-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.association-selects {
+  display: flex;
+  align-items: center;
+}
+
+.add-association-btn {
+  background: #7957d5;
+  color: white;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  align-self: flex-start;
+}
+
+.add-association-btn:hover {
+  background: #6742c0;
+}
+
+.add-association-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.remove-association-btn {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 1.2rem;
+  padding: 0 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-association-btn:hover {
+  color: #e74c3c;
+}
+
+.remove-icon {
+  font-weight: bold;
+}
+
+.no-categories-message {
+  font-style: italic;
+  color: #999;
+  font-size: 0.9rem;
+  margin: 10px 0;
+}
+
+.association-error {
+  color: #e74c3c;
+  margin-top: 10px;
+  font-size: 0.9rem;
+  padding: 8px 10px;
+  background-color: #ffeaea;
+  border-radius: 4px;
+  border-left: 3px solid #e74c3c;
 }
 
 h4 {
