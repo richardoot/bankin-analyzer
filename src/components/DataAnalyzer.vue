@@ -602,6 +602,19 @@ const totalAmount = computed(() => {
       const amount = getAdjustedAmount(expense)
       if (amount > 0) {
         const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+        const account = expense.Compte
+        
+        // Vérifier si cette catégorie est exclue globalement ou pour ce compte spécifique
+        const isExcludedGlobally = excludedCategories.value.includes(subCategory);
+        const isExcludedForAccount = account && 
+                                    categoryExclusionsByAccount.value[account] && 
+                                    categoryExclusionsByAccount.value[account].includes(subCategory);
+        
+        // Si la catégorie de remboursement est exclue, ne pas prendre en compte son montant
+        if (isExcludedGlobally || isExcludedForAccount) {
+          return;
+        }
+        
         if (reimbursingCategories.has(subCategory)) {
           const targetExpenseCategory = reimbursementAssociations.value[subCategory]
           if (!reimbursementsByCategory[targetExpenseCategory]) {
@@ -618,6 +631,19 @@ const totalAmount = computed(() => {
       const amount = getAdjustedAmount(expense)
       if (amount < 0) {
         const category = expense.Catégorie?.trim() || 'Non catégorisé'
+        const account = expense.Compte
+        
+        // Vérifier si cette catégorie est exclue globalement ou pour ce compte spécifique
+        const isExcludedGlobally = excludedCategories.value.includes(category);
+        const isExcludedForAccount = account && 
+                                   categoryExclusionsByAccount.value[account] && 
+                                   categoryExclusionsByAccount.value[account].includes(category);
+        
+        // Si la catégorie est exclue, ne pas l'inclure
+        if (isExcludedGlobally || isExcludedForAccount) {
+          return;
+        }
+        
         const absAmount = Math.abs(amount)
         
         // Vérifier s'il y a des remboursements pour cette catégorie
@@ -659,6 +685,19 @@ function getCategoryTotal(categoryName: string, isIncome: boolean): number {
       
       if (amount > 0) {
         const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+        const account = expense.Compte;
+        
+        // Vérifier si cette catégorie est exclue globalement ou pour ce compte spécifique
+        const isExcludedGlobally = excludedCategories.value.includes(subCategory);
+        const isExcludedForAccount = account && 
+                                    categoryExclusionsByAccount.value[account] && 
+                                    categoryExclusionsByAccount.value[account].includes(subCategory);
+        
+        // Si la catégorie est exclue et qu'il s'agit de la catégorie recherchée, retourner 0
+        if ((isExcludedGlobally || isExcludedForAccount) && subCategory === categoryName) {
+          return sum;
+        }
+        
         if (subCategory === categoryName) {
           return sum + amount
         }
@@ -801,12 +840,25 @@ const categoryData = computed(() => {
   
   // D'abord, calculer tous les montants de remboursement par catégorie
   // Important: utiliser filteredByAccount pour avoir accès à TOUS les remboursements même dans l'onglet "Dépenses"
+  // mais vérifier également si la catégorie est exclue
   filteredByAccount.value.forEach(expense => {
     const amount = getAdjustedAmount(expense)
     
     // Pour les revenus (montant > 0), calculer les remboursements
     if (amount > 0) {
       const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+      const account = expense.Compte
+      
+      // Vérifier si cette catégorie est exclue globalement ou pour ce compte spécifique
+      const isExcludedGlobally = excludedCategories.value.includes(subCategory);
+      const isExcludedForAccount = account && 
+                                  categoryExclusionsByAccount.value[account] && 
+                                  categoryExclusionsByAccount.value[account].includes(subCategory);
+      
+      // Si la catégorie est exclue, ne pas l'inclure
+      if (isExcludedGlobally || isExcludedForAccount) {
+        return;
+      }
       
       // Si c'est une catégorie de remboursement, on accumule son montant
       if (reimbursingCategories.has(subCategory)) {
@@ -818,6 +870,17 @@ const categoryData = computed(() => {
       } 
       // On n'ajoute les revenus aux catégories que si on est sur tous les types ou les revenus et que ce n'est pas un remboursement
       else if (!reimbursingCategories.has(subCategory) && (transactionType.value === 'all' || transactionType.value === 'income')) {
+        // Vérifier si cette catégorie est exclue globalement ou pour ce compte spécifique
+        const isExcludedGlobally = excludedCategories.value.includes(subCategory);
+        const isExcludedForAccount = account && 
+                                    categoryExclusionsByAccount.value[account] && 
+                                    categoryExclusionsByAccount.value[account].includes(subCategory);
+        
+        // Si la catégorie est exclue, ne pas l'inclure
+        if (isExcludedGlobally || isExcludedForAccount) {
+          return;
+        }
+        
         if (!categories[subCategory]) {
           categories[subCategory] = 0
         }
@@ -955,6 +1018,18 @@ const monthlyData = computed(() => {
     if (amount > 0) {
       const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
       
+      // Vérifier si cette catégorie est exclue globalement ou pour ce compte spécifique
+      const account = expense.Compte;
+      const isExcludedGlobally = excludedCategories.value.includes(subCategory);
+      const isExcludedForAccount = account && 
+                                  categoryExclusionsByAccount.value[account] && 
+                                  categoryExclusionsByAccount.value[account].includes(subCategory);
+      
+      // Si la catégorie est exclue, ne pas l'inclure
+      if (isExcludedGlobally || isExcludedForAccount) {
+        return;
+      }
+      
       // Si c'est un remboursement associé à une catégorie de dépense
       if (reimbursingCategories.has(subCategory)) {
         const targetExpenseCategory = reimbursementAssociations.value[subCategory]
@@ -992,6 +1067,19 @@ const monthlyData = computed(() => {
     // Pour les dépenses
     if (amount < 0) {
       const category = expense.Catégorie?.trim() || 'Non catégorisé'
+      const account = expense.Compte
+      
+      // Vérifier si cette catégorie est exclue globalement ou pour ce compte spécifique
+      const isExcludedGlobally = excludedCategories.value.includes(category);
+      const isExcludedForAccount = account && 
+                                 categoryExclusionsByAccount.value[account] && 
+                                 categoryExclusionsByAccount.value[account].includes(category);
+      
+      // Si la catégorie est exclue, ne pas l'inclure
+      if (isExcludedGlobally || isExcludedForAccount) {
+        return;
+      }
+      
       const absAmount = Math.abs(amount)
       
       // Si cette catégorie est associée à des remboursements
@@ -1081,12 +1169,29 @@ const accountChartData = computed(() => {
   // Utiliser les transactions filtrées par type
   filteredExpensesByType.value.forEach(expense => {
     const account = expense.Compte?.trim() || 'Non spécifié'
-    const amount = Math.abs(getAdjustedAmount(expense))
+    const amount = getAdjustedAmount(expense)
     
+    // Vérifier les exclusions de catégories (pour être cohérent avec les autres graphiques)
+    const categoryField = amount > 0 ? 'Sous-Catégorie' : 'Catégorie'
+    const category = expense[categoryField]?.trim() || 'Non catégorisé'
+    
+    // Vérifier si cette catégorie est exclue globalement ou pour ce compte spécifique
+    const isExcludedGlobally = excludedCategories.value.includes(category)
+    const isExcludedForAccount = account && 
+                               categoryExclusionsByAccount.value[account] && 
+                               categoryExclusionsByAccount.value[account].includes(category)
+    
+    // Si la catégorie est exclue, ne pas inclure cette transaction
+    if (isExcludedGlobally || isExcludedForAccount) {
+      return
+    }
+    
+    // Ajouter le montant au total du compte (en valeur absolue)
+    const absAmount = Math.abs(amount)
     if (!accounts[account]) {
       accounts[account] = 0
     }
-    accounts[account] += amount
+    accounts[account] += absAmount
   })
   
   // Modifier les labels pour indiquer les comptes joints
