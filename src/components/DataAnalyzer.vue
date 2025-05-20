@@ -34,17 +34,24 @@
         }">
           {{ Math.abs(totalAmount).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}
           <span class="card-sign">{{ totalAmount < 0 ? '-' : '+' }}</span>
+          <span v-if="jointAccounts.length > 0" class="card-adjusted-indicator" title="Ce montant tient compte de la division par 2 pour les comptes joints">*</span>
         </div>
-        <div class="card-label">{{ transactionType === 'income' ? 'Total revenus' : transactionType === 'expenses' ? 'Total dépenses' : 'Solde' }}</div>
+        <div class="card-label">
+          {{ transactionType === 'income' ? 'Total revenus' : transactionType === 'expenses' ? 'Total dépenses' : 'Solde' }}
+        </div>
       </div>
       <div class="card">
         <div class="card-value">
           {{ Math.abs(averageAmount).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}
+          <span v-if="jointAccounts.length > 0" class="card-adjusted-indicator" title="Ce montant tient compte de la division par 2 pour les comptes joints">*</span>
         </div>
         <div class="card-label">Moyenne par transaction</div>
       </div>
       <div class="card">
-        <div class="card-value">{{ uniqueAccounts.length }}</div>
+        <div class="card-value">
+          {{ uniqueAccounts.length }}
+          <span v-if="jointAccounts.length > 0" class="joint-accounts-count">({{ jointAccounts.length }} joint<span v-if="jointAccounts.length > 1">s</span>)</span>
+        </div>
         <div class="card-label">Comptes</div>
       </div>
     </div>
@@ -111,6 +118,34 @@
         <p v-if="excludedCategories.length > 0">
           <strong>{{ excludedCategories.length }} catégorie(s) masquée(s) pour tous les comptes:</strong>
           {{ excludedCategories.join(', ') }}
+        </p>
+      </div>
+      
+      <!-- Section pour les comptes joints -->
+      <div class="filter-section">
+        <div class="filter-group exclude-categories">
+          <div class="section-header">
+            <label>Comptes joints (montants divisés par 2):</label>
+            <div class="tooltip-icon" title="Les montants des comptes joints sont divisés par 2 pour refléter votre part réelle des dépenses et revenus partagés">?</div>
+          </div>
+          <div class="checkbox-container">
+            <div v-for="account in uniqueAccounts" :key="account" class="checkbox-item">
+              <input 
+                type="checkbox" 
+                :id="'joint-account-' + account" 
+                v-model="jointAccounts" 
+                :value="account"
+              />
+              <label :for="'joint-account-' + account">{{ account }}</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="filter-info" v-if="jointAccounts.length > 0">
+        <p>
+          <strong>{{ jointAccounts.length }} compte(s) joint(s):</strong>
+          {{ jointAccounts.join(', ') }}
         </p>
       </div>
     </div>
@@ -195,8 +230,17 @@
                       : (expense.Catégorie || 'Non catégorisé') }}
                 </td>
                 <td :class="{'negative': parseFloat(expense.Montant) < 0, 'positive': parseFloat(expense.Montant) > 0}">
-                  {{ Math.abs(parseFloat(expense.Montant)).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}
-                  <span class="sign">{{ parseFloat(expense.Montant) < 0 ? '-' : '+' }}</span>
+                  <template v-if="expense.Compte && jointAccounts.includes(expense.Compte)">
+                    <span class="adjusted-amount">
+                      {{ Math.abs(getAdjustedAmount(expense)).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}
+                      <span class="sign">{{ parseFloat(expense.Montant) < 0 ? '-' : '+' }}</span>
+                    </span>
+                    <span class="joint-indicator" title="Montant divisé par 2 (compte joint)">½</span>
+                  </template>
+                  <template v-else>
+                    {{ Math.abs(parseFloat(expense.Montant)).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}
+                    <span class="sign">{{ parseFloat(expense.Montant) < 0 ? '-' : '+' }}</span>
+                  </template>
                 </td>
               </tr>
             </tbody>
@@ -206,6 +250,14 @@
           </div>
           <div v-else class="table-footer">
             <span>Il y a {{ finalFilteredTransactions.length }} transactions</span>
+          </div>
+          
+          <!-- Légende pour les comptes joints -->
+          <div class="table-legend" v-if="jointAccounts.length > 0">
+            <div class="legend-item">
+              <span class="joint-indicator">½</span>
+              <span>Montant divisé par 2 (compte joint)</span>
+            </div>
           </div>
         </div>
       </div>
@@ -245,6 +297,8 @@ const showAdvancedFilters = ref(false)
 const excludedCategories = ref<string[]>([])
 const filterAccountForExclusion = ref('all')
 const categoryExclusionsByAccount = ref<Record<string, string[]>>({})
+// Comptes joints (dont les montants sont divisés par 2)
+const jointAccounts = ref<string[]>([])
 
 // Obtenir la liste des comptes uniques
 const uniqueAccounts = computed(() => {
@@ -256,6 +310,19 @@ const uniqueAccounts = computed(() => {
   })
   return Array.from(accounts)
 })
+
+// Fonction pour ajuster le montant d'une transaction selon type de compte
+function getAdjustedAmount(expense: CsvRow): number {
+  const amount = parseFloat(expense.Montant) || 0
+  const account = expense.Compte
+  
+  // Si le compte est joint, diviser le montant par 2
+  if (account && jointAccounts.value.includes(account)) {
+    return amount / 2
+  }
+  
+  return amount
+}
 
 // Obtenir la liste des catégories uniques
 const uniqueCategories = computed(() => {
@@ -356,9 +423,9 @@ const filteredExpensesByType = computed(() => {
   let filtered = filteredByAccount.value
   
   if (transactionType.value === 'expenses') {
-    filtered = filtered.filter(expense => parseFloat(expense.Montant) < 0)
+    filtered = filtered.filter(expense => getAdjustedAmount(expense) < 0)
   } else if (transactionType.value === 'income') {
-    filtered = filtered.filter(expense => parseFloat(expense.Montant) > 0)
+    filtered = filtered.filter(expense => getAdjustedAmount(expense) > 0)
   }
   
   // Ensuite exclure les catégories filtrées globalement
@@ -395,7 +462,7 @@ const finalFilteredTransactions = computed(() => {
     return filteredExpensesByType.value
   } else {
     return filteredExpensesByType.value.filter(expense => {
-      const amount = parseFloat(expense.Montant)
+      const amount = getAdjustedAmount(expense)
       
       // Pour les revenus, comparer avec la sous-catégorie
       if (amount > 0) {
@@ -413,7 +480,7 @@ const finalFilteredTransactions = computed(() => {
 
 // Calculer les totaux sur les transactions filtrées
 const totalAmount = computed(() =>
-  filteredExpensesByType.value.reduce((sum, e) => sum + (parseFloat(e.Montant) || 0), 0)
+  filteredExpensesByType.value.reduce((sum, e) => sum + getAdjustedAmount(e), 0)
 )
 
 const averageAmount = computed(() =>
@@ -447,7 +514,7 @@ const categoryData = computed(() => {
   const categories = {} as Record<string, number>
   
   filteredExpensesByType.value.forEach(expense => {
-    const amount = parseFloat(expense.Montant) || 0
+    const amount = getAdjustedAmount(expense)
     const absAmount = Math.abs(amount)
     
     // Pour les revenus (montant > 0), utiliser la sous-catégorie
@@ -516,7 +583,7 @@ const monthlyData = computed(() => {
       return
     }
     
-    const amount = parseFloat(expense.Montant) || 0
+    const amount = getAdjustedAmount(expense)
     
     if (!months[monthKey]) {
       months[monthKey] = { expenses: 0, income: 0 }
@@ -580,7 +647,7 @@ const accountChartData = computed(() => {
   // Utiliser les transactions filtrées par type
   filteredExpensesByType.value.forEach(expense => {
     const account = expense.Compte?.trim() || 'Non spécifié'
-    const amount = Math.abs(parseFloat(expense.Montant) || 0)
+    const amount = Math.abs(getAdjustedAmount(expense))
     
     if (!accounts[account]) {
       accounts[account] = 0
@@ -588,8 +655,16 @@ const accountChartData = computed(() => {
     accounts[account] += amount
   })
   
+  // Modifier les labels pour indiquer les comptes joints
+  const labels = Object.keys(accounts).map(account => {
+    if (jointAccounts.value.includes(account)) {
+      return `${account} (joint)`
+    }
+    return account
+  })
+  
   return {
-    labels: Object.keys(accounts),
+    labels: labels,
     datasets: [{
       data: Object.values(accounts),
       backgroundColor: [
@@ -746,6 +821,21 @@ function goBack() {
   right: -15px;
 }
 
+.card-adjusted-indicator {
+  position: relative;
+  top: -8px;
+  font-size: 1.1em;
+  color: #7957d5;
+  margin-left: 4px;
+  cursor: help;
+}
+
+.joint-accounts-count {
+  font-size: 0.7em;
+  color: #7957d5;
+  margin-left: 5px;
+}
+
 .card-label {
   font-size: 0.9rem;
   color: #666;
@@ -821,6 +911,27 @@ function goBack() {
 .exclude-categories {
   flex-direction: column;
   align-items: flex-start;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.tooltip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: #7957d5;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: help;
 }
 
 .filter-info {
@@ -909,11 +1020,47 @@ th {
   margin-left: 2px;
 }
 
+.joint-indicator {
+  font-size: 0.8em;
+  background-color: #7957d5;
+  color: white;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  cursor: help;
+}
+
+.adjusted-amount {
+  position: relative;
+  text-decoration: none;
+  border-bottom: 1px dashed #666;
+}
+
 .table-footer {
   padding: 10px;
   text-align: center;
   font-size: 0.9rem;
   color: #888;
+}
+
+.table-legend {
+  padding: 8px 10px;
+  margin-top: 5px;
+  font-size: 0.85rem;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border-left: 3px solid #7957d5;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #555;
 }
 
 h4 {
