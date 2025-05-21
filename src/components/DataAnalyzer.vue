@@ -435,6 +435,8 @@ const uniqueCategories = computed(() => {
 const filteredCategoriesToExclude = computed(() => {
   const account = filterAccountForExclusion.value
   const categories = new Set<string>()
+  // Récupérer les catégories de remboursement associées
+  const associatedReimbursementCategories = Object.keys(reimbursementAssociations.value)
   
   props.expenses.forEach(expense => {
     // Si on filtre pour un compte spécifique et que le compte ne correspond pas, on ignore
@@ -450,7 +452,10 @@ const filteredCategoriesToExclude = computed(() => {
       // Pour les revenus, utiliser la sous-catégorie
       if (amount > 0) {
         const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
-        categories.add(subCategory)
+        // Ne pas ajouter les catégories de remboursement déjà associées
+        if (!associatedReimbursementCategories.includes(subCategory)) {
+          categories.add(subCategory)
+        }
       } 
       // Pour les dépenses, utiliser la catégorie normale
       else {
@@ -800,6 +805,19 @@ function addReimbursementAssociation(incomeCategory: string, expenseCategory: st
   
   // Tout est bon, ajouter l'association
   reimbursementAssociations.value[incomeCategory] = expenseCategory
+  
+  // Supprimer la catégorie de remboursement des exclusions globales si elle y est présente
+  if (excludedCategories.value.includes(incomeCategory)) {
+    excludedCategories.value = excludedCategories.value.filter(cat => cat !== incomeCategory)
+  }
+  
+  // Supprimer la catégorie de remboursement des exclusions par compte si elle y est présente
+  Object.keys(categoryExclusionsByAccount.value).forEach(account => {
+    if (categoryExclusionsByAccount.value[account].includes(incomeCategory)) {
+      categoryExclusionsByAccount.value[account] = categoryExclusionsByAccount.value[account].filter(cat => cat !== incomeCategory)
+    }
+  })
+  
   showAssociationError.value = null
   return true
 }
