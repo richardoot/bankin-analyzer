@@ -162,22 +162,26 @@
             <div class="tooltip-icon" title="Associer des catégories de remboursements à des catégories de dépenses pour déduire automatiquement les remboursements des dépenses">?</div>
           </div>
           
-          <div v-if="Object.keys(reimbursementAssociations).length > 0" class="existing-associations">
-            <h5>Associations existantes:</h5>
-            <div v-for="(expenseCategory, incomeCategory) in reimbursementAssociations" :key="incomeCategory" class="association-item">
-              <div class="association-details">
-                <span class="income-category">{{ incomeCategory }}</span>
-                <span class="association-arrow">➔</span>
-                <span class="expense-category">{{ expenseCategory }}</span>
-                <div class="association-amounts">
-                  <span class="income-amount">{{ getCategoryTotal(incomeCategory, true).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}</span>
-                  <span class="association-separator">/</span>
-                  <span class="expense-amount">{{ getCategoryTotal(expenseCategory, false).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}</span>
+          <div v-if="Object.keys(reimbursementAssociations).length > 0" class="existing-associations-container">
+            <h5 class="associations-title">Associations existantes:</h5>
+            <div class="existing-associations">
+              <div v-for="(expenseCategory, incomeCategory) in reimbursementAssociations" :key="incomeCategory" 
+                  class="association-item"
+                  :class="{'half-width': Object.keys(reimbursementAssociations).length === 1}">
+                <div class="association-details">
+                  <span class="income-category">{{ incomeCategory }}</span>
+                  <span class="association-arrow">➔</span>
+                  <span class="expense-category">{{ expenseCategory }}</span>
+                  <div class="association-amounts">
+                    <span class="income-amount">{{ getCategoryTotal(incomeCategory, true).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}</span>
+                    <span class="association-separator">/</span>
+                    <span class="expense-amount">{{ getCategoryTotal(expenseCategory, false).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}</span>
+                  </div>
                 </div>
+                <button class="remove-association-btn" @click="removeReimbursementAssociation(incomeCategory)">
+                  <span class="remove-icon">×</span>
+                </button>
               </div>
-              <button class="remove-association-btn" @click="removeReimbursementAssociation(incomeCategory)">
-                <span class="remove-icon">×</span>
-              </button>
             </div>
           </div>
           
@@ -1621,10 +1625,22 @@ th {
   color: #555;
 }
 
-.existing-associations {
+.existing-associations-container {
   margin-bottom: 15px;
   padding-bottom: 10px;
   border-bottom: 1px solid #e0e0e0;
+}
+
+.associations-title {
+  margin-bottom: 10px;
+  display: block;
+  width: 100%;
+}
+
+.existing-associations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .new-association {
@@ -1641,39 +1657,62 @@ h5 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
   padding: 8px 10px;
   background-color: #f0f5ff;
   border-radius: 4px;
   font-size: 0.9rem;
+  min-width: 250px;
+  max-width: 100%;
+  box-sizing: border-box;
+  flex: 1 1 calc(33.33% - 10px);
+}
+
+.association-item.half-width {
+  flex: 0 0 calc(50% - 10px);
+  max-width: calc(50% - 10px);
 }
 
 .association-details {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .association-arrow {
   margin: 0 8px;
   color: #7957d5;
   font-weight: bold;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
 }
 
 .income-category {
   color: #42b983;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .expense-category {
   color: #e74c3c;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .association-amounts {
   font-size: 0.85rem;
   color: #666;
   margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .income-amount {
@@ -1693,11 +1732,15 @@ h5 {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-width: 100%;
 }
 
 .association-selects {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
 }
 
 .add-association-btn {
@@ -1804,6 +1847,30 @@ h4 {
   
   .filter-select {
     flex-grow: 1;
+  }
+  
+  .association-item, .association-item.half-width {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+  
+  .existing-associations {
+    gap: 8px;
+  }
+  
+  .association-selects {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+  }
+  
+  .association-selects select {
+    width: 100%;
+  }
+  
+  .association-arrow {
+    margin: 5px 0;
+    align-self: center;
   }
 }
 </style>
