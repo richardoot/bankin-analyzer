@@ -231,7 +231,18 @@
       
       <!-- Graphique par mois -->
       <div class="chart-box">
-        <h4>Évolution temporelle</h4>
+        <div class="chart-header">
+          <h4>Évolution temporelle</h4>
+          <div class="category-filter">
+            <label for="monthly-category-filter">Filtrer par catégorie:</label>
+            <select id="monthly-category-filter" v-model="selectedTimelineCategory" class="filter-select">
+              <option value="all">Toutes les catégories</option>
+              <option v-for="category in uniqueCategories" :key="category" :value="category">
+                {{ category }}
+              </option>
+            </select>
+          </div>
+        </div>
         <Bar 
           :data="monthlyChartData" 
           :options="chartOptions"
@@ -360,6 +371,7 @@ const emit = defineEmits<{
 // États pour le filtrage
 const selectedAccount = ref('all')
 const selectedCategory = ref('all')
+const selectedTimelineCategory = ref('all') // Pour filtrer le graphique d'évolution temporelle
 const transactionType = ref('all') // 'all', 'expenses', 'income'
 const showAdvancedFilters = ref(false)
 const excludedCategories = ref<string[]>([])
@@ -972,12 +984,11 @@ const categoryChartData = computed(() => {
   }
 })
 
-// Préparer les données par mois (pour tous les types de transactions)
-const monthlyData = computed(() => {
-  const months = {} as Record<string, { expenses: number; income: number }>
-  const reimbursingCategories = new Set(Object.keys(reimbursementAssociations.value))
-  const reimbursedCategories = new Set(Object.values(reimbursementAssociations.value))
-  const monthReimbursements = {} as Record<string, Record<string, number>>
+// Suppression de l'ancienne fonction monthlyData car remplacée par monthlyDataByCategory
+
+// Données pour le graphique en barres (évolution menselle par catégorie)
+const monthlyDataByCategory = computed(() => {
+  const months = {} as Record<string, Record<string, number>>
   
   // Initialiser la structure pour tous les mois concernés
   const initMonthKey = (dateStr: string): string | null => {
@@ -996,130 +1007,59 @@ const monthlyData = computed(() => {
     }
     
     if (!months[monthKey]) {
-      months[monthKey] = { expenses: 0, income: 0 }
-    }
-    
-    if (!monthReimbursements[monthKey]) {
-      monthReimbursements[monthKey] = {}
+      months[monthKey] = {}
     }
     
     return monthKey
   }
   
-  // Première passe : collecter tous les remboursements par mois et catégorie
-  // Important: utiliser filteredByAccount pour avoir accès à TOUS les remboursements
+  // Collecter les données par catégorie et par mois
   filteredByAccount.value.forEach(expense => {
     const monthKey = initMonthKey(expense.Date)
     if (!monthKey) return
     
     const amount = getAdjustedAmount(expense)
+    let category
     
-    // Pour les revenus (remboursements)
-    if (amount > 0) {
-      const subCategory = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+    // Filtrer selon le type de transaction
+    if ((transactionType.value === 'expenses' && amount < 0) || 
+        (transactionType.value === 'income' && amount > 0) ||
+        transactionType.value === 'all') {
+      
+      // Pour les revenus, utiliser la sous-catégorie
+      if (amount > 0) {
+        category = expense['Sous-Catégorie']?.trim() || 'Non catégorisé'
+      } 
+      // Pour les dépenses, utiliser la catégorie normale
+      else {
+        category = expense.Catégorie?.trim() || 'Non catégorisé'
+      }
       
       // Vérifier si cette catégorie est exclue globalement ou pour ce compte spécifique
-      const account = expense.Compte;
-      const isExcludedGlobally = excludedCategories.value.includes(subCategory);
-      const isExcludedForAccount = account && 
-                                  categoryExclusionsByAccount.value[account] && 
-                                  categoryExclusionsByAccount.value[account].includes(subCategory);
-      
-      // Si la catégorie est exclue, ne pas l'inclure
-      if (isExcludedGlobally || isExcludedForAccount) {
-        return;
-      }
-      
-      // Si c'est un remboursement associé à une catégorie de dépense
-      if (reimbursingCategories.has(subCategory)) {
-        const targetExpenseCategory = reimbursementAssociations.value[subCategory]
-        if (!monthReimbursements[monthKey][targetExpenseCategory]) {
-          monthReimbursements[monthKey][targetExpenseCategory] = 0
-        }
-        monthReimbursements[monthKey][targetExpenseCategory] += amount
-      }
-      // Si c'est un revenu normal (non remboursement)
-      else if ((transactionType.value === 'all' || transactionType.value === 'income')) {
-        months[monthKey].income += amount
-      }
-    }
-  })
-  
-  // Pour chaque mois, créer une copie des remboursements pour ne pas les modifier directement
-  const processedMonthReimbursements = {} as Record<string, Record<string, number>>
-  for (const monthKey in monthReimbursements) {
-    processedMonthReimbursements[monthKey] = { ...monthReimbursements[monthKey] }
-  }
-  
-  // Deuxième passe : calculer les revenus et dépenses en tenant compte des remboursements
-  // Utiliser les transactions filtrées pour respecter les filtres d'affichage
-  let transactionsToProcess = filteredByAccount.value
-  if (transactionType.value === 'expenses') {
-    transactionsToProcess = transactionsToProcess.filter(expense => getAdjustedAmount(expense) < 0)
-  }
-  
-  transactionsToProcess.forEach(expense => {
-    const monthKey = initMonthKey(expense.Date)
-    if (!monthKey) return
-    
-    const amount = getAdjustedAmount(expense)
-    
-    // Pour les dépenses
-    if (amount < 0) {
-      const category = expense.Catégorie?.trim() || 'Non catégorisé'
       const account = expense.Compte
-      
-      // Vérifier si cette catégorie est exclue globalement ou pour ce compte spécifique
-      const isExcludedGlobally = excludedCategories.value.includes(category);
+      const isExcludedGlobally = excludedCategories.value.includes(category)
       const isExcludedForAccount = account && 
                                  categoryExclusionsByAccount.value[account] && 
-                                 categoryExclusionsByAccount.value[account].includes(category);
+                                 categoryExclusionsByAccount.value[account].includes(category)
       
       // Si la catégorie est exclue, ne pas l'inclure
       if (isExcludedGlobally || isExcludedForAccount) {
-        return;
+        return
       }
       
-      const absAmount = Math.abs(amount)
+      // Initialiser la catégorie si elle n'existe pas encore pour ce mois
+      if (!months[monthKey][category]) {
+        months[monthKey][category] = 0
+      }
       
-      // Si cette catégorie est associée à des remboursements
-      if (reimbursedCategories.has(category)) {
-        // Récupérer le montant de remboursement disponible pour ce mois et cette catégorie
-        const reimbursement = (processedMonthReimbursements[monthKey] || {})[category] || 0
-        
-        // Si un remboursement est disponible
-        if (reimbursement > 0) {
-          // Si le remboursement est supérieur à la dépense
-          if (reimbursement >= absAmount) {
-            // La dépense est entièrement remboursée
-            processedMonthReimbursements[monthKey][category] = reimbursement - absAmount
-            // Ne rien ajouter aux dépenses si on est dans l'onglet "Dépenses"
-            if (transactionType.value !== 'expenses') {
-              months[monthKey].expenses += 0
-            }
-          }
-          // Si le remboursement est inférieur à la dépense
-          else {
-            // Ajouter seulement la partie non remboursée
-            months[monthKey].expenses += (absAmount - reimbursement)
-            // Le remboursement est entièrement utilisé
-            processedMonthReimbursements[monthKey][category] = 0
-          }
-        }
-        // Si pas de remboursement disponible
-        else {
-          months[monthKey].expenses += absAmount
-        }
-      }
-      // Pour les dépenses sans remboursement
-      else {
-        months[monthKey].expenses += absAmount
-      }
+      // Pour les dépenses, on travaille avec la valeur absolue
+      const valueToAdd = amount < 0 ? Math.abs(amount) : amount
+      months[monthKey][category] += valueToAdd
     }
   })
   
-  // Trier par date chronologique
-  return Object.entries(months)
+  // Trier par date chronologique et formater pour affichage
+  const sortedData = Object.entries(months)
     .sort((a, b) => a[0].localeCompare(b[0]))
     .reduce((obj, [key, value]) => {
       // Formater pour affichage (ex: "2023-05" devient "Mai 2023")
@@ -1130,28 +1070,75 @@ const monthlyData = computed(() => {
       
       obj[displayKey] = value
       return obj
-    }, {} as Record<string, { expenses: number; income: number }>)
+    }, {} as Record<string, Record<string, number>>)
+  
+  return sortedData
 })
 
 // Données pour le graphique en barres (évolution mensuelle)
 const monthlyChartData = computed(() => {
-  const data = monthlyData.value
-  const labels = Object.keys(data)
+  const dataByCategory = monthlyDataByCategory.value
+  const labels = Object.keys(dataByCategory)
   let values: Array<number> = []
+  let datasetLabel = ''
   
-  if (transactionType.value === 'expenses') {
-    values = labels.map(label => data[label].expenses)
-  } else if (transactionType.value === 'income') {
-    values = labels.map(label => data[label].income)
+  if (selectedTimelineCategory.value === 'all') {
+    // Si aucune catégorie spécifique n'est sélectionnée, on revient au comportement d'origine
+    const aggregatedData = labels.reduce((result, monthKey) => {
+      result[monthKey] = {
+        income: 0,
+        expenses: 0
+      }
+      
+      const monthCategories = dataByCategory[monthKey]
+      
+      // Additionner toutes les valeurs pour le mois selon le type de transaction
+      Object.entries(monthCategories).forEach(([category, value]) => {
+        // Pour simplifier, on considère que toutes les catégories dans l'onglet "Dépenses" sont des dépenses
+        // et toutes les catégories dans l'onglet "Revenus" sont des revenus
+        if (transactionType.value === 'expenses') {
+          result[monthKey].expenses += value
+        } else if (transactionType.value === 'income') {
+          result[monthKey].income += value
+        } else {
+          // Dans l'onglet "Toutes les transactions", on doit déterminer si c'est un revenu ou une dépense
+          // On s'appuie sur la structure de données qui indique déjà si c'est une dépense ou un revenu
+          const isIncomeCategory = incomeCategories.value.includes(category)
+          if (isIncomeCategory) {
+            result[monthKey].income += value
+          } else {
+            result[monthKey].expenses += value
+          }
+        }
+      })
+      
+      return result
+    }, {} as Record<string, { income: number, expenses: number }>)
+    
+    // Déterminer les valeurs à afficher selon le type de transaction
+    if (transactionType.value === 'expenses') {
+      values = labels.map(label => aggregatedData[label].expenses)
+      datasetLabel = 'Dépenses'
+    } else if (transactionType.value === 'income') {
+      values = labels.map(label => aggregatedData[label].income)
+      datasetLabel = 'Revenus'
+    } else {
+      values = labels.map(label => aggregatedData[label].income - aggregatedData[label].expenses)
+      datasetLabel = 'Solde'
+    }
   } else {
-    values = labels.map(label => data[label].income - data[label].expenses)
+    // Si une catégorie spécifique est sélectionnée, on affiche seulement ses données
+    values = labels.map(label => {
+      const categoryData = dataByCategory[label][selectedTimelineCategory.value] || 0
+      return categoryData
+    })
+    datasetLabel = selectedTimelineCategory.value
   }
   
   return {
     labels,
     datasets: [{
-      label: transactionType.value === 'expenses' ? 'Dépenses' : 
-             transactionType.value === 'income' ? 'Revenus' : 'Solde',
+      label: datasetLabel,
       data: values,
       backgroundColor: transactionType.value === 'expenses' ? '#e74c3c' : 
                         transactionType.value === 'income' ? '#42b983' : '#3498db',
@@ -1216,22 +1203,45 @@ const accountChartData = computed(() => {
 
 // Données pour le graphique de balance revenus/dépenses
 const balanceChartData = computed(() => {
-  const data = monthlyData.value
-  const labels = Object.keys(data)
+  const dataByCategory = monthlyDataByCategory.value
+  const labels = Object.keys(dataByCategory)
+  
+  // Agréger les données par mois pour avoir revenus et dépenses
+  const aggregatedData = labels.reduce((result, monthKey) => {
+    result[monthKey] = {
+      income: 0,
+      expenses: 0
+    }
+    
+    const monthCategories = dataByCategory[monthKey]
+    
+    // Additionner toutes les valeurs pour le mois
+    Object.entries(monthCategories).forEach(([category, value]) => {
+      // Déterminer si la catégorie est un revenu ou une dépense
+      const isIncomeCategory = incomeCategories.value.includes(category)
+      if (isIncomeCategory) {
+        result[monthKey].income += value
+      } else {
+        result[monthKey].expenses += value
+      }
+    })
+    
+    return result
+  }, {} as Record<string, { income: number, expenses: number }>)
   
   return {
     labels,
     datasets: [
       {
         label: 'Revenus',
-        data: labels.map(label => data[label].income),
+        data: labels.map(label => aggregatedData[label].income),
         backgroundColor: '#42b983',
         borderColor: '#42b983',
         borderWidth: 1
       },
       {
         label: 'Dépenses',
-        data: labels.map(label => data[label].expenses),
+        data: labels.map(label => aggregatedData[label].expenses),
         backgroundColor: '#e74c3c',
         borderColor: '#e74c3c',
         borderWidth: 1
@@ -1495,6 +1505,15 @@ function goBack() {
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   height: 350px;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+  gap: 15px;
 }
 
 .transactions-header {
