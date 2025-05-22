@@ -45,12 +45,31 @@
           {{ transactionType === 'income' ? 'Total revenus' : transactionType === 'expenses' ? 'Total dépenses' : 'Solde' }}
         </div>
       </div>
-      <div class="card">
-        <div class="card-value">
-          {{ Math.abs(averageAmount).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}
+      <div class="card monthly-average-card">
+        <div class="card-value" :class="{
+          'negative': transactionType === 'expenses' || (transactionType === 'all' && averageMonthlyExpense < 0), 
+          'positive': transactionType === 'income' || (transactionType === 'all' && averageMonthlyExpense > 0)
+        }">
+          {{ Math.abs(averageMonthlyExpense).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) }}
+          <span class="card-sign">{{ averageMonthlyExpense < 0 ? '-' : '+' }}</span>
           <span v-if="jointAccounts.length > 0" class="card-adjusted-indicator" title="Ce montant tient compte de la division par 2 pour les comptes joints">*</span>
         </div>
-        <div class="card-label">Moyenne par transaction</div>
+        <div class="card-label">
+          {{ transactionType === 'income' ? 'Moyenne mensuelle revenus' : transactionType === 'expenses' ? 'Moyenne mensuelle dépenses' : 'Moyenne mensuelle' }}
+          <span v-if="monthlyAverageCategory !== 'all'" class="filtered-category">
+            ({{ monthlyAverageCategory }})
+          </span>
+          
+          <!-- Filtre de catégorie dédié pour la moyenne mensuelle -->
+          <div class="monthly-filter-container">
+            <select v-model="monthlyAverageCategory" class="filter-select monthly-filter">
+              <option value="all">Toutes les catégories</option>
+              <option v-for="category in uniqueCategories" :key="'monthly-'+category" :value="category">
+                {{ category }}
+              </option>
+            </select>
+          </div>
+        </div>
       </div>
       <div class="card">
         <div class="card-value">
@@ -375,6 +394,7 @@ const emit = defineEmits<{
 // États pour le filtrage
 const selectedAccount = ref('all')
 const selectedCategory = ref('all')
+const monthlyAverageCategory = ref('all') // Filtre dédié pour la moyenne mensuelle
 const selectedTimelineCategory = ref('all') // Pour filtrer le graphique d'évolution temporelle
 const transactionType = ref('all') // 'all', 'expenses', 'income'
 const showAdvancedFilters = ref(false)
@@ -842,6 +862,58 @@ const availableExpenseCategories = computed(() => {
 const averageAmount = computed(() =>
   filteredExpensesByType.value.length ? totalAmount.value / filteredExpensesByType.value.length : 0
 )
+
+// Calculer la moyenne mensuelle des dépenses (globale ou par catégorie)
+const averageMonthlyExpense = computed(() => {
+  // On utilise les données mensuelles déjà calculées pour notre graphique
+  const monthlyData = monthlyDataByCategory.value
+  
+  // Si aucune donnée, renvoyer 0
+  if (Object.keys(monthlyData).length === 0) return 0
+  
+  // Nombre total de mois
+  const months = Object.keys(monthlyData)
+  const totalMonths = months.length
+  
+  let totalAmount = 0
+  
+  // Pour chaque mois, on ajoute les montants (soit de la catégorie spécifique, soit de toutes les catégories)
+  months.forEach(month => {
+    const categories = monthlyData[month]
+    
+    // Si on filtre par une catégorie spécifique via monthlyAverageCategory (filtre dédié)
+    if (monthlyAverageCategory.value !== 'all') {
+      // On ajoute uniquement le montant de la catégorie spécifiée si elle existe pour ce mois
+      if (categories[monthlyAverageCategory.value]) {
+        totalAmount += categories[monthlyAverageCategory.value]
+      }
+    } 
+    // Sinon, on ajoute les montants de toutes les catégories pour le type de transaction actuel
+    else {
+      Object.entries(categories).forEach(([category, amount]) => {
+        // Pour les dépenses, on n'inclut que les catégories de dépenses
+        if (transactionType.value === 'expenses' && !incomeCategories.value.includes(category)) {
+          totalAmount += amount
+        }
+        // Pour les revenus, on n'inclut que les catégories de revenus
+        else if (transactionType.value === 'income' && incomeCategories.value.includes(category)) {
+          totalAmount += amount
+        }
+        // Pour "toutes les transactions", on inclut tout mais on fait attention au type
+        else if (transactionType.value === 'all') {
+          if (incomeCategories.value.includes(category)) {
+            totalAmount += amount // Revenus
+          } else {
+            totalAmount -= amount // Dépenses (en négatif)
+          }
+        }
+      })
+    }
+  })
+  
+  // Calculer et renvoyer la moyenne
+  return totalMonths > 0 ? totalAmount / totalMonths : 0
+})
 
 // Formatter les dates
 function formatDate(dateStr: string | undefined): string {
@@ -1411,6 +1483,33 @@ function goBack() {
   font-size: 0.9rem;
   color: #666;
   margin-top: 5px;
+}
+
+.filtered-category {
+  display: block;
+  font-size: 0.85rem;
+  color: #7957d5;
+  font-style: italic;
+  margin-top: 3px;
+}
+
+.monthly-average-card {
+  background-color: #f7fcf9;
+  border-left: 3px solid #42b983;
+}
+
+.monthly-filter-container {
+  margin-top: 8px;
+}
+
+.monthly-filter {
+  font-size: 0.8rem;
+  padding: 3px 5px;
+  width: 100%;
+  max-width: 180px;
+  background-color: #f7fcf9;
+  border: 1px solid #42b983;
+  border-radius: 3px;
 }
 
 .filter-section {
