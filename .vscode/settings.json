@@ -1,0 +1,28 @@
+{
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "explicit"
+  },
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+    "vue"
+  ],
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.suggest.autoImports": true,
+  "vue.codeActions.enabled": true,
+  "vue.complete.casing.tags": "pascal",
+  "vue.complete.casing.props": "camel",
+  "emmet.includeLanguages": {
+    "vue-html": "html"
+  },
+  "files.associations": {
+    "*.vue": "vue"
+  },
+  "prettier.requireConfig": true,
+  "prettier.useEditorConfig": false
+}
