@@ -1,0 +1,54 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Colors for output
+BLUE='\033[0;34m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# Only run for regular commits (not merge, squash, etc.)
+if [ "$COMMIT_SOURCE" = "" ] || [ "$COMMIT_SOURCE" = "template" ]; then
+
+  # Check if commit message is empty or default
+  if [ ! -s "$COMMIT_MSG_FILE" ] || grep -q "^#" "$COMMIT_MSG_FILE"; then
+
+    # Get the current branch name
+    BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+
+    # Extract ticket number from branch name (e.g., feature/PROJ-123-description -> PROJ-123)
+    TICKET=$(echo "$BRANCH" | grep -oE '[A-Z]+-[0-9]+' | head -1)
+
+    # Suggest commit message template based on branch type
+    if echo "$BRANCH" | grep -q "^feature/"; then
+      SUGGESTED_TYPE="feat"
+    elif echo "$BRANCH" | grep -q "^fix/\|^hotfix/\|^bugfix/"; then
+      SUGGESTED_TYPE="fix"
+    elif echo "$BRANCH" | grep -q "^docs/"; then
+      SUGGESTED_TYPE="docs"
+    elif echo "$BRANCH" | grep -q "^style/"; then
+      SUGGESTED_TYPE="style"
+    elif echo "$BRANCH" | grep -q "^refactor/"; then
+      SUGGESTED_TYPE="refactor"
+    elif echo "$BRANCH" | grep -q "^test/"; then
+      SUGGESTED_TYPE="test"
+    elif echo "$BRANCH" | grep -q "^chore/"; then
+      SUGGESTED_TYPE="chore"
+    else
+      SUGGESTED_TYPE="feat"
+    fi
+
+    # Create suggested commit message
+    if [ -n "$TICKET" ]; then
+      SUGGESTED_MSG="$SUGGESTED_TYPE: add your description here ($TICKET)"
+    else
+      SUGGESTED_MSG="$SUGGESTED_TYPE: add your description here"
+    fi
+
+    echo "$SUGGESTED_MSG" > "$COMMIT_MSG_FILE"
+    echo "${BLUE}💡 Suggested commit message template has been added based on your branch.${NC}"
+    echo "${GREEN}Please edit the commit message to describe your changes.${NC}"
+  fi
+fi
