@@ -13,12 +13,39 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check-all": "npm run type-check && npm run lint:check && npm run format:check",
-    "fix-all": "npm run format && npm run lint"
+    "fix-all": "npm run format && npm run lint",
+    "prepare": "husky",
+    "commit": "git-cz",
+    "hooks:install": "husky install",
+    "hooks:test": "npm run hooks:test:pre-commit && npm run hooks:test:commit-msg",
+    "hooks:test:pre-commit": "sh .husky/pre-commit",
+    "hooks:test:commit-msg": "echo 'feat: test commit message' | npx commitlint",
+    "release:patch": "npm version patch && git push --follow-tags",
+    "release:minor": "npm version minor && git push --follow-tags",
+    "release:major": "npm version major && git push --follow-tags"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,vue}": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ],
+    "*.{css,scss,sass,less}": [
+      "prettier --write"
+    ],
+    "*.vue": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "vue": "^3.5.13"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
     "@eslint/js": "^9.27.0",
     "@typescript-eslint/eslint-plugin": "^8.32.1",
     "@typescript-eslint/parser": "^8.32.1",
@@ -26,13 +53,22 @@
     "@vue/eslint-config-prettier": "^10.2.0",
     "@vue/eslint-config-typescript": "^14.5.0",
     "@vue/tsconfig": "^0.7.0",
+    "commitizen": "^4.3.1",
+    "cz-conventional-changelog": "^3.3.0",
     "eslint": "^9.27.0",
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-prettier": "^5.4.0",
     "eslint-plugin-vue": "^10.1.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.0.0",
     "prettier": "^3.5.3",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vue-tsc": "^2.2.10"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
   }
 }
