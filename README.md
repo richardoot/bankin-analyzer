@@ -1,8 +1,45 @@
 # Bankin Analyzer
 
-Analyseur de données bancaires développé avec Vue 3, TypeScript et Vite.
+Une application web moderne pour analyser vos données financières à partir des exports CSV de
+l'application Bankin.
 
-## 🚀 Démarrage rapide
+## 🚀 Fonctionnalités
+
+### ✅ **Navigation Multi-Pages**
+
+- **Page d'accueil** : Présentation de l'application avec appel à l'action
+- **Page d'analyses** : Interface d'upload et d'analyse des données CSV
+- Navigation fluide entre les pages avec état géré
+
+### ✅ **Upload de Fichiers CSV**
+
+- Interface drag-and-drop intuitive
+- Validation des formats de fichiers (.csv)
+- Gestion d'erreurs et feedback utilisateur
+- Sécurité : traitement local, aucune donnée transmise
+
+### ✅ **Workflow Git Complet**
+
+- **Husky v9.1.7** : Hooks Git automatisés
+- **Commitlint** : Validation des messages de commit conventionnels
+- **Lint-staged** : Vérifications automatiques sur les fichiers modifiés
+- **Commitizen** : Interface interactive pour les commits
+
+### ✅ **Qualité de Code**
+
+- **TypeScript** : Typage strict et sécurité
+- **ESLint** : Analyse statique du code
+- **Prettier** : Formatage automatique
+- **Vue 3 Composition API** : Architecture moderne
+
+## 🛠️ Technologies
+
+- **Frontend** : Vue 3, TypeScript, Vite
+- **Styling** : CSS3 avec variables personnalisées, gradients, animations
+- **Outils** : Husky, ESLint, Prettier, Commitlint
+- **Design** : Interface responsive, mode sombre, accessibilité
+
+## 📦 Installation et Développement
 
 ```bash
 # Installation des dépendances
@@ -11,74 +48,98 @@ npm install
 # Démarrage du serveur de développement
 npm run dev
 
-# Build pour la production
+# Build de production
 npm run build
+
+# Vérification de la qualité du code
+npm run check-all
+
+# Commit interactif avec conventions
+npm run commit
 ```
 
-## 📋 Scripts disponibles
-
-```bash
-npm run dev          # Serveur de développement
-npm run build        # Build de production
-npm run preview      # Prévisualisation du build
-npm run type-check   # Vérification TypeScript
-npm run lint         # Linting avec correction automatique
-npm run lint:check   # Vérification du linting seulement
-npm run format       # Formatage avec Prettier
-npm run format:check # Vérification du formatage
-npm run check-all    # Vérification complète (types + lint + format)
-npm run fix-all      # Correction automatique (format + lint)
-```
-
-## 🔧 Configuration
-
-Ce projet utilise :
-
-- **Vue 3** avec Composition API et `<script setup>`
-- **TypeScript** en mode strict
-- **Vite** pour le build et le développement
-- **ESLint** avec les meilleures pratiques 2025
-- **Prettier** pour le formatage automatique
-- **Husky** pour les hooks Git
-- **Commitlint** pour les conventions de commit
-
-## 📝 Conventions de commit
-
-Ce projet suit les [Conventional Commits](./COMMIT_CONVENTIONS.md).
-
-### Hooks Git automatiques
-
-- **Pre-commit**: Vérifie et corrige le code (ESLint + Prettier + TypeScript)
-- **Commit-msg**: Valide le format du message de commit
-- **Pre-push**: Exécute tous les checks et teste le build
-
-### Exemples de commits valides
-
-```bash
-feat: add user dashboard
-fix: resolve authentication bug
-docs: update API documentation
-style: format components with prettier
-refactor: extract validation logic
-```
-
-## 🏗️ Architecture
+## 🎯 Structure du Projet
 
 ```
 src/
-├── components/     # Composants Vue réutilisables
-├── assets/        # Ressources statiques
-├── style.css     # Styles globaux
-└── main.ts       # Point d'entrée de l'application
+├── components/
+│   ├── AppHeader.vue           # En-tête avec navigation
+│   ├── HeroSection.vue         # Section héro de la page d'accueil
+│   ├── StartAnalysisSection.vue # CTA pour démarrer l'analyse
+│   ├── AnalysesPage.vue        # Page des analyses
+│   ├── UploadSection.vue       # Section d'upload de fichiers
+│   ├── FileUpload.vue          # Composant drag-and-drop
+│   └── AppFooter.vue           # Pied de page
+├── composables/
+│   └── useFileUpload.ts        # Logique d'upload réutilisable
+├── types/
+│   └── index.ts                # Définitions TypeScript
+└── App.vue                     # Composant racine avec navigation
 ```
 
-## 🛠️ Développement
+## 🔄 Workflow Git
 
-Le projet inclut une configuration VS Code optimisée avec :
+### Hooks Configurés
 
-- Formatage automatique à la sauvegarde
-- Correction automatique ESLint
-- Extensions recommandées
+- **pre-commit** : lint-staged + vérifications TypeScript
+- **commit-msg** : validation commitlint
+- **prepare-commit-msg** : templates automatiques
+- **pre-push** : suite de validation complète
+- **post-commit** : feedback de succès
 
-Pour plus de détails sur les conventions de commit, consultez
-[COMMIT_CONVENTIONS.md](./COMMIT_CONVENTIONS.md).
+### Scripts Disponibles
+
+```bash
+npm run hooks:test          # Test des hooks Git
+npm run commit             # Commit interactif avec commitizen
+npm run fix-all           # Correction automatique (ESLint + Prettier)
+npm run check-all         # Vérifications complètes
+```
+
+## 🎨 Design System
+
+### Couleurs
+
+- **Primaire** : Gradients bleu-violet (#667eea → #764ba2)
+- **Accent** : Dégradé doré (#fbbf24 → #f59e0b)
+- **Fond** : Blanc vers gris clair (#ffffff → #f8fafc)
+- **Texte** : Grises (#1f2937, #6b7280)
+
+### Composants
+
+- Cards avec glassmorphism et backdrop-filter
+- Boutons avec animations de hover et états
+- Icônes SVG inline pour la performance
+- Responsive design avec breakpoints mobiles
+
+## 🔒 Sécurité
+
+- **Traitement local** : Aucune donnée bancaire transmise
+- **Validation stricte** : Types de fichiers et tailles
+- **TypeScript** : Sécurité au niveau du code
+- **CSP-ready** : Compatible Content Security Policy
+
+## 📱 Fonctionnalités Prévues
+
+- [ ] Parsing et analyse des CSV Bankin
+- [ ] Tableaux de bord interactifs
+- [ ] Graphiques de dépenses par catégorie
+- [ ] Analyse des tendances temporelles
+- [ ] Export des rapports
+- [ ] Sauvegarde locale des analyses
+
+## 🚀 Status
+
+**✅ Phase 1 Complète** : Navigation et upload de fichiers
+
+- Architecture Vue 3 + TypeScript ✅
+- Workflow Git avec hooks ✅
+- Interface d'upload sécurisée ✅
+- Navigation multi-pages ✅
+- Design responsive et accessible ✅
+
+**🔄 Phase 2 En Cours** : Traitement et analyse des données CSV
+
+---
+
+_Développé avec ❤️ pour simplifier l'analyse financière personnelle_
