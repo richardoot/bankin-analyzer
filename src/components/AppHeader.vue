@@ -1,5 +1,18 @@
 <script setup lang="ts">
-  // Header sans logique complexe, respecte le principe de responsabilité unique
+  interface Props {
+    currentView?: 'home' | 'analyses'
+  }
+
+  interface Emits {
+    (e: 'navigate', view: 'home' | 'analyses'): void
+  }
+
+  defineProps<Props>()
+  const emit = defineEmits<Emits>()
+
+  const handleNavigation = (view: 'home' | 'analyses') => {
+    emit('navigate', view)
+  }
 </script>
 
 <template>
@@ -28,9 +41,23 @@
       >
         <ul class="nav-list">
           <li>
-            <a href="#" class="nav-link active" aria-current="page">Accueil</a>
+            <button
+              class="nav-link"
+              :class="{ active: currentView === 'home' }"
+              @click="handleNavigation('home')"
+            >
+              Accueil
+            </button>
           </li>
-          <li><a href="#" class="nav-link">Analyses</a></li>
+          <li>
+            <button
+              class="nav-link"
+              :class="{ active: currentView === 'analyses' }"
+              @click="handleNavigation('analyses')"
+            >
+              Analyses
+            </button>
+          </li>
           <li><a href="#" class="nav-link">Rapports</a></li>
           <li><a href="#" class="nav-link">Aide</a></li>
         </ul>
@@ -109,6 +136,11 @@
     border-radius: 6px;
     transition: all 0.2s ease;
     position: relative;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    font-family: inherit;
   }
 
   .nav-link:hover {

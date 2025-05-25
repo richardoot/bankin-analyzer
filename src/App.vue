@@ -1,16 +1,40 @@
 <script setup lang="ts">
+  import { ref } from 'vue'
   import AppHeader from './components/AppHeader.vue'
   import HeroSection from './components/HeroSection.vue'
-  import UploadSection from './components/UploadSection.vue'
+  import StartAnalysisSection from './components/StartAnalysisSection.vue'
+  import AnalysesPage from './components/AnalysesPage.vue'
   import AppFooter from './components/AppFooter.vue'
+
+  // État de navigation
+  type ViewState = 'home' | 'analyses'
+  const currentView = ref<ViewState>('home')
+
+  // Gestion de la navigation
+  const handleNavigation = (view: ViewState) => {
+    currentView.value = view
+  }
+
+  // Gestion du bouton "Commencer l'analyse"
+  const handleStartAnalysis = () => {
+    currentView.value = 'analyses'
+  }
 </script>
 
 <template>
   <div class="app-container">
-    <AppHeader />
+    <AppHeader :current-view="currentView" @navigate="handleNavigation" />
     <main class="main-content" role="main">
-      <HeroSection />
-      <UploadSection />
+      <!-- Page d'accueil -->
+      <template v-if="currentView === 'home'">
+        <HeroSection />
+        <StartAnalysisSection @start-analysis="handleStartAnalysis" />
+      </template>
+
+      <!-- Page des analyses -->
+      <template v-if="currentView === 'analyses'">
+        <AnalysesPage />
+      </template>
     </main>
     <AppFooter />
   </div>
