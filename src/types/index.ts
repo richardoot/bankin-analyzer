@@ -22,3 +22,21 @@ export interface Transaction {
   category: string
   account: string
 }
+
+export interface CsvAnalysisResult {
+  isValid: boolean
+  transactionCount: number
+  categoryCount: number
+  categories: string[]
+  dateRange: {
+    start: string
+    end: string
+  }
+  totalAmount: number
+  errors?: string[]
+}
+
+export interface ValidationModalData {
+  isOpen: boolean
+  csvResult: CsvAnalysisResult | null
+}
