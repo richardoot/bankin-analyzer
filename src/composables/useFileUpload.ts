@@ -28,13 +28,38 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
           return
         }
 
-        // Vérification des en-têtes typiques Bankin
-        const headers = lines[0]?.toLowerCase() || ''
-        const requiredHeaders = ['date', 'libelle', 'montant', 'catégorie']
-        const hasValidHeaders = requiredHeaders.some(
-          header =>
-            headers.includes(header) ||
-            headers.includes(header.replace('é', 'e'))
+        // Vérification des en-têtes Bankin (séparateur point-virgule)
+        const headerLine = lines[0]
+        if (!headerLine) {
+          resolve({
+            isValid: false,
+            transactionCount: 0,
+            categoryCount: 0,
+            categories: [],
+            dateRange: { start: '', end: '' },
+            totalAmount: 0,
+            errors: ['Fichier CSV vide ou en-têtes manquants'],
+          })
+          return
+        }
+
+        const headers = headerLine
+          .split(';')
+          .map(h => h.replace(/"/g, '').trim())
+
+        // En-têtes attendus pour un export Bankin
+        const expectedHeaders = [
+          'Date',
+          'Description',
+          'Compte',
+          'Montant',
+          'Catégorie',
+          'Sous-Catégorie',
+          'Note',
+          'Pointée',
+        ]
+        const hasValidHeaders = expectedHeaders.every(header =>
+          headers.some(h => h.toLowerCase() === header.toLowerCase())
         )
 
         if (!hasValidHeaders) {
@@ -45,25 +70,66 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
             categories: [],
             dateRange: { start: '', end: '' },
             totalAmount: 0,
-            errors: ['Format CSV Bankin non reconnu. Vérifiez les en-têtes.'],
+            errors: [
+              'Format CSV Bankin non reconnu. En-têtes attendus : ' +
+                expectedHeaders.join(', '),
+            ],
           })
           return
         }
 
-        // Analyse des données (simulation basique)
+        // Analyse des données selon le format Bankin
         const dataLines = lines.slice(1)
         const categories = new Set<string>()
         const amounts: number[] = []
         const dates: string[] = []
 
+        // Index des colonnes
+        const dateIndex = headers.findIndex(h => h.toLowerCase() === 'date')
+        const amountIndex = headers.findIndex(
+          h => h.toLowerCase() === 'montant'
+        )
+        const categoryIndex = headers.findIndex(
+          h => h.toLowerCase() === 'catégorie'
+        )
+        const subCategoryIndex = headers.findIndex(
+          h => h.toLowerCase() === 'sous-catégorie'
+        )
+
         dataLines.forEach(line => {
-          const parts = line.split(',')
-          if (parts.length >= 4) {
-            // Extraction basique (à améliorer selon le format exact Bankin)
-            categories.add(parts[3]?.trim() || 'Non catégorisé')
-            const amount = parseFloat(parts[2]?.replace(',', '.') || '0')
-            if (!isNaN(amount)) amounts.push(amount)
-            dates.push(parts[0]?.trim() || '')
+          if (!line.trim()) return
+
+          // Parsing CSV avec séparateur point-virgule et gestion des guillemets
+          const parts = line
+            .split(';')
+            .map(part => part.replace(/^"|"$/g, '').trim())
+
+          if (parts.length >= headers.length) {
+            // Extraction de la date
+            if (dateIndex >= 0 && parts[dateIndex]) {
+              dates.push(parts[dateIndex])
+            }
+
+            // Extraction du montant
+            if (amountIndex >= 0 && parts[amountIndex]) {
+              const amount = parseFloat(parts[amountIndex].replace(',', '.'))
+              if (!isNaN(amount)) {
+                amounts.push(amount)
+
+                // Gestion des catégories selon les règles Bankin :
+                // - Pour les dépenses (montant négatif) : utiliser "Catégorie"
+                // - Pour les revenus (montant positif) : utiliser "Sous-Catégorie"
+                if (amount < 0 && categoryIndex >= 0 && parts[categoryIndex]) {
+                  categories.add(parts[categoryIndex])
+                } else if (
+                  amount > 0 &&
+                  subCategoryIndex >= 0 &&
+                  parts[subCategoryIndex]
+                ) {
+                  categories.add(parts[subCategoryIndex])
+                }
+              }
+            }
           }
         })
 
@@ -72,7 +138,7 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
 
         resolve({
           isValid: true,
-          transactionCount: dataLines.length,
+          transactionCount: dataLines.filter(line => line.trim()).length,
           categoryCount: categories.size,
           categories: Array.from(categories),
           dateRange: {
