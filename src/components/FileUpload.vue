@@ -24,11 +24,11 @@
   const {
     uploadState,
     uploadedFile,
-    handleFileUpload,
     resetUpload,
     canUpload,
     hasError,
     isComplete,
+    isValidCsvFile,
   } = useFileUpload()
 
   // Refs pour le composant
@@ -64,14 +64,17 @@
    * Traite le fichier sélectionné
    */
   const processFile = async (file: File): Promise<void> => {
-    try {
-      await handleFileUpload(file)
-      emit('file-uploaded', file)
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Erreur inconnue'
-      emit('upload-error', errorMessage)
+    // Validation basique du fichier
+    if (!isValidCsvFile(file)) {
+      emit(
+        'upload-error',
+        'Veuillez sélectionner un fichier CSV valide (max 10MB)'
+      )
+      return
     }
+
+    // Émettre le fichier pour traitement par le composant parent
+    emit('file-uploaded', file)
   }
 
   /**

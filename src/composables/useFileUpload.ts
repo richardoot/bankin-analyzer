@@ -1,5 +1,107 @@
 import { ref, computed } from 'vue'
-import type { CsvFile, UploadState } from '@/types'
+import type { CsvFile, UploadState, CsvAnalysisResult } from '@/types'
+
+/**
+ * Analyse un fichier CSV Bankin et extrait les informations
+ */
+const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.onload = e => {
+      try {
+        const text = e.target?.result as string
+        const lines = text.split('\n').filter(line => line.trim())
+
+        if (lines.length < 2) {
+          resolve({
+            isValid: false,
+            transactionCount: 0,
+            categoryCount: 0,
+            categories: [],
+            dateRange: { start: '', end: '' },
+            totalAmount: 0,
+            errors: [
+              'Le fichier CSV doit contenir au moins une ligne de données',
+            ],
+          })
+          return
+        }
+
+        // Vérification des en-têtes typiques Bankin
+        const headers = lines[0]?.toLowerCase() || ''
+        const requiredHeaders = ['date', 'libelle', 'montant', 'catégorie']
+        const hasValidHeaders = requiredHeaders.some(
+          header =>
+            headers.includes(header) ||
+            headers.includes(header.replace('é', 'e'))
+        )
+
+        if (!hasValidHeaders) {
+          resolve({
+            isValid: false,
+            transactionCount: 0,
+            categoryCount: 0,
+            categories: [],
+            dateRange: { start: '', end: '' },
+            totalAmount: 0,
+            errors: ['Format CSV Bankin non reconnu. Vérifiez les en-têtes.'],
+          })
+          return
+        }
+
+        // Analyse des données (simulation basique)
+        const dataLines = lines.slice(1)
+        const categories = new Set<string>()
+        const amounts: number[] = []
+        const dates: string[] = []
+
+        dataLines.forEach(line => {
+          const parts = line.split(',')
+          if (parts.length >= 4) {
+            // Extraction basique (à améliorer selon le format exact Bankin)
+            categories.add(parts[3]?.trim() || 'Non catégorisé')
+            const amount = parseFloat(parts[2]?.replace(',', '.') || '0')
+            if (!isNaN(amount)) amounts.push(amount)
+            dates.push(parts[0]?.trim() || '')
+          }
+        })
+
+        const totalAmount = amounts.reduce((sum, amount) => sum + amount, 0)
+        const sortedDates = dates.filter(d => d).sort()
+
+        resolve({
+          isValid: true,
+          transactionCount: dataLines.length,
+          categoryCount: categories.size,
+          categories: Array.from(categories),
+          dateRange: {
+            start: sortedDates[0] || '',
+            end: sortedDates[sortedDates.length - 1] || '',
+          },
+          totalAmount,
+          errors: [],
+        })
+      } catch (_error) {
+        resolve({
+          isValid: false,
+          transactionCount: 0,
+          categoryCount: 0,
+          categories: [],
+          dateRange: { start: '', end: '' },
+          totalAmount: 0,
+          errors: ["Erreur lors de l'analyse du fichier CSV"],
+        })
+      }
+    }
+
+    reader.onerror = () => {
+      reject(new Error('Erreur lors de la lecture du fichier'))
+    }
+
+    reader.readAsText(file, 'utf-8')
+  })
+}
 
 /**
  * Composable pour gérer l'upload de fichiers CSV Bankin
@@ -13,6 +115,7 @@ export function useFileUpload() {
   })
 
   const uploadedFile = ref<CsvFile | null>(null)
+  const analysisResult = ref<CsvAnalysisResult | null>(null)
 
   /**
    * Valide le type de fichier CSV
@@ -45,10 +148,13 @@ export function useFileUpload() {
         )
       }
 
-      // Simulation du traitement (à remplacer par la vraie logique plus tard)
-      await new Promise<void>(resolve => {
-        setTimeout(() => resolve(), 1000)
-      })
+      // Analyse du contenu CSV
+      const result = await analyzeCsvFile(file)
+      analysisResult.value = result
+
+      if (!result.isValid) {
+        throw new Error(result.errors?.join(', ') || 'Fichier CSV invalide')
+      }
 
       // Stockage des informations du fichier
       uploadedFile.value = {
@@ -63,13 +169,14 @@ export function useFileUpload() {
         isSuccess: true,
         error: null,
       }
-    } catch (error) {
+    } catch (_error) {
+      const error = _error as Error
       uploadState.value = {
         isUploading: false,
         isSuccess: false,
-        error:
-          error instanceof Error ? error.message : "Erreur lors de l'upload",
+        error: error.message || "Erreur lors de l'upload",
       }
+      analysisResult.value = null
     }
   }
 
@@ -83,6 +190,7 @@ export function useFileUpload() {
       error: null,
     }
     uploadedFile.value = null
+    analysisResult.value = null
   }
 
   // Computed properties pour l'interface
@@ -95,10 +203,12 @@ export function useFileUpload() {
   return {
     uploadState: uploadState.value,
     uploadedFile,
+    analysisResult,
     handleFileUpload,
     resetUpload,
     canUpload,
     hasError,
     isComplete,
+    isValidCsvFile,
   }
 }

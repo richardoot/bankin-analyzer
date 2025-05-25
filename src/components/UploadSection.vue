@@ -1,15 +1,65 @@
 <script setup lang="ts">
+  import { ref } from 'vue'
   import FileUpload from './FileUpload.vue'
+  import ValidationModal from './ValidationModal.vue'
+  import { useFileUpload } from '@/composables/useFileUpload'
+  import type { CsvAnalysisResult } from '@/types'
+
+  interface Emits {
+    (e: 'navigate-to-dashboard', analysisResult: CsvAnalysisResult): void
+  }
+
+  const emit = defineEmits<Emits>()
+
+  // État de la modale de validation
+  const showValidationModal = ref(false)
+  const currentAnalysisResult = ref<CsvAnalysisResult | null>(null)
+
+  // Composable pour la logique d'upload
+  const { handleFileUpload, analysisResult } = useFileUpload()
 
   // Gestionnaire d'événements pour l'upload de fichier
-  const handleFileUploaded = (file: File): void => {
-    console.log('Fichier uploadé avec succès:', file.name)
-    // TODO: Implémenter la logique de traitement du fichier
+  const handleFileUploaded = async (file: File): Promise<void> => {
+    console.log('Fichier uploadé:', file.name)
+
+    try {
+      // Analyser le fichier
+      await handleFileUpload(file)
+
+      // Afficher la modale de validation si l'analyse est réussie
+      if (analysisResult.value && analysisResult.value.isValid) {
+        currentAnalysisResult.value = analysisResult.value
+        showValidationModal.value = true
+      } else if (analysisResult.value && !analysisResult.value.isValid) {
+        // Gérer les erreurs de validation
+        console.error('Fichier invalide:', analysisResult.value.errors)
+        handleUploadError(
+          analysisResult.value.errors?.join(', ') || 'Fichier invalide'
+        )
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Erreur inconnue'
+      handleUploadError(errorMessage)
+    }
   }
 
   const handleUploadError = (error: string): void => {
     console.error("Erreur lors de l'upload:", error)
     // TODO: Implémenter la gestion d'erreur globale
+  }
+
+  // Gestionnaires de la modale de validation
+  const handleValidationConfirm = (): void => {
+    if (currentAnalysisResult.value) {
+      emit('navigate-to-dashboard', currentAnalysisResult.value)
+      showValidationModal.value = false
+    }
+  }
+
+  const handleValidationClose = (): void => {
+    showValidationModal.value = false
+    currentAnalysisResult.value = null
   }
 </script>
 
@@ -96,6 +146,14 @@
         </div>
       </div>
     </div>
+
+    <!-- Modale de validation -->
+    <ValidationModal
+      :is-open="showValidationModal"
+      :analysis-result="currentAnalysisResult"
+      @close="handleValidationClose"
+      @confirm="handleValidationConfirm"
+    />
   </section>
 </template>
 

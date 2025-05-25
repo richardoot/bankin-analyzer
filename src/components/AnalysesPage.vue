@@ -1,27 +1,57 @@
 <script setup lang="ts">
+  import { ref } from 'vue'
   import UploadSection from './UploadSection.vue'
+  import DashboardPage from './DashboardPage.vue'
+  import type { CsvAnalysisResult } from '@/types'
+
+  // État local pour gérer l'affichage
+  const showDashboard = ref(false)
+  const analysisResult = ref<CsvAnalysisResult | null>(null)
+
+  // Gestion de la navigation vers le dashboard
+  const handleNavigateToDashboard = (result: CsvAnalysisResult): void => {
+    analysisResult.value = result
+    showDashboard.value = true
+  }
+
+  // Fonction pour revenir à l'upload
+  const backToUpload = (): void => {
+    showDashboard.value = false
+    analysisResult.value = null
+  }
 </script>
 
 <template>
   <div class="analyses-page">
     <div class="analyses-container">
-      <div class="page-header">
-        <h1 class="page-title">Analyses financières</h1>
-        <p class="page-description">
-          Uploadez votre fichier d'export CSV Bankin pour commencer l'analyse de
-          vos données financières
-        </p>
-      </div>
+      <!-- Affichage conditionnel : upload ou dashboard -->
+      <template v-if="!showDashboard">
+        <div class="page-header">
+          <h1 class="page-title">Analyses financières</h1>
+          <p class="page-description">
+            Uploadez votre fichier d'export CSV Bankin pour commencer l'analyse
+            de vos données financières
+          </p>
+        </div>
 
-      <div class="upload-wrapper">
-        <UploadSection />
-      </div>
+        <div class="upload-wrapper">
+          <UploadSection @navigate-to-dashboard="handleNavigateToDashboard" />
+        </div>
+      </template>
 
-      <!-- Section pour les résultats d'analyse (à implémenter plus tard) -->
-      <div class="results-section hidden">
-        <h2>Résultats de l'analyse</h2>
-        <!-- Les graphiques et tableaux apparaîtront ici après upload -->
-      </div>
+      <!-- Dashboard intégré -->
+      <template v-else-if="analysisResult">
+        <div class="dashboard-header">
+          <button class="back-button" @click="backToUpload">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M19 12H5" />
+              <path d="M12 19l-7-7 7-7" />
+            </svg>
+            Nouvel upload
+          </button>
+        </div>
+        <DashboardPage :analysis-result="analysisResult" />
+      </template>
     </div>
   </div>
 </template>
@@ -61,6 +91,36 @@
 
   .upload-wrapper {
     margin-bottom: 3rem;
+  }
+
+  .dashboard-header {
+    margin-bottom: 2rem;
+  }
+
+  .back-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+  }
+
+  .back-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+  }
+
+  .back-button svg {
+    width: 1.2rem;
+    height: 1.2rem;
+    stroke-width: 2;
   }
 
   .results-section {
