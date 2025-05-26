@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import { ref } from 'vue'
   import type { CsvAnalysisResult } from '@/types'
 
   interface Props {
@@ -6,6 +7,13 @@
   }
 
   defineProps<Props>()
+
+  // État pour gérer l'onglet actif
+  const activeTab = ref<'expenses' | 'income'>('expenses')
+
+  const setActiveTab = (tab: 'expenses' | 'income') => {
+    activeTab.value = tab
+  }
 
   const formatAmount = (amount: number): string => {
     return new Intl.NumberFormat('fr-FR', {
@@ -44,14 +52,14 @@
           Tableau de bord financier
         </h1>
         <p class="dashboard-description">
-          Voici un aperçu de vos données financières analysées
+          Analyse détaillée de vos transactions - Dépenses et Revenus séparés
         </p>
       </div>
 
-      <!-- Grille des statistiques principales -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon transactions">
+      <!-- Statistiques générales -->
+      <div class="overview-stats">
+        <div class="stat-card total">
+          <div class="stat-icon total-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path
                 d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
@@ -60,44 +68,14 @@
             </svg>
           </div>
           <div class="stat-content">
-            <h3 class="stat-title">Transactions</h3>
+            <h3 class="stat-title">Total Transactions</h3>
             <p class="stat-value">{{ analysisResult.transactionCount }}</p>
             <p class="stat-description">transactions analysées</p>
           </div>
         </div>
 
-        <div class="stat-card">
-          <div class="stat-icon categories">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1" />
-            </svg>
-          </div>
-          <div class="stat-content">
-            <h3 class="stat-title">Catégories</h3>
-            <p class="stat-value">{{ analysisResult.categoryCount }}</p>
-            <p class="stat-description">catégories détectées</p>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon amount">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <line x1="12" y1="1" x2="12" y2="23" />
-              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-            </svg>
-          </div>
-          <div class="stat-content">
-            <h3 class="stat-title">Montant total</h3>
-            <p class="stat-value">
-              {{ formatAmount(analysisResult.totalAmount) }}
-            </p>
-            <p class="stat-description">sur la période</p>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon period">
+        <div class="stat-card period">
+          <div class="stat-icon period-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
               <line x1="16" y1="2" x2="16" y2="6" />
@@ -106,7 +84,7 @@
             </svg>
           </div>
           <div class="stat-content">
-            <h3 class="stat-title">Période</h3>
+            <h3 class="stat-title">Période d'analyse</h3>
             <p class="stat-value">
               {{ formatDate(analysisResult.dateRange.start) }}
             </p>
@@ -117,34 +95,237 @@
         </div>
       </div>
 
-      <!-- Section des catégories -->
-      <div class="categories-section">
-        <h2 class="section-title">
-          <svg
-            class="section-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
+      <!-- Système d'onglets Dépenses/Revenus -->
+      <div class="tabs-container">
+        <!-- Navigation des onglets -->
+        <div class="tabs-navigation">
+          <button
+            class="tab-button"
+            :class="{ active: activeTab === 'expenses' }"
+            @click="setActiveTab('expenses')"
           >
-            <path d="M3 3v18h18" />
-            <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
-          </svg>
-          Catégories détectées
-        </h2>
+            <svg
+              class="tab-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <path d="M17 11l-3-3V2m0 6l-3 3m3-3h8" />
+              <path d="M7 21H4a2 2 0 01-2-2v-5h20v5a2 2 0 01-2 2h-3" />
+            </svg>
+            Dépenses
+            <span class="tab-badge expenses-badge">
+              {{ analysisResult.expenses.transactionCount }}
+            </span>
+          </button>
 
-        <div class="categories-grid">
-          <div
-            v-for="(category, index) in analysisResult.categories"
-            :key="index"
-            class="category-item"
+          <button
+            class="tab-button"
+            :class="{ active: activeTab === 'income' }"
+            @click="setActiveTab('income')"
           >
-            <div
-              class="category-color"
-              :style="{
-                backgroundColor: `hsl(${(index * 137.5) % 360}, 70%, 60%)`,
-              }"
-            ></div>
-            <span class="category-name">{{ category }}</span>
+            <svg
+              class="tab-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <path d="M7 13l3 3 7-7" />
+              <path
+                d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c2.35 0 4.49.91 6.08 2.4"
+              />
+            </svg>
+            Revenus
+            <span class="tab-badge income-badge">
+              {{ analysisResult.income.transactionCount }}
+            </span>
+          </button>
+        </div>
+
+        <!-- Contenu des onglets -->
+        <div class="tab-content">
+          <!-- Onglet Dépenses -->
+          <div
+            v-show="activeTab === 'expenses'"
+            class="tab-panel expenses-panel"
+          >
+            <div class="panel-header">
+              <h2 class="panel-title">
+                <svg
+                  class="panel-icon expenses-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                >
+                  <path d="M17 11l-3-3V2m0 6l-3 3m3-3h8" />
+                  <path d="M7 21H4a2 2 0 01-2-2v-5h20v5a2 2 0 01-2 2h-3" />
+                </svg>
+                Analyse des Dépenses
+              </h2>
+              <p class="panel-description">
+                Catégories de dépenses basées sur la colonne "Catégorie"
+              </p>
+            </div>
+
+            <div class="panel-stats">
+              <div class="panel-stat-card">
+                <div class="panel-stat-icon expenses">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <line x1="12" y1="1" x2="12" y2="23" />
+                    <path
+                      d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                    />
+                  </svg>
+                </div>
+                <div class="panel-stat-content">
+                  <h4 class="panel-stat-title">Montant total</h4>
+                  <p class="panel-stat-value expenses-amount">
+                    {{ formatAmount(analysisResult.expenses.totalAmount) }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="panel-stat-card">
+                <div class="panel-stat-icon transactions">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M9 12l2 2 4-4" />
+                    <circle cx="12" cy="12" r="10" />
+                  </svg>
+                </div>
+                <div class="panel-stat-content">
+                  <h4 class="panel-stat-title">Transactions</h4>
+                  <p class="panel-stat-value">
+                    {{ analysisResult.expenses.transactionCount }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="panel-stat-card">
+                <div class="panel-stat-icon categories">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1" />
+                  </svg>
+                </div>
+                <div class="panel-stat-content">
+                  <h4 class="panel-stat-title">Catégories</h4>
+                  <p class="panel-stat-value">
+                    {{ analysisResult.expenses.categories.length }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="categories-container">
+              <h3 class="categories-title">Catégories de dépenses</h3>
+              <div class="categories-grid">
+                <div
+                  v-for="(category, index) in analysisResult.expenses
+                    .categories"
+                  :key="index"
+                  class="category-item expenses-category"
+                >
+                  <div
+                    class="category-color"
+                    :style="{
+                      backgroundColor: `hsl(${(index * 137.5) % 360}, 70%, 50%)`,
+                    }"
+                  ></div>
+                  <span class="category-name">{{ category }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Onglet Revenus -->
+          <div v-show="activeTab === 'income'" class="tab-panel income-panel">
+            <div class="panel-header">
+              <h2 class="panel-title">
+                <svg
+                  class="panel-icon income-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                >
+                  <path d="M7 13l3 3 7-7" />
+                  <path
+                    d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c2.35 0 4.49.91 6.08 2.4"
+                  />
+                </svg>
+                Analyse des Revenus
+              </h2>
+              <p class="panel-description">
+                Sources de revenus basées sur la colonne "Sous-Catégorie"
+              </p>
+            </div>
+
+            <div class="panel-stats">
+              <div class="panel-stat-card">
+                <div class="panel-stat-icon income">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <line x1="12" y1="1" x2="12" y2="23" />
+                    <path
+                      d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                    />
+                  </svg>
+                </div>
+                <div class="panel-stat-content">
+                  <h4 class="panel-stat-title">Montant total</h4>
+                  <p class="panel-stat-value income-amount">
+                    {{ formatAmount(analysisResult.income.totalAmount) }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="panel-stat-card">
+                <div class="panel-stat-icon transactions">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M9 12l2 2 4-4" />
+                    <circle cx="12" cy="12" r="10" />
+                  </svg>
+                </div>
+                <div class="panel-stat-content">
+                  <h4 class="panel-stat-title">Transactions</h4>
+                  <p class="panel-stat-value">
+                    {{ analysisResult.income.transactionCount }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="panel-stat-card">
+                <div class="panel-stat-icon categories">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1" />
+                  </svg>
+                </div>
+                <div class="panel-stat-content">
+                  <h4 class="panel-stat-title">Catégories</h4>
+                  <p class="panel-stat-value">
+                    {{ analysisResult.income.categories.length }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="categories-container">
+              <h3 class="categories-title">Sources de revenus</h3>
+              <div class="categories-grid">
+                <div
+                  v-for="(category, index) in analysisResult.income.categories"
+                  :key="index"
+                  class="category-item income-category"
+                >
+                  <div
+                    class="category-color"
+                    :style="{
+                      backgroundColor: `hsl(${(index * 137.5 + 120) % 360}, 70%, 50%)`,
+                    }"
+                  ></div>
+                  <span class="category-name">{{ category }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -162,9 +343,9 @@
           <div class="info-content">
             <h3 class="info-title">Analyse terminée</h3>
             <p class="info-description">
-              Votre fichier CSV a été analysé avec succès. Ces données vous
-              donnent un aperçu de vos habitudes financières sur la période
-              sélectionnée.
+              Vos données Bankin ont été analysées selon les règles métier : les
+              dépenses utilisent la colonne "Catégorie" et les revenus la
+              colonne "Sous-Catégorie".
             </p>
           </div>
         </div>
@@ -181,7 +362,7 @@
   }
 
   .dashboard-container {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
@@ -220,11 +401,12 @@
     margin: 0 auto;
   }
 
-  /* Grille des statistiques */
-  .stats-grid {
+  /* Statistiques générales */
+  .overview-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 1.5rem;
+    margin-bottom: 1rem;
   }
 
   .stat-card {
@@ -260,19 +442,11 @@
     color: white;
   }
 
-  .stat-icon.transactions {
+  .total-icon {
     background: linear-gradient(135deg, #3b82f6, #1d4ed8);
   }
 
-  .stat-icon.categories {
-    background: linear-gradient(135deg, #10b981, #047857);
-  }
-
-  .stat-icon.amount {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-  }
-
-  .stat-icon.period {
+  .period-icon {
     background: linear-gradient(135deg, #8b5cf6, #7c3aed);
   }
 
@@ -303,35 +477,247 @@
     margin: 0;
   }
 
-  /* Section des catégories */
-  .categories-section {
+  /* Système d'onglets */
+  .tabs-container {
     background: white;
     border-radius: 1rem;
-    padding: 2rem;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
     border: 1px solid #e5e7eb;
+    overflow: hidden;
   }
 
-  .section-title {
+  .tabs-navigation {
+    display: flex;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .tab-button {
+    flex: 1;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.75rem;
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: #1f2937;
-    margin-bottom: 1.5rem;
+    padding: 1.25rem 2rem;
+    background: transparent;
+    border: none;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
   }
 
-  .section-icon {
-    width: 1.5rem;
-    height: 1.5rem;
-    color: #3b82f6;
+  .tab-button:hover {
+    background: #f3f4f6;
+    color: #374151;
+  }
+
+  .tab-button.active {
+    background: white;
+    color: #1f2937;
+    font-weight: 600;
+  }
+
+  .tab-button.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  }
+
+  .tab-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    transition: transform 0.2s ease;
+  }
+
+  .tab-button.active .tab-icon {
+    transform: scale(1.1);
+  }
+
+  .tab-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: white;
+    min-width: 1.5rem;
+    text-align: center;
+  }
+
+  .expenses-badge {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+  }
+
+  .income-badge {
+    background: linear-gradient(135deg, #10b981, #059669);
+  }
+
+  .tab-content {
+    padding: 0;
+  }
+
+  .tab-panel {
+    padding: 2rem;
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .panel-header {
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+
+  .panel-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0 0 0.75rem;
+  }
+
+  .panel-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .expenses-icon {
+    color: #ef4444;
+  }
+
+  .income-icon {
+    color: #10b981;
+  }
+
+  .panel-description {
+    font-size: 1rem;
+    color: #6b7280;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .panel-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .panel-stat-card {
+    background: #f9fafb;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    border: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: all 0.2s ease;
+  }
+
+  .panel-stat-card:hover {
+    background: #f3f4f6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .panel-stat-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .panel-stat-icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: white;
+  }
+
+  .panel-stat-icon.expenses {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+  }
+
+  .panel-stat-icon.income {
+    background: linear-gradient(135deg, #10b981, #059669);
+  }
+
+  .panel-stat-icon.transactions {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+  }
+
+  .panel-stat-icon.categories {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+  }
+
+  .panel-stat-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .panel-stat-title {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6b7280;
+    margin: 0 0 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .panel-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0;
+    line-height: 1.2;
+  }
+
+  .expenses-amount {
+    color: #ef4444;
+  }
+
+  .income-amount {
+    color: #10b981;
+  }
+
+  /* Conteneurs de catégories */
+  .categories-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .categories-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #374151;
+    margin: 0;
   }
 
   .categories-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.75rem;
   }
 
   .category-item {
@@ -347,11 +733,22 @@
 
   .category-item:hover {
     background: #f3f4f6;
+    transform: translateY(-1px);
+  }
+
+  .expenses-category:hover {
+    border-color: #ef4444;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
+  }
+
+  .income-category:hover {
+    border-color: #10b981;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
   }
 
   .category-color {
-    width: 1rem;
-    height: 1rem;
+    width: 0.75rem;
+    height: 0.75rem;
     border-radius: 50%;
     flex-shrink: 0;
   }
@@ -360,6 +757,9 @@
     font-size: 0.875rem;
     font-weight: 500;
     color: #374151;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Section info */
@@ -413,6 +813,20 @@
   }
 
   /* Responsive */
+  @media (max-width: 1024px) {
+    .panel-stats {
+      grid-template-columns: 1fr;
+    }
+
+    .tabs-navigation {
+      flex-direction: column;
+    }
+
+    .tab-button {
+      padding: 1rem 1.5rem;
+    }
+  }
+
   @media (max-width: 768px) {
     .dashboard-page {
       padding: 1.5rem;
@@ -429,111 +843,70 @@
       height: 2rem;
     }
 
-    .stats-grid {
+    .overview-stats {
       grid-template-columns: 1fr;
-      gap: 1rem;
     }
 
-    .stat-card {
+    .tab-panel {
       padding: 1.5rem;
+    }
+
+    .panel-title {
+      font-size: 1.5rem;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .panel-stats {
+      grid-template-columns: 1fr;
     }
 
     .categories-grid {
       grid-template-columns: 1fr;
     }
 
-    .categories-section {
-      padding: 1.5rem;
-    }
-
     .info-card {
       flex-direction: column;
       text-align: center;
-      padding: 1.5rem;
+    }
+
+    .tab-button {
+      padding: 0.875rem 1rem;
+      font-size: 0.875rem;
+    }
+
+    .tab-badge {
+      font-size: 0.6875rem;
+      padding: 0.1875rem 0.375rem;
     }
   }
 
-  /* Mode sombre */
-  @media (prefers-color-scheme: dark) {
+  @media (max-width: 480px) {
     .dashboard-page {
-      background: linear-gradient(135deg, #0f1419 0%, #111827 100%);
+      padding: 1rem;
     }
 
-    .dashboard-title {
-      color: #f9fafb;
+    .tab-panel {
+      padding: 1rem;
     }
 
-    .dashboard-description {
-      color: #d1d5db;
+    .panel-stat-card {
+      padding: 1rem;
     }
 
-    .stat-card {
-      background: #1f2937;
-      border-color: #374151;
+    .tabs-navigation {
+      border-radius: 0;
     }
 
-    .stat-value {
-      color: #f9fafb;
+    .tab-button {
+      padding: 0.75rem;
+      flex-direction: column;
+      gap: 0.5rem;
     }
 
-    .categories-section {
-      background: #1f2937;
-      border-color: #374151;
+    .tab-icon {
+      width: 1rem;
+      height: 1rem;
     }
-
-    .section-title {
-      color: #f9fafb;
-    }
-
-    .category-item {
-      background: #374151;
-      border-color: #4b5563;
-    }
-
-    .category-item:hover {
-      background: #4b5563;
-    }
-
-    .category-name {
-      color: #e5e7eb;
-    }
-
-    .info-card {
-      background: linear-gradient(135deg, #1e3a8a, #1e40af);
-      border-color: #3b82f6;
-    }
-
-    .info-title,
-    .info-description {
-      color: #dbeafe;
-    }
-  }
-
-  /* Animations */
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .dashboard-container > * {
-    animation: fadeInUp 0.6s ease-out;
-  }
-
-  .stats-grid {
-    animation-delay: 0.1s;
-  }
-
-  .categories-section {
-    animation-delay: 0.2s;
-  }
-
-  .info-section {
-    animation-delay: 0.3s;
   }
 </style>
