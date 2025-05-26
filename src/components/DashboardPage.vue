@@ -358,7 +358,31 @@
   .dashboard-page {
     min-height: calc(100vh - 120px);
     padding: 2rem;
-    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(102, 126, 234, 0.05) 0%,
+      rgba(118, 75, 162, 0.05) 50%,
+      rgba(248, 250, 252, 0.8) 100%
+    );
+    position: relative;
+  }
+
+  /* Effet de texture subtile pour harmoniser avec l'app */
+  .dashboard-page::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      rgba(102, 126, 234, 0.02) 1px,
+      transparent 0
+    );
+    background-size: 30px 30px;
+    pointer-events: none;
+    z-index: 0;
   }
 
   .dashboard-container {
@@ -367,6 +391,8 @@
     display: flex;
     flex-direction: column;
     gap: 2rem;
+    position: relative;
+    z-index: 1;
   }
 
   /* En-tête */
@@ -410,11 +436,12 @@
   }
 
   .stat-card {
-    background: white;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
     border-radius: 1rem;
     padding: 2rem;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    border: 1px solid #e5e7eb;
+    border: 1px solid rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
     gap: 1.5rem;
@@ -424,6 +451,7 @@
   .stat-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.85);
   }
 
   .stat-icon {
@@ -479,17 +507,19 @@
 
   /* Système d'onglets */
   .tabs-container {
-    background: white;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
     border-radius: 1rem;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    border: 1px solid #e5e7eb;
+    border: 1px solid rgba(255, 255, 255, 0.2);
     overflow: hidden;
   }
 
   .tabs-navigation {
     display: flex;
-    background: #f9fafb;
-    border-bottom: 1px solid #e5e7eb;
+    background: rgba(249, 250, 251, 0.8);
+    backdrop-filter: blur(5px);
+    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
   }
 
   .tab-button {
@@ -510,12 +540,13 @@
   }
 
   .tab-button:hover {
-    background: #f3f4f6;
+    background: rgba(243, 244, 246, 0.8);
     color: #374151;
   }
 
   .tab-button.active {
-    background: white;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
     color: #1f2937;
     font-weight: 600;
   }
@@ -622,10 +653,11 @@
   }
 
   .panel-stat-card {
-    background: #f9fafb;
+    background: rgba(249, 250, 251, 0.6);
+    backdrop-filter: blur(5px);
     border-radius: 0.75rem;
     padding: 1.5rem;
-    border: 1px solid #e5e7eb;
+    border: 1px solid rgba(229, 231, 235, 0.3);
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -633,7 +665,7 @@
   }
 
   .panel-stat-card:hover {
-    background: #f3f4f6;
+    background: rgba(243, 244, 246, 0.8);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
@@ -725,14 +757,15 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.75rem 1rem;
-    background: #f9fafb;
+    background: rgba(249, 250, 251, 0.6);
+    backdrop-filter: blur(5px);
     border-radius: 0.5rem;
-    border: 1px solid #e5e7eb;
+    border: 1px solid rgba(229, 231, 235, 0.3);
     transition: all 0.2s ease;
   }
 
   .category-item:hover {
-    background: #f3f4f6;
+    background: rgba(243, 244, 246, 0.8);
     transform: translateY(-1px);
   }
 
