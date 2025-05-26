@@ -33,6 +33,17 @@ export interface CsvAnalysisResult {
     end: string
   }
   totalAmount: number
+  // Nouvelles propriétés pour séparer dépenses et revenus
+  expenses: {
+    totalAmount: number
+    transactionCount: number
+    categories: string[]
+  }
+  income: {
+    totalAmount: number
+    transactionCount: number
+    categories: string[]
+  }
   errors?: string[]
 }
 

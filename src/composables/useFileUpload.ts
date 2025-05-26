@@ -21,6 +21,16 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
             categories: [],
             dateRange: { start: '', end: '' },
             totalAmount: 0,
+            expenses: {
+              totalAmount: 0,
+              transactionCount: 0,
+              categories: [],
+            },
+            income: {
+              totalAmount: 0,
+              transactionCount: 0,
+              categories: [],
+            },
             errors: [
               'Le fichier CSV doit contenir au moins une ligne de données',
             ],
@@ -38,6 +48,16 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
             categories: [],
             dateRange: { start: '', end: '' },
             totalAmount: 0,
+            expenses: {
+              totalAmount: 0,
+              transactionCount: 0,
+              categories: [],
+            },
+            income: {
+              totalAmount: 0,
+              transactionCount: 0,
+              categories: [],
+            },
             errors: ['Fichier CSV vide ou en-têtes manquants'],
           })
           return
@@ -70,6 +90,16 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
             categories: [],
             dateRange: { start: '', end: '' },
             totalAmount: 0,
+            expenses: {
+              totalAmount: 0,
+              transactionCount: 0,
+              categories: [],
+            },
+            income: {
+              totalAmount: 0,
+              transactionCount: 0,
+              categories: [],
+            },
             errors: [
               'Format CSV Bankin non reconnu. En-têtes attendus : ' +
                 expectedHeaders.join(', '),
@@ -83,6 +113,12 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
         const categories = new Set<string>()
         const amounts: number[] = []
         const dates: string[] = []
+
+        // Séparation des dépenses et revenus
+        const expenseCategories = new Set<string>()
+        const incomeCategories = new Set<string>()
+        const expenseAmounts: number[] = []
+        const incomeAmounts: number[] = []
 
         // Index des colonnes
         const dateIndex = headers.findIndex(h => h.toLowerCase() === 'date')
@@ -120,13 +156,19 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
                 // - Pour les dépenses (montant négatif) : utiliser "Catégorie"
                 // - Pour les revenus (montant positif) : utiliser "Sous-Catégorie"
                 if (amount < 0 && categoryIndex >= 0 && parts[categoryIndex]) {
-                  categories.add(parts[categoryIndex])
+                  const category = parts[categoryIndex]
+                  categories.add(category)
+                  expenseCategories.add(category)
+                  expenseAmounts.push(Math.abs(amount)) // Valeur absolue pour les dépenses
                 } else if (
                   amount > 0 &&
                   subCategoryIndex >= 0 &&
                   parts[subCategoryIndex]
                 ) {
-                  categories.add(parts[subCategoryIndex])
+                  const category = parts[subCategoryIndex]
+                  categories.add(category)
+                  incomeCategories.add(category)
+                  incomeAmounts.push(amount)
                 }
               }
             }
@@ -134,6 +176,14 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
         })
 
         const totalAmount = amounts.reduce((sum, amount) => sum + amount, 0)
+        const totalExpenses = expenseAmounts.reduce(
+          (sum, amount) => sum + amount,
+          0
+        )
+        const totalIncome = incomeAmounts.reduce(
+          (sum, amount) => sum + amount,
+          0
+        )
         const sortedDates = dates.filter(d => d).sort()
 
         resolve({
@@ -146,6 +196,16 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
             end: sortedDates[sortedDates.length - 1] || '',
           },
           totalAmount,
+          expenses: {
+            totalAmount: totalExpenses,
+            transactionCount: expenseAmounts.length,
+            categories: Array.from(expenseCategories),
+          },
+          income: {
+            totalAmount: totalIncome,
+            transactionCount: incomeAmounts.length,
+            categories: Array.from(incomeCategories),
+          },
           errors: [],
         })
       } catch (_error) {
@@ -156,6 +216,16 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
           categories: [],
           dateRange: { start: '', end: '' },
           totalAmount: 0,
+          expenses: {
+            totalAmount: 0,
+            transactionCount: 0,
+            categories: [],
+          },
+          income: {
+            totalAmount: 0,
+            transactionCount: 0,
+            categories: [],
+          },
           errors: ["Erreur lors de l'analyse du fichier CSV"],
         })
       }
