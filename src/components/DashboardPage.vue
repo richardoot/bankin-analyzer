@@ -290,6 +290,8 @@
         <ReimbursementCompensationFilter
           :analysis-result="analysisResult"
           :selected-rules="compensationRules"
+          :selected-expense-categories="selectedExpenseCategories"
+          :selected-income-categories="selectedIncomeCategories"
           @update:selected-rules="compensationRules = $event"
         />
       </div>
