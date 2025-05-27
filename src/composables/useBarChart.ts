@@ -26,7 +26,8 @@ export interface BarChartData {
 export const useBarChart = (
   analysisResult: ComputedRef<CsvAnalysisResult>,
   selectedExpenseCategories?: ComputedRef<string[]>,
-  selectedIncomeCategories?: ComputedRef<string[]>
+  selectedIncomeCategories?: ComputedRef<string[]>,
+  jointAccounts?: ComputedRef<string[]>
 ) => {
   /**
    * Parse une date au format DD/MM/YYYY ou autres formats communs
@@ -129,11 +130,17 @@ export const useBarChart = (
       const monthData = monthlyData.get(monthKey)
       if (!monthData) return
 
+      // Calculer le montant en tenant compte des comptes joints
+      const isJointAccount =
+        jointAccounts?.value?.includes(transaction.account) || false
+      const amount = Math.abs(transaction.amount)
+      const adjustedAmount = isJointAccount ? amount / 2 : amount
+
       // Ajouter la transaction aux totaux du mois
       if (transaction.type === 'expense') {
-        monthData.expenses += Math.abs(transaction.amount)
+        monthData.expenses += adjustedAmount
       } else if (transaction.type === 'income') {
-        monthData.income += transaction.amount
+        monthData.income += adjustedAmount
       }
 
       monthData.transactionCount++

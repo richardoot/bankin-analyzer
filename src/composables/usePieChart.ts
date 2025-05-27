@@ -110,8 +110,53 @@ const processChartData = (
 export const usePieChart = (
   analysisResult: ComputedRef<CsvAnalysisResult | null>,
   selectedExpenseCategories?: ComputedRef<string[]>,
-  selectedIncomeCategories?: ComputedRef<string[]>
+  selectedIncomeCategories?: ComputedRef<string[]>,
+  jointAccounts?: ComputedRef<string[]>
 ) => {
+  /**
+   * Applique la logique des comptes joints aux données de catégories
+   */
+  const applyJointAccountLogic = (
+    categoriesData: Record<string, number>,
+    type: 'expenses' | 'income'
+  ): Record<string, number> => {
+    if (!jointAccounts?.value?.length || !analysisResult.value?.transactions) {
+      return categoriesData
+    }
+
+    const result: Record<string, number> = {}
+
+    // Convertir le type pour correspondre aux types de transaction
+    const transactionType = type === 'expenses' ? 'expense' : 'income'
+
+    // Recalculer les montants en tenant compte des comptes joints
+    for (const [category, originalAmount] of Object.entries(categoriesData)) {
+      let adjustedAmount = 0
+
+      // Parcourir les transactions pour cette catégorie
+      const categoryTransactions = analysisResult.value.transactions.filter(
+        t => t.category === category && t.type === transactionType
+      )
+
+      if (categoryTransactions.length === 0) {
+        // Si aucune transaction trouvée, utiliser le montant original
+        adjustedAmount = originalAmount
+      } else {
+        // Recalculer en fonction des comptes joints
+        for (const transaction of categoryTransactions) {
+          const isJointAccount = jointAccounts.value.includes(
+            transaction.account
+          )
+          const amount = Math.abs(transaction.amount)
+          adjustedAmount += isJointAccount ? amount / 2 : amount
+        }
+      }
+
+      result[category] = adjustedAmount
+    }
+
+    return result
+  }
   /**
    * Données pour le graphique des dépenses
    */
@@ -121,7 +166,7 @@ export const usePieChart = (
     }
 
     // Utilise les vraies données de catégories de dépenses si disponibles
-    const expensesData = analysisResult.value.expenses.categoriesData
+    let expensesData = analysisResult.value.expenses.categoriesData
 
     // Si pas de données détaillées, crée une répartition simulée
     if (!expensesData || Object.keys(expensesData).length === 0) {
@@ -135,15 +180,14 @@ export const usePieChart = (
         simulatedData[category] = Math.abs(baseAmount * (1 + variation))
       })
 
-      return processChartData(
-        simulatedData,
-        'expenses',
-        selectedExpenseCategories?.value
-      )
+      expensesData = simulatedData
     }
 
+    // Appliquer la logique des comptes joints
+    const adjustedData = applyJointAccountLogic(expensesData, 'expenses')
+
     return processChartData(
-      expensesData,
+      adjustedData,
       'expenses',
       selectedExpenseCategories?.value
     )
@@ -158,7 +202,7 @@ export const usePieChart = (
     }
 
     // Utilise les vraies données de catégories de revenus si disponibles
-    const incomeData = analysisResult.value.income.categoriesData
+    let incomeData = analysisResult.value.income.categoriesData
 
     // Si pas de données détaillées, crée une répartition simulée
     if (!incomeData || Object.keys(incomeData).length === 0) {
@@ -172,15 +216,14 @@ export const usePieChart = (
         simulatedData[category] = Math.abs(baseAmount * (1 + variation))
       })
 
-      return processChartData(
-        simulatedData,
-        'income',
-        selectedIncomeCategories?.value
-      )
+      incomeData = simulatedData
     }
 
+    // Appliquer la logique des comptes joints
+    const adjustedData = applyJointAccountLogic(incomeData, 'income')
+
     return processChartData(
-      incomeData,
+      adjustedData,
       'income',
       selectedIncomeCategories?.value
     )
