@@ -434,6 +434,8 @@
             <div class="chart-section">
               <BarChart
                 :chart-data="monthlyChartData"
+                :available-categories="availableCategories"
+                :analysis-result="analysisResult"
                 title="Évolution mensuelle des dépenses"
                 type="expenses"
                 :format-amount="formatBarAmount"
@@ -551,6 +553,8 @@
             <div class="chart-section">
               <BarChart
                 :chart-data="monthlyChartData"
+                :available-categories="availableCategories"
+                :analysis-result="analysisResult"
                 title="Évolution mensuelle des revenus"
                 type="income"
                 :format-amount="formatBarAmount"
