@@ -207,6 +207,8 @@
   interface Props {
     analysisResult: CsvAnalysisResult
     selectedRules?: CompensationRule[]
+    selectedExpenseCategories?: string[]
+    selectedIncomeCategories?: string[]
   }
 
   const props = defineProps<Props>()
@@ -229,7 +231,7 @@
     incomeCategory: '',
   })
 
-  // Catégories disponibles (filtrées pour exclure celles déjà associées)
+  // Catégories disponibles (filtrées pour exclure celles déjà associées ET celles désélectionnées dans CategoryFilter)
   const availableExpenseCategories = computed(() => {
     if (!props.analysisResult.isValid) return []
 
@@ -238,9 +240,18 @@
       compensationRules.value.map(rule => rule.expenseCategory)
     )
 
-    // Filtrer les catégories pour exclure celles déjà utilisées
+    // Récupérer les catégories sélectionnées dans CategoryFilter (par défaut toutes si non spécifiées)
+    const selectedCategories =
+      props.selectedExpenseCategories ||
+      props.analysisResult.expenses.categories
+
+    // Filtrer les catégories pour exclure celles déjà utilisées ET garder seulement celles sélectionnées
     return [...props.analysisResult.expenses.categories]
-      .filter(category => !usedExpenseCategories.has(category))
+      .filter(
+        category =>
+          !usedExpenseCategories.has(category) &&
+          selectedCategories.includes(category)
+      )
       .sort()
   })
 
@@ -252,9 +263,17 @@
       compensationRules.value.map(rule => rule.incomeCategory)
     )
 
-    // Filtrer les catégories pour exclure celles déjà utilisées
+    // Récupérer les catégories sélectionnées dans CategoryFilter (par défaut toutes si non spécifiées)
+    const selectedCategories =
+      props.selectedIncomeCategories || props.analysisResult.income.categories
+
+    // Filtrer les catégories pour exclure celles déjà utilisées ET garder seulement celles sélectionnées
     return [...props.analysisResult.income.categories]
-      .filter(category => !usedIncomeCategories.has(category))
+      .filter(
+        category =>
+          !usedIncomeCategories.has(category) &&
+          selectedCategories.includes(category)
+      )
       .sort()
   })
 
