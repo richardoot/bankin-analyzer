@@ -23,7 +23,11 @@ export interface BarChartData {
 /**
  * Composable pour créer les données d'histogramme mensuel
  */
-export const useBarChart = (analysisResult: ComputedRef<CsvAnalysisResult>) => {
+export const useBarChart = (
+  analysisResult: ComputedRef<CsvAnalysisResult>,
+  selectedExpenseCategories?: ComputedRef<string[]>,
+  selectedIncomeCategories?: ComputedRef<string[]>
+) => {
   /**
    * Parse une date au format DD/MM/YYYY ou autres formats communs
    */
@@ -82,6 +86,25 @@ export const useBarChart = (analysisResult: ComputedRef<CsvAnalysisResult>) => {
     result.transactions.forEach(transaction => {
       const date = parseDate(transaction.date)
       if (!date) return
+
+      // Appliquer le filtrage par catégories
+      if (transaction.type === 'expense' && selectedExpenseCategories?.value) {
+        if (
+          selectedExpenseCategories.value.length > 0 &&
+          !selectedExpenseCategories.value.includes(transaction.category || '')
+        ) {
+          return
+        }
+      }
+
+      if (transaction.type === 'income' && selectedIncomeCategories?.value) {
+        if (
+          selectedIncomeCategories.value.length > 0 &&
+          !selectedIncomeCategories.value.includes(transaction.category || '')
+        ) {
+          return
+        }
+      }
 
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 

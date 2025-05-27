@@ -4,6 +4,7 @@
   import type { CsvAnalysisResult } from '@/types'
   import { computed, ref } from 'vue'
   import BarChart from './BarChart.vue'
+  import CategoryFilter from './CategoryFilter.vue'
   import PieChart from './PieChart.vue'
 
   interface Props {
@@ -15,8 +16,57 @@
   // État pour gérer l'onglet actif
   const activeTab = ref<'expenses' | 'income'>('expenses')
 
+  // État pour contrôler la visibilité du panneau de filtrage
+  const showAdvancedFilters = ref(false)
+
+  // États pour les filtres de catégories
+  const selectedExpenseCategories = ref<string[]>([])
+  const selectedIncomeCategories = ref<string[]>([])
+
+  // Initialiser les catégories sélectionnées avec toutes les catégories disponibles
+  const initializeSelectedCategories = () => {
+    if (props.analysisResult.isValid) {
+      selectedExpenseCategories.value = [
+        ...props.analysisResult.expenses.categories,
+      ]
+      selectedIncomeCategories.value = [
+        ...props.analysisResult.income.categories,
+      ]
+    }
+  }
+
+  // Initialiser au montage
+  initializeSelectedCategories()
+
+  // Catégories disponibles selon l'onglet actif
+  const availableCategories = computed(() => {
+    if (!props.analysisResult.isValid) return []
+    return activeTab.value === 'expenses'
+      ? props.analysisResult.expenses.categories
+      : props.analysisResult.income.categories
+  })
+
+  // Catégories sélectionnées selon l'onglet actif
+  const currentSelectedCategories = computed({
+    get: () =>
+      activeTab.value === 'expenses'
+        ? selectedExpenseCategories.value
+        : selectedIncomeCategories.value,
+    set: value => {
+      if (activeTab.value === 'expenses') {
+        selectedExpenseCategories.value = value
+      } else {
+        selectedIncomeCategories.value = value
+      }
+    },
+  })
+
   const setActiveTab = (tab: 'expenses' | 'income') => {
     activeTab.value = tab
+  }
+
+  const toggleAdvancedFilters = () => {
+    showAdvancedFilters.value = !showAdvancedFilters.value
   }
 
   const formatAmount = (amount: number): string => {
@@ -36,18 +86,33 @@
     }
   }
 
-  // Utilisation du composable pour les graphiques
+  // Utilisation du composable pour les graphiques avec filtrage
   const analysisResultComputed = computed(() => props.analysisResult)
+  const selectedExpenseCategoriesComputed = computed(() => {
+    console.log('🔍 Filtres dépenses actifs:', selectedExpenseCategories.value)
+    return selectedExpenseCategories.value
+  })
+  const selectedIncomeCategoriesComputed = computed(() => {
+    console.log('🔍 Filtres revenus actifs:', selectedIncomeCategories.value)
+    return selectedIncomeCategories.value
+  })
+
   const {
     expensesChartData,
     incomeChartData,
     formatAmount: formatChartAmount,
     formatPercentage,
-  } = usePieChart(analysisResultComputed)
+  } = usePieChart(
+    analysisResultComputed,
+    selectedExpenseCategoriesComputed,
+    selectedIncomeCategoriesComputed
+  )
 
-  // Utilisation du composable pour l'histogramme mensuel
+  // Utilisation du composable pour l'histogramme mensuel avec filtrage
   const { monthlyChartData, formatAmount: formatBarAmount } = useBarChart(
-    analysisResultComputed
+    analysisResultComputed,
+    selectedExpenseCategoriesComputed,
+    selectedIncomeCategoriesComputed
   )
 
   // Gestion des interactions avec le graphique
@@ -134,6 +199,43 @@
             </p>
           </div>
         </div>
+      </div>
+
+      <!-- Bouton de filtrage avancé -->
+      <div class="advanced-filters-toggle">
+        <button
+          class="advanced-filters-btn"
+          :class="{ active: showAdvancedFilters }"
+          @click="toggleAdvancedFilters"
+        >
+          <svg
+            class="filter-toggle-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <path d="M6 3h12l-4 4v8l-4 2V7L6 3z" />
+          </svg>
+          <span>Filtrages avancés</span>
+          <svg
+            class="chevron-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            :class="{ rotated: showAdvancedFilters }"
+          >
+            <polyline points="6,9 12,15 18,9" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Panneau de filtres (conditionnel) -->
+      <div v-show="showAdvancedFilters" class="advanced-filters-panel">
+        <CategoryFilter
+          :categories="availableCategories"
+          :selected-categories="currentSelectedCategories"
+          @update:selected-categories="currentSelectedCategories = $event"
+        />
       </div>
 
       <!-- Système d'onglets Dépenses/Revenus -->
@@ -893,6 +995,105 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* Bouton de filtrage avancé */
+  .advanced-filters-toggle {
+    margin: 1.5rem 0;
+    display: flex;
+    justify-content: center;
+  }
+
+  .advanced-filters-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1.5rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    border: 1px solid #cbd5e1;
+    border-radius: 0.75rem;
+    color: #475569;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .advanced-filters-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.2),
+      transparent
+    );
+    transition: left 0.5s;
+  }
+
+  .advanced-filters-btn:hover::before {
+    left: 100%;
+  }
+
+  .advanced-filters-btn:hover {
+    background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+    border-color: #94a3b8;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .advanced-filters-btn.active {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    border-color: #1d4ed8;
+    color: white;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  }
+
+  .advanced-filters-btn.active:hover {
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+    border-color: #1e40af;
+  }
+
+  .filter-toggle-icon {
+    width: 1.125rem;
+    height: 1.125rem;
+    flex-shrink: 0;
+  }
+
+  .chevron-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .chevron-icon.rotated {
+    transform: rotate(180deg);
+  }
+
+  /* Panneau de filtres avancés */
+  .advanced-filters-panel {
+    animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+      max-height: 0;
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      max-height: 500px;
+    }
   }
 
   /* Section info */

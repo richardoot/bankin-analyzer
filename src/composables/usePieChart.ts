@@ -64,9 +64,20 @@ const generateColor = (index: number): string => {
  */
 const processChartData = (
   data: Record<string, number>,
-  _type: 'expenses' | 'income'
+  _type: 'expenses' | 'income',
+  selectedCategories?: string[]
 ): PieChartData => {
-  const total = Object.values(data).reduce(
+  // Filtre les données selon les catégories sélectionnées
+  const filteredData =
+    selectedCategories && selectedCategories.length > 0
+      ? Object.fromEntries(
+          Object.entries(data).filter(([name]) =>
+            selectedCategories.includes(name)
+          )
+        )
+      : data
+
+  const total = Object.values(filteredData).reduce(
     (sum, value) => sum + Math.abs(value),
     0
   )
@@ -76,7 +87,7 @@ const processChartData = (
   }
 
   // Trie les catégories par valeur décroissante
-  const sortedEntries = Object.entries(data)
+  const sortedEntries = Object.entries(filteredData)
     .map(([name, value]) => ({ name, value: Math.abs(value) }))
     .filter(({ value }) => value > 0)
     .sort((a, b) => b.value - a.value)
@@ -97,7 +108,9 @@ const processChartData = (
  * Hook principal pour utiliser le graphique camembert
  */
 export const usePieChart = (
-  analysisResult: ComputedRef<CsvAnalysisResult | null>
+  analysisResult: ComputedRef<CsvAnalysisResult | null>,
+  selectedExpenseCategories?: ComputedRef<string[]>,
+  selectedIncomeCategories?: ComputedRef<string[]>
 ) => {
   /**
    * Données pour le graphique des dépenses
@@ -122,10 +135,18 @@ export const usePieChart = (
         simulatedData[category] = Math.abs(baseAmount * (1 + variation))
       })
 
-      return processChartData(simulatedData, 'expenses')
+      return processChartData(
+        simulatedData,
+        'expenses',
+        selectedExpenseCategories?.value
+      )
     }
 
-    return processChartData(expensesData, 'expenses')
+    return processChartData(
+      expensesData,
+      'expenses',
+      selectedExpenseCategories?.value
+    )
   })
 
   /**
@@ -151,10 +172,18 @@ export const usePieChart = (
         simulatedData[category] = Math.abs(baseAmount * (1 + variation))
       })
 
-      return processChartData(simulatedData, 'income')
+      return processChartData(
+        simulatedData,
+        'income',
+        selectedIncomeCategories?.value
+      )
     }
 
-    return processChartData(incomeData, 'income')
+    return processChartData(
+      incomeData,
+      'income',
+      selectedIncomeCategories?.value
+    )
   })
 
   /**
