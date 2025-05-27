@@ -38,11 +38,13 @@ export interface CsvAnalysisResult {
     totalAmount: number
     transactionCount: number
     categories: string[]
+    categoriesData: Record<string, number> // Montants par catégorie
   }
   income: {
     totalAmount: number
     transactionCount: number
     categories: string[]
+    categoriesData: Record<string, number> // Montants par catégorie
   }
   errors?: string[]
 }
