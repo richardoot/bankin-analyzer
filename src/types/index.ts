@@ -21,6 +21,7 @@ export interface Transaction {
   amount: number
   category: string
   account: string
+  type: 'expense' | 'income'
 }
 
 export interface CsvAnalysisResult {
@@ -46,6 +47,8 @@ export interface CsvAnalysisResult {
     categories: string[]
     categoriesData: Record<string, number> // Montants par catégorie
   }
+  // Ajout des transactions individuelles pour l'histogramme mensuel
+  transactions: Transaction[]
   errors?: string[]
 }
 

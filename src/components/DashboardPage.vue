@@ -1,7 +1,9 @@
 <script setup lang="ts">
+  import { useBarChart, type MonthlyData } from '@/composables/useBarChart'
   import { usePieChart, type CategoryData } from '@/composables/usePieChart'
   import type { CsvAnalysisResult } from '@/types'
   import { computed, ref } from 'vue'
+  import BarChart from './BarChart.vue'
   import PieChart from './PieChart.vue'
 
   interface Props {
@@ -43,6 +45,11 @@
     formatPercentage,
   } = usePieChart(analysisResultComputed)
 
+  // Utilisation du composable pour l'histogramme mensuel
+  const { monthlyChartData, formatAmount: formatBarAmount } = useBarChart(
+    analysisResultComputed
+  )
+
   // Gestion des interactions avec le graphique
   const handleCategoryClick = (category: CategoryData) => {
     console.log('Catégorie cliquée:', category)
@@ -50,6 +57,19 @@
   }
 
   const handleCategoryHover = (_category: CategoryData | null) => {
+    // Ici on pourrait ajouter une logique pour mettre en surbrillance les éléments liés
+  }
+
+  // Gestion des interactions avec l'histogramme
+  const handleMonthClick = (month: MonthlyData, type: string) => {
+    console.log('Mois cliqué:', month, type)
+    // Ici on pourrait ajouter une logique pour filtrer les transactions par mois
+  }
+
+  const handleMonthHover = (
+    _month: MonthlyData | null,
+    _type: string | null
+  ) => {
     // Ici on pourrait ajouter une logique pour mettre en surbrillance les éléments liés
   }
 </script>
@@ -250,6 +270,18 @@
               />
             </div>
 
+            <!-- Histogramme mensuel des dépenses -->
+            <div class="chart-section">
+              <BarChart
+                :chart-data="monthlyChartData"
+                title="Évolution mensuelle des dépenses"
+                type="expenses"
+                :format-amount="formatBarAmount"
+                @month-click="handleMonthClick"
+                @month-hover="handleMonthHover"
+              />
+            </div>
+
             <div class="categories-container">
               <h3 class="categories-title">Catégories de dépenses</h3>
               <div class="categories-grid">
@@ -352,6 +384,18 @@
                 :format-percentage="formatPercentage"
                 @category-click="handleCategoryClick"
                 @category-hover="handleCategoryHover"
+              />
+            </div>
+
+            <!-- Histogramme mensuel des revenus -->
+            <div class="chart-section">
+              <BarChart
+                :chart-data="monthlyChartData"
+                title="Évolution mensuelle des revenus"
+                type="income"
+                :format-amount="formatBarAmount"
+                @month-click="handleMonthClick"
+                @month-hover="handleMonthHover"
               />
             </div>
 
@@ -791,6 +835,8 @@
     margin: 2rem 0;
     display: flex;
     justify-content: center;
+    width: 100%;
+    max-width: 100%;
   }
 
   .categories-title {
