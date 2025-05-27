@@ -2,29 +2,61 @@
   <div class="bar-chart-container">
     <!-- En-tête du graphique -->
     <div class="chart-header">
-      <h3 class="chart-title">
-        <svg
-          class="chart-title-icon"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
+      <div class="chart-header-content">
+        <div class="chart-title-section">
+          <h3 class="chart-title">
+            <svg
+              class="chart-title-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <rect x="7" y="7" width="3" height="9" />
+              <rect x="14" y="7" width="3" height="5" />
+            </svg>
+            {{ title }}
+          </h3>
+          <p class="chart-description">
+            Évolution mensuelle des
+            {{
+              type === 'expenses'
+                ? 'dépenses'
+                : type === 'income'
+                  ? 'revenus'
+                  : 'flux financiers'
+            }}
+          </p>
+        </div>
+
+        <!-- Filtre par catégorie -->
+        <div
+          v-if="
+            availableCategories &&
+            availableCategories.length > 0 &&
+            (type === 'expenses' || type === 'income')
+          "
+          class="category-filter-section"
         >
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-          <rect x="7" y="7" width="3" height="9" />
-          <rect x="14" y="7" width="3" height="5" />
-        </svg>
-        {{ title }}
-      </h3>
-      <p class="chart-description">
-        Évolution mensuelle des
-        {{
-          type === 'expenses'
-            ? 'dépenses'
-            : type === 'income'
-              ? 'revenus'
-              : 'flux financiers'
-        }}
-      </p>
+          <label for="category-select" class="filter-label">
+            Filtrer par catégorie :
+          </label>
+          <select
+            id="category-select"
+            v-model="selectedCategory"
+            class="category-select"
+          >
+            <option value="all">Toutes les catégories</option>
+            <option
+              v-for="category in availableCategories"
+              :key="category"
+              :value="category"
+            >
+              {{ category }}
+            </option>
+          </select>
+        </div>
+      </div>
     </div>
 
     <!-- Zone du graphique -->
@@ -100,7 +132,7 @@
             />
             <!-- Graduations X -->
             <g
-              v-for="(month, index) in chartData.months"
+              v-for="(month, index) in currentChartData.months"
               :key="`x-tick-${index}`"
             >
               <line
@@ -126,9 +158,12 @@
           </g>
 
           <!-- Barres de l'histogramme -->
-          <g v-if="chartData.months.length > 0" class="bars">
+          <g v-if="currentChartData.months.length > 0" class="bars">
             <!-- Barres principales -->
-            <g v-for="(month, index) in chartData.months" :key="`bar-${index}`">
+            <g
+              v-for="(month, index) in currentChartData.months"
+              :key="`bar-${index}`"
+            >
               <!-- Barre des dépenses (si type expenses ou comparison) -->
               <rect
                 v-if="type === 'expenses' || type === 'comparison'"
@@ -311,7 +346,7 @@
     </div>
 
     <!-- Message quand pas de données -->
-    <div v-if="chartData.months.length === 0" class="empty-state">
+    <div v-if="currentChartData.months.length === 0" class="empty-state">
       <svg
         class="empty-icon"
         viewBox="0 0 24 24"
@@ -328,6 +363,10 @@
 
 <script setup lang="ts">
   import type { BarChartData, MonthlyData } from '@/composables/useBarChart'
+  import type {
+    CsvAnalysisResult,
+    Transaction as GlobalTransaction,
+  } from '@/types'
   import { computed, ref } from 'vue'
 
   interface Props {
@@ -335,6 +374,8 @@
     title: string
     type: 'expenses' | 'income' | 'net' | 'comparison'
     formatAmount: (amount: number) => string
+    availableCategories?: string[]
+    analysisResult?: CsvAnalysisResult
   }
 
   const props = defineProps<Props>()
@@ -344,6 +385,162 @@
     monthClick: [month: MonthlyData, type: string]
     monthHover: [month: MonthlyData | null, type: string | null]
   }>()
+
+  // État local pour le filtrage par catégorie
+  const selectedCategory = ref<string>('all')
+
+  // Logique de filtrage par catégorie
+  const filteredChartData = computed(() => {
+    if (
+      !props.availableCategories ||
+      !props.analysisResult ||
+      selectedCategory.value === 'all'
+    ) {
+      return props.chartData
+    }
+
+    // Calculer les données mensuelles pour la catégorie sélectionnée
+    const transactions = props.analysisResult.transactions || []
+    const monthlyData = new Map<
+      string,
+      { expenses: number; income: number; transactionCount: number }
+    >()
+
+    // Filtrer les transactions par catégorie et type
+    transactions
+      .filter((transaction: GlobalTransaction) => {
+        const matchesCategory = transaction.category === selectedCategory.value
+        const matchesType =
+          (props.type === 'expenses' && transaction.type === 'expense') ||
+          (props.type === 'income' && transaction.type === 'income')
+        return matchesCategory && matchesType
+      })
+      .forEach((transaction: GlobalTransaction) => {
+        // Parser la date
+        const dateStr = transaction.date
+        if (!dateStr) return
+
+        let date: Date | null = null
+        try {
+          // Format DD/MM/YYYY (Bankin)
+          if (dateStr.includes('/')) {
+            const parts = dateStr.split('/')
+            if (parts.length === 3) {
+              const [day, month, year] = parts
+              if (day && month && year) {
+                date = new Date(
+                  parseInt(year),
+                  parseInt(month) - 1,
+                  parseInt(day)
+                )
+              }
+            }
+          }
+        } catch (_error) {
+          return
+        }
+
+        if (!date || isNaN(date.getTime())) return
+
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+
+        if (!monthlyData.has(monthKey)) {
+          monthlyData.set(monthKey, {
+            expenses: 0,
+            income: 0,
+            transactionCount: 0,
+          })
+        }
+
+        const monthData = monthlyData.get(monthKey)
+        if (!monthData) return
+
+        const amount = Math.abs(transaction.amount)
+
+        if (transaction.type === 'expense') {
+          monthData.expenses += amount
+        } else if (transaction.type === 'income') {
+          monthData.income += amount
+        }
+        monthData.transactionCount++
+      })
+
+    // Convertir en format MonthlyData
+    const months = Array.from(monthlyData.entries())
+      .map(([monthKey, data]) => {
+        const parts = monthKey.split('-')
+        if (parts.length !== 2) return null
+
+        const [yearStr, monthStr] = parts
+        if (!yearStr || !monthStr) return null
+
+        const monthNames = [
+          'Jan',
+          'Fév',
+          'Mar',
+          'Avr',
+          'Mai',
+          'Jun',
+          'Jul',
+          'Aoû',
+          'Sep',
+          'Oct',
+          'Nov',
+          'Déc',
+        ]
+
+        const yearNum = parseInt(yearStr)
+        const monthIndex = parseInt(monthStr) - 1
+
+        if (
+          isNaN(yearNum) ||
+          monthIndex < 0 ||
+          monthIndex >= 12 ||
+          !monthNames[monthIndex]
+        ) {
+          return null
+        }
+
+        return {
+          month: monthNames[monthIndex] as string,
+          year: yearNum,
+          monthKey,
+          expenses: data.expenses,
+          income: data.income,
+          net: data.income - data.expenses,
+          transactionCount: data.transactionCount,
+        }
+      })
+      .filter((month): month is NonNullable<typeof month> => month !== null)
+      .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+
+    const maxValue = Math.max(
+      ...months.map(m => Math.max(m.expenses, m.income)),
+      0
+    )
+    const minValue = Math.min(
+      ...months.map(m => Math.min(m.expenses, m.income, m.net)),
+      0
+    )
+    const totalExpenses = months.reduce((sum, m) => sum + m.expenses, 0)
+    const totalIncome = months.reduce((sum, m) => sum + m.income, 0)
+
+    return {
+      months,
+      maxValue,
+      minValue,
+      totalExpenses,
+      totalIncome,
+      totalNet: totalIncome - totalExpenses,
+    }
+  })
+
+  // Utiliser les données filtrées ou les données originales
+  const currentChartData = computed(() => {
+    return selectedCategory.value === 'all'
+      ? props.chartData
+      : filteredChartData.value
+  })
 
   // Configuration du SVG
   const svgWidth = 1200
@@ -367,17 +564,17 @@
   const chartWidth = computed(() => svgWidth - padding.left - padding.right)
   const chartHeight = computed(() => svgHeight - padding.top - padding.bottom)
   const barWidth = computed(() => {
-    if (props.chartData.months.length === 0) return 0
+    if (currentChartData.value.months.length === 0) return 0
     return Math.max(
       20,
-      (chartWidth.value / props.chartData.months.length) * 0.8
+      (chartWidth.value / currentChartData.value.months.length) * 0.8
     )
   })
 
   // Graduations de l'axe Y
   const yTicks = computed(() => {
-    const max = props.chartData.maxValue
-    const min = props.type === 'net' ? props.chartData.minValue : 0
+    const max = currentChartData.value.maxValue
+    const min = props.type === 'net' ? currentChartData.value.minValue : 0
     const range = max - min
     const tickCount = 6
     const tickSize = range / (tickCount - 1)
@@ -387,15 +584,15 @@
 
   // Position Y basée sur la valeur
   const getYPosition = (value: number): number => {
-    const max = props.chartData.maxValue
-    const min = props.type === 'net' ? props.chartData.minValue : 0
+    const max = currentChartData.value.maxValue
+    const min = props.type === 'net' ? currentChartData.value.minValue : 0
     const ratio = (value - min) / (max - min)
     return svgHeight - padding.bottom - ratio * chartHeight.value
   }
 
   // Position X basée sur l'index du mois
   const getXPosition = (index: number): number => {
-    const spacing = chartWidth.value / props.chartData.months.length
+    const spacing = chartWidth.value / currentChartData.value.months.length
     return padding.left + spacing * index + spacing / 2
   }
 
@@ -409,8 +606,8 @@
 
   // Hauteur d'une barre
   const getBarHeight = (value: number): number => {
-    const max = props.chartData.maxValue
-    const min = props.type === 'net' ? props.chartData.minValue : 0
+    const max = currentChartData.value.maxValue
+    const min = props.type === 'net' ? currentChartData.value.minValue : 0
     return (Math.abs(value) * chartHeight.value) / (max - min)
   }
 
@@ -445,7 +642,7 @@
   // Vérification du survol
   const isHovered = (index: number, type: string): boolean => {
     return (
-      hoveredBar.value?.month === props.chartData.months[index] &&
+      hoveredBar.value?.month === currentChartData.value.months[index] &&
       hoveredBar.value?.type === type
     )
   }
@@ -457,7 +654,7 @@
     isHover: boolean
   ) => {
     if (isHover) {
-      const month = props.chartData.months[index]
+      const month = currentChartData.value.months[index]
       if (!month) return
 
       // Calculer la position du tooltip basée sur les coordonnées SVG
@@ -578,14 +775,26 @@
 
   .chart-header {
     padding: 1.5rem 2rem 1rem;
-    text-align: center;
     border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+  }
+
+  .chart-header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .chart-title-section {
+    text-align: left;
+    flex: 1;
+    min-width: 250px;
   }
 
   .chart-title {
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 0.5rem;
     font-size: 1.25rem;
     font-weight: 600;
@@ -604,6 +813,42 @@
     color: #6b7280;
     margin: 0;
     line-height: 1.4;
+  }
+
+  .category-filter-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 200px;
+  }
+
+  .filter-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    margin: 0;
+  }
+
+  .category-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    color: #374151;
+    background-color: #ffffff;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+    min-width: 180px;
+  }
+
+  .category-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  .category-select:hover {
+    border-color: #9ca3af;
   }
 
   .chart-container {
