@@ -7,6 +7,9 @@
   import CategoryFilter from './CategoryFilter.vue'
   import JointAccountFilter from './JointAccountFilter.vue'
   import PieChart from './PieChart.vue'
+  import ReimbursementCompensationFilter, {
+    type CompensationRule,
+  } from './ReimbursementCompensationFilter.vue'
 
   interface Props {
     analysisResult: CsvAnalysisResult
@@ -27,6 +30,9 @@
   // États pour les comptes joints
   const selectedJointAccounts = ref<string[]>([])
 
+  // États pour les règles de compensation des remboursements
+  const compensationRules = ref<CompensationRule[]>([])
+
   // Calculer la liste des comptes uniques
   const availableAccounts = computed(() => {
     if (!props.analysisResult.isValid) return []
@@ -39,14 +45,14 @@
     return Array.from(accounts).sort()
   })
 
-  // Initialiser les catégories sélectionnées avec toutes les catégories disponibles
+  // Initialiser les catégories sélectionnées avec toutes les catégories disponibles (triées par ordre alphabétique)
   const initializeSelectedCategories = () => {
     if (props.analysisResult.isValid) {
       selectedExpenseCategories.value = [
-        ...props.analysisResult.expenses.categories,
+        ...props.analysisResult.expenses.categories.slice().sort(),
       ]
       selectedIncomeCategories.value = [
-        ...props.analysisResult.income.categories,
+        ...props.analysisResult.income.categories.slice().sort(),
       ]
     }
   }
@@ -54,12 +60,12 @@
   // Initialiser au montage
   initializeSelectedCategories()
 
-  // Catégories disponibles selon l'onglet actif
+  // Catégories disponibles selon l'onglet actif (triées par ordre alphabétique)
   const availableCategories = computed(() => {
     if (!props.analysisResult.isValid) return []
     return activeTab.value === 'expenses'
-      ? props.analysisResult.expenses.categories
-      : props.analysisResult.income.categories
+      ? [...props.analysisResult.expenses.categories].sort()
+      : [...props.analysisResult.income.categories].sort()
   })
 
   // Catégories sélectionnées selon l'onglet actif
@@ -122,7 +128,8 @@
     analysisResultComputed,
     selectedExpenseCategoriesComputed,
     selectedIncomeCategoriesComputed,
-    computed(() => selectedJointAccounts.value)
+    computed(() => selectedJointAccounts.value),
+    computed(() => compensationRules.value)
   )
 
   // Utilisation du composable pour l'histogramme mensuel avec filtrage
@@ -259,6 +266,12 @@
           :accounts="availableAccounts"
           :selected-accounts="selectedJointAccounts"
           @update:selected-accounts="selectedJointAccounts = $event"
+        />
+
+        <ReimbursementCompensationFilter
+          :analysis-result="analysisResult"
+          :selected-rules="compensationRules"
+          @update:selected-rules="compensationRules = $event"
         />
       </div>
 
