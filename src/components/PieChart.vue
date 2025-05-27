@@ -331,20 +331,23 @@
 
 <style scoped>
   .pie-chart-container {
-    background: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.8);
     backdrop-filter: blur(10px);
     border-radius: 1rem;
     padding: 1.5rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     transition: all 0.3s ease;
-    max-width: 650px;
+    width: 100%;
+    max-width: 100%;
+    min-height: 500px;
     margin: 0 auto;
+    overflow: hidden;
   }
 
   .pie-chart-container:hover {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-    background: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    background: rgba(255, 255, 255, 0.9);
   }
 
   /* En-tête du graphique */
@@ -616,6 +619,12 @@
 
   /* Responsive */
   @media (max-width: 768px) {
+    .pie-chart-container {
+      margin: 1rem;
+      padding: 1rem;
+      min-height: 400px;
+    }
+
     .chart-container {
       flex-direction: column;
       align-items: center;
@@ -630,6 +639,12 @@
   }
 
   @media (max-width: 640px) {
+    .pie-chart-container {
+      margin: 0.5rem;
+      padding: 0.75rem;
+      min-height: 350px;
+    }
+
     .chart-svg-container {
       width: 250px;
       height: 250px;

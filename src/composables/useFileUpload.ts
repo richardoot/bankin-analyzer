@@ -1,4 +1,9 @@
-import type { CsvAnalysisResult, CsvFile, UploadState } from '@/types'
+import type {
+  CsvAnalysisResult,
+  CsvFile,
+  Transaction,
+  UploadState,
+} from '@/types'
 import { computed, ref } from 'vue'
 
 /**
@@ -33,6 +38,7 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
               categories: [],
               categoriesData: {},
             },
+            transactions: [],
             errors: [
               'Le fichier CSV doit contenir au moins une ligne de données',
             ],
@@ -62,6 +68,7 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
               categories: [],
               categoriesData: {},
             },
+            transactions: [],
             errors: ['Fichier CSV vide ou en-têtes manquants'],
           })
           return
@@ -106,6 +113,7 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
               categories: [],
               categoriesData: {},
             },
+            transactions: [],
             errors: [
               'Format CSV Bankin non reconnu. En-têtes attendus : ' +
                 expectedHeaders.join(', '),
@@ -119,6 +127,9 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
         const categories = new Set<string>()
         const amounts: number[] = []
         const dates: string[] = []
+
+        // Collecte des transactions individuelles
+        const transactions: Transaction[] = []
 
         // Séparation des dépenses et revenus
         const expenseCategories = new Set<string>()
@@ -141,6 +152,12 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
         const subCategoryIndex = headers.findIndex(
           h => h.toLowerCase() === 'sous-catégorie'
         )
+        const descriptionIndex = headers.findIndex(
+          h => h.toLowerCase() === 'description'
+        )
+        const accountIndex = headers.findIndex(
+          h => h.toLowerCase() === 'compte'
+        )
 
         dataLines.forEach(line => {
           if (!line.trim()) return
@@ -151,9 +168,14 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
             .map(part => part.replace(/^"|"$/g, '').trim())
 
           if (parts.length >= headers.length) {
+            const date = dateIndex >= 0 ? parts[dateIndex] || '' : ''
+            const description =
+              descriptionIndex >= 0 ? parts[descriptionIndex] || '' : ''
+            const account = accountIndex >= 0 ? parts[accountIndex] || '' : ''
+
             // Extraction de la date
-            if (dateIndex >= 0 && parts[dateIndex]) {
-              dates.push(parts[dateIndex])
+            if (date) {
+              dates.push(date)
             }
 
             // Extraction du montant
@@ -165,32 +187,49 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
                 // Gestion des catégories selon les règles Bankin :
                 // - Pour les dépenses (montant négatif) : utiliser "Catégorie"
                 // - Pour les revenus (montant positif) : utiliser "Sous-Catégorie"
-                if (amount < 0 && categoryIndex >= 0 && parts[categoryIndex]) {
-                  const category = parts[categoryIndex]
-                  categories.add(category)
-                  expenseCategories.add(category)
-                  expenseAmounts.push(Math.abs(amount)) // Valeur absolue pour les dépenses
+                let category = ''
+                let transactionType: 'expense' | 'income' = 'expense'
 
-                  // Agrégation par catégorie pour les dépenses
-                  if (!expenseCategoriesData[category]) {
-                    expenseCategoriesData[category] = 0
+                if (amount < 0 && categoryIndex >= 0 && parts[categoryIndex]) {
+                  category = parts[categoryIndex] || ''
+                  if (category) {
+                    transactionType = 'expense'
+                    categories.add(category)
+                    expenseCategories.add(category)
+                    expenseAmounts.push(Math.abs(amount)) // Valeur absolue pour les dépenses
+
+                    // Agrégation par catégorie pour les dépenses
+                    expenseCategoriesData[category] =
+                      (expenseCategoriesData[category] || 0) + Math.abs(amount)
                   }
-                  expenseCategoriesData[category] += Math.abs(amount)
                 } else if (
                   amount > 0 &&
                   subCategoryIndex >= 0 &&
                   parts[subCategoryIndex]
                 ) {
-                  const category = parts[subCategoryIndex]
-                  categories.add(category)
-                  incomeCategories.add(category)
-                  incomeAmounts.push(amount)
+                  category = parts[subCategoryIndex] || ''
+                  if (category) {
+                    transactionType = 'income'
+                    categories.add(category)
+                    incomeCategories.add(category)
+                    incomeAmounts.push(amount)
 
-                  // Agrégation par catégorie pour les revenus
-                  if (!incomeCategoriesData[category]) {
-                    incomeCategoriesData[category] = 0
+                    // Agrégation par catégorie pour les revenus
+                    incomeCategoriesData[category] =
+                      (incomeCategoriesData[category] || 0) + amount
                   }
-                  incomeCategoriesData[category] += amount
+                }
+
+                // Collecte de la transaction individuelle
+                if (date && description && category) {
+                  transactions.push({
+                    date,
+                    description,
+                    amount,
+                    category,
+                    account,
+                    type: transactionType,
+                  })
                 }
               }
             }
@@ -230,6 +269,7 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
             categories: Array.from(incomeCategories),
             categoriesData: incomeCategoriesData,
           },
+          transactions,
           errors: [],
         })
       } catch (_error) {
@@ -252,6 +292,7 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
             categories: [],
             categoriesData: {},
           },
+          transactions: [],
           errors: ["Erreur lors de l'analyse du fichier CSV"],
         })
       }
