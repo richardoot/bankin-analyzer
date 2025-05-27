@@ -443,26 +443,6 @@
                 @month-hover="handleMonthHover"
               />
             </div>
-
-            <div class="categories-container">
-              <h3 class="categories-title">Catégories de dépenses</h3>
-              <div class="categories-grid">
-                <div
-                  v-for="(category, index) in analysisResult.expenses
-                    .categories"
-                  :key="index"
-                  class="category-item expenses-category"
-                >
-                  <div
-                    class="category-color"
-                    :style="{
-                      backgroundColor: `hsl(${(index * 137.5) % 360}, 70%, 50%)`,
-                    }"
-                  ></div>
-                  <span class="category-name">{{ category }}</span>
-                </div>
-              </div>
-            </div>
           </div>
 
           <!-- Onglet Revenus -->
@@ -561,25 +541,6 @@
                 @month-click="handleMonthClick"
                 @month-hover="handleMonthHover"
               />
-            </div>
-
-            <div class="categories-container">
-              <h3 class="categories-title">Sources de revenus</h3>
-              <div class="categories-grid">
-                <div
-                  v-for="(category, index) in analysisResult.income.categories"
-                  :key="index"
-                  class="category-item income-category"
-                >
-                  <div
-                    class="category-color"
-                    :style="{
-                      backgroundColor: `hsl(${(index * 137.5 + 120) % 360}, 70%, 50%)`,
-                    }"
-                  ></div>
-                  <span class="category-name">{{ category }}</span>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -987,13 +948,6 @@
     color: #10b981;
   }
 
-  /* Conteneurs de catégories */
-  .categories-container {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
   /* Section graphique */
   .chart-section {
     margin: 2rem 0;
@@ -1001,62 +955,6 @@
     justify-content: center;
     width: 100%;
     max-width: 100%;
-  }
-
-  .categories-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #374151;
-    margin: 0;
-  }
-
-  .categories-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 0.75rem;
-  }
-
-  .category-item {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    background: rgba(249, 250, 251, 0.6);
-    backdrop-filter: blur(5px);
-    border-radius: 0.5rem;
-    border: 1px solid rgba(229, 231, 235, 0.3);
-    transition: all 0.2s ease;
-  }
-
-  .category-item:hover {
-    background: rgba(243, 244, 246, 0.8);
-    transform: translateY(-1px);
-  }
-
-  .expenses-category:hover {
-    border-color: #ef4444;
-    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
-  }
-
-  .income-category:hover {
-    border-color: #10b981;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
-  }
-
-  .category-color {
-    width: 0.75rem;
-    height: 0.75rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .category-name {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #374151;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   /* Bouton de filtrage avancé */
