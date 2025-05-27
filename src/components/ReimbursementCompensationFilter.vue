@@ -1,0 +1,699 @@
+<template>
+  <div class="reimbursement-compensation-filter">
+    <div class="filter-header">
+      <h3 class="filter-title">
+        <svg
+          class="filter-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+        >
+          <path d="M12 1v6l4-4" />
+          <path d="M12 23v-6l4 4M12 17l-4 4" />
+          <path d="M20 12h-6l4-4M14 12l4 4" />
+          <path d="M4 12h6l-4-4M10 12l-4 4" />
+        </svg>
+        Compensation des remboursements
+      </h3>
+      <p class="filter-description">
+        Associez les catégories de remboursement aux dépenses correspondantes
+        pour les déduire automatiquement
+      </p>
+    </div>
+
+    <!-- Formulaire d'association directe -->
+    <div class="add-rule-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Catégorie de dépense</label>
+          <select v-model="newRule.expenseCategory" class="form-select">
+            <option value="">Sélectionner une dépense...</option>
+            <option
+              v-for="category in availableExpenseCategories"
+              :key="category"
+              :value="category"
+            >
+              {{ category }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Catégorie de remboursement</label>
+          <select v-model="newRule.incomeCategory" class="form-select">
+            <option value="">Sélectionner un remboursement...</option>
+            <option
+              v-for="category in availableIncomeCategories"
+              :key="category"
+              :value="category"
+            >
+              {{ category }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-group-button">
+          <button
+            class="form-btn save"
+            :disabled="!canSaveRule"
+            @click="saveRule"
+          >
+            <svg
+              class="btn-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Associer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Liste des règles de compensation -->
+    <div v-if="compensationRules.length > 0" class="compensation-rules">
+      <div
+        v-for="(rule, index) in compensationRules"
+        :key="`rule-${index}`"
+        class="compensation-rule"
+      >
+        <div class="rule-content">
+          <div class="rule-mapping">
+            <div class="expense-side">
+              <span class="category-label">Dépense</span>
+              <div class="category-chip expense">
+                <svg
+                  class="category-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                >
+                  <path
+                    d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+                  />
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                </svg>
+                {{ rule.expenseCategory }}
+              </div>
+            </div>
+
+            <div class="arrow-connector">
+              <svg
+                class="arrow-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <path d="M5 12h14" />
+                <path d="M12 5l7 7-7 7" />
+              </svg>
+            </div>
+
+            <div class="income-side">
+              <span class="category-label">Remboursement</span>
+              <div class="category-chip income">
+                <svg
+                  class="category-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                >
+                  <path d="M12 1v6l4-4M12 7l-4-4" />
+                  <circle cx="12" cy="12" r="10" />
+                </svg>
+                {{ rule.incomeCategory }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Affichage des montants impactés -->
+          <div v-if="rule.affectedAmount > 0" class="rule-impact">
+            <span class="impact-label">Montant compensé :</span>
+            <span class="impact-amount">{{
+              formatAmount(rule.affectedAmount)
+            }}</span>
+          </div>
+        </div>
+
+        <button
+          class="remove-rule-btn"
+          title="Supprimer cette règle"
+          @click="removeRule(index)"
+        >
+          <svg
+            class="remove-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Actions de gestion -->
+    <div v-if="compensationRules.length > 0" class="filter-actions">
+      <button class="filter-action-btn clear-all" @click="clearAllRules">
+        <svg
+          class="btn-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+        >
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+        Tout effacer
+      </button>
+    </div>
+
+    <!-- Message quand aucune règle -->
+    <div v-if="compensationRules.length === 0" class="empty-state">
+      <svg
+        class="empty-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+      <p class="empty-message">Aucune règle de compensation configurée</p>
+      <p class="empty-description">
+        Sélectionnez une dépense et son remboursement correspondant pour créer
+        une association
+      </p>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+  import { usePerformanceMonitor } from '@/composables/usePerformanceMonitor'
+  import type { CsvAnalysisResult } from '@/types'
+  import { computed, nextTick, ref, watch } from 'vue'
+
+  export interface CompensationRule {
+    expenseCategory: string
+    incomeCategory: string
+    affectedAmount: number
+  }
+
+  interface Props {
+    analysisResult: CsvAnalysisResult
+    selectedRules?: CompensationRule[]
+  }
+
+  const props = defineProps<Props>()
+
+  const emit = defineEmits<{
+    'update:selectedRules': [rules: CompensationRule[]]
+  }>()
+
+  // Monitoring de performance (en développement)
+  const {
+    startMeasure: _startMeasure,
+    endMeasure: _endMeasure,
+    watchWithPerformance: _watchWithPerformance,
+  } = usePerformanceMonitor('ReimbursementCompensationFilter')
+
+  // État local
+  const compensationRules = ref<CompensationRule[]>(props.selectedRules || [])
+  const newRule = ref({
+    expenseCategory: '',
+    incomeCategory: '',
+  })
+
+  // Catégories disponibles (sans filtrer celles déjà utilisées) triées par ordre alphabétique
+  const availableExpenseCategories = computed(() => {
+    if (!props.analysisResult.isValid) return []
+    return [...props.analysisResult.expenses.categories].sort()
+  })
+
+  const availableIncomeCategories = computed(() => {
+    if (!props.analysisResult.isValid) return []
+    return [...props.analysisResult.income.categories].sort()
+  })
+
+  // Vérifications pour les boutons
+  const canSaveRule = computed(() => {
+    return newRule.value.expenseCategory && newRule.value.incomeCategory
+  })
+
+  // Calcul des montants affectés
+  const calculateAffectedAmount = (incomeCategory: string): number => {
+    if (!props.analysisResult.isValid || !props.analysisResult.transactions)
+      return 0
+
+    // Utiliser les transactions originales pour calculer le montant,
+    // sans tenir compte des associations existantes
+    const reimbursementAmount = props.analysisResult.transactions
+      .filter(t => t.category === incomeCategory && t.type === 'income')
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+
+    return reimbursementAmount
+  }
+
+  // Actions
+  const saveRule = () => {
+    if (!canSaveRule.value) return
+
+    const affectedAmount = calculateAffectedAmount(newRule.value.incomeCategory)
+
+    const rule: CompensationRule = {
+      expenseCategory: newRule.value.expenseCategory,
+      incomeCategory: newRule.value.incomeCategory,
+      affectedAmount,
+    }
+
+    // Créer un nouveau tableau pour forcer la réactivité
+    compensationRules.value = [...compensationRules.value, rule]
+
+    // Émettre l'événement immédiatement pour notifier le parent
+    emit('update:selectedRules', [...compensationRules.value])
+
+    // Reset form
+    newRule.value = { expenseCategory: '', incomeCategory: '' }
+  }
+
+  const removeRule = (index: number) => {
+    // Créer une copie et modifier pour garantir la réactivité
+    compensationRules.value = compensationRules.value.filter(
+      (_, i) => i !== index
+    )
+
+    // Émettre directement vers le parent pour assurer la mise à jour immédiate
+    emit('update:selectedRules', [...compensationRules.value])
+
+    // Réinitialiser le formulaire pour s'assurer que les sélecteurs se mettent à jour
+    newRule.value = { expenseCategory: '', incomeCategory: '' }
+  }
+
+  const clearAllRules = () => {
+    compensationRules.value = []
+    // Émettre directement vers le parent pour assurer la mise à jour immédiate
+    emit('update:selectedRules', [])
+  }
+
+  // Formatage
+  const formatAmount = (amount: number): string => {
+    return new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount)
+  }
+
+  // Optimisation: Synchronisation avec debouncing pour éviter les recalculs excessifs
+  let updateTimeout: number | null = null
+
+  watch(
+    compensationRules,
+    newRules => {
+      // Debounce pour éviter les émissions multiples lors de modifications rapides
+      if (updateTimeout) {
+        clearTimeout(updateTimeout)
+      }
+      updateTimeout = setTimeout(() => {
+        emit('update:selectedRules', newRules)
+      }, 50) // 50ms de délai pour grouper les modifications
+    },
+    { deep: true, flush: 'post' }
+  )
+
+  // Synchronisation depuis le parent avec protection contre les boucles infinies
+  let isUpdatingFromParent = false
+  watch(
+    () => props.selectedRules,
+    newRules => {
+      if (newRules && !isUpdatingFromParent) {
+        isUpdatingFromParent = true
+        compensationRules.value = [...newRules]
+        nextTick(() => {
+          isUpdatingFromParent = false
+        })
+      }
+    },
+    { deep: true, flush: 'pre' }
+  )
+</script>
+
+<style scoped>
+  .reimbursement-compensation-filter {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    border: 1px solid rgba(229, 231, 235, 0.3);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  }
+
+  /* En-tête */
+  .filter-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+  }
+
+  .filter-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0 0 0.5rem;
+  }
+
+  .filter-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: #8b5cf6;
+  }
+
+  .filter-description {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  /* Formulaire d'ajout */
+  .add-rule-form {
+    background: rgba(243, 244, 246, 0.5);
+    border: 1px solid rgba(209, 213, 219, 0.5);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .form-row {
+    display: flex;
+    gap: 1rem;
+    align-items: end;
+  }
+
+  .form-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-group-button {
+    flex: 0 0 auto;
+  }
+
+  .form-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+  }
+
+  .form-select {
+    padding: 0.75rem;
+    border: 1px solid rgba(209, 213, 219, 0.7);
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.9);
+    color: #374151;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+
+  .form-select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  }
+
+  .form-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+  }
+
+  .form-btn.save {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: #15803d;
+  }
+
+  .form-btn.save:hover:not(:disabled) {
+    background: rgba(34, 197, 94, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .form-btn.save:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn-icon {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  /* Règles de compensation */
+  .compensation-rules {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .compensation-rule {
+    position: relative;
+    background: rgba(249, 250, 251, 0.6);
+    border: 1px solid rgba(229, 231, 235, 0.5);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    transition: all 0.2s ease;
+  }
+
+  .compensation-rule:hover {
+    background: rgba(243, 244, 246, 0.8);
+    border-color: rgba(156, 163, 175, 0.7);
+  }
+
+  .rule-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding-right: 2.5rem;
+  }
+
+  .rule-mapping {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .expense-side,
+  .income-side {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .category-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .category-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid;
+  }
+
+  .category-chip.expense {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #dc2626;
+  }
+
+  .category-chip.income {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: #15803d;
+  }
+
+  .category-icon {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .arrow-connector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+  }
+
+  .arrow-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    color: #6b7280;
+  }
+
+  .rule-impact {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 0.5rem;
+  }
+
+  .impact-label {
+    font-size: 0.875rem;
+    color: #6b7280;
+  }
+
+  .impact-amount {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #4f46e5;
+  }
+
+  .remove-rule-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 2rem;
+    height: 2rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 0.375rem;
+    color: #dc2626;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .remove-rule-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    transform: scale(1.05);
+  }
+
+  .remove-icon {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  /* Actions */
+  .filter-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    justify-content: flex-end;
+  }
+
+  .filter-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(249, 250, 251, 0.8);
+    border: 1px solid rgba(209, 213, 219, 0.5);
+    border-radius: 0.5rem;
+    color: #374151;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .filter-action-btn:hover {
+    background: rgba(243, 244, 246, 0.9);
+    border-color: rgba(156, 163, 175, 0.7);
+    transform: translateY(-1px);
+  }
+
+  .clear-all {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #dc2626;
+  }
+
+  .clear-all:hover {
+    background: rgba(239, 68, 68, 0.15);
+  }
+
+  /* État vide */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+    text-align: center;
+  }
+
+  .empty-icon {
+    width: 3rem;
+    height: 3rem;
+    color: #9ca3af;
+    margin-bottom: 1rem;
+  }
+
+  .empty-message {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #6b7280;
+    margin: 0 0 0.5rem;
+  }
+
+  .empty-description {
+    font-size: 0.875rem;
+    color: #9ca3af;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .rule-mapping {
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .arrow-connector {
+      transform: rotate(90deg);
+    }
+
+    .form-row {
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .form-group-button {
+      align-self: stretch;
+    }
+  }
+</style>

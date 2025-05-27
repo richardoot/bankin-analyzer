@@ -111,7 +111,14 @@ export const usePieChart = (
   analysisResult: ComputedRef<CsvAnalysisResult | null>,
   selectedExpenseCategories?: ComputedRef<string[]>,
   selectedIncomeCategories?: ComputedRef<string[]>,
-  jointAccounts?: ComputedRef<string[]>
+  jointAccounts?: ComputedRef<string[]>,
+  compensationRules?: ComputedRef<
+    Array<{
+      expenseCategory: string
+      incomeCategory: string
+      affectedAmount: number
+    }>
+  >
 ) => {
   /**
    * Applique la logique des comptes joints aux données de catégories
@@ -157,34 +164,120 @@ export const usePieChart = (
 
     return result
   }
+
   /**
-   * Données pour le graphique des dépenses
+   * Applique les règles de compensation aux données de catégories
    */
-  const expensesChartData = computed((): PieChartData => {
-    if (!analysisResult.value) {
-      return { categories: [], total: 0 }
+  const applyCompensationRules = (
+    expensesData: Record<string, number>,
+    incomeData: Record<string, number>
+  ): {
+    adjustedExpenses: Record<string, number>
+    adjustedIncome: Record<string, number>
+  } => {
+    // Toujours créer de nouvelles références pour assurer la réactivité
+    if (!compensationRules?.value?.length) {
+      return {
+        adjustedExpenses: { ...expensesData },
+        adjustedIncome: { ...incomeData },
+      }
     }
 
-    // Utilise les vraies données de catégories de dépenses si disponibles
+    // Important: créer des copies profondes pour ne pas modifier les données originales
+    const adjustedExpenses = { ...expensesData }
+    const adjustedIncome = { ...incomeData }
+
+    // Optimisation: traitement batch des règles sans logs pour améliorer les performances
+    compensationRules.value.forEach(rule => {
+      const { expenseCategory, incomeCategory, affectedAmount } = rule
+
+      // Déduire le montant de remboursement de la catégorie de dépense
+      if (adjustedExpenses[expenseCategory] !== undefined) {
+        adjustedExpenses[expenseCategory] = Math.max(
+          0,
+          adjustedExpenses[expenseCategory] - affectedAmount
+        )
+      }
+
+      // Masquer la catégorie de remboursement (mettre à 0)
+      if (adjustedIncome[incomeCategory] !== undefined) {
+        adjustedIncome[incomeCategory] = 0
+      }
+    })
+
+    // Retourner des nouveaux objets explicitement pour forcer la réactivité Vue
+    return {
+      adjustedExpenses: { ...adjustedExpenses },
+      adjustedIncome: { ...adjustedIncome },
+    }
+  }
+  // Cache pour éviter les recalculs inutiles
+  const baseExpensesDataCache = computed(() => {
+    if (!analysisResult.value) return {}
+
     let expensesData = analysisResult.value.expenses.categoriesData
 
-    // Si pas de données détaillées, crée une répartition simulée
+    // Si pas de données détaillées, utilise une répartition simulée mise en cache
     if (!expensesData || Object.keys(expensesData).length === 0) {
       const simulatedData: Record<string, number> = {}
       const expenseCategories = analysisResult.value.expenses.categories
       const totalExpenses = analysisResult.value.expenses.totalAmount
 
-      expenseCategories.forEach((category, _index) => {
+      expenseCategories.forEach((category, index) => {
         const baseAmount = totalExpenses / expenseCategories.length
-        const variation = (Math.random() - 0.5) * 0.4 // Variation de ±20%
+        // Utiliser l'index pour une simulation déterministe (pas de Math.random())
+        const variation =
+          (index % 2 === 0 ? 0.1 : -0.1) * ((index % 3) + 1) * 0.1
         simulatedData[category] = Math.abs(baseAmount * (1 + variation))
       })
 
       expensesData = simulatedData
     }
 
-    // Appliquer la logique des comptes joints
-    const adjustedData = applyJointAccountLogic(expensesData, 'expenses')
+    return applyJointAccountLogic(expensesData, 'expenses')
+  })
+
+  const baseIncomeDataCache = computed(() => {
+    if (!analysisResult.value) return {}
+
+    let incomeData = analysisResult.value.income.categoriesData
+
+    // Si pas de données détaillées, utilise une répartition simulée mise en cache
+    if (!incomeData || Object.keys(incomeData).length === 0) {
+      const simulatedData: Record<string, number> = {}
+      const incomeCategories = analysisResult.value.income.categories
+      const totalIncome = analysisResult.value.income.totalAmount
+
+      incomeCategories.forEach((category, index) => {
+        const baseAmount = totalIncome / incomeCategories.length
+        // Utiliser l'index pour une simulation déterministe
+        const variation =
+          (index % 2 === 0 ? 0.15 : -0.05) * ((index % 4) + 1) * 0.1
+        simulatedData[category] = Math.abs(baseAmount * (1 + variation))
+      })
+
+      incomeData = simulatedData
+    }
+
+    return applyJointAccountLogic(incomeData, 'income')
+  })
+
+  /**
+   * Données pour le graphique des dépenses - optimisé avec cache
+   */
+  const expensesChartData = computed((): PieChartData => {
+    const baseData = baseExpensesDataCache.value
+    if (Object.keys(baseData).length === 0) {
+      return { categories: [], total: 0 }
+    }
+
+    // Appliquer les règles de compensation si disponibles
+    let adjustedData = baseData
+    if (compensationRules?.value?.length) {
+      const incomeData = baseIncomeDataCache.value
+      const { adjustedExpenses } = applyCompensationRules(baseData, incomeData)
+      adjustedData = adjustedExpenses
+    }
 
     return processChartData(
       adjustedData,
@@ -194,33 +287,21 @@ export const usePieChart = (
   })
 
   /**
-   * Données pour le graphique des revenus
+   * Données pour le graphique des revenus - optimisé avec cache
    */
   const incomeChartData = computed((): PieChartData => {
-    if (!analysisResult.value) {
+    const baseData = baseIncomeDataCache.value
+    if (Object.keys(baseData).length === 0) {
       return { categories: [], total: 0 }
     }
 
-    // Utilise les vraies données de catégories de revenus si disponibles
-    let incomeData = analysisResult.value.income.categoriesData
-
-    // Si pas de données détaillées, crée une répartition simulée
-    if (!incomeData || Object.keys(incomeData).length === 0) {
-      const simulatedData: Record<string, number> = {}
-      const incomeCategories = analysisResult.value.income.categories
-      const totalIncome = analysisResult.value.income.totalAmount
-
-      incomeCategories.forEach((category, _index) => {
-        const baseAmount = totalIncome / incomeCategories.length
-        const variation = (Math.random() - 0.5) * 0.4 // Variation de ±20%
-        simulatedData[category] = Math.abs(baseAmount * (1 + variation))
-      })
-
-      incomeData = simulatedData
+    // Appliquer les règles de compensation si disponibles (masquer les catégories de remboursement)
+    let adjustedData = baseData
+    if (compensationRules?.value?.length) {
+      const expenseData = baseExpensesDataCache.value
+      const { adjustedIncome } = applyCompensationRules(expenseData, baseData)
+      adjustedData = adjustedIncome
     }
-
-    // Appliquer la logique des comptes joints
-    const adjustedData = applyJointAccountLogic(incomeData, 'income')
 
     return processChartData(
       adjustedData,
