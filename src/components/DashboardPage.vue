@@ -5,6 +5,7 @@
   import { computed, ref } from 'vue'
   import BarChart from './BarChart.vue'
   import CategoryFilter from './CategoryFilter.vue'
+  import JointAccountFilter from './JointAccountFilter.vue'
   import PieChart from './PieChart.vue'
 
   interface Props {
@@ -22,6 +23,21 @@
   // États pour les filtres de catégories
   const selectedExpenseCategories = ref<string[]>([])
   const selectedIncomeCategories = ref<string[]>([])
+
+  // États pour les comptes joints
+  const selectedJointAccounts = ref<string[]>([])
+
+  // Calculer la liste des comptes uniques
+  const availableAccounts = computed(() => {
+    if (!props.analysisResult.isValid) return []
+    const accounts = new Set<string>()
+    props.analysisResult.transactions.forEach(transaction => {
+      if (transaction.account) {
+        accounts.add(transaction.account)
+      }
+    })
+    return Array.from(accounts).sort()
+  })
 
   // Initialiser les catégories sélectionnées avec toutes les catégories disponibles
   const initializeSelectedCategories = () => {
@@ -105,14 +121,16 @@
   } = usePieChart(
     analysisResultComputed,
     selectedExpenseCategoriesComputed,
-    selectedIncomeCategoriesComputed
+    selectedIncomeCategoriesComputed,
+    computed(() => selectedJointAccounts.value)
   )
 
   // Utilisation du composable pour l'histogramme mensuel avec filtrage
   const { monthlyChartData, formatAmount: formatBarAmount } = useBarChart(
     analysisResultComputed,
     selectedExpenseCategoriesComputed,
-    selectedIncomeCategoriesComputed
+    selectedIncomeCategoriesComputed,
+    computed(() => selectedJointAccounts.value)
   )
 
   // Gestion des interactions avec le graphique
@@ -235,6 +253,12 @@
           :categories="availableCategories"
           :selected-categories="currentSelectedCategories"
           @update:selected-categories="currentSelectedCategories = $event"
+        />
+
+        <JointAccountFilter
+          :accounts="availableAccounts"
+          :selected-accounts="selectedJointAccounts"
+          @update:selected-accounts="selectedJointAccounts = $event"
         />
       </div>
 

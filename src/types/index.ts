@@ -49,6 +49,8 @@ export interface CsvAnalysisResult {
   }
   // Ajout des transactions individuelles pour l'histogramme mensuel
   transactions: Transaction[]
+  // Comptes joints pour diviser les montants par 2
+  jointAccounts?: string[]
   errors?: string[]
 }
 
