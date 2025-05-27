@@ -1,12 +1,14 @@
 <script setup lang="ts">
-  import { ref } from 'vue'
+  import { usePieChart, type CategoryData } from '@/composables/usePieChart'
   import type { CsvAnalysisResult } from '@/types'
+  import { computed, ref } from 'vue'
+  import PieChart from './PieChart.vue'
 
   interface Props {
     analysisResult: CsvAnalysisResult
   }
 
-  defineProps<Props>()
+  const props = defineProps<Props>()
 
   // État pour gérer l'onglet actif
   const activeTab = ref<'expenses' | 'income'>('expenses')
@@ -30,6 +32,25 @@
     } catch {
       return dateStr
     }
+  }
+
+  // Utilisation du composable pour les graphiques
+  const analysisResultComputed = computed(() => props.analysisResult)
+  const {
+    expensesChartData,
+    incomeChartData,
+    formatAmount: formatChartAmount,
+    formatPercentage,
+  } = usePieChart(analysisResultComputed)
+
+  // Gestion des interactions avec le graphique
+  const handleCategoryClick = (category: CategoryData) => {
+    console.log('Catégorie cliquée:', category)
+    // Ici on pourrait ajouter une logique pour filtrer les transactions par catégorie
+  }
+
+  const handleCategoryHover = (_category: CategoryData | null) => {
+    // Ici on pourrait ajouter une logique pour mettre en surbrillance les éléments liés
   }
 </script>
 
@@ -216,6 +237,19 @@
               </div>
             </div>
 
+            <!-- Graphique camembert des dépenses -->
+            <div class="chart-section">
+              <PieChart
+                :chart-data="expensesChartData"
+                title="Répartition des dépenses"
+                type="expenses"
+                :format-amount="formatChartAmount"
+                :format-percentage="formatPercentage"
+                @category-click="handleCategoryClick"
+                @category-hover="handleCategoryHover"
+              />
+            </div>
+
             <div class="categories-container">
               <h3 class="categories-title">Catégories de dépenses</h3>
               <div class="categories-grid">
@@ -306,6 +340,19 @@
                   </p>
                 </div>
               </div>
+            </div>
+
+            <!-- Graphique camembert des revenus -->
+            <div class="chart-section">
+              <PieChart
+                :chart-data="incomeChartData"
+                title="Répartition des revenus"
+                type="income"
+                :format-amount="formatChartAmount"
+                :format-percentage="formatPercentage"
+                @category-click="handleCategoryClick"
+                @category-hover="handleCategoryHover"
+              />
             </div>
 
             <div class="categories-container">
@@ -737,6 +784,13 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
+  }
+
+  /* Section graphique */
+  .chart-section {
+    margin: 2rem 0;
+    display: flex;
+    justify-content: center;
   }
 
   .categories-title {
