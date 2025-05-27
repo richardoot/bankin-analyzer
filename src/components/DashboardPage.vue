@@ -63,9 +63,28 @@
   // Catégories disponibles selon l'onglet actif (triées par ordre alphabétique)
   const availableCategories = computed(() => {
     if (!props.analysisResult.isValid) return []
-    return activeTab.value === 'expenses'
-      ? [...props.analysisResult.expenses.categories].sort()
-      : [...props.analysisResult.income.categories].sort()
+
+    if (activeTab.value === 'expenses') {
+      // Pour les dépenses : garder toutes les catégories visibles
+      return [...props.analysisResult.expenses.categories].sort()
+    } else {
+      // Pour les revenus : filtrer les catégories à valeur nulle après compensation
+      const allIncomeCategories = [...props.analysisResult.income.categories]
+
+      // Si aucune règle de compensation, afficher toutes les catégories
+      if (!compensationRules.value.length) {
+        return allIncomeCategories.sort()
+      }
+
+      // Filtrer les catégories de revenus qui ne sont pas mises à zéro par les associations
+      const hiddenCategories = new Set(
+        compensationRules.value.map(rule => rule.incomeCategory)
+      )
+
+      return allIncomeCategories
+        .filter(category => !hiddenCategories.has(category))
+        .sort()
+    }
   })
 
   // Catégories sélectionnées selon l'onglet actif

@@ -229,15 +229,33 @@
     incomeCategory: '',
   })
 
-  // Catégories disponibles (sans filtrer celles déjà utilisées) triées par ordre alphabétique
+  // Catégories disponibles (filtrées pour exclure celles déjà associées)
   const availableExpenseCategories = computed(() => {
     if (!props.analysisResult.isValid) return []
-    return [...props.analysisResult.expenses.categories].sort()
+
+    // Récupérer les catégories de dépenses déjà utilisées dans les règles actives
+    const usedExpenseCategories = new Set(
+      compensationRules.value.map(rule => rule.expenseCategory)
+    )
+
+    // Filtrer les catégories pour exclure celles déjà utilisées
+    return [...props.analysisResult.expenses.categories]
+      .filter(category => !usedExpenseCategories.has(category))
+      .sort()
   })
 
   const availableIncomeCategories = computed(() => {
     if (!props.analysisResult.isValid) return []
-    return [...props.analysisResult.income.categories].sort()
+
+    // Récupérer les catégories de remboursements déjà utilisées dans les règles actives
+    const usedIncomeCategories = new Set(
+      compensationRules.value.map(rule => rule.incomeCategory)
+    )
+
+    // Filtrer les catégories pour exclure celles déjà utilisées
+    return [...props.analysisResult.income.categories]
+      .filter(category => !usedIncomeCategories.has(category))
+      .sort()
   })
 
   // Vérifications pour les boutons
