@@ -10,6 +10,7 @@
   import ReimbursementCompensationFilter, {
     type CompensationRule,
   } from './ReimbursementCompensationFilter.vue'
+  import TransactionsList from './TransactionsList.vue'
 
   interface Props {
     analysisResult: CsvAnalysisResult
@@ -546,6 +547,11 @@
         </div>
       </div>
 
+      <!-- Section des 50 dernières transactions -->
+      <div class="transactions-section">
+        <TransactionsList :transactions="analysisResult.transactions" />
+      </div>
+
       <!-- Message informatif -->
       <div class="info-section">
         <div class="info-card">
@@ -1054,6 +1060,11 @@
       transform: translateY(0);
       max-height: 500px;
     }
+  }
+
+  /* Section des transactions */
+  .transactions-section {
+    margin-top: 1rem;
   }
 
   /* Section info */
