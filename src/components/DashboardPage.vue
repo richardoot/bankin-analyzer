@@ -276,25 +276,109 @@
 
       <!-- Panneau de filtres (conditionnel) -->
       <div v-show="showAdvancedFilters" class="advanced-filters-panel">
-        <CategoryFilter
-          :categories="availableCategories"
-          :selected-categories="currentSelectedCategories"
-          @update:selected-categories="currentSelectedCategories = $event"
-        />
+        <div class="filters-container">
+          <!-- En-tête principal du panneau -->
+          <div class="filters-main-header">
+            <div class="filters-main-title">
+              <svg
+                class="filters-main-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <path d="M6 3h12l-4 4v8l-4 2V7L6 3z" />
+              </svg>
+              <h3>Configuration des filtres</h3>
+            </div>
+            <p class="filters-main-description">
+              Personnalisez l'affichage de vos données avec les options
+              ci-dessous
+            </p>
+          </div>
 
-        <JointAccountFilter
-          :accounts="availableAccounts"
-          :selected-accounts="selectedJointAccounts"
-          @update:selected-accounts="selectedJointAccounts = $event"
-        />
+          <!-- Grille des filtres compacts -->
+          <div class="filters-compact-grid">
+            <!-- Filtre Catégories -->
+            <div class="compact-filter-card">
+              <div class="compact-filter-header">
+                <div class="compact-filter-icon categories-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </div>
+                <div class="compact-filter-title">
+                  <h4>Catégories</h4>
+                  <span class="compact-filter-subtitle"
+                    >Filtrer par catégorie</span
+                  >
+                </div>
+              </div>
+              <div class="compact-filter-content">
+                <CategoryFilter
+                  :categories="availableCategories"
+                  :selected-categories="currentSelectedCategories"
+                  @update:selected-categories="
+                    currentSelectedCategories = $event
+                  "
+                />
+              </div>
+            </div>
 
-        <ReimbursementCompensationFilter
-          :analysis-result="analysisResult"
-          :selected-rules="compensationRules"
-          :selected-expense-categories="selectedExpenseCategories"
-          :selected-income-categories="selectedIncomeCategories"
-          @update:selected-rules="compensationRules = $event"
-        />
+            <!-- Filtre Comptes Joints -->
+            <div class="compact-filter-card">
+              <div class="compact-filter-header">
+                <div class="compact-filter-icon joint-accounts-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                  </svg>
+                </div>
+                <div class="compact-filter-title">
+                  <h4>Comptes joints</h4>
+                  <span class="compact-filter-subtitle"
+                    >Montants divisés par 2</span
+                  >
+                </div>
+              </div>
+              <div class="compact-filter-content">
+                <JointAccountFilter
+                  :accounts="availableAccounts"
+                  :selected-accounts="selectedJointAccounts"
+                  @update:selected-accounts="selectedJointAccounts = $event"
+                />
+              </div>
+            </div>
+
+            <!-- Filtre Compensation -->
+            <div class="compact-filter-card full-width">
+              <div class="compact-filter-header">
+                <div class="compact-filter-icon compensation-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M12 1v6l4-4" />
+                    <path d="M12 23v-6l4 4M12 17l-4 4" />
+                    <path d="M20 12h-6l4-4M14 12l4 4" />
+                  </svg>
+                </div>
+                <div class="compact-filter-title">
+                  <h4>Compensation des remboursements</h4>
+                  <span class="compact-filter-subtitle"
+                    >Association dépenses/remboursements</span
+                  >
+                </div>
+              </div>
+              <div class="compact-filter-content">
+                <ReimbursementCompensationFilter
+                  :analysis-result="analysisResult"
+                  :selected-rules="compensationRules"
+                  :selected-expense-categories="selectedExpenseCategories"
+                  :selected-income-categories="selectedIncomeCategories"
+                  @update:selected-rules="compensationRules = $event"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Système d'onglets Dépenses/Revenus -->
@@ -1049,22 +1133,177 @@
     animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-20px);
-      max-height: 0;
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-      max-height: 500px;
-    }
+  /* Conteneur principal des filtres */
+  .filters-container {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 1.25rem;
+    padding: 2rem;
+    margin: 1.5rem 0;
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.1),
+      0 2px 8px rgba(0, 0, 0, 0.05);
+    position: relative;
   }
 
-  /* Section des transactions */
-  .transactions-section {
-    margin-top: 1rem;
+  /* En-tête principal du panneau */
+  .filters-main-header {
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+
+  .filters-main-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .filters-main-title h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .filters-main-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    color: #6366f1;
+    stroke-width: 2.5;
+  }
+
+  .filters-main-description {
+    font-size: 1rem;
+    color: #6b7280;
+    margin: 0;
+    line-height: 1.6;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  /* Grille compacte des filtres */
+  .filters-compact-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  /* Cartes de filtres compacts */
+  .compact-filter-card {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 1rem;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.08),
+      0 1px 4px rgba(0, 0, 0, 0.04);
+  }
+
+  .compact-filter-card:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.12),
+      0 2px 8px rgba(0, 0, 0, 0.06);
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
+  .compact-filter-card.full-width {
+    grid-column: 1 / -1;
+  }
+
+  /* En-tête des cartes de filtres */
+  .compact-filter-header {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.9) 0%,
+      rgba(248, 250, 252, 0.8) 100%
+    );
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .compact-filter-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .compact-filter-icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    stroke-width: 2.5;
+  }
+
+  /* Icônes spécifiques par type de filtre */
+  .categories-icon {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+  }
+
+  .joint-accounts-icon {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  }
+
+  .compensation-icon {
+    background: linear-gradient(135deg, #06b6d4, #0891b2);
+  }
+
+  .compact-filter-title h4 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0 0 0.25rem 0;
+    line-height: 1.4;
+  }
+
+  .compact-filter-subtitle {
+    font-size: 0.875rem;
+    color: #6b7280;
+    font-weight: 500;
+  }
+
+  /* Contenu des cartes de filtres */
+  .compact-filter-content {
+    padding: 1.5rem;
+  }
+
+  /* Masquer les en-têtes originaux des composants de filtres */
+  .compact-filter-content .filter-header {
+    display: none;
+  }
+
+  /* Ajustements pour les composants de filtres dans le layout compact */
+  .compact-filter-content .category-filter,
+  .compact-filter-content .joint-account-filter {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
+  }
+
+  .compact-filter-content .categories-list,
+  .compact-filter-content .accounts-list {
+    background: rgba(249, 250, 251, 0.6);
+    border-color: rgba(229, 231, 235, 0.5);
   }
 
   /* Section info */
@@ -1117,101 +1356,83 @@
     line-height: 1.5;
   }
 
-  /* Responsive */
-  @media (max-width: 1024px) {
-    .panel-stats {
+  /* Responsive pour les filtres compacts */
+  @media (max-width: 1200px) {
+    .filters-compact-grid {
       grid-template-columns: 1fr;
+      gap: 1.25rem;
     }
 
-    .tabs-navigation {
-      flex-direction: column;
-    }
-
-    .tab-button {
-      padding: 1rem 1.5rem;
+    .compact-filter-card.full-width {
+      grid-column: 1;
     }
   }
 
   @media (max-width: 768px) {
-    .dashboard-page {
+    .filters-container {
       padding: 1.5rem;
+      margin: 1rem 0;
     }
 
-    .dashboard-title {
-      font-size: 2rem;
-      flex-direction: column;
-      gap: 0.5rem;
+    .filters-main-title h3 {
+      font-size: 1.25rem;
     }
 
-    .dashboard-icon {
+    .filters-main-description {
+      font-size: 0.875rem;
+    }
+
+    .compact-filter-header {
+      padding: 1rem 1.25rem;
+    }
+
+    .compact-filter-content {
+      padding: 1.25rem;
+    }
+
+    .compact-filter-icon {
       width: 2rem;
       height: 2rem;
     }
 
-    .overview-stats {
-      grid-template-columns: 1fr;
-    }
-
-    .tab-panel {
-      padding: 1.5rem;
-    }
-
-    .panel-title {
-      font-size: 1.5rem;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .panel-stats {
-      grid-template-columns: 1fr;
-    }
-
-    .categories-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .info-card {
-      flex-direction: column;
-      text-align: center;
-    }
-
-    .tab-button {
-      padding: 0.875rem 1rem;
-      font-size: 0.875rem;
-    }
-
-    .tab-badge {
-      font-size: 0.6875rem;
-      padding: 0.1875rem 0.375rem;
+    .compact-filter-icon svg {
+      width: 1rem;
+      height: 1rem;
     }
   }
 
   @media (max-width: 480px) {
-    .dashboard-page {
+    .filters-container {
       padding: 1rem;
     }
 
-    .tab-panel {
+    .filters-main-header {
+      margin-bottom: 1.5rem;
+    }
+
+    .compact-filter-header {
+      padding: 0.875rem 1rem;
+    }
+
+    .compact-filter-content {
       padding: 1rem;
     }
 
-    .panel-stat-card {
-      padding: 1rem;
+    .filters-compact-grid {
+      gap: 1rem;
     }
+  }
 
-    .tabs-navigation {
-      border-radius: 0;
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+      max-height: 0;
     }
-
-    .tab-button {
-      padding: 0.75rem;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .tab-icon {
-      width: 1rem;
-      height: 1rem;
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      max-height: 500px;
     }
   }
 </style>
