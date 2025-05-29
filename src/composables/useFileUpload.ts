@@ -158,6 +158,7 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
         const accountIndex = headers.findIndex(
           h => h.toLowerCase() === 'compte'
         )
+        const noteIndex = headers.findIndex(h => h.toLowerCase() === 'note')
 
         dataLines.forEach(line => {
           if (!line.trim()) return
@@ -172,6 +173,7 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
             const description =
               descriptionIndex >= 0 ? parts[descriptionIndex] || '' : ''
             const account = accountIndex >= 0 ? parts[accountIndex] || '' : ''
+            const note = noteIndex >= 0 ? parts[noteIndex] || '' : ''
 
             // Extraction de la date
             if (date) {
@@ -229,6 +231,7 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
                     category,
                     account,
                     type: transactionType,
+                    note,
                   })
                 }
               }

@@ -35,6 +35,7 @@
             <th>Date</th>
             <th>Catégorie</th>
             <th>Description</th>
+            <th>Note</th>
             <th>Compte</th>
             <th class="amount-column">Montant</th>
           </tr>
@@ -54,7 +55,12 @@
             <td class="description-cell" :title="transaction.description">
               {{ transaction.description }}
             </td>
-            <td class="account-cell">{{ transaction.account }}</td>
+            <td class="note-cell" :title="transaction.note || ''">
+              {{ transaction.note }}
+            </td>
+            <td class="account-cell" :title="transaction.account">
+              {{ transaction.account }}
+            </td>
             <td class="amount-cell" :class="transaction.type">
               {{ formatAmount(transaction.amount) }}
             </td>
@@ -329,10 +335,23 @@
     color: #374151;
   }
 
-  .account-cell {
+  .note-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: #6b7280;
     font-size: 0.875rem;
+    font-style: italic;
+  }
+
+  .account-cell {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
+    color: #6b7280;
+    font-size: 0.875rem;
   }
 
   .amount-column {
