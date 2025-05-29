@@ -6,10 +6,6 @@
         <component :is="titleIcon" class="chart-title-icon" />
         {{ title }}
       </h3>
-      <p class="chart-total">
-        Total :
-        <span class="total-amount">{{ formatAmount(chartData.total) }}</span>
-      </p>
     </div>
 
     <!-- Zone du graphique -->
@@ -373,18 +369,6 @@
     width: 1.25rem;
     height: 1.25rem;
     color: #6366f1;
-  }
-
-  .chart-total {
-    font-size: 0.875rem;
-    color: #6b7280;
-    margin: 0;
-  }
-
-  .total-amount {
-    font-weight: 600;
-    color: #1f2937;
-    font-size: 1rem;
   }
 
   /* Conteneur principal du graphique */

@@ -382,7 +382,7 @@
                 <div class="panel-stat-content">
                   <h4 class="panel-stat-title">Montant total</h4>
                   <p class="panel-stat-value expenses-amount">
-                    {{ formatAmount(analysisResult.expenses.totalAmount) }}
+                    {{ formatAmount(expensesChartData.total) }}
                   </p>
                 </div>
               </div>
@@ -481,7 +481,7 @@
                 <div class="panel-stat-content">
                   <h4 class="panel-stat-title">Montant total</h4>
                   <p class="panel-stat-value income-amount">
-                    {{ formatAmount(analysisResult.income.totalAmount) }}
+                    {{ formatAmount(incomeChartData.total) }}
                   </p>
                 </div>
               </div>
