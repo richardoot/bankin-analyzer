@@ -4,7 +4,11 @@
       <div class="header-title">
         <h3>
           <i class="fas fa-list-ul"></i>
-          50 dernières transactions
+          {{
+            props.activeTab === 'expenses'
+              ? '50 dernières dépenses'
+              : '50 derniers revenus'
+          }}
         </h3>
         <span class="transactions-count">
           {{ displayedTransactions.length }} transactions
@@ -72,18 +76,27 @@
 
   interface Props {
     transactions: Transaction[]
+    activeTab?: 'expenses' | 'income'
   }
 
-  const props = defineProps<Props>()
+  const props = withDefaults(defineProps<Props>(), {
+    activeTab: 'expenses',
+  })
 
   // État pour le filtre de catégorie
   const selectedCategory = ref<string>('')
 
-  // Calculer les catégories disponibles
+  // Calculer les catégories disponibles selon le type de transaction
   const availableCategories = computed(() => {
     const categories = new Set<string>()
     props.transactions.forEach(transaction => {
-      if (transaction.category) {
+      // Filtrer par type selon l'onglet actif
+      const matchesType =
+        props.activeTab === 'expenses'
+          ? transaction.type === 'expense'
+          : transaction.type === 'income'
+
+      if (matchesType && transaction.category) {
         categories.add(transaction.category)
       }
     })
@@ -93,6 +106,15 @@
   // Trier les transactions par date (plus récente en premier) et prendre les 50 premières
   const displayedTransactions = computed(() => {
     let filteredTransactions = [...props.transactions]
+
+    // Filtrer par type selon l'onglet actif
+    filteredTransactions = filteredTransactions.filter(transaction => {
+      if (props.activeTab === 'expenses') {
+        return transaction.type === 'expense'
+      } else {
+        return transaction.type === 'income'
+      }
+    })
 
     // Filtrer par catégorie si une catégorie est sélectionnée
     if (selectedCategory.value) {

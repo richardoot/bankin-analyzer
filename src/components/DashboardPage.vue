@@ -633,7 +633,10 @@
 
       <!-- Section des 50 dernières transactions -->
       <div class="transactions-section">
-        <TransactionsList :transactions="analysisResult.transactions" />
+        <TransactionsList
+          :transactions="analysisResult.transactions"
+          :active-tab="activeTab"
+        />
       </div>
 
       <!-- Message informatif -->
