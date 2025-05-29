@@ -22,6 +22,7 @@ export interface Transaction {
   category: string
   account: string
   type: 'expense' | 'income'
+  note: string
 }
 
 export interface CsvAnalysisResult {
