@@ -10,6 +10,7 @@
   import ReimbursementCompensationFilter, {
     type CompensationRule,
   } from './ReimbursementCompensationFilter.vue'
+  import ReimbursementModule from './ReimbursementModule.vue'
   import TransactionsList from './TransactionsList.vue'
 
   interface Props {
@@ -18,8 +19,8 @@
 
   const props = defineProps<Props>()
 
-  // État pour gérer l'onglet actif
-  const activeTab = ref<'expenses' | 'income'>('expenses')
+  // État pour gérer l'onglet actif (ajout de l'onglet remboursements)
+  const activeTab = ref<'expenses' | 'income' | 'reimbursements'>('expenses')
 
   // État pour contrôler la visibilité du panneau de filtrage
   const showAdvancedFilters = ref(false)
@@ -103,7 +104,7 @@
     },
   })
 
-  const setActiveTab = (tab: 'expenses' | 'income') => {
+  const setActiveTab = (tab: 'expenses' | 'income' | 'reimbursements') => {
     activeTab.value = tab
   }
 
@@ -426,6 +427,28 @@
               {{ analysisResult.income.transactionCount }}
             </span>
           </button>
+
+          <button
+            class="tab-button"
+            :class="{ active: activeTab === 'reimbursements' }"
+            @click="setActiveTab('reimbursements')"
+          >
+            <svg
+              class="tab-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <path d="M12 1v6l4-4" />
+              <path d="M12 23v-6l4 4" />
+              <path d="M20 12h-6l4-4" />
+              <path d="M4 12h6l-4-4" />
+            </svg>
+            Remboursements
+            <span class="tab-badge reimbursements-badge">
+              <i class="fas fa-hand-holding-dollar"></i>
+            </span>
+          </button>
         </div>
 
         <!-- Contenu des onglets -->
@@ -628,14 +651,22 @@
               />
             </div>
           </div>
+
+          <!-- Onglet Remboursements -->
+          <div
+            v-show="activeTab === 'reimbursements'"
+            class="tab-panel reimbursements-panel"
+          >
+            <ReimbursementModule :transactions="analysisResult.transactions" />
+          </div>
         </div>
       </div>
 
-      <!-- Section des 50 dernières transactions -->
-      <div class="transactions-section">
+      <!-- Section des 50 dernières transactions (uniquement pour dépenses et revenus) -->
+      <div v-if="activeTab !== 'reimbursements'" class="transactions-section">
         <TransactionsList
           :transactions="analysisResult.transactions"
-          :active-tab="activeTab"
+          :active-tab="activeTab === 'expenses' ? 'expenses' : 'income'"
         />
       </div>
 
@@ -898,6 +929,17 @@
     background: linear-gradient(135deg, #10b981, #059669);
   }
 
+  .reimbursements-badge {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .reimbursements-badge i {
+    font-size: 0.75rem;
+  }
+
   .tab-content {
     padding: 0;
   }
@@ -905,6 +947,10 @@
   .tab-panel {
     padding: 2rem;
     animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .tab-panel.reimbursements-panel {
+    padding: 0; /* Le ReimbursementModule gère son propre padding */
   }
 
   @keyframes fadeIn {

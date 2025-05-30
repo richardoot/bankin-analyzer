@@ -59,3 +59,45 @@ export interface ValidationModalData {
   isOpen: boolean
   csvResult: CsvAnalysisResult | null
 }
+
+// Types pour le module de remboursement
+export interface Person {
+  id: string
+  name: string
+  email?: string
+  avatar?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReimbursementTransaction {
+  id: string
+  transactionId: string // ID de la transaction originale
+  personId: string
+  amount: number
+  description: string
+  date: string
+  category: string
+  isReimbursed: boolean
+  reimbursedAt?: string
+  note?: string
+  createdAt: string
+}
+
+export interface PersonDebt {
+  personId: string
+  personName: string
+  totalAmount: number
+  transactionCount: number
+  lastTransactionDate: string
+  transactions: ReimbursementTransaction[]
+}
+
+export interface ReimbursementSummary {
+  totalDebt: number
+  totalReimbursed: number
+  pendingAmount: number
+  peopleCount: number
+  transactionCount: number
+  debts: PersonDebt[]
+}

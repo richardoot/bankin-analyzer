@@ -275,6 +275,27 @@
     z-index: 1;
   }
 
+  /* Largeurs de colonnes pour éviter le défilement horizontal */
+  .transactions-table thead th:nth-child(1) {
+    width: 120px;
+  } /* Date */
+  .transactions-table thead th:nth-child(2) {
+    width: 140px;
+  } /* Catégorie */
+  .transactions-table thead th:nth-child(3) {
+    width: 200px;
+  } /* Description */
+  .transactions-table thead th:nth-child(4) {
+    width: 150px;
+  } /* Note */
+  .transactions-table thead th:nth-child(5) {
+    width: 120px;
+  } /* Compte */
+  .transactions-table thead th:nth-child(6) {
+    width: 120px;
+    text-align: right;
+  } /* Montant */
+
   .transactions-table tbody tr {
     border-bottom: 1px solid #f1f5f9;
     transition: background-color 0.2s ease;
@@ -346,7 +367,7 @@
   }
 
   .account-cell {
-    max-width: 150px;
+    max-width: 120px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
