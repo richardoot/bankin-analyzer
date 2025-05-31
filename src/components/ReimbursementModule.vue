@@ -148,6 +148,13 @@
                   </div>
                   <div class="transaction-amount">
                     {{ formatAmount(transaction.amount) }}
+                    <span
+                      v-if="isCustomAmountTransaction(transaction)"
+                      class="custom-amount-indicator"
+                      title="Montant personnalisé"
+                    >
+                      <i class="fas fa-edit"></i>
+                    </span>
                     <i
                       v-if="transaction.isReimbursed"
                       class="fas fa-check-circle reimbursed-icon"
@@ -389,34 +396,101 @@
                       getAssociatedPerson(transaction)?.name ||
                       'Personne inconnue'
                     }}</strong>
+                    <span
+                      v-if="hasCustomAmount(transaction)"
+                      class="custom-amount-badge"
+                      title="Montant personnalisé"
+                    >
+                      <i class="fas fa-edit"></i>
+                      Montant personnalisé
+                    </span>
                   </div>
-                  <button
-                    title="Dissocier cette transaction"
-                    class="dissociate-button"
-                    @click="dissociateTransaction(transaction)"
-                  >
-                    <i class="fas fa-unlink"></i>
-                    Dissocier
-                  </button>
+                  <div class="associated-actions">
+                    <button
+                      title="Modifier le montant de remboursement"
+                      class="edit-amount-button"
+                      @click="editTransactionAmount(transaction)"
+                    >
+                      <i class="fas fa-edit"></i>
+                      Modifier montant
+                    </button>
+                    <button
+                      title="Dissocier cette transaction"
+                      class="dissociate-button"
+                      @click="dissociateTransaction(transaction)"
+                    >
+                      <i class="fas fa-unlink"></i>
+                      Dissocier
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Si la transaction n'est pas associée -->
                 <div v-else class="association-controls">
-                  <select
-                    v-model="
-                      transactionAssociations[getTransactionKey(transaction)]
-                    "
-                    class="person-select"
-                  >
-                    <option value="">Sélectionner une personne</option>
-                    <option
-                      v-for="person in people"
-                      :key="person.id"
-                      :value="person.id"
+                  <div class="association-inputs">
+                    <select
+                      v-model="
+                        transactionAssociations[getTransactionKey(transaction)]
+                      "
+                      class="person-select"
                     >
-                      {{ person.name }}
-                    </option>
-                  </select>
+                      <option value="">Sélectionner une personne</option>
+                      <option
+                        v-for="person in people"
+                        :key="person.id"
+                        :value="person.id"
+                      >
+                        {{ person.name }}
+                      </option>
+                    </select>
+
+                    <div class="amount-input-group">
+                      <label class="amount-label">Montant à rembourser :</label>
+                      <input
+                        v-model.number="
+                          customAmounts[getTransactionKey(transaction)]
+                        "
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        :max="Math.abs(transaction.amount)"
+                        :placeholder="`${Math.abs(transaction.amount).toFixed(2)} €`"
+                        class="amount-input"
+                        @focus="initializeCustomAmount(transaction)"
+                      />
+                      <span class="original-amount">
+                        sur {{ formatAmount(Math.abs(transaction.amount)) }}
+                      </span>
+
+                      <!-- Boutons de division rapide -->
+                      <div class="division-controls">
+                        <button
+                          type="button"
+                          class="division-button"
+                          title="Diviser par 2"
+                          @click="divideAmount(transaction, 2)"
+                        >
+                          ÷ 2
+                        </button>
+                        <button
+                          type="button"
+                          class="division-button"
+                          title="Division personnalisée"
+                          @click="showCustomDivision(transaction)"
+                        >
+                          ÷ N
+                        </button>
+                        <button
+                          type="button"
+                          class="division-button reset"
+                          title="Remettre le montant original"
+                          @click="resetToOriginalAmount(transaction)"
+                        >
+                          ↺
+                        </button>
+                      </div>
+                    </div>
+                  </div>
 
                   <button
                     :disabled="
@@ -500,7 +574,7 @@
 
 <script setup lang="ts">
   import { useReimbursement } from '@/composables/useReimbursement'
-  import type { Person, Transaction } from '@/types'
+  import type { Person, ReimbursementTransaction, Transaction } from '@/types'
   import { computed, ref, watch } from 'vue'
 
   interface Props {
@@ -543,6 +617,9 @@
 
   // État des associations de transactions
   const transactionAssociations = ref<Record<string, string>>({})
+
+  // État des montants personnalisés pour chaque transaction
+  const customAmounts = ref<Record<string, number>>({})
 
   /**
    * Transactions disponibles pour association (toutes les dépenses)
@@ -706,11 +783,38 @@
 
     if (!personId) return
 
-    try {
-      associateTransaction(transaction, personId)
+    // Récupérer le montant personnalisé ou utiliser le montant original
+    const customAmount = customAmounts.value[transactionKey]
+    const amountToAssociate =
+      customAmount && customAmount > 0
+        ? customAmount
+        : Math.abs(transaction.amount)
 
-      // Réinitialiser l'association
+    // Validation du montant
+    const maxAmount = Math.abs(transaction.amount)
+
+    if (amountToAssociate <= 0) {
+      alert('Le montant doit être supérieur à 0 €')
+      return
+    }
+
+    if (amountToAssociate > maxAmount) {
+      alert(`Le montant ne peut pas dépasser ${formatAmount(maxAmount)}`)
+      return
+    }
+
+    // Vérification de montant raisonnable (au moins 1 centime)
+    if (amountToAssociate < 0.01) {
+      alert('Le montant minimum est de 0,01 €')
+      return
+    }
+
+    try {
+      associateTransaction(transaction, personId, amountToAssociate)
+
+      // Réinitialiser les associations et montants
       delete transactionAssociations.value[transactionKey]
+      delete customAmounts.value[transactionKey]
 
       // Message de succès (optionnel - pourrait être remplacé par une notification)
       console.log('Transaction associée avec succès')
@@ -776,6 +880,154 @@
   const viewPersonDetails = (personId: string) => {
     // TODO: Implémenter la vue détaillée d'une personne
     console.log('Voir détails de la personne:', personId)
+  }
+
+  /**
+   * Initialise le montant personnalisé avec le montant original de la transaction
+   */
+  const initializeCustomAmount = (transaction: Transaction) => {
+    const transactionKey = getTransactionKey(transaction)
+    if (!customAmounts.value[transactionKey]) {
+      customAmounts.value[transactionKey] = Math.abs(transaction.amount)
+    }
+  }
+
+  /**
+   * Vérifie si une transaction a un montant personnalisé
+   */
+  const hasCustomAmount = (transaction: Transaction): boolean => {
+    const association = getTransactionAssociation(transaction)
+    if (!association) return false
+
+    const originalAmount = Math.abs(transaction.amount)
+    return association.amount !== originalAmount
+  }
+
+  /**
+   * Obtient la transaction originale à partir d'une transaction de remboursement
+   */
+  const getOriginalTransaction = (
+    reimbursementTransaction: ReimbursementTransaction
+  ): Transaction | null => {
+    return (
+      props.transactions.find(t => {
+        const transactionId = t.date + t.description + t.amount
+        return transactionId === reimbursementTransaction.transactionId
+      }) || null
+    )
+  }
+
+  /**
+   * Vérifie si une transaction de remboursement a un montant personnalisé
+   */
+  const isCustomAmountTransaction = (
+    reimbursementTransaction: ReimbursementTransaction
+  ): boolean => {
+    const originalTransaction = getOriginalTransaction(reimbursementTransaction)
+    if (!originalTransaction) return false
+
+    const originalAmount = Math.abs(originalTransaction.amount)
+    return reimbursementTransaction.amount !== originalAmount
+  }
+
+  /**
+   * Permet de modifier le montant d'une transaction déjà associée
+   */
+  const editTransactionAmount = (transaction: Transaction) => {
+    const association = getTransactionAssociation(transaction)
+    if (!association) return
+
+    const originalAmount = Math.abs(transaction.amount)
+    const currentAmount = association.amount
+
+    const newAmountStr = prompt(
+      `Modifier le montant de remboursement :\n\nMontant original : ${formatAmount(originalAmount)}\nMontant actuel : ${formatAmount(currentAmount)}\n\nNouveau montant (en euros) :`,
+      currentAmount.toString()
+    )
+
+    if (newAmountStr === null) return // Annulé
+
+    const newAmount = parseFloat(newAmountStr)
+
+    if (isNaN(newAmount) || newAmount <= 0) {
+      alert('Veuillez saisir un montant valide supérieur à 0')
+      return
+    }
+
+    if (newAmount > originalAmount) {
+      alert(`Le montant ne peut pas dépasser ${formatAmount(originalAmount)}`)
+      return
+    }
+
+    if (newAmount < 0.01) {
+      alert('Le montant minimum est de 0,01 €')
+      return
+    }
+
+    // Mettre à jour le montant dans la transaction de remboursement
+    association.amount = newAmount
+
+    // Sauvegarder les modifications
+    const { saveToStorage } = useReimbursement()
+    saveToStorage()
+
+    console.log('Montant modifié avec succès')
+  }
+
+  /**
+   * Divise le montant personnalisé par un nombre donné
+   */
+  const divideAmount = (transaction: Transaction, divisor: number) => {
+    const transactionKey = getTransactionKey(transaction)
+    const originalAmount = Math.abs(transaction.amount)
+
+    // Initialiser le montant personnalisé s'il n'existe pas
+    if (!customAmounts.value[transactionKey]) {
+      customAmounts.value[transactionKey] = originalAmount
+    }
+
+    const dividedAmount = originalAmount / divisor
+
+    // Arrondir à 2 décimales et s'assurer que c'est au moins 0.01€
+    customAmounts.value[transactionKey] = Math.max(
+      0.01,
+      Math.round(dividedAmount * 100) / 100
+    )
+  }
+
+  /**
+   * Affiche une popup pour diviser par un nombre personnalisé
+   */
+  const showCustomDivision = (transaction: Transaction) => {
+    const divisorStr = prompt(
+      'Par combien voulez-vous diviser le montant ?\n\nExemples :\n- 2 pour diviser par 2\n- 3 pour diviser par 3\n- 4 pour diviser par 4, etc.',
+      '2'
+    )
+
+    if (divisorStr === null) return // Annulé
+
+    const divisor = parseFloat(divisorStr)
+
+    if (isNaN(divisor) || divisor <= 0) {
+      alert('Veuillez saisir un nombre valide supérieur à 0')
+      return
+    }
+
+    if (divisor === 1) {
+      alert('La division par 1 ne change pas le montant')
+      return
+    }
+
+    divideAmount(transaction, divisor)
+  }
+
+  /**
+   * Remet le montant personnalisé au montant original
+   */
+  const resetToOriginalAmount = (transaction: Transaction) => {
+    const transactionKey = getTransactionKey(transaction)
+    const originalAmount = Math.abs(transaction.amount)
+    customAmounts.value[transactionKey] = originalAmount
   }
 
   // Pré-sélectionner la personne dans les filtres si une seule personne
@@ -1103,6 +1355,16 @@
 
   .reimbursed-icon {
     color: #28a745;
+  }
+
+  .custom-amount-indicator {
+    color: #f59e0b;
+    font-size: 0.8rem;
+    margin-left: 0.25rem;
+  }
+
+  .custom-amount-indicator i {
+    font-size: 0.7rem;
   }
 
   .more-transactions {
@@ -1636,11 +1898,144 @@
     background: #c82333;
   }
 
+  .associated-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .edit-amount-button {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .edit-amount-button:hover {
+    background: #5a67d8;
+  }
+
+  .custom-amount-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #f59e0b;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-left: 0.5rem;
+  }
+
+  .custom-amount-badge i {
+    font-size: 0.7rem;
+  }
+
   .association-controls {
     display: flex;
     gap: 0.75rem;
-    align-items: center;
+    align-items: flex-start;
     flex-wrap: wrap;
+  }
+
+  .association-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 250px;
+  }
+
+  .amount-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .amount-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    margin: 0;
+  }
+
+  .amount-input {
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .amount-input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  }
+
+  .amount-input:invalid {
+    border-color: #ef4444;
+  }
+
+  .original-amount {
+    font-size: 0.75rem;
+    color: #6b7280;
+    font-style: italic;
+  }
+
+  .division-controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    align-items: center;
+  }
+
+  .division-button {
+    padding: 0.375rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    background: #f9fafb;
+    color: #374151;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.5rem;
+  }
+
+  .division-button:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+    transform: translateY(-1px);
+  }
+
+  .division-button:active {
+    transform: translateY(0);
+  }
+
+  .division-button.reset {
+    background: #fef3f2;
+    border-color: #fecaca;
+    color: #dc2626;
+  }
+
+  .division-button.reset:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
   }
 
   /* Responsive */
@@ -1687,6 +2082,15 @@
     .transaction-actions {
       width: 100%;
       justify-content: space-between;
+    }
+
+    .association-controls {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .association-inputs {
+      min-width: unset;
     }
 
     .person-select {
