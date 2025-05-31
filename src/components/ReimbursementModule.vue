@@ -81,6 +81,14 @@
         <i class="fas fa-link"></i>
         Associer
       </button>
+      <button
+        class="tab-button"
+        :class="[{ active: activeTab === 'shared' }]"
+        @click="activeTab = 'shared'"
+      >
+        <i class="fas fa-users"></i>
+        Partage ({{ sharedAssociations.length }})
+      </button>
     </div>
 
     <!-- Contenu des onglets -->
@@ -508,6 +516,283 @@
           </div>
         </div>
       </div>
+
+      <!-- Onglet Partage -->
+      <div v-if="activeTab === 'shared'" class="shared-tab">
+        <div class="shared-header">
+          <h3>
+            <i class="fas fa-users"></i>
+            Associations partagées
+          </h3>
+          <p>Gérez les transactions partagées entre plusieurs personnes.</p>
+          <div class="shared-stats">
+            <span class="stat-item">
+              <i class="fas fa-users"></i>
+              {{ sharedAssociations.length }} association(s) partagée(s)
+            </span>
+          </div>
+        </div>
+
+        <div v-if="people.length === 0" class="empty-state">
+          <i class="fas fa-user-plus"></i>
+          <h3>Aucune personne disponible</h3>
+          <p>
+            Vous devez d'abord ajouter des personnes avant de pouvoir créer des
+            associations partagées.
+          </p>
+          <button class="cta-button" @click="activeTab = 'people'">
+            <i class="fas fa-user-plus"></i>
+            Ajouter une personne
+          </button>
+        </div>
+
+        <div v-else class="shared-content">
+          <!-- Création d'une nouvelle association partagée -->
+          <div class="create-shared-section">
+            <h4>
+              <i class="fas fa-plus"></i>
+              Créer une association partagée
+            </h4>
+
+            <div
+              v-if="!selectedTransactionForSharing"
+              class="transaction-selector"
+            >
+              <p>Sélectionnez une transaction à partager :</p>
+              <div class="available-transactions">
+                <div
+                  v-for="transaction in availableTransactions.filter(
+                    t => !isTransactionAssociated(t)
+                  )"
+                  :key="getTransactionKey(transaction)"
+                  class="transaction-item selectable"
+                  @click="selectTransactionForSharing(transaction)"
+                >
+                  <div class="transaction-info">
+                    <div class="transaction-main">
+                      <span class="transaction-description">{{
+                        transaction.description
+                      }}</span>
+                      <span class="transaction-category">{{
+                        transaction.category
+                      }}</span>
+                    </div>
+                    <div class="transaction-meta">
+                      <span class="transaction-date">{{
+                        formatDate(transaction.date)
+                      }}</span>
+                      <span class="transaction-account">{{
+                        transaction.account
+                      }}</span>
+                    </div>
+                  </div>
+                  <div class="transaction-amount">
+                    {{ formatAmount(Math.abs(transaction.amount)) }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="sharing-form">
+              <div class="selected-transaction">
+                <h5>Transaction sélectionnée :</h5>
+                <div class="transaction-item">
+                  <div class="transaction-info">
+                    <span class="transaction-description">{{
+                      selectedTransactionForSharing.description
+                    }}</span>
+                    <span class="transaction-category">{{
+                      selectedTransactionForSharing.category
+                    }}</span>
+                  </div>
+                  <div class="transaction-amount">
+                    {{
+                      formatAmount(
+                        Math.abs(selectedTransactionForSharing.amount)
+                      )
+                    }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="people-sharing">
+                <h5>Répartition entre les personnes :</h5>
+                <div class="people-list">
+                  <div
+                    v-for="person in people"
+                    :key="person.id"
+                    class="person-sharing-item"
+                  >
+                    <div class="person-info">
+                      <input
+                        :id="`person-${person.id}`"
+                        v-model="selectedPeopleForSharing[person.id]"
+                        type="checkbox"
+                        @change="updatePersonSharing(person.id)"
+                      />
+                      <label :for="`person-${person.id}`" class="person-name">
+                        {{ person.name }}
+                      </label>
+                    </div>
+                    <div
+                      v-if="selectedPeopleForSharing[person.id]"
+                      class="person-amount"
+                    >
+                      <input
+                        v-model.number="peopleAmounts[person.id]"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        :max="Math.abs(selectedTransactionForSharing.amount)"
+                        class="amount-input"
+                        placeholder="Montant"
+                      />
+                      <span class="currency">€</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sharing-controls">
+                <div class="quick-split">
+                  <button
+                    type="button"
+                    class="quick-split-button"
+                    @click="createEqualSplitForSelected"
+                  >
+                    <i class="fas fa-equals"></i>
+                    Répartition égale
+                  </button>
+                </div>
+
+                <div class="total-validation">
+                  <span class="total-label">Total réparti :</span>
+                  <span
+                    class="total-amount"
+                    :class="{ invalid: !isValidSharing }"
+                  >
+                    {{ formatAmount(getTotalSharedAmount()) }}
+                  </span>
+                  <span class="total-max"
+                    >/
+                    {{
+                      formatAmount(
+                        Math.abs(selectedTransactionForSharing.amount)
+                      )
+                    }}</span
+                  >
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button
+                  type="button"
+                  class="cancel-button"
+                  @click="cancelSharing"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  class="create-button"
+                  :disabled="!isValidSharing || getSelectedPeopleCount() === 0"
+                  @click="createSharedAssociation"
+                >
+                  <i class="fas fa-users"></i>
+                  Créer l'association
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Liste des associations partagées existantes -->
+          <div
+            v-if="sharedAssociations.length > 0"
+            class="existing-shared-section"
+          >
+            <h4>
+              <i class="fas fa-list"></i>
+              Associations partagées existantes
+            </h4>
+
+            <div class="shared-associations-list">
+              <div
+                v-for="association in sharedAssociations"
+                :key="association.id"
+                class="shared-association-card"
+              >
+                <div class="association-header">
+                  <div class="association-info">
+                    <h5>{{ association.description }}</h5>
+                    <span class="association-category">{{
+                      association.category
+                    }}</span>
+                    <span class="association-date">{{
+                      formatDate(association.date)
+                    }}</span>
+                  </div>
+                  <div class="association-total">
+                    {{ formatAmount(association.totalAmount) }}
+                  </div>
+                </div>
+
+                <div class="association-people">
+                  <div
+                    v-for="personAssoc in association.people"
+                    :key="personAssoc.personId"
+                    class="person-association"
+                    :class="{ reimbursed: personAssoc.isReimbursed }"
+                  >
+                    <div class="person-details">
+                      <span class="person-name">
+                        {{
+                          people.find(p => p.id === personAssoc.personId)
+                            ?.name || 'Personne inconnue'
+                        }}
+                      </span>
+                      <span v-if="personAssoc.note" class="person-note">
+                        {{ personAssoc.note }}
+                      </span>
+                    </div>
+                    <div class="person-amount">
+                      {{ formatAmount(personAssoc.amount) }}
+                    </div>
+                    <div class="person-actions">
+                      <button
+                        v-if="!personAssoc.isReimbursed"
+                        class="reimburse-button"
+                        @click="
+                          markPersonAsReimbursed(
+                            association.id,
+                            personAssoc.personId
+                          )
+                        "
+                      >
+                        <i class="fas fa-check"></i>
+                        Remboursé
+                      </button>
+                      <span v-else class="reimbursed-badge">
+                        <i class="fas fa-check-circle"></i>
+                        Remboursé
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="association-actions">
+                  <button
+                    class="delete-association-button"
+                    @click="deleteSharedAssociation(association.id)"
+                  >
+                    <i class="fas fa-trash"></i>
+                    Supprimer l'association
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Modal d'ajout/modification de personne -->
@@ -590,19 +875,25 @@
     people,
     reimbursementSummary,
     personDebts,
+    sharedAssociations,
     addPerson,
     updatePerson,
     deletePerson: deletePersonAction,
     associateTransaction,
+    associateSharedTransaction,
     markAsReimbursed,
+    markSharedAssociationAsReimbursed,
+    removeAssociation,
+    removeSharedAssociation,
     formatAmount,
     isTransactionAssociated,
     getTransactionAssociation,
-    removeAssociation,
   } = useReimbursement()
 
   // État de l'interface
-  const activeTab = ref<'overview' | 'people' | 'associate'>('overview')
+  const activeTab = ref<'overview' | 'people' | 'associate' | 'shared'>(
+    'overview'
+  )
   const showAddPersonModal = ref(false)
   const editingPerson = ref<Person | null>(null)
   const selectedCategoryFilter = ref('')
@@ -620,6 +911,11 @@
 
   // État des montants personnalisés pour chaque transaction
   const customAmounts = ref<Record<string, number>>({})
+
+  // État pour les associations partagées
+  const selectedTransactionForSharing = ref<Transaction | null>(null)
+  const selectedPeopleForSharing = ref<Record<string, boolean>>({})
+  const peopleAmounts = ref<Record<string, number>>({})
 
   /**
    * Transactions disponibles pour association (toutes les dépenses)
@@ -1029,6 +1325,174 @@
     const originalAmount = Math.abs(transaction.amount)
     customAmounts.value[transactionKey] = originalAmount
   }
+
+  // === Fonctions pour les associations partagées ===
+
+  /**
+   * Sélectionne une transaction pour le partage
+   */
+  const selectTransactionForSharing = (transaction: Transaction) => {
+    selectedTransactionForSharing.value = transaction
+    // Réinitialiser les sélections
+    selectedPeopleForSharing.value = {}
+    peopleAmounts.value = {}
+  }
+
+  /**
+   * Met à jour la sélection d'une personne pour le partage
+   */
+  const updatePersonSharing = (personId: string) => {
+    if (!selectedPeopleForSharing.value[personId]) {
+      // Si la personne est désélectionnée, supprimer son montant
+      delete peopleAmounts.value[personId]
+    } else {
+      // Si la personne est sélectionnée, initialiser avec un montant par défaut
+      const remainingPeople = Object.keys(
+        selectedPeopleForSharing.value
+      ).filter(id => selectedPeopleForSharing.value[id]).length
+      if (selectedTransactionForSharing.value && remainingPeople > 0) {
+        const defaultAmount =
+          Math.round(
+            (Math.abs(selectedTransactionForSharing.value.amount) /
+              remainingPeople) *
+              100
+          ) / 100
+        peopleAmounts.value[personId] = defaultAmount
+      }
+    }
+  }
+
+  /**
+   * Crée une répartition égale pour les personnes sélectionnées
+   */
+  const createEqualSplitForSelected = () => {
+    if (!selectedTransactionForSharing.value) return
+
+    const selectedPeople = Object.keys(selectedPeopleForSharing.value).filter(
+      id => selectedPeopleForSharing.value[id]
+    )
+
+    if (selectedPeople.length === 0) {
+      alert('Veuillez sélectionner au moins une personne')
+      return
+    }
+
+    const totalAmount = Math.abs(selectedTransactionForSharing.value.amount)
+    const amountPerPerson =
+      Math.round((totalAmount / selectedPeople.length) * 100) / 100
+
+    selectedPeople.forEach(personId => {
+      peopleAmounts.value[personId] = amountPerPerson
+    })
+  }
+
+  /**
+   * Calcule le montant total partagé
+   */
+  const getTotalSharedAmount = (): number => {
+    return Object.values(peopleAmounts.value).reduce(
+      (sum, amount) => sum + (amount || 0),
+      0
+    )
+  }
+
+  /**
+   * Vérifie si la répartition est valide
+   */
+  const isValidSharing = computed(() => {
+    if (!selectedTransactionForSharing.value) return false
+
+    const totalShared = getTotalSharedAmount()
+    const maxAmount = Math.abs(selectedTransactionForSharing.value.amount)
+
+    return totalShared > 0 && totalShared <= maxAmount
+  })
+
+  /**
+   * Compte le nombre de personnes sélectionnées
+   */
+  const getSelectedPeopleCount = (): number => {
+    return Object.values(selectedPeopleForSharing.value).filter(Boolean).length
+  }
+
+  /**
+   * Annule la création d'une association partagée
+   */
+  const cancelSharing = () => {
+    selectedTransactionForSharing.value = null
+    selectedPeopleForSharing.value = {}
+    peopleAmounts.value = {}
+  }
+
+  /**
+   * Crée une association partagée
+   */
+  const createSharedAssociation = () => {
+    if (!selectedTransactionForSharing.value || !isValidSharing.value) return
+
+    const selectedPeople = Object.keys(selectedPeopleForSharing.value).filter(
+      id => selectedPeopleForSharing.value[id]
+    )
+
+    if (selectedPeople.length === 0) {
+      alert('Veuillez sélectionner au moins une personne')
+      return
+    }
+
+    const peopleAssociations = selectedPeople.map(personId => ({
+      personId,
+      amount: peopleAmounts.value[personId] || 0,
+    }))
+
+    try {
+      associateSharedTransaction(
+        selectedTransactionForSharing.value,
+        peopleAssociations
+      )
+      cancelSharing()
+      console.log('Association partagée créée avec succès')
+    } catch (error) {
+      console.error(
+        "Erreur lors de la création de l'association partagée:",
+        error
+      )
+      alert(
+        `Erreur: ${error instanceof Error ? error.message : 'Erreur inconnue'}`
+      )
+    }
+  }
+
+  /**
+   * Marque une personne comme remboursée dans une association partagée
+   */
+  const markPersonAsReimbursed = (associationId: string, personId: string) => {
+    try {
+      markSharedAssociationAsReimbursed(associationId, personId, true)
+      console.log('Personne marquée comme remboursée')
+    } catch (error) {
+      console.error('Erreur lors du marquage comme remboursé:', error)
+      alert('Erreur lors du marquage comme remboursé')
+    }
+  }
+
+  /**
+   * Supprime une association partagée
+   */
+  const deleteSharedAssociation = (associationId: string) => {
+    if (
+      confirm('Êtes-vous sûr de vouloir supprimer cette association partagée ?')
+    ) {
+      try {
+        removeSharedAssociation(associationId)
+        console.log('Association partagée supprimée')
+      } catch (error) {
+        console.error('Erreur lors de la suppression:', error)
+        alert("Erreur lors de la suppression de l'association")
+      }
+    }
+  }
+
+  // === Fin des fonctions pour les associations partagées ===
 
   // Pré-sélectionner la personne dans les filtres si une seule personne
   watch(
@@ -2036,6 +2500,432 @@
   .division-button.reset:hover {
     background: #fee2e2;
     border-color: #fca5a5;
+  }
+
+  /* Styles pour le partage de transactions */
+  .shared-header {
+    margin-bottom: 2rem;
+  }
+
+  .shared-header h3 {
+    margin: 0 0 0.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #495057;
+  }
+
+  .shared-header p {
+    margin: 0;
+    color: #6c757d;
+  }
+
+  .shared-stats {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+  }
+
+  .create-shared-section {
+    background: #f8fffe;
+    border: 1px solid #d1fae5;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .create-shared-section h4 {
+    color: #065f46;
+    margin: 0 0 1.5rem 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .available-transactions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .transaction-item.selectable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .transaction-item.selectable:hover {
+    background: #f0f9ff;
+    border-color: #0ea5e9;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
+  }
+
+  .sharing-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .selected-transaction {
+    background: #f0f9ff;
+    border: 1px solid #0ea5e9;
+    border-radius: 8px;
+    padding: 1rem;
+  }
+
+  .selected-transaction h5 {
+    margin: 0 0 0.75rem 0;
+    color: #0c4a6e;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .people-sharing h5 {
+    margin: 0 0 1rem 0;
+    color: #374151;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .people-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+  }
+
+  .person-sharing-item {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .person-sharing-item:has(input:checked) {
+    border-color: #10b981;
+    background: #f0fdf4;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+  }
+
+  .person-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .person-info input[type='checkbox'] {
+    width: 1.125rem;
+    height: 1.125rem;
+    accent-color: #10b981;
+  }
+
+  .person-name {
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+  }
+
+  .person-amount {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .person-amount input {
+    width: 100px;
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    text-align: right;
+  }
+
+  .person-amount input:focus {
+    outline: none;
+    border-color: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+  }
+
+  .currency {
+    color: #6b7280;
+    font-weight: 500;
+  }
+
+  .sharing-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1rem;
+    background: #f9fafb;
+    border-radius: 8px;
+  }
+
+  .quick-split-button {
+    background: #0ea5e9;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .quick-split-button:hover {
+    background: #0284c7;
+  }
+
+  .total-validation {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1rem;
+  }
+
+  .total-label {
+    color: #374151;
+    font-weight: 500;
+  }
+
+  .total-amount {
+    font-weight: 700;
+    color: #10b981;
+    transition: color 0.2s ease;
+  }
+
+  .total-amount.invalid {
+    color: #ef4444;
+  }
+
+  .total-max {
+    color: #6b7280;
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .create-button {
+    background: #10b981;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .create-button:hover:not(:disabled) {
+    background: #059669;
+  }
+
+  .create-button:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+  }
+
+  .existing-shared-section {
+    margin-top: 2rem;
+  }
+
+  .existing-shared-section h4 {
+    color: #374151;
+    margin: 0 0 1.5rem 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .shared-associations-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .shared-association-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: box-shadow 0.2s ease;
+  }
+
+  .shared-association-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .association-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .association-info h5 {
+    margin: 0 0 0.25rem 0;
+    color: #1f2937;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .association-category {
+    display: inline-block;
+    background: rgba(102, 126, 234, 0.1);
+    color: #667eea;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-right: 0.5rem;
+  }
+
+  .association-date {
+    color: #6b7280;
+    font-size: 0.875rem;
+  }
+
+  .association-total {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #dc3545;
+  }
+
+  .association-people {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .person-association {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+  }
+
+  .person-association.reimbursed {
+    background: #d1fae5;
+    border: 1px solid #a7f3d0;
+  }
+
+  .person-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .person-details .person-name {
+    font-weight: 600;
+    color: #374151;
+  }
+
+  .person-note {
+    font-size: 0.75rem;
+    color: #6b7280;
+    font-style: italic;
+  }
+
+  .person-association .person-amount {
+    font-weight: 600;
+    color: #dc3545;
+  }
+
+  .person-association.reimbursed .person-amount {
+    color: #10b981;
+  }
+
+  .person-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .reimburse-button {
+    background: #10b981;
+    color: white;
+    border: none;
+    padding: 0.375rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .reimburse-button:hover {
+    background: #059669;
+  }
+
+  .reimbursed-badge {
+    background: #10b981;
+    color: white;
+    padding: 0.375rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .association-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 1rem;
+    border-top: 1px solid #f3f4f6;
+  }
+
+  .delete-association-button {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  .delete-association-button:hover {
+    background: #dc2626;
   }
 
   /* Responsive */

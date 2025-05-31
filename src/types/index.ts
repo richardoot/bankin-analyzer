@@ -84,6 +84,25 @@ export interface ReimbursementTransaction {
   createdAt: string
 }
 
+// Interface pour les associations partagées
+export interface SharedTransactionAssociation {
+  id: string
+  transactionId: string // ID de la transaction originale
+  people: Array<{
+    personId: string
+    amount: number
+    isReimbursed: boolean
+    reimbursedAt?: string
+    note?: string
+  }>
+  description: string
+  date: string
+  category: string
+  totalAmount: number
+  createdAt: string
+  updatedAt: string
+}
+
 export interface PersonDebt {
   personId: string
   personName: string
