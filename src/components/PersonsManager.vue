@@ -8,6 +8,17 @@
     email?: string // Email optionnel
   }
 
+  // Interfaces pour les assignations d'ExpensesReimbursementManager
+  interface PersonAssignment {
+    personId: string
+    amount: number
+  }
+
+  interface ExpenseAssignment {
+    transactionId: string
+    assignedPersons: PersonAssignment[]
+  }
+
   // Liste des personnes (chargée depuis localStorage)
   const availablePersons = ref<Person[]>([])
 
@@ -159,13 +170,52 @@
     resetForm()
   }
 
-  // Supprimer une personne
+  // Supprimer une personne et ses associations
   const deletePerson = (personId: string) => {
     if (confirm('Êtes-vous sûr de vouloir supprimer cette personne ?')) {
+      // Supprimer la personne de la liste
       availablePersons.value = availablePersons.value.filter(
         p => p.id !== personId
       )
       saveToStorage()
+
+      // Nettoyer toutes les assignations de cette personne dans les dépenses
+      cleanPersonAssignments(personId)
+    }
+  }
+
+  // Nettoyer les assignations d'une personne supprimée
+  const cleanPersonAssignments = (personId: string) => {
+    try {
+      const stored = localStorage.getItem('bankin-analyzer-expense-assignments')
+      if (stored) {
+        let expenseAssignments = JSON.parse(stored)
+
+        // Supprimer la personne de toutes les assignations
+        expenseAssignments = expenseAssignments
+          .map((assignment: ExpenseAssignment) => {
+            if (assignment.assignedPersons) {
+              assignment.assignedPersons = assignment.assignedPersons.filter(
+                (ap: PersonAssignment) => ap.personId !== personId
+              )
+            }
+            return assignment
+          })
+          .filter(
+            (assignment: ExpenseAssignment) =>
+              // Garder seulement les assignations qui ont encore des personnes
+              assignment.assignedPersons &&
+              assignment.assignedPersons.length > 0
+          )
+
+        // Sauvegarder les assignations mises à jour
+        localStorage.setItem(
+          'bankin-analyzer-expense-assignments',
+          JSON.stringify(expenseAssignments)
+        )
+      }
+    } catch (error) {
+      console.warn('Erreur lors du nettoyage des assignations:', error)
     }
   }
 
