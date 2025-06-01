@@ -1,7 +1,7 @@
 <script setup lang="ts">
   import type { CsvAnalysisResult } from '@/types'
   import { computed } from 'vue'
-  import ExpensesList from './ExpensesList.vue'
+  import ExpensesReimbursementManager from './ExpensesReimbursementManager.vue'
   import PersonsManager from './PersonsManager.vue'
   import ReimbursementStats from './ReimbursementStats.vue'
   import ReimbursementSummary from './ReimbursementSummary.vue'
@@ -59,8 +59,8 @@
       <!-- Gestionnaire des personnes -->
       <PersonsManager />
 
-      <!-- Liste des dépenses -->
-      <ExpensesList :analysis-result="analysisResult" />
+      <!-- Gestionnaire des dépenses et remboursements -->
+      <ExpensesReimbursementManager :analysis-result="analysisResult" />
 
       <!-- Résumé des remboursements -->
       <ReimbursementSummary :filtered-expenses="filteredExpenses" />
