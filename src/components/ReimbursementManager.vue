@@ -1,6 +1,6 @@
 <script setup lang="ts">
   import type { CsvAnalysisResult } from '@/types'
-  import { computed } from 'vue'
+  import { computed, ref } from 'vue'
   import ExpensesReimbursementManager from './ExpensesReimbursementManager.vue'
   import PersonsManager from './PersonsManager.vue'
   import ReimbursementStats from './ReimbursementStats.vue'
@@ -11,6 +11,11 @@
   }
 
   const props = defineProps<Props>()
+
+  // Référence au composant ExpensesReimbursementManager
+  const expensesManagerRef = ref<InstanceType<
+    typeof ExpensesReimbursementManager
+  > | null>(null)
 
   // Calcul des dépenses pour les statistiques
   const filteredExpenses = computed(() => {
@@ -60,10 +65,13 @@
       <PersonsManager />
 
       <!-- Gestionnaire des dépenses et remboursements -->
-      <ExpensesReimbursementManager :analysis-result="analysisResult" />
+      <ExpensesReimbursementManager
+        ref="expensesManagerRef"
+        :analysis-result="analysisResult"
+      />
 
       <!-- Résumé des remboursements -->
-      <ReimbursementSummary :filtered-expenses="filteredExpenses" />
+      <ReimbursementSummary :expenses-manager-ref="expensesManagerRef" />
     </div>
   </div>
 </template>
