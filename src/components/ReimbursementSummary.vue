@@ -1,15 +1,27 @@
 <script setup lang="ts">
-  import { computed } from 'vue'
+  import { computed, ref } from 'vue'
 
   interface PersonAssignment {
     personId: string
     amount: number
+    categoryId?: string
   }
 
   interface Person {
     id: string
     name: string
     email?: string
+  }
+
+  interface ReimbursementCategory {
+    id: string
+    name: string
+    description: string
+    icon: string
+    color: string
+    keywords: string[]
+    isDefault: boolean
+    createdAt: Date
   }
 
   interface Props {
@@ -23,6 +35,18 @@
 
   const props = defineProps<Props>()
 
+  // État pour gérer les catégories expansées
+  const expandedCategories = ref(new Set<string>())
+
+  // Fonction pour basculer l'état d'une catégorie
+  const toggleCategory = (category: string) => {
+    if (expandedCategories.value.has(category)) {
+      expandedCategories.value.delete(category)
+    } else {
+      expandedCategories.value.add(category)
+    }
+  }
+
   // Récupération des personnes depuis localStorage
   const availablePersons = computed<Person[]>(() => {
     try {
@@ -32,6 +56,31 @@
       }
     } catch (error) {
       console.error('Erreur lors de la récupération des personnes:', error)
+    }
+    return []
+  })
+
+  // Récupération des catégories de remboursement depuis localStorage
+  const reimbursementCategories = computed<ReimbursementCategory[]>(() => {
+    try {
+      const stored = localStorage.getItem(
+        'bankin-analyzer-reimbursement-categories'
+      )
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        return parsed.map(
+          (
+            cat: Omit<ReimbursementCategory, 'createdAt'> & {
+              createdAt: string
+            }
+          ) => ({
+            ...cat,
+            createdAt: new Date(cat.createdAt),
+          })
+        )
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération des catégories:', error)
     }
     return []
   })
@@ -73,6 +122,165 @@
       })
       .filter(item => item.amount > 0) // Ne montrer que les montants positifs
       .sort((a, b) => b.amount - a.amount) // Trier par montant décroissant
+  })
+
+  // Calcul des remboursements par catégorie assignée et par personne
+  const reimbursementDataByCategory = computed(() => {
+    if (!props.expensesManagerRef?.expenseAssignments) {
+      return new Map()
+    }
+
+    const assignments = props.expensesManagerRef.expenseAssignments
+    const persons = availablePersons.value
+    const categories = reimbursementCategories.value
+
+    // Structure: Map<categoryName, Map<personId, amount>>
+    const categoryPersonTotals = new Map<string, Map<string, number>>()
+
+    assignments.forEach(assignment => {
+      assignment.assignedPersons.forEach(personAssignment => {
+        let categoryName = 'Sans catégorie spécifique'
+
+        // Si une catégorie est assignée, utiliser son nom
+        if (personAssignment.categoryId) {
+          const category = categories.find(
+            c => c.id === personAssignment.categoryId
+          )
+          if (category) {
+            categoryName = `${category.icon} ${category.name}`
+          }
+        }
+
+        if (!categoryPersonTotals.has(categoryName)) {
+          categoryPersonTotals.set(categoryName, new Map())
+        }
+
+        const personTotals = categoryPersonTotals.get(categoryName)
+        if (personTotals) {
+          const currentTotal = personTotals.get(personAssignment.personId) || 0
+          personTotals.set(
+            personAssignment.personId,
+            currentTotal + personAssignment.amount
+          )
+        }
+      })
+    })
+
+    // Transformer en structure plus pratique pour l'affichage
+    const result = new Map<
+      string,
+      Array<{
+        person: string
+        amount: number
+        personId: string
+      }>
+    >()
+
+    categoryPersonTotals.forEach((personTotals, category) => {
+      const categoryData = Array.from(personTotals.entries())
+        .map(([personId, amount]) => {
+          const person = persons.find(p => p.id === personId)
+          return {
+            person: person?.name || `Personne inconnue (${personId})`,
+            amount: amount,
+            personId,
+          }
+        })
+        .filter(item => item.amount > 0)
+        .sort((a, b) => b.amount - a.amount)
+
+      if (categoryData.length > 0) {
+        result.set(category, categoryData)
+      }
+    })
+
+    return result
+  })
+
+  // Calcul détaillé des remboursements par personne avec catégories
+  const detailedReimbursementData = computed(() => {
+    if (!props.expensesManagerRef?.expenseAssignments) {
+      return []
+    }
+
+    const assignments = props.expensesManagerRef.expenseAssignments
+    const persons = availablePersons.value
+    const categories = reimbursementCategories.value
+
+    // Structure: Map<personId, Map<categoryName, amount>>
+    const personCategoryTotals = new Map<string, Map<string, number>>()
+
+    assignments.forEach(assignment => {
+      assignment.assignedPersons.forEach(personAssignment => {
+        let categoryName = 'Sans catégorie spécifique'
+
+        if (personAssignment.categoryId) {
+          const category = categories.find(
+            c => c.id === personAssignment.categoryId
+          )
+          if (category) {
+            categoryName = `${category.icon} ${category.name}`
+          }
+        }
+
+        if (!personCategoryTotals.has(personAssignment.personId)) {
+          personCategoryTotals.set(personAssignment.personId, new Map())
+        }
+
+        const categoryTotals = personCategoryTotals.get(
+          personAssignment.personId
+        )
+        if (categoryTotals) {
+          const currentTotal = categoryTotals.get(categoryName) || 0
+          categoryTotals.set(
+            categoryName,
+            currentTotal + personAssignment.amount
+          )
+        }
+      })
+    })
+
+    // Transformer en structure pour l'affichage
+    return Array.from(personCategoryTotals.entries())
+      .map(([personId, categoryTotals]) => {
+        const person = persons.find(p => p.id === personId)
+        const categories = Array.from(categoryTotals.entries())
+          .map(([categoryName, amount]) => ({
+            categoryName,
+            amount,
+          }))
+          .filter(item => item.amount > 0)
+          .sort((a, b) => b.amount - a.amount)
+
+        const totalAmount = categories.reduce((sum, cat) => sum + cat.amount, 0)
+
+        return {
+          personId,
+          personName: person?.name || `Personne inconnue (${personId})`,
+          categories,
+          totalAmount,
+          status: totalAmount > 0 ? 'en_attente' : 'valide',
+        }
+      })
+      .filter(item => item.totalAmount > 0)
+      .sort((a, b) => b.totalAmount - a.totalAmount)
+  })
+
+  // Totaux par catégorie
+  const categoryTotals = computed(() => {
+    const totals = new Map<string, number>()
+
+    reimbursementDataByCategory.value.forEach((personData, category) => {
+      const categoryTotal = personData.reduce(
+        (sum: number, item: { amount: number }) => sum + item.amount,
+        0
+      )
+      totals.set(category, categoryTotal)
+    })
+
+    return Array.from(totals.entries())
+      .map(([category, total]) => ({ category, total }))
+      .sort((a, b) => b.total - a.total)
   })
 </script>
 
@@ -140,6 +348,174 @@
               <button class="action-button" :class="item.status">
                 {{ item.status === 'valide' ? 'Traité' : 'Valider' }}
               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Détail des remboursements par personne avec catégories -->
+      <div class="detailed-reimbursement">
+        <h4 class="preview-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="8.5" cy="7" r="4" />
+            <path d="M20 8v6M23 11h-6" />
+          </svg>
+          Détail par personne avec catégories
+          <span
+            v-if="detailedReimbursementData.length === 0"
+            class="preview-badge"
+          >
+            Aucune donnée
+          </span>
+          <span v-else class="preview-badge">
+            {{ detailedReimbursementData.length }} personne(s)
+          </span>
+        </h4>
+
+        <div
+          v-if="detailedReimbursementData.length === 0"
+          class="no-data-message"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="8.5" cy="7" r="4" />
+            <path d="M20 8v6M23 11h-6" />
+          </svg>
+          <p>Aucune assignation avec catégorie trouvée.</p>
+          <small>
+            Assignez des catégories spécifiques lors de l'association des
+            personnes aux dépenses.
+          </small>
+        </div>
+
+        <div v-else class="detailed-person-list">
+          <div
+            v-for="personData in detailedReimbursementData"
+            :key="personData.personId"
+            class="detailed-person-section"
+          >
+            <div class="person-header">
+              <div class="person-info">
+                <div class="person-avatar">
+                  {{ personData.personName.charAt(0).toUpperCase() }}
+                </div>
+                <div class="person-details">
+                  <span class="person-name">{{ personData.personName }}</span>
+                  <span class="person-summary">
+                    {{ personData.categories.length }} catégorie(s) •
+                    {{ personData.totalAmount.toFixed(2) }} €
+                  </span>
+                </div>
+              </div>
+              <div class="person-total">
+                <span class="total-amount">
+                  {{ personData.totalAmount.toFixed(2) }} €
+                </span>
+                <button class="action-button" :class="personData.status">
+                  {{ personData.status === 'valide' ? 'Traité' : 'Valider' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="person-categories">
+              <div
+                v-for="category in personData.categories"
+                :key="`${personData.personId}-${category.categoryName}`"
+                class="category-detail-item"
+              >
+                <div class="category-info">
+                  <span class="category-label">{{
+                    category.categoryName
+                  }}</span>
+                </div>
+                <span class="category-amount">
+                  {{ category.amount.toFixed(2) }} €
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Aperçu des remboursements par catégorie -->
+      <div class="reimbursement-by-category">
+        <h4 class="preview-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+          Remboursements par catégorie
+          <span v-if="categoryTotals.length === 0" class="preview-badge">
+            Aucune catégorie
+          </span>
+          <span v-else class="preview-badge">
+            {{ categoryTotals.length }} catégorie(s)
+          </span>
+        </h4>
+
+        <div v-if="categoryTotals.length === 0" class="no-data-message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+          <p>Aucune donnée de catégorie trouvée.</p>
+          <small>
+            Les données de catégorie s'afficheront une fois les assignations
+            effectuées.
+          </small>
+        </div>
+
+        <div v-else class="category-list">
+          <div
+            v-for="categoryData in categoryTotals"
+            :key="categoryData.category"
+            class="category-section"
+          >
+            <div class="category-header">
+              <div class="category-info">
+                <span class="category-name">
+                  {{ categoryData.category }}
+                </span>
+                <span class="category-total">
+                  {{ categoryData.total.toFixed(2) }} €
+                </span>
+              </div>
+              <button
+                class="category-toggle"
+                @click="toggleCategory(categoryData.category)"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <polyline points="6,9 12,15 18,9" />
+                </svg>
+              </button>
+            </div>
+
+            <div
+              v-show="expandedCategories.has(categoryData.category)"
+              class="category-persons"
+            >
+              <div
+                v-for="person in reimbursementDataByCategory.get(
+                  categoryData.category
+                ) || []"
+                :key="`${categoryData.category}-${person.personId}`"
+                class="category-person-item"
+              >
+                <div class="person-info">
+                  <div class="person-avatar small">
+                    {{ person.person.charAt(0).toUpperCase() }}
+                  </div>
+                  <span class="person-name">{{ person.person }}</span>
+                </div>
+                <span class="person-amount">
+                  {{ person.amount.toFixed(2) }} €
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -456,6 +832,212 @@
 
   .action-button.en_attente:hover {
     background: #1d4ed8;
+  }
+
+  /* Remboursements par catégorie */
+  .reimbursement-by-category {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Détail des remboursements par personne avec catégories */
+  .detailed-reimbursement {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .detailed-person-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .detailed-person-section {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+
+  .person-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .person-summary {
+    font-size: 0.875rem;
+    color: #64748b;
+    font-weight: 500;
+  }
+
+  .person-total {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .total-amount {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f172a;
+    background: #ecfdf5;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: 1px solid #bbf7d0;
+  }
+
+  .person-categories {
+    padding: 0;
+    background: #fafafa;
+  }
+
+  .category-detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #f3f4f6;
+    transition: all 0.2s ease;
+  }
+
+  .category-detail-item:last-child {
+    border-bottom: none;
+  }
+
+  .category-detail-item:hover {
+    background: #f9fafb;
+  }
+
+  .category-label {
+    font-weight: 600;
+    color: #374151;
+    font-size: 0.95rem;
+  }
+
+  .category-amount {
+    font-weight: 600;
+    color: #059669;
+    font-size: 1rem;
+    background: #d1fae5;
+    padding: 0.375rem 0.75rem;
+    border-radius: 6px;
+  }
+
+  .category-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .category-section {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+  }
+
+  .category-section:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  .category-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    cursor: pointer;
+  }
+
+  .category-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+  }
+
+  .category-name {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 1rem;
+  }
+
+  .category-total {
+    font-weight: 700;
+    color: #059669;
+    font-size: 1.125rem;
+    background: #d1fae5;
+    padding: 0.25rem 0.75rem;
+    border-radius: 6px;
+    margin-left: auto;
+  }
+
+  .category-toggle {
+    background: none;
+    border: none;
+    padding: 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #6b7280;
+    margin-left: 1rem;
+  }
+
+  .category-toggle:hover {
+    background: #e5e7eb;
+    color: #374151;
+  }
+
+  .category-toggle svg {
+    width: 1rem;
+    height: 1rem;
+    transition: transform 0.2s ease;
+  }
+
+  .category-persons {
+    padding: 0;
+  }
+
+  .category-person-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.875rem 1.25rem;
+    border-bottom: 1px solid #f3f4f6;
+    transition: all 0.2s ease;
+  }
+
+  .category-person-item:last-child {
+    border-bottom: none;
+  }
+
+  .category-person-item:hover {
+    background: #f9fafb;
+  }
+
+  .person-avatar.small {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.875rem;
+  }
+
+  .person-amount {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 1rem;
   }
 
   /* Actions d'export */

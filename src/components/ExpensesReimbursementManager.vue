@@ -9,11 +9,23 @@
   interface PersonAssignment {
     personId: string
     amount: number
+    categoryId?: string
   }
 
   interface ExpenseAssignment {
     transactionId: string
     assignedPersons: PersonAssignment[]
+  }
+
+  interface ReimbursementCategory {
+    id: string
+    name: string
+    description: string
+    icon: string
+    color: string
+    keywords: string[]
+    isDefault: boolean
+    createdAt: Date
   }
 
   const props = defineProps<Props>()
@@ -32,6 +44,7 @@
   } | null>(null)
   const modalPersonId = ref<string>('')
   const modalAmount = ref<number>(0)
+  const modalCategoryId = ref<string>('')
   const customDivider = ref<number>(2)
 
   // Calculer le montant maximal disponible pour l'assignation
@@ -68,6 +81,9 @@
     Array<{ id: string; name: string; email?: string }>
   >([])
 
+  // Catégories de remboursement disponibles (chargées depuis localStorage)
+  const reimbursementCategories = ref<ReimbursementCategory[]>([])
+
   // Charger les personnes depuis localStorage
   const loadPersons = () => {
     try {
@@ -80,6 +96,31 @@
     } catch (error) {
       console.warn('Erreur lors du chargement des personnes:', error)
       availablePersons.value = []
+    }
+  }
+
+  // Charger les catégories depuis localStorage
+  const loadReimbursementCategories = () => {
+    try {
+      const stored = localStorage.getItem(
+        'bankin-analyzer-reimbursement-categories'
+      )
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        reimbursementCategories.value = parsed.map(
+          (
+            cat: Omit<ReimbursementCategory, 'createdAt'> & {
+              createdAt: string
+            }
+          ) => ({
+            ...cat,
+            createdAt: new Date(cat.createdAt),
+          })
+        )
+      }
+    } catch (error) {
+      console.warn('Erreur lors du chargement des catégories:', error)
+      reimbursementCategories.value = []
     }
   }
 
@@ -271,7 +312,16 @@
     return assignment.assignedPersons
       .map(ap => {
         const person = availablePersons.value.find(p => p.id === ap.personId)
-        return person ? { ...person, assignedAmount: ap.amount } : null
+        const category = ap.categoryId
+          ? reimbursementCategories.value.find(c => c.id === ap.categoryId)
+          : null
+        return person
+          ? {
+              ...person,
+              assignedAmount: ap.amount,
+              assignedCategory: category || null,
+            }
+          : null
       })
       .filter((person): person is NonNullable<typeof person> => person !== null)
   }
@@ -280,7 +330,8 @@
   const addPersonToTransaction = (
     transactionId: string,
     personId: string,
-    amount: number
+    amount: number,
+    categoryId?: string
   ) => {
     const existingIndex = expenseAssignments.value.findIndex(
       a => a.transactionId === transactionId
@@ -294,21 +345,32 @@
           ap => ap.personId === personId
         )
         if (personIndex >= 0) {
-          // Mettre à jour le montant
+          // Mettre à jour le montant et la catégorie
           const existingAssignment = assignment.assignedPersons[personIndex]
           if (existingAssignment) {
             existingAssignment.amount = amount
+            if (categoryId) {
+              existingAssignment.categoryId = categoryId
+            }
           }
         } else {
           // Ajouter la nouvelle personne
-          assignment.assignedPersons.push({ personId, amount })
+          const newAssignment: PersonAssignment = { personId, amount }
+          if (categoryId) {
+            newAssignment.categoryId = categoryId
+          }
+          assignment.assignedPersons.push(newAssignment)
         }
       }
     } else {
       // Créer une nouvelle assignation
+      const newPersonAssignment: PersonAssignment = { personId, amount }
+      if (categoryId) {
+        newPersonAssignment.categoryId = categoryId
+      }
       expenseAssignments.value.push({
         transactionId,
-        assignedPersons: [{ personId, amount }],
+        assignedPersons: [newPersonAssignment],
       })
     }
 
@@ -358,6 +420,7 @@
     currentExpense.value = null
     modalPersonId.value = ''
     modalAmount.value = 0
+    modalCategoryId.value = ''
     customDivider.value = 2
   }
 
@@ -402,10 +465,12 @@
         addPersonToTransaction(
           transactionId,
           modalPersonId.value,
-          modalAmount.value
+          modalAmount.value,
+          modalCategoryId.value || undefined
         )
         modalPersonId.value = ''
         modalAmount.value = 0
+        modalCategoryId.value = ''
       } else {
         alert(
           'Le montant total des remboursements ne peut pas dépasser le montant de la dépense.'
@@ -518,6 +583,7 @@
   // Charger les données au montage
   loadPersons()
   loadAssignments()
+  loadReimbursementCategories()
 
   // Écouter les changements de localStorage pour synchroniser les personnes entre composants
   const handleStorageChange = (event: StorageEvent) => {
@@ -710,7 +776,7 @@
                   )"
                   :key="person.id"
                   class="person-avatar-compact"
-                  :title="`${person.name}${person.email ? ' (' + person.email + ')' : ''}\nMontant: ${formatAmount(person.assignedAmount || 0)}`"
+                  :title="`${person.name}${person.email ? ' (' + person.email + ')' : ''}\nMontant: ${formatAmount(person.assignedAmount || 0)}${person.assignedCategory ? '\nCatégorie: ' + person.assignedCategory.icon + ' ' + person.assignedCategory.name : ''}`"
                   @click="
                     removePersonFromTransaction(
                       getTransactionId(
@@ -880,6 +946,26 @@
                 :value="person.id"
               >
                 {{ person.name }}
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="modal-category-select">
+              Catégorie de remboursement (optionnel) :
+            </label>
+            <select
+              id="modal-category-select"
+              v-model="modalCategoryId"
+              class="form-control"
+            >
+              <option value="">Aucune catégorie spécifique</option>
+              <option
+                v-for="category in reimbursementCategories"
+                :key="category.id"
+                :value="category.id"
+              >
+                {{ category.icon }} {{ category.name }}
               </option>
             </select>
           </div>
