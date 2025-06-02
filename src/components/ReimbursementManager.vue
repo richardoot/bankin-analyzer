@@ -3,6 +3,7 @@
   import { computed, ref } from 'vue'
   import ExpensesReimbursementManager from './ExpensesReimbursementManager.vue'
   import PersonsManager from './PersonsManager.vue'
+  import ReimbursementCategoriesManager from './ReimbursementCategoriesManager.vue'
   import ReimbursementStats from './ReimbursementStats.vue'
   import ReimbursementSummary from './ReimbursementSummary.vue'
 
@@ -63,6 +64,9 @@
 
       <!-- Gestionnaire des personnes -->
       <PersonsManager />
+
+      <!-- Gestionnaire des catégories de remboursement -->
+      <ReimbursementCategoriesManager />
 
       <!-- Gestionnaire des dépenses et remboursements -->
       <ExpensesReimbursementManager
