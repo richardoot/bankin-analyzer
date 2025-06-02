@@ -1,65 +1,79 @@
 <script setup lang="ts">
-  import type { Transaction } from '@/types'
   import { computed } from 'vue'
 
+  interface PersonAssignment {
+    personId: string
+    amount: number
+  }
+
+  interface Person {
+    id: string
+    name: string
+    email?: string
+  }
+
   interface Props {
-    filteredExpenses: Transaction[]
+    expensesManagerRef?: {
+      expenseAssignments?: Array<{
+        transactionId: string
+        assignedPersons: PersonAssignment[]
+      }>
+    } | null
   }
 
   const props = defineProps<Props>()
 
-  // Calculs pour le résumé de remboursement
-  const totalExpenses = computed(() => {
-    return props.filteredExpenses.reduce(
-      (sum, transaction) => sum + Math.abs(transaction.amount),
-      0
-    )
+  // Récupération des personnes depuis localStorage
+  const availablePersons = computed<Person[]>(() => {
+    try {
+      const stored = localStorage.getItem('bankin-analyzer-persons')
+      if (stored) {
+        return JSON.parse(stored)
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération des personnes:', error)
+    }
+    return []
   })
 
-  const potentiallyReimbursableExpenses = computed(() => {
-    return props.filteredExpenses.filter(transaction => {
-      const searchText =
-        `${transaction.description} ${transaction.category}`.toLowerCase()
-      const reimbursableKeywords = [
-        'restaurant',
-        'transport',
-        'taxi',
-        'uber',
-        'essence',
-        'parking',
-        'hotel',
-        'hébergement',
-        'formation',
-        'matériel',
-        'bureau',
-        'professionnel',
-        'mission',
-        'déplacement',
-        'repas',
-        'client',
-      ]
-      return reimbursableKeywords.some(keyword => searchText.includes(keyword))
+  // Calcul des remboursements réels par personne
+  const reimbursementData = computed(() => {
+    if (!props.expensesManagerRef?.expenseAssignments) {
+      return []
+    }
+
+    const assignments = props.expensesManagerRef.expenseAssignments
+    const persons = availablePersons.value
+
+    // Calculer les totaux par personne
+    const personTotals = new Map<string, number>()
+
+    assignments.forEach(assignment => {
+      assignment.assignedPersons.forEach(
+        (personAssignment: PersonAssignment) => {
+          const currentTotal = personTotals.get(personAssignment.personId) || 0
+          personTotals.set(
+            personAssignment.personId,
+            currentTotal + personAssignment.amount
+          )
+        }
+      )
     })
-  })
 
-  const totalReimbursableAmount = computed(() => {
-    return potentiallyReimbursableExpenses.value.reduce(
-      (sum, transaction) => sum + Math.abs(transaction.amount),
-      0
-    )
+    // Créer les données de remboursement
+    return Array.from(personTotals.entries())
+      .map(([personId, amount]) => {
+        const person = persons.find(p => p.id === personId)
+        return {
+          person: person?.name || `Personne inconnue (${personId})`,
+          amount: amount,
+          status: amount > 0 ? 'en_attente' : 'valide', // Statut basique pour l'instant
+          personId,
+        }
+      })
+      .filter(item => item.amount > 0) // Ne montrer que les montants positifs
+      .sort((a, b) => b.amount - a.amount) // Trier par montant décroissant
   })
-
-  const reimbursementRate = computed(() => {
-    if (totalExpenses.value === 0) return 0
-    return (totalReimbursableAmount.value / totalExpenses.value) * 100
-  })
-
-  // Données mockées pour le groupe de personnes
-  const mockReimbursementData = [
-    { person: 'Jean Dupont', amount: 1250.5, status: 'en_attente' },
-    { person: 'Marie Martin', amount: 890.25, status: 'valide' },
-    { person: 'Pierre Durand', amount: 567.8, status: 'en_attente' },
-  ]
 </script>
 
 <template>
@@ -72,55 +86,6 @@
       Résumé des remboursements
     </h3>
     <div class="section-content">
-      <!-- Résumé principal -->
-      <div class="summary-main">
-        <div class="summary-cards">
-          <div class="summary-card total">
-            <div class="card-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                <line x1="9" y1="9" x2="9.01" y2="9" />
-                <line x1="15" y1="9" x2="15.01" y2="9" />
-              </svg>
-            </div>
-            <div class="card-content">
-              <span class="card-label">Total des dépenses</span>
-              <span class="card-value">{{ totalExpenses.toFixed(2) }} €</span>
-            </div>
-          </div>
-
-          <div class="summary-card reimbursable">
-            <div class="card-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-              </svg>
-            </div>
-            <div class="card-content">
-              <span class="card-label">Potentiellement remboursable</span>
-              <span class="card-value"
-                >{{ totalReimbursableAmount.toFixed(2) }} €</span
-              >
-            </div>
-          </div>
-
-          <div class="summary-card rate">
-            <div class="card-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12,6 12,12 16,14" />
-              </svg>
-            </div>
-            <div class="card-content">
-              <span class="card-label">Taux de remboursement</span>
-              <span class="card-value"
-                >{{ reimbursementRate.toFixed(1) }}%</span
-              >
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Aperçu des remboursements par personne -->
       <div class="reimbursement-preview">
         <h4 class="preview-title">
@@ -131,13 +96,32 @@
             <path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
           Aperçu des remboursements par personne
-          <span class="preview-badge">Données d'exemple</span>
+          <span v-if="reimbursementData.length === 0" class="preview-badge">
+            Aucune assignation
+          </span>
+          <span v-else class="preview-badge">
+            {{ reimbursementData.length }} personne(s)
+          </span>
         </h4>
 
-        <div class="reimbursement-list">
+        <div v-if="reimbursementData.length === 0" class="no-data-message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+            <line x1="9" y1="9" x2="9.01" y2="9" />
+            <line x1="15" y1="9" x2="15.01" y2="9" />
+          </svg>
+          <p>Aucune assignation de dépense trouvée.</p>
+          <small>
+            Utilisez le gestionnaire des dépenses ci-dessus pour assigner des
+            montants aux personnes.
+          </small>
+        </div>
+
+        <div v-else class="reimbursement-list">
           <div
-            v-for="item in mockReimbursementData"
-            :key="item.person"
+            v-for="item in reimbursementData"
+            :key="item.personId"
             class="reimbursement-item"
           >
             <div class="person-info">
@@ -200,27 +184,6 @@
             </svg>
             Exporter en Excel
           </button>
-        </div>
-      </div>
-
-      <!-- Fonctionnalités à venir -->
-      <div class="future-features">
-        <div class="feature-card">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-          </div>
-          <h5>Fonctionnalités à venir</h5>
-          <ul class="feature-list">
-            <li>Association automatique des dépenses aux personnes</li>
-            <li>Calcul intelligent des remboursements</li>
-            <li>Génération de rapports détaillés</li>
-            <li>Intégration avec les systèmes de paiement</li>
-            <li>Notifications automatiques</li>
-          </ul>
         </div>
       </div>
     </div>
@@ -366,6 +329,30 @@
     font-size: 0.75rem;
     font-weight: 500;
     margin-left: auto;
+  }
+
+  .no-data-message {
+    text-align: center;
+    padding: 2rem;
+    color: #6b7280;
+  }
+
+  .no-data-message svg {
+    width: 3rem;
+    height: 3rem;
+    margin: 0 auto 1rem;
+    color: #d1d5db;
+  }
+
+  .no-data-message p {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #374151;
+  }
+
+  .no-data-message small {
+    font-size: 0.875rem;
+    line-height: 1.5;
   }
 
   .reimbursement-list {
