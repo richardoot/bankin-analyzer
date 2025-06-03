@@ -186,7 +186,7 @@
     if (!props.analysisResult?.isValid) return []
     const categories = new Set<string>()
     props.analysisResult.transactions
-      .filter(t => t.type === 'expense')
+      .filter(t => t.type === 'expense' && t.isPointed !== true)
       .forEach(t => categories.add(t.category))
     return ['Toutes les catégories', ...Array.from(categories).sort()]
   })
@@ -198,6 +198,9 @@
     return props.analysisResult.transactions.filter(transaction => {
       // Uniquement les dépenses
       if (transaction.type !== 'expense') return false
+
+      // Exclure les dépenses pointées (validées)
+      if (transaction.isPointed === true) return false
 
       // Filtre par catégorie si sélectionnée
       if (

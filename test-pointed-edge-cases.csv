@@ -1,0 +1,7 @@
+Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
+01/12/2024;Test Oui majuscule;Compte Courant;-10.00;Test;;;OUI
+02/12/2024;Test oui minuscule;Compte Courant;-10.00;Test;;;oui
+03/12/2024;Test Non majuscule;Compte Courant;-10.00;Test;;;NON
+04/12/2024;Test non minuscule;Compte Courant;-10.00;Test;;;non
+05/12/2024;Test vide;Compte Courant;-10.00;Test;;;
+06/12/2024;Test autre valeur;Compte Courant;-10.00;Test;;;Peut-être
