@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { computed, ref } from 'vue'
+  import { computed, onMounted, onUnmounted, ref } from 'vue'
 
   interface PersonAssignment {
     personId: string
@@ -38,6 +38,10 @@
   // État pour gérer les catégories expansées
   const expandedCategories = ref(new Set<string>())
 
+  // États réactifs pour les données localStorage
+  const availablePersons = ref<Person[]>([])
+  const reimbursementCategories = ref<ReimbursementCategory[]>([])
+
   // Fonction pour basculer l'état d'une catégorie
   const toggleCategory = (category: string) => {
     if (expandedCategories.value.has(category)) {
@@ -47,28 +51,28 @@
     }
   }
 
-  // Récupération des personnes depuis localStorage
-  const availablePersons = computed<Person[]>(() => {
+  // Charger les personnes depuis localStorage
+  const loadPersons = () => {
     try {
       const stored = localStorage.getItem('bankin-analyzer-persons')
       if (stored) {
-        return JSON.parse(stored)
+        availablePersons.value = JSON.parse(stored)
       }
     } catch (error) {
       console.error('Erreur lors de la récupération des personnes:', error)
+      availablePersons.value = []
     }
-    return []
-  })
+  }
 
-  // Récupération des catégories de remboursement depuis localStorage
-  const reimbursementCategories = computed<ReimbursementCategory[]>(() => {
+  // Charger les catégories depuis localStorage
+  const loadCategories = () => {
     try {
       const stored = localStorage.getItem(
         'bankin-analyzer-reimbursement-categories'
       )
       if (stored) {
         const parsed = JSON.parse(stored)
-        return parsed.map(
+        reimbursementCategories.value = parsed.map(
           (
             cat: Omit<ReimbursementCategory, 'createdAt'> & {
               createdAt: string
@@ -79,10 +83,74 @@
           })
         )
       }
-    } catch (error) {
-      console.error('Erreur lors de la récupération des catégories:', error)
+    } catch (_error) {
+      console.error('Erreur lors de la récupération des catégories:', _error)
+      reimbursementCategories.value = []
     }
-    return []
+  }
+
+  // Gestionnaire pour les changements de localStorage
+  const handleStorageChange = (event: StorageEvent) => {
+    if (event.key === 'bankin-analyzer-persons' && event.newValue) {
+      loadPersons()
+    }
+    if (
+      event.key === 'bankin-analyzer-reimbursement-categories' &&
+      event.newValue
+    ) {
+      loadCategories()
+    }
+  }
+
+  // Vérification périodique pour synchronisation (fallback)
+  const checkForUpdates = () => {
+    // Vérifier les personnes
+    try {
+      const storedPersons = localStorage.getItem('bankin-analyzer-persons')
+      if (storedPersons) {
+        const parsed = JSON.parse(storedPersons)
+        if (JSON.stringify(parsed) !== JSON.stringify(availablePersons.value)) {
+          loadPersons()
+        }
+      }
+    } catch (_error) {
+      // Ignorer les erreurs de parsing
+    }
+
+    // Vérifier les catégories
+    try {
+      const storedCategories = localStorage.getItem(
+        'bankin-analyzer-reimbursement-categories'
+      )
+      if (storedCategories) {
+        const parsed = JSON.parse(storedCategories)
+        const currentSerialized = JSON.stringify(
+          reimbursementCategories.value.map(cat => ({
+            ...cat,
+            createdAt: cat.createdAt.toISOString(),
+          }))
+        )
+        if (JSON.stringify(parsed) !== currentSerialized) {
+          loadCategories()
+        }
+      }
+    } catch (_error) {
+      // Ignorer les erreurs de parsing
+    }
+  }
+
+  // Initialisation et lifecycle
+  onMounted(() => {
+    loadPersons()
+    loadCategories()
+    window.addEventListener('storage', handleStorageChange)
+
+    // Vérification périodique toutes les 500ms
+    setInterval(checkForUpdates, 500)
+  })
+
+  onUnmounted(() => {
+    window.removeEventListener('storage', handleStorageChange)
   })
 
   // Calcul des remboursements réels par personne
