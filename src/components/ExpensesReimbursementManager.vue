@@ -195,7 +195,7 @@
   const filteredExpenses = computed(() => {
     if (!props.analysisResult?.isValid) return []
 
-    return props.analysisResult.transactions.filter(transaction => {
+    const filtered = props.analysisResult.transactions.filter(transaction => {
       // Uniquement les dépenses
       if (transaction.type !== 'expense') return false
 
@@ -211,6 +211,24 @@
       }
 
       return true
+    })
+
+    // Trier par date décroissante (plus récentes d'abord)
+    return filtered.sort((a, b) => {
+      // Parser les dates au format DD/MM/YYYY
+      const parseDate = (dateStr: string): Date => {
+        const parts = dateStr.split('/')
+        if (parts.length !== 3) return new Date(0)
+        const [day, month, year] = parts
+        if (!day || !month || !year) return new Date(0)
+        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+      }
+
+      const dateA = parseDate(a.date)
+      const dateB = parseDate(b.date)
+
+      // Trier par ordre décroissant (plus récent en premier)
+      return dateB.getTime() - dateA.getTime()
     })
   })
 
@@ -519,8 +537,22 @@
   }
 
   // Formater la date
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('fr-FR')
+  const formatDate = (dateStr: string): string => {
+    try {
+      const parts = dateStr.split('/')
+      if (parts.length !== 3) return dateStr
+      const [day, month, year] = parts
+      if (!day || !month || !year) return dateStr
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+
+      return date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    } catch (_error) {
+      return dateStr
+    }
   }
 
   // Générer un ID unique pour une transaction basé sur ses propriétés intrinsèques
