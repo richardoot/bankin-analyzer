@@ -23,6 +23,7 @@ export interface Transaction {
   account: string
   type: 'expense' | 'income'
   note: string
+  isPointed?: boolean
 }
 
 export interface CsvAnalysisResult {
