@@ -761,6 +761,7 @@
             <div class="header-cell description">Description</div>
             <div class="header-cell category">Catégorie</div>
             <div class="header-cell amount">Montant</div>
+            <div class="header-cell note">Note</div>
             <div class="header-cell assignments">Personnes assignées</div>
             <div class="header-cell actions">Actions</div>
           </div>
@@ -788,6 +789,10 @@
               <span class="amount-value">{{
                 formatAmount(expense.amount)
               }}</span>
+            </div>
+
+            <div class="cell note">
+              <span class="note-text">{{ expense.note || '-' }}</span>
             </div>
 
             <div class="cell assignments">
@@ -834,6 +839,7 @@
             <div class="cell actions">
               <button
                 class="associate-btn"
+                title="Associer une personne"
                 @click="
                   openAssignModal(expense, paginationStats.startIndex + index)
                 "
@@ -841,7 +847,6 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path d="M12 5v14m-7-7h14" />
                 </svg>
-                Associer
               </button>
             </div>
           </div>
@@ -1243,8 +1248,8 @@
 
   .table-header {
     display: grid;
-    grid-template-columns: 100px 2fr 150px 120px 200px 150px;
-    gap: 1rem;
+    grid-template-columns: 80px 1fr 170px 90px 180px 150px 60px;
+    gap: 0.75rem;
     padding: 1rem;
     background: #f9fafb;
     border-bottom: 1px solid #e5e7eb;
@@ -1260,8 +1265,8 @@
 
   .expense-row {
     display: grid;
-    grid-template-columns: 100px 2fr 150px 120px 200px 150px;
-    gap: 1rem;
+    grid-template-columns: 80px 1fr 170px 90px 180px 150px 60px;
+    gap: 0.75rem;
     padding: 1rem;
     border-bottom: 1px solid #f3f4f6;
     transition: all 0.2s ease;
@@ -1288,13 +1293,26 @@
 
   .description-content {
     max-width: 100%;
+    overflow: hidden;
   }
 
   .description-text {
     display: block;
     color: #1f2937;
     line-height: 1.4;
-    word-break: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+  }
+
+  .note-text {
+    color: #6b7280;
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
   }
 
   .category-badge {
@@ -1906,16 +1924,16 @@
   .associate-btn {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
     background: #3b82f6;
     color: white;
     border: none;
     border-radius: 6px;
-    font-size: 0.85rem;
-    font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
+    padding: 0;
   }
 
   .associate-btn:hover {
@@ -1924,8 +1942,8 @@
   }
 
   .associate-btn svg {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
   }
 
   /* Styles pour la modal */
@@ -2171,8 +2189,12 @@
   @media (max-width: 1200px) {
     .table-header,
     .expense-row {
-      grid-template-columns: 90px 1.5fr 120px 100px 180px 130px;
-      gap: 0.75rem;
+      grid-template-columns: 70px 0.8fr 140px 80px 150px 130px 50px;
+      gap: 0.5rem;
+    }
+
+    .description-text {
+      max-width: 150px;
     }
   }
 
@@ -2248,12 +2270,16 @@
       content: 'Montant: ';
     }
 
-    .cell.person::before {
-      content: 'Personne: ';
+    .cell.note::before {
+      content: 'Note: ';
     }
 
-    .cell.reimbursement::before {
-      content: 'Remboursement: ';
+    .cell.assignments::before {
+      content: 'Personnes: ';
+    }
+
+    .cell.actions::before {
+      content: 'Actions: ';
     }
 
     .person-assignment {
