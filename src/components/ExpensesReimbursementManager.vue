@@ -620,10 +620,16 @@
   loadAssignments()
   loadReimbursementCategories()
 
-  // Écouter les changements de localStorage pour synchroniser les personnes entre composants
+  // Écouter les changements de localStorage pour synchroniser les personnes et catégories entre composants
   const handleStorageChange = (event: StorageEvent) => {
     if (event.key === 'bankin-analyzer-persons' && event.newValue) {
       loadPersons()
+    }
+    if (
+      event.key === 'bankin-analyzer-reimbursement-categories' &&
+      event.newValue
+    ) {
+      loadReimbursementCategories()
     }
   }
 
@@ -649,8 +655,29 @@
     }
   }
 
+  const checkForCategoriesUpdates = () => {
+    const stored = localStorage.getItem(
+      'bankin-analyzer-reimbursement-categories'
+    )
+    if (stored) {
+      const storedCategories = JSON.parse(stored)
+      if (
+        JSON.stringify(storedCategories) !==
+        JSON.stringify(
+          reimbursementCategories.value.map(cat => ({
+            ...cat,
+            createdAt: cat.createdAt.toISOString(),
+          }))
+        )
+      ) {
+        loadReimbursementCategories()
+      }
+    }
+  }
+
   // Vérifier les mises à jour toutes les 500ms
   setInterval(checkForPersonsUpdates, 500)
+  setInterval(checkForCategoriesUpdates, 500)
 
   // Exposition des données pour le composant parent
   defineExpose({
