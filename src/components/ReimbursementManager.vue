@@ -454,6 +454,7 @@
   }
 
   .compact-filter-content {
+    height: 100%;
     padding: 0;
   }
 

@@ -185,13 +185,13 @@
 </script>
 
 <template>
-  <div class="dashboard-page">
-    <div class="dashboard-container">
-      <!-- En-tête du dashboard -->
-      <div class="dashboard-header">
-        <h1 class="dashboard-title">
+  <div class="dashboard-manager">
+    <!-- En-tête avec titre -->
+    <div class="manager-header">
+      <div class="header-content">
+        <h2 class="manager-title">
           <svg
-            class="dashboard-icon"
+            class="title-icon"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -201,12 +201,15 @@
             <line x1="9" y1="15" x2="15" y2="15" />
           </svg>
           Tableau de bord financier
-        </h1>
-        <p class="dashboard-description">
+        </h2>
+        <p class="manager-description">
           Analyse détaillée de vos transactions - Dépenses et Revenus séparés
         </p>
       </div>
+    </div>
 
+    <!-- Contenu principal avec composants modulaires -->
+    <div class="manager-content">
       <!-- Statistiques générales -->
       <div class="overview-stats">
         <div class="stat-card total">
@@ -259,36 +262,33 @@
             fill="none"
             stroke="currentColor"
           >
-            <path d="M6 3h12l-4 4v8l-4 2V7L6 3z" />
+            <polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46" />
           </svg>
-          <span>Filtrages avancés</span>
+          Filtres avancés
           <svg
             class="chevron-icon"
+            :class="{ rotated: showAdvancedFilters }"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            :class="{ rotated: showAdvancedFilters }"
           >
             <polyline points="6,9 12,15 18,9" />
           </svg>
         </button>
       </div>
 
-      <!-- Panneau de filtres (conditionnel) -->
+      <!-- Panneau de filtres avancés -->
       <div v-show="showAdvancedFilters" class="advanced-filters-panel">
         <div class="filters-container">
           <!-- En-tête principal du panneau -->
           <div class="filters-main-header">
             <div class="filters-main-title">
-              <svg
-                class="filters-main-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-              >
-                <path d="M6 3h12l-4 4v8l-4 2V7L6 3z" />
-              </svg>
-              <h3>Configuration des filtres</h3>
+              <div class="filters-main-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46" />
+                </svg>
+              </div>
+              <h3>Filtres avancés du tableau de bord</h3>
             </div>
             <p class="filters-main-description">
               Personnalisez l'affichage de vos données avec les options
@@ -296,7 +296,7 @@
             </p>
           </div>
 
-          <!-- Grille des filtres compacts -->
+          <!-- Grille compacte des filtres -->
           <div class="filters-compact-grid">
             <!-- Filtre Catégories -->
             <div class="compact-filter-card">
@@ -664,76 +664,57 @@
 </template>
 
 <style scoped>
-  .dashboard-page {
-    min-height: calc(100vh - 120px);
+  .dashboard-manager {
+    background: white;
+    border-radius: 1rem;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e5e7eb;
+  }
+
+  /* En-tête du gestionnaire */
+  .manager-header {
     padding: 2rem;
-    background: linear-gradient(
-      135deg,
-      rgba(102, 126, 234, 0.05) 0%,
-      rgba(118, 75, 162, 0.05) 50%,
-      rgba(248, 250, 252, 0.8) 100%
-    );
-    position: relative;
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+    border-bottom: 1px solid #e5e7eb;
   }
 
-  /* Effet de texture subtile pour harmoniser avec l'app */
-  .dashboard-page::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-image: radial-gradient(
-      circle at 1px 1px,
-      rgba(102, 126, 234, 0.02) 1px,
-      transparent 0
-    );
-    background-size: 30px 30px;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  .dashboard-container {
-    max-width: 1400px;
-    margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-    position: relative;
-    z-index: 1;
-  }
-
-  /* En-tête */
-  .dashboard-header {
+  .header-content {
     text-align: center;
-    padding: 2rem 0;
   }
 
-  .dashboard-title {
+  .manager-title {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
-    font-size: 2.5rem;
+    font-size: 1.75rem;
     font-weight: 700;
     color: #1f2937;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
     line-height: 1.2;
   }
 
-  .dashboard-icon {
-    width: 2.5rem;
-    height: 2.5rem;
+  .title-icon {
+    width: 2rem;
+    height: 2rem;
     color: #3b82f6;
   }
 
-  .dashboard-description {
-    font-size: 1.125rem;
+  .manager-description {
+    font-size: 1rem;
     color: #6b7280;
     line-height: 1.6;
     max-width: 600px;
     margin: 0 auto;
+  }
+
+  /* Contenu principal */
+  .manager-content {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
   }
 
   /* Statistiques générales */
@@ -745,28 +726,26 @@
   }
 
   .stat-card {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    border-radius: 1rem;
-    padding: 2rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: white;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid #f3f4f6;
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: 1.25rem;
     transition: all 0.3s ease;
   }
 
   .stat-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   }
 
   .stat-icon {
-    width: 3rem;
-    height: 3rem;
-    border-radius: 0.75rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.5rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -774,8 +753,8 @@
   }
 
   .stat-icon svg {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 1.25rem;
+    height: 1.25rem;
     color: white;
   }
 
@@ -801,16 +780,15 @@
   }
 
   .stat-value {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: #1f2937;
     margin: 0 0 0.25rem;
-    line-height: 1;
   }
 
   .stat-description {
-    font-size: 0.875rem;
-    color: #6b7280;
+    font-size: 0.8125rem;
+    color: #9ca3af;
     margin: 0;
   }
 
@@ -1052,79 +1030,47 @@
 
   /* Bouton de filtrage avancé */
   .advanced-filters-toggle {
-    margin: 1.5rem 0;
-    display: flex;
-    justify-content: center;
+    margin-bottom: 1rem;
   }
 
   .advanced-filters-btn {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.875rem 1.5rem;
-    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-    border: 1px solid #cbd5e1;
-    border-radius: 0.75rem;
-    color: #475569;
-    font-weight: 600;
-    font-size: 0.9rem;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .advanced-filters-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.2),
-      transparent
-    );
-    transition: left 0.5s;
-  }
-
-  .advanced-filters-btn:hover::before {
-    left: 100%;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   }
 
   .advanced-filters-btn:hover {
-    background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
-    border-color: #94a3b8;
+    background: #f9fafb;
+    border-color: #9ca3af;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
   .advanced-filters-btn.active {
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-    border-color: #1d4ed8;
-    color: white;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-  }
-
-  .advanced-filters-btn.active:hover {
-    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
-    border-color: #1e40af;
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #1e40af;
   }
 
   .filter-toggle-icon {
-    width: 1.125rem;
-    height: 1.125rem;
-    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
   }
 
   .chevron-icon {
     width: 1rem;
     height: 1rem;
-    flex-shrink: 0;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.2s ease;
   }
 
   .chevron-icon.rotated {
@@ -1133,27 +1079,35 @@
 
   /* Panneau de filtres avancés */
   .advanced-filters-panel {
-    animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-bottom: 1.5rem;
+    animation: slideDown 0.3s ease-out;
   }
 
-  /* Conteneur principal des filtres */
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   .filters-container {
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 1.25rem;
-    padding: 2rem;
-    margin: 1.5rem 0;
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.1),
-      0 2px 8px rgba(0, 0, 0, 0.05);
-    position: relative;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   }
 
   /* En-tête principal du panneau */
   .filters-main-header {
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
     text-align: center;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 1rem;
   }
 
   .filters-main-title {
@@ -1161,104 +1115,91 @@
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
-    margin-bottom: 0.75rem;
-  }
-
-  .filters-main-title h3 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #1f2937;
-    margin: 0;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    margin-bottom: 0.5rem;
   }
 
   .filters-main-icon {
-    width: 1.75rem;
-    height: 1.75rem;
-    color: #6366f1;
-    stroke-width: 2.5;
+    width: 2rem;
+    height: 2rem;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .filters-main-icon svg {
+    width: 1rem;
+    height: 1rem;
+    color: white;
+  }
+
+  .filters-main-title h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
   }
 
   .filters-main-description {
-    font-size: 1rem;
+    font-size: 0.875rem;
     color: #6b7280;
     margin: 0;
-    line-height: 1.6;
-    max-width: 500px;
-    margin: 0 auto;
   }
 
   /* Grille compacte des filtres */
   .filters-compact-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-    gap: 1.5rem;
-    align-items: start;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
   }
 
-  /* Cartes de filtres compacts */
   .compact-filter-card {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 1rem;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
     overflow: hidden;
-    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    box-shadow:
-      0 4px 16px rgba(0, 0, 0, 0.08),
-      0 1px 4px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
   }
 
   .compact-filter-card:hover {
-    transform: translateY(-2px);
-    box-shadow:
-      0 8px 24px rgba(0, 0, 0, 0.12),
-      0 2px 8px rgba(0, 0, 0, 0.06);
-    border-color: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
   }
 
   .compact-filter-card.full-width {
     grid-column: 1 / -1;
   }
 
-  /* En-tête des cartes de filtres */
   .compact-filter-header {
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.9) 0%,
-      rgba(248, 250, 252, 0.8) 100%
-    );
-    padding: 1.25rem 1.5rem;
-    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem 0.75rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+    border-bottom: 1px solid #f1f5f9;
   }
 
   .compact-filter-icon {
     width: 2.5rem;
     height: 2.5rem;
-    border-radius: 0.75rem;
+    border-radius: 0.5rem;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    color: white;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 
   .compact-filter-icon svg {
     width: 1.25rem;
     height: 1.25rem;
-    stroke-width: 2.5;
+    color: white;
   }
 
   /* Icônes spécifiques par type de filtre */
   .categories-icon {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
+    background: linear-gradient(135deg, #10b981, #059669);
   }
 
   .joint-accounts-icon {
@@ -1266,26 +1207,24 @@
   }
 
   .compensation-icon {
-    background: linear-gradient(135deg, #06b6d4, #0891b2);
+    background: linear-gradient(135deg, #f59e0b, #d97706);
   }
 
   .compact-filter-title h4 {
-    font-size: 1.125rem;
+    font-size: 1rem;
     font-weight: 600;
     color: #1f2937;
-    margin: 0 0 0.25rem 0;
-    line-height: 1.4;
+    margin: 0 0 0.125rem;
   }
 
   .compact-filter-subtitle {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
-    font-weight: 500;
   }
 
-  /* Contenu des cartes de filtres */
   .compact-filter-content {
-    padding: 1.5rem;
+    padding: 0;
+    height: 100%;
   }
 
   /* Masquer les en-têtes originaux des composants de filtres */
@@ -1294,19 +1233,17 @@
   }
 
   /* Ajustements pour les composants de filtres dans le layout compact */
-  .compact-filter-content .category-filter,
+  /*.compact-filter-content .category-filter,
   .compact-filter-content .joint-account-filter {
-    background: transparent;
     border: none;
-    padding: 0;
-    margin: 0;
+    background: transparent;
     box-shadow: none;
-  }
+  }*/
 
   .compact-filter-content .categories-list,
   .compact-filter-content .accounts-list {
-    background: rgba(249, 250, 251, 0.6);
-    border-color: rgba(229, 231, 235, 0.5);
+    max-height: 150px;
+    overflow-y: auto;
   }
 
   /* Section info */
@@ -1426,16 +1363,297 @@
     }
   }
 
-  @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-20px);
-      max-height: 0;
+  /* Styles pour les sections transactions */
+  .transactions-section {
+    margin-top: 2rem;
+  }
+
+  /* Styles responsive généraux */
+  @media (max-width: 1024px) {
+    .manager-content {
+      padding: 1.5rem;
     }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-      max-height: 500px;
+
+    .overview-stats {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    .panel-stats {
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+
+    .chart-section {
+      margin: 1.5rem 0;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .dashboard-manager {
+      border-radius: 0.5rem;
+      margin: 0.5rem;
+    }
+
+    .manager-header {
+      padding: 1.5rem;
+    }
+
+    .manager-title {
+      font-size: 1.5rem;
+    }
+
+    .manager-description {
+      font-size: 0.875rem;
+    }
+
+    .manager-content {
+      padding: 1rem;
+      gap: 1.5rem;
+    }
+
+    .tab-button {
+      padding: 1rem;
+      font-size: 0.875rem;
+    }
+
+    .tab-panel {
+      padding: 1.5rem;
+    }
+
+    .panel-title {
+      font-size: 1.5rem;
+    }
+
+    .panel-stats {
+      grid-template-columns: 1fr;
+    }
+
+    .stat-card {
+      padding: 1.25rem;
+    }
+
+    .stat-value {
+      font-size: 1.25rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .dashboard-manager {
+      margin: 0.25rem;
+      border-radius: 0.375rem;
+    }
+
+    .manager-header {
+      padding: 1rem;
+    }
+
+    .manager-title {
+      font-size: 1.25rem;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .title-icon {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+
+    .manager-content {
+      padding: 0.75rem;
+      gap: 1rem;
+    }
+
+    .tabs-navigation {
+      flex-direction: column;
+    }
+
+    .tab-button {
+      padding: 0.75rem;
+    }
+
+    .tab-panel {
+      padding: 1rem;
+    }
+
+    .panel-title {
+      font-size: 1.25rem;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .stat-card {
+      flex-direction: column;
+      text-align: center;
+      gap: 1rem;
+    }
+  }
+
+  /* Mode sombre */
+  @media (prefers-color-scheme: dark) {
+    .dashboard-manager {
+      background: #1f2937;
+      border-color: #374151;
+    }
+
+    .manager-header {
+      background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+      border-color: #4b5563;
+    }
+
+    .manager-title {
+      color: #f9fafb;
+    }
+
+    .title-icon {
+      color: #60a5fa;
+    }
+
+    .manager-description {
+      color: #9ca3af;
+    }
+
+    .stat-card {
+      background: #374151;
+      border-color: #4b5563;
+    }
+
+    .stat-card:hover {
+      background: #4b5563;
+    }
+
+    .stat-title {
+      color: #9ca3af;
+    }
+
+    .stat-value {
+      color: #f9fafb;
+    }
+
+    .stat-description {
+      color: #6b7280;
+    }
+
+    .tabs-container {
+      background: rgba(31, 41, 55, 0.7);
+      border-color: rgba(75, 85, 99, 0.2);
+    }
+
+    .tabs-navigation {
+      background: rgba(55, 65, 81, 0.8);
+      border-color: rgba(75, 85, 99, 0.3);
+    }
+
+    .tab-button {
+      color: #9ca3af;
+    }
+
+    .tab-button:hover {
+      background: rgba(75, 85, 99, 0.8);
+      color: #d1d5db;
+    }
+
+    .tab-button.active {
+      background: rgba(31, 41, 55, 0.9);
+      color: #f9fafb;
+    }
+
+    .tab-panel {
+      background: #1f2937;
+    }
+
+    .panel-title {
+      color: #f9fafb;
+    }
+
+    .panel-description {
+      color: #9ca3af;
+    }
+
+    .panel-stat-card {
+      background: rgba(55, 65, 81, 0.6);
+      border-color: rgba(75, 85, 99, 0.3);
+    }
+
+    .panel-stat-card:hover {
+      background: rgba(75, 85, 99, 0.8);
+    }
+
+    .panel-stat-title {
+      color: #9ca3af;
+    }
+
+    .panel-stat-value {
+      color: #f9fafb;
+    }
+
+    .advanced-filters-btn {
+      background: #374151;
+      border-color: #4b5563;
+      color: #d1d5db;
+    }
+
+    .advanced-filters-btn:hover {
+      background: #4b5563;
+      border-color: #6b7280;
+    }
+
+    .advanced-filters-btn.active {
+      background: #1e3a8a;
+      border-color: #3b82f6;
+      color: #dbeafe;
+    }
+
+    .filters-container {
+      background: #374151;
+      border-color: #4b5563;
+    }
+
+    .filters-main-title h3 {
+      color: #f9fafb;
+    }
+
+    .filters-main-description {
+      color: #9ca3af;
+    }
+
+    .compact-filter-card {
+      background: #1f2937;
+      border-color: #4b5563;
+    }
+
+    .compact-filter-card:hover {
+      background: #374151;
+    }
+
+    .compact-filter-header {
+      background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+      border-color: #4b5563;
+    }
+
+    .compact-filter-title h4 {
+      color: #f9fafb;
+    }
+
+    .compact-filter-subtitle {
+      color: #9ca3af;
+    }
+
+    .info-card {
+      background: linear-gradient(135deg, #1e3a8a, #1d4ed8);
+      border-color: #3b82f6;
+    }
+
+    .info-icon {
+      background: #60a5fa;
+    }
+
+    .info-title {
+      color: #dbeafe;
+    }
+
+    .info-description {
+      color: #bfdbfe;
     }
   }
 </style>
