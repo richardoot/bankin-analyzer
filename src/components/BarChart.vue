@@ -762,20 +762,26 @@
 
 <style scoped>
   .bar-chart-container {
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(10px);
+    background: white;
     border-radius: 1rem;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    overflow: hidden;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid #f3f4f6;
+    transition: all 0.3s ease;
     width: 100%;
     max-width: 100%;
     min-height: 600px;
+    overflow: hidden;
+  }
+
+  .bar-chart-container:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   }
 
   .chart-header {
+    background: #f8fafc;
     padding: 1.5rem 2rem 1rem;
-    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+    border-bottom: 1px solid #e5e7eb;
   }
 
   .chart-header-content {
@@ -1109,6 +1115,58 @@
 
     .axis-label {
       font-size: 13px;
+    }
+  }
+
+  /* Mode sombre */
+  @media (prefers-color-scheme: dark) {
+    .bar-chart-container {
+      background: #1f2937;
+      border-color: #374151;
+    }
+
+    .chart-header {
+      background: #374151;
+      border-bottom-color: #4b5563;
+    }
+
+    .chart-title {
+      color: #f9fafb;
+    }
+
+    .chart-description {
+      color: #9ca3af;
+    }
+
+    .filter-label {
+      color: #e5e7eb;
+    }
+
+    .category-select {
+      background-color: #374151;
+      border-color: #4b5563;
+      color: #f9fafb;
+    }
+
+    .category-select:hover {
+      border-color: #6b7280;
+    }
+
+    .category-select:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .axis-label {
+      fill: #e5e7eb !important;
+    }
+
+    .legend-label {
+      color: #e5e7eb;
+    }
+
+    .empty-message {
+      color: #9ca3af;
     }
   }
 </style>
