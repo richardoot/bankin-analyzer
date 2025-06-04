@@ -1,0 +1,9 @@
+Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
+01/12/2024;Restaurant Le Gourmet;Compte Courant;-45.80;Restauration;;Déjeuner client;Non
+02/12/2024;Taxi aéroport;Compte Courant;-35.50;Transport;;Transfert aéroport;Oui
+03/12/2024;Hôtel Business;Compte Courant;-185.00;Hébergement;;Conférence Paris;Non
+04/12/2024;Train Paris-Lyon;Compte Courant;-89.00;Transport;;Mission Lyon;Non
+05/12/2024;Essence autoroute;Compte Courant;-62.30;Transport;;Frais kilométriques;Oui
+06/12/2024;Matériel bureau;Compte Courant;-125.90;Matériel;;Fournitures équipe;Non
+07/12/2024;Parking aéroport;Compte Courant;-28.00;Transport;;Stationnement;Oui
+08/12/2024;Repas équipe;Compte Courant;-95.40;Restauration;;Team building;Non
