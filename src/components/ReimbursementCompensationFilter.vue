@@ -402,7 +402,6 @@
   .reimbursement-compensation-filter {
     background: rgba(255, 255, 255, 0.8);
     backdrop-filter: blur(10px);
-    border-radius: 1rem;
     padding: 1.5rem;
     border: 1px solid rgba(229, 231, 235, 0.3);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
