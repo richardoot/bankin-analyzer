@@ -159,6 +159,9 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
           h => h.toLowerCase() === 'compte'
         )
         const noteIndex = headers.findIndex(h => h.toLowerCase() === 'note')
+        const pointedIndex = headers.findIndex(
+          h => h.toLowerCase() === 'pointée'
+        )
 
         dataLines.forEach(line => {
           if (!line.trim()) return
@@ -174,6 +177,8 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
               descriptionIndex >= 0 ? parts[descriptionIndex] || '' : ''
             const account = accountIndex >= 0 ? parts[accountIndex] || '' : ''
             const note = noteIndex >= 0 ? parts[noteIndex] || '' : ''
+            const pointed = pointedIndex >= 0 ? parts[pointedIndex] || '' : ''
+            const isPointed = pointed.toLowerCase() === 'oui'
 
             // Extraction de la date
             if (date) {
@@ -232,6 +237,7 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
                     account,
                     type: transactionType,
                     note,
+                    isPointed,
                   })
                 }
               }
