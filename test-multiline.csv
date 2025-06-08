@@ -1,0 +1,5 @@
+Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
+"01/01/2025";"Achat normal";"Compte 1";"-10.00";"Alimentation";"";"";"Oui"
+"02/01/2025";"Achat avec note
+multiligne";"Compte 1";"-20.00";"Transport";"";"";"Oui"
+"03/01/2025";"Achat final";"Compte 1";"-30.00";"Loisirs";"";"";"Oui"
