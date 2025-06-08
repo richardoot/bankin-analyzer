@@ -60,3 +60,27 @@ export interface ValidationModalData {
   isOpen: boolean
   csvResult: CsvAnalysisResult | null
 }
+
+// Types pour la gestion des personnes et remboursements
+export interface Person {
+  id: string
+  name: string
+  email?: string
+}
+
+export interface ReimbursementCategory {
+  id: string
+  name: string
+  description: string
+  icon: string
+  color: string
+  keywords: string[]
+  isDefault: boolean
+  createdAt: Date
+}
+
+export interface PersonAssignment {
+  personId: string
+  amount: number
+  categoryId?: string
+}

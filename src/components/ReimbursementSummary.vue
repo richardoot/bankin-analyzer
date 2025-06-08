@@ -1,28 +1,11 @@
 <script setup lang="ts">
+  import {
+    usePdfExport,
+    type DetailedReimbursementData,
+    type ReimbursementData,
+  } from '@/composables/usePdfExport'
+  import type { Person, PersonAssignment, ReimbursementCategory } from '@/types'
   import { computed, onMounted, onUnmounted, ref } from 'vue'
-
-  interface PersonAssignment {
-    personId: string
-    amount: number
-    categoryId?: string
-  }
-
-  interface Person {
-    id: string
-    name: string
-    email?: string
-  }
-
-  interface ReimbursementCategory {
-    id: string
-    name: string
-    description: string
-    icon: string
-    color: string
-    keywords: string[]
-    isDefault: boolean
-    createdAt: Date
-  }
 
   interface Props {
     expensesManagerRef?: {
@@ -41,6 +24,12 @@
   // États réactifs pour les données localStorage
   const availablePersons = ref<Person[]>([])
   const reimbursementCategories = ref<ReimbursementCategory[]>([])
+
+  // Hook pour l'export PDF
+  const { exportToPdf } = usePdfExport()
+
+  // État pour gérer le chargement de l'export
+  const isExporting = ref(false)
 
   // Fonction pour basculer l'état d'une catégorie
   const toggleCategory = (category: string) => {
@@ -154,7 +143,7 @@
   })
 
   // Calcul des remboursements réels par personne
-  const reimbursementData = computed(() => {
+  const reimbursementData = computed<ReimbursementData[]>(() => {
     if (!props.expensesManagerRef?.expenseAssignments) {
       return []
     }
@@ -184,7 +173,9 @@
         return {
           person: person?.name || `Personne inconnue (${personId})`,
           amount: amount,
-          status: amount > 0 ? 'en_attente' : 'valide', // Statut basique pour l'instant
+          status: (amount > 0 ? 'en_attente' : 'valide') as
+            | 'en_attente'
+            | 'valide',
           personId,
         }
       })
@@ -266,73 +257,80 @@
   })
 
   // Calcul détaillé des remboursements par personne avec catégories
-  const detailedReimbursementData = computed(() => {
-    if (!props.expensesManagerRef?.expenseAssignments) {
-      return []
-    }
+  const detailedReimbursementData = computed<DetailedReimbursementData[]>(
+    () => {
+      if (!props.expensesManagerRef?.expenseAssignments) {
+        return []
+      }
 
-    const assignments = props.expensesManagerRef.expenseAssignments
-    const persons = availablePersons.value
-    const categories = reimbursementCategories.value
+      const assignments = props.expensesManagerRef.expenseAssignments
+      const persons = availablePersons.value
+      const categories = reimbursementCategories.value
 
-    // Structure: Map<personId, Map<categoryName, amount>>
-    const personCategoryTotals = new Map<string, Map<string, number>>()
+      // Structure: Map<personId, Map<categoryName, amount>>
+      const personCategoryTotals = new Map<string, Map<string, number>>()
 
-    assignments.forEach(assignment => {
-      assignment.assignedPersons.forEach(personAssignment => {
-        let categoryName = 'Sans catégorie spécifique'
+      assignments.forEach(assignment => {
+        assignment.assignedPersons.forEach(personAssignment => {
+          let categoryName = 'Sans catégorie spécifique'
 
-        if (personAssignment.categoryId) {
-          const category = categories.find(
-            c => c.id === personAssignment.categoryId
-          )
-          if (category) {
-            categoryName = `${category.icon} ${category.name}`
+          if (personAssignment.categoryId) {
+            const category = categories.find(
+              c => c.id === personAssignment.categoryId
+            )
+            if (category) {
+              categoryName = `${category.icon} ${category.name}`
+            }
           }
-        }
 
-        if (!personCategoryTotals.has(personAssignment.personId)) {
-          personCategoryTotals.set(personAssignment.personId, new Map())
-        }
+          if (!personCategoryTotals.has(personAssignment.personId)) {
+            personCategoryTotals.set(personAssignment.personId, new Map())
+          }
 
-        const categoryTotals = personCategoryTotals.get(
-          personAssignment.personId
-        )
-        if (categoryTotals) {
-          const currentTotal = categoryTotals.get(categoryName) || 0
-          categoryTotals.set(
-            categoryName,
-            currentTotal + personAssignment.amount
+          const categoryTotals = personCategoryTotals.get(
+            personAssignment.personId
           )
-        }
+          if (categoryTotals) {
+            const currentTotal = categoryTotals.get(categoryName) || 0
+            categoryTotals.set(
+              categoryName,
+              currentTotal + personAssignment.amount
+            )
+          }
+        })
       })
-    })
 
-    // Transformer en structure pour l'affichage
-    return Array.from(personCategoryTotals.entries())
-      .map(([personId, categoryTotals]) => {
-        const person = persons.find(p => p.id === personId)
-        const categories = Array.from(categoryTotals.entries())
-          .map(([categoryName, amount]) => ({
-            categoryName,
-            amount,
-          }))
-          .filter(item => item.amount > 0)
-          .sort((a, b) => b.amount - a.amount)
+      // Transformer en structure pour l'affichage
+      return Array.from(personCategoryTotals.entries())
+        .map(([personId, categoryTotals]) => {
+          const person = persons.find(p => p.id === personId)
+          const categories = Array.from(categoryTotals.entries())
+            .map(([categoryName, amount]) => ({
+              categoryName,
+              amount,
+            }))
+            .filter(item => item.amount > 0)
+            .sort((a, b) => b.amount - a.amount)
 
-        const totalAmount = categories.reduce((sum, cat) => sum + cat.amount, 0)
+          const totalAmount = categories.reduce(
+            (sum, cat) => sum + cat.amount,
+            0
+          )
 
-        return {
-          personId,
-          personName: person?.name || `Personne inconnue (${personId})`,
-          categories,
-          totalAmount,
-          status: totalAmount > 0 ? 'en_attente' : 'valide',
-        }
-      })
-      .filter(item => item.totalAmount > 0)
-      .sort((a, b) => b.totalAmount - a.totalAmount)
-  })
+          return {
+            personId,
+            personName: person?.name || `Personne inconnue (${personId})`,
+            categories,
+            totalAmount,
+            status: (totalAmount > 0 ? 'en_attente' : 'valide') as
+              | 'en_attente'
+              | 'valide',
+          }
+        })
+        .filter(item => item.totalAmount > 0)
+        .sort((a, b) => b.totalAmount - a.totalAmount)
+    }
+  )
 
   // Totaux par catégorie
   const categoryTotals = computed(() => {
@@ -350,6 +348,57 @@
       .map(([category, total]) => ({ category, total }))
       .sort((a, b) => b.total - a.total)
   })
+
+  // Fonctions d'export PDF
+  const handlePdfExport = async (): Promise<void> => {
+    if (reimbursementData.value.length === 0) {
+      alert('Aucune donnée à exporter.')
+      return
+    }
+
+    isExporting.value = true
+
+    try {
+      // Préparer les données pour l'export
+      const reimbursementDataForExport = reimbursementData.value
+      const detailedDataForExport = detailedReimbursementData.value
+
+      // Convertir les données de catégorie pour l'export
+      const categoryDataForExport = new Map()
+      reimbursementDataByCategory.value.forEach((personData, category) => {
+        categoryDataForExport.set(category, {
+          category,
+          total: personData.reduce(
+            (sum: number, item: { amount: number }) => sum + item.amount,
+            0
+          ),
+          persons: personData,
+        })
+      })
+
+      await exportToPdf(
+        reimbursementDataForExport,
+        detailedDataForExport,
+        categoryDataForExport,
+        'remboursements-detailles'
+      )
+    } catch (error) {
+      console.error("Erreur lors de l'export PDF:", error)
+      alert('Erreur lors de la génération du PDF. Veuillez réessayer.')
+    } finally {
+      isExporting.value = false
+    }
+  }
+
+  // Fonction d'export CSV (placeholder pour future implémentation)
+  const handleCsvExport = (): void => {
+    alert('Export CSV - Fonctionnalité à implémenter')
+  }
+
+  // Fonction d'export Excel (placeholder pour future implémentation)
+  const handleExcelExport = (): void => {
+    alert('Export Excel - Fonctionnalité à implémenter')
+  }
 </script>
 
 <template>
@@ -600,7 +649,7 @@
           Exporter les données
         </h4>
         <div class="export-buttons">
-          <button class="export-btn csv">
+          <button class="export-btn csv" @click="handleCsvExport">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path
                 d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
@@ -609,7 +658,7 @@
             </svg>
             Exporter en CSV
           </button>
-          <button class="export-btn pdf">
+          <button class="export-btn pdf" @click="handlePdfExport">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path
                 d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
@@ -621,7 +670,7 @@
             </svg>
             Exporter en PDF
           </button>
-          <button class="export-btn excel">
+          <button class="export-btn excel" @click="handleExcelExport">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
               <path d="M9 9h6v6H9z" />
