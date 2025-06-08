@@ -4,7 +4,12 @@
     type DetailedReimbursementData,
     type ReimbursementData,
   } from '@/composables/usePdfExport'
-  import type { Person, PersonAssignment, ReimbursementCategory } from '@/types'
+  import type {
+    Person,
+    PersonAssignment,
+    ReimbursementCategory,
+    Transaction,
+  } from '@/types'
   import { computed, onMounted, onUnmounted, ref } from 'vue'
 
   interface Props {
@@ -13,6 +18,13 @@
         transactionId: string
         assignedPersons: PersonAssignment[]
       }>
+      filteredExpenses?: Transaction[]
+      stats?: {
+        totalExpenses: number
+        totalIncome: number
+        categoriesCount: number
+        transactionsCount: number
+      }
     } | null
   }
 
@@ -20,6 +32,9 @@
 
   // État pour gérer les catégories expansées
   const expandedCategories = ref(new Set<string>())
+
+  // État pour gérer les détails de transactions expansés par personne et catégorie
+  const expandedTransactionDetails = ref(new Set<string>())
 
   // États réactifs pour les données localStorage
   const availablePersons = ref<Person[]>([])
@@ -37,6 +52,16 @@
       expandedCategories.value.delete(category)
     } else {
       expandedCategories.value.add(category)
+    }
+  }
+
+  // Fonction pour basculer l'état des détails de transactions pour une personne et catégorie
+  const toggleTransactionDetails = (personId: string, categoryName: string) => {
+    const key = `${personId}-${categoryName}`
+    if (expandedTransactionDetails.value.has(key)) {
+      expandedTransactionDetails.value.delete(key)
+    } else {
+      expandedTransactionDetails.value.add(key)
     }
   }
 
@@ -349,6 +374,92 @@
       .sort((a, b) => b.total - a.total)
   })
 
+  // Fonction utilitaire pour générer les IDs de transaction (identique à ExpensesReimbursementManager)
+  const generateTransactionId = (transaction: Transaction) => {
+    const description = transaction.description
+      .substring(0, 20)
+      .replace(/[^a-zA-Z0-9]/g, '')
+    return `${transaction.date}-${transaction.amount}-${description}-${transaction.account}`
+  }
+
+  // Détails des transactions par personne et catégorie
+  const expenseDetailsByPersonAndCategory = computed(() => {
+    if (
+      !props.expensesManagerRef?.expenseAssignments ||
+      !props.expensesManagerRef?.filteredExpenses
+    ) {
+      return new Map<
+        string,
+        Array<{
+          date: string
+          description: string
+          note: string
+          baseAmount: number
+          reimbursementAmount: number
+        }>
+      >()
+    }
+
+    const assignments = props.expensesManagerRef.expenseAssignments
+    const expenses = props.expensesManagerRef.filteredExpenses
+    const categories = reimbursementCategories.value
+
+    const result = new Map<
+      string,
+      Array<{
+        date: string
+        description: string
+        note: string
+        baseAmount: number
+        reimbursementAmount: number
+      }>
+    >()
+
+    assignments.forEach(assignment => {
+      const expense = expenses.find(e => {
+        // Utiliser la même logique de génération d'ID que dans ExpensesReimbursementManager
+        return generateTransactionId(e) === assignment.transactionId
+      })
+
+      if (expense) {
+        assignment.assignedPersons.forEach(personAssignment => {
+          let categoryName = 'Sans catégorie spécifique'
+
+          if (personAssignment.categoryId) {
+            const category = categories.find(
+              c => c.id === personAssignment.categoryId
+            )
+            if (category) {
+              categoryName = `${category.icon} ${category.name}`
+            }
+          }
+
+          const key = `${personAssignment.personId}-${categoryName}`
+
+          if (!result.has(key)) {
+            result.set(key, [])
+          }
+
+          result.get(key)?.push({
+            date: expense.date,
+            description: expense.description,
+            note: expense.note,
+            baseAmount: Math.abs(expense.amount),
+            reimbursementAmount: personAssignment.amount,
+          })
+        })
+      }
+    })
+
+    return result
+  })
+
+  // Fonction pour obtenir les détails de transactions pour une personne et catégorie
+  const getTransactionDetails = (personId: string, categoryName: string) => {
+    const key = `${personId}-${categoryName}`
+    return expenseDetailsByPersonAndCategory.value.get(key) || []
+  }
+
   // Fonctions d'export PDF
   const handlePdfExport = async (): Promise<void> => {
     if (reimbursementData.value.length === 0) {
@@ -541,14 +652,92 @@
                 :key="`${personData.personId}-${category.categoryName}`"
                 class="category-detail-item"
               >
-                <div class="category-info">
-                  <span class="category-label">{{
-                    category.categoryName
-                  }}</span>
+                <div
+                  class="category-header-clickable"
+                  @click="
+                    toggleTransactionDetails(
+                      personData.personId,
+                      category.categoryName
+                    )
+                  "
+                >
+                  <div class="category-info">
+                    <span class="category-label">{{
+                      category.categoryName
+                    }}</span>
+                    <button class="expand-details-btn">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        :class="{
+                          rotated: expandedTransactionDetails.has(
+                            `${personData.personId}-${category.categoryName}`
+                          ),
+                        }"
+                      >
+                        <polyline points="6,9 12,15 18,9" />
+                      </svg>
+                    </button>
+                  </div>
+                  <span class="category-amount">
+                    {{ category.amount.toFixed(2) }} €
+                  </span>
                 </div>
-                <span class="category-amount">
-                  {{ category.amount.toFixed(2) }} €
-                </span>
+
+                <!-- Détails des transactions -->
+                <div
+                  v-show="
+                    expandedTransactionDetails.has(
+                      `${personData.personId}-${category.categoryName}`
+                    )
+                  "
+                  class="transaction-details"
+                >
+                  <div
+                    v-for="(transaction, index) in getTransactionDetails(
+                      personData.personId,
+                      category.categoryName
+                    )"
+                    :key="`${personData.personId}-${category.categoryName}-${index}`"
+                    class="transaction-detail-item"
+                  >
+                    <div class="transaction-info">
+                      <div class="transaction-date">
+                        {{
+                          new Date(transaction.date).toLocaleDateString('fr-FR')
+                        }}
+                      </div>
+                      <div class="transaction-description">
+                        {{ transaction.description }}
+                      </div>
+                      <div v-if="transaction.note" class="transaction-note">
+                        {{ transaction.note }}
+                      </div>
+                    </div>
+                    <div class="transaction-amounts">
+                      <div class="base-amount">
+                        Montant: {{ transaction.baseAmount.toFixed(2) }} €
+                      </div>
+                      <div class="reimbursement-amount">
+                        À rembourser:
+                        {{ transaction.reimbursementAmount.toFixed(2) }} €
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="
+                      getTransactionDetails(
+                        personData.personId,
+                        category.categoryName
+                      ).length === 0
+                    "
+                    class="no-transactions"
+                  >
+                    Aucune transaction trouvée
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1021,9 +1210,7 @@
 
   .category-detail-item {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 1.25rem;
+    flex-direction: column;
     border-bottom: 1px solid #f3f4f6;
     transition: all 0.2s ease;
   }
@@ -1032,8 +1219,130 @@
     border-bottom: none;
   }
 
-  .category-detail-item:hover {
+  .category-header-clickable {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .category-header-clickable:hover {
     background: #f9fafb;
+  }
+
+  .category-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+  }
+
+  .expand-details-btn {
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+  }
+
+  .expand-details-btn:hover {
+    background: #e5e7eb;
+    color: #374151;
+  }
+
+  .expand-details-btn svg {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.2s ease;
+  }
+
+  .expand-details-btn svg.rotated {
+    transform: rotate(180deg);
+  }
+
+  .transaction-details {
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    padding: 0;
+  }
+
+  .transaction-detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #e2e8f0;
+    gap: 1rem;
+  }
+
+  .transaction-detail-item:last-child {
+    border-bottom: none;
+  }
+
+  .transaction-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .transaction-date {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #4f46e5;
+    background: #e0e7ff;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    width: fit-content;
+  }
+
+  .transaction-description {
+    font-weight: 500;
+    color: #1f2937;
+    font-size: 0.95rem;
+  }
+
+  .transaction-note {
+    font-size: 0.875rem;
+    color: #6b7280;
+    font-style: italic;
+    margin-top: 0.25rem;
+  }
+
+  .transaction-amounts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    align-items: flex-end;
+  }
+
+  .base-amount {
+    font-size: 0.875rem;
+    color: #6b7280;
+    font-weight: 500;
+  }
+
+  .reimbursement-amount {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #059669;
+    background: #d1fae5;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+  }
+
+  .no-transactions {
+    padding: 1rem 1.25rem;
+    text-align: center;
+    color: #6b7280;
+    font-style: italic;
+    font-size: 0.875rem;
   }
 
   .category-label {
