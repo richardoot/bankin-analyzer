@@ -7,6 +7,59 @@ import type {
 import { computed, ref } from 'vue'
 
 /**
+ * Parse un CSV avec gestion correcte des retours à la ligne dans les champs
+ */
+const parseCSV = (csvText: string): string[][] => {
+  const result: string[][] = []
+  let current = ''
+  let inQuotes = false
+  let row: string[] = []
+
+  for (let i = 0; i < csvText.length; i++) {
+    const char = csvText[i]
+    const nextChar = csvText[i + 1]
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        // Guillemet échappé ("")
+        current += '"'
+        i++ // Skip le prochain guillemet
+      } else {
+        // Début ou fin de guillemets
+        inQuotes = !inQuotes
+      }
+    } else if (char === ';' && !inQuotes) {
+      // Séparateur de champ hors guillemets
+      row.push(current.trim())
+      current = ''
+    } else if (char === '\n' && !inQuotes) {
+      // Fin de ligne hors guillemets
+      if (current.trim() || row.length > 0) {
+        row.push(current.trim())
+        if (row.some(field => field.length > 0)) {
+          result.push(row)
+        }
+        row = []
+        current = ''
+      }
+    } else {
+      // Caractère normal (y compris retours à la ligne dans les guillemets)
+      current += char
+    }
+  }
+
+  // Ajouter la dernière ligne si elle n'est pas vide
+  if (current.trim() || row.length > 0) {
+    row.push(current.trim())
+    if (row.some(field => field.length > 0)) {
+      result.push(row)
+    }
+  }
+
+  return result
+}
+
+/**
  * Analyse un fichier CSV Bankin et extrait les informations
  */
 const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
@@ -16,9 +69,9 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
     reader.onload = e => {
       try {
         const text = e.target?.result as string
-        const lines = text.split('\n').filter(line => line.trim())
+        const rows = parseCSV(text)
 
-        if (lines.length < 2) {
+        if (rows.length < 2) {
           resolve({
             isValid: false,
             transactionCount: 0,
@@ -47,8 +100,8 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
         }
 
         // Vérification des en-têtes Bankin (séparateur point-virgule)
-        const headerLine = lines[0]
-        if (!headerLine) {
+        const headerRow = rows[0]
+        if (!headerRow) {
           resolve({
             isValid: false,
             transactionCount: 0,
@@ -74,9 +127,8 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
           return
         }
 
-        const headers = headerLine
-          .split(';')
-          .map(h => h.replace(/"/g, '').trim())
+        // Extraction des en-têtes (déjà parsés, plus besoin de split et replace)
+        const headers = headerRow
 
         // En-têtes attendus pour un export Bankin
         const expectedHeaders = [
@@ -123,7 +175,7 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
         }
 
         // Analyse des données selon le format Bankin
-        const dataLines = lines.slice(1)
+        const dataRows = rows.slice(1)
         const categories = new Set<string>()
         const amounts: number[] = []
         const dates: string[] = []
@@ -142,34 +194,36 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
         const incomeCategoriesData: Record<string, number> = {}
 
         // Index des colonnes
-        const dateIndex = headers.findIndex(h => h.toLowerCase() === 'date')
+        const dateIndex = headers.findIndex(
+          (h: string) => h.toLowerCase() === 'date'
+        )
         const amountIndex = headers.findIndex(
-          h => h.toLowerCase() === 'montant'
+          (h: string) => h.toLowerCase() === 'montant'
         )
         const categoryIndex = headers.findIndex(
-          h => h.toLowerCase() === 'catégorie'
+          (h: string) => h.toLowerCase() === 'catégorie'
         )
         const subCategoryIndex = headers.findIndex(
-          h => h.toLowerCase() === 'sous-catégorie'
+          (h: string) => h.toLowerCase() === 'sous-catégorie'
         )
         const descriptionIndex = headers.findIndex(
-          h => h.toLowerCase() === 'description'
+          (h: string) => h.toLowerCase() === 'description'
         )
         const accountIndex = headers.findIndex(
-          h => h.toLowerCase() === 'compte'
+          (h: string) => h.toLowerCase() === 'compte'
         )
-        const noteIndex = headers.findIndex(h => h.toLowerCase() === 'note')
+        const noteIndex = headers.findIndex(
+          (h: string) => h.toLowerCase() === 'note'
+        )
         const pointedIndex = headers.findIndex(
-          h => h.toLowerCase() === 'pointée'
+          (h: string) => h.toLowerCase() === 'pointée'
         )
 
-        dataLines.forEach(line => {
-          if (!line.trim()) return
+        dataRows.forEach(row => {
+          if (!row || row.length === 0) return
 
-          // Parsing CSV avec séparateur point-virgule et gestion des guillemets
-          const parts = line
-            .split(';')
-            .map(part => part.replace(/^"|"$/g, '').trim())
+          // Les données sont déjà parsées correctement par parseCSV
+          const parts = row
 
           if (parts.length >= headers.length) {
             const date = dateIndex >= 0 ? parts[dateIndex] || '' : ''
@@ -258,7 +312,8 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
 
         resolve({
           isValid: true,
-          transactionCount: dataLines.filter(line => line.trim()).length,
+          transactionCount: dataRows.filter(row => row && row.length > 0)
+            .length,
           categoryCount: categories.size,
           categories: Array.from(categories),
           dateRange: {
