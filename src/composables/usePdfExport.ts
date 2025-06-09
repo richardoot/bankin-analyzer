@@ -113,6 +113,45 @@ export const usePdfExport = () => {
   }
 
   /**
+   * Formate les dates de transaction de manière robuste pour l'export PDF
+   * Gère à la fois les formats ISO (YYYY-MM-DD) et français (DD/MM/YYYY)
+   */
+  const formatTransactionDate = (dateStr: string): string => {
+    try {
+      let date: Date | null = null
+
+      // Format ISO YYYY-MM-DD (fichiers de test)
+      if (dateStr.includes('-') && dateStr.length === 10) {
+        date = new Date(dateStr)
+      }
+      // Format français DD/MM/YYYY (Bankin)
+      else if (dateStr.includes('/')) {
+        const parts = dateStr.split('/')
+        if (parts.length === 3) {
+          const [day, month, year] = parts
+          if (day && month && year) {
+            date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+          }
+        }
+      }
+
+      // Si la date est valide, la formater en français
+      if (date && !isNaN(date.getTime())) {
+        return date.toLocaleDateString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        })
+      }
+
+      // En cas d'échec, retourner la date originale
+      return dateStr
+    } catch (_error) {
+      return dateStr
+    }
+  }
+
+  /**
    * Genere le HTML pour le PDF
    */
   const generatePdfHtml = (
@@ -598,7 +637,7 @@ export const usePdfExport = () => {
                             transaction => `
                           <div class="transaction-item">
                             <div class="transaction-info">
-                              <div class="transaction-date">${new Date(transaction.date).toLocaleDateString('fr-FR')}</div>
+                              <div class="transaction-date">${formatTransactionDate(transaction.date)}</div>
                               <div class="transaction-description">${cleanStringForPdf(transaction.description)}</div>
                               ${transaction.note ? `<div class="transaction-note">${cleanStringForPdf(transaction.note)}</div>` : ''}
                             </div>
@@ -1126,9 +1165,7 @@ export const usePdfExport = () => {
           // Date
           pdf.setTextColor(107, 114, 128)
           pdf.text(
-            cleanStringForPdf(
-              `- ${new Date(transaction.date).toLocaleDateString('fr-FR')}`
-            ),
+            cleanStringForPdf(`- ${formatTransactionDate(transaction.date)}`),
             margin + 10,
             yPos
           )

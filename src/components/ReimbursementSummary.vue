@@ -514,6 +514,42 @@
   const handleExcelExport = (): void => {
     alert('Export Excel - Fonctionnalité à implémenter')
   }
+
+  // Fonction pour formater les dates de transaction de manière robuste
+  const formatTransactionDate = (dateStr: string): string => {
+    try {
+      let date: Date | null = null
+
+      // Format ISO YYYY-MM-DD (fichiers de test)
+      if (dateStr.includes('-') && dateStr.length === 10) {
+        date = new Date(dateStr)
+      }
+      // Format français DD/MM/YYYY (Bankin)
+      else if (dateStr.includes('/')) {
+        const parts = dateStr.split('/')
+        if (parts.length === 3) {
+          const [day, month, year] = parts
+          if (day && month && year) {
+            date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+          }
+        }
+      }
+
+      // Si la date est valide, la formater en français
+      if (date && !isNaN(date.getTime())) {
+        return date.toLocaleDateString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        })
+      }
+
+      // En cas d'échec, retourner la date originale
+      return dateStr
+    } catch (_error) {
+      return dateStr
+    }
+  }
 </script>
 
 <template>
@@ -708,9 +744,7 @@
                   >
                     <div class="transaction-info">
                       <div class="transaction-date">
-                        {{
-                          new Date(transaction.date).toLocaleDateString('fr-FR')
-                        }}
+                        {{ formatTransactionDate(transaction.date) }}
                       </div>
                       <div class="transaction-description">
                         {{ transaction.description }}
