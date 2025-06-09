@@ -51,7 +51,7 @@
             :cx="center"
             :cy="center"
             :r="innerRadius"
-            fill="rgba(255, 255, 255, 0.95)"
+            :fill="centerCircleFill"
             stroke="rgba(229, 231, 235, 0.2)"
             stroke-width="1"
           />
@@ -179,6 +179,18 @@
   // Références pour le scroll automatique
   const legendContainer = ref<HTMLElement | null>(null)
   const legendItemRefs = ref<(HTMLElement | null)[]>([])
+
+  // Couleur du cercle central selon le thème
+  const centerCircleFill = computed(() => {
+    // Détection du mode sombre via CSS custom property ou media query
+    if (
+      window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches
+    ) {
+      return '#1f2937' // Couleur de fond sombre du container
+    }
+    return 'white' // Couleur de fond clair du container
+  })
 
   // Fonction pour gérer les références des éléments de légende
   const setLegendItemRef = (el: unknown, index: number) => {
