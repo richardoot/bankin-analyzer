@@ -528,6 +528,14 @@
                 @month-hover="handleMonthHover"
               />
             </div>
+
+            <!-- Liste des transactions de dépenses -->
+            <div class="chart-section">
+              <TransactionsList
+                :transactions="analysisResult.transactions"
+                active-tab="expenses"
+              />
+            </div>
           </div>
 
           <!-- Onglet Revenus -->
@@ -627,16 +635,16 @@
                 @month-hover="handleMonthHover"
               />
             </div>
+
+            <!-- Liste des transactions de revenus -->
+            <div class="chart-section">
+              <TransactionsList
+                :transactions="analysisResult.transactions"
+                active-tab="income"
+              />
+            </div>
           </div>
         </div>
-      </div>
-
-      <!-- Section des 50 dernières transactions -->
-      <div class="transactions-section">
-        <TransactionsList
-          :transactions="analysisResult.transactions"
-          :active-tab="activeTab"
-        />
       </div>
 
       <!-- Message informatif -->
