@@ -20,10 +20,13 @@
       }>
       filteredExpenses?: Transaction[]
       stats?: {
-        totalExpenses: number
-        totalIncome: number
-        categoriesCount: number
-        transactionsCount: number
+        total: number
+        assigned: number
+        unassigned: number
+        totalAmount: number
+        totalReimbursementAmount: number
+        assignedWithReimbursement: number
+        reimbursementCoverage: number
       }
     } | null
   }
@@ -333,6 +336,7 @@
             .map(([categoryName, amount]) => ({
               categoryName,
               amount,
+              transactions: getTransactionDetails(personId, categoryName),
             }))
             .filter(item => item.amount > 0)
             .sort((a, b) => b.amount - a.amount)
