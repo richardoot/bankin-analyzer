@@ -60,7 +60,7 @@
     </div>
 
     <!-- Zone du graphique -->
-    <div class="chart-container">
+    <div ref="chartContainerRef" class="chart-container">
       <!-- SVG de l'histogramme -->
       <div class="chart-svg-container">
         <svg
@@ -192,7 +192,7 @@
                 :stroke-width="isHovered(index, 'expenses') ? '2' : '1'"
                 class="bar expenses-bar"
                 :class="{ 'bar-hovered': isHovered(index, 'expenses') }"
-                @mouseenter="handleBarHover(index, 'expenses', true)"
+                @mouseenter="handleBarHover(index, 'expenses', true, $event)"
                 @mouseleave="handleBarHover(index, 'expenses', false)"
                 @click="handleBarClick(month, 'expenses')"
               />
@@ -221,7 +221,7 @@
                 :stroke-width="isHovered(index, 'income') ? '2' : '1'"
                 class="bar income-bar"
                 :class="{ 'bar-hovered': isHovered(index, 'income') }"
-                @mouseenter="handleBarHover(index, 'income', true)"
+                @mouseenter="handleBarHover(index, 'income', true, $event)"
                 @mouseleave="handleBarHover(index, 'income', false)"
                 @click="handleBarClick(month, 'income')"
               />
@@ -242,7 +242,7 @@
                 :stroke-width="isHovered(index, 'net') ? '2' : '1'"
                 class="bar net-bar"
                 :class="{ 'bar-hovered': isHovered(index, 'net') }"
-                @mouseenter="handleBarHover(index, 'net', true)"
+                @mouseenter="handleBarHover(index, 'net', true, $event)"
                 @mouseleave="handleBarHover(index, 'net', false)"
                 @click="handleBarClick(month, 'net')"
               />
@@ -303,19 +303,40 @@
           {{ hoveredBar.month.month }} {{ hoveredBar.month.year }}
         </div>
         <div class="tooltip-values">
-          <div v-if="hoveredBar.type === 'expenses' || type === 'comparison'">
+          <!-- Mode comparaison : afficher toutes les valeurs -->
+          <div v-if="type === 'comparison'">
+            <div>
+              <span class="tooltip-label expenses">💸 Dépenses:</span>
+              <span class="tooltip-value">{{
+                formatAmount(hoveredBar.month.expenses)
+              }}</span>
+            </div>
+            <div>
+              <span class="tooltip-label income">💰 Revenus:</span>
+              <span class="tooltip-value">{{
+                formatAmount(hoveredBar.month.income)
+              }}</span>
+            </div>
+          </div>
+
+          <!-- Mode dépenses : afficher seulement les dépenses -->
+          <div v-else-if="hoveredBar.type === 'expenses'">
             <span class="tooltip-label expenses">💸 Dépenses:</span>
             <span class="tooltip-value">{{
               formatAmount(hoveredBar.month.expenses)
             }}</span>
           </div>
-          <div v-if="hoveredBar.type === 'income' || type === 'comparison'">
+
+          <!-- Mode revenus : afficher seulement les revenus -->
+          <div v-else-if="hoveredBar.type === 'income'">
             <span class="tooltip-label income">💰 Revenus:</span>
             <span class="tooltip-value">{{
               formatAmount(hoveredBar.month.income)
             }}</span>
           </div>
-          <div v-if="hoveredBar.type === 'net'">
+
+          <!-- Mode solde net : afficher le solde -->
+          <div v-else-if="hoveredBar.type === 'net'">
             <span
               class="tooltip-label net"
               :class="{
@@ -335,6 +356,7 @@
               {{ formatAmount(hoveredBar.month.net) }}
             </span>
           </div>
+
           <div class="tooltip-transactions">
             <span class="tooltip-label">📊 Transactions:</span>
             <span class="tooltip-value">{{
@@ -385,6 +407,9 @@
     monthClick: [month: MonthlyData, type: string]
     monthHover: [month: MonthlyData | null, type: string | null]
   }>()
+
+  // Référence au conteneur du graphique
+  const chartContainerRef = ref<HTMLElement | null>(null)
 
   // État local pour le filtrage par catégorie
   const selectedCategory = ref<string>('all')
@@ -648,33 +673,23 @@
   }
 
   // Gestion du survol des barres
-  const handleBarHover = async (
+  const handleBarHover = (
     index: number,
     type: string,
-    isHover: boolean
+    isHover: boolean,
+    event?: MouseEvent
   ) => {
-    if (isHover) {
+    if (isHover && event) {
       const month = currentChartData.value.months[index]
       if (!month) return
 
-      // Calculer la position du tooltip basée sur les coordonnées SVG
-      const centerX = getXPosition(index)
-      const barY = getYPosition(getMonthValue(month))
+      // Utiliser la référence directe au conteneur de ce composant
+      if (chartContainerRef.value) {
+        const containerRect = chartContainerRef.value.getBoundingClientRect()
 
-      // Convertir les coordonnées SVG en coordonnées relatives au conteneur .chart-container
-      const chartContainer = document.querySelector(
-        '.bar-chart-container .chart-container'
-      )
-      const svgElement = document.querySelector('.bar-chart-svg')
-      if (svgElement && chartContainer) {
-        const svgRect = svgElement.getBoundingClientRect()
-        const containerRect = chartContainer.getBoundingClientRect()
-        const scaleX = svgRect.width / svgWidth
-        const scaleY = svgRect.height / svgHeight
-
-        // Position relative au conteneur du graphique
-        const relativeX = centerX * scaleX - (containerRect.left - svgRect.left)
-        const relativeY = barY * scaleY - (containerRect.top - svgRect.top)
+        // Position relative au conteneur du graphique spécifique
+        const relativeX = event.clientX - containerRect.left
+        const relativeY = event.clientY - containerRect.top
 
         hoveredBar.value = {
           month,
@@ -700,42 +715,57 @@
   const tooltipStyle = computed(() => {
     if (!hoveredBar.value) return { display: 'none' }
 
-    // Dimensions approximatives du conteneur et du tooltip
-    const maxX = 1000 // Largeur approximative du conteneur
-    const maxY = 500 // Hauteur approximative du conteneur graphique
-    const tooltipWidth = 200 // Largeur approximative du tooltip
-    const tooltipHeight = 150 // Hauteur approximative du tooltip
+    // Dimensions du tooltip
+    const tooltipWidth = 220
+    const tooltipHeight = 120
+    const offset = 15 // Décalage pour éviter que le tooltip cache la barre
 
+    // Utiliser la référence directe au conteneur de ce composant
+    const containerWidth = chartContainerRef.value?.clientWidth || 1000
+    const containerHeight = chartContainerRef.value?.clientHeight || 500
+
+    // Position de base : au-dessus de la souris, centrée
     let leftPosition = hoveredBar.value.x
-    let topPosition = hoveredBar.value.y - 15
+    let topPosition = hoveredBar.value.y - offset
     let transform = 'translate(-50%, -100%)'
 
     // Gestion du débordement horizontal
-    if (leftPosition + tooltipWidth / 2 > maxX) {
-      leftPosition = hoveredBar.value.x - 10
+    if (leftPosition + tooltipWidth / 2 > containerWidth - 10) {
+      // Tooltip déborde à droite : l'aligner à droite de la souris
+      leftPosition = hoveredBar.value.x - offset
       transform = 'translate(-100%, -100%)'
-    } else if (leftPosition - tooltipWidth / 2 < 0) {
-      leftPosition = hoveredBar.value.x + 10
+    } else if (leftPosition - tooltipWidth / 2 < 10) {
+      // Tooltip déborde à gauche : l'aligner à gauche de la souris
+      leftPosition = hoveredBar.value.x + offset
       transform = 'translate(0%, -100%)'
     }
 
     // Gestion du débordement vertical
-    if (topPosition - tooltipHeight < 0) {
-      // Si le tooltip déborde en haut, le placer en dessous de la barre
-      topPosition = hoveredBar.value.y + 25
-      transform = transform.replace('-100%', '0%') // Remplacer le Y par 0%
-    } else if (topPosition > maxY) {
-      // Si le tooltip déborde en bas, forcer la position en haut
-      topPosition = hoveredBar.value.y - tooltipHeight - 10
-      transform = transform.replace('0%', '-100%') // S'assurer que le Y est -100%
+    if (topPosition - tooltipHeight < 10) {
+      // Si le tooltip déborde en haut, le placer en dessous de la souris
+      topPosition = hoveredBar.value.y + offset
+      if (transform.includes('translate(-50%')) {
+        transform = 'translate(-50%, 0%)'
+      } else if (transform.includes('translate(-100%')) {
+        transform = 'translate(-100%, 0%)'
+      } else {
+        transform = 'translate(0%, 0%)'
+      }
+    }
+
+    // S'assurer que le tooltip ne déborde pas en bas
+    if (topPosition + tooltipHeight > containerHeight - 10) {
+      topPosition = containerHeight - tooltipHeight - 10
+      transform = transform.replace('0%', '-100%')
     }
 
     return {
       position: 'absolute' as const,
-      left: `${leftPosition}px`,
-      top: `${topPosition}px`,
+      left: `${Math.max(10, Math.min(leftPosition, containerWidth - 10))}px`,
+      top: `${Math.max(10, topPosition)}px`,
       transform,
       zIndex: 1000,
+      pointerEvents: 'none' as const,
     }
   })
 
@@ -771,7 +801,8 @@
     width: 100%;
     max-width: 100%;
     min-height: 600px;
-    overflow: hidden;
+    overflow: visible; /* Permettre au tooltip de sortir légèrement */
+    position: relative; /* Assurer le positionnement relatif pour le tooltip */
   }
 
   .bar-chart-container:hover {
@@ -860,6 +891,7 @@
   .chart-container {
     padding: 2rem;
     position: relative;
+    overflow: visible; /* Permettre au tooltip de déborder légèrement */
   }
 
   .chart-svg-container {
