@@ -1,102 +1,133 @@
-# Bankin Analyzer
+# 💰 Bankin Analyzer
 
-Une application web moderne pour analyser vos données financières à partir des exports CSV de
-l'application Bankin.
+Une application web moderne pour analyser vos données financières Bankin avec gestion des
+remboursements partagés et export PDF professionnel.
 
-## 🚀 Fonctionnalités
+## 🚀 Fonctionnalités Principales
 
-### ✅ **Navigation Multi-Pages**
+### 📊 **Analyse des Données Financières**
 
-- **Page d'accueil** : Présentation de l'application avec appel à l'action
-- **Page d'analyses** : Interface d'upload et d'analyse des données CSV
-- Navigation fluide entre les pages avec état géré
+- Import CSV au format Bankin (comptes multiples, dates multiples formats)
+- Parsing intelligent avec validation robuste et gestion d'erreurs
+- Dashboard interactif avec graphiques harmonisés et tooltips précis
 
-### ✅ **Upload de Fichiers CSV**
+### 👥 **Gestion des Personnes et Remboursements**
 
-- Interface drag-and-drop intuitive
-- Validation des formats de fichiers (.csv)
-- Gestion d'erreurs et feedback utilisateur
-- Sécurité : traitement local, aucune donnée transmise
+- CRUD complet avec validation email et détection doublons
+- Assignation intelligente des remboursements par transaction
+- Helpers de calcul (total, moitié, division équitable)
+- Synchronisation temps réel entre tous les composants
 
-### ✅ **Workflow Git Complet**
+### 🏷️ **Catégorisation et Export**
 
-- **Husky v9.1.7** : Hooks Git automatisés
-- **Commitlint** : Validation des messages de commit conventionnels
-- **Lint-staged** : Vérifications automatiques sur les fichiers modifiés
-- **Commitizen** : Interface interactive pour les commits
-
-### ✅ **Qualité de Code**
-
-- **TypeScript** : Typage strict et sécurité
-- **ESLint** : Analyse statique du code
-- **Prettier** : Formatage automatique
-- **Vue 3 Composition API** : Architecture moderne
+- Catégories prédéfinies + personnalisées (icônes, couleurs)
+- Export PDF multi-pages avec formatage français professionnel
+- Filtres dynamiques par compte, catégorie, période, personne
 
 ## 🛠️ Technologies
 
-- **Frontend** : Vue 3, TypeScript, Vite
-- **Styling** : CSS3 avec variables personnalisées, gradients, animations
-- **Outils** : Husky, ESLint, Prettier, Commitlint
-- **Design** : Interface responsive, mode sombre, accessibilité
+**Stack Moderne**
+
+- Vue 3 + Composition API + TypeScript strict
+- Vite pour build optimisé et développement rapide
+- CSS3 avec variables personnalisées et design responsive
+
+**Qualité de Code**
+
+- ESLint + Prettier avec configuration stricte
+- Husky pour hooks Git automatisés + Commitlint
+- Tests manuels exhaustifs documentés
+
+**Performance et Sécurité**
+
+- Traitement 100% local (aucune donnée transmise)
+- Persistance localStorage avec récupération d'erreur
+- Optimisations bundle avec lazy loading
 
 ## 📦 Installation et Développement
 
+### Démarrage rapide
+
 ```bash
-# Installation des dépendances
+# Cloner et installer
+git clone [url-du-repo]
+cd bankin-analyzer
 npm install
 
-# Démarrage du serveur de développement
-npm run dev
+# Développement
+npm run dev              # Serveur local (http://localhost:5173)
 
-# Build de production
-npm run build
+# Production
+npm run build            # Build optimisé
+npm run preview          # Prévisualisation
 
-# Vérification de la qualité du code
-npm run check-all
-
-# Commit interactif avec conventions
-npm run commit
+# Qualité
+npm run check-all        # Vérifications complètes
+npm run commit           # Commit avec conventions
 ```
 
-## 🎯 Structure du Projet
+## 🎯 Guide d'Utilisation Rapide
 
-```
-src/
-├── components/
-│   ├── AppHeader.vue           # En-tête avec navigation
-│   ├── HeroSection.vue         # Section héro de la page d'accueil
-│   ├── StartAnalysisSection.vue # CTA pour démarrer l'analyse
-│   ├── AnalysesPage.vue        # Page des analyses
-│   ├── UploadSection.vue       # Section d'upload de fichiers
-│   ├── FileUpload.vue          # Composant drag-and-drop
-│   └── AppFooter.vue           # Pied de page
-├── composables/
-│   └── useFileUpload.ts        # Logique d'upload réutilisable
-├── types/
-│   └── index.ts                # Définitions TypeScript
-└── App.vue                     # Composant racine avec navigation
-```
+1. **Importer données** : Glisser-déposer CSV Bankin → validation → dashboard
+2. **Configurer personnes** : Ajouter avec email (validation doublons)
+3. **Assigner remboursements** : Sélectionner transaction → personne → catégorie → helpers calcul
+4. **Analyser** : Dashboard avec graphiques interactifs et filtres dynamiques
+5. **Exporter** : PDF professionnel avec détails complets
 
-## 🔄 Workflow Git
+## 🔧 Corrections Récentes (Décembre 2024)
 
-### Hooks Configurés
+### ✅ Fix Tooltips BarChart
 
-- **pre-commit** : lint-staged + vérifications TypeScript
-- **commit-msg** : validation commitlint
-- **prepare-commit-msg** : templates automatiques
-- **pre-push** : suite de validation complète
-- **post-commit** : feedback de succès
+**Problème** : Tooltips revenus ne s'affichaient pas comme ceux des dépenses  
+**Solution** : Ref locale `chartContainerRef` pour cibler le bon conteneur dans chaque instance  
+**Impact** : Comportement identique entre graphiques, positionnement précis sans débordement
 
-### Scripts Disponibles
+### ✅ Synchronisation Temps Réel
+
+PersonsManager ↔ ExpensesReimbursementManager avec système d'événements localStorage (latence
+<500ms)
+
+### ✅ Export PDF Multi-pages
+
+Pagination intelligente avec propriétés CSS anti-coupure, formatage français, caractères spéciaux
+
+## � Testing et Validation
+
+**Tests manuels recommandés** :
+
+- Upload CSV (formats multiples fournis : `test-bankin-real.csv`, `test-multiline.csv`)
+- CRUD Personnes avec validation email et synchronisation
+- Tooltips graphiques sur dépenses ET revenus (correction majeure)
+- Export PDF avec vérification pagination/formatage
+- Performance >1000 transactions
+
+**Fichiers de test fournis** : `test-*.csv` pour différents cas d'usage
+
+## 🎨 Conventions de Développement
+
+**Commits** : [Conventional Commits](https://www.conventionalcommits.org/)
 
 ```bash
-npm run hooks:test          # Test des hooks Git
-npm run commit             # Commit interactif avec commitizen
-npm run fix-all           # Correction automatique (ESLint + Prettier)
-npm run check-all         # Vérifications complètes
+feat: nouvelle fonctionnalité
+fix: correction de bug
+docs: mise à jour documentation
+# Exemple: fix(charts): correct tooltip positioning in BarChart
 ```
 
-## 🎨 Design System
+**Code** : TypeScript strict, Composition API, CSS modulaire avec variables
+
+## 📚 Documentation
+
+- **[Documentation Complète](./docs/README_CONSOLIDATED.md)** - Guide détaillé avec toutes les
+  fonctionnalités
+- **[Guide Technique](./docs/TECHNICAL_GUIDE.md)** - Architecture, patterns, optimisations
+- **[Guide de Test](./docs/TESTING_GUIDE_CONSOLIDATED.md)** - Procédures de test exhaustives
+- **[Conventions de Commits](./COMMIT_CONVENTIONS.md)** - Standards de commits
+
+---
+
+**Version** : Prête pour production (corrections majeures appliquées)  
+**Dernière mise à jour** : Décembre 2024 - Fix tooltips BarChart + documentation consolidée
 
 ### Couleurs
 
@@ -119,27 +150,50 @@ npm run check-all         # Vérifications complètes
 - **TypeScript** : Sécurité au niveau du code
 - **CSP-ready** : Compatible Content Security Policy
 
-## 📱 Fonctionnalités Prévues
+## 🎯 Fonctionnalités Complètes
 
-- [ ] Parsing et analyse des CSV Bankin
-- [ ] Tableaux de bord interactifs
-- [ ] Graphiques de dépenses par catégorie
-- [ ] Analyse des tendances temporelles
-- [ ] Export des rapports
-- [ ] Sauvegarde locale des analyses
+### ✅ **Gestion des Données**
 
-## 🚀 Status
+- 👥 **Gestionnaire de Personnes** : CRUD complet avec emails optionnels
+- 🎯 **Système de Catégories** : 5 catégories par défaut + personnalisées
+- 💰 **Assignation de Remboursements** : Double niveau (personne + catégorie)
 
-**✅ Phase 1 Complète** : Navigation et upload de fichiers
+### ✅ **Visualisation Interactive**
 
-- Architecture Vue 3 + TypeScript ✅
-- Workflow Git avec hooks ✅
-- Interface d'upload sécurisée ✅
-- Navigation multi-pages ✅
-- Design responsive et accessible ✅
+- 📊 **Dashboard** : Graphiques harmonisés (BarChart + PieChart)
+- 📈 **Résumé des Remboursements** : Analyses détaillées par personne
+- 🔍 **Filtrage Avancé** : Par compte, catégorie, période
 
-**🔄 Phase 2 En Cours** : Traitement et analyse des données CSV
+### ✅ **Import/Export Professionnel**
+
+- 📤 **Import CSV Bankin** : Support complet avec validation
+- 📋 **Export PDF** : Rapports détaillés multi-pages
+- 💾 **Sauvegarde Locale** : Persistance automatique et sécurisée
+
+## � Documentation
+
+**Documentation complète disponible dans le dossier `/docs/` :**
+
+- **[📖 Guide d'Utilisation](./docs/USER_GUIDE.md)** - Installation et utilisation
+- **[🏗️ Guide de Développement](./docs/DEVELOPER_GUIDE.md)** - Architecture et conventions
+- **[🧪 Guide de Test](./docs/TESTING_GUIDE.md)** - Procédures de validation
+- **[🚀 Historique des Fonctionnalités](./docs/FEATURES_HISTORY.md)** - Évolution du projet
+- **[🔧 Notes Techniques](./docs/TECHNICAL_NOTES.md)** - Corrections et optimisations
+
+## 🚀 Statut du Projet
+
+**✅ APPLICATION COMPLÈTE ET FONCTIONNELLE**
+
+Toutes les fonctionnalités principales sont implémentées, testées et documentées. L'application est
+prête pour une utilisation en production.
+
+### Corrections Récentes
+
+- ✅ **Tooltips BarChart** : Comportement identique entre graphiques dépenses/revenus
+- ✅ **Export PDF** : Support des dates françaises (DD/MM/YYYY)
+- ✅ **Synchronisation** : Communication temps réel entre composants
+- ✅ **Validation** : Nettoyage automatique des données orphelines
 
 ---
 
-_Développé avec ❤️ pour simplifier l'analyse financière personnelle_
+_Application développée avec ❤️ pour simplifier l'analyse financière personnelle_

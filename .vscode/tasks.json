@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Nettoyer la documentation",
+      "type": "shell",
+      "command": "./cleanup-docs.sh",
+      "group": "build",
+      "problemMatcher": [],
+      "isBackground": false
+    }
+  ]
+}
