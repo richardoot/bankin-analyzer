@@ -82,13 +82,19 @@ L'application s'ouvre sur une page d'accueil moderne avec :
 1. **Consulter le résumé** des remboursements par personne
 2. **Filtrer par catégorie** ou personne
 3. **Visualiser les graphiques** (barres et secteurs)
-4. **Exporter en PDF** avec détails complets
+4. **Filtrer par mois** dans les graphiques camembert :
+   - Utiliser la liste déroulante "Période" dans l'en-tête du graphique
+   - Sélectionner un mois spécifique pour voir la répartition de cette période
+   - Choisir "Tous les mois" pour revenir à la vue globale
+   - Les filtres par mois sont indépendants entre dépenses et revenus
+5. **Exporter en PDF** avec détails complets
 
 ## 📱 Fonctionnalités Avancées
 
 ### Dashboard Interactif
 
 - **Graphiques harmonisés** avec tooltips informatifs
+- **Filtrage par mois** dans les graphiques camembert avec sélecteur déroulant
 - **Filtrage dynamique** par compte, catégorie, période
 - **Synchronisation en temps réel** entre composants
 - **Mode responsive** pour mobile et desktop

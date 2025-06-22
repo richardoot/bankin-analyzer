@@ -1,6 +1,20 @@
 # 💰 Bankin Analyzer
 
-Une application web moderne pour analyser vos données financières Bankin avec gestion des
+Une application web moderne pour analyser vos donné4. **Analyser** : Dashboard avec graphiques
+interactifs et filtres dynamiques  
+5. **Filtrer par mois** : Utiliser les listes déroulantes des graphiques camembert pour analyser une
+période spécifique 6. **Exporter** : PDF professionnel avec détails complets
+
+## 🔧 Corrections Récentes (Décembre 2024)
+
+### ✅ Nouveauté : Filtrage par Mois PieChart
+
+**Fonctionnalité** : Liste déroulante dans l'en-tête des graphiques camembert  
+**Usage** : Sélectionner un mois pour voir la répartition des dépenses/revenus de cette période  
+**Avantage** : Analyse détaillée par période avec filtres indépendants
+
+### ✅ Fix Tooltips BarChartancières Bankin avec gestion des
+
 remboursements partagés et export PDF professionnel.
 
 ## 🚀 Fonctionnalités Principales

@@ -191,6 +191,25 @@
 - ✅ Messages appropriés si aucune donnée
 - ✅ Réinitialisation filtres fonctionnelle
 
+#### Test Filtrage par Mois PieChart
+
+**Étapes** :
+
+1. Naviguer vers dashboard avec données multi-mois
+2. Localiser la liste déroulante "Période" dans l'en-tête du graphique
+3. Sélectionner un mois spécifique
+4. Vérifier mise à jour du graphique
+
+**Validation** :
+
+- ✅ Liste déroulante affiche les mois disponibles en français
+- ✅ Sélection "Tous les mois" affiche données complètes
+- ✅ Sélection mois spécifique filtre les données correctement
+- ✅ Graphique se met à jour immédiatement
+- ✅ Légende reflète les nouvelles proportions
+- ✅ Tooltips affichent montants filtrés
+- ✅ Filtres indépendants entre dépenses et revenus
+
 ### 6. Export PDF
 
 #### Test Export Complet
