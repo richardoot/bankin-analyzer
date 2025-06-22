@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { useBarChart, type MonthlyData } from '@/composables/useBarChart'
   import { usePieChart, type CategoryData } from '@/composables/usePieChart'
+  import { useMonthFilter } from '@/composables/useMonthFilter'
   import type { CsvAnalysisResult } from '@/types'
   import { computed, ref } from 'vue'
   import BarChart from './BarChart.vue'
@@ -33,6 +34,14 @@
 
   // États pour les règles de compensation des remboursements
   const compensationRules = ref<CompensationRule[]>([])
+
+  // États pour les filtres par mois des graphiques
+  const selectedExpenseMonth = ref<string>('')
+  const selectedIncomeMonth = ref<string>('')
+
+  // Utilisation du composable pour le filtrage par mois
+  const { generateAvailableMonths, filterTransactionsByMonth } =
+    useMonthFilter()
 
   // Calculer la liste des comptes uniques
   const availableAccounts = computed(() => {
@@ -139,18 +148,102 @@
     return selectedIncomeCategories.value
   })
 
-  const {
-    expensesChartData,
-    incomeChartData,
-    formatAmount: formatChartAmount,
-    formatPercentage,
-  } = usePieChart(
-    analysisResultComputed,
+  // Computed pour créer des résultats d'analyse avec transactions filtrées par mois
+  const expensesAnalysisResult = computed(() => {
+    if (!selectedExpenseMonth.value) {
+      console.log(
+        '📊 Pas de filtre mois pour dépenses, transactions totales:',
+        props.analysisResult.transactions.length
+      )
+      return props.analysisResult
+    }
+
+    const filteredTransactions = filterTransactionsByMonth(
+      props.analysisResult.transactions,
+      selectedExpenseMonth.value
+    )
+
+    console.log(
+      `📊 Filtrage dépenses pour ${selectedExpenseMonth.value}: ${props.analysisResult.transactions.length} → ${filteredTransactions.length} transactions`
+    )
+
+    return {
+      ...props.analysisResult,
+      transactions: filteredTransactions,
+    }
+  })
+
+  const incomeAnalysisResult = computed(() => {
+    if (!selectedIncomeMonth.value) {
+      console.log(
+        '📊 Pas de filtre mois pour revenus, transactions totales:',
+        props.analysisResult.transactions.length
+      )
+      return props.analysisResult
+    }
+
+    const filteredTransactions = filterTransactionsByMonth(
+      props.analysisResult.transactions,
+      selectedIncomeMonth.value
+    )
+
+    console.log(
+      `📊 Filtrage revenus pour ${selectedIncomeMonth.value}: ${props.analysisResult.transactions.length} → ${filteredTransactions.length} transactions`
+    )
+
+    return {
+      ...props.analysisResult,
+      transactions: filteredTransactions,
+    }
+  })
+
+  // Utilisation de composables séparés pour les dépenses et revenus filtrés
+  const expensesPieChart = usePieChart(
+    expensesAnalysisResult,
     selectedExpenseCategoriesComputed,
     selectedIncomeCategoriesComputed,
     computed(() => selectedJointAccounts.value),
     computed(() => compensationRules.value)
   )
+
+  const incomePieChart = usePieChart(
+    incomeAnalysisResult,
+    selectedExpenseCategoriesComputed,
+    selectedIncomeCategoriesComputed,
+    computed(() => selectedJointAccounts.value),
+    computed(() => compensationRules.value)
+  )
+
+  // Extraire les données depuis les composables
+  const expensesChartData = computed(() => {
+    const result = expensesPieChart.expensesChartData.value
+    console.log('📊 expensesChartData calculé:', {
+      selectedMonth: selectedExpenseMonth.value,
+      categoriesCount: result.categories.length,
+      categories: result.categories.map(c => c.name),
+    })
+    return result
+  })
+
+  const incomeChartData = computed(() => {
+    const result = incomePieChart.incomeChartData.value
+    console.log('📊 incomeChartData calculé:', {
+      selectedMonth: selectedIncomeMonth.value,
+      categoriesCount: result.categories.length,
+      categories: result.categories.map(c => c.name),
+    })
+    return result
+  })
+  const formatChartAmount = expensesPieChart.formatAmount
+  const formatPercentage = expensesPieChart.formatPercentage
+
+  // Générer les mois disponibles à partir des transactions
+  const availableMonths = computed(() => {
+    if (!props.analysisResult.isValid) return []
+    const months = generateAvailableMonths(props.analysisResult.transactions)
+    console.log('📅 Mois disponibles générés:', months)
+    return months
+  })
 
   // Utilisation du composable pour l'histogramme mensuel avec filtrage
   const { monthlyChartData, formatAmount: formatBarAmount } = useBarChart(
@@ -168,6 +261,17 @@
 
   const handleCategoryHover = (_category: CategoryData | null) => {
     // Ici on pourrait ajouter une logique pour mettre en surbrillance les éléments liés
+  }
+
+  // Gestionnaires pour les changements de mois dans les graphiques
+  const handleExpenseMonthChange = (month: string) => {
+    console.log('🔄 Changement de mois dépenses:', month)
+    selectedExpenseMonth.value = month
+  }
+
+  const handleIncomeMonthChange = (month: string) => {
+    console.log('🔄 Changement de mois revenus:', month)
+    selectedIncomeMonth.value = month
   }
 
   // Gestion des interactions avec l'histogramme
@@ -510,8 +614,11 @@
                 type="expenses"
                 :format-amount="formatChartAmount"
                 :format-percentage="formatPercentage"
+                :available-months="availableMonths"
+                :selected-month="selectedExpenseMonth"
                 @category-click="handleCategoryClick"
                 @category-hover="handleCategoryHover"
+                @month-change="handleExpenseMonthChange"
               />
             </div>
 
@@ -617,8 +724,11 @@
                 type="income"
                 :format-amount="formatChartAmount"
                 :format-percentage="formatPercentage"
+                :available-months="availableMonths"
+                :selected-month="selectedIncomeMonth"
                 @category-click="handleCategoryClick"
                 @category-hover="handleCategoryHover"
+                @month-change="handleIncomeMonthChange"
               />
             </div>
 

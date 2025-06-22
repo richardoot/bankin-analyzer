@@ -2,10 +2,35 @@
   <div class="pie-chart-container">
     <!-- En-tête du graphique -->
     <div class="chart-header">
-      <h3 class="chart-title">
-        <component :is="titleIcon" class="chart-title-icon" />
-        {{ title }}
-      </h3>
+      <div class="header-content">
+        <h3 class="chart-title">
+          <component :is="titleIcon" class="chart-title-icon" />
+          {{ title }}
+        </h3>
+
+        <!-- Sélecteur de mois -->
+        <div
+          v-if="availableMonths && availableMonths.length > 0"
+          class="month-selector"
+        >
+          <label for="month-filter" class="month-label">Période :</label>
+          <select
+            id="month-filter"
+            :value="selectedMonth || 'all'"
+            class="month-select"
+            @change="handleMonthChange"
+          >
+            <option value="all">Tous les mois</option>
+            <option
+              v-for="month in availableMonths"
+              :key="month.value"
+              :value="month.value"
+            >
+              {{ month.label }}
+            </option>
+          </select>
+        </div>
+      </div>
     </div>
 
     <!-- Zone du graphique -->
@@ -152,6 +177,8 @@
     type: 'expenses' | 'income'
     formatAmount: (amount: number) => string
     formatPercentage: (percentage: number) => string
+    availableMonths?: { value: string; label: string }[]
+    selectedMonth?: string
   }
 
   const props = defineProps<Props>()
@@ -160,6 +187,7 @@
   const emit = defineEmits<{
     categoryClick: [category: CategoryData]
     categoryHover: [category: CategoryData | null]
+    monthChange: [month: string]
   }>()
 
   // Configuration du SVG
@@ -335,6 +363,13 @@
   const handleSegmentClick = (category: CategoryData) => {
     emit('categoryClick', category)
   }
+
+  // Gestion du changement de mois
+  const handleMonthChange = (event: Event) => {
+    const target = event.target as HTMLSelectElement
+    const newMonth = target.value === 'all' ? '' : target.value
+    emit('monthChange', newMonth)
+  }
 </script>
 
 <style scoped>
@@ -363,6 +398,14 @@
     border-bottom: 1px solid #e5e7eb;
   }
 
+  .header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
   .chart-title {
     margin: 0;
     font-size: 1.25rem;
@@ -370,7 +413,6 @@
     color: #1f2937;
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 0.5rem;
   }
 
@@ -378,6 +420,43 @@
     width: 1.25rem;
     height: 1.25rem;
     color: #3b82f6;
+  }
+
+  /* Sélecteur de mois */
+  .month-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .month-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6b7280;
+    white-space: nowrap;
+  }
+
+  .month-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    background: white;
+    color: #374151;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 140px;
+  }
+
+  .month-select:hover {
+    border-color: #3b82f6;
+  }
+
+  .month-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   /* Zone du graphique */
@@ -627,6 +706,20 @@
       min-height: 400px;
     }
 
+    .header-content {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 1rem;
+    }
+
+    .chart-title {
+      justify-content: center;
+    }
+
+    .month-selector {
+      justify-content: center;
+    }
+
     .chart-container {
       flex-direction: column;
       align-items: center;
@@ -645,6 +738,19 @@
       margin: 0.5rem;
       padding: 0.75rem;
       min-height: 350px;
+    }
+
+    .chart-header {
+      padding: 1rem;
+    }
+
+    .header-content {
+      gap: 0.75rem;
+    }
+
+    .month-select {
+      min-width: 120px;
+      font-size: 0.8125rem;
     }
 
     .chart-svg-container {
@@ -685,6 +791,25 @@
 
     .chart-title {
       color: #f9fafb;
+    }
+
+    .month-label {
+      color: #d1d5db;
+    }
+
+    .month-select {
+      background: #374151;
+      border-color: #4b5563;
+      color: #f9fafb;
+    }
+
+    .month-select:hover {
+      border-color: #60a5fa;
+    }
+
+    .month-select:focus {
+      border-color: #60a5fa;
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
     }
 
     .center-text-main {
