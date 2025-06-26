@@ -1,10 +1,10 @@
 <script setup lang="ts">
   import { ref } from 'vue'
-  import AppHeader from './components/AppHeader.vue'
-  import HeroSection from './components/HeroSection.vue'
-  import StartAnalysisSection from './components/StartAnalysisSection.vue'
-  import AnalysesPage from './components/AnalysesPage.vue'
-  import AppFooter from './components/AppFooter.vue'
+  import AppHeader from './components/layout/AppHeader.vue'
+  import HeroSection from './components/layout/HeroSection.vue'
+  import StartAnalysisSection from './components/layout/StartAnalysisSection.vue'
+  import AnalysesPage from './views/AnalysesPage.vue'
+  import AppFooter from './components/layout/AppFooter.vue'
 
   // État de navigation
   type ViewState = 'home' | 'analyses'

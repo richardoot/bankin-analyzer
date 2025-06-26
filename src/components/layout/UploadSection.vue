@@ -1,7 +1,7 @@
 <script setup lang="ts">
   import { ref } from 'vue'
-  import FileUpload from './FileUpload.vue'
-  import ValidationModal from './ValidationModal.vue'
+  import FileUpload from '../shared/FileUpload.vue'
+  import ValidationModal from '../shared/ValidationModal.vue'
   import { useFileUpload } from '@/composables/useFileUpload'
   import type { CsvAnalysisResult } from '@/types'
 

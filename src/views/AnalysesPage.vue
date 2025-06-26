@@ -2,8 +2,8 @@
   import type { CsvAnalysisResult } from '@/types'
   import { ref } from 'vue'
   import DashboardPage from './DashboardPage.vue'
-  import ReimbursementManager from './ReimbursementManager.vue'
-  import UploadSection from './UploadSection.vue'
+  import ReimbursementManager from '../components/reimbursement/ReimbursementManager.vue'
+  import UploadSection from '../components/layout/UploadSection.vue'
 
   // État local pour gérer l'affichage
   const showAnalysis = ref(false)
