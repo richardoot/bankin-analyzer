@@ -1,9 +1,9 @@
 <script setup lang="ts">
   import type { CsvAnalysisResult } from '@/types'
   import { computed, ref } from 'vue'
-  import AccountFilter from './AccountFilter.vue'
+  import AccountFilter from '../filters/AccountFilter.vue'
   import ExpensesReimbursementManager from './ExpensesReimbursementManager.vue'
-  import PersonsManager from './PersonsManager.vue'
+  import PersonsManager from '../shared/PersonsManager.vue'
   import ReimbursementCategoriesManager from './ReimbursementCategoriesManager.vue'
   import ReimbursementStats from './ReimbursementStats.vue'
   import ReimbursementSummary from './ReimbursementSummary.vue'

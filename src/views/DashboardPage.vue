@@ -1,17 +1,17 @@
 <script setup lang="ts">
   import { useBarChart, type MonthlyData } from '@/composables/useBarChart'
-  import { usePieChart, type CategoryData } from '@/composables/usePieChart'
   import { useMonthFilter } from '@/composables/useMonthFilter'
+  import { usePieChart, type CategoryData } from '@/composables/usePieChart'
   import type { CsvAnalysisResult } from '@/types'
   import { computed, ref } from 'vue'
-  import BarChart from './BarChart.vue'
-  import CategoryFilter from './CategoryFilter.vue'
-  import JointAccountFilter from './JointAccountFilter.vue'
-  import PieChart from './PieChart.vue'
+  import BarChart from '../components/charts/BarChart.vue'
+  import CategoryFilter from '../components/filters/CategoryFilter.vue'
+  import JointAccountFilter from '../components/filters/JointAccountFilter.vue'
+  import PieChart from '../components/charts/PieChart.vue'
   import ReimbursementCompensationFilter, {
     type CompensationRule,
-  } from './ReimbursementCompensationFilter.vue'
-  import TransactionsList from './TransactionsList.vue'
+  } from '../components/filters/ReimbursementCompensationFilter.vue'
+  import TransactionsList from '../components/shared/TransactionsList.vue'
 
   interface Props {
     analysisResult: CsvAnalysisResult
@@ -40,8 +40,7 @@
   const selectedIncomeMonth = ref<string>('')
 
   // Utilisation du composable pour le filtrage par mois
-  const { generateAvailableMonths, filterTransactionsByMonth } =
-    useMonthFilter()
+  const { generateAvailableMonths, parseDate } = useMonthFilter()
 
   // Calculer la liste des comptes uniques
   const availableAccounts = computed(() => {
@@ -139,109 +138,199 @@
 
   // Utilisation du composable pour les graphiques avec filtrage
   const analysisResultComputed = computed(() => props.analysisResult)
-  const selectedExpenseCategoriesComputed = computed(() => {
-    console.log('🔍 Filtres dépenses actifs:', selectedExpenseCategories.value)
-    return selectedExpenseCategories.value
-  })
-  const selectedIncomeCategoriesComputed = computed(() => {
-    console.log('🔍 Filtres revenus actifs:', selectedIncomeCategories.value)
-    return selectedIncomeCategories.value
-  })
+  const selectedExpenseCategoriesComputed = computed(
+    () => selectedExpenseCategories.value
+  )
+  const selectedIncomeCategoriesComputed = computed(
+    () => selectedIncomeCategories.value
+  )
 
-  // Computed pour créer des résultats d'analyse avec transactions filtrées par mois
+  // Créer un analysisResult filtré par mois pour les dépenses
   const expensesAnalysisResult = computed(() => {
-    if (!selectedExpenseMonth.value) {
-      console.log(
-        '📊 Pas de filtre mois pour dépenses, transactions totales:',
-        props.analysisResult.transactions.length
-      )
-      return props.analysisResult
-    }
-
-    const filteredTransactions = filterTransactionsByMonth(
-      props.analysisResult.transactions,
+    console.log(
+      '🔍 expensesAnalysisResult - Mois sélectionné:',
       selectedExpenseMonth.value
     )
 
-    console.log(
-      `📊 Filtrage dépenses pour ${selectedExpenseMonth.value}: ${props.analysisResult.transactions.length} → ${filteredTransactions.length} transactions`
-    )
+    if (!props.analysisResult.isValid) return props.analysisResult
 
-    return {
-      ...props.analysisResult,
-      transactions: filteredTransactions,
-    }
-  })
-
-  const incomeAnalysisResult = computed(() => {
-    if (!selectedIncomeMonth.value) {
+    if (!selectedExpenseMonth.value) {
       console.log(
-        '📊 Pas de filtre mois pour revenus, transactions totales:',
-        props.analysisResult.transactions.length
+        '🔍 expensesAnalysisResult - Pas de mois sélectionné, retour de toutes les données'
       )
       return props.analysisResult
     }
 
-    const filteredTransactions = filterTransactionsByMonth(
-      props.analysisResult.transactions,
-      selectedIncomeMonth.value
+    // Filtrer les transactions pour le mois sélectionné (dépenses uniquement)
+    const filteredTransactions = props.analysisResult.transactions.filter(
+      transaction => {
+        if (!transaction.date || transaction.type !== 'expense') return false
+        const date = parseDate(transaction.date)
+        if (isNaN(date.getTime())) return false
+        const transactionMonth = date.toISOString().substring(0, 7)
+        return transactionMonth === selectedExpenseMonth.value
+      }
     )
 
     console.log(
-      `📊 Filtrage revenus pour ${selectedIncomeMonth.value}: ${props.analysisResult.transactions.length} → ${filteredTransactions.length} transactions`
+      '🔍 expensesAnalysisResult - Transactions filtrées:',
+      filteredTransactions.length,
+      'sur',
+      props.analysisResult.transactions.filter(t => t.type === 'expense')
+        .length,
+      'dépenses totales'
     )
 
-    return {
+    // Recalculer les statistiques pour les dépenses filtrées
+    const expenseCategoriesData: Record<string, number> = {}
+    const expenseCategories = new Set<string>()
+    let totalExpenseAmount = 0
+
+    filteredTransactions.forEach(transaction => {
+      if (transaction.category && transaction.type === 'expense') {
+        const amount = Math.abs(transaction.amount)
+        expenseCategoriesData[transaction.category] =
+          (expenseCategoriesData[transaction.category] || 0) + amount
+        expenseCategories.add(transaction.category)
+        totalExpenseAmount += amount
+      }
+    })
+
+    console.log(
+      '🔍 expensesAnalysisResult - Catégories calculées:',
+      expenseCategoriesData
+    )
+
+    const result = {
       ...props.analysisResult,
       transactions: filteredTransactions,
+      expenses: {
+        totalAmount: totalExpenseAmount,
+        transactionCount: filteredTransactions.filter(t => t.type === 'expense')
+          .length,
+        categories: Array.from(expenseCategories),
+        categoriesData: expenseCategoriesData,
+      },
     }
+
+    return result
   })
 
-  // Utilisation de composables séparés pour les dépenses et revenus filtrés
-  const expensesPieChart = usePieChart(
+  // Créer un analysisResult filtré par mois pour les revenus
+  const incomeAnalysisResult = computed(() => {
+    console.log(
+      '🔍 incomeAnalysisResult - Mois sélectionné:',
+      selectedIncomeMonth.value
+    )
+
+    if (!props.analysisResult.isValid) return props.analysisResult
+
+    if (!selectedIncomeMonth.value) {
+      console.log(
+        '🔍 incomeAnalysisResult - Pas de mois sélectionné, retour de toutes les données'
+      )
+      return props.analysisResult
+    }
+
+    // Filtrer les transactions pour le mois sélectionné (revenus uniquement)
+    const filteredTransactions = props.analysisResult.transactions.filter(
+      transaction => {
+        if (!transaction.date || transaction.type !== 'income') return false
+        const date = parseDate(transaction.date)
+        if (isNaN(date.getTime())) return false
+        const transactionMonth = date.toISOString().substring(0, 7)
+        return transactionMonth === selectedIncomeMonth.value
+      }
+    )
+
+    console.log(
+      '🔍 incomeAnalysisResult - Transactions filtrées:',
+      filteredTransactions.length,
+      'sur',
+      props.analysisResult.transactions.filter(t => t.type === 'income').length,
+      'revenus totaux'
+    )
+
+    // Recalculer les statistiques pour les revenus filtrés
+    const incomeCategoriesData: Record<string, number> = {}
+    const incomeCategories = new Set<string>()
+    let totalIncomeAmount = 0
+
+    filteredTransactions.forEach(transaction => {
+      if (transaction.category && transaction.type === 'income') {
+        const amount = Math.abs(transaction.amount)
+        incomeCategoriesData[transaction.category] =
+          (incomeCategoriesData[transaction.category] || 0) + amount
+        incomeCategories.add(transaction.category)
+        totalIncomeAmount += amount
+      }
+    })
+
+    console.log(
+      '🔍 incomeAnalysisResult - Catégories calculées:',
+      incomeCategoriesData
+    )
+
+    const result = {
+      ...props.analysisResult,
+      transactions: filteredTransactions,
+      income: {
+        totalAmount: totalIncomeAmount,
+        transactionCount: filteredTransactions.filter(t => t.type === 'income')
+          .length,
+        categories: Array.from(incomeCategories),
+        categoriesData: incomeCategoriesData,
+      },
+    }
+
+    return result
+  })
+
+  // Utilisation de composables séparés pour les graphiques camembert
+  const {
+    expensesChartData,
+    formatAmount: formatChartAmount,
+    formatPercentage,
+  } = usePieChart(
     expensesAnalysisResult,
     selectedExpenseCategoriesComputed,
-    selectedIncomeCategoriesComputed,
+    computed(() => []), // Pas de revenus pour ce composable
     computed(() => selectedJointAccounts.value),
     computed(() => compensationRules.value)
   )
 
-  const incomePieChart = usePieChart(
+  const { incomeChartData } = usePieChart(
     incomeAnalysisResult,
-    selectedExpenseCategoriesComputed,
+    computed(() => []), // Pas de dépenses pour ce composable
     selectedIncomeCategoriesComputed,
     computed(() => selectedJointAccounts.value),
     computed(() => compensationRules.value)
   )
-
-  // Extraire les données depuis les composables
-  const expensesChartData = computed(() => {
-    const result = expensesPieChart.expensesChartData.value
-    console.log('📊 expensesChartData calculé:', {
-      selectedMonth: selectedExpenseMonth.value,
-      categoriesCount: result.categories.length,
-      categories: result.categories.map(c => c.name),
-    })
-    return result
-  })
-
-  const incomeChartData = computed(() => {
-    const result = incomePieChart.incomeChartData.value
-    console.log('📊 incomeChartData calculé:', {
-      selectedMonth: selectedIncomeMonth.value,
-      categoriesCount: result.categories.length,
-      categories: result.categories.map(c => c.name),
-    })
-    return result
-  })
-  const formatChartAmount = expensesPieChart.formatAmount
-  const formatPercentage = expensesPieChart.formatPercentage
 
   // Générer les mois disponibles à partir des transactions
   const availableMonths = computed(() => {
     if (!props.analysisResult.isValid) return []
     const months = generateAvailableMonths(props.analysisResult.transactions)
-    console.log('📅 Mois disponibles générés:', months)
+    console.log('📅 DashboardPage - Mois disponibles générés:', months)
+    console.log(
+      '📅 DashboardPage - Nombre de transactions total:',
+      props.analysisResult.transactions.length
+    )
+
+    // Log quelques transactions pour debug
+    if (props.analysisResult.transactions.length > 0) {
+      console.log(
+        '📅 DashboardPage - Première transaction:',
+        props.analysisResult.transactions[0]
+      )
+      console.log(
+        '📅 DashboardPage - Dernière transaction:',
+        props.analysisResult.transactions[
+          props.analysisResult.transactions.length - 1
+        ]
+      )
+    }
+
     return months
   })
 
@@ -265,12 +354,10 @@
 
   // Gestionnaires pour les changements de mois dans les graphiques
   const handleExpenseMonthChange = (month: string) => {
-    console.log('🔄 Changement de mois dépenses:', month)
     selectedExpenseMonth.value = month
   }
 
   const handleIncomeMonthChange = (month: string) => {
-    console.log('🔄 Changement de mois revenus:', month)
     selectedIncomeMonth.value = month
   }
 

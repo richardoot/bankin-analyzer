@@ -1,0 +1,28 @@
+Date,Description,Compte,Montant,Catégorie,Sous-Catégorie,Note,Pointée
+2024-10-15,Restaurant Le Bistrot,Compte Courant,-45.50,Restauration,,Déjeuner professionnel,Non
+2024-10-16,Salaire mensuel,Compte Courant,2500.00,,Salaire,Salaire principal,Oui
+2024-10-20,Carrefour courses,Compte Courant,-67.45,Alimentation,,Courses hebdomadaires,Non
+2024-11-05,Uber Paris,Compte Courant,-23.80,Transport,,Déplacement client,Non
+2024-11-10,Hotel Mercure Paris,Compte Courant,-189.00,Hébergement,,Mission Paris,Non
+2024-11-15,Salaire mensuel,Compte Courant,2500.00,,Salaire,Salaire principal,Oui
+2024-11-20,Essence Total,Compte Courant,-52.30,Transport,,Plein essence,Non
+2024-11-25,Freelance web,Compte Courant,800.00,,Freelance,Mission développement,Oui
+2024-12-01,Restaurant Le Bistrot,Compte Courant,-45.50,Restauration,,Déjeuner professionnel,Non
+2024-12-01,Uber Paris,Compte Courant,-23.80,Transport,,Déplacement client,Non
+2024-12-02,Hotel Mercure Paris,Compte Courant,-189.00,Hébergement,,Mission Paris,Non
+2024-12-02,Salaire mensuel,Compte Courant,2500.00,,Salaire,Salaire principal,Oui
+2024-12-03,Carrefour courses,Compte Courant,-67.45,Alimentation,,Courses hebdomadaires,Non
+2024-12-03,Essence Total,Compte Courant,-52.30,Transport,,Plein essence,Non
+2024-12-04,Formation en ligne,Compte Courant,-99.00,Formation,,Formation technique,Non
+2024-12-04,Remboursement frais,Compte Courant,156.80,,Remboursement,Frais de mission,Oui
+2024-12-05,McDonald's,Compte Courant,-12.90,Restauration,,Repas rapide,Non
+2024-12-05,Métro Paris,Compte Courant,-14.90,Transport,,Tickets métro,Non
+2024-12-06,Fnac livre technique,Compte Courant,-29.90,Formation,,Livre développement,Non
+2024-12-06,Airbnb Londres,Compte Courant,-245.00,Hébergement,,Mission Londres,Non
+2024-12-07,Taxi aéroport,Compte Courant,-65.00,Transport,,Transfert aéroport,Non
+2024-12-07,Déjeuner client,Compte Courant,-78.50,Restauration,,Repas d'affaires,Non
+2024-12-15,Consulting,Compte Courant,1200.00,,Consulting,Mission conseil,Oui
+2025-01-03,Formation en ligne,Compte Courant,-120.00,Formation,,Formation avancée,Non
+2025-01-05,Salaire mensuel,Compte Courant,2500.00,,Salaire,Salaire principal,Oui
+2025-01-10,Restaurant Le Bistrot,Compte Courant,-55.00,Restauration,,Déjeuner professionnel,Non
+2025-01-15,Prime annuelle,Compte Courant,1500.00,,Prime,Prime performance,Oui

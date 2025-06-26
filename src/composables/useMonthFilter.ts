@@ -9,6 +9,46 @@ export interface MonthOption {
  * Composable pour gérer le filtrage par mois des transactions
  */
 export function useMonthFilter() {
+  /**
+   * Parse une date selon différents formats possibles
+   */
+  const parseDate = (dateString: string): Date => {
+    let date: Date
+
+    // Vérifier si c'est au format français DD/MM/YYYY
+    if (dateString.includes('/')) {
+      const parts = dateString.split('/')
+      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+        const day = parseInt(parts[0], 10)
+        const month = parseInt(parts[1], 10) - 1 // Les mois en JS commencent à 0
+        const year = parseInt(parts[2], 10)
+
+        // Vérifier que les valeurs sont valides
+        if (
+          !isNaN(day) &&
+          !isNaN(month) &&
+          !isNaN(year) &&
+          day >= 1 &&
+          day <= 31 &&
+          month >= 0 &&
+          month <= 11 &&
+          year > 1900
+        ) {
+          date = new Date(year, month, day)
+        } else {
+          date = new Date(dateString)
+        }
+      } else {
+        date = new Date(dateString)
+      }
+    } else {
+      // Pour les autres formats (ISO, etc.)
+      date = new Date(dateString)
+    }
+
+    return date
+  }
+
   const generateAvailableMonths = (
     transactions: Transaction[]
   ): MonthOption[] => {
@@ -28,24 +68,33 @@ export function useMonthFilter() {
 
     transactions.forEach((transaction, index) => {
       if (transaction.date) {
-        // Créer une date à partir de la transaction
-        const date = new Date(transaction.date)
+        const date = parseDate(transaction.date)
+
         if (!isNaN(date.getTime())) {
           // Format YYYY-MM pour la valeur
           const monthValue = date.toISOString().substring(0, 7)
           monthsSet.add(monthValue)
 
-          if (index < 3) {
-            // Log des 3 premières transactions
+          if (index < 5) {
+            // Log des 5 premières transactions pour debug
             console.log(
-              `🔧 Transaction ${index}: ${transaction.date} → ${monthValue}`
+              `🔧 Transaction ${index}: date="${transaction.date}" → Date object: ${date.toISOString()} → monthValue="${monthValue}"`
             )
           }
+        } else {
+          console.log(
+            `🔧 Date invalide pour transaction ${index}: "${transaction.date}"`
+          )
+        }
+      } else {
+        if (index < 5) {
+          console.log(`🔧 Pas de date pour transaction ${index}`)
         }
       }
     })
 
-    console.log('🔧 Mois uniques trouvés:', Array.from(monthsSet))
+    const monthsArray = Array.from(monthsSet).sort()
+    console.log('🔧 Mois uniques trouvés (triés):', monthsArray)
 
     // Convertir en array et trier par date (plus récent en premier)
     const sortedMonths = Array.from(monthsSet).sort((a, b) =>
@@ -86,30 +135,50 @@ export function useMonthFilter() {
     transactions: Transaction[],
     selectedMonth: string
   ): Transaction[] => {
-    console.log(
-      '🔧 filterTransactionsByMonth appelé avec',
-      selectedMonth,
-      'et',
-      transactions.length,
-      'transactions'
-    )
-
     if (!selectedMonth || selectedMonth === 'all') {
-      console.log('🔧 Pas de filtrage (mois vide ou "all")')
       return transactions
     }
 
     const filtered = transactions.filter(transaction => {
       if (!transaction.date) return false
 
-      const date = new Date(transaction.date)
+      // Parser la date selon différents formats possibles (même logique que generateAvailableMonths)
+      let date: Date
+
+      if (transaction.date.includes('/')) {
+        const parts = transaction.date.split('/')
+        if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+          const day = parseInt(parts[0], 10)
+          const month = parseInt(parts[1], 10) - 1
+          const year = parseInt(parts[2], 10)
+
+          if (
+            !isNaN(day) &&
+            !isNaN(month) &&
+            !isNaN(year) &&
+            day >= 1 &&
+            day <= 31 &&
+            month >= 0 &&
+            month <= 11 &&
+            year > 1900
+          ) {
+            date = new Date(year, month, day)
+          } else {
+            date = new Date(transaction.date)
+          }
+        } else {
+          date = new Date(transaction.date)
+        }
+      } else {
+        date = new Date(transaction.date)
+      }
+
       if (isNaN(date.getTime())) return false
 
       const transactionMonth = date.toISOString().substring(0, 7)
       return transactionMonth === selectedMonth
     })
 
-    console.log('🔧 Résultat du filtrage:', filtered.length, 'transactions')
     return filtered
   }
 
@@ -152,5 +221,6 @@ export function useMonthFilter() {
     filterTransactionsByMonth,
     getCurrentMonth,
     getMonthLabel,
+    parseDate,
   }
 }
