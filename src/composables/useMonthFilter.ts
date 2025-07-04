@@ -52,21 +52,14 @@ export function useMonthFilter() {
   const generateAvailableMonths = (
     transactions: Transaction[]
   ): MonthOption[] => {
-    console.log(
-      '🔧 generateAvailableMonths appelé avec',
-      transactions.length,
-      'transactions'
-    )
-
     if (!transactions || transactions.length === 0) {
-      console.log('🔧 Aucune transaction, retour vide')
       return []
     }
 
     // Extraire tous les mois uniques des transactions
     const monthsSet = new Set<string>()
 
-    transactions.forEach((transaction, index) => {
+    transactions.forEach(transaction => {
       if (transaction.date) {
         const date = parseDate(transaction.date)
 
@@ -74,27 +67,9 @@ export function useMonthFilter() {
           // Format YYYY-MM pour la valeur
           const monthValue = date.toISOString().substring(0, 7)
           monthsSet.add(monthValue)
-
-          if (index < 5) {
-            // Log des 5 premières transactions pour debug
-            console.log(
-              `🔧 Transaction ${index}: date="${transaction.date}" → Date object: ${date.toISOString()} → monthValue="${monthValue}"`
-            )
-          }
-        } else {
-          console.log(
-            `🔧 Date invalide pour transaction ${index}: "${transaction.date}"`
-          )
-        }
-      } else {
-        if (index < 5) {
-          console.log(`🔧 Pas de date pour transaction ${index}`)
         }
       }
     })
-
-    const monthsArray = Array.from(monthsSet).sort()
-    console.log('🔧 Mois uniques trouvés (triés):', monthsArray)
 
     // Convertir en array et trier par date (plus récent en premier)
     const sortedMonths = Array.from(monthsSet).sort((a, b) =>
@@ -124,7 +99,6 @@ export function useMonthFilter() {
       }
     })
 
-    console.log('🔧 Résultat final:', result)
     return result
   }
 

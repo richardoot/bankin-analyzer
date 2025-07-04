@@ -468,7 +468,7 @@ export function useFileUpload() {
   )
 
   return {
-    uploadState: uploadState.value,
+    uploadState,
     uploadedFile,
     analysisResult,
     handleFileUpload,

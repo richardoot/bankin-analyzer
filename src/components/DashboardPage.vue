@@ -4,14 +4,19 @@
   import { usePieChart, type CategoryData } from '@/composables/usePieChart'
   import type { CsvAnalysisResult } from '@/types'
   import { computed, ref } from 'vue'
-  import BarChart from './BarChart.vue'
-  import CategoryFilter from './CategoryFilter.vue'
-  import JointAccountFilter from './JointAccountFilter.vue'
-  import PieChart from './PieChart.vue'
-  import ReimbursementCompensationFilter, {
-    type CompensationRule,
-  } from './ReimbursementCompensationFilter.vue'
-  import TransactionsList from './TransactionsList.vue'
+  import AccountFilter from './filters/AccountFilter.vue'
+  import BarChart from './charts/BarChart.vue'
+  import CategoryFilter from './filters/CategoryFilter.vue'
+  import JointAccountFilter from './filters/JointAccountFilter.vue'
+  import PieChart from './charts/PieChart.vue'
+  import ReimbursementCompensationFilter from './filters/ReimbursementCompensationFilter.vue'
+  import TransactionsList from './shared/TransactionsList.vue'
+
+  interface CompensationRule {
+    expenseCategory: string
+    incomeCategory: string
+    affectedAmount: number
+  }
 
   interface Props {
     analysisResult: CsvAnalysisResult
@@ -28,6 +33,9 @@
   // États pour les filtres de catégories
   const selectedExpenseCategories = ref<string[]>([])
   const selectedIncomeCategories = ref<string[]>([])
+
+  // États pour les comptes
+  const selectedAccounts = ref<string[]>([])
 
   // États pour les comptes joints
   const selectedJointAccounts = ref<string[]>([])
@@ -143,21 +151,11 @@
   )
   const selectedIncomeCategoriesComputed = computed(
     () => selectedIncomeCategories.value
-  )
-
-  // Créer un analysisResult filtré par mois pour les dépenses
+  ) // Créer un analysisResult filtré par mois pour les dépenses
   const expensesAnalysisResult = computed(() => {
-    console.log(
-      '🔍 expensesAnalysisResult - Mois sélectionné:',
-      selectedExpenseMonth.value
-    )
-
     if (!props.analysisResult.isValid) return props.analysisResult
 
     if (!selectedExpenseMonth.value) {
-      console.log(
-        '🔍 expensesAnalysisResult - Pas de mois sélectionné, retour de toutes les données'
-      )
       return props.analysisResult
     }
 
@@ -170,15 +168,6 @@
         const transactionMonth = date.toISOString().substring(0, 7)
         return transactionMonth === selectedExpenseMonth.value
       }
-    )
-
-    console.log(
-      '🔍 expensesAnalysisResult - Transactions filtrées:',
-      filteredTransactions.length,
-      'sur',
-      props.analysisResult.transactions.filter(t => t.type === 'expense')
-        .length,
-      'dépenses totales'
     )
 
     // Recalculer les statistiques pour les dépenses filtrées
@@ -196,12 +185,7 @@
       }
     })
 
-    console.log(
-      '🔍 expensesAnalysisResult - Catégories calculées:',
-      expenseCategoriesData
-    )
-
-    const result = {
+    return {
       ...props.analysisResult,
       transactions: filteredTransactions,
       expenses: {
@@ -212,23 +196,13 @@
         categoriesData: expenseCategoriesData,
       },
     }
-
-    return result
   })
 
   // Créer un analysisResult filtré par mois pour les revenus
   const incomeAnalysisResult = computed(() => {
-    console.log(
-      '🔍 incomeAnalysisResult - Mois sélectionné:',
-      selectedIncomeMonth.value
-    )
-
     if (!props.analysisResult.isValid) return props.analysisResult
 
     if (!selectedIncomeMonth.value) {
-      console.log(
-        '🔍 incomeAnalysisResult - Pas de mois sélectionné, retour de toutes les données'
-      )
       return props.analysisResult
     }
 
@@ -241,14 +215,6 @@
         const transactionMonth = date.toISOString().substring(0, 7)
         return transactionMonth === selectedIncomeMonth.value
       }
-    )
-
-    console.log(
-      '🔍 incomeAnalysisResult - Transactions filtrées:',
-      filteredTransactions.length,
-      'sur',
-      props.analysisResult.transactions.filter(t => t.type === 'income').length,
-      'revenus totaux'
     )
 
     // Recalculer les statistiques pour les revenus filtrés
@@ -265,11 +231,6 @@
         totalIncomeAmount += amount
       }
     })
-
-    console.log(
-      '🔍 incomeAnalysisResult - Catégories calculées:',
-      incomeCategoriesData
-    )
 
     const result = {
       ...props.analysisResult,
@@ -311,26 +272,6 @@
   const availableMonths = computed(() => {
     if (!props.analysisResult.isValid) return []
     const months = generateAvailableMonths(props.analysisResult.transactions)
-    console.log('📅 DashboardPage - Mois disponibles générés:', months)
-    console.log(
-      '📅 DashboardPage - Nombre de transactions total:',
-      props.analysisResult.transactions.length
-    )
-
-    // Log quelques transactions pour debug
-    if (props.analysisResult.transactions.length > 0) {
-      console.log(
-        '📅 DashboardPage - Première transaction:',
-        props.analysisResult.transactions[0]
-      )
-      console.log(
-        '📅 DashboardPage - Dernière transaction:',
-        props.analysisResult.transactions[
-          props.analysisResult.transactions.length - 1
-        ]
-      )
-    }
-
     return months
   })
 
@@ -343,8 +284,7 @@
   )
 
   // Gestion des interactions avec le graphique
-  const handleCategoryClick = (category: CategoryData) => {
-    console.log('Catégorie cliquée:', category)
+  const handleCategoryClick = (_category: CategoryData) => {
     // Ici on pourrait ajouter une logique pour filtrer les transactions par catégorie
   }
 
@@ -362,8 +302,7 @@
   }
 
   // Gestion des interactions avec l'histogramme
-  const handleMonthClick = (month: MonthlyData, type: string) => {
-    console.log('Mois cliqué:', month, type)
+  const handleMonthClick = (_month: MonthlyData, _type: string) => {
     // Ici on pourrait ajouter une logique pour filtrer les transactions par mois
   }
 
@@ -511,6 +450,31 @@
                   @update:selected-categories="
                     currentSelectedCategories = $event
                   "
+                />
+              </div>
+            </div>
+
+            <!-- Filtre Comptes -->
+            <div class="compact-filter-card">
+              <div class="compact-filter-header">
+                <div class="compact-filter-icon accounts-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    <polyline points="9,22 9,12 15,12 15,22" />
+                  </svg>
+                </div>
+                <div class="compact-filter-title">
+                  <h4>Comptes</h4>
+                  <span class="compact-filter-subtitle"
+                    >Sélectionner les comptes à inclure</span
+                  >
+                </div>
+              </div>
+              <div class="compact-filter-content">
+                <AccountFilter
+                  :accounts="availableAccounts"
+                  :selected-accounts="selectedAccounts"
+                  @update:selected-accounts="selectedAccounts = $event"
                 />
               </div>
             </div>
