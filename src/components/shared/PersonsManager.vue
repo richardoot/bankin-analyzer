@@ -554,11 +554,12 @@
 
 <style scoped>
   .reimbursement-section {
-    background: white;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
     border-radius: 1rem;
     margin-bottom: 1.5rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    border: 1px solid #f3f4f6;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
   }
 
   .section-title {
@@ -587,8 +588,9 @@
   }
 
   .placeholder-card {
-    background: #f9fafb;
-    border: 2px dashed #d1d5db;
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(5px);
+    border: 2px dashed rgba(255, 255, 255, 0.4);
     border-radius: 12px;
     padding: 2rem;
     transition: all 0.3s ease;
@@ -596,7 +598,8 @@
 
   .placeholder-card:hover {
     border-color: #3b82f6;
-    background: #eff6ff;
+    background: rgba(59, 130, 246, 0.1);
+    backdrop-filter: blur(8px);
   }
 
   .placeholder-icon {
@@ -697,17 +700,19 @@
   .search-input {
     width: 100%;
     padding: 0.75rem 0.75rem 0.75rem 2.5rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 8px;
     font-size: 0.875rem;
-    background: #f9fafb;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(5px);
     transition: all 0.2s ease;
   }
 
   .search-input:focus {
     outline: none;
     border-color: #3b82f6;
-    background: white;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(8px);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
@@ -788,15 +793,20 @@
     align-items: center;
     gap: 1rem;
     padding: 0.75rem;
-    background: white;
-    border: 1px solid #e5e7eb;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     transition: all 0.2s ease;
   }
 
   .person-item:hover {
-    background: #f9fafb;
-    border-color: #d1d5db;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
   }
 
   .person-avatar {
@@ -973,11 +983,11 @@
   }
 
   .modal-dialog {
-    background: white;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(15px);
     border-radius: 12px;
-    box-shadow:
-      0 20px 25px -5px rgba(0, 0, 0, 0.1),
-      0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
     max-width: 500px;
     width: 90%;
     max-height: 90vh;
@@ -1055,15 +1065,19 @@
   .form-group input {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 6px;
     font-size: 0.875rem;
-    transition: border-color 0.2s ease;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(5px);
+    transition: all 0.2s ease;
   }
 
   .form-group input:focus {
     outline: none;
     border-color: #3b82f6;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
@@ -1126,183 +1140,6 @@
     fill: currentColor !important;
     opacity: 1 !important;
     visibility: visible !important;
-  }
-
-  /* Mode sombre */
-  @media (prefers-color-scheme: dark) {
-    .reimbursement-section {
-      background: #1f2937;
-      border: 1px solid #374151;
-    }
-
-    .section-title {
-      color: #f9fafb;
-    }
-
-    .placeholder-card {
-      background: #374151;
-      border-color: #4b5563;
-    }
-
-    .placeholder-card:hover {
-      border-color: #3b82f6;
-      background: #1e3a8a;
-    }
-
-    .placeholder-card h4 {
-      color: #f9fafb;
-    }
-
-    .placeholder-card p {
-      color: #d1d5db;
-    }
-
-    .person-item {
-      background: #374151;
-      border-color: #4b5563;
-    }
-
-    .person-item:hover {
-      background: #4b5563;
-    }
-
-    .person-name {
-      color: #f9fafb;
-    }
-
-    .person-email {
-      color: #d1d5db;
-    }
-
-    .person-email.no-email {
-      color: #9ca3af;
-    }
-
-    .persons-preview h5 {
-      color: #f3f4f6;
-    }
-
-    .modal-dialog {
-      background: #374151;
-      border: 1px solid #4b5563;
-    }
-
-    .modal-header {
-      border-bottom-color: #4b5563;
-    }
-
-    .modal-title {
-      color: #f9fafb;
-    }
-
-    .modal-close-btn {
-      color: #9ca3af;
-    }
-
-    .modal-close-btn:hover {
-      background: #4b5563;
-      color: #f3f4f6;
-    }
-
-    .form-group label {
-      color: #f3f4f6;
-    }
-
-    .form-group input {
-      background: #4b5563;
-      border-color: #6b7280;
-      color: #f9fafb;
-    }
-
-    .form-group input:focus {
-      border-color: #3b82f6;
-    }
-
-    .btn-secondary {
-      background: #4b5563;
-      color: #f9fafb;
-      border-color: #6b7280;
-    }
-
-    .btn-secondary:hover {
-      background: #6b7280;
-    }
-
-    /* Styles mode sombre pour la recherche */
-    .persons-count {
-      color: #d1d5db;
-    }
-
-    .search-input {
-      background: #4b5563;
-      border-color: #6b7280;
-      color: #f9fafb;
-    }
-
-    .search-input:focus {
-      background: #374151;
-      border-color: #3b82f6;
-    }
-
-    .search-icon {
-      color: #d1d5db;
-    }
-
-    .clear-search {
-      background: #6b7280;
-    }
-
-    .clear-search:hover {
-      background: #9ca3af;
-    }
-
-    .clear-search svg {
-      color: #f9fafb;
-    }
-
-    .no-results {
-      color: #d1d5db;
-    }
-
-    .no-results svg {
-      color: #6b7280;
-    }
-
-    .no-results-subtitle {
-      color: #9ca3af !important;
-    }
-
-    /* Styles mode sombre pour les boutons d'export/import */
-    .action-btn.secondary {
-      background: #4b5563;
-      color: #f9fafb;
-      border-color: #6b7280;
-    }
-
-    .action-btn.secondary:hover {
-      background: #6b7280;
-    }
-
-    /* Styles mode sombre pour les boutons d'action edit/delete */
-    .action-btn.edit {
-      background: rgba(59, 130, 246, 0.2);
-      color: #60a5fa;
-    }
-
-    .action-btn.edit:hover {
-      background: #3b82f6;
-      color: white;
-    }
-
-    .action-btn.delete {
-      background: rgba(220, 38, 38, 0.2);
-      color: #f87171;
-    }
-
-    .action-btn.delete:hover {
-      background: #dc2626;
-      color: white;
-    }
   }
 
   /* Responsive */

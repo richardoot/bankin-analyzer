@@ -792,11 +792,12 @@
 
 <style scoped>
   .bar-chart-container {
-    background: white;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     border-radius: 1rem;
     margin-bottom: 1.5rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    border: 1px solid #f3f4f6;
     transition: all 0.3s ease;
     width: 100%;
     max-width: 100%;
@@ -806,13 +807,14 @@
   }
 
   .bar-chart-container:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
   }
 
   .chart-header {
-    background: #f8fafc;
+    background: rgba(248, 250, 252, 0.5);
+    backdrop-filter: blur(5px);
     padding: 1.5rem 2rem 1rem;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
   }
 
   .chart-header-content {
@@ -868,12 +870,13 @@
 
   .category-select {
     padding: 0.5rem 0.75rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(209, 213, 219, 0.5);
     border-radius: 0.5rem;
     font-size: 0.875rem;
     color: #374151;
-    background-color: #ffffff;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(5px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     transition: all 0.2s ease;
     min-width: 180px;
   }
@@ -1147,58 +1150,6 @@
 
     .axis-label {
       font-size: 13px;
-    }
-  }
-
-  /* Mode sombre */
-  @media (prefers-color-scheme: dark) {
-    .bar-chart-container {
-      background: #1f2937;
-      border-color: #374151;
-    }
-
-    .chart-header {
-      background: #374151;
-      border-bottom-color: #4b5563;
-    }
-
-    .chart-title {
-      color: #f9fafb;
-    }
-
-    .chart-description {
-      color: #9ca3af;
-    }
-
-    .filter-label {
-      color: #e5e7eb;
-    }
-
-    .category-select {
-      background-color: #374151;
-      border-color: #4b5563;
-      color: #f9fafb;
-    }
-
-    .category-select:hover {
-      border-color: #6b7280;
-    }
-
-    .category-select:focus {
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    }
-
-    .axis-label {
-      fill: #e5e7eb !important;
-    }
-
-    .legend-label {
-      color: #e5e7eb;
-    }
-
-    .empty-message {
-      color: #9ca3af;
     }
   }
 </style>

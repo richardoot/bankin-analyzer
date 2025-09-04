@@ -912,11 +912,12 @@
 
 <style scoped>
   .reimbursement-section {
-    background: white;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     border-radius: 1rem;
     margin-bottom: 1.5rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    border: 1px solid #f3f4f6;
   }
 
   .section-title {
@@ -957,14 +958,16 @@
     gap: 1rem;
     padding: 1.5rem;
     border-radius: 12px;
-    border: 1px solid #e5e7eb;
-    background: #f9fafb;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(249, 250, 251, 0.9);
+    backdrop-filter: blur(5px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     transition: all 0.3s ease;
   }
 
   .summary-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   }
 
   .summary-card.total {
@@ -1018,8 +1021,10 @@
 
   /* Aperçu des remboursements */
   .reimbursement-preview {
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
+    background: rgba(249, 250, 251, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     border-radius: 12px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
@@ -1042,7 +1047,8 @@
   }
 
   .preview-badge {
-    background: #fbbf24;
+    background: rgba(251, 191, 36, 0.8);
+    backdrop-filter: blur(5px);
     color: #92400e;
     padding: 0.25rem 0.75rem;
     border-radius: 12px;
@@ -1086,14 +1092,16 @@
     justify-content: space-between;
     align-items: center;
     padding: 1rem;
-    background: white;
-    border: 1px solid #e5e7eb;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     border-radius: 8px;
     transition: all 0.2s ease;
   }
 
   .reimbursement-item:hover {
-    background: #f3f4f6;
+    background: rgba(243, 244, 246, 0.9);
   }
 
   .person-info {
@@ -1134,12 +1142,14 @@
   }
 
   .person-status.valide {
-    background: #d1fae5;
+    background: rgba(209, 250, 229, 0.8);
+    backdrop-filter: blur(5px);
     color: #047857;
   }
 
   .person-status.en_attente {
-    background: #fef3c7;
+    background: rgba(254, 243, 199, 0.8);
+    backdrop-filter: blur(5px);
     color: #92400e;
   }
 
@@ -1165,7 +1175,8 @@
   }
 
   .action-button.valide {
-    background: #d1fae5;
+    background: rgba(209, 250, 229, 0.8);
+    backdrop-filter: blur(5px);
     color: #047857;
   }
 
@@ -1180,8 +1191,10 @@
 
   /* Remboursements par catégorie */
   .reimbursement-by-category {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background: rgba(248, 250, 252, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     border-radius: 12px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
@@ -1189,8 +1202,10 @@
 
   /* Détail des remboursements par personne avec catégories */
   .detailed-reimbursement {
-    background: #fff7ed;
-    border: 1px solid #fed7aa;
+    background: rgba(255, 247, 237, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(254, 215, 170, 0.5);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     border-radius: 12px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
@@ -1203,11 +1218,12 @@
   }
 
   .detailed-person-section {
-    background: white;
-    border: 1px solid #e5e7eb;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   }
 
   .person-header {
@@ -1215,8 +1231,13 @@
     justify-content: space-between;
     align-items: center;
     padding: 1.25rem;
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border-bottom: 1px solid #e2e8f0;
+    background: linear-gradient(
+      135deg,
+      rgba(248, 250, 252, 0.8) 0%,
+      rgba(241, 245, 249, 0.8) 100%
+    );
+    backdrop-filter: blur(5px);
+    border-bottom: 1px solid rgba(226, 232, 240, 0.5);
   }
 
   .person-summary {
@@ -1235,21 +1256,23 @@
     font-size: 1.25rem;
     font-weight: 700;
     color: #0f172a;
-    background: #ecfdf5;
+    background: rgba(236, 253, 245, 0.8);
+    backdrop-filter: blur(5px);
     padding: 0.5rem 1rem;
     border-radius: 8px;
-    border: 1px solid #bbf7d0;
+    border: 1px solid rgba(187, 247, 208, 0.5);
   }
 
   .person-categories {
     padding: 0;
-    background: #fafafa;
+    background: rgba(250, 250, 250, 0.8);
+    backdrop-filter: blur(5px);
   }
 
   .category-detail-item {
     display: flex;
     flex-direction: column;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid rgba(243, 244, 246, 0.5);
     transition: all 0.2s ease;
   }
 
@@ -1267,7 +1290,8 @@
   }
 
   .category-header-clickable:hover {
-    background: #f9fafb;
+    background: rgba(249, 250, 251, 0.8);
+    backdrop-filter: blur(5px);
   }
 
   .category-info {
@@ -1290,7 +1314,8 @@
   }
 
   .expand-details-btn:hover {
-    background: #e5e7eb;
+    background: rgba(229, 231, 235, 0.8);
+    backdrop-filter: blur(5px);
     color: #374151;
   }
 
@@ -1305,8 +1330,9 @@
   }
 
   .transaction-details {
-    background: #f8fafc;
-    border-top: 1px solid #e2e8f0;
+    background: rgba(248, 250, 252, 0.8);
+    backdrop-filter: blur(5px);
+    border-top: 1px solid rgba(226, 232, 240, 0.5);
     padding: 0;
   }
 
@@ -1315,7 +1341,7 @@
     justify-content: space-between;
     align-items: flex-start;
     padding: 1rem 1.25rem;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.5);
     gap: 1rem;
   }
 
@@ -1334,7 +1360,8 @@
     font-size: 0.875rem;
     font-weight: 600;
     color: #4f46e5;
-    background: #e0e7ff;
+    background: rgba(224, 231, 255, 0.8);
+    backdrop-filter: blur(5px);
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
     width: fit-content;
@@ -1370,7 +1397,8 @@
     font-size: 0.95rem;
     font-weight: 600;
     color: #059669;
-    background: #d1fae5;
+    background: rgba(209, 250, 229, 0.8);
+    backdrop-filter: blur(5px);
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
   }
@@ -1393,7 +1421,8 @@
     font-weight: 600;
     color: #059669;
     font-size: 1rem;
-    background: #d1fae5;
+    background: rgba(209, 250, 229, 0.8);
+    backdrop-filter: blur(5px);
     padding: 0.375rem 0.75rem;
     border-radius: 6px;
   }
@@ -1405,15 +1434,17 @@
   }
 
   .category-section {
-    background: white;
-    border: 1px solid #e5e7eb;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     border-radius: 8px;
     overflow: hidden;
     transition: all 0.2s ease;
   }
 
   .category-section:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
   }
 
   .category-header {
@@ -1421,8 +1452,13 @@
     justify-content: space-between;
     align-items: center;
     padding: 1rem 1.25rem;
-    background: #f9fafb;
-    border-bottom: 1px solid #e5e7eb;
+    background: linear-gradient(
+      135deg,
+      rgba(249, 250, 251, 0.8) 0%,
+      rgba(243, 244, 246, 0.8) 100%
+    );
+    backdrop-filter: blur(5px);
+    border-bottom: 1px solid rgba(229, 231, 235, 0.5);
     cursor: pointer;
   }
 
@@ -1443,7 +1479,8 @@
     font-weight: 700;
     color: #059669;
     font-size: 1.125rem;
-    background: #d1fae5;
+    background: rgba(209, 250, 229, 0.8);
+    backdrop-filter: blur(5px);
     padding: 0.25rem 0.75rem;
     border-radius: 6px;
     margin-left: auto;
@@ -1461,7 +1498,8 @@
   }
 
   .category-toggle:hover {
-    background: #e5e7eb;
+    background: rgba(229, 231, 235, 0.8);
+    backdrop-filter: blur(5px);
     color: #374151;
   }
 
@@ -1480,7 +1518,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.875rem 1.25rem;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid rgba(243, 244, 246, 0.5);
     transition: all 0.2s ease;
   }
 
@@ -1489,7 +1527,8 @@
   }
 
   .category-person-item:hover {
-    background: #f9fafb;
+    background: rgba(249, 250, 251, 0.8);
+    backdrop-filter: blur(5px);
   }
 
   .person-avatar.small {
@@ -1506,7 +1545,10 @@
 
   /* Actions d'export */
   .export-actions {
-    background: #f3f4f6;
+    background: rgba(243, 244, 246, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     border-radius: 12px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
@@ -1539,9 +1581,10 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.75rem 1.5rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 8px;
-    background: white;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
     color: #374151;
     font-weight: 500;
     cursor: pointer;
@@ -1549,7 +1592,7 @@
   }
 
   .export-btn:hover {
-    background: #f9fafb;
+    background: rgba(249, 250, 251, 0.9);
     border-color: #3b82f6;
     color: #3b82f6;
   }
@@ -1561,8 +1604,9 @@
 
   /* Fonctionnalités futures */
   .future-features {
-    background: #eff6ff;
-    border: 2px dashed #3b82f6;
+    background: rgba(239, 246, 255, 0.9);
+    backdrop-filter: blur(5px);
+    border: 2px dashed rgba(59, 130, 246, 0.5);
     border-radius: 12px;
     padding: 1.5rem;
   }
@@ -1575,7 +1619,8 @@
     width: 3rem;
     height: 3rem;
     margin: 0 auto 1rem;
-    background: #dbeafe;
+    background: rgba(219, 234, 254, 0.8);
+    backdrop-filter: blur(5px);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -1617,90 +1662,6 @@
     font-weight: bold;
     position: absolute;
     left: 0;
-  }
-
-  /* Mode sombre */
-  @media (prefers-color-scheme: dark) {
-    .reimbursement-section {
-      background: #1f2937;
-      border: 1px solid #374151;
-    }
-
-    .section-title {
-      color: #f9fafb;
-    }
-
-    .summary-card {
-      background: #374151;
-      border-color: #4b5563;
-    }
-
-    .card-label {
-      color: #d1d5db;
-    }
-
-    .card-value {
-      color: #f9fafb;
-    }
-
-    .reimbursement-preview {
-      background: #374151;
-      border-color: #4b5563;
-    }
-
-    .preview-title {
-      color: #f9fafb;
-    }
-
-    .reimbursement-item {
-      background: #1f2937;
-      border-color: #4b5563;
-    }
-
-    .reimbursement-item:hover {
-      background: #4b5563;
-    }
-
-    .person-name {
-      color: #f9fafb;
-    }
-
-    .amount {
-      color: #f9fafb;
-    }
-
-    .export-actions {
-      background: #374151;
-    }
-
-    .actions-title {
-      color: #f9fafb;
-    }
-
-    .export-btn {
-      background: #1f2937;
-      border-color: #4b5563;
-      color: #d1d5db;
-    }
-
-    .export-btn:hover {
-      background: #4b5563;
-      border-color: #3b82f6;
-      color: #60a5fa;
-    }
-
-    .future-features {
-      background: #1e3a8a;
-      border-color: #3b82f6;
-    }
-
-    .feature-card h5 {
-      color: #f9fafb;
-    }
-
-    .feature-list li {
-      color: #d1d5db;
-    }
   }
 
   /* Responsive */

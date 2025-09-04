@@ -339,8 +339,9 @@
   }
 
   .filters-container {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(229, 231, 235, 0.3);
     border-radius: 0.75rem;
     padding: 1.5rem;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -350,7 +351,7 @@
   .filters-main-header {
     margin-bottom: 1.5rem;
     text-align: center;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
     padding-bottom: 1rem;
   }
 
@@ -399,8 +400,9 @@
   }
 
   .compact-filter-card {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(229, 231, 235, 0.3);
     border-radius: 0.75rem;
     overflow: hidden;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -417,8 +419,13 @@
     align-items: center;
     gap: 0.75rem;
     padding: 1rem 1.25rem 0.75rem;
-    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-    border-bottom: 1px solid #f1f5f9;
+    background: linear-gradient(
+      135deg,
+      rgba(248, 250, 252, 0.8) 0%,
+      rgba(255, 255, 255, 0.9) 100%
+    );
+    backdrop-filter: blur(5px);
+    border-bottom: 1px solid rgba(241, 245, 249, 0.3);
   }
 
   .compact-filter-icon {
