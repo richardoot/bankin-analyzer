@@ -208,16 +208,9 @@
   const legendContainer = ref<HTMLElement | null>(null)
   const legendItemRefs = ref<(HTMLElement | null)[]>([])
 
-  // Couleur du cercle central selon le thème
+  // Couleur du cercle central pour le thème glassmorphism
   const centerCircleFill = computed(() => {
-    // Détection du mode sombre via CSS custom property ou media query
-    if (
-      window.matchMedia &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches
-    ) {
-      return '#1f2937' // Couleur de fond sombre du container
-    }
-    return 'white' // Couleur de fond clair du container
+    return 'rgba(255, 255, 255, 0.9)' // Fond blanc semi-transparent pour glassmorphism
   })
 
   // Fonction pour gérer les références des éléments de légende
@@ -374,11 +367,12 @@
 
 <style scoped>
   .pie-chart-container {
-    background: white;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     border-radius: 1rem;
     margin-bottom: 1.5rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    border: 1px solid #f3f4f6;
     transition: all 0.3s ease;
     width: 100%;
     max-width: 100%;
@@ -388,14 +382,15 @@
   }
 
   .pie-chart-container:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
   }
 
   /* En-tête du graphique */
   .chart-header {
-    background: #f8fafc;
+    background: rgba(248, 250, 252, 0.5);
+    backdrop-filter: blur(5px);
     padding: 1.5rem;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
   }
 
   .header-content {
@@ -438,9 +433,10 @@
 
   .month-select {
     padding: 0.5rem 0.75rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(209, 213, 219, 0.5);
     border-radius: 0.5rem;
-    background: white;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(5px);
     color: #374151;
     font-size: 0.875rem;
     font-weight: 500;
@@ -614,19 +610,20 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.75rem;
-    background: rgba(249, 250, 251, 0.6);
-    backdrop-filter: blur(5px);
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
     border-radius: 0.5rem;
-    border: 1px solid rgba(229, 231, 235, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .legend-item:hover,
   .legend-hovered {
-    background: rgba(243, 244, 246, 0.8);
+    background: rgba(255, 255, 255, 0.9);
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   }
 
   .legend-color {
@@ -670,7 +667,8 @@
     font-weight: 500;
     color: #6b7280;
     padding: 0.125rem 0.5rem;
-    background: rgba(229, 231, 235, 0.5);
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(5px);
     border-radius: 0.375rem;
   }
 
@@ -774,97 +772,6 @@
 
     .chart-legend {
       max-height: 180px;
-    }
-  }
-
-  /* Mode sombre */
-  @media (prefers-color-scheme: dark) {
-    .pie-chart-container {
-      background: #1f2937;
-      border-color: #374151;
-    }
-
-    .chart-header {
-      background: #374151;
-      border-bottom-color: #4b5563;
-    }
-
-    .chart-title {
-      color: #f9fafb;
-    }
-
-    .month-label {
-      color: #d1d5db;
-    }
-
-    .month-select {
-      background: #374151;
-      border-color: #4b5563;
-      color: #f9fafb;
-    }
-
-    .month-select:hover {
-      border-color: #60a5fa;
-    }
-
-    .month-select:focus {
-      border-color: #60a5fa;
-      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
-    }
-
-    .center-text-main {
-      fill: #f9fafb;
-    }
-
-    .center-text-sub {
-      fill: #9ca3af;
-    }
-
-    .legend-item {
-      background: rgba(55, 65, 81, 0.6);
-      border-color: rgba(75, 85, 99, 0.3);
-    }
-
-    .legend-item:hover,
-    .legend-hovered {
-      background: rgba(75, 85, 99, 0.8);
-    }
-
-    .legend-name {
-      color: #e5e7eb;
-    }
-
-    .legend-amount {
-      color: #f9fafb;
-    }
-
-    .legend-percentage {
-      color: #9ca3af;
-      background: rgba(75, 85, 99, 0.5);
-    }
-
-    .empty-message {
-      color: #9ca3af;
-    }
-
-    .empty-icon {
-      color: #6b7280;
-    }
-
-    .chart-legend::-webkit-scrollbar-track {
-      background: rgba(75, 85, 99, 0.3);
-    }
-
-    .chart-legend::-webkit-scrollbar-thumb {
-      background: rgba(156, 163, 175, 0.3);
-    }
-
-    .chart-legend::-webkit-scrollbar-thumb:hover {
-      background: rgba(156, 163, 175, 0.5);
-    }
-
-    .chart-legend::after {
-      background: linear-gradient(transparent, rgba(31, 41, 55, 0.8));
     }
   }
 </style>

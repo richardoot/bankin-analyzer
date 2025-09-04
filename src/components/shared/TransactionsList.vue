@@ -181,11 +181,12 @@
 
 <style scoped>
   .transactions-list-container {
-    background: white;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
     border-radius: 1rem;
     margin-bottom: 1.5rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    border: 1px solid #f3f4f6;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     overflow: hidden;
   }
 
@@ -194,11 +195,12 @@
     justify-content: space-between;
     align-items: center;
     padding: 1.5rem;
-    background: #f8fafc;
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(5px);
     color: #1f2937;
     flex-wrap: wrap;
     gap: 1rem;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
   }
 
   .header-title {
@@ -237,8 +239,9 @@
   }
 
   .category-filter {
-    background: white;
-    border: 1px solid #d1d5db;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 0.5rem;
     padding: 0.5rem 1rem;
     color: #374151;
@@ -254,7 +257,7 @@
   }
 
   .category-filter option {
-    background: white;
+    background: rgba(255, 255, 255, 0.95);
     color: #374151;
     padding: 0.5rem;
   }
@@ -270,12 +273,13 @@
   }
 
   .transactions-table thead th {
-    background-color: #f8fafc;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(8px);
     padding: 1rem;
     text-align: left;
     font-weight: 600;
     color: #374151;
-    border-bottom: 2px solid #e5e7eb;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.3);
     position: sticky;
     top: 0;
     z-index: 1;
@@ -287,7 +291,7 @@
   }
 
   .transactions-table tbody tr:hover {
-    background-color: #f8fafc;
+    background: rgba(255, 255, 255, 0.4);
   }
 
   .transactions-table tbody tr.expense {
@@ -434,63 +438,6 @@
 
     .description-cell {
       max-width: 200px;
-    }
-  }
-
-  /* Mode sombre */
-  @media (prefers-color-scheme: dark) {
-    .transactions-list-container {
-      background: #1f2937;
-      border-color: #374151;
-    }
-
-    .transactions-header {
-      background: #374151;
-      border-bottom-color: #4b5563;
-      color: white;
-    }
-
-    .transactions-header h3 {
-      color: white;
-    }
-
-    .category-filter {
-      background: #4b5563;
-      border-color: #6b7280;
-      color: white;
-    }
-
-    .category-filter option {
-      background: #4b5563;
-      color: white;
-    }
-
-    .transactions-table thead th {
-      background-color: #374151;
-      color: white;
-      border-bottom-color: #4b5563;
-    }
-
-    .transactions-table tbody tr {
-      border-bottom-color: #374151;
-    }
-
-    .transactions-table tbody tr:hover {
-      background-color: #374151;
-    }
-
-    .description-cell {
-      color: #e5e7eb;
-    }
-
-    .date-cell,
-    .note-cell,
-    .account-cell {
-      color: #9ca3af;
-    }
-
-    .no-transactions {
-      color: #6b7280;
     }
   }
 </style>

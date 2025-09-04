@@ -1133,11 +1133,12 @@
 
 <style scoped>
   .reimbursement-section {
-    background: white;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     border-radius: 1rem;
     margin-bottom: 1.5rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    border: 1px solid #f3f4f6;
   }
 
   .section-title {
@@ -1166,10 +1167,12 @@
     display: flex;
     gap: 1.5rem;
     padding: 1rem;
-    background: #f9fafb;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     border-radius: 8px;
     margin-bottom: 1.5rem;
-    border: 1px solid #e5e7eb;
     flex-wrap: wrap;
   }
 
@@ -1244,9 +1247,10 @@
 
   .category-select {
     padding: 0.75rem 1rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 8px;
-    background: white;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
     font-size: 0.875rem;
     color: #374151;
     min-width: 200px;
@@ -1262,9 +1266,11 @@
 
   /* Liste des dépenses */
   .expenses-list {
-    background: white;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     border-radius: 12px;
-    border: 1px solid #e5e7eb;
     overflow: hidden;
   }
 
@@ -1278,8 +1284,13 @@
     grid-template-columns: 80px 1fr 170px 90px 180px 150px 60px;
     gap: 0.75rem;
     padding: 1rem;
-    background: #f9fafb;
-    border-bottom: 1px solid #e5e7eb;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.6) 0%,
+      rgba(249, 250, 251, 0.6) 100%
+    );
+    backdrop-filter: blur(5px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     font-weight: 600;
     color: #374151;
     font-size: 0.875rem;
@@ -1295,12 +1306,13 @@
     grid-template-columns: 80px 1fr 170px 90px 180px 150px 60px;
     gap: 0.75rem;
     padding: 1rem;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     transition: all 0.2s ease;
   }
 
   .expense-row:hover {
-    background: #f9fafb;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(5px);
   }
 
   .expense-row:last-child {
@@ -1343,7 +1355,8 @@
   }
 
   .category-badge {
-    background: #dbeafe;
+    background: rgba(219, 234, 254, 0.8);
+    backdrop-filter: blur(5px);
     color: #1e40af;
     padding: 0.375rem 0.75rem;
     border-radius: 16px;
@@ -1372,7 +1385,9 @@
   .amount-input {
     flex: 1;
     padding: 0.5rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
     border-radius: 6px;
     font-size: 0.8rem;
     text-align: right;
@@ -1407,7 +1422,9 @@
   .person-select {
     width: 100%;
     padding: 0.5rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
     border-radius: 6px;
     font-size: 0.8rem;
     cursor: pointer;
@@ -1426,9 +1443,10 @@
     gap: 0.5rem;
     margin-top: 0.5rem;
     padding: 0.5rem;
-    background: #f0f9ff;
+    background: rgba(240, 249, 255, 0.8);
+    backdrop-filter: blur(5px);
     border-radius: 6px;
-    border: 1px solid #e0f2fe;
+    border: 1px solid rgba(224, 242, 254, 0.5);
   }
 
   .person-avatar {
@@ -1499,8 +1517,9 @@
     align-items: center;
     gap: 1rem;
     padding: 1rem;
-    background: #fffbeb;
-    border: 1px solid #fcd34d;
+    background: rgba(255, 251, 235, 0.8);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(252, 211, 77, 0.5);
     border-radius: 8px;
     margin-top: 1.5rem;
     color: #92400e;
@@ -1595,9 +1614,11 @@
     align-items: center;
     justify-content: space-between;
     padding: 1.5rem;
-    background: #f9fafb;
+    background: rgba(249, 250, 251, 0.8);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     border-radius: 8px;
-    border: 1px solid #e5e7eb;
     margin-top: 1.5rem;
   }
 
@@ -1630,21 +1651,22 @@
     justify-content: center;
     width: 2.5rem;
     height: 2.5rem;
-    background: white;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
     color: #374151;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .pagination-btn:hover:not(:disabled) {
-    background: #f3f4f6;
-    border-color: #9ca3af;
+    background: rgba(243, 244, 246, 0.9);
+    border-color: rgba(156, 163, 175, 0.5);
   }
 
   .pagination-btn:disabled {
-    background: #f9fafb;
+    background: rgba(249, 250, 251, 0.7);
     color: #d1d5db;
     cursor: not-allowed;
   }
@@ -1666,9 +1688,10 @@
     justify-content: center;
     width: 2.5rem;
     height: 2.5rem;
-    background: white;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
     color: #374151;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -1677,8 +1700,8 @@
   }
 
   .pagination-number:hover:not(:disabled) {
-    background: #f3f4f6;
-    border-color: #9ca3af;
+    background: rgba(243, 244, 246, 0.9);
+    border-color: rgba(156, 163, 175, 0.5);
   }
 
   .pagination-number.active {
@@ -1688,67 +1711,9 @@
   }
 
   .pagination-number:disabled {
-    background: #f9fafb;
+    background: rgba(249, 250, 251, 0.7);
     color: #d1d5db;
     cursor: not-allowed;
-  }
-
-  /* Mode sombre - Contrôles de pagination */
-  @media (prefers-color-scheme: dark) {
-    .pagination-controls {
-      background: #374151;
-      border-color: #4b5563;
-    }
-
-    .pagination-info {
-      color: #f3f4f6;
-    }
-
-    .pagination-text {
-      color: #d1d5db;
-    }
-
-    .pagination-pages {
-      color: #f9fafb;
-    }
-
-    .pagination-btn {
-      background: #1f2937;
-      color: #f3f4f6;
-      border-color: #4b5563;
-    }
-
-    .pagination-btn:hover:not(:disabled) {
-      background: #374151;
-      border-color: #6b7280;
-    }
-
-    .pagination-btn:disabled {
-      background: #1f2937;
-      color: #4b5563;
-    }
-
-    .pagination-number {
-      background: #1f2937;
-      color: #f3f4f6;
-      border-color: #4b5563;
-    }
-
-    .pagination-number:hover:not(:disabled) {
-      background: #374151;
-      border-color: #6b7280;
-    }
-
-    .pagination-number.active {
-      background: #3b82f6;
-      color: white;
-      border-color: #3b82f6;
-    }
-
-    .pagination-number:disabled {
-      background: #1f2937;
-      color: #4b5563;
-    }
   }
 
   /* Responsive - Contrôles de pagination */
@@ -1769,121 +1734,6 @@
 
     .pagination-numbers {
       margin: 0;
-    }
-  }
-  @media (prefers-color-scheme: dark) {
-    .reimbursement-section {
-      background: #1f2937;
-      border: 1px solid #374151;
-    }
-
-    .section-title {
-      color: #f9fafb;
-    }
-
-    .stats-bar {
-      background: #374151;
-      border-color: #4b5563;
-    }
-
-    .stat-label {
-      color: #d1d5db;
-    }
-
-    .stat-value {
-      color: #f9fafb;
-    }
-
-    .filter-label {
-      color: #f3f4f6;
-    }
-
-    .category-select {
-      background: #374151;
-      border-color: #4b5563;
-      color: #f9fafb;
-    }
-
-    .category-select:focus {
-      border-color: #3b82f6;
-    }
-
-    .expenses-list {
-      background: #1f2937;
-      border-color: #374151;
-    }
-
-    .table-header {
-      background: #374151;
-      border-bottom-color: #4b5563;
-      color: #f3f4f6;
-    }
-
-    .expense-row {
-      border-bottom-color: #374151;
-    }
-
-    .expense-row:hover {
-      background: #374151;
-    }
-
-    .description-text {
-      color: #f9fafb;
-    }
-
-    .cell.date {
-      color: #d1d5db;
-    }
-
-    .person-select {
-      background: #374151;
-      border-color: #4b5563;
-      color: #f9fafb;
-    }
-
-    .assigned-person {
-      background: #1e3a8a;
-      border-color: #3730a3;
-    }
-
-    .person-name {
-      color: #f9fafb;
-    }
-
-    .person-email {
-      color: #d1d5db;
-    }
-
-    .empty-state h4 {
-      color: #f9fafb;
-    }
-
-    .empty-state {
-      color: #d1d5db;
-    }
-
-    .help-message {
-      background: #451a03;
-      border-color: #92400e;
-      color: #fbbf24;
-    }
-
-    .amount-input {
-      background: #374151;
-      border-color: #4b5563;
-      color: #f9fafb;
-    }
-
-    .amount-input:focus {
-      border-color: #3b82f6;
-    }
-
-    .currency-symbol {
-      color: #d1d5db;
-    }
-
-    .no-assignment {
-      color: #4b5563;
     }
   }
 
@@ -1988,9 +1838,11 @@
   }
 
   .modal-content {
-    background: white;
-    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
     width: 90%;
     max-width: 500px;
     max-height: 90vh;
@@ -2002,7 +1854,13 @@
     justify-content: space-between;
     align-items: center;
     padding: 1.5rem;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.6) 0%,
+      rgba(249, 250, 251, 0.6) 100%
+    );
+    backdrop-filter: blur(5px);
   }
 
   .modal-header h3 {
@@ -2033,11 +1891,12 @@
   }
 
   .expense-info {
-    background: #f9fafb;
+    background: rgba(249, 250, 251, 0.8);
+    backdrop-filter: blur(5px);
     border-radius: 8px;
     padding: 1rem;
     margin-bottom: 1.5rem;
-    border: 1px solid #e5e7eb;
+    border: 1px solid rgba(255, 255, 255, 0.3);
   }
 
   .expense-detail {
@@ -2065,7 +1924,9 @@
   .form-control {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
     border-radius: 6px;
     font-size: 0.9rem;
     transition: border-color 0.2s;
@@ -2124,9 +1985,10 @@
     align-items: center;
     gap: 0.375rem;
     padding: 0.5rem 0.75rem;
-    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+    background: rgba(243, 244, 246, 0.8);
+    backdrop-filter: blur(5px);
     color: #374151;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 6px;
     font-size: 0.8rem;
     font-weight: 500;
@@ -2136,8 +1998,8 @@
   }
 
   .helper-btn:hover {
-    background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
-    border-color: #9ca3af;
+    background: rgba(229, 231, 235, 0.9);
+    border-color: rgba(156, 163, 175, 0.5);
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
@@ -2156,7 +2018,9 @@
   .custom-divider-input {
     width: 60px;
     padding: 0.375rem 0.5rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
     border-radius: 4px;
     font-size: 0.8rem;
     text-align: center;
@@ -2174,8 +2038,9 @@
     justify-content: flex-end;
     gap: 0.75rem;
     padding: 1.5rem;
-    border-top: 1px solid #e5e7eb;
-    background: #f9fafb;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(249, 250, 251, 0.8);
+    backdrop-filter: blur(5px);
   }
 
   .btn {
@@ -2189,13 +2054,14 @@
   }
 
   .btn-secondary {
-    background: #f3f4f6;
+    background: rgba(243, 244, 246, 0.8);
+    backdrop-filter: blur(5px);
     color: #374151;
-    border: 1px solid #d1d5db;
+    border: 1px solid rgba(255, 255, 255, 0.3);
   }
 
   .btn-secondary:hover {
-    background: #e5e7eb;
+    background: rgba(229, 231, 235, 0.9);
   }
 
   .btn-primary {

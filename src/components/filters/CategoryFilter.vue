@@ -153,10 +153,11 @@
 
 <style scoped>
   .category-filter {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     padding: 20px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   }
 
   .filter-header {
@@ -199,16 +200,17 @@
     font-size: 14px;
     font-weight: 500;
     border-radius: 6px;
-    border: 1px solid #d1d5db;
-    background: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
     color: #374151;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .filter-action-btn:hover:not(:disabled) {
-    background: #f9fafb;
-    border-color: #9ca3af;
+    background: rgba(249, 250, 251, 0.9);
+    border-color: rgba(255, 255, 255, 0.4);
   }
 
   .filter-action-btn:disabled {
@@ -222,14 +224,14 @@
   }
 
   .select-all:hover:not(:disabled) {
-    background: #ecfdf5;
-    border-color: #22c55e;
+    background: rgba(236, 253, 245, 0.9);
+    border-color: rgba(34, 197, 94, 0.6);
     color: #16a34a;
   }
 
   .deselect-all:hover:not(:disabled) {
-    background: #fef2f2;
-    border-color: #ef4444;
+    background: rgba(254, 242, 242, 0.9);
+    border-color: rgba(239, 68, 68, 0.6);
     color: #dc2626;
   }
 
@@ -240,8 +242,9 @@
     max-height: 400px;
     overflow-y: auto;
     padding: 1rem;
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
+    background: rgba(249, 250, 251, 0.6);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 8px;
   }
 
@@ -266,13 +269,13 @@
   .category-filter-button:hover {
     background: rgba(243, 244, 246, 0.9);
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   }
 
   .category-filter-button.selected {
     background: rgba(255, 255, 255, 0.9);
-    border-color: #3b82f6;
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.6);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
   }
 
   .category-filter-button.disabled {
@@ -310,7 +313,7 @@
   .filter-summary {
     margin-top: 16px;
     padding-top: 16px;
-    border-top: 1px solid #e5e7eb;
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
   }
 
   .summary-text {

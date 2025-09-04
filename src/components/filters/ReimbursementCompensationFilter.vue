@@ -400,18 +400,18 @@
 
 <style scoped>
   .reimbursement-compensation-filter {
-    background: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(10px);
     padding: 1.5rem;
-    border: 1px solid rgba(229, 231, 235, 0.3);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   }
 
   /* En-tête */
   .filter-header {
     margin-bottom: 1.5rem;
     padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
   }
 
   .filter-title {
@@ -439,8 +439,9 @@
 
   /* Formulaire d'ajout */
   .add-rule-form {
-    background: rgba(243, 244, 246, 0.5);
-    border: 1px solid rgba(209, 213, 219, 0.5);
+    background: rgba(249, 250, 251, 0.6);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 0.75rem;
     padding: 1.5rem;
     margin-bottom: 1rem;
@@ -471,9 +472,10 @@
 
   .form-select {
     padding: 0.75rem;
-    border: 1px solid rgba(209, 213, 219, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 0.5rem;
     background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
     color: #374151;
     font-size: 0.875rem;
     transition: all 0.2s ease;
@@ -481,7 +483,7 @@
 
   .form-select:focus {
     outline: none;
-    border-color: #6366f1;
+    border-color: rgba(99, 102, 241, 0.6);
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
   }
 
@@ -529,17 +531,14 @@
 
   .compensation-card {
     position: relative;
-    background: rgba(255, 255, 255, 0.75);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 0.875rem;
     padding: 0;
     overflow: hidden;
     transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    box-shadow:
-      0 4px 16px rgba(0, 0, 0, 0.05),
-      0 1px 2px rgba(0, 0, 0, 0.06),
-      inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   }
 
   .compensation-card::before {
@@ -556,11 +555,8 @@
 
   .compensation-card:hover {
     transform: translateY(-1px) scale(1.002);
-    box-shadow:
-      0 8px 20px rgba(0, 0, 0, 0.08),
-      0 2px 8px rgba(0, 0, 0, 0.05),
-      inset 0 1px 0 rgba(255, 255, 255, 0.6);
-    border-color: rgba(255, 255, 255, 0.35);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    border-color: rgba(255, 255, 255, 0.4);
   }
 
   .compensation-card:hover::before {
@@ -817,8 +813,9 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    background: rgba(249, 250, 251, 0.8);
-    border: 1px solid rgba(209, 213, 219, 0.5);
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 0.5rem;
     color: #374151;
     font-size: 0.875rem;
@@ -829,7 +826,7 @@
 
   .filter-action-btn:hover {
     background: rgba(243, 244, 246, 0.9);
-    border-color: rgba(156, 163, 175, 0.7);
+    border-color: rgba(255, 255, 255, 0.4);
     transform: translateY(-1px);
   }
 
