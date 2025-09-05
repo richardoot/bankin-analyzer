@@ -1,31 +1,19 @@
 <script setup lang="ts">
-  import type { CsvAnalysisResult, Transaction } from '@/types'
+  import type {
+    CsvAnalysisResult,
+    Transaction,
+    PersonAssignment,
+    ReimbursementCategory,
+  } from '@/types'
   import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
   interface Props {
     analysisResult: CsvAnalysisResult
   }
 
-  interface PersonAssignment {
-    personId: string
-    amount: number
-    categoryId?: string
-  }
-
   interface ExpenseAssignment {
     transactionId: string
     assignedPersons: PersonAssignment[]
-  }
-
-  interface ReimbursementCategory {
-    id: string
-    name: string
-    description: string
-    icon: string
-    color: string
-    keywords: string[]
-    isDefault: boolean
-    createdAt: Date
   }
 
   const props = defineProps<Props>()
