@@ -1,9 +1,15 @@
 <script setup lang="ts">
   import { computed, onMounted, ref } from 'vue'
   import type { ReimbursementCategory } from '@/types'
+  import BaseModal from '@/components/shared/BaseModal.vue'
+  import BaseButton from '@/components/shared/BaseButton.vue'
+  import BaseCard from '@/components/shared/BaseCard.vue'
+  import { useLocalStorage } from '@/composables/useLocalStorage'
 
-  // État local
-  const categories = ref<ReimbursementCategory[]>([])
+  // Utiliser le composable de localStorage
+  const { useReimbursementCategoriesStorage } = useLocalStorage()
+  const { data: categories, save: saveCategories } =
+    useReimbursementCategoriesStorage()
   const showAddModal = ref(false)
   const editingCategory = ref<ReimbursementCategory | null>(null)
 
@@ -117,28 +123,8 @@
 
   // Charger les catégories depuis localStorage
   const loadCategories = () => {
-    try {
-      const stored = localStorage.getItem(
-        'bankin-analyzer-reimbursement-categories'
-      )
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        categories.value = parsed.map(
-          (
-            cat: Omit<ReimbursementCategory, 'createdAt'> & {
-              createdAt: string
-            }
-          ) => ({
-            ...cat,
-            createdAt: new Date(cat.createdAt),
-          })
-        )
-      } else {
-        // Initialiser avec les catégories par défaut
-        initializeDefaultCategories()
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des catégories:', error)
+    if (categories.value.length === 0) {
+      // Initialiser avec les catégories par défaut si vide
       initializeDefaultCategories()
     }
   }
@@ -151,18 +137,6 @@
       createdAt: new Date(),
     }))
     saveCategories()
-  }
-
-  // Sauvegarder les catégories
-  const saveCategories = () => {
-    try {
-      localStorage.setItem(
-        'bankin-analyzer-reimbursement-categories',
-        JSON.stringify(categories.value)
-      )
-    } catch (error) {
-      console.error('Erreur lors de la sauvegarde des catégories:', error)
-    }
   }
 
   // Générer un ID unique
@@ -297,7 +271,7 @@
 </script>
 
 <template>
-  <div class="categories-manager section">
+  <BaseCard variant="default" class="categories-manager">
     <h3 class="section-title">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <path
@@ -337,13 +311,15 @@
 
       <!-- Bouton d'ajout -->
       <div class="actions-bar">
-        <button class="add-btn" @click="openAddModal">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
+        <BaseButton variant="primary" size="medium" @click="openAddModal">
+          <template #icon-left>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </template>
           Nouvelle catégorie
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Liste des catégories -->
@@ -382,148 +358,144 @@
           </div>
 
           <div class="category-actions">
-            <button
-              class="action-btn edit"
+            <BaseButton
+              variant="secondary"
+              size="small"
               title="Modifier"
               @click="openEditModal(category)"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path
-                  d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-                />
-                <path
-                  d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-                />
-              </svg>
-            </button>
-            <button
+              <template #icon-left>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path
+                    d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                  />
+                  <path
+                    d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                  />
+                </svg>
+              </template>
+            </BaseButton>
+            <BaseButton
               v-if="!category.isDefault"
-              class="action-btn delete"
+              variant="danger"
+              size="small"
               title="Supprimer"
               @click="deleteCategory(category)"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <polyline points="3,6 5,6 21,6" />
-                <path
-                  d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                />
-              </svg>
-            </button>
+              <template #icon-left>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <polyline points="3,6 5,6 21,6" />
+                  <path
+                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                  />
+                </svg>
+              </template>
+            </BaseButton>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Modal d'ajout/édition -->
-    <div v-if="showAddModal" class="modal-overlay" @click="closeModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ editingCategory ? 'Modifier' : 'Nouvelle' }} catégorie</h3>
-          <button class="close-btn" @click="closeModal">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+    <BaseModal
+      :is-open="showAddModal"
+      :title="editingCategory ? 'Modifier la catégorie' : 'Nouvelle catégorie'"
+      @close="closeModal"
+    >
+      <template #body>
+        <div class="form-group">
+          <label for="category-name">Nom de la catégorie</label>
+          <input
+            id="category-name"
+            v-model="formData.name"
+            type="text"
+            placeholder="Ex: Transport, Restauration..."
+            class="form-input"
+            maxlength="50"
+          />
         </div>
 
-        <div class="modal-body">
+        <div class="form-group">
+          <label for="category-description">Description</label>
+          <textarea
+            id="category-description"
+            v-model="formData.description"
+            placeholder="Description de la catégorie..."
+            class="form-textarea"
+            maxlength="200"
+          ></textarea>
+        </div>
+
+        <div class="form-row">
           <div class="form-group">
-            <label for="category-name">Nom de la catégorie</label>
-            <input
-              id="category-name"
-              v-model="formData.name"
-              type="text"
-              placeholder="Ex: Transport, Restauration..."
-              class="form-input"
-              maxlength="50"
-            />
-          </div>
-
-          <div class="form-group">
-            <label for="category-description">Description</label>
-            <textarea
-              id="category-description"
-              v-model="formData.description"
-              placeholder="Description de la catégorie..."
-              class="form-textarea"
-              maxlength="200"
-            ></textarea>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Icône</label>
-              <div class="icon-selector">
-                <button
-                  v-for="icon in availableIcons"
-                  :key="icon"
-                  type="button"
-                  class="icon-option"
-                  :class="{ active: formData.icon === icon }"
-                  @click="formData.icon = icon"
-                >
-                  {{ icon }}
-                </button>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>Couleur</label>
-              <div class="color-selector">
-                <button
-                  v-for="color in availableColors"
-                  :key="color"
-                  type="button"
-                  class="color-option"
-                  :class="{ active: formData.color === color }"
-                  :style="{ backgroundColor: color }"
-                  @click="formData.color = color"
-                ></button>
-              </div>
+            <label>Icône</label>
+            <div class="icon-selector">
+              <button
+                v-for="icon in availableIcons"
+                :key="icon"
+                type="button"
+                class="icon-option"
+                :class="{ active: formData.icon === icon }"
+                @click="formData.icon = icon"
+              >
+                {{ icon }}
+              </button>
             </div>
           </div>
 
           <div class="form-group">
-            <label for="category-keywords"
-              >Mots-clés (séparés par des virgules)</label
-            >
-            <input
-              id="category-keywords"
-              v-model="formData.keywords"
-              type="text"
-              placeholder="Ex: taxi, uber, transport, métro..."
-              class="form-input"
-            />
-            <small class="form-help">
-              Ces mots-clés aideront à identifier automatiquement les dépenses
-              de cette catégorie
-            </small>
+            <label>Couleur</label>
+            <div class="color-selector">
+              <button
+                v-for="color in availableColors"
+                :key="color"
+                type="button"
+                class="color-option"
+                :class="{ active: formData.color === color }"
+                :style="{ backgroundColor: color }"
+                @click="formData.color = color"
+              ></button>
+            </div>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="closeModal">Annuler</button>
-          <button
-            class="btn-primary"
-            :disabled="!isFormValid"
-            @click="saveCategory"
+        <div class="form-group">
+          <label for="category-keywords"
+            >Mots-clés (séparés par des virgules)</label
           >
-            {{ editingCategory ? 'Modifier' : 'Créer' }}
-          </button>
+          <input
+            id="category-keywords"
+            v-model="formData.keywords"
+            type="text"
+            placeholder="Ex: taxi, uber, transport, métro..."
+            class="form-input"
+          />
+          <small class="form-help">
+            Ces mots-clés aideront à identifier automatiquement les dépenses de
+            cette catégorie
+          </small>
         </div>
-      </div>
-    </div>
-  </div>
+      </template>
+
+      <template #footer>
+        <BaseButton variant="secondary" size="medium" @click="closeModal">
+          Annuler
+        </BaseButton>
+        <BaseButton
+          variant="primary"
+          size="medium"
+          :disabled="!isFormValid"
+          @click="saveCategory"
+        >
+          {{ editingCategory ? 'Modifier' : 'Créer' }}
+        </BaseButton>
+      </template>
+    </BaseModal>
+  </BaseCard>
 </template>
 
 <style scoped>
   .categories-manager {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border-radius: 1rem;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
   }
@@ -591,29 +563,6 @@
     display: flex;
     justify-content: flex-end;
     margin-bottom: 1.5rem;
-  }
-
-  .add-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    background: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
-  .add-btn:hover {
-    background: #1d4ed8;
-  }
-
-  .add-btn svg {
-    width: 1rem;
-    height: 1rem;
   }
 
   /* Grille des catégories */
@@ -724,116 +673,6 @@
     justify-content: flex-end;
   }
 
-  .action-btn {
-    width: 2rem;
-    height: 2rem;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-  }
-
-  .action-btn svg {
-    width: 1rem;
-    height: 1rem;
-  }
-
-  .action-btn.edit {
-    background: rgba(219, 234, 254, 0.8);
-    backdrop-filter: blur(5px);
-    color: #1d4ed8;
-  }
-
-  .action-btn.edit:hover {
-    background: rgba(191, 219, 254, 0.9);
-  }
-
-  .action-btn.delete {
-    background: rgba(254, 202, 202, 0.8);
-    backdrop-filter: blur(5px);
-    color: #dc2626;
-  }
-
-  .action-btn.delete:hover {
-    background: rgba(252, 165, 165, 0.9);
-  }
-
-  /* Modal */
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .modal-content {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    border-radius: 12px;
-    max-width: 500px;
-    width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
-  }
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.5rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.6) 0%,
-      rgba(249, 250, 251, 0.6) 100%
-    );
-    backdrop-filter: blur(5px);
-  }
-
-  .modal-header h3 {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #1f2937;
-  }
-
-  .close-btn {
-    width: 2rem;
-    height: 2rem;
-    border: none;
-    background: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #6b7280;
-    border-radius: 4px;
-  }
-
-  .close-btn:hover {
-    background: rgba(243, 244, 246, 0.8);
-    backdrop-filter: blur(5px);
-  }
-
-  .close-btn svg {
-    width: 1rem;
-    height: 1rem;
-  }
-
-  .modal-body {
-    padding: 1.5rem;
-  }
-
   .form-group {
     margin-bottom: 1.5rem;
   }
@@ -938,50 +777,6 @@
   .color-option.active {
     border-color: #1f2937;
     transform: scale(1.1);
-  }
-
-  .modal-footer {
-    display: flex;
-    gap: 1rem;
-    justify-content: flex-end;
-    padding: 1.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
-    background: rgba(249, 250, 251, 0.8);
-    backdrop-filter: blur(5px);
-  }
-
-  .btn-secondary,
-  .btn-primary {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 6px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .btn-secondary {
-    background: rgba(243, 244, 246, 0.8);
-    backdrop-filter: blur(5px);
-    color: #374151;
-  }
-
-  .btn-secondary:hover {
-    background: rgba(229, 231, 235, 0.9);
-  }
-
-  .btn-primary {
-    background: #3b82f6;
-    color: white;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    background: #1d4ed8;
-  }
-
-  .btn-primary:disabled {
-    background: #9ca3af;
-    cursor: not-allowed;
   }
 
   /* Responsive */
