@@ -402,80 +402,78 @@
       :title="editingCategory ? 'Modifier la catégorie' : 'Nouvelle catégorie'"
       @close="closeModal"
     >
-      <template #body>
+      <div class="form-group">
+        <label for="category-name">Nom de la catégorie</label>
+        <input
+          id="category-name"
+          v-model="formData.name"
+          type="text"
+          placeholder="Ex: Transport, Restauration..."
+          class="form-input"
+          maxlength="50"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="category-description">Description</label>
+        <textarea
+          id="category-description"
+          v-model="formData.description"
+          placeholder="Description de la catégorie..."
+          class="form-textarea"
+          maxlength="200"
+        ></textarea>
+      </div>
+
+      <div class="form-row">
         <div class="form-group">
-          <label for="category-name">Nom de la catégorie</label>
-          <input
-            id="category-name"
-            v-model="formData.name"
-            type="text"
-            placeholder="Ex: Transport, Restauration..."
-            class="form-input"
-            maxlength="50"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="category-description">Description</label>
-          <textarea
-            id="category-description"
-            v-model="formData.description"
-            placeholder="Description de la catégorie..."
-            class="form-textarea"
-            maxlength="200"
-          ></textarea>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label>Icône</label>
-            <div class="icon-selector">
-              <button
-                v-for="icon in availableIcons"
-                :key="icon"
-                type="button"
-                class="icon-option"
-                :class="{ active: formData.icon === icon }"
-                @click="formData.icon = icon"
-              >
-                {{ icon }}
-              </button>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Couleur</label>
-            <div class="color-selector">
-              <button
-                v-for="color in availableColors"
-                :key="color"
-                type="button"
-                class="color-option"
-                :class="{ active: formData.color === color }"
-                :style="{ backgroundColor: color }"
-                @click="formData.color = color"
-              ></button>
-            </div>
+          <label>Icône</label>
+          <div class="icon-selector">
+            <button
+              v-for="icon in availableIcons"
+              :key="icon"
+              type="button"
+              class="icon-option"
+              :class="{ active: formData.icon === icon }"
+              @click="formData.icon = icon"
+            >
+              {{ icon }}
+            </button>
           </div>
         </div>
 
         <div class="form-group">
-          <label for="category-keywords"
-            >Mots-clés (séparés par des virgules)</label
-          >
-          <input
-            id="category-keywords"
-            v-model="formData.keywords"
-            type="text"
-            placeholder="Ex: taxi, uber, transport, métro..."
-            class="form-input"
-          />
-          <small class="form-help">
-            Ces mots-clés aideront à identifier automatiquement les dépenses de
-            cette catégorie
-          </small>
+          <label>Couleur</label>
+          <div class="color-selector">
+            <button
+              v-for="color in availableColors"
+              :key="color"
+              type="button"
+              class="color-option"
+              :class="{ active: formData.color === color }"
+              :style="{ backgroundColor: color }"
+              @click="formData.color = color"
+            ></button>
+          </div>
         </div>
-      </template>
+      </div>
+
+      <div class="form-group">
+        <label for="category-keywords"
+          >Mots-clés (séparés par des virgules)</label
+        >
+        <input
+          id="category-keywords"
+          v-model="formData.keywords"
+          type="text"
+          placeholder="Ex: taxi, uber, transport, métro..."
+          class="form-input"
+        />
+        <small class="form-help">
+          Ces mots-clés aideront à identifier automatiquement les dépenses de
+          cette catégorie
+        </small>
+      </div>
 
       <template #footer>
         <BaseButton variant="secondary" size="medium" @click="closeModal">
