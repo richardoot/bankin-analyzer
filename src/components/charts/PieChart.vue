@@ -1,5 +1,5 @@
 <template>
-  <div class="pie-chart-container">
+  <BaseCard variant="default" class="pie-chart-container">
     <!-- En-tête du graphique -->
     <div class="chart-header">
       <div class="header-content">
@@ -111,10 +111,10 @@
           <div class="hover-card">
             <div class="hover-category">{{ hoveredSegment.category.name }}</div>
             <div class="hover-amount">
-              {{ formatAmount(hoveredSegment.category.value) }}
+              {{ props.formatAmount(hoveredSegment.category.value) }}
             </div>
             <div class="hover-percentage">
-              {{ formatPercentage(hoveredSegment.category.percentage) }}
+              {{ props.formatPercentage(hoveredSegment.category.percentage) }}
             </div>
           </div>
         </div>
@@ -140,10 +140,10 @@
             <div class="legend-name">{{ category.name }}</div>
             <div class="legend-values">
               <span class="legend-amount">{{
-                formatAmount(category.value)
+                props.formatAmount(category.value)
               }}</span>
               <span class="legend-percentage">{{
-                formatPercentage(category.percentage)
+                props.formatPercentage(category.percentage)
               }}</span>
             </div>
           </div>
@@ -164,12 +164,14 @@
       </svg>
       <p class="empty-message">Aucune donnée à afficher</p>
     </div>
-  </div>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
   import type { CategoryData, PieChartData } from '@/composables/usePieChart'
   import { computed, ref, type Component } from 'vue'
+  import BaseCard from '@/components/shared/BaseCard.vue'
+  import { useFormatting } from '@/composables/useFormatting'
 
   interface Props {
     chartData: PieChartData
@@ -189,6 +191,12 @@
     categoryHover: [category: CategoryData | null]
     monthChange: [month: string]
   }>()
+
+  // Utiliser le composable de formatage (préparation future)
+  const {
+    formatAmount: _formatAmountFromComposable,
+    formatPercentage: _formatPercentageFromComposable,
+  } = useFormatting()
 
   // Configuration du SVG
   const svgSize = 300
@@ -367,22 +375,11 @@
 
 <style scoped>
   .pie-chart-container {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border-radius: 1rem;
-    margin-bottom: 1.5rem;
-    transition: all 0.3s ease;
     width: 100%;
     max-width: 100%;
     min-height: 500px;
-    margin: 0 auto;
+    margin: 0 auto 1.5rem;
     overflow: hidden;
-  }
-
-  .pie-chart-container:hover {
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
   }
 
   /* En-tête du graphique */
