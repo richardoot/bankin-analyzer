@@ -1,26 +1,18 @@
 <script setup lang="ts">
   import { computed, ref } from 'vue'
-
-  // Interface pour les personnes
-  interface Person {
-    id: string
-    name: string
-    email?: string // Email optionnel
-  }
-
-  // Interfaces pour les assignations d'ExpensesReimbursementManager
-  interface PersonAssignment {
-    personId: string
-    amount: number
-  }
+  import type { Person, PersonAssignment } from '@/types'
+  import BaseModal from './BaseModal.vue'
+  import BaseButton from './BaseButton.vue'
+  import BaseCard from './BaseCard.vue'
+  import { useLocalStorage } from '@/composables/useLocalStorage'
 
   interface ExpenseAssignment {
     transactionId: string
     assignedPersons: PersonAssignment[]
   }
 
-  // Liste des personnes (chargée depuis localStorage)
-  const availablePersons = ref<Person[]>([])
+  const { usePersonsStorage } = useLocalStorage()
+  const { data: availablePersons, save: savePersons } = usePersonsStorage()
 
   // États pour la gestion du formulaire
   const showAddPersonForm = ref(false)
@@ -41,28 +33,7 @@
     )
   })
 
-  // Fonctions de persistance localStorage
-  const saveToStorage = () => {
-    localStorage.setItem(
-      'bankin-analyzer-persons',
-      JSON.stringify(availablePersons.value)
-    )
-  }
-
-  const loadFromStorage = () => {
-    try {
-      const stored = localStorage.getItem('bankin-analyzer-persons')
-      if (stored) {
-        availablePersons.value = JSON.parse(stored)
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des données:', error)
-      availablePersons.value = []
-    }
-  }
-
-  // Charger les données au démarrage
-  loadFromStorage()
+  // Les données sont maintenant gérées par usePersonsStorage - pas besoin de fonctions supplémentaires
 
   // Validation du formulaire
   const isFormValid = computed(() => {
@@ -125,7 +96,7 @@
     }
 
     availablePersons.value.push(person)
-    saveToStorage()
+    savePersons()
     resetForm()
   }
 
@@ -166,7 +137,7 @@
         availablePersons.value[personIndex] = updatedPerson
       }
     }
-    saveToStorage()
+    savePersons()
     resetForm()
   }
 
@@ -177,7 +148,7 @@
       availablePersons.value = availablePersons.value.filter(
         p => p.id !== personId
       )
-      saveToStorage()
+      savePersons()
 
       // Nettoyer toutes les assignations de cette personne dans les dépenses
       cleanPersonAssignments(personId)
@@ -235,12 +206,7 @@
     }
   }
 
-  // Fermer la modale en cliquant sur l'overlay
-  const closeModalOnOverlay = (event: Event) => {
-    if (event.target === event.currentTarget) {
-      resetForm()
-    }
-  }
+  // Fonction closeModalOnOverlay supprimée - gérée par BaseModal
 
   // Fonctions d'export/import
   const exportPersons = () => {
@@ -278,7 +244,7 @@
 
           if (validPersons.length > 0) {
             availablePersons.value = validPersons
-            saveToStorage()
+            savePersons()
             alert(`${validPersons.length} personne(s) importée(s) avec succès`)
           } else {
             alert('Aucune donnée valide trouvée dans le fichier')
@@ -297,7 +263,7 @@
 </script>
 
 <template>
-  <div class="reimbursement-section persons-section">
+  <BaseCard variant="default" class="persons-section">
     <h3 class="section-title">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -432,39 +398,55 @@
 
           <!-- Boutons d'actions -->
           <div class="action-buttons">
-            <button
-              class="add-person-btn primary"
+            <BaseButton
+              variant="primary"
+              size="large"
+              class="add-person-btn"
               @click="showAddPersonForm = !showAddPersonForm"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="16" />
-                <line x1="8" y1="12" x2="16" y2="12" />
-              </svg>
+              <template #icon-left>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="16" />
+                  <line x1="8" y1="12" x2="16" y2="12" />
+                </svg>
+              </template>
               {{ editingPersonId ? 'Annuler' : 'Ajouter une personne' }}
-            </button>
+            </BaseButton>
 
             <div v-if="availablePersons.length > 0" class="secondary-actions">
-              <button
-                class="action-btn secondary"
+              <BaseButton
+                variant="secondary"
+                size="medium"
                 title="Exporter les données"
                 @click="exportPersons"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7,10 12,15 17,10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
+                <template #icon-left>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7,10 12,15 17,10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                </template>
                 Exporter
-              </button>
+              </BaseButton>
 
-              <label class="action-btn secondary" title="Importer des données">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17,8 12,3 7,8" />
-                  <line x1="12" y1="3" x2="12" y2="15" />
-                </svg>
-                Importer
+              <label class="import-label">
+                <BaseButton
+                  variant="secondary"
+                  size="medium"
+                  title="Importer des données"
+                  as="span"
+                >
+                  <template #icon-left>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17,8 12,3 7,8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                  </template>
+                  Importer
+                </BaseButton>
                 <input
                   type="file"
                   accept=".json"
@@ -476,80 +458,60 @@
           </div>
 
           <!-- Modale de formulaire d'ajout/édition -->
-          <div
-            v-if="showAddPersonForm"
-            class="modal-overlay"
-            @click="closeModalOnOverlay"
+          <BaseModal
+            :is-open="showAddPersonForm"
+            :title="
+              editingPersonId
+                ? 'Modifier la personne'
+                : 'Ajouter une nouvelle personne'
+            "
+            @close="resetForm"
           >
-            <div class="modal-dialog" @click.stop>
-              <div class="modal-header">
-                <h5 class="modal-title">
-                  {{
-                    editingPersonId
-                      ? 'Modifier la personne'
-                      : 'Ajouter une nouvelle personne'
-                  }}
-                </h5>
-                <button
-                  type="button"
-                  class="modal-close-btn"
-                  @click="resetForm"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
+            <form @submit.prevent="submitForm">
+              <div class="form-group">
+                <label for="person-name">Nom complet</label>
+                <input
+                  id="person-name"
+                  v-model="newPerson.name"
+                  type="text"
+                  placeholder="Entrez le nom complet"
+                  required
+                  class="form-input"
+                />
               </div>
+              <div class="form-group">
+                <label for="person-email">Email (optionnel)</label>
+                <input
+                  id="person-email"
+                  v-model="newPerson.email"
+                  type="email"
+                  placeholder="Entrez l'adresse email (optionnel)"
+                  class="form-input"
+                />
+                <div v-if="emailErrorMessage" class="error-message">
+                  {{ emailErrorMessage }}
+                </div>
+              </div>
+            </form>
 
-              <div class="modal-body">
-                <form @submit.prevent="submitForm">
-                  <div class="form-group">
-                    <label for="person-name">Nom complet</label>
-                    <input
-                      id="person-name"
-                      v-model="newPerson.name"
-                      type="text"
-                      placeholder="Entrez le nom complet"
-                      required
-                    />
-                  </div>
-                  <div class="form-group">
-                    <label for="person-email">Email (optionnel)</label>
-                    <input
-                      id="person-email"
-                      v-model="newPerson.email"
-                      type="email"
-                      placeholder="Entrez l'adresse email (optionnel)"
-                    />
-                    <div v-if="emailErrorMessage" class="error-message">
-                      {{ emailErrorMessage }}
-                    </div>
-                  </div>
-                  <div class="form-actions">
-                    <button
-                      type="button"
-                      class="btn-secondary"
-                      @click="resetForm"
-                    >
-                      Annuler
-                    </button>
-                    <button
-                      type="submit"
-                      class="btn-primary"
-                      :disabled="!isFormValid"
-                    >
-                      {{ editingPersonId ? 'Sauvegarder' : 'Ajouter' }}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </div>
+            <template #footer>
+              <BaseButton variant="secondary" size="medium" @click="resetForm">
+                Annuler
+              </BaseButton>
+              <BaseButton
+                variant="primary"
+                size="medium"
+                :disabled="!isFormValid"
+                @click="submitForm"
+              >
+                {{ editingPersonId ? 'Sauvegarder' : 'Ajouter' }}
+              </BaseButton>
+            </template>
+          </BaseModal>
         </div>
       </div>
     </div>
-  </div>
+  </BaseCard>
 </template>
 
 <style scoped>
@@ -1073,63 +1035,10 @@
     transition: all 0.2s ease;
   }
 
-  .form-group input:focus {
-    outline: none;
-    border-color: #3b82f6;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  }
-
   .error-message {
     color: #dc2626;
     font-size: 0.75rem;
     margin-top: 0.5rem;
-  }
-
-  .form-actions {
-    display: flex;
-    gap: 0.75rem;
-    justify-content: flex-end;
-    margin-top: 1.5rem;
-  }
-
-  .btn-secondary {
-    padding: 0.5rem 1rem;
-    background: #f3f4f6;
-    color: #374151;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-secondary:hover {
-    background: #e5e7eb;
-  }
-
-  .btn-primary {
-    padding: 0.5rem 1rem;
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-  }
-
-  .btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 
   /* Styles pour garantir l'affichage des SVG dans les boutons d'action */

@@ -1,16 +1,6 @@
 <script setup lang="ts">
   import { computed, onMounted, ref } from 'vue'
-
-  interface ReimbursementCategory {
-    id: string
-    name: string
-    description: string
-    icon: string
-    color: string
-    keywords: string[]
-    isDefault: boolean
-    createdAt: Date
-  }
+  import type { ReimbursementCategory } from '@/types'
 
   // État local
   const categories = ref<ReimbursementCategory[]>([])
