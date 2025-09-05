@@ -1,5 +1,5 @@
 <template>
-  <div class="bar-chart-container">
+  <BaseCard variant="default" class="bar-chart-container">
     <!-- En-tête du graphique -->
     <div class="chart-header">
       <div class="chart-header-content">
@@ -308,13 +308,13 @@
             <div>
               <span class="tooltip-label expenses">💸 Dépenses:</span>
               <span class="tooltip-value">{{
-                formatAmount(hoveredBar.month.expenses)
+                props.formatAmount(hoveredBar.month.expenses)
               }}</span>
             </div>
             <div>
               <span class="tooltip-label income">💰 Revenus:</span>
               <span class="tooltip-value">{{
-                formatAmount(hoveredBar.month.income)
+                props.formatAmount(hoveredBar.month.income)
               }}</span>
             </div>
           </div>
@@ -323,7 +323,7 @@
           <div v-else-if="hoveredBar.type === 'expenses'">
             <span class="tooltip-label expenses">💸 Dépenses:</span>
             <span class="tooltip-value">{{
-              formatAmount(hoveredBar.month.expenses)
+              props.formatAmount(hoveredBar.month.expenses)
             }}</span>
           </div>
 
@@ -331,7 +331,7 @@
           <div v-else-if="hoveredBar.type === 'income'">
             <span class="tooltip-label income">💰 Revenus:</span>
             <span class="tooltip-value">{{
-              formatAmount(hoveredBar.month.income)
+              props.formatAmount(hoveredBar.month.income)
             }}</span>
           </div>
 
@@ -353,7 +353,7 @@
                 negative: hoveredBar.month.net < 0,
               }"
             >
-              {{ formatAmount(hoveredBar.month.net) }}
+              {{ props.formatAmount(hoveredBar.month.net) }}
             </span>
           </div>
 
@@ -380,7 +380,7 @@
       </svg>
       <p class="empty-message">Aucune donnée mensuelle à afficher</p>
     </div>
-  </div>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
@@ -390,6 +390,8 @@
     Transaction as GlobalTransaction,
   } from '@/types'
   import { computed, ref } from 'vue'
+  import BaseCard from '@/components/shared/BaseCard.vue'
+  import { useFormatting } from '@/composables/useFormatting'
 
   interface Props {
     chartData: BarChartData
@@ -407,6 +409,9 @@
     monthClick: [month: MonthlyData, type: string]
     monthHover: [month: MonthlyData | null, type: string | null]
   }>()
+
+  // Utiliser le composable de formatage (préparation future)
+  const { formatAmount: _formatAmountFromComposable } = useFormatting()
 
   // Référence au conteneur du graphique
   const chartContainerRef = ref<HTMLElement | null>(null)
@@ -769,7 +774,7 @@
     }
   })
 
-  // Formatage court des montants pour les axes
+  // Formatage court des montants pour les axes (logique originale)
   const formatShortAmount = (amount: number): string => {
     const abs = Math.abs(amount)
     if (abs >= 1000000) {
@@ -792,22 +797,12 @@
 
 <style scoped>
   .bar-chart-container {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border-radius: 1rem;
-    margin-bottom: 1.5rem;
-    transition: all 0.3s ease;
     width: 100%;
     max-width: 100%;
     min-height: 600px;
+    margin-bottom: 1.5rem;
     overflow: visible; /* Permettre au tooltip de sortir légèrement */
     position: relative; /* Assurer le positionnement relatif pour le tooltip */
-  }
-
-  .bar-chart-container:hover {
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
   }
 
   .chart-header {
