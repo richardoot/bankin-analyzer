@@ -13,12 +13,12 @@
 
   interface Props {
     expensesManagerRef?: {
-      expenseAssignments?: Array<{
+      expenseAssignments: Array<{
         transactionId: string
         assignedPersons: PersonAssignment[]
       }>
-      filteredExpenses?: Transaction[]
-      stats?: {
+      filteredExpenses: Transaction[]
+      stats: {
         total: number
         assigned: number
         unassigned: number
@@ -77,11 +77,17 @@
 
   // Calcul des remboursements réels par personne
   const reimbursementData = computed<ReimbursementData[]>(() => {
-    if (!props.expensesManagerRef?.expenseAssignments) {
+    // Vérifier que la ref existe et contient des données
+    const managerRef = props.expensesManagerRef
+    if (!managerRef) {
       return []
     }
 
-    const assignments = props.expensesManagerRef.expenseAssignments
+    // Accéder aux données exposées par le composant
+    const assignments = managerRef.expenseAssignments
+    if (!assignments || assignments.length === 0) {
+      return []
+    }
     const persons = availablePersons.value
 
     // Calculer les totaux par personne
@@ -103,6 +109,14 @@
     return Array.from(personTotals.entries())
       .map(([personId, amount]) => {
         const person = persons.find(p => p.id === personId)
+        console.log(
+          'Debug remboursement - personId:',
+          personId,
+          'person trouvée:',
+          person,
+          'toutes les personnes:',
+          persons
+        )
         return {
           person: person?.name || `Personne inconnue (${personId})`,
           amount: amount,
@@ -118,11 +132,15 @@
 
   // Calcul des remboursements par catégorie assignée et par personne
   const reimbursementDataByCategory = computed(() => {
-    if (!props.expensesManagerRef?.expenseAssignments) {
+    const managerRef = props.expensesManagerRef
+    if (!managerRef) {
       return new Map()
     }
 
-    const assignments = props.expensesManagerRef.expenseAssignments
+    const assignments = managerRef.expenseAssignments
+    if (!assignments || assignments.length === 0) {
+      return new Map()
+    }
     const persons = availablePersons.value
     const categories = reimbursementCategories.value
 
@@ -192,11 +210,15 @@
   // Calcul détaillé des remboursements par personne avec catégories
   const detailedReimbursementData = computed<DetailedReimbursementData[]>(
     () => {
-      if (!props.expensesManagerRef?.expenseAssignments) {
+      const managerRef = props.expensesManagerRef
+      if (!managerRef) {
         return []
       }
 
-      const assignments = props.expensesManagerRef.expenseAssignments
+      const assignments = managerRef.expenseAssignments
+      if (!assignments || assignments.length === 0) {
+        return []
+      }
       const persons = availablePersons.value
       const categories = reimbursementCategories.value
 
@@ -293,10 +315,8 @@
 
   // Détails des transactions par personne et catégorie
   const expenseDetailsByPersonAndCategory = computed(() => {
-    if (
-      !props.expensesManagerRef?.expenseAssignments ||
-      !props.expensesManagerRef?.filteredExpenses
-    ) {
+    const managerRef = props.expensesManagerRef
+    if (!managerRef) {
       return new Map<
         string,
         Array<{
@@ -309,8 +329,20 @@
       >()
     }
 
-    const assignments = props.expensesManagerRef.expenseAssignments
-    const expenses = props.expensesManagerRef.filteredExpenses
+    const assignments = managerRef.expenseAssignments
+    const expenses = managerRef.filteredExpenses
+    if (!assignments || assignments.length === 0 || !expenses) {
+      return new Map<
+        string,
+        Array<{
+          date: string
+          description: string
+          note: string
+          baseAmount: number
+          reimbursementAmount: number
+        }>
+      >()
+    }
     const categories = reimbursementCategories.value
 
     const result = new Map<
@@ -463,12 +495,9 @@
       </div>
 
       <div v-else class="reimbursement-list">
-        <BaseCard
+        <div
           v-for="item in reimbursementData"
           :key="item.personId"
-          variant="default"
-          padding="md"
-          rounded="md"
           class="reimbursement-item"
         >
           <div class="person-info">
@@ -491,7 +520,7 @@
               {{ item.status === 'valide' ? 'Traité' : 'Valider' }}
             </BaseButton>
           </div>
-        </BaseCard>
+        </div>
       </div>
     </BaseCard>
 
@@ -885,6 +914,18 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    padding: 1.5rem;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+  }
+
+  .reimbursement-item:hover {
+    background: #f9fafb;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
   }
 
   .person-info {
