@@ -88,6 +88,8 @@
     if (!assignments || assignments.length === 0) {
       return []
     }
+
+    // Forcer la réactivité en accédant aux personnes depuis le storage global
     const persons = availablePersons.value
 
     // Calculer les totaux par personne
@@ -109,14 +111,6 @@
     return Array.from(personTotals.entries())
       .map(([personId, amount]) => {
         const person = persons.find(p => p.id === personId)
-        console.log(
-          'Debug remboursement - personId:',
-          personId,
-          'person trouvée:',
-          person,
-          'toutes les personnes:',
-          persons
-        )
         return {
           person: person?.name || `Personne inconnue (${personId})`,
           amount: amount,
