@@ -5,6 +5,9 @@
 
 import { ref, watch, type Ref, type UnwrapRef } from 'vue'
 
+// Instances partagées pour assurer la réactivité cross-composant
+const globalInstances = new Map<string, StorageItem<unknown>>()
+
 export interface StorageOptions {
   /** Préfixe automatique pour les clés (défaut: 'bankin-analyzer-') */
   prefix?: string
@@ -269,6 +272,13 @@ export const useLocalStorage = () => {
       silentErrors = false,
     } = options
 
+    const normalizedKey = normalizeKey(key, prefix)
+
+    // Vérifier s'il existe déjà une instance globale pour cette clé
+    if (globalInstances.has(normalizedKey)) {
+      return globalInstances.get(normalizedKey) as StorageItem<T>
+    }
+
     // Charger la valeur initiale depuis localStorage
     const loadedValue = getItem<T>(key, {
       prefix,
@@ -356,7 +366,7 @@ export const useLocalStorage = () => {
       return getItemSize(key, { prefix })
     }
 
-    return {
+    const storageItem = {
       data,
       save,
       reload,
@@ -364,6 +374,11 @@ export const useLocalStorage = () => {
       exists,
       size,
     }
+
+    // Stocker l'instance dans la Map globale pour la réutiliser
+    globalInstances.set(normalizedKey, storageItem as StorageItem<unknown>)
+
+    return storageItem
   }
 
   /**
