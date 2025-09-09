@@ -34,12 +34,15 @@ describe('useLocalStorage', () => {
   let storage: ReturnType<typeof useLocalStorage>
 
   beforeEach(() => {
-    storage = useLocalStorage()
+    // Clear localStorage completely before each test
     mockLocalStorage.clear()
     vi.clearAllMocks()
+    // Create a fresh storage instance
+    storage = useLocalStorage()
   })
 
   afterEach(() => {
+    // Clean up after each test
     mockLocalStorage.clear()
   })
 
@@ -222,7 +225,7 @@ describe('useLocalStorage', () => {
       })
 
       it('devrait utiliser la valeur par défaut si les données sont invalides', () => {
-        storage.setItem('test', { invalid: true })
+        storage.setItem('test-invalid', { invalid: true })
 
         const validator = (data: unknown): data is { valid: boolean } =>
           typeof data === 'object' &&
@@ -230,7 +233,7 @@ describe('useLocalStorage', () => {
           'valid' in data &&
           (data as { valid: boolean }).valid === true
         const item = storage.useStorageItem(
-          'test',
+          'test-invalid',
           { valid: true },
           { validator }
         )
@@ -240,32 +243,38 @@ describe('useLocalStorage', () => {
 
       describe("méthodes d'instance", () => {
         it('save() devrait sauvegarder manuellement', () => {
-          const item = storage.useStorageItem('test', { value: 'initial' })
+          const item = storage.useStorageItem('test-save', { value: 'initial' })
           item.data.value.value = 'updated'
 
           expect(item.save()).toBe(true)
-          expect(storage.getItem('test')).toEqual({ value: 'updated' })
+          expect(storage.getItem('test-save')).toEqual({ value: 'updated' })
         })
 
         it('reload() devrait recharger depuis localStorage', () => {
-          const item = storage.useStorageItem('test', { value: 'initial' })
-          storage.setItem('test', { value: 'external' })
+          const item = storage.useStorageItem('test-reload', {
+            value: 'initial',
+          })
+          storage.setItem('test-reload', { value: 'external' })
 
           expect(item.reload()).toBe(true)
           expect(item.data.value).toEqual({ value: 'external' })
         })
 
         it('remove() devrait supprimer et reset', () => {
-          const item = storage.useStorageItem('test', { value: 'initial' })
+          const item = storage.useStorageItem('test-remove', {
+            value: 'initial',
+          })
           item.data.value = { value: 'updated' }
 
           expect(item.remove()).toBe(true)
           expect(item.data.value).toEqual({ value: 'initial' })
-          expect(storage.hasItem('test')).toBe(false)
+          expect(storage.hasItem('test-remove')).toBe(false)
         })
 
         it("exists() devrait vérifier l'existence", () => {
-          const item = storage.useStorageItem('test', { value: 'initial' })
+          const item = storage.useStorageItem('test-exists', {
+            value: 'initial',
+          })
 
           expect(item.exists()).toBe(false)
 
@@ -274,7 +283,7 @@ describe('useLocalStorage', () => {
         })
 
         it('size() devrait retourner la taille', () => {
-          const item = storage.useStorageItem('test', { value: 'hello' })
+          const item = storage.useStorageItem('test-size', { value: 'hello' })
           item.save()
 
           expect(item.size()).toBeGreaterThan(0)
@@ -305,6 +314,8 @@ describe('useLocalStorage', () => {
       })
 
       it('devrait valider les données des personnes', () => {
+        // Assurer que localStorage est vide au début
+        storage.removeItem('persons')
         storage.setItem('persons', [{ invalid: true }])
 
         const persons = storage.usePersonsStorage()
@@ -312,6 +323,8 @@ describe('useLocalStorage', () => {
       })
 
       it('devrait accepter des personnes valides', () => {
+        // Assurer que localStorage est vide au début
+        storage.removeItem('persons')
         const validPersons = [
           { id: '1', name: 'John', email: 'john@example.com' },
           { id: '2', name: 'Jane' },

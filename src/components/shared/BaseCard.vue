@@ -77,14 +77,35 @@
 
   /* Variants */
   .base-card--default {
-    background: white;
-    border: 1px solid #e5e7eb;
+    background: linear-gradient(145deg, #ffffff 0%, #fafbfc 100%);
+    border: 1px solid var(--gray-200);
+    box-shadow:
+      var(--shadow-sm),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    transition: all var(--transition-normal);
+  }
+
+  .base-card--default:hover {
+    box-shadow:
+      var(--shadow-lg),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    transform: translateY(-2px);
+    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
   }
 
   .base-card--glass {
-    background: rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(12px);
+    background: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(248, 250, 252, 0.95) 100%
+    );
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(16px) saturate(180%);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.06),
+      0 2px 8px rgba(0, 0, 0, 0.02),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8),
+      inset 0 0 20px rgba(255, 255, 255, 0.1);
   }
 
   .base-card--bordered {
@@ -95,7 +116,24 @@
   .base-card--elevated {
     background: white;
     border: none;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-xl);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .base-card--elevated::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(59, 130, 246, 0.3),
+      transparent
+    );
   }
 
   .base-card--gradient {
@@ -184,19 +222,27 @@
     transform: translateY(0);
   }
 
-  /* Card sections */
+  /* Card sections - Espacement professionnel */
   .base-card__header {
     flex-shrink: 0;
-    margin-bottom: 1rem;
+    margin-bottom: var(--spacing-6);
+    padding-bottom: var(--spacing-4);
+    border-bottom: 1px solid var(--gray-100);
   }
 
   .base-card__content {
     flex: 1;
+    min-height: 0; /* Permet le flex shrink */
   }
 
   .base-card__footer {
     flex-shrink: 0;
-    margin-top: 1rem;
+    margin-top: var(--spacing-6);
+    padding-top: var(--spacing-4);
+    border-top: 1px solid var(--gray-100);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-3);
   }
 
   /* Special case: when padding is none, add padding to sections */

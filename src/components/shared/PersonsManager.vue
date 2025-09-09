@@ -263,16 +263,23 @@
 </script>
 
 <template>
-  <BaseCard variant="default" class="persons-section">
-    <h3 class="section-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-      </svg>
-      Gestion des personnes
-    </h3>
+  <BaseCard variant="glass" padding="lg" rounded="lg" class="persons-section">
+    <template #header>
+      <h4 class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+        Gestion des personnes
+        <span v-if="availablePersons.length > 0" class="title-badge">
+          {{ availablePersons.length }} personne{{
+            availablePersons.length > 1 ? 's' : ''
+          }}
+        </span>
+      </h4>
+    </template>
     <div class="section-content placeholder-content">
       <div class="placeholder-card">
         <div class="placeholder-icon">
@@ -340,9 +347,15 @@
                 <path d="m21 21-4.35-4.35" />
               </svg>
               <p>Aucune personne trouvée pour "{{ searchTerm }}"</p>
-              <button class="clear-search-btn" @click="searchTerm = ''">
-                Effacer la recherche
-              </button>
+              <BaseButton variant="primary" size="sm" @click="searchTerm = ''">
+                <template #icon-left>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </template>
+                Effacer
+              </BaseButton>
             </div>
 
             <!-- Message quand aucune personne n'existe -->
@@ -378,20 +391,40 @@
                 >
               </div>
               <div class="person-actions">
-                <button
-                  class="action-btn edit"
+                <BaseButton
+                  variant="secondary"
+                  size="sm"
+                  icon
                   title="Éditer"
                   @click="startEditPerson(person.id)"
                 >
-                  ✏️
-                </button>
-                <button
-                  class="action-btn delete"
+                  <template #icon-left>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path
+                        d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                      />
+                      <path
+                        d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                      />
+                    </svg>
+                  </template>
+                </BaseButton>
+                <BaseButton
+                  variant="danger"
+                  size="sm"
+                  icon
                   title="Supprimer"
                   @click="deletePerson(person.id)"
                 >
-                  🗑️
-                </button>
+                  <template #icon-left>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <polyline points="3,6 5,6 21,6" />
+                      <path
+                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                      />
+                    </svg>
+                  </template>
+                </BaseButton>
               </div>
             </div>
           </div>
@@ -515,34 +548,50 @@
 </template>
 
 <style scoped>
-  .reimbursement-section {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    border-radius: 1rem;
+  .persons-section {
     margin-bottom: 1.5rem;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
   }
 
   .section-title {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #1f2937;
-    padding: 1.5rem 1.5rem 0;
-    margin-bottom: 1rem;
+    gap: var(--spacing-3);
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--gray-900);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    margin: 0 0 var(--spacing-6) 0;
+    position: relative;
+  }
+
+  .section-title::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 60px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
+    border-radius: 2px;
   }
 
   .section-title svg {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 1.25rem;
+    height: 1.25rem;
     color: #3b82f6;
   }
 
-  .section-content {
-    padding: 0 1.5rem 1.5rem;
+  .title-badge {
+    background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
+    color: var(--primary-700);
+    padding: 0.375rem 0.875rem;
+    border-radius: 16px;
+    font-size: 0.75rem;
+    font-weight: var(--font-weight-semibold);
+    margin-left: auto;
+    border: 1px solid var(--primary-200);
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+    backdrop-filter: blur(10px);
   }
 
   .placeholder-content {
@@ -550,18 +599,24 @@
   }
 
   .placeholder-card {
-    background: rgba(255, 255, 255, 0.5);
-    backdrop-filter: blur(5px);
-    border: 2px dashed rgba(255, 255, 255, 0.4);
-    border-radius: 12px;
+    background: linear-gradient(145deg, #ffffff 0%, #fafbfc 100%);
+    border: 2px dashed var(--gray-300);
+    border-radius: var(--radius-xl);
     padding: 2rem;
-    transition: all 0.3s ease;
+    transition: all var(--transition-normal);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
   }
 
   .placeholder-card:hover {
-    border-color: #3b82f6;
-    background: rgba(59, 130, 246, 0.1);
-    backdrop-filter: blur(8px);
+    border-color: var(--primary-400);
+    background: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(59, 130, 246, 0.04) 100%
+    );
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      0 4px 12px rgba(59, 130, 246, 0.08);
   }
 
   .placeholder-icon {
@@ -662,19 +717,17 @@
   .search-input {
     width: 100%;
     padding: 0.75rem 0.75rem 0.75rem 2.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid #e5e7eb;
     border-radius: 8px;
     font-size: 0.875rem;
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(5px);
+    background: white;
     transition: all 0.2s ease;
   }
 
   .search-input:focus {
     outline: none;
     border-color: #3b82f6;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(8px);
+    background: white;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
@@ -727,22 +780,6 @@
     color: #9ca3af !important;
   }
 
-  .clear-search-btn {
-    margin-top: 1rem;
-    padding: 0.5rem 1rem;
-    background: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .clear-search-btn:hover {
-    background: #2563eb;
-  }
-
   .persons-list {
     display: flex;
     flex-direction: column;
@@ -754,34 +791,75 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 0.75rem;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    transition: all 0.2s ease;
+    padding: 1rem;
+    background: linear-gradient(145deg, #ffffff 0%, #fafbfc 100%);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-xl);
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.04),
+      0 1px 3px rgba(0, 0, 0, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    transition: all var(--transition-spring);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .person-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
+    transform: scaleX(0);
+    transition: transform var(--transition-normal);
+    transform-origin: left;
+  }
+
+  .person-item:hover::before {
+    transform: scaleX(1);
   }
 
   .person-item:hover {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-    border-color: rgba(255, 255, 255, 0.5);
-    transform: translateY(-1px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    border-color: var(--primary-200);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow:
+      0 12px 28px rgba(0, 0, 0, 0.08),
+      0 6px 20px rgba(59, 130, 246, 0.12),
+      0 0 0 2px rgba(59, 130, 246, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  }
+
+  .person-item:hover .person-avatar {
+    transform: scale(1.1) rotate(5deg);
+    box-shadow:
+      0 6px 20px rgba(59, 130, 246, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
   }
 
   .person-avatar {
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 2.75rem;
+    height: 2.75rem;
     border-radius: 50%;
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    background: linear-gradient(
+      135deg,
+      var(--primary-500) 0%,
+      var(--primary-700) 100%
+    );
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 600;
-    font-size: 1rem;
+    font-weight: var(--font-weight-bold);
+    font-size: 1.125rem;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow:
+      0 4px 12px rgba(59, 130, 246, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transition: all var(--transition-spring);
+    flex-shrink: 0;
   }
 
   .person-info {
@@ -810,46 +888,6 @@
   .person-actions {
     display: flex;
     gap: 0.5rem;
-  }
-
-  .action-btn {
-    width: 2rem;
-    height: 2rem;
-    border: none;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .action-btn svg {
-    width: 1.1rem;
-    height: 1.1rem;
-    fill: currentColor;
-  }
-
-  .action-btn.edit {
-    background: #dbeafe;
-    color: #1e40af;
-  }
-
-  .action-btn.edit:hover {
-    background: #3b82f6;
-    color: white;
-    transform: scale(1.1);
-  }
-
-  .action-btn.delete {
-    background: #fee2e2;
-    color: #dc2626;
-  }
-
-  .action-btn.delete:hover {
-    background: #dc2626;
-    color: white;
-    transform: scale(1.1);
   }
 
   .add-person-btn {
@@ -945,11 +983,10 @@
   }
 
   .modal-dialog {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(15px);
+    background: white;
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
     max-width: 500px;
     width: 90%;
     max-height: 90vh;
@@ -1026,29 +1063,34 @@
 
   .form-group input {
     width: 100%;
-    padding: 0.75rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 6px;
+    padding: 0.875rem 1rem;
+    border: 2px solid var(--gray-200);
+    border-radius: var(--radius-lg);
     font-size: 0.875rem;
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(5px);
-    transition: all 0.2s ease;
+    background: white;
+    color: var(--gray-800);
+    transition: all var(--transition-normal);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .form-group input:hover {
+    border-color: var(--gray-300);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+
+  .form-group input:focus {
+    outline: none;
+    border-color: var(--primary-400);
+    box-shadow:
+      0 0 0 4px rgba(59, 130, 246, 0.1),
+      0 4px 12px rgba(59, 130, 246, 0.15);
+    transform: translateY(-1px);
   }
 
   .error-message {
     color: #dc2626;
     font-size: 0.75rem;
     margin-top: 0.5rem;
-  }
-
-  /* Styles pour garantir l'affichage des SVG dans les boutons d'action */
-  .person-actions .action-btn svg {
-    display: block !important;
-    width: 1.1rem !important;
-    height: 1.1rem !important;
-    fill: currentColor !important;
-    opacity: 1 !important;
-    visibility: visible !important;
   }
 
   /* Responsive */
@@ -1086,16 +1128,6 @@
       width: 2rem;
       height: 2rem;
       font-size: 0.875rem;
-    }
-
-    .action-btn {
-      width: 1.75rem;
-      height: 1.75rem;
-    }
-
-    .action-btn svg {
-      width: 0.875rem;
-      height: 0.875rem;
     }
   }
 </style>

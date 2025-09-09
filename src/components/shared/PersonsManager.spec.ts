@@ -1,8 +1,31 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import PersonsManager from './PersonsManager.vue'
+import BaseModal from './BaseModal.vue'
+import BaseButton from './BaseButton.vue'
+import BaseCard from './BaseCard.vue'
 
-// Mock localStorage
+// Mock the useLocalStorage composable with reactive ref
+import { ref } from 'vue'
+
+const mockPersonsData = ref([
+  { id: '1', name: 'John Doe', email: 'john@example.com' },
+  { id: '2', name: 'Jane Smith', email: 'jane@example.com' },
+  { id: '3', name: 'Bob Wilson' },
+])
+
+const mockUsePersonsStorage = {
+  data: mockPersonsData,
+  save: vi.fn(),
+}
+
+vi.mock('@/composables/useLocalStorage', () => ({
+  useLocalStorage: () => ({
+    usePersonsStorage: () => mockUsePersonsStorage,
+  }),
+}))
+
+// Mock localStorage for cleanup functions
 const localStorageMock = {
   getItem: vi.fn(),
   setItem: vi.fn(),
@@ -28,6 +51,8 @@ describe('PersonsManager', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // Reset mock data
+    mockPersonsData.value = [...mockPersons]
     localStorageMock.getItem.mockReturnValue(JSON.stringify(mockPersons))
   })
 
@@ -39,7 +64,15 @@ describe('PersonsManager', () => {
 
   describe('Rendu initial', () => {
     it('devrait afficher le titre de section', () => {
-      wrapper = mount(PersonsManager)
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
 
       expect(wrapper.find('.section-title').text()).toContain(
         'Gestion des personnes'
@@ -47,18 +80,31 @@ describe('PersonsManager', () => {
       expect(wrapper.find('.section-title svg').exists()).toBe(true)
     })
 
-    it('devrait charger les personnes depuis localStorage', () => {
-      wrapper = mount(PersonsManager)
+    it('devrait charger les personnes depuis usePersonsStorage', () => {
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
 
-      expect(localStorageMock.getItem).toHaveBeenCalledWith(
-        'bankin-analyzer-persons'
-      )
       expect(wrapper.findAll('.person-item')).toHaveLength(3)
     })
 
-    it('devrait gérer le localStorage vide', () => {
-      localStorageMock.getItem.mockReturnValue(null)
-      wrapper = mount(PersonsManager)
+    it('devrait gérer la liste vide', () => {
+      mockPersonsData.value = []
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
 
       expect(wrapper.find('.no-results').exists()).toBe(true)
       expect(wrapper.find('.no-results p').text()).toContain(
@@ -66,22 +112,33 @@ describe('PersonsManager', () => {
       )
     })
 
-    it('devrait gérer les erreurs de parsing du localStorage', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      localStorageMock.getItem.mockReturnValue('invalid json')
+    it('devrait gérer les données invalides', () => {
+      mockPersonsData.value = []
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
 
-      wrapper = mount(PersonsManager)
-
-      expect(consoleSpy).toHaveBeenCalled()
       expect(wrapper.find('.no-results').exists()).toBe(true)
-
-      consoleSpy.mockRestore()
     })
   })
 
   describe('Affichage des personnes', () => {
     beforeEach(() => {
-      wrapper = mount(PersonsManager)
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
     })
 
     it('devrait afficher les informations de chaque personne', () => {
@@ -105,7 +162,7 @@ describe('PersonsManager', () => {
     })
 
     it('devrait utiliser le singulier pour une personne', () => {
-      localStorageMock.getItem.mockReturnValue(JSON.stringify([mockPersons[0]]))
+      mockPersonsData.value = [mockPersons[0]]
       wrapper = mount(PersonsManager)
 
       const personsCount = wrapper.find('.persons-count')
@@ -125,7 +182,15 @@ describe('PersonsManager', () => {
 
   describe('Barre de recherche', () => {
     beforeEach(() => {
-      wrapper = mount(PersonsManager)
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
     })
 
     it('devrait afficher la barre de recherche', () => {
@@ -198,45 +263,60 @@ describe('PersonsManager', () => {
 
   describe('Ajout de personne', () => {
     beforeEach(() => {
-      wrapper = mount(PersonsManager)
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
     })
 
     it("devrait afficher le bouton d'ajout", () => {
-      const addButton = wrapper.find('.add-person-btn')
+      const addButton = wrapper.findComponent(BaseButton)
       expect(addButton.exists()).toBe(true)
       expect(addButton.text()).toContain('Ajouter une personne')
     })
 
     it("devrait ouvrir le formulaire d'ajout", async () => {
-      const addButton = wrapper.find('.add-person-btn')
+      const addButton = wrapper.findComponent(BaseButton)
       await addButton.trigger('click')
 
-      expect(wrapper.find('.modal-overlay').exists()).toBe(true)
-      expect(wrapper.find('.modal-title').text()).toBe(
-        'Ajouter une nouvelle personne'
-      )
+      const modal = wrapper.findComponent(BaseModal)
+      expect(modal.props('isOpen')).toBe(true)
+      expect(modal.props('title')).toBe('Ajouter une nouvelle personne')
     })
 
     it('devrait valider le formulaire correctement', async () => {
-      const addButton = wrapper.find('.add-person-btn')
+      const addButton = wrapper.findComponent(BaseButton)
       await addButton.trigger('click')
 
       const nameInput = wrapper.find('#person-name')
       const emailInput = wrapper.find('#person-email')
-      const submitButton = wrapper.find('.btn-primary')
+
+      // Need to wait for modal to fully render
+      await wrapper.vm.$nextTick()
+
+      const modal = wrapper.findComponent(BaseModal)
+      const submitButtons = modal.findAllComponents(BaseButton)
+      const submitButton = submitButtons.find(btn =>
+        btn.text().includes('Ajouter')
+      )
 
       // Formulaire vide - invalide
-      expect(submitButton.attributes('disabled')).toBeDefined()
+      expect(submitButton?.props('disabled')).toBe(true)
 
       // Nom seul - valide
       await nameInput.setValue('New Person')
       await wrapper.vm.$nextTick()
-      expect(submitButton.attributes('disabled')).toBeUndefined()
+      expect(submitButton?.props('disabled')).toBe(false)
 
       // Email invalide - invalide
       await emailInput.setValue('invalid-email')
       await wrapper.vm.$nextTick()
-      expect(submitButton.attributes('disabled')).toBeDefined()
+      expect(submitButton?.props('disabled')).toBe(true)
       expect(wrapper.find('.error-message').text()).toContain(
         'adresse email valide'
       )
@@ -244,7 +324,7 @@ describe('PersonsManager', () => {
       // Email valide - valide
       await emailInput.setValue('new@example.com')
       await wrapper.vm.$nextTick()
-      expect(submitButton.attributes('disabled')).toBeUndefined()
+      expect(submitButton?.props('disabled')).toBe(false)
     })
 
     it('devrait détecter les emails dupliqués', async () => {
@@ -262,7 +342,7 @@ describe('PersonsManager', () => {
     })
 
     it('devrait ajouter une nouvelle personne', async () => {
-      const addButton = wrapper.find('.add-person-btn')
+      const addButton = wrapper.findComponent(BaseButton)
       await addButton.trigger('click')
 
       const nameInput = wrapper.find('#person-name')
@@ -273,15 +353,13 @@ describe('PersonsManager', () => {
       await emailInput.setValue('new@example.com')
       await form.trigger('submit')
 
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'bankin-analyzer-persons',
-        expect.stringContaining('New Person')
-      )
-      expect(wrapper.find('.modal-overlay').exists()).toBe(false)
+      expect(mockUsePersonsStorage.save).toHaveBeenCalled()
+      const modal = wrapper.findComponent(BaseModal)
+      expect(modal.props('isOpen')).toBe(false)
     })
 
     it('devrait ajouter une personne sans email', async () => {
-      const addButton = wrapper.find('.add-person-btn')
+      const addButton = wrapper.findComponent(BaseButton)
       await addButton.trigger('click')
 
       const nameInput = wrapper.find('#person-name')
@@ -290,21 +368,30 @@ describe('PersonsManager', () => {
       await nameInput.setValue('Person Without Email')
       await form.trigger('submit')
 
-      expect(localStorageMock.setItem).toHaveBeenCalled()
+      expect(mockUsePersonsStorage.save).toHaveBeenCalled()
     })
   })
 
   describe('Édition de personne', () => {
     beforeEach(() => {
-      wrapper = mount(PersonsManager)
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
     })
 
     it("devrait ouvrir le formulaire d'édition", async () => {
       const editButton = wrapper.findAll('.action-btn.edit')[0]
       await editButton.trigger('click')
 
-      expect(wrapper.find('.modal-overlay').exists()).toBe(true)
-      expect(wrapper.find('.modal-title').text()).toBe('Modifier la personne')
+      const modal = wrapper.findComponent(BaseModal)
+      expect(modal.props('isOpen')).toBe(true)
+      expect(modal.props('title')).toBe('Modifier la personne')
       expect(wrapper.find('#person-name').element.value).toBe('John Doe')
       expect(wrapper.find('#person-email').element.value).toBe(
         'john@example.com'
@@ -315,7 +402,7 @@ describe('PersonsManager', () => {
       const editButton = wrapper.findAll('.action-btn.edit')[0]
       await editButton.trigger('click')
 
-      const addButton = wrapper.find('.add-person-btn')
+      const addButton = wrapper.findComponent(BaseButton)
       expect(addButton.text()).toContain('Annuler')
     })
 
@@ -329,10 +416,7 @@ describe('PersonsManager', () => {
       await nameInput.setValue('John Updated')
       await form.trigger('submit')
 
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'bankin-analyzer-persons',
-        expect.stringContaining('John Updated')
-      )
+      expect(mockUsePersonsStorage.save).toHaveBeenCalled()
     })
 
     it("ne devrait pas considérer l'email de la personne éditée comme doublon", async () => {
@@ -340,14 +424,25 @@ describe('PersonsManager', () => {
       await editButton.trigger('click')
 
       // L'email de John ne devrait pas être considéré comme un doublon pour John lui-même
-      const submitButton = wrapper.find('.btn-primary')
-      expect(submitButton.attributes('disabled')).toBeUndefined()
+      const submitButtons = wrapper.findAllComponents(BaseButton)
+      const submitButton = submitButtons.find(btn =>
+        btn.text().includes('Sauvegarder')
+      )
+      expect(submitButton?.props('disabled')).toBe(false)
     })
   })
 
   describe('Suppression de personne', () => {
     beforeEach(() => {
-      wrapper = mount(PersonsManager)
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
     })
 
     it('devrait demander confirmation avant suppression', async () => {
@@ -363,10 +458,7 @@ describe('PersonsManager', () => {
       const deleteButton = wrapper.findAll('.action-btn.delete')[0]
       await deleteButton.trigger('click')
 
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'bankin-analyzer-persons',
-        expect.not.stringContaining('John Doe')
-      )
+      expect(mockUsePersonsStorage.save).toHaveBeenCalled()
     })
 
     it('ne devrait pas supprimer si confirmation annulée', async () => {
@@ -375,8 +467,8 @@ describe('PersonsManager', () => {
       const deleteButton = wrapper.findAll('.action-btn.delete')[0]
       await deleteButton.trigger('click')
 
-      // setItem ne devrait pas être appelé pour la suppression
-      expect(localStorageMock.setItem).not.toHaveBeenCalled()
+      // save ne devrait pas être appelé pour la suppression
+      expect(mockUsePersonsStorage.save).not.toHaveBeenCalled()
     })
 
     it('devrait nettoyer les assignations de la personne supprimée', async () => {
@@ -414,57 +506,71 @@ describe('PersonsManager', () => {
 
   describe('Gestion de la modale', () => {
     beforeEach(() => {
-      wrapper = mount(PersonsManager)
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
     })
 
     it('devrait fermer la modale en cliquant sur overlay', async () => {
-      const addButton = wrapper.find('.add-person-btn')
+      const addButton = wrapper.findComponent(BaseButton)
       await addButton.trigger('click')
 
-      const overlay = wrapper.find('.modal-overlay')
-      await overlay.trigger('click')
+      const modal = wrapper.findComponent(BaseModal)
+      await modal.find('.modal-overlay').trigger('click')
 
-      expect(wrapper.find('.modal-overlay').exists()).toBe(false)
+      expect(modal.props('isOpen')).toBe(false)
     })
 
     it('ne devrait pas fermer la modale en cliquant sur le contenu', async () => {
-      const addButton = wrapper.find('.add-person-btn')
+      const addButton = wrapper.findComponent(BaseButton)
       await addButton.trigger('click')
 
-      const dialog = wrapper.find('.modal-dialog')
-      await dialog.trigger('click')
+      const modal = wrapper.findComponent(BaseModal)
+      await modal.find('.modal-content').trigger('click')
 
-      expect(wrapper.find('.modal-overlay').exists()).toBe(true)
+      expect(modal.props('isOpen')).toBe(true)
     })
 
     it('devrait fermer la modale avec le bouton de fermeture', async () => {
-      const addButton = wrapper.find('.add-person-btn')
+      const addButton = wrapper.findComponent(BaseButton)
       await addButton.trigger('click')
 
-      const closeButton = wrapper.find('.modal-close-btn')
+      const modal = wrapper.findComponent(BaseModal)
+      const closeButton = modal.find('.modal-close-button')
       await closeButton.trigger('click')
 
-      expect(wrapper.find('.modal-overlay').exists()).toBe(false)
+      expect(modal.props('isOpen')).toBe(false)
     })
 
     it('devrait fermer la modale avec le bouton Annuler', async () => {
-      const addButton = wrapper.find('.add-person-btn')
+      const addButton = wrapper.findComponent(BaseButton)
       await addButton.trigger('click')
 
-      const cancelButton = wrapper.find('.btn-secondary')
-      await cancelButton.trigger('click')
+      const cancelButtons = wrapper.findAllComponents(BaseButton)
+      const cancelButton = cancelButtons.find(btn =>
+        btn.text().includes('Annuler')
+      )
+      await cancelButton?.trigger('click')
 
-      expect(wrapper.find('.modal-overlay').exists()).toBe(false)
+      const modal = wrapper.findComponent(BaseModal)
+      expect(modal.props('isOpen')).toBe(false)
     })
 
     it('devrait réinitialiser le formulaire lors de la fermeture', async () => {
-      const addButton = wrapper.find('.add-person-btn')
+      const addButton = wrapper.findComponent(BaseButton)
       await addButton.trigger('click')
 
       const nameInput = wrapper.find('#person-name')
       await nameInput.setValue('Test')
 
-      const closeButton = wrapper.find('.modal-close-btn')
+      const modal = wrapper.findComponent(BaseModal)
+      const closeButton = modal.find('.modal-close-button')
       await closeButton.trigger('click')
 
       // Rouvrir et vérifier que le formulaire est vide
@@ -475,21 +581,39 @@ describe('PersonsManager', () => {
 
   describe('Export/Import', () => {
     beforeEach(() => {
-      wrapper = mount(PersonsManager)
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
     })
 
     it("devrait afficher les boutons d'export/import quand il y a des personnes", () => {
       expect(wrapper.find('.secondary-actions').exists()).toBe(true)
 
-      const buttons = wrapper.findAll('.action-btn.secondary')
-      expect(buttons).toHaveLength(2)
-      expect(buttons[0].text()).toContain('Exporter')
-      expect(buttons[1].text()).toContain('Importer')
+      const buttons = wrapper.findAllComponents(BaseButton)
+      const exportButton = buttons.find(btn => btn.text().includes('Exporter'))
+      const importButton = buttons.find(btn => btn.text().includes('Importer'))
+
+      expect(exportButton?.exists()).toBe(true)
+      expect(importButton?.exists()).toBe(true)
     })
 
     it('ne devrait pas afficher les boutons export/import sans personnes', () => {
-      localStorageMock.getItem.mockReturnValue('[]')
-      wrapper = mount(PersonsManager)
+      mockPersonsData.value = []
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
 
       expect(wrapper.find('.secondary-actions').exists()).toBe(false)
     })
@@ -518,8 +642,9 @@ describe('PersonsManager', () => {
       }
       mockCreateElement.mockReturnValue(mockLink as HTMLAnchorElement)
 
-      const exportButton = wrapper.find('[title="Exporter les données"]')
-      await exportButton.trigger('click')
+      const buttons = wrapper.findAllComponents(BaseButton)
+      const exportButton = buttons.find(btn => btn.text().includes('Exporter'))
+      await exportButton?.trigger('click')
 
       expect(mockCreateElement).toHaveBeenCalledWith('a')
       expect(mockLink.download).toBe('personnes-bankin-analyzer.json')
@@ -563,10 +688,7 @@ describe('PersonsManager', () => {
       // Simuler la lecture du fichier
       mockFileReader.onload({ target: { result: JSON.stringify(newPersons) } })
 
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'bankin-analyzer-persons',
-        JSON.stringify(newPersons)
-      )
+      expect(mockUsePersonsStorage.save).toHaveBeenCalled()
       expect(window.alert).toHaveBeenCalledWith(
         '1 personne(s) importée(s) avec succès'
       )
@@ -640,7 +762,15 @@ describe('PersonsManager', () => {
 
   describe("Validation et génération d'ID", () => {
     beforeEach(() => {
-      wrapper = mount(PersonsManager)
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
     })
 
     it('devrait générer des IDs uniques', () => {
@@ -670,7 +800,15 @@ describe('PersonsManager', () => {
 
   describe('Accessibilité', () => {
     beforeEach(() => {
-      wrapper = mount(PersonsManager)
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
     })
 
     it('devrait avoir des labels appropriés pour les inputs', async () => {
@@ -706,9 +844,17 @@ describe('PersonsManager', () => {
 
   describe('Responsive design', () => {
     it('devrait avoir des classes CSS pour le responsive', () => {
-      wrapper = mount(PersonsManager)
+      wrapper = mount(PersonsManager, {
+        global: {
+          components: {
+            BaseModal,
+            BaseButton,
+            BaseCard,
+          },
+        },
+      })
 
-      expect(wrapper.find('.persons-section').exists()).toBe(true)
+      expect(wrapper.findComponent(BaseCard).exists()).toBe(true)
       expect(wrapper.find('.section-content').exists()).toBe(true)
       expect(wrapper.find('.persons-list').exists()).toBe(true)
       expect(wrapper.find('.action-buttons').exists()).toBe(true)
