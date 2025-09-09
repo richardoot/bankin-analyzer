@@ -1,7 +1,9 @@
 <script setup lang="ts">
+  import { computed } from 'vue'
+
   interface Props {
     variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
-    size?: 'sm' | 'md' | 'lg'
+    size?: 'small' | 'medium' | 'large' | 'sm' | 'md' | 'lg'
     disabled?: boolean
     loading?: boolean
     type?: 'button' | 'submit' | 'reset'
@@ -25,6 +27,20 @@
 
   const emit = defineEmits<Emits>()
 
+  // Map size values for compatibility
+  const normalizedSize = computed(() => {
+    switch (props.size) {
+      case 'small':
+        return 'sm'
+      case 'medium':
+        return 'md'
+      case 'large':
+        return 'lg'
+      default:
+        return props.size
+    }
+  })
+
   const handleClick = (event: MouseEvent) => {
     if (!props.disabled && !props.loading) {
       emit('click', event)
@@ -39,7 +55,7 @@
     class="base-btn"
     :class="[
       `base-btn--${variant}`,
-      `base-btn--${size}`,
+      `base-btn--${normalizedSize}`,
       {
         'base-btn--full-width': fullWidth,
         'base-btn--loading': loading,
@@ -71,8 +87,16 @@
       />
     </svg>
 
-    <!-- Icon slot -->
-    <span v-if="$slots.icon && !loading" class="base-btn__icon">
+    <!-- Left icon slot -->
+    <span
+      v-if="$slots['icon-left'] && !loading"
+      class="base-btn__icon base-btn__icon--left"
+    >
+      <slot name="icon-left" />
+    </span>
+
+    <!-- Legacy icon slot (for compatibility) -->
+    <span v-else-if="$slots.icon && !loading" class="base-btn__icon">
       <slot name="icon" />
     </span>
 
@@ -80,31 +104,46 @@
     <span v-if="!icon || $slots.default" class="base-btn__content">
       <slot />
     </span>
+
+    <!-- Right icon slot -->
+    <span
+      v-if="$slots['icon-right'] && !loading"
+      class="base-btn__icon base-btn__icon--right"
+    >
+      <slot name="icon-right" />
+    </span>
   </button>
 </template>
 
 <style scoped>
   .base-btn {
     position: relative;
-    display: inline-flex;
+    display: inline-flex !important;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
     border: none;
-    border-radius: 0.5rem;
+    border-radius: var(--radius-lg);
     font-family: inherit;
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold) !important;
     text-decoration: none;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all var(--transition-normal);
     white-space: nowrap;
     user-select: none;
     outline: none;
+    backdrop-filter: blur(10px);
   }
 
   .base-btn:focus-visible {
-    outline: 2px solid #3b82f6;
-    outline-offset: 2px;
+    outline: 3px solid var(--primary-400);
+    outline-offset: 3px;
+    transform: scale(1.05);
+  }
+
+  .base-btn:active {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
   }
 
   /* Sizes */
@@ -147,52 +186,105 @@
 
   /* Variants */
   .base-btn--primary {
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    color: white;
+    background: linear-gradient(135deg, var(--primary-500), var(--primary-700));
+    color: white !important;
     border: 1px solid transparent;
+    box-shadow: var(--shadow-primary);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .base-btn--primary::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.2),
+      transparent
+    );
+    transition: left var(--transition-normal);
+  }
+
+  .base-btn--primary:hover::before {
+    left: 100%;
   }
 
   .base-btn--primary:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow:
+      var(--shadow-primary),
+      0 8px 25px rgba(59, 130, 246, 0.3);
+    background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
   }
 
   .base-btn--primary:active:not(:disabled) {
-    transform: translateY(0);
+    transform: translateY(0) scale(0.98);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .base-btn--primary:focus:not(:disabled) {
+    box-shadow:
+      var(--shadow-primary),
+      0 0 0 4px rgba(59, 130, 246, 0.2);
   }
 
   .base-btn--secondary {
-    background: #f3f4f6;
-    color: #374151;
-    border: 1px solid #d1d5db;
+    background: white;
+    color: var(--gray-700) !important;
+    border: 1px solid var(--gray-300);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(10px);
   }
 
   .base-btn--secondary:hover:not(:disabled) {
-    background: #e5e7eb;
-    border-color: #9ca3af;
+    background: var(--gray-50);
+    border-color: var(--primary-300);
+    color: var(--primary-700) !important;
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
   }
 
   .base-btn--danger {
-    background: #ef4444;
-    color: white;
+    background: linear-gradient(135deg, var(--error-500), #dc2626);
+    color: white !important;
     border: 1px solid transparent;
+    box-shadow: var(--shadow-error);
   }
 
   .base-btn--danger:hover:not(:disabled) {
-    background: #dc2626;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    color: white !important;
+    transform: translateY(-2px) scale(1.02);
+    box-shadow:
+      var(--shadow-error),
+      0 8px 25px rgba(239, 68, 68, 0.3);
+  }
+
+  .base-btn--danger:active:not(:disabled) {
+    transform: translateY(0) scale(0.98);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .base-btn--danger:focus:not(:disabled) {
+    box-shadow:
+      var(--shadow-error),
+      0 0 0 4px rgba(239, 68, 68, 0.2);
   }
 
   .base-btn--ghost {
     background: transparent;
-    color: #6b7280;
+    color: #6b7280 !important;
     border: 1px solid transparent;
   }
 
   .base-btn--ghost:hover:not(:disabled) {
     background: #f3f4f6;
-    color: #374151;
+    color: #374151 !important;
   }
 
   /* States */
@@ -233,11 +325,15 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    color: inherit;
   }
 
   .base-btn__icon :deep(svg) {
     width: 1rem;
     height: 1rem;
+    color: inherit;
+    fill: currentColor;
+    stroke: currentColor;
   }
 
   .base-btn--sm .base-btn__icon :deep(svg) {
@@ -254,6 +350,25 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    color: inherit;
+  }
+
+  .base-btn__icon--left {
+    margin-right: 0.25rem;
+  }
+
+  .base-btn__icon--right {
+    margin-left: 0.25rem;
+  }
+
+  /* Force color inheritance for all child elements */
+  .base-btn * {
+    color: inherit !important;
+  }
+
+  .base-btn svg {
+    fill: currentColor !important;
+    stroke: currentColor !important;
   }
 
   /* Responsive adjustments */
@@ -278,22 +393,23 @@
   @media (prefers-color-scheme: dark) {
     .base-btn--secondary {
       background: #374151;
-      color: #d1d5db;
+      color: #d1d5db !important;
       border-color: #4b5563;
     }
 
     .base-btn--secondary:hover:not(:disabled) {
       background: #4b5563;
+      color: #d1d5db !important;
       border-color: #6b7280;
     }
 
     .base-btn--ghost {
-      color: #9ca3af;
+      color: #9ca3af !important;
     }
 
     .base-btn--ghost:hover:not(:disabled) {
       background: #374151;
-      color: #d1d5db;
+      color: #d1d5db !important;
     }
   }
 </style>

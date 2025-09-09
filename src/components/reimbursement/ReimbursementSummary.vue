@@ -835,11 +835,24 @@
   .preview-title {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #1f2937;
-    margin: 0;
+    gap: var(--spacing-3);
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--gray-900);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    margin: 0 0 var(--spacing-6) 0;
+    position: relative;
+  }
+
+  .preview-title::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 60px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
+    border-radius: 2px;
   }
 
   .preview-title svg {
@@ -865,13 +878,16 @@
   }
 
   .preview-badge {
-    background: rgba(251, 191, 36, 0.2);
-    color: #92400e;
-    padding: 0.25rem 0.75rem;
-    border-radius: 12px;
+    background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
+    color: var(--primary-700);
+    padding: 0.375rem 0.875rem;
+    border-radius: 16px;
     font-size: 0.75rem;
-    font-weight: 500;
+    font-weight: var(--font-weight-semibold);
     margin-left: auto;
+    border: 1px solid var(--primary-200);
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+    backdrop-filter: blur(10px);
   }
 
   .no-data-message {
