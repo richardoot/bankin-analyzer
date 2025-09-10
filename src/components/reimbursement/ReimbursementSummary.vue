@@ -402,14 +402,16 @@
 
   // Fonctions d'export PDF
   const handlePdfExport = async (): Promise<void> => {
-    if (reimbursementData.value.length === 0) {
-      alert('Aucune donnée à exporter.')
-      return
-    }
-
     isExporting.value = true
 
     try {
+      console.log('=== DEBUT EXPORT PDF ===')
+
+      if (reimbursementData.value.length === 0) {
+        alert('Aucune donnée à exporter.')
+        return
+      }
+
       // Préparer les données pour l'export
       const reimbursementDataForExport = reimbursementData.value
       const detailedDataForExport = detailedReimbursementData.value
@@ -435,7 +437,9 @@
       )
     } catch (error) {
       console.error("Erreur lors de l'export PDF:", error)
-      alert('Erreur lors de la génération du PDF. Veuillez réessayer.')
+      alert(
+        `Erreur lors de la génération du PDF: ${error instanceof Error ? error.message : 'Erreur inconnue'}`
+      )
     } finally {
       isExporting.value = false
     }
