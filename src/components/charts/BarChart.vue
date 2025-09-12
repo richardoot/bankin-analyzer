@@ -59,6 +59,17 @@
       </div>
     </div>
 
+    <!-- Annonce des changements de données pour les lecteurs d'écran -->
+    <div class="sr-only" aria-live="polite" aria-atomic="false">
+      Graphique mis à jour: {{ currentChartData.months.length }} mois affichés
+      <span v-if="type === 'expenses'">
+        , total des dépenses {{ formatAmount(totalAmount) }}
+      </span>
+      <span v-else-if="type === 'income'">
+        , total des revenus {{ formatAmount(totalAmount) }}
+      </span>
+    </div>
+
     <!-- Zone du graphique -->
     <div ref="chartContainerRef" class="chart-container">
       <!-- SVG de l'histogramme -->
@@ -67,6 +78,8 @@
           class="bar-chart-svg"
           :viewBox="`0 0 ${svgWidth} ${svgHeight}`"
           xmlns="http://www.w3.org/2000/svg"
+          role="img"
+          :aria-label="`Graphique en barres des ${type === 'expenses' ? 'dépenses' : type === 'income' ? 'revenus' : 'flux financiers'} par mois`"
         >
           <!-- Grille de fond -->
           <defs>
@@ -572,6 +585,18 @@
       : filteredChartData.value
   })
 
+  // Total amount selon le type de graphique
+  const totalAmount = computed(() => {
+    if (props.type === 'expenses') {
+      return currentChartData.value.totalExpenses
+    } else if (props.type === 'income') {
+      return currentChartData.value.totalIncome
+    } else if (props.type === 'net') {
+      return currentChartData.value.totalNet
+    }
+    return 0
+  })
+
   // Configuration du SVG
   const svgWidth = 1200
   const svgHeight = 500
@@ -776,6 +801,11 @@
 
   // Formatage court des montants pour les axes (logique originale)
   const formatShortAmount = (amount: number): string => {
+    // Protection contre les valeurs undefined/null/NaN
+    if (amount == null || isNaN(amount)) {
+      return '0€'
+    }
+
     const abs = Math.abs(amount)
     if (abs >= 1000000) {
       return `${(amount / 1000000).toFixed(1)}M€`
@@ -796,6 +826,18 @@
 </script>
 
 <style scoped>
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   .bar-chart-container {
     width: 100%;
     max-width: 100%;

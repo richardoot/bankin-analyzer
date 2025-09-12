@@ -723,7 +723,7 @@
         <div class="stat-item">
           <span class="stat-label">Couverture :</span>
           <span class="stat-value coverage"
-            >{{ stats.reimbursementCoverage.toFixed(1) }}%</span
+            >{{ (stats.reimbursementCoverage || 0).toFixed(1) }}%</span
           >
         </div>
       </div>
