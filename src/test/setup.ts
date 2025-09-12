@@ -1,17 +1,20 @@
 import { expect, vi } from 'vitest'
 import * as matchers from '@testing-library/jest-dom/matchers'
 import { config } from '@vue/test-utils'
+import type { ComponentPublicInstance } from 'vue'
 
 // Étendre les matchers expect avec jest-dom
 expect.extend(matchers)
 
 // Configuration globale pour Vue Test Utils
 config.global = {
-  // Stubs pour les composants externes
+  // Stubs pour les composants externes et async components
   stubs: {
     // Stub des transitions Vue pour les tests
     transition: false,
     'transition-group': false,
+    // Stub pour les composants async qui posent problème
+    Suspense: false,
   },
 
   // Configuration des plugins globaux
@@ -24,26 +27,110 @@ config.global = {
   directives: {},
 }
 
-// Mock du localStorage pour les tests
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-  length: 0,
-  key: vi.fn(),
+// Helper pour gérer les composants async dans les tests
+export const waitForAsyncComponent = async (
+  wrapper: any,
+  timeout = 1000
+): Promise<void> => {
+  const startTime = Date.now()
+
+  while (Date.now() - startTime < timeout) {
+    try {
+      // Force update du wrapper
+      await wrapper.vm.$nextTick()
+
+      // Vérifier si les composants async sont montés
+      const hasAsyncErrors = wrapper.vm.$el?.querySelector(
+        '.async-component-error'
+      )
+      const hasAsyncLoading = wrapper.vm.$el?.querySelector(
+        '.async-component-loading'
+      )
+
+      if (!hasAsyncErrors && !hasAsyncLoading) {
+        // Attendre une frame supplémentaire pour s'assurer du rendu
+        await new Promise(resolve =>
+          requestAnimationFrame(() => resolve(void 0))
+        )
+        return
+      }
+
+      // Attendre 10ms avant la prochaine vérification
+      await new Promise(resolve => setTimeout(resolve, 10))
+    } catch {
+      // En cas d'erreur, continuer à attendre
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+  }
 }
+
+// Mock du localStorage avec isolation entre tests
+class MockStorage {
+  private store = new Map<string, string>()
+
+  getItem = vi.fn((key: string) => this.store.get(key) ?? null)
+  setItem = vi.fn((key: string, value: string) => {
+    this.store.set(key, value)
+    this.dispatchStorageEvent(key, value)
+  })
+  removeItem = vi.fn((key: string) => {
+    this.store.delete(key)
+    this.dispatchStorageEvent(key, null)
+  })
+  clear = vi.fn(() => {
+    this.store.clear()
+  })
+  key = vi.fn((index: number) => {
+    const keys = Array.from(this.store.keys())
+    return keys[index] ?? null
+  })
+  get length() {
+    return this.store.size
+  }
+
+  // Dispatch des événements storage pour les tests d'intégration
+  private dispatchStorageEvent(key: string, newValue: string | null) {
+    const oldValue = this.store.get(key) ?? null
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key,
+        newValue,
+        oldValue,
+        storageArea: this as any,
+      })
+    )
+  }
+
+  // Méthode pour nettoyer entre les tests
+  reset() {
+    this.store.clear()
+    this.getItem.mockClear()
+    this.setItem.mockClear()
+    this.removeItem.mockClear()
+    this.clear.mockClear()
+    this.key.mockClear()
+  }
+}
+
+const localStorageMock = new MockStorage()
+const sessionStorageMock = new MockStorage()
 
 Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
   writable: true,
 })
 
-// Mock du sessionStorage
 Object.defineProperty(window, 'sessionStorage', {
-  value: localStorageMock,
+  value: sessionStorageMock,
   writable: true,
 })
+
+// Exposition globale pour les tests
+// @ts-ignore
+global.mockStorage = {
+  localStorage: localStorageMock,
+  sessionStorage: sessionStorageMock,
+}
 
 // Mock de window.matchMedia pour les media queries
 Object.defineProperty(window, 'matchMedia', {
@@ -127,4 +214,24 @@ global.FileReader = class MockFileReader {
 vi.setConfig({
   testTimeout: 10000,
   hookTimeout: 10000,
+})
+
+// Hook global pour nettoyer entre les tests
+import { beforeEach, afterEach } from 'vitest'
+
+beforeEach(() => {
+  // Nettoyer les mocks localStorage entre chaque test
+  // @ts-ignore
+  global.mockStorage.localStorage.reset()
+  // @ts-ignore
+  global.mockStorage.sessionStorage.reset()
+
+  // Nettoyer les mocks DOM
+  vi.clearAllMocks()
+})
+
+afterEach(() => {
+  // Nettoyer les timers et les observateurs
+  vi.clearAllTimers()
+  vi.useRealTimers()
 })
