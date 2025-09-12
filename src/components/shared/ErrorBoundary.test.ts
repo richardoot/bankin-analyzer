@@ -3,18 +3,12 @@ import { mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import ErrorBoundary from './ErrorBoundary.vue'
 
-// Composant de test qui génère une erreur
-const _ThrowingComponent = defineComponent({
-  name: 'ThrowingComponent',
-  template: '<div>This should not render</div>',
-  setup() {
-    throw new Error('Test error from component')
-  },
-})
-
 // Composant de test normal
 const NormalComponent = defineComponent({
   name: 'NormalComponent',
+  setup() {
+    return {}
+  },
   template: '<div>Normal component content</div>',
 })
 

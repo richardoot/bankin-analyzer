@@ -58,15 +58,17 @@ export const waitForAsyncComponent = async (
   const pollAsync = async (): Promise<void> => {
     if (await checkAsync()) {
       // Attendre une frame supplémentaire pour s'assurer du rendu
-      return new Promise<void>(resolve =>
+      return new Promise<void>(resolve => {
         requestAnimationFrame(() => resolve())
-      )
+      })
     }
 
     if (Date.now() - startTime < timeout) {
-      return new Promise<void>((resolve, reject) => 
-        setTimeout(() => pollAsync().then(resolve).catch(reject), 10)
-      )
+      return new Promise<void>((resolve, reject) => {
+        setTimeout(() => {
+          pollAsync().then(resolve).catch(reject)
+        }, 10)
+      })
     }
   }
 
