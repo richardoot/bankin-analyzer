@@ -28,7 +28,7 @@
     console.log('📊 État après upload:', {
       error: uploadState.value.error,
       isValid: analysisResult.value?.isValid,
-      hasAnalysisResult: !!analysisResult.value
+      hasAnalysisResult: !!analysisResult.value,
     })
 
     // Vérifier le résultat après l'upload

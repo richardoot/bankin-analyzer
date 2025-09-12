@@ -81,7 +81,7 @@ export default defineConfig({
         // Optimize asset naming
         assetFileNames: assetInfo => {
           const info = assetInfo.name?.split('.') ?? []
-          const extType = info[info.length - 1]
+          const _extType = info[info.length - 1]
 
           if (/\.(png|jpe?g|gif|svg|webp|avif)$/.test(assetInfo.name ?? '')) {
             return 'assets/images/[name]-[hash][extname]'
@@ -96,7 +96,7 @@ export default defineConfig({
       },
 
       // External dependencies optimization
-      external: id => {
+      external: (_id: string) => {
         // Don't externalize anything in production build
         return false
       },

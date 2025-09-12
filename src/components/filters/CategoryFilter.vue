@@ -28,8 +28,8 @@
       <button
         class="filter-action-btn select-all"
         :disabled="allSelected"
-        @click="selectAll"
         :aria-label="`Sélectionner toutes les ${categories.length} catégories`"
+        @click="selectAll"
       >
         <svg
           class="btn-icon"
@@ -46,8 +46,8 @@
       <button
         class="filter-action-btn deselect-all"
         :disabled="noneSelected"
+        aria-label="Désélectionner toutes les catégories"
         @click="deselectAll"
-        :aria-label="`Désélectionner toutes les catégories`"
       >
         <svg
           class="btn-icon"

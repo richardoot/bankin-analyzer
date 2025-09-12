@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import App from '@/App.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import StartAnalysisSection from '@/components/layout/StartAnalysisSection.vue'
-import { waitForAsyncComponent } from '@/test/setup'
+import { waitForAsyncComponent as _waitForAsyncComponent } from '@/test/setup'
 
 // Mock des composants lourds pour focus sur la navigation
 vi.mock('@/views/AnalysesPage.vue', () => ({

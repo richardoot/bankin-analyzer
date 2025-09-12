@@ -114,7 +114,7 @@
             <ErrorBoundary
               fallback-title="Erreur du tableau de bord"
               fallback-message="Impossible d'afficher le tableau de bord. Veuillez rafraîchir la page."
-              >
+            >
               <DashboardPage :analysis-result="analysisResult" />
             </ErrorBoundary>
           </div>
@@ -122,7 +122,7 @@
             <ErrorBoundary
               fallback-title="Erreur du gestionnaire de remboursements"
               fallback-message="Impossible d'afficher le gestionnaire de remboursements. Veuillez rafraîchir la page."
-              >
+            >
               <ReimbursementManager :analysis-result="analysisResult" />
             </ErrorBoundary>
           </div>
