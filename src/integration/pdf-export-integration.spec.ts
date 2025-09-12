@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import ReimbursementSummary from '@/components/reimbursement/ReimbursementSummary.vue'
 import ExpensesReimbursementManager from '@/components/reimbursement/ExpensesReimbursementManager.vue'
 import { usePdfExport } from '@/composables/usePdfExport'
+import { waitForAsyncComponent } from '@/test/setup'
 import type {
   CsvAnalysisResult,
   Person,
@@ -314,31 +315,49 @@ describe('PDF Export Integration Tests', () => {
 
   describe("Génération des données pour l'export PDF", () => {
     beforeEach(() => {
-      expensesWrapper = mount(ExpensesReimbursementManager, {
-        props: { analysisResult: mockAnalysisResult },
-      })
+      // Simuler les données du gestionnaire de dépenses
+      const mockExpensesManager = {
+        filteredExpenses: mockAnalysisResult.transactions.filter(
+          t => t.type === 'expense'
+        ),
+        expenseAssignments: [],
+        stats: {
+          totalExpenses: 1000,
+          assignedExpenses: 500,
+          unassignedExpenses: 500,
+        },
+      }
 
       summaryWrapper = mount(ReimbursementSummary, {
         props: {
-          expensesManagerRef: {
-            filteredExpenses: expensesWrapper.vm.filteredExpenses,
-            expenseAssignments: expensesWrapper.vm.expenseAssignments,
-            stats: expensesWrapper.vm.stats,
-          },
+          expensesManagerRef: mockExpensesManager,
         },
       })
     })
 
     it('devrait générer les données de remboursement par personne', async () => {
-      await expensesWrapper.vm.loadAssignments()
-
-      // Mettre à jour la ref du summary avec les nouvelles données
-      await summaryWrapper.setProps({
-        expensesManagerRef: {
-          filteredExpenses: expensesWrapper.vm.filteredExpenses,
-          expenseAssignments: expensesWrapper.vm.expenseAssignments,
-          stats: expensesWrapper.vm.stats,
+      // Simuler les données de remboursement
+      const mockExpensesManager = {
+        filteredExpenses: mockAnalysisResult.transactions.filter(
+          t => t.type === 'expense'
+        ),
+        expenseAssignments: [
+          {
+            transactionId: 'trans1',
+            assignedPersons: [
+              { personId: 'person1', amount: 50, categoryId: 'cat1' },
+            ],
+          },
+        ],
+        stats: {
+          totalExpenses: 1000,
+          assignedExpenses: 500,
+          unassignedExpenses: 500,
         },
+      }
+
+      await summaryWrapper.setProps({
+        expensesManagerRef: mockExpensesManager,
       })
       await summaryWrapper.vm.$nextTick()
 

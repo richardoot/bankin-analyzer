@@ -3,12 +3,17 @@ import { mount } from '@vue/test-utils'
 import App from '@/App.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import StartAnalysisSection from '@/components/layout/StartAnalysisSection.vue'
+import { waitForAsyncComponent } from '@/test/setup'
 
 // Mock des composants lourds pour focus sur la navigation
 vi.mock('@/views/AnalysesPage.vue', () => ({
   default: {
     name: 'AnalysesPage',
     template: '<div class="analyses-page-mock">Analyses Page Content</div>',
+    emits: [],
+    setup() {
+      return {}
+    },
   },
 }))
 
@@ -16,6 +21,7 @@ vi.mock('@/components/layout/HeroSection.vue', () => ({
   default: {
     name: 'HeroSection',
     template: '<div class="hero-section-mock">Hero Section Content</div>',
+    emits: [],
   },
 }))
 
@@ -23,6 +29,7 @@ vi.mock('@/components/layout/AppFooter.vue', () => ({
   default: {
     name: 'AppFooter',
     template: '<footer class="app-footer-mock">Footer Content</footer>',
+    emits: [],
   },
 }))
 
@@ -36,8 +43,19 @@ describe('App Navigation Integration Tests', () => {
   })
 
   describe('Navigation initiale et état par défaut', () => {
-    beforeEach(() => {
-      wrapper = mount(App)
+    beforeEach(async () => {
+      wrapper = mount(App, {
+        global: {
+          stubs: {
+            // Stub the async component directly
+            AnalysesPage: {
+              template:
+                '<div class="analyses-page-mock">Analyses Page Content</div>',
+            },
+          },
+        },
+      })
+      await wrapper.vm.$nextTick()
     })
 
     it("devrait afficher la page d'accueil par défaut", () => {
@@ -59,8 +77,18 @@ describe('App Navigation Integration Tests', () => {
   })
 
   describe('Navigation via AppHeader', () => {
-    beforeEach(() => {
-      wrapper = mount(App)
+    beforeEach(async () => {
+      wrapper = mount(App, {
+        global: {
+          stubs: {
+            AnalysesPage: {
+              template:
+                '<div class="analyses-page-mock">Analyses Page Content</div>',
+            },
+          },
+        },
+      })
+      await wrapper.vm.$nextTick()
     })
 
     it('devrait naviguer vers la page analyses via le header', async () => {
@@ -106,8 +134,18 @@ describe('App Navigation Integration Tests', () => {
   })
 
   describe('Navigation via StartAnalysisSection', () => {
-    beforeEach(() => {
-      wrapper = mount(App)
+    beforeEach(async () => {
+      wrapper = mount(App, {
+        global: {
+          stubs: {
+            AnalysesPage: {
+              template:
+                '<div class="analyses-page-mock">Analyses Page Content</div>',
+            },
+          },
+        },
+      })
+      await wrapper.vm.$nextTick()
     })
 
     it('devrait naviguer vers les analyses via le bouton "Commencer l\'analyse"', async () => {
@@ -137,8 +175,18 @@ describe('App Navigation Integration Tests', () => {
   })
 
   describe('Cohérence des états de navigation', () => {
-    beforeEach(() => {
-      wrapper = mount(App)
+    beforeEach(async () => {
+      wrapper = mount(App, {
+        global: {
+          stubs: {
+            AnalysesPage: {
+              template:
+                '<div class="analyses-page-mock">Analyses Page Content</div>',
+            },
+          },
+        },
+      })
+      await wrapper.vm.$nextTick()
     })
 
     it("devrait maintenir la cohérence entre l'état interne et l'affichage", async () => {
@@ -194,8 +242,18 @@ describe('App Navigation Integration Tests', () => {
   })
 
   describe('Gestion des événements et émissions', () => {
-    beforeEach(() => {
-      wrapper = mount(App)
+    beforeEach(async () => {
+      wrapper = mount(App, {
+        global: {
+          stubs: {
+            AnalysesPage: {
+              template:
+                '<div class="analyses-page-mock">Analyses Page Content</div>',
+            },
+          },
+        },
+      })
+      await wrapper.vm.$nextTick()
     })
 
     it('devrait gérer correctement les événements de navigation du header', async () => {
@@ -245,8 +303,18 @@ describe('App Navigation Integration Tests', () => {
   })
 
   describe('Rendu conditionnel et performance', () => {
-    beforeEach(() => {
-      wrapper = mount(App)
+    beforeEach(async () => {
+      wrapper = mount(App, {
+        global: {
+          stubs: {
+            AnalysesPage: {
+              template:
+                '<div class="analyses-page-mock">Analyses Page Content</div>',
+            },
+          },
+        },
+      })
+      await wrapper.vm.$nextTick()
     })
 
     it('ne devrait rendre que les composants de la vue active', async () => {
@@ -301,8 +369,18 @@ describe('App Navigation Integration Tests', () => {
   })
 
   describe('Accessibilité et UX', () => {
-    beforeEach(() => {
-      wrapper = mount(App)
+    beforeEach(async () => {
+      wrapper = mount(App, {
+        global: {
+          stubs: {
+            AnalysesPage: {
+              template:
+                '<div class="analyses-page-mock">Analyses Page Content</div>',
+            },
+          },
+        },
+      })
+      await wrapper.vm.$nextTick()
     })
 
     it('devrait maintenir une structure sémantique correcte', () => {
@@ -340,8 +418,18 @@ describe('App Navigation Integration Tests', () => {
   })
 
   describe('Gestion des erreurs et cas limites', () => {
-    beforeEach(() => {
-      wrapper = mount(App)
+    beforeEach(async () => {
+      wrapper = mount(App, {
+        global: {
+          stubs: {
+            AnalysesPage: {
+              template:
+                '<div class="analyses-page-mock">Analyses Page Content</div>',
+            },
+          },
+        },
+      })
+      await wrapper.vm.$nextTick()
     })
 
     it('devrait gérer des états de navigation invalides', async () => {
@@ -398,8 +486,18 @@ describe('App Navigation Integration Tests', () => {
   })
 
   describe('Performance et optimisation', () => {
-    beforeEach(() => {
-      wrapper = mount(App)
+    beforeEach(async () => {
+      wrapper = mount(App, {
+        global: {
+          stubs: {
+            AnalysesPage: {
+              template:
+                '<div class="analyses-page-mock">Analyses Page Content</div>',
+            },
+          },
+        },
+      })
+      await wrapper.vm.$nextTick()
     })
 
     it('devrait éviter les re-renders inutiles', async () => {
