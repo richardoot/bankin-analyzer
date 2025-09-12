@@ -146,7 +146,11 @@
 
       <!-- Contenu de la zone d'upload -->
       <div class="upload-content">
-        <div v-if="uploadState.isUploading" class="uploading-state">
+        <div
+          v-if="uploadState.isUploading"
+          class="uploading-state"
+          aria-live="polite"
+        >
           <div class="spinner" aria-label="Chargement en cours"></div>
           <p class="upload-text">Traitement du fichier...</p>
         </div>
@@ -179,7 +183,11 @@
     </div>
 
     <!-- Fichier uploadé avec succès -->
-    <div v-if="isComplete && uploadedFile" class="success-state">
+    <div
+      v-if="isComplete && uploadedFile"
+      class="success-state"
+      aria-live="polite"
+    >
       <div class="file-info">
         <svg
           class="success-icon"
@@ -216,7 +224,12 @@
     </div>
 
     <!-- Message d'erreur -->
-    <div v-if="hasError" class="error-message" role="alert">
+    <div
+      v-if="hasError"
+      class="error-message"
+      role="alert"
+      aria-live="assertive"
+    >
       <svg
         class="error-icon"
         viewBox="0 0 24 24"
