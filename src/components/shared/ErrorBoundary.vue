@@ -7,8 +7,6 @@
     fallbackTitle?: string
     /** Message personnalisé de l'erreur */
     fallbackMessage?: string
-    /** Afficher les détails de l'erreur (mode dev) */
-    showErrorDetails?: boolean
     /** Afficher le bouton de retry */
     showRetryButton?: boolean
     /** Délai de récupération automatique */
@@ -20,7 +18,7 @@
   }
 
   interface Emits {
-    (e: 'error', errorInfo: any): void
+    (e: 'error', errorInfo: Record<string, unknown>): void
     (e: 'recover'): void
   }
 
@@ -28,7 +26,6 @@
     fallbackTitle: "Oups ! Une erreur s'est produite",
     fallbackMessage:
       'Nous rencontrons des difficultés techniques. Veuillez réessayer.',
-    showErrorDetails: false,
     showRetryButton: true,
     autoRecoveryDelay: 0,
     maxRetries: 3,

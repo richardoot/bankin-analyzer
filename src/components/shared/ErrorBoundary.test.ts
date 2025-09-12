@@ -4,7 +4,7 @@ import { defineComponent } from 'vue'
 import ErrorBoundary from './ErrorBoundary.vue'
 
 // Composant de test qui génère une erreur
-const ThrowingComponent = defineComponent({
+const _ThrowingComponent = defineComponent({
   name: 'ThrowingComponent',
   template: '<div>This should not render</div>',
   setup() {
