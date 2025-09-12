@@ -280,6 +280,25 @@
         </span>
       </h4>
     </template>
+
+    <!-- Annonces pour lecteurs d'écran -->
+    <div class="sr-only" aria-live="polite" aria-atomic="false">
+      <span v-if="searchTerm">
+        {{ filteredPersons.length }} personne{{
+          filteredPersons.length !== 1 ? 's' : ''
+        }}
+        trouvée{{ filteredPersons.length !== 1 ? 's' : '' }} pour "{{
+          searchTerm
+        }}"
+      </span>
+      <span v-else>
+        {{ availablePersons.length }} personne{{
+          availablePersons.length !== 1 ? 's' : ''
+        }}
+        total{{ availablePersons.length !== 1 ? 'es' : 'e' }}
+      </span>
+    </div>
+
     <div class="section-content placeholder-content">
       <div class="placeholder-card">
         <div class="placeholder-icon">
