@@ -18,11 +18,18 @@
       </p>
     </div>
 
+    <!-- Status des filtres pour les lecteurs d'écran -->
+    <div class="sr-only" aria-live="polite" aria-atomic="true">
+      {{ selectedCategories.length }} catégorie(s) sélectionnée(s) sur
+      {{ categories.length }}
+    </div>
+
     <div class="filter-actions">
       <button
         class="filter-action-btn select-all"
         :disabled="allSelected"
         @click="selectAll"
+        :aria-label="`Sélectionner toutes les ${categories.length} catégories`"
       >
         <svg
           class="btn-icon"
@@ -40,6 +47,7 @@
         class="filter-action-btn deselect-all"
         :disabled="noneSelected"
         @click="deselectAll"
+        :aria-label="`Désélectionner toutes les catégories`"
       >
         <svg
           class="btn-icon"
@@ -152,6 +160,18 @@
 </script>
 
 <style scoped>
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   .category-filter {
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(10px);

@@ -88,7 +88,7 @@ export const useLocalStorage = () => {
       const normalizedKey = normalizeKey(key, prefix)
       const item = localStorage.getItem(normalizedKey)
 
-      if (item === null) {
+      if (item === null || item === 'undefined') {
         return fallback
       }
 

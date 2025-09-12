@@ -115,6 +115,13 @@
       </div>
     </div>
 
+    <!-- Annonces pour lecteurs d'écran -->
+    <div class="sr-only" aria-live="polite" aria-atomic="false">
+      Gestionnaire de remboursements mis à jour:
+      {{ filteredExpenses.length }} dépenses filtrées sur
+      {{ analysisResult.transactions.filter(t => t.type === 'expense').length }}
+    </div>
+
     <!-- Contenu principal avec composants modulaires -->
     <div class="manager-content">
       <!-- Bouton de filtrage avancé -->
