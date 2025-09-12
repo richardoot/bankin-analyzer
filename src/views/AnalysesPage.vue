@@ -48,7 +48,6 @@
           <ErrorBoundary
             fallback-title="Erreur d'upload"
             fallback-message="Impossible de charger l'interface d'upload. Veuillez rafraîchir la page."
-            :show-error-details="true"
           >
             <UploadSection @navigate-to-dashboard="handleNavigateToAnalysis" />
           </ErrorBoundary>
@@ -115,8 +114,7 @@
             <ErrorBoundary
               fallback-title="Erreur du tableau de bord"
               fallback-message="Impossible d'afficher le tableau de bord. Veuillez rafraîchir la page."
-              :show-error-details="true"
-            >
+              >
               <DashboardPage :analysis-result="analysisResult" />
             </ErrorBoundary>
           </div>
@@ -124,8 +122,7 @@
             <ErrorBoundary
               fallback-title="Erreur du gestionnaire de remboursements"
               fallback-message="Impossible d'afficher le gestionnaire de remboursements. Veuillez rafraîchir la page."
-              :show-error-details="true"
-            >
+              >
               <ReimbursementManager :analysis-result="analysisResult" />
             </ErrorBoundary>
           </div>
