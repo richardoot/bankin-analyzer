@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import ReimbursementSummary from '@/components/reimbursement/ReimbursementSummary.vue'
 import ExpensesReimbursementManager from '@/components/reimbursement/ExpensesReimbursementManager.vue'
 import { usePdfExport } from '@/composables/usePdfExport'
-import { waitForAsyncComponent } from '@/test/setup'
+import { waitForAsyncComponent as _waitForAsyncComponent } from '@/test/setup'
 import type {
   CsvAnalysisResult,
   Person,

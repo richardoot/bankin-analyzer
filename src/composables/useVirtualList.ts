@@ -22,7 +22,7 @@ interface VirtualListState {
   /** Décalage du conteneur virtuel */
   offsetY: number
   /** Éléments actuellement visibles */
-  visibleItems: any[]
+  visibleItems: T[]
 }
 
 export function useVirtualList<T>(

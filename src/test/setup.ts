@@ -1,7 +1,7 @@
 import { expect, vi } from 'vitest'
 import * as matchers from '@testing-library/jest-dom/matchers'
 import { config } from '@vue/test-utils'
-import type { ComponentPublicInstance } from 'vue'
+import type { ComponentPublicInstance as _ComponentPublicInstance } from 'vue'
 
 // Étendre les matchers expect avec jest-dom
 expect.extend(matchers)
@@ -29,7 +29,7 @@ config.global = {
 
 // Helper pour gérer les composants async dans les tests
 export const waitForAsyncComponent = async (
-  wrapper: any,
+  wrapper: Record<string, unknown>,
   timeout = 1000
 ): Promise<void> => {
   const startTime = Date.now()
@@ -49,17 +49,17 @@ export const waitForAsyncComponent = async (
 
       if (!hasAsyncErrors && !hasAsyncLoading) {
         // Attendre une frame supplémentaire pour s'assurer du rendu
-        await new Promise(resolve =>
-          requestAnimationFrame(() => resolve(void 0))
+        await new Promise<void>(resolve =>
+          requestAnimationFrame(() => resolve())
         )
         return
       }
 
       // Attendre 10ms avant la prochaine vérification
-      await new Promise(resolve => setTimeout(resolve, 10))
+      await new Promise<void>(resolve => setTimeout(resolve, 10))
     } catch {
       // En cas d'erreur, continuer à attendre
-      await new Promise(resolve => setTimeout(resolve, 10))
+      await new Promise<void>(resolve => setTimeout(resolve, 10))
     }
   }
 }
@@ -126,7 +126,7 @@ Object.defineProperty(window, 'sessionStorage', {
 })
 
 // Exposition globale pour les tests
-// @ts-ignore
+// @ts-expect-error
 global.mockStorage = {
   localStorage: localStorageMock,
   sessionStorage: sessionStorageMock,
@@ -221,9 +221,9 @@ import { beforeEach, afterEach } from 'vitest'
 
 beforeEach(() => {
   // Nettoyer les mocks localStorage entre chaque test
-  // @ts-ignore
+  // @ts-expect-error
   global.mockStorage.localStorage.reset()
-  // @ts-ignore
+  // @ts-expect-error
   global.mockStorage.sessionStorage.reset()
 
   // Nettoyer les mocks DOM

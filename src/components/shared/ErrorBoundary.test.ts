@@ -39,7 +39,7 @@ describe('ErrorBoundary', () => {
     const wrapper = mount(ErrorBoundary)
 
     // Simuler une erreur via l'interface du composable
-    const errorBoundary = wrapper.vm as any
+    const errorBoundary = wrapper.vm as Record<string, unknown>
     if (errorBoundary.hasError !== undefined) {
       errorBoundary.hasError = true
       await wrapper.vm.$nextTick()
@@ -57,7 +57,7 @@ describe('ErrorBoundary', () => {
     })
 
     // Simuler une erreur
-    const errorBoundary = wrapper.vm as any
+    const errorBoundary = wrapper.vm as Record<string, unknown>
     if (errorBoundary.hasError !== undefined) {
       errorBoundary.hasError = true
       await wrapper.vm.$nextTick()
@@ -75,7 +75,7 @@ describe('ErrorBoundary', () => {
     })
 
     // Simuler une erreur
-    const errorBoundary = wrapper.vm as any
+    const errorBoundary = wrapper.vm as Record<string, unknown>
     if (errorBoundary.hasError !== undefined) {
       errorBoundary.hasError = true
       await wrapper.vm.$nextTick()
@@ -118,7 +118,7 @@ describe('ErrorBoundary', () => {
     })
 
     // Simuler une erreur avec des détails
-    const errorBoundary = wrapper.vm as any
+    const errorBoundary = wrapper.vm as Record<string, unknown>
     if (errorBoundary.hasError !== undefined) {
       errorBoundary.hasError = true
       errorBoundary.errorInfo = {
@@ -137,7 +137,7 @@ describe('ErrorBoundary', () => {
     const wrapper = mount(ErrorBoundary)
 
     // Simuler une erreur
-    const errorBoundary = wrapper.vm as any
+    const errorBoundary = wrapper.vm as Record<string, unknown>
     if (errorBoundary.hasError !== undefined) {
       errorBoundary.hasError = true
       await wrapper.vm.$nextTick()
