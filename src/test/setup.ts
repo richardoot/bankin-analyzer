@@ -32,36 +32,45 @@ export const waitForAsyncComponent = async (
   wrapper: Record<string, unknown>,
   timeout = 1000
 ): Promise<void> => {
-  const startTime = Date.now()
-
-  while (Date.now() - startTime < timeout) {
+  const checkAsync = async (): Promise<boolean> => {
     try {
       // Force update du wrapper
-      await wrapper.vm.$nextTick()
+      if (wrapper.vm && typeof wrapper.vm.$nextTick === 'function') {
+        await wrapper.vm.$nextTick()
+      }
 
       // Vérifier si les composants async sont montés
-      const hasAsyncErrors = wrapper.vm.$el?.querySelector(
+      const hasAsyncErrors = wrapper.vm?.$el?.querySelector?.(
         '.async-component-error'
       )
-      const hasAsyncLoading = wrapper.vm.$el?.querySelector(
+      const hasAsyncLoading = wrapper.vm?.$el?.querySelector?.(
         '.async-component-loading'
       )
 
-      if (!hasAsyncErrors && !hasAsyncLoading) {
-        // Attendre une frame supplémentaire pour s'assurer du rendu
-        await new Promise<void>(resolve =>
-          requestAnimationFrame(() => resolve())
-        )
-        return
-      }
-
-      // Attendre 10ms avant la prochaine vérification
-      await new Promise<void>(resolve => setTimeout(resolve, 10))
+      return !hasAsyncErrors && !hasAsyncLoading
     } catch {
-      // En cas d'erreur, continuer à attendre
-      await new Promise<void>(resolve => setTimeout(resolve, 10))
+      return false
     }
   }
+
+  const startTime = Date.now()
+
+  const pollAsync = async (): Promise<void> => {
+    if (await checkAsync()) {
+      // Attendre une frame supplémentaire pour s'assurer du rendu
+      return new Promise<void>(resolve =>
+        requestAnimationFrame(() => resolve())
+      )
+    }
+
+    if (Date.now() - startTime < timeout) {
+      return new Promise<void>((resolve, reject) => 
+        setTimeout(() => pollAsync().then(resolve).catch(reject), 10)
+      )
+    }
+  }
+
+  return pollAsync() || Promise.resolve()
 }
 
 // Mock du localStorage avec isolation entre tests
@@ -96,7 +105,7 @@ class MockStorage {
         key,
         newValue,
         oldValue,
-        storageArea: this as any,
+        storageArea: this as Storage,
       })
     )
   }
@@ -126,7 +135,7 @@ Object.defineProperty(window, 'sessionStorage', {
 })
 
 // Exposition globale pour les tests
-// @ts-expect-error
+// @ts-expect-error - DOM manipulation needed for test utilities
 global.mockStorage = {
   localStorage: localStorageMock,
   sessionStorage: sessionStorageMock,
@@ -221,9 +230,9 @@ import { beforeEach, afterEach } from 'vitest'
 
 beforeEach(() => {
   // Nettoyer les mocks localStorage entre chaque test
-  // @ts-expect-error
+  // @ts-expect-error - DOM manipulation needed for test utilities
   global.mockStorage.localStorage.reset()
-  // @ts-expect-error
+  // @ts-expect-error - DOM manipulation needed for test utilities
   global.mockStorage.sessionStorage.reset()
 
   // Nettoyer les mocks DOM
