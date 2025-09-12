@@ -33,6 +33,18 @@
       </div>
     </div>
 
+    <!-- Annonce des changements de données pour les lecteurs d'écran -->
+    <div class="sr-only" aria-live="polite" aria-atomic="false">
+      Graphique camembert mis à jour:
+      {{ chartData.categories.length }} catégories,
+      <span v-if="selectedMonth && selectedMonth !== 'all'">
+        période
+        {{ availableMonths?.find(m => m.value === selectedMonth)?.label }},
+      </span>
+      <span v-else> toutes périodes, </span>
+      total {{ formatAmount(chartData.totalAmount) }}
+    </div>
+
     <!-- Zone du graphique -->
     <div class="chart-container">
       <!-- SVG du graphique camembert -->
@@ -41,6 +53,8 @@
           class="pie-chart-svg"
           :viewBox="`0 0 ${svgSize} ${svgSize}`"
           xmlns="http://www.w3.org/2000/svg"
+          role="img"
+          :aria-label="`Graphique camembert des catégories: ${chartData.categories.length} catégories affichées`"
         >
           <!-- Cercle de fond -->
           <circle
@@ -65,9 +79,14 @@
               :stroke-width="segment.isHovered ? '3' : '1'"
               class="pie-segment"
               :class="{ 'segment-hovered': segment.isHovered }"
+              role="button"
+              :aria-label="`${segment.category}: ${formatAmount(segment.amount)} (${(segment.percentage || 0).toFixed(1)}%)`"
+              tabindex="0"
               @mouseenter="handleSegmentHover(index, true)"
               @mouseleave="handleSegmentHover(index, false)"
               @click="handleSegmentClick(segment.category)"
+              @keydown.enter="handleSegmentClick(segment.category)"
+              @keydown.space.prevent="handleSegmentClick(segment.category)"
             />
           </g>
 

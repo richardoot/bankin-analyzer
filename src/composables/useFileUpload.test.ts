@@ -319,4 +319,47 @@ retour à la ligne";Non`
       expect(fileUpload.isComplete.value).toBe(true)
     })
   })
+
+  describe("Sécurité CSV - Protection contre l'injection de formules", () => {
+    it('devrait protéger contre les formules Excel dangereuses', async () => {
+      const dangerousCSV = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
+15/12/2024;=SUM(A1:A10);Compte Courant;-10.00;Test;Test;Test;Non`
+      const file = FileFactory.createCsvFile(dangerousCSV, 'dangerous.csv')
+
+      await fileUpload.handleFileUpload(file)
+
+      expect(
+        fileUpload.analysisResult.value?.transactions[0]?.description
+      ).toBe("'=SUM(A1:A10)")
+    })
+
+    it('devrait préserver les montants négatifs légitimes', async () => {
+      const legitimateCSV = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
+15/12/2024;Achat supermarché;Compte Courant;-45.67;Alimentation;Test;Test;Non`
+      const file = FileFactory.createCsvFile(legitimateCSV, 'legitimate.csv')
+
+      await fileUpload.handleFileUpload(file)
+
+      expect(fileUpload.analysisResult.value?.transactions[0]?.amount).toBe(
+        -45.67
+      )
+      expect(
+        fileUpload.analysisResult.value?.transactions[0]?.description
+      ).toBe('Achat supermarché')
+    })
+
+    it("devrait protéger contre diverses techniques d'injection", async () => {
+      const maliciousCSV = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
+15/12/2024;+HYPERLINK("http://evil.com");Compte Courant;-10.00;Test;Test;@echo dangerous;Non
+16/12/2024;Test normal;Compte Courant;-20.00;Test;Test;-cmd malicious;Non`
+      const file = FileFactory.createCsvFile(maliciousCSV, 'malicious.csv')
+
+      await fileUpload.handleFileUpload(file)
+
+      const transactions = fileUpload.analysisResult.value?.transactions || []
+      expect(transactions[0]?.description).toBe("'+HYPERLINK(http://evil.com)")
+      expect(transactions[0]?.note).toBe("'@echo dangerous")
+      expect(transactions[1]?.note).toBe("'-cmd malicious")
+    })
+  })
 })
