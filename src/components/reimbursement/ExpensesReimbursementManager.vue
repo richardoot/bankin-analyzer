@@ -7,6 +7,7 @@
   } from '@/types'
   import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
   import BaseButton from '@/components/shared/BaseButton.vue'
+  import BaseCard from '@/components/shared/BaseCard.vue'
 
   interface Props {
     analysisResult: CsvAnalysisResult
@@ -677,15 +678,58 @@
 </script>
 
 <template>
-  <div class="reimbursement-section expenses-manager">
-    <h3 class="section-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-        <polyline points="7,10 12,15 17,10" />
-        <line x1="12" y1="15" x2="12" y2="3" />
-      </svg>
-      Gestion des dépenses et remboursements
-    </h3>
+  <BaseCard
+    variant="glass"
+    padding="lg"
+    rounded="lg"
+    class="reimbursement-section expenses-manager"
+  >
+    <!-- En-tête du gestionnaire -->
+    <div class="chart-header">
+      <div class="chart-header-content">
+        <div class="chart-title-section">
+          <h3 class="chart-title">
+            <svg
+              class="chart-title-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7,10 12,15 17,10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Gestion des dépenses et remboursements
+          </h3>
+          <p class="chart-description">
+            Assignation et suivi des remboursements pour les dépenses
+          </p>
+        </div>
+
+        <!-- Filtre par catégorie -->
+        <div
+          v-if="availableCategories && availableCategories.length > 0"
+          class="category-filter-section"
+        >
+          <label for="category-select" class="filter-label">
+            Filtrer par catégorie :
+          </label>
+          <select
+            id="category-select"
+            v-model="selectedCategory"
+            class="category-select"
+          >
+            <option
+              v-for="category in availableCategories"
+              :key="category"
+              :value="category"
+            >
+              {{ category }}
+            </option>
+          </select>
+        </div>
+      </div>
+    </div>
 
     <div class="section-content">
       <!-- Statistiques rapides -->
@@ -725,31 +769,6 @@
           <span class="stat-value coverage"
             >{{ (stats.reimbursementCoverage || 0).toFixed(1) }}%</span
           >
-        </div>
-      </div>
-
-      <!-- Filtre par catégorie -->
-      <div class="filter-section">
-        <div class="filter-group">
-          <label for="category-select" class="filter-label">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M6 3h12l-4 4v8l-4 2V7L6 3z" />
-            </svg>
-            Filtrer par catégorie :
-          </label>
-          <select
-            id="category-select"
-            v-model="selectedCategory"
-            class="category-select"
-          >
-            <option
-              v-for="category in availableCategories"
-              :key="category"
-              :value="category"
-            >
-              {{ category }}
-            </option>
-          </select>
         </div>
       </div>
 
@@ -1122,7 +1141,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </BaseCard>
 </template>
 
 <style scoped>
@@ -1134,46 +1153,82 @@
     margin-bottom: 0;
   }
 
-  .section-title {
+  /* En-tête du gestionnaire */
+  .chart-header {
+    background: rgba(248, 250, 252, 0.5);
+    backdrop-filter: blur(5px);
+    padding: 1.5rem 2rem 1rem;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+  }
+
+  .chart-header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .chart-title-section {
+    text-align: left;
+    flex: 1;
+    min-width: 250px;
+  }
+
+  .chart-title {
     display: flex;
     align-items: center;
-    gap: var(--spacing-3);
-    font-size: var(--text-xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--gray-900);
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-    margin: 0 0 var(--spacing-6) 0;
-    position: relative;
+    gap: 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0 0 0.5rem;
   }
 
-  .section-title::after {
-    content: '';
-    position: absolute;
-    bottom: -8px;
-    left: 0;
-    width: 60px;
-    height: 3px;
-    background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
-    border-radius: 2px;
-  }
-
-  .section-title svg {
+  .chart-title-icon {
     width: 1.25rem;
     height: 1.25rem;
     color: #3b82f6;
   }
 
-  .title-badge {
-    background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
-    color: var(--primary-700);
-    padding: 0.375rem 0.875rem;
-    border-radius: 16px;
-    font-size: 0.75rem;
-    font-weight: var(--font-weight-semibold);
-    margin-left: auto;
-    border: 1px solid var(--primary-200);
-    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
-    backdrop-filter: blur(10px);
+  .chart-description {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .category-filter-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 200px;
+  }
+
+  .filter-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    margin: 0;
+  }
+
+  .category-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid rgba(209, 213, 219, 0.5);
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    color: #374151;
+    background: var(--surface-color, rgba(255, 255, 255, 0.7));
+    backdrop-filter: blur(5px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+    min-width: 180px;
+  }
+
+  .category-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   /* Barre de statistiques */
@@ -1234,51 +1289,6 @@
 
   .stat-value.coverage {
     color: #ea580c;
-  }
-
-  /* Section de filtrage */
-  .filter-section {
-    margin-bottom: 1.5rem;
-  }
-
-  .filter-group {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-
-  .filter-label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-weight: 600;
-    color: #374151;
-    font-size: 0.9rem;
-    white-space: nowrap;
-  }
-
-  .filter-label svg {
-    width: 1rem;
-    height: 1rem;
-    color: #3b82f6;
-  }
-
-  .category-select {
-    padding: 0.75rem 1rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    background: white;
-    font-size: 0.875rem;
-    color: #374151;
-    min-width: 200px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .category-select:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   /* Liste des dépenses */
@@ -2110,6 +2120,32 @@
 
     .person-assignment {
       flex: 1;
+    }
+  }
+
+  /* Support du thème sombre */
+  @media (prefers-color-scheme: dark) {
+    .chart-header {
+      background: rgba(31, 41, 55, 0.5);
+      border-bottom-color: rgba(75, 85, 99, 0.3);
+    }
+
+    .chart-title {
+      color: #f3f4f6;
+    }
+
+    .chart-description {
+      color: #9ca3af;
+    }
+
+    .filter-label {
+      color: #e5e7eb;
+    }
+
+    .category-select {
+      background: rgba(31, 41, 55, 0.7);
+      border-color: rgba(75, 85, 99, 0.5);
+      color: #f3f4f6;
     }
   }
 </style>

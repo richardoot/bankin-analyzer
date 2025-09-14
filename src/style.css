@@ -98,6 +98,10 @@
   --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 
   /* Ombres colorées pour les éléments interactifs */
+
+  /* Variables de surface pour thème clair/sombre */
+  --surface-color: rgba(255, 255, 255, 0.7);
+  --surface-color-50: rgba(255, 255, 255, 0.5);
   --shadow-primary: 0 4px 14px 0 rgba(59, 130, 246, 0.2);
   --shadow-success: 0 4px 14px 0 rgba(16, 185, 129, 0.2);
   --shadow-warning: 0 4px 14px 0 rgba(245, 158, 11, 0.2);
@@ -373,6 +377,10 @@ select:focus {
     --gray-700: #e5e7eb;
     --gray-800: #f3f4f6;
     --gray-900: #f9fafb;
+
+    /* Variables de surface pour thème sombre */
+    --surface-color: rgba(31, 41, 55, 0.7);
+    --surface-color-50: rgba(31, 41, 55, 0.5);
   }
 
   body {

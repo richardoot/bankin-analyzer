@@ -85,14 +85,6 @@
     transition: all var(--transition-normal);
   }
 
-  .base-card--default:hover {
-    box-shadow:
-      var(--shadow-lg),
-      inset 0 1px 0 rgba(255, 255, 255, 0.9);
-    transform: translateY(-2px);
-    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
-  }
-
   .base-card--glass {
     background: linear-gradient(
       145deg,
