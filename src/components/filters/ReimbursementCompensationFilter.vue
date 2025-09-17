@@ -830,4 +830,119 @@
       height: 0.5rem;
     }
   }
+
+  /* Theme sombre */
+  @media (prefers-color-scheme: dark) {
+    .reimbursement-compensation-filter {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .filter-header {
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .filter-title {
+      color: #e2e8f0;
+    }
+
+    .filter-icon {
+      color: #a78bfa;
+    }
+
+    .filter-description {
+      color: #94a3b8;
+    }
+
+    .add-rule-form {
+      background: rgba(15, 23, 42, 0.6);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .form-label {
+      color: #cbd5e1;
+    }
+
+    .form-select {
+      background: rgba(30, 41, 59, 0.9);
+      border-color: rgba(71, 85, 105, 0.3);
+      color: #e2e8f0;
+    }
+
+    .form-select:focus {
+      border-color: rgba(99, 102, 241, 0.6);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    /* Tableau en mode sombre */
+    .compensation-table {
+      background: rgba(30, 41, 59, 0.9);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .table-header {
+      background: linear-gradient(
+        135deg,
+        rgba(51, 65, 85, 0.8) 0%,
+        rgba(71, 85, 105, 0.6) 100%
+      );
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .header-cell {
+      color: #cbd5e1;
+      border-right-color: rgba(71, 85, 105, 0.2);
+    }
+
+    .table-row {
+      border-bottom-color: rgba(71, 85, 105, 0.2);
+    }
+
+    .table-row:hover {
+      background: rgba(51, 65, 85, 0.3);
+    }
+
+    .table-cell {
+      border-right-color: rgba(71, 85, 105, 0.15);
+    }
+
+    .cell-text {
+      color: #cbd5e1;
+    }
+
+    .amount-display {
+      background: rgba(51, 65, 85, 0.6);
+      border-color: rgba(99, 102, 241, 0.3);
+      color: #a5b4fc;
+    }
+
+    /* Actions en mode sombre */
+    .filter-actions .clear-all {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+    }
+
+    .filter-actions .clear-all:hover {
+      background: rgba(239, 68, 68, 0.25);
+      color: #f87171;
+    }
+
+    /* État vide en mode sombre */
+    .empty-state {
+      color: #94a3b8;
+    }
+
+    .empty-icon {
+      color: #64748b;
+    }
+
+    .empty-message {
+      color: #94a3b8;
+    }
+
+    .empty-description {
+      color: #64748b;
+    }
+  }
 </style>
