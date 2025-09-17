@@ -41,15 +41,6 @@ vi.mock('jspdf', () => ({
   default: vi.fn(() => mockJsPDF),
 }))
 
-// Mock du composable usePerformanceMonitor
-vi.mock('@/composables/usePerformanceMonitor', () => ({
-  usePerformanceMonitor: () => ({
-    startMeasure: vi.fn(),
-    endMeasure: vi.fn(),
-    watchWithPerformance: vi.fn(),
-  }),
-}))
-
 describe('PDF Export Integration Tests', () => {
   let summaryWrapper: ReturnType<typeof mount>
   let expensesWrapper: ReturnType<typeof mount>

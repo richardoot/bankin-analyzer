@@ -21,15 +21,6 @@ vi.mock('@/composables/usePdfExport', () => ({
   }),
 }))
 
-// Mock du composable usePerformanceMonitor
-vi.mock('@/composables/usePerformanceMonitor', () => ({
-  usePerformanceMonitor: () => ({
-    startMeasure: vi.fn(),
-    endMeasure: vi.fn(),
-    watchWithPerformance: vi.fn(),
-  }),
-}))
-
 describe('Reimbursement Workflow Integration Tests', () => {
   let reimbursementManagerWrapper: ReturnType<typeof mount>
   let expensesManagerWrapper: ReturnType<typeof mount>
