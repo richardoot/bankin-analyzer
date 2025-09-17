@@ -188,6 +188,8 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
     overflow: hidden;
+    width: 100%;
+    max-width: 100%;
   }
 
   .transactions-header {
@@ -270,6 +272,7 @@
   .transactions-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
   }
 
   .transactions-table thead th {
@@ -284,6 +287,25 @@
     top: 0;
     z-index: 1;
   }
+
+  .transactions-table thead th:nth-child(1) {
+    width: 10%;
+  } /* Date */
+  .transactions-table thead th:nth-child(2) {
+    width: 15%;
+  } /* Catégorie */
+  .transactions-table thead th:nth-child(3) {
+    width: 25%;
+  } /* Description */
+  .transactions-table thead th:nth-child(4) {
+    width: 15%;
+  } /* Note */
+  .transactions-table thead th:nth-child(5) {
+    width: 15%;
+  } /* Compte */
+  .transactions-table thead th:nth-child(6) {
+    width: 20%;
+  } /* Montant */
 
   .transactions-table tbody tr {
     border-bottom: 1px solid #f1f5f9;
@@ -338,7 +360,6 @@
   }
 
   .description-cell {
-    max-width: 300px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -346,7 +367,6 @@
   }
 
   .note-cell {
-    max-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -356,7 +376,6 @@
   }
 
   .account-cell {
-    max-width: 150px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -429,15 +448,30 @@
     }
 
     .transactions-table {
-      min-width: 600px;
+      min-width: 100%;
     }
 
     .transactions-table td {
       padding: 0.75rem 0.5rem;
     }
 
-    .description-cell {
-      max-width: 200px;
-    }
+    .transactions-table thead th:nth-child(1) {
+      width: 12%;
+    } /* Date */
+    .transactions-table thead th:nth-child(2) {
+      width: 18%;
+    } /* Catégorie */
+    .transactions-table thead th:nth-child(3) {
+      width: 20%;
+    } /* Description */
+    .transactions-table thead th:nth-child(4) {
+      width: 15%;
+    } /* Note */
+    .transactions-table thead th:nth-child(5) {
+      width: 15%;
+    } /* Compte */
+    .transactions-table thead th:nth-child(6) {
+      width: 20%;
+    } /* Montant */
   }
 </style>
