@@ -1689,4 +1689,54 @@
       gap: 1rem;
     }
   }
+
+  /* Thème sombre pour les filtres avancés */
+  @media (prefers-color-scheme: dark) {
+    .filters-container {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .filters-main-header {
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .filters-main-title h3 {
+      color: #e2e8f0;
+    }
+
+    .filters-main-icon {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+    }
+
+    .filters-main-description {
+      color: #94a3b8;
+    }
+
+    .compact-filter-card {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .compact-filter-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .compact-filter-header {
+      background: linear-gradient(
+        135deg,
+        rgba(30, 41, 59, 0.8) 0%,
+        rgba(51, 65, 85, 0.9) 100%
+      );
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .compact-filter-title h4 {
+      color: #e2e8f0;
+    }
+
+    .compact-filter-subtitle {
+      color: #94a3b8;
+    }
+  }
 </style>
