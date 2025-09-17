@@ -73,101 +73,84 @@
       </div>
     </div>
 
-    <!-- Liste des règles de compensation -->
-    <div v-if="compensationRules.length > 0" class="compensation-rules">
-      <div
-        v-for="(rule, index) in compensationRules"
-        :key="`rule-${index}`"
-        class="compensation-card"
-      >
-        <!-- Bouton de suppression -->
-        <button
-          class="delete-btn"
-          title="Supprimer cette règle"
-          @click="removeRule(index)"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
+    <!-- Liste des règles de compensation - Format tableau -->
+    <div v-if="compensationRules.length > 0" class="compensation-table">
+      <div class="table-header">
+        <div class="header-cell expense-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M17 11l-3-3V2m0 6l-3 3m3-3h8" />
+            <path d="M7 21H4a2 2 0 01-2-2v-5h20v5a2 2 0 01-2 2h-3" />
           </svg>
-        </button>
-
-        <!-- Contenu principal de la carte -->
-        <div class="card-content">
-          <!-- Section dépense -->
-          <div class="category-section expense-section">
-            <div class="category-badge expense-badge">
-              <div class="badge-icon">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
-                  />
-                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-                </svg>
-              </div>
-              <div class="badge-content">
-                <span class="badge-label">Dépense</span>
-                <span class="badge-value">{{ rule.expenseCategory }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Connecteur -->
-          <div class="connector">
-            <div class="connector-line"></div>
-            <div class="connector-icon">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-              >
-                <line x1="5" y1="12" x2="19" y2="12" />
-                <polyline points="12,5 19,12 12,19" />
-              </svg>
-            </div>
-          </div>
-
-          <!-- Section remboursement -->
-          <div class="category-section income-section">
-            <div class="category-badge income-badge">
-              <div class="badge-icon">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
-                  />
-                </svg>
-              </div>
-              <div class="badge-content">
-                <span class="badge-label">Remboursement</span>
-                <span class="badge-value">{{ rule.incomeCategory }}</span>
-              </div>
-            </div>
-          </div>
+          Dépense
         </div>
+        <div class="header-cell income-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M7 13l3 3 7-7" />
+            <path
+              d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c2.35 0 4.49.91 6.08 2.4"
+            />
+          </svg>
+          Remboursement
+        </div>
+        <div class="header-cell amount-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <line x1="12" y1="1" x2="12" y2="23" />
+            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+          </svg>
+          Montant compensé
+        </div>
+      </div>
 
-        <!-- Footer avec montant -->
-        <div v-if="rule.affectedAmount > 0" class="card-footer">
-          <div class="amount-chip">
-            <span class="amount-label">Compensé</span>
-            <span class="amount-value">{{
-              formatAmount(rule.affectedAmount)
-            }}</span>
+      <div class="table-body">
+        <div
+          v-for="(rule, index) in compensationRules"
+          :key="`rule-${index}`"
+          class="table-row"
+        >
+          <div class="table-cell expense-cell">
+            <div class="cell-content">
+              <div class="cell-icon expense-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M17 11l-3-3V2m0 6l-3 3m3-3h8" />
+                  <path d="M7 21H4a2 2 0 01-2-2v-5h20v5a2 2 0 01-2 2h-3" />
+                </svg>
+              </div>
+              <span class="cell-text">{{ rule.expenseCategory }}</span>
+            </div>
+          </div>
+
+          <div class="table-cell income-cell">
+            <div class="cell-content">
+              <div class="cell-icon income-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M7 13l3 3 7-7" />
+                  <path
+                    d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c2.35 0 4.49.91 6.08 2.4"
+                  />
+                </svg>
+              </div>
+              <span class="cell-text">{{ rule.incomeCategory }}</span>
+            </div>
+          </div>
+
+          <div class="table-cell amount-cell">
+            <div class="amount-display">
+              {{ formatAmount(rule.affectedAmount) }}
+            </div>
+            <BaseButton
+              variant="danger"
+              size="sm"
+              icon
+              title="Supprimer cette règle"
+              @click="removeRule(index)"
+            >
+              <template #icon>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </template>
+            </BaseButton>
           </div>
         </div>
       </div>
@@ -211,9 +194,9 @@
 </template>
 
 <script setup lang="ts">
-  import { usePerformanceMonitor } from '@/composables/usePerformanceMonitor'
   import type { CsvAnalysisResult } from '@/types'
   import { computed, nextTick, ref, watch } from 'vue'
+  import BaseButton from '@/components/shared/BaseButton.vue'
 
   export interface CompensationRule {
     expenseCategory: string
@@ -233,13 +216,6 @@
   const emit = defineEmits<{
     'update:selectedRules': [rules: CompensationRule[]]
   }>()
-
-  // Monitoring de performance (en développement)
-  const {
-    startMeasure: _startMeasure,
-    endMeasure: _endMeasure,
-    watchWithPerformance: _watchWithPerformance,
-  } = usePerformanceMonitor('ReimbursementCompensationFilter')
 
   // État local
   const compensationRules = ref<CompensationRule[]>(props.selectedRules || [])
@@ -521,283 +497,153 @@
     height: 1rem;
   }
 
-  /* Règles de compensation - Design ultra-compact */
-  .compensation-rules {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-  }
-
-  .compensation-card {
-    position: relative;
+  /* Tableau de compensation - Design moderne et compact */
+  .compensation-table {
     background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
+    backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 0.875rem;
-    padding: 0;
-    overflow: hidden;
-    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  }
-
-  .compensation-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-
-  .compensation-card:hover {
-    transform: translateY(-1px) scale(1.002);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    border-color: rgba(255, 255, 255, 0.4);
-  }
-
-  .compensation-card:hover::before {
-    opacity: 1;
-  }
-
-  .delete-btn {
-    position: absolute;
-    top: 0.625rem;
-    right: 0.625rem;
-    width: 1.375rem;
-    height: 1.375rem;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-    border: none;
-    border-radius: 0.375rem;
-    color: #64748b;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-    z-index: 10;
-    opacity: 0;
-    transform: scale(0.85);
-  }
-
-  .delete-btn svg {
-    width: 0.75rem;
-    height: 0.75rem;
-    stroke-width: 2.5;
-  }
-
-  .compensation-card:hover .delete-btn {
-    opacity: 1;
-    transform: scale(1);
-  }
-
-  .delete-btn:hover {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
-    transform: scale(1.1);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
-  }
-
-  .card-content {
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.875rem;
-  }
-
-  .category-section {
-    display: flex;
-    justify-content: center;
-  }
-
-  .category-badge {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    padding: 0.625rem 0.875rem;
     border-radius: 0.75rem;
-    min-width: 0;
-    flex: 1;
-    max-width: 240px;
-    transition: all 0.3s ease;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    margin-bottom: 0.75rem;
   }
 
-  .expense-badge {
+  .table-header {
+    display: grid;
+    grid-template-columns: 2fr 2fr 1.5fr;
     background: linear-gradient(
       135deg,
-      rgba(239, 68, 68, 0.05) 0%,
-      rgba(248, 113, 113, 0.08) 100%
+      rgba(99, 102, 241, 0.05) 0%,
+      rgba(139, 92, 246, 0.08) 100%
     );
-    border: 1px solid rgba(239, 68, 68, 0.15);
+    border-bottom: 1px solid rgba(99, 102, 241, 0.1);
   }
 
-  .income-badge {
-    background: linear-gradient(
-      135deg,
-      rgba(34, 197, 94, 0.05) 0%,
-      rgba(74, 222, 128, 0.08) 100%
-    );
-    border: 1px solid rgba(34, 197, 94, 0.15);
-  }
-
-  .badge-icon {
+  .header-cell {
     display: flex;
     align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 0.625rem;
-    flex-shrink: 0;
-    transition: all 0.3s ease;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    border-right: 1px solid rgba(99, 102, 241, 0.1);
   }
 
-  .expense-badge .badge-icon {
-    background: linear-gradient(135deg, #ef4444, #f87171);
-    color: white;
-    box-shadow: 0 3px 8px rgba(239, 68, 68, 0.25);
+  .header-cell:last-child {
+    border-right: none;
   }
 
-  .income-badge .badge-icon {
-    background: linear-gradient(135deg, #22c55e, #4ade80);
-    color: white;
-    box-shadow: 0 3px 8px rgba(34, 197, 94, 0.25);
-  }
-
-  .badge-icon svg {
+  .header-cell svg {
     width: 1rem;
     height: 1rem;
-    stroke-width: 2;
+    flex-shrink: 0;
   }
 
-  .badge-content {
+  .expense-header svg {
+    color: #ef4444;
+  }
+
+  .income-header svg {
+    color: #22c55e;
+  }
+
+  .amount-header svg {
+    color: #6366f1;
+  }
+
+  .table-body {
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
+  }
+
+  .table-row {
+    display: grid;
+    grid-template-columns: 2fr 2fr 1.5fr;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+    transition: background-color 0.2s ease;
+  }
+
+  .table-row:hover {
+    background: rgba(99, 102, 241, 0.02);
+  }
+
+  .table-row:last-child {
+    border-bottom: none;
+  }
+
+  .table-cell {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-right: 1px solid rgba(229, 231, 235, 0.2);
+    min-height: 3rem;
+  }
+
+  .table-cell:last-child {
+    border-right: none;
+  }
+
+  .cell-content {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     min-width: 0;
     flex: 1;
   }
 
-  .badge-label {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    opacity: 0.7;
-  }
-
-  .expense-badge .badge-label {
-    color: #dc2626;
-  }
-
-  .income-badge .badge-label {
-    color: #15803d;
-  }
-
-  .badge-value {
-    font-size: 0.8125rem;
-    font-weight: 600;
-    color: #1f2937;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: 1.2;
-  }
-
-  .connector {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    margin: 0.25rem 0;
-  }
-
-  .connector-line {
-    position: absolute;
-    width: 100%;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(148, 163, 184, 0.3) 20%,
-      rgba(148, 163, 184, 0.6) 50%,
-      rgba(148, 163, 184, 0.3) 80%,
-      transparent 100%
-    );
-  }
-
-  .connector-icon {
+  .cell-icon {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 1.5rem;
     height: 1.5rem;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    border-radius: 0.5rem;
-    color: #64748b;
-    z-index: 1;
-    transition: all 0.3s ease;
+    border-radius: 0.375rem;
+    flex-shrink: 0;
   }
 
-  .connector-icon svg {
+  .expense-icon {
+    background: linear-gradient(135deg, #ef4444, #f87171);
+    color: white;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+  }
+
+  .income-icon {
+    background: linear-gradient(135deg, #22c55e, #4ade80);
+    color: white;
+    box-shadow: 0 2px 4px rgba(34, 197, 94, 0.2);
+  }
+
+  .cell-icon svg {
     width: 0.75rem;
     height: 0.75rem;
+    stroke-width: 2;
   }
 
-  .compensation-card:hover .connector-icon {
-    background: rgba(99, 102, 241, 0.1);
-    border-color: rgba(99, 102, 241, 0.3);
-    color: #6366f1;
-    transform: scale(1.05);
+  .cell-text {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .card-footer {
-    background: linear-gradient(
-      135deg,
-      rgba(99, 102, 241, 0.04) 0%,
-      rgba(139, 92, 246, 0.06) 100%
-    );
-    border-top: 1px solid rgba(99, 102, 241, 0.1);
-    padding: 0.75rem 1rem;
-    margin-top: auto;
-  }
-
-  .amount-chip {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.5rem 0.75rem;
-    background: rgba(255, 255, 255, 0.6);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(99, 102, 241, 0.15);
-    border-radius: 0.625rem;
-    transition: all 0.3s ease;
-  }
-
-  .compensation-card:hover .amount-chip {
-    background: rgba(255, 255, 255, 0.8);
-    border-color: rgba(99, 102, 241, 0.25);
-    transform: translateY(-1px);
-  }
-
-  .amount-label {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .amount-value {
+  .amount-display {
     font-size: 0.875rem;
     font-weight: 700;
-    color: #4f46e5;
+    color: #6366f1;
     font-feature-settings: 'tnum';
+    padding: 0.375rem 0.75rem;
+    background: rgba(99, 102, 241, 0.08);
+    border-radius: 0.375rem;
+    border: 1px solid rgba(99, 102, 241, 0.15);
+  }
+
+  /* Cellule montant avec bouton aligné à droite */
+  .amount-cell {
+    justify-content: space-between;
+    gap: 0.5rem;
   }
 
   /* Actions */
@@ -871,54 +717,78 @@
     line-height: 1.5;
   }
 
-  /* Responsive Design - Ajusté pour format compact */
-  @media (max-width: 1200px) {
-    .compensation-rules {
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 0.75rem;
+  /* Responsive Design - Optimisé pour tableau */
+  @media (max-width: 1024px) {
+    .table-header,
+    .table-row {
+      grid-template-columns: 1.8fr 1.8fr 1.2fr;
+    }
+
+    .header-cell,
+    .table-cell {
+      padding: 0.625rem 0.75rem;
+    }
+
+    .header-cell {
+      font-size: 0.8125rem;
+    }
+
+    .cell-text {
+      font-size: 0.8125rem;
+    }
+
+    .amount-display {
+      font-size: 0.8125rem;
+      padding: 0.25rem 0.5rem;
     }
   }
 
   @media (max-width: 768px) {
-    .compensation-rules {
-      grid-template-columns: 1fr;
-      gap: 0.75rem;
+    .compensation-table {
+      border-radius: 0.5rem;
     }
 
-    .card-content {
-      padding: 0.875rem;
-      gap: 0.75rem;
+    .table-header,
+    .table-row {
+      grid-template-columns: 2fr 2fr 1fr;
     }
 
-    .category-badge {
-      padding: 0.5rem 0.75rem;
-      gap: 0.5rem;
+    .header-cell,
+    .table-cell {
+      padding: 0.5rem 0.625rem;
     }
 
-    .badge-icon {
-      width: 1.75rem;
-      height: 1.75rem;
+    .table-cell {
+      min-height: 2.5rem;
     }
 
-    .badge-icon svg {
+    .cell-icon {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+
+    .cell-icon svg {
+      width: 0.625rem;
+      height: 0.625rem;
+    }
+
+    .header-cell {
+      font-size: 0.75rem;
+      gap: 0.375rem;
+    }
+
+    .header-cell svg {
       width: 0.875rem;
       height: 0.875rem;
     }
 
-    .badge-value {
+    .cell-text {
       font-size: 0.75rem;
     }
 
-    .delete-btn {
-      width: 1.25rem;
-      height: 1.25rem;
-      opacity: 1;
-      transform: scale(1);
-    }
-
-    .delete-btn svg {
-      width: 0.75rem;
-      height: 0.75rem;
+    .amount-display {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
     }
 
     .form-row {
@@ -932,38 +802,32 @@
   }
 
   @media (max-width: 480px) {
-    .card-content {
-      padding: 0.75rem;
+    .header-cell,
+    .table-cell {
+      padding: 0.5rem;
     }
 
-    .category-badge {
-      padding: 0.5rem 0.625rem;
-      gap: 0.5rem;
+    .header-cell {
+      font-size: 0.6875rem;
     }
 
-    .badge-icon {
-      width: 1.5rem;
-      height: 1.5rem;
+    .cell-text {
+      font-size: 0.6875rem;
     }
 
-    .badge-value {
-      font-size: 0.7rem;
+    .amount-display {
+      font-size: 0.6875rem;
+      padding: 0.25rem 0.375rem;
     }
 
-    .amount-chip {
-      padding: 0.375rem 0.5rem;
+    .cell-icon {
+      width: 1rem;
+      height: 1rem;
     }
 
-    .delete-btn {
-      top: 0.5rem;
-      right: 0.5rem;
-      width: 1.125rem;
-      height: 1.125rem;
-    }
-
-    .delete-btn svg {
-      width: 0.625rem;
-      height: 0.625rem;
+    .cell-icon svg {
+      width: 0.5rem;
+      height: 0.5rem;
     }
   }
 </style>
