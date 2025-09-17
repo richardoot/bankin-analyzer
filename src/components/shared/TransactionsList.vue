@@ -298,13 +298,13 @@
     width: 25%;
   } /* Description */
   .transactions-table thead th:nth-child(4) {
-    width: 15%;
+    width: 25%;
   } /* Note */
   .transactions-table thead th:nth-child(5) {
     width: 15%;
   } /* Compte */
   .transactions-table thead th:nth-child(6) {
-    width: 20%;
+    width: 10%;
   } /* Montant */
 
   .transactions-table tbody tr {
@@ -419,6 +419,109 @@
     font-size: 1.125rem;
   }
 
+  /* Mode sombre */
+  @media (prefers-color-scheme: dark) {
+    .transactions-list-container {
+      background: rgba(31, 41, 55, 0.8);
+      border: 1px solid rgba(75, 85, 99, 0.3);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .transactions-header {
+      background: rgba(55, 65, 81, 0.6);
+      color: #f9fafb;
+      border-bottom: 1px solid rgba(75, 85, 99, 0.3);
+    }
+
+    .transactions-header h3 {
+      color: #f9fafb;
+    }
+
+    .transactions-header h3 i {
+      color: #60a5fa;
+    }
+
+    .transactions-count {
+      color: #d1d5db;
+    }
+
+    .category-filter {
+      background: rgba(31, 41, 55, 0.9);
+      border: 1px solid rgba(75, 85, 99, 0.5);
+      color: #f3f4f6;
+    }
+
+    .category-filter:focus {
+      border-color: #60a5fa;
+      box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+    }
+
+    .category-filter option {
+      background: #1f2937;
+      color: #f3f4f6;
+    }
+
+    .transactions-table thead th {
+      background: rgba(55, 65, 81, 0.8);
+      color: #f3f4f6;
+      border-bottom: 2px solid rgba(75, 85, 99, 0.4);
+    }
+
+    .transactions-table tbody tr {
+      border-bottom: 1px solid #374151;
+    }
+
+    .transactions-table tbody tr:hover {
+      background: rgba(55, 65, 81, 0.4);
+    }
+
+    .date-cell {
+      color: #9ca3af;
+    }
+
+    .category-badge.expense {
+      background-color: rgba(185, 28, 28, 0.2);
+      color: #fca5a5;
+    }
+
+    .category-badge.income {
+      background-color: rgba(5, 150, 105, 0.2);
+      color: #6ee7b7;
+    }
+
+    .description-cell {
+      color: #e5e7eb;
+    }
+
+    .note-cell {
+      color: #9ca3af;
+    }
+
+    .account-cell {
+      color: #9ca3af;
+    }
+
+    .amount-cell.expense {
+      color: #fca5a5;
+    }
+
+    .amount-cell.income {
+      color: #6ee7b7;
+    }
+
+    .no-transactions {
+      color: #6b7280;
+    }
+
+    .no-transactions i {
+      color: #4b5563;
+    }
+
+    .no-transactions p {
+      color: #9ca3af;
+    }
+  }
+
   /* Responsive design */
   @media (max-width: 768px) {
     .transactions-header {
@@ -465,13 +568,13 @@
       width: 20%;
     } /* Description */
     .transactions-table thead th:nth-child(4) {
-      width: 15%;
+      width: 25%;
     } /* Note */
     .transactions-table thead th:nth-child(5) {
       width: 15%;
     } /* Compte */
     .transactions-table thead th:nth-child(6) {
-      width: 20%;
+      width: 10%;
     } /* Montant */
   }
 </style>
