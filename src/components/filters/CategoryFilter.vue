@@ -362,4 +362,98 @@
   .categories-list::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
   }
+
+  /* Thème sombre */
+  @media (prefers-color-scheme: dark) {
+    .category-filter {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .filter-title {
+      color: #e2e8f0;
+    }
+
+    .filter-icon {
+      color: #a78bfa;
+    }
+
+    .filter-description {
+      color: #94a3b8;
+    }
+
+    .filter-action-btn {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(71, 85, 105, 0.3);
+      color: #cbd5e1;
+    }
+
+    .filter-action-btn:hover:not(:disabled) {
+      background: rgba(71, 85, 105, 0.9);
+      border-color: rgba(100, 116, 139, 0.4);
+    }
+
+    .select-all:hover:not(:disabled) {
+      background: rgba(20, 83, 45, 0.6);
+      border-color: rgba(34, 197, 94, 0.4);
+      color: #4ade80;
+    }
+
+    .deselect-all:hover:not(:disabled) {
+      background: rgba(127, 29, 29, 0.6);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }
+
+    .categories-list {
+      background: rgba(15, 23, 42, 0.6);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .category-filter-button {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(71, 85, 105, 0.5);
+      color: #cbd5e1;
+    }
+
+    .category-filter-button:hover {
+      background: rgba(71, 85, 105, 0.9);
+    }
+
+    .category-filter-button.selected {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(99, 102, 241, 0.6);
+      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.2);
+    }
+
+    .category-filter-button.disabled {
+      background: rgba(71, 85, 105, 0.3);
+      color: #64748b;
+    }
+
+    .category-filter-button.disabled:hover {
+      background: rgba(71, 85, 105, 0.4);
+    }
+
+    .filter-summary {
+      border-top-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .summary-text {
+      color: #94a3b8;
+    }
+
+    /* Scrollbar en mode sombre */
+    .categories-list::-webkit-scrollbar-track {
+      background: #334155;
+    }
+
+    .categories-list::-webkit-scrollbar-thumb {
+      background: #64748b;
+    }
+
+    .categories-list::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  }
 </style>
