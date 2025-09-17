@@ -105,15 +105,6 @@ vi.mock('@/components/reimbursement/ReimbursementSummary.vue', () => ({
   },
 }))
 
-// Mock du composable usePerformanceMonitor
-vi.mock('@/composables/usePerformanceMonitor', () => ({
-  usePerformanceMonitor: () => ({
-    startMeasure: vi.fn(),
-    endMeasure: vi.fn(),
-    watchWithPerformance: vi.fn(),
-  }),
-}))
-
 describe('Cross-Filters Integration Tests', () => {
   let dashboardWrapper: ReturnType<typeof mount>
   let reimbursementWrapper: ReturnType<typeof mount>
