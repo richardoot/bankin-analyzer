@@ -140,7 +140,7 @@
     gap: 1rem;
     background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(229, 231, 235, 0.3);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     border-radius: 12px;
     padding: 1.5rem;
@@ -169,18 +169,21 @@
   }
 
   .stat-icon.expenses {
-    background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 100%);
-    color: #92400e;
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 50%, #f87171 100%);
+    color: #dc2626;
+    box-shadow: 0 4px 14px rgba(248, 113, 113, 0.25);
   }
 
   .stat-icon.reimbursable {
-    background: linear-gradient(135deg, #d1fae5 0%, #34d399 100%);
+    background: linear-gradient(135deg, #d1fae5 0%, #86efac 50%, #10b981 100%);
     color: #065f46;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
   }
 
   .stat-icon.persons {
-    background: linear-gradient(135deg, #ddd6fe 0%, #8b5cf6 100%);
-    color: #581c87;
+    background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 50%, #f59e0b 100%);
+    color: #92400e;
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25);
   }
 
   .stat-content {

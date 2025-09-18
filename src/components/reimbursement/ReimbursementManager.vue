@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import type { CsvAnalysisResult } from '@/types'
   import { computed, ref } from 'vue'
+  import BaseCard from '@/components/shared/BaseCard.vue'
   import AccountFilter from '../filters/AccountFilter.vue'
   import ExpensesReimbursementManager from './ExpensesReimbursementManager.vue'
   import PersonsManager from '../shared/PersonsManager.vue'
@@ -87,36 +88,40 @@
 </script>
 
 <template>
-  <div class="reimbursement-manager">
-    <!-- En-tête avec titre -->
-    <div class="manager-header">
-      <div class="header-content">
-        <h2 class="manager-title">
-          <svg
-            class="title-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-          >
-            <path
-              d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-            />
-            <polyline points="14,2 14,8 20,8" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-            <polyline points="10,9 9,9 8,9" />
-          </svg>
-          Gestionnaire de remboursements
-        </h2>
-        <p class="manager-description">
-          Gérez vos demandes de remboursement et identifiez les dépenses
-          professionnelles.
-        </p>
-      </div>
+  <BaseCard
+    variant="glass"
+    padding="lg"
+    rounded="lg"
+    class="reimbursement-manager"
+  >
+    <template #header>
+      <h4 class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path
+            d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+          />
+          <polyline points="14,2 14,8 20,8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+          <polyline points="10,9 9,9 8,9" />
+        </svg>
+        Gestionnaire de remboursements
+        <span class="title-badge"> Gestion centralisée </span>
+      </h4>
+      <p class="section-description">
+        Gérez vos demandes de remboursement et identifiez les dépenses
+        professionnelles.
+      </p>
+    </template>
+
+    <!-- Annonces pour lecteurs d'écran -->
+    <div class="sr-only" aria-live="polite" aria-atomic="false">
+      Gestionnaire de remboursements mis à jour:
+      {{ filteredExpenses.length }} dépenses filtrées sur
+      {{ analysisResult.transactions.filter(t => t.type === 'expense').length }}
     </div>
 
-    <!-- Contenu principal avec composants modulaires -->
-    <div class="manager-content">
+    <div class="section-content">
       <!-- Bouton de filtrage avancé -->
       <div class="advanced-filters-toggle">
         <button
@@ -215,61 +220,67 @@
       <!-- Résumé des remboursements -->
       <ReimbursementSummary :expenses-manager-ref="expensesManagerRef" />
     </div>
-  </div>
+  </BaseCard>
 </template>
 
 <style scoped>
   .reimbursement-manager {
-    background: white;
-    border-radius: 1rem;
-    overflow: hidden;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    border: 1px solid #e5e7eb;
+    margin-bottom: 1.5rem;
   }
 
-  /* En-tête du gestionnaire */
-  .manager-header {
-    padding: 2rem;
-    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-    border-bottom: 1px solid #e5e7eb;
-  }
-
-  .header-content {
-    text-align: center;
-  }
-
-  .manager-title {
+  .section-title {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: #1f2937;
-    margin-bottom: 0.75rem;
-    line-height: 1.2;
+    gap: var(--spacing-3);
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--gray-900);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    margin: 0 0 var(--spacing-6) 0;
+    position: relative;
   }
 
-  .title-icon {
-    width: 2rem;
-    height: 2rem;
+  .section-title::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 60px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
+    border-radius: 2px;
+  }
+
+  .section-title svg {
+    width: 1.25rem;
+    height: 1.25rem;
     color: #3b82f6;
   }
 
-  .manager-description {
-    font-size: 1rem;
-    color: #6b7280;
-    line-height: 1.6;
-    max-width: 600px;
-    margin: 0 auto;
+  .title-badge {
+    background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
+    color: var(--primary-700);
+    padding: 0.375rem 0.875rem;
+    border-radius: 16px;
+    font-size: 0.75rem;
+    font-weight: var(--font-weight-semibold);
+    margin-left: auto;
+    border: 1px solid var(--primary-200);
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+    backdrop-filter: blur(10px);
   }
 
-  /* Contenu principal */
-  .manager-content {
-    padding: 2rem;
+  .section-description {
+    font-size: 0.875rem;
+    color: var(--gray-600);
+    margin: var(--spacing-3) 0 0;
+    line-height: 1.5;
+  }
+
+  .section-content {
     display: flex;
     flex-direction: column;
-    gap: 2rem;
+    gap: var(--spacing-6);
   }
 
   /* Bouton de filtres avancés */
@@ -467,12 +478,8 @@
 
   /* Responsive */
   @media (max-width: 768px) {
-    .manager-header {
-      padding: 1.5rem;
-    }
-
-    .manager-content {
-      padding: 1.5rem;
+    .section-content {
+      gap: var(--spacing-4);
     }
 
     .filters-container {

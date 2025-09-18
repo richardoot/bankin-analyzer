@@ -1,19 +1,15 @@
 <script setup lang="ts">
   import { computed, onMounted, ref } from 'vue'
+  import type { ReimbursementCategory } from '@/types'
+  import BaseModal from '@/components/shared/BaseModal.vue'
+  import BaseButton from '@/components/shared/BaseButton.vue'
+  import BaseCard from '@/components/shared/BaseCard.vue'
+  import { useLocalStorage } from '@/composables/useLocalStorage'
 
-  interface ReimbursementCategory {
-    id: string
-    name: string
-    description: string
-    icon: string
-    color: string
-    keywords: string[]
-    isDefault: boolean
-    createdAt: Date
-  }
-
-  // État local
-  const categories = ref<ReimbursementCategory[]>([])
+  // Utiliser le composable de localStorage
+  const { useReimbursementCategoriesStorage } = useLocalStorage()
+  const { data: categories, save: saveCategories } =
+    useReimbursementCategoriesStorage()
   const showAddModal = ref(false)
   const editingCategory = ref<ReimbursementCategory | null>(null)
 
@@ -127,28 +123,8 @@
 
   // Charger les catégories depuis localStorage
   const loadCategories = () => {
-    try {
-      const stored = localStorage.getItem(
-        'bankin-analyzer-reimbursement-categories'
-      )
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        categories.value = parsed.map(
-          (
-            cat: Omit<ReimbursementCategory, 'createdAt'> & {
-              createdAt: string
-            }
-          ) => ({
-            ...cat,
-            createdAt: new Date(cat.createdAt),
-          })
-        )
-      } else {
-        // Initialiser avec les catégories par défaut
-        initializeDefaultCategories()
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des catégories:', error)
+    if (categories.value.length === 0) {
+      // Initialiser avec les catégories par défaut si vide
       initializeDefaultCategories()
     }
   }
@@ -161,18 +137,6 @@
       createdAt: new Date(),
     }))
     saveCategories()
-  }
-
-  // Sauvegarder les catégories
-  const saveCategories = () => {
-    try {
-      localStorage.setItem(
-        'bankin-analyzer-reimbursement-categories',
-        JSON.stringify(categories.value)
-      )
-    } catch (error) {
-      console.error('Erreur lors de la sauvegarde des catégories:', error)
-    }
   }
 
   // Générer un ID unique
@@ -307,17 +271,27 @@
 </script>
 
 <template>
-  <div class="categories-manager section">
-    <h3 class="section-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path
-          d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5a2 2 0 0 0-2-2z"
-        />
-        <path d="M8 1v4" />
-        <path d="M16 1v4" />
-      </svg>
-      Catégories de remboursement
-    </h3>
+  <BaseCard
+    variant="glass"
+    padding="lg"
+    rounded="lg"
+    class="categories-manager"
+  >
+    <template #header>
+      <h4 class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path
+            d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5a2 2 0 0 0-2-2z"
+          />
+          <path d="M8 1v4" />
+          <path d="M16 1v4" />
+        </svg>
+        Catégories de remboursement
+        <span v-if="stats.total > 0" class="title-badge">
+          {{ stats.total }} catégorie{{ stats.total > 1 ? 's' : '' }}
+        </span>
+      </h4>
+    </template>
 
     <div class="section-content">
       <!-- Statistiques -->
@@ -347,13 +321,15 @@
 
       <!-- Bouton d'ajout -->
       <div class="actions-bar">
-        <button class="add-btn" @click="openAddModal">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
+        <BaseButton variant="primary" size="medium" @click="openAddModal">
+          <template #icon-left>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </template>
           Nouvelle catégorie
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Liste des catégories -->
@@ -392,166 +368,183 @@
           </div>
 
           <div class="category-actions">
-            <button
-              class="action-btn edit"
+            <BaseButton
+              variant="secondary"
+              size="small"
               title="Modifier"
               @click="openEditModal(category)"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path
-                  d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-                />
-                <path
-                  d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-                />
-              </svg>
-            </button>
-            <button
+              <template #icon-left>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path
+                    d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                  />
+                  <path
+                    d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                  />
+                </svg>
+              </template>
+            </BaseButton>
+            <BaseButton
               v-if="!category.isDefault"
-              class="action-btn delete"
+              variant="danger"
+              size="small"
               title="Supprimer"
               @click="deleteCategory(category)"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <polyline points="3,6 5,6 21,6" />
-                <path
-                  d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                />
-              </svg>
-            </button>
+              <template #icon-left>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <polyline points="3,6 5,6 21,6" />
+                  <path
+                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                  />
+                </svg>
+              </template>
+            </BaseButton>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Modal d'ajout/édition -->
-    <div v-if="showAddModal" class="modal-overlay" @click="closeModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ editingCategory ? 'Modifier' : 'Nouvelle' }} catégorie</h3>
-          <button class="close-btn" @click="closeModal">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
+    <BaseModal
+      :is-open="showAddModal"
+      :title="editingCategory ? 'Modifier la catégorie' : 'Nouvelle catégorie'"
+      @close="closeModal"
+    >
+      <div class="form-group">
+        <label for="category-name">Nom de la catégorie</label>
+        <input
+          id="category-name"
+          v-model="formData.name"
+          type="text"
+          placeholder="Ex: Transport, Restauration..."
+          class="form-input"
+          maxlength="50"
+        />
+      </div>
 
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="category-name">Nom de la catégorie</label>
-            <input
-              id="category-name"
-              v-model="formData.name"
-              type="text"
-              placeholder="Ex: Transport, Restauration..."
-              class="form-input"
-              maxlength="50"
-            />
-          </div>
+      <div class="form-group">
+        <label for="category-description">Description</label>
+        <textarea
+          id="category-description"
+          v-model="formData.description"
+          placeholder="Description de la catégorie..."
+          class="form-textarea"
+          maxlength="200"
+        ></textarea>
+      </div>
 
-          <div class="form-group">
-            <label for="category-description">Description</label>
-            <textarea
-              id="category-description"
-              v-model="formData.description"
-              placeholder="Description de la catégorie..."
-              class="form-textarea"
-              maxlength="200"
-            ></textarea>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Icône</label>
-              <div class="icon-selector">
-                <button
-                  v-for="icon in availableIcons"
-                  :key="icon"
-                  type="button"
-                  class="icon-option"
-                  :class="{ active: formData.icon === icon }"
-                  @click="formData.icon = icon"
-                >
-                  {{ icon }}
-                </button>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>Couleur</label>
-              <div class="color-selector">
-                <button
-                  v-for="color in availableColors"
-                  :key="color"
-                  type="button"
-                  class="color-option"
-                  :class="{ active: formData.color === color }"
-                  :style="{ backgroundColor: color }"
-                  @click="formData.color = color"
-                ></button>
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="category-keywords"
-              >Mots-clés (séparés par des virgules)</label
-            >
-            <input
-              id="category-keywords"
-              v-model="formData.keywords"
-              type="text"
-              placeholder="Ex: taxi, uber, transport, métro..."
-              class="form-input"
-            />
-            <small class="form-help">
-              Ces mots-clés aideront à identifier automatiquement les dépenses
-              de cette catégorie
-            </small>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="closeModal">Annuler</button>
+      <div class="form-group">
+        <label>Icône</label>
+        <div class="icon-selector">
           <button
-            class="btn-primary"
-            :disabled="!isFormValid"
-            @click="saveCategory"
+            v-for="icon in availableIcons"
+            :key="icon"
+            type="button"
+            class="icon-option"
+            :class="{ active: formData.icon === icon }"
+            @click="formData.icon = icon"
           >
-            {{ editingCategory ? 'Modifier' : 'Créer' }}
+            {{ icon }}
           </button>
         </div>
       </div>
-    </div>
-  </div>
+
+      <div class="form-group">
+        <label>Couleur</label>
+        <div class="color-selector">
+          <button
+            v-for="color in availableColors"
+            :key="color"
+            type="button"
+            class="color-option"
+            :class="{ active: formData.color === color }"
+            :style="{ backgroundColor: color }"
+            @click="formData.color = color"
+          ></button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="category-keywords"
+          >Mots-clés (séparés par des virgules)</label
+        >
+        <input
+          id="category-keywords"
+          v-model="formData.keywords"
+          type="text"
+          placeholder="Ex: taxi, uber, transport, métro..."
+          class="form-input"
+        />
+        <small class="form-help">
+          Ces mots-clés aideront à identifier automatiquement les dépenses de
+          cette catégorie
+        </small>
+      </div>
+
+      <template #footer>
+        <BaseButton variant="secondary" size="medium" @click="closeModal">
+          Annuler
+        </BaseButton>
+        <BaseButton
+          variant="primary"
+          size="medium"
+          :disabled="!isFormValid"
+          @click="saveCategory"
+        >
+          {{ editingCategory ? 'Modifier' : 'Créer' }}
+        </BaseButton>
+      </template>
+    </BaseModal>
+  </BaseCard>
 </template>
 
 <style scoped>
   .categories-manager {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border-radius: 1rem;
-    padding: 1.5rem;
     margin-bottom: 1.5rem;
   }
 
   .section-title {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #1f2937;
-    margin-bottom: 1.5rem;
+    gap: var(--spacing-3);
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--gray-900);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    margin: 0 0 var(--spacing-6) 0;
+    position: relative;
+  }
+
+  .section-title::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 60px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
+    border-radius: 2px;
   }
 
   .section-title svg {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 1.25rem;
+    height: 1.25rem;
     color: #3b82f6;
+  }
+
+  .title-badge {
+    background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
+    color: var(--primary-700);
+    padding: 0.375rem 0.875rem;
+    border-radius: 16px;
+    font-size: 0.75rem;
+    font-weight: var(--font-weight-semibold);
+    margin-left: auto;
+    border: 1px solid var(--primary-200);
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+    backdrop-filter: blur(10px);
   }
 
   /* Statistiques */
@@ -567,11 +560,17 @@
     align-items: center;
     gap: 0.75rem;
     padding: 1rem;
-    background: rgba(249, 250, 251, 0.9);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    background: white;
+    border: 1px solid #e5e7eb;
     border-radius: 8px;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+  }
+
+  .stat-card:hover {
+    background: #f9fafb;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
   }
 
   .stat-icon {
@@ -603,29 +602,6 @@
     margin-bottom: 1.5rem;
   }
 
-  .add-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    background: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
-  .add-btn:hover {
-    background: #1d4ed8;
-  }
-
-  .add-btn svg {
-    width: 1rem;
-    height: 1rem;
-  }
-
   /* Grille des catégories */
   .categories-grid {
     display: grid;
@@ -634,18 +610,54 @@
   }
 
   .category-card {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    border-radius: 12px;
-    padding: 1.5rem;
-    transition: all 0.2s ease;
+    background: linear-gradient(145deg, #ffffff 0%, #fafbfc 100%);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-2xl);
+    padding: 1.75rem;
+    transition: all var(--transition-spring);
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.05),
+      0 1px 3px rgba(0, 0, 0, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .category-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      135deg,
+      transparent 0%,
+      rgba(59, 130, 246, 0.02) 100%
+    );
+    opacity: 0;
+    transition: opacity var(--transition-normal);
   }
 
   .category-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    transform: translateY(-6px) scale(1.02);
+    box-shadow:
+      0 20px 40px rgba(0, 0, 0, 0.08),
+      0 8px 25px rgba(59, 130, 246, 0.15),
+      0 0 0 2px rgba(59, 130, 246, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+  }
+
+  .category-card:hover::before {
+    opacity: 1;
+  }
+
+  .category-card:hover .category-icon {
+    transform: scale(1.1) rotate(5deg);
+    box-shadow:
+      0 8px 25px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
   }
 
   .category-header {
@@ -657,8 +669,8 @@
   }
 
   .category-icon {
-    width: 3rem;
-    height: 3rem;
+    width: 3.25rem;
+    height: 3.25rem;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -666,6 +678,11 @@
     font-size: 1.5rem;
     color: white;
     flex-shrink: 0;
+    transition: all var(--transition-spring);
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.1);
   }
 
   .category-info {
@@ -690,8 +707,7 @@
     position: absolute;
     top: -0.5rem;
     right: -0.5rem;
-    background: rgba(251, 191, 36, 0.8);
-    backdrop-filter: blur(5px);
+    background: rgba(251, 191, 36, 0.9);
     color: #92400e;
     padding: 0.25rem 0.5rem;
     border-radius: 12px;
@@ -708,8 +724,7 @@
   }
 
   .keyword-tag {
-    background: rgba(243, 244, 246, 0.8);
-    backdrop-filter: blur(5px);
+    background: #f3f4f6;
     color: #374151;
     padding: 0.25rem 0.5rem;
     border-radius: 6px;
@@ -718,8 +733,7 @@
   }
 
   .keyword-more {
-    background: rgba(229, 231, 235, 0.8);
-    backdrop-filter: blur(5px);
+    background: #e5e7eb;
     color: #6b7280;
     padding: 0.25rem 0.5rem;
     border-radius: 6px;
@@ -732,116 +746,6 @@
     display: flex;
     gap: 0.5rem;
     justify-content: flex-end;
-  }
-
-  .action-btn {
-    width: 2rem;
-    height: 2rem;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-  }
-
-  .action-btn svg {
-    width: 1rem;
-    height: 1rem;
-  }
-
-  .action-btn.edit {
-    background: rgba(219, 234, 254, 0.8);
-    backdrop-filter: blur(5px);
-    color: #1d4ed8;
-  }
-
-  .action-btn.edit:hover {
-    background: rgba(191, 219, 254, 0.9);
-  }
-
-  .action-btn.delete {
-    background: rgba(254, 202, 202, 0.8);
-    backdrop-filter: blur(5px);
-    color: #dc2626;
-  }
-
-  .action-btn.delete:hover {
-    background: rgba(252, 165, 165, 0.9);
-  }
-
-  /* Modal */
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .modal-content {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    border-radius: 12px;
-    max-width: 500px;
-    width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
-  }
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.5rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.6) 0%,
-      rgba(249, 250, 251, 0.6) 100%
-    );
-    backdrop-filter: blur(5px);
-  }
-
-  .modal-header h3 {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #1f2937;
-  }
-
-  .close-btn {
-    width: 2rem;
-    height: 2rem;
-    border: none;
-    background: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #6b7280;
-    border-radius: 4px;
-  }
-
-  .close-btn:hover {
-    background: rgba(243, 244, 246, 0.8);
-    backdrop-filter: blur(5px);
-  }
-
-  .close-btn svg {
-    width: 1rem;
-    height: 1rem;
-  }
-
-  .modal-body {
-    padding: 1.5rem;
   }
 
   .form-group {
@@ -859,11 +763,11 @@
   .form-textarea {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
+    border: 1px solid #e5e7eb;
+    background: white;
     border-radius: 6px;
     font-size: 0.875rem;
+    color: #374151;
     transition: border-color 0.2s;
   }
 
@@ -892,106 +796,154 @@
     gap: 1rem;
   }
 
-  /* Sélecteurs */
+  /* Sélecteurs améliorés */
   .icon-selector {
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    gap: 0.5rem;
-    margin-top: 0.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(3rem, 1fr));
+    gap: 0.875rem;
+    margin-top: 0.75rem;
+    max-width: 100%;
+    padding: 0.5rem;
+    background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 12px;
+    border: 1px solid var(--gray-200);
   }
 
   .icon-option {
-    width: 2.5rem;
-    height: 2.5rem;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
+    width: 3rem;
+    height: 3rem;
+    border: 2px solid var(--gray-200);
+    border-radius: 12px;
+    background: linear-gradient(145deg, #ffffff 0%, #fafbfc 100%);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.25rem;
-    transition: all 0.2s;
+    font-size: 1.375rem;
+    transition: all var(--transition-spring);
+    justify-self: center;
+    box-shadow:
+      0 2px 4px rgba(0, 0, 0, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .icon-option::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      135deg,
+      transparent 0%,
+      rgba(59, 130, 246, 0.05) 100%
+    );
+    opacity: 0;
+    transition: opacity var(--transition-normal);
   }
 
   .icon-option:hover {
-    border-color: #3b82f6;
+    border-color: var(--primary-300);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow:
+      0 8px 25px rgba(59, 130, 246, 0.15),
+      0 3px 10px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+
+  .icon-option:hover::before {
+    opacity: 1;
   }
 
   .icon-option.active {
-    border-color: #3b82f6;
-    background: rgba(219, 234, 254, 0.8);
-    backdrop-filter: blur(5px);
+    border-color: var(--primary-500);
+    background: linear-gradient(
+      145deg,
+      var(--primary-50) 0%,
+      var(--primary-100) 100%
+    );
+    color: var(--primary-700);
+    transform: scale(1.1);
+    box-shadow:
+      0 8px 25px rgba(59, 130, 246, 0.25),
+      0 3px 10px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  }
+
+  .icon-option.active::before {
+    opacity: 1;
   }
 
   .color-selector {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 0.5rem;
-    margin-top: 0.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(3.25rem, 1fr));
+    gap: 1rem;
+    margin-top: 0.75rem;
+    max-width: 100%;
+    padding: 0.75rem;
+    background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 12px;
+    border: 1px solid var(--gray-200);
   }
 
   .color-option {
-    width: 2.5rem;
-    height: 2.5rem;
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    width: 3.25rem;
+    height: 3.25rem;
+    border: 3px solid rgba(255, 255, 255, 0.9);
     border-radius: 50%;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all var(--transition-spring);
+    justify-self: center;
+    position: relative;
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.15),
+      0 2px 4px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+
+  .color-option::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    background: linear-gradient(135deg, transparent, rgba(255, 255, 255, 0.2))
+      padding-box;
+    transition: all var(--transition-normal);
+    z-index: -1;
   }
 
   .color-option:hover {
-    transform: scale(1.1);
+    transform: translateY(-3px) scale(1.15);
+    box-shadow:
+      0 12px 35px rgba(0, 0, 0, 0.2),
+      0 6px 20px rgba(0, 0, 0, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    border-color: rgba(255, 255, 255, 1);
+  }
+
+  .color-option:hover::before {
+    border-color: rgba(59, 130, 246, 0.3);
   }
 
   .color-option.active {
-    border-color: #1f2937;
-    transform: scale(1.1);
+    transform: scale(1.2);
+    border-color: var(--primary-600);
+    box-shadow:
+      0 12px 35px rgba(59, 130, 246, 0.3),
+      0 6px 20px rgba(0, 0, 0, 0.15),
+      0 0 0 4px rgba(59, 130, 246, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
   }
 
-  .modal-footer {
-    display: flex;
-    gap: 1rem;
-    justify-content: flex-end;
-    padding: 1.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
-    background: rgba(249, 250, 251, 0.8);
-    backdrop-filter: blur(5px);
-  }
-
-  .btn-secondary,
-  .btn-primary {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 6px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .btn-secondary {
-    background: rgba(243, 244, 246, 0.8);
-    backdrop-filter: blur(5px);
-    color: #374151;
-  }
-
-  .btn-secondary:hover {
-    background: rgba(229, 231, 235, 0.9);
-  }
-
-  .btn-primary {
-    background: #3b82f6;
-    color: white;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    background: #1d4ed8;
-  }
-
-  .btn-primary:disabled {
-    background: #9ca3af;
-    cursor: not-allowed;
+  .color-option.active::before {
+    border-color: var(--primary-400);
   }
 
   /* Responsive */
@@ -1000,12 +952,27 @@
       grid-template-columns: 1fr;
     }
 
-    .form-row {
-      grid-template-columns: 1fr;
+    .icon-selector {
+      grid-template-columns: repeat(auto-fit, minmax(2.5rem, 1fr));
+      gap: 0.75rem;
+      padding: 0.375rem;
     }
 
-    .icon-selector {
-      grid-template-columns: repeat(6, 1fr);
+    .color-selector {
+      grid-template-columns: repeat(auto-fit, minmax(2.75rem, 1fr));
+      gap: 0.875rem;
+      padding: 0.5rem;
+    }
+
+    .icon-option {
+      width: 2.5rem;
+      height: 2.5rem;
+      font-size: 1.125rem;
+    }
+
+    .color-option {
+      width: 2.75rem;
+      height: 2.75rem;
     }
 
     .modal-content {

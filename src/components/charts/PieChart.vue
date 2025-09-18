@@ -1,23 +1,40 @@
 <template>
-  <div class="pie-chart-container">
+  <BaseCard variant="default" class="pie-chart-container">
     <!-- En-tête du graphique -->
     <div class="chart-header">
-      <div class="header-content">
-        <h3 class="chart-title">
-          <component :is="titleIcon" class="chart-title-icon" />
-          {{ title }}
-        </h3>
+      <div class="chart-header-content">
+        <div class="chart-title-section">
+          <h3 class="chart-title">
+            <svg
+              class="chart-title-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="m12 2 3 10L12 22 5 12l7-10" />
+              <circle cx="12" cy="7" r="3" />
+            </svg>
+            {{ title }}
+          </h3>
+          <p class="chart-description">
+            Répartition par catégories des
+            {{ type === 'expenses' ? 'dépenses' : 'revenus' }}
+          </p>
+        </div>
 
         <!-- Sélecteur de mois -->
         <div
           v-if="availableMonths && availableMonths.length > 0"
-          class="month-selector"
+          class="category-filter-section"
         >
-          <label for="month-filter" class="month-label">Période :</label>
+          <label for="month-filter" class="filter-label"
+            >Filtrer par période :</label
+          >
           <select
             id="month-filter"
             :value="selectedMonth || 'all'"
-            class="month-select"
+            class="category-select"
             @change="handleMonthChange"
           >
             <option value="all">Tous les mois</option>
@@ -33,6 +50,18 @@
       </div>
     </div>
 
+    <!-- Annonce des changements de données pour les lecteurs d'écran -->
+    <div class="sr-only" aria-live="polite" aria-atomic="false">
+      Graphique camembert mis à jour:
+      {{ chartData.categories.length }} catégories,
+      <span v-if="selectedMonth && selectedMonth !== 'all'">
+        période
+        {{ availableMonths?.find(m => m.value === selectedMonth)?.label }},
+      </span>
+      <span v-else> toutes périodes, </span>
+      total {{ formatAmount(chartData.totalAmount) }}
+    </div>
+
     <!-- Zone du graphique -->
     <div class="chart-container">
       <!-- SVG du graphique camembert -->
@@ -41,6 +70,8 @@
           class="pie-chart-svg"
           :viewBox="`0 0 ${svgSize} ${svgSize}`"
           xmlns="http://www.w3.org/2000/svg"
+          role="img"
+          :aria-label="`Graphique camembert des catégories: ${chartData.categories.length} catégories affichées`"
         >
           <!-- Cercle de fond -->
           <circle
@@ -65,9 +96,14 @@
               :stroke-width="segment.isHovered ? '3' : '1'"
               class="pie-segment"
               :class="{ 'segment-hovered': segment.isHovered }"
+              role="button"
+              :aria-label="`${segment.category}: ${formatAmount(segment.amount)} (${(segment.percentage || 0).toFixed(1)}%)`"
+              tabindex="0"
               @mouseenter="handleSegmentHover(index, true)"
               @mouseleave="handleSegmentHover(index, false)"
               @click="handleSegmentClick(segment.category)"
+              @keydown.enter="handleSegmentClick(segment.category)"
+              @keydown.space.prevent="handleSegmentClick(segment.category)"
             />
           </g>
 
@@ -111,10 +147,10 @@
           <div class="hover-card">
             <div class="hover-category">{{ hoveredSegment.category.name }}</div>
             <div class="hover-amount">
-              {{ formatAmount(hoveredSegment.category.value) }}
+              {{ props.formatAmount(hoveredSegment.category.value) }}
             </div>
             <div class="hover-percentage">
-              {{ formatPercentage(hoveredSegment.category.percentage) }}
+              {{ props.formatPercentage(hoveredSegment.category.percentage) }}
             </div>
           </div>
         </div>
@@ -140,10 +176,10 @@
             <div class="legend-name">{{ category.name }}</div>
             <div class="legend-values">
               <span class="legend-amount">{{
-                formatAmount(category.value)
+                props.formatAmount(category.value)
               }}</span>
               <span class="legend-percentage">{{
-                formatPercentage(category.percentage)
+                props.formatPercentage(category.percentage)
               }}</span>
             </div>
           </div>
@@ -164,12 +200,14 @@
       </svg>
       <p class="empty-message">Aucune donnée à afficher</p>
     </div>
-  </div>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
   import type { CategoryData, PieChartData } from '@/composables/usePieChart'
-  import { computed, ref, type Component } from 'vue'
+  import { computed, ref, onMounted, onUnmounted } from 'vue'
+  import BaseCard from '@/components/shared/BaseCard.vue'
+  import { useFormatting } from '@/composables/useFormatting'
 
   interface Props {
     chartData: PieChartData
@@ -190,6 +228,12 @@
     monthChange: [month: string]
   }>()
 
+  // Utiliser le composable de formatage (préparation future)
+  const {
+    formatAmount: _formatAmountFromComposable,
+    formatPercentage: _formatPercentageFromComposable,
+  } = useFormatting()
+
   // Configuration du SVG
   const svgSize = 300
   const center = svgSize / 2
@@ -208,9 +252,32 @@
   const legendContainer = ref<HTMLElement | null>(null)
   const legendItemRefs = ref<(HTMLElement | null)[]>([])
 
+  // État pour détecter le thème
+  const isDarkMode = ref(
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+  )
+
+  // Écouter les changements de thème
+  const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  const handleThemeChange = (e: MediaQueryListEvent) => {
+    isDarkMode.value = e.matches
+  }
+
+  onMounted(() => {
+    darkModeMediaQuery.addEventListener('change', handleThemeChange)
+  })
+
+  onUnmounted(() => {
+    darkModeMediaQuery.removeEventListener('change', handleThemeChange)
+  })
+
   // Couleur du cercle central pour le thème glassmorphism
   const centerCircleFill = computed(() => {
-    return 'rgba(255, 255, 255, 0.9)' // Fond blanc semi-transparent pour glassmorphism
+    if (isDarkMode.value) {
+      // En mode sombre, utilise le même fond que BaseCard
+      return 'rgba(31, 41, 55, 0.98)' // Correspond au fond de BaseCard en mode sombre
+    }
+    return 'rgba(255, 255, 255, 0.98)' // En mode clair
   })
 
   // Fonction pour gérer les références des éléments de légende
@@ -248,25 +315,6 @@
       })
     }
   }
-
-  // Icône du titre basée sur le type
-  const titleIcon = computed((): Component => {
-    if (props.type === 'expenses') {
-      return {
-        template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path d="M17 11l-3-3V2m0 6l-3 3m3-3h8" />
-        <path d="M7 21H4a2 2 0 01-2-2v-5h20v5a2 2 0 01-2 2h-3" />
-      </svg>`,
-      }
-    } else {
-      return {
-        template: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path d="M7 13l3 3 7-7" />
-        <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c2.35 0 4.49.91 6.08 2.4" />
-      </svg>`,
-      }
-    }
-  })
 
   // Calcul des segments du camembert
   const pieSegments = computed(() => {
@@ -367,48 +415,43 @@
 
 <style scoped>
   .pie-chart-container {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border-radius: 1rem;
-    margin-bottom: 1.5rem;
-    transition: all 0.3s ease;
     width: 100%;
     max-width: 100%;
     min-height: 500px;
-    margin: 0 auto;
+    margin: 0 auto 1.5rem;
     overflow: hidden;
-  }
-
-  .pie-chart-container:hover {
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
   }
 
   /* En-tête du graphique */
   .chart-header {
     background: rgba(248, 250, 252, 0.5);
     backdrop-filter: blur(5px);
-    padding: 1.5rem;
+    padding: 1.5rem 2rem 1rem;
     border-bottom: 1px solid rgba(229, 231, 235, 0.3);
   }
 
-  .header-content {
+  .chart-header-content {
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    align-items: flex-start;
+    gap: 2rem;
     flex-wrap: wrap;
   }
 
+  .chart-title-section {
+    text-align: left;
+    flex: 1;
+    min-width: 250px;
+  }
+
   .chart-title {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #1f2937;
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0 0 0.5rem;
   }
 
   .chart-title-icon {
@@ -417,39 +460,41 @@
     color: #3b82f6;
   }
 
-  /* Sélecteur de mois */
-  .month-selector {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+  .chart-description {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin: 0;
+    line-height: 1.4;
   }
 
-  .month-label {
+  .category-filter-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 200px;
+  }
+
+  .filter-label {
     font-size: 0.875rem;
     font-weight: 500;
-    color: #6b7280;
-    white-space: nowrap;
+    color: #374151;
+    margin: 0;
   }
 
-  .month-select {
+  .category-select {
     padding: 0.5rem 0.75rem;
     border: 1px solid rgba(209, 213, 219, 0.5);
     border-radius: 0.5rem;
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(5px);
-    color: #374151;
     font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
+    color: #374151;
+    background: var(--surface-color, rgba(255, 255, 255, 0.7));
+    backdrop-filter: blur(5px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     transition: all 0.2s ease;
-    min-width: 140px;
+    min-width: 180px;
   }
 
-  .month-select:hover {
-    border-color: #3b82f6;
-  }
-
-  .month-select:focus {
+  .category-select:focus {
     outline: none;
     border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
@@ -704,7 +749,7 @@
       min-height: 400px;
     }
 
-    .header-content {
+    .chart-header-content {
       flex-direction: column;
       align-items: stretch;
       gap: 1rem;
@@ -714,8 +759,8 @@
       justify-content: center;
     }
 
-    .month-selector {
-      justify-content: center;
+    .category-filter-section {
+      align-items: center;
     }
 
     .chart-container {
@@ -742,11 +787,11 @@
       padding: 1rem;
     }
 
-    .header-content {
+    .chart-header-content {
       gap: 0.75rem;
     }
 
-    .month-select {
+    .category-select {
       min-width: 120px;
       font-size: 0.8125rem;
     }
@@ -772,6 +817,67 @@
 
     .chart-legend {
       max-height: 180px;
+    }
+  }
+
+  /* Support du thème sombre */
+  @media (prefers-color-scheme: dark) {
+    .chart-header {
+      background: rgba(31, 41, 55, 0.5);
+      border-bottom-color: rgba(75, 85, 99, 0.3);
+    }
+
+    .chart-title {
+      color: #f3f4f6;
+    }
+
+    .chart-description {
+      color: #9ca3af;
+    }
+
+    .filter-label {
+      color: #e5e7eb;
+    }
+
+    .category-select {
+      background: rgba(31, 41, 55, 0.7);
+      border-color: rgba(75, 85, 99, 0.5);
+      color: #f3f4f6;
+    }
+
+    .center-text-main {
+      fill: #f3f4f6;
+    }
+
+    .center-text-sub {
+      fill: #d1d5db;
+    }
+
+    .legend-item {
+      background: rgba(31, 41, 55, 0.7);
+      border-color: rgba(75, 85, 99, 0.3);
+    }
+
+    .legend-item:hover,
+    .legend-hovered {
+      background: rgba(31, 41, 55, 0.9);
+    }
+
+    .legend-name {
+      color: #e5e7eb;
+    }
+
+    .legend-amount {
+      color: #f3f4f6;
+    }
+
+    .legend-percentage {
+      color: #9ca3af;
+      background: rgba(31, 41, 55, 0.5);
+    }
+
+    .empty-state {
+      color: #9ca3af;
     }
   }
 </style>

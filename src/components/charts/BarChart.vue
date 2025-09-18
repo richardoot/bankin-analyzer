@@ -1,5 +1,5 @@
 <template>
-  <div class="bar-chart-container">
+  <BaseCard variant="default" class="bar-chart-container">
     <!-- En-tête du graphique -->
     <div class="chart-header">
       <div class="chart-header-content">
@@ -59,6 +59,17 @@
       </div>
     </div>
 
+    <!-- Annonce des changements de données pour les lecteurs d'écran -->
+    <div class="sr-only" aria-live="polite" aria-atomic="false">
+      Graphique mis à jour: {{ currentChartData.months.length }} mois affichés
+      <span v-if="type === 'expenses'">
+        , total des dépenses {{ formatAmount(totalAmount) }}
+      </span>
+      <span v-else-if="type === 'income'">
+        , total des revenus {{ formatAmount(totalAmount) }}
+      </span>
+    </div>
+
     <!-- Zone du graphique -->
     <div ref="chartContainerRef" class="chart-container">
       <!-- SVG de l'histogramme -->
@@ -67,6 +78,8 @@
           class="bar-chart-svg"
           :viewBox="`0 0 ${svgWidth} ${svgHeight}`"
           xmlns="http://www.w3.org/2000/svg"
+          role="img"
+          :aria-label="`Graphique en barres des ${type === 'expenses' ? 'dépenses' : type === 'income' ? 'revenus' : 'flux financiers'} par mois`"
         >
           <!-- Grille de fond -->
           <defs>
@@ -184,17 +197,12 @@
                   )
                 "
                 :fill="getBarColor('expenses')"
-                :stroke="
-                  isHovered(index, 'expenses')
-                    ? '#ffffff'
-                    : 'rgba(255, 255, 255, 0.1)'
-                "
-                :stroke-width="isHovered(index, 'expenses') ? '2' : '1'"
+                stroke="rgba(255, 255, 255, 0.1)"
+                stroke-width="1"
                 class="bar expenses-bar"
-                :class="{ 'bar-hovered': isHovered(index, 'expenses') }"
-                @mouseenter="handleBarHover(index, 'expenses', true, $event)"
-                @mouseleave="handleBarHover(index, 'expenses', false)"
                 @click="handleBarClick(month, 'expenses')"
+                @mouseenter="handleBarHover($event, month, 'expenses')"
+                @mouseleave="handleBarLeave"
               />
 
               <!-- Barre des revenus (si type income ou comparison) -->
@@ -213,17 +221,12 @@
                   )
                 "
                 :fill="getBarColor('income')"
-                :stroke="
-                  isHovered(index, 'income')
-                    ? '#ffffff'
-                    : 'rgba(255, 255, 255, 0.1)'
-                "
-                :stroke-width="isHovered(index, 'income') ? '2' : '1'"
+                stroke="rgba(255, 255, 255, 0.1)"
+                stroke-width="1"
                 class="bar income-bar"
-                :class="{ 'bar-hovered': isHovered(index, 'income') }"
-                @mouseenter="handleBarHover(index, 'income', true, $event)"
-                @mouseleave="handleBarHover(index, 'income', false)"
                 @click="handleBarClick(month, 'income')"
+                @mouseenter="handleBarHover($event, month, 'income')"
+                @mouseleave="handleBarLeave"
               />
 
               <!-- Barre du solde net (si type net) -->
@@ -234,17 +237,12 @@
                 :width="barWidth"
                 :height="Math.abs(getBarHeight(month.net))"
                 :fill="getBarColor('net', month.net)"
-                :stroke="
-                  isHovered(index, 'net')
-                    ? '#ffffff'
-                    : 'rgba(255, 255, 255, 0.1)'
-                "
-                :stroke-width="isHovered(index, 'net') ? '2' : '1'"
+                stroke="rgba(255, 255, 255, 0.1)"
+                stroke-width="1"
                 class="bar net-bar"
-                :class="{ 'bar-hovered': isHovered(index, 'net') }"
-                @mouseenter="handleBarHover(index, 'net', true, $event)"
-                @mouseleave="handleBarHover(index, 'net', false)"
                 @click="handleBarClick(month, 'net')"
+                @mouseenter="handleBarHover($event, month, 'net')"
+                @mouseleave="handleBarLeave"
               />
             </g>
           </g>
@@ -308,13 +306,13 @@
             <div>
               <span class="tooltip-label expenses">💸 Dépenses:</span>
               <span class="tooltip-value">{{
-                formatAmount(hoveredBar.month.expenses)
+                props.formatAmount(hoveredBar.month.expenses)
               }}</span>
             </div>
             <div>
               <span class="tooltip-label income">💰 Revenus:</span>
               <span class="tooltip-value">{{
-                formatAmount(hoveredBar.month.income)
+                props.formatAmount(hoveredBar.month.income)
               }}</span>
             </div>
           </div>
@@ -323,7 +321,7 @@
           <div v-else-if="hoveredBar.type === 'expenses'">
             <span class="tooltip-label expenses">💸 Dépenses:</span>
             <span class="tooltip-value">{{
-              formatAmount(hoveredBar.month.expenses)
+              props.formatAmount(hoveredBar.month.expenses)
             }}</span>
           </div>
 
@@ -331,7 +329,7 @@
           <div v-else-if="hoveredBar.type === 'income'">
             <span class="tooltip-label income">💰 Revenus:</span>
             <span class="tooltip-value">{{
-              formatAmount(hoveredBar.month.income)
+              props.formatAmount(hoveredBar.month.income)
             }}</span>
           </div>
 
@@ -344,7 +342,7 @@
                 negative: hoveredBar.month.net < 0,
               }"
             >
-              {{ hoveredBar.month.net >= 0 ? '📈' : '📉' }} Solde:
+              💵 Solde net:
             </span>
             <span
               class="tooltip-value"
@@ -353,10 +351,11 @@
                 negative: hoveredBar.month.net < 0,
               }"
             >
-              {{ formatAmount(hoveredBar.month.net) }}
+              {{ props.formatAmount(hoveredBar.month.net) }}
             </span>
           </div>
 
+          <!-- Afficher le nombre de transactions -->
           <div class="tooltip-transactions">
             <span class="tooltip-label">📊 Transactions:</span>
             <span class="tooltip-value">{{
@@ -380,7 +379,7 @@
       </svg>
       <p class="empty-message">Aucune donnée mensuelle à afficher</p>
     </div>
-  </div>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
@@ -390,6 +389,8 @@
     Transaction as GlobalTransaction,
   } from '@/types'
   import { computed, ref } from 'vue'
+  import BaseCard from '@/components/shared/BaseCard.vue'
+  import { useFormatting } from '@/composables/useFormatting'
 
   interface Props {
     chartData: BarChartData
@@ -405,14 +406,34 @@
   // Émissions pour les interactions
   const emit = defineEmits<{
     monthClick: [month: MonthlyData, type: string]
-    monthHover: [month: MonthlyData | null, type: string | null]
   }>()
+
+  // Utiliser le composable de formatage (préparation future)
+  const { formatAmount: _formatAmountFromComposable } = useFormatting()
 
   // Référence au conteneur du graphique
   const chartContainerRef = ref<HTMLElement | null>(null)
 
   // État local pour le filtrage par catégorie
   const selectedCategory = ref<string>('all')
+
+  // État pour le hover des barres
+  const hoveredBar = ref<{
+    month: MonthlyData
+    type: string
+    x: number
+    y: number
+  } | null>(null)
+
+  // Style du tooltip basé sur la position du hover
+  const tooltipStyle = computed(() => {
+    if (!hoveredBar.value) return {}
+    return {
+      left: `${hoveredBar.value.x}px`,
+      top: `${hoveredBar.value.y}px`,
+      transform: 'translate(-50%, 10px)',
+    }
+  })
 
   // Logique de filtrage par catégorie
   const filteredChartData = computed(() => {
@@ -567,6 +588,18 @@
       : filteredChartData.value
   })
 
+  // Total amount selon le type de graphique
+  const totalAmount = computed(() => {
+    if (props.type === 'expenses') {
+      return currentChartData.value.totalExpenses
+    } else if (props.type === 'income') {
+      return currentChartData.value.totalIncome
+    } else if (props.type === 'net') {
+      return currentChartData.value.totalNet
+    }
+    return 0
+  })
+
   // Configuration du SVG
   const svgWidth = 1200
   const svgHeight = 500
@@ -576,14 +609,6 @@
     bottom: 80,
     left: 100,
   }
-
-  // État pour les interactions
-  const hoveredBar = ref<{
-    month: MonthlyData
-    type: string
-    x: number
-    y: number
-  } | null>(null)
 
   // Dimensions calculées
   const chartWidth = computed(() => svgWidth - padding.left - padding.right)
@@ -664,113 +689,42 @@
     }
   }
 
-  // Vérification du survol
-  const isHovered = (index: number, type: string): boolean => {
-    return (
-      hoveredBar.value?.month === currentChartData.value.months[index] &&
-      hoveredBar.value?.type === type
-    )
-  }
-
-  // Gestion du survol des barres
-  const handleBarHover = (
-    index: number,
-    type: string,
-    isHover: boolean,
-    event?: MouseEvent
-  ) => {
-    if (isHover && event) {
-      const month = currentChartData.value.months[index]
-      if (!month) return
-
-      // Utiliser la référence directe au conteneur de ce composant
-      if (chartContainerRef.value) {
-        const containerRect = chartContainerRef.value.getBoundingClientRect()
-
-        // Position relative au conteneur du graphique spécifique
-        const relativeX = event.clientX - containerRect.left
-        const relativeY = event.clientY - containerRect.top
-
-        hoveredBar.value = {
-          month,
-          type,
-          x: relativeX,
-          y: relativeY,
-        }
-      }
-
-      emit('monthHover', month, type)
-    } else {
-      hoveredBar.value = null
-      emit('monthHover', null, null)
-    }
-  }
-
   // Gestion du clic sur les barres
   const handleBarClick = (month: MonthlyData, type: string) => {
     emit('monthClick', month, type)
   }
 
-  // Style du tooltip
-  const tooltipStyle = computed(() => {
-    if (!hoveredBar.value) return { display: 'none' }
+  // Gestion du hover sur les barres
+  const handleBarHover = (
+    event: MouseEvent,
+    month: MonthlyData,
+    type: string
+  ) => {
+    const rect = (event.target as SVGRectElement).getBoundingClientRect()
+    const container = chartContainerRef.value?.getBoundingClientRect()
 
-    // Dimensions du tooltip
-    const tooltipWidth = 220
-    const tooltipHeight = 120
-    const offset = 15 // Décalage pour éviter que le tooltip cache la barre
-
-    // Utiliser la référence directe au conteneur de ce composant
-    const containerWidth = chartContainerRef.value?.clientWidth || 1000
-    const containerHeight = chartContainerRef.value?.clientHeight || 500
-
-    // Position de base : au-dessus de la souris, centrée
-    let leftPosition = hoveredBar.value.x
-    let topPosition = hoveredBar.value.y - offset
-    let transform = 'translate(-50%, -100%)'
-
-    // Gestion du débordement horizontal
-    if (leftPosition + tooltipWidth / 2 > containerWidth - 10) {
-      // Tooltip déborde à droite : l'aligner à droite de la souris
-      leftPosition = hoveredBar.value.x - offset
-      transform = 'translate(-100%, -100%)'
-    } else if (leftPosition - tooltipWidth / 2 < 10) {
-      // Tooltip déborde à gauche : l'aligner à gauche de la souris
-      leftPosition = hoveredBar.value.x + offset
-      transform = 'translate(0%, -100%)'
-    }
-
-    // Gestion du débordement vertical
-    if (topPosition - tooltipHeight < 10) {
-      // Si le tooltip déborde en haut, le placer en dessous de la souris
-      topPosition = hoveredBar.value.y + offset
-      if (transform.includes('translate(-50%')) {
-        transform = 'translate(-50%, 0%)'
-      } else if (transform.includes('translate(-100%')) {
-        transform = 'translate(-100%, 0%)'
-      } else {
-        transform = 'translate(0%, 0%)'
+    if (container) {
+      hoveredBar.value = {
+        month,
+        type,
+        x: rect.left + rect.width / 2 - container.left,
+        y: rect.top - container.top,
       }
     }
+  }
 
-    // S'assurer que le tooltip ne déborde pas en bas
-    if (topPosition + tooltipHeight > containerHeight - 10) {
-      topPosition = containerHeight - tooltipHeight - 10
-      transform = transform.replace('0%', '-100%')
-    }
+  // Gestion de la sortie du hover
+  const handleBarLeave = () => {
+    hoveredBar.value = null
+  }
 
-    return {
-      position: 'absolute' as const,
-      left: `${Math.max(10, Math.min(leftPosition, containerWidth - 10))}px`,
-      top: `${Math.max(10, topPosition)}px`,
-      transform,
-      zIndex: 1000,
-      pointerEvents: 'none' as const,
-    }
-  })
-
-  // Formatage court des montants pour les axes
+  // Formatage court des montants pour les axes (logique originale)
   const formatShortAmount = (amount: number): string => {
+    // Protection contre les valeurs undefined/null/NaN
+    if (amount == null || isNaN(amount)) {
+      return '0€'
+    }
+
     const abs = Math.abs(amount)
     if (abs >= 1000000) {
       return `${(amount / 1000000).toFixed(1)}M€`
@@ -791,23 +745,25 @@
 </script>
 
 <style scoped>
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   .bar-chart-container {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border-radius: 1rem;
-    margin-bottom: 1.5rem;
-    transition: all 0.3s ease;
     width: 100%;
     max-width: 100%;
     min-height: 600px;
-    overflow: visible; /* Permettre au tooltip de sortir légèrement */
-    position: relative; /* Assurer le positionnement relatif pour le tooltip */
-  }
-
-  .bar-chart-container:hover {
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    margin-bottom: 1.5rem;
+    overflow: visible;
+    position: relative;
   }
 
   .chart-header {
@@ -874,7 +830,7 @@
     border-radius: 0.5rem;
     font-size: 0.875rem;
     color: #374151;
-    background: rgba(255, 255, 255, 0.7);
+    background: var(--surface-color, rgba(255, 255, 255, 0.7));
     backdrop-filter: blur(5px);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     transition: all 0.2s ease;
@@ -887,14 +843,10 @@
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
-  .category-select:hover {
-    border-color: #9ca3af;
-  }
-
   .chart-container {
     padding: 2rem;
     position: relative;
-    overflow: visible; /* Permettre au tooltip de déborder légèrement */
+    overflow: visible;
   }
 
   .chart-svg-container {
@@ -920,14 +872,6 @@
   .bar {
     cursor: pointer;
     transition: all 0.2s ease;
-  }
-
-  .bar:hover {
-    opacity: 0.8;
-  }
-
-  .bar-hovered {
-    filter: brightness(1.1);
   }
 
   .chart-legend {
@@ -976,88 +920,6 @@
     color: #374151;
   }
 
-  .chart-tooltip {
-    background: rgba(17, 24, 39, 0.96);
-    backdrop-filter: blur(12px);
-    border-radius: 0.75rem;
-    padding: 1rem 1.25rem;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    pointer-events: none;
-    max-width: 280px;
-    min-width: 200px;
-  }
-
-  .tooltip-content {
-    color: white;
-    font-size: 0.9rem;
-    line-height: 1.4;
-  }
-
-  .tooltip-month {
-    font-weight: 700;
-    margin-bottom: 0.75rem;
-    color: #f9fafb;
-    font-size: 1rem;
-    text-align: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    padding-bottom: 0.5rem;
-  }
-
-  .tooltip-values {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .tooltip-values > div {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1.5rem;
-    padding: 0.25rem 0;
-  }
-
-  .tooltip-label {
-    font-weight: 600;
-    font-size: 0.85rem;
-  }
-
-  .tooltip-label.expenses {
-    color: #fca5a5;
-  }
-
-  .tooltip-label.income {
-    color: #6ee7b7;
-  }
-
-  .tooltip-label.net.positive {
-    color: #6ee7b7;
-  }
-
-  .tooltip-label.net.negative {
-    color: #fca5a5;
-  }
-
-  .tooltip-value {
-    font-weight: 700;
-    font-size: 0.9rem;
-  }
-
-  .tooltip-value.positive {
-    color: #6ee7b7;
-  }
-
-  .tooltip-value.negative {
-    color: #fca5a5;
-  }
-
-  .tooltip-transactions {
-    padding-top: 0.25rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
-    margin-top: 0.25rem;
-  }
-
   .empty-state {
     text-align: center;
     padding: 3rem 2rem;
@@ -1102,16 +964,6 @@
     .axis-label {
       font-size: 14px;
     }
-
-    .chart-tooltip {
-      max-width: 250px;
-      min-width: 180px;
-      padding: 0.875rem 1rem;
-    }
-
-    .tooltip-month {
-      font-size: 0.9rem;
-    }
   }
 
   @media (max-width: 480px) {
@@ -1138,18 +990,154 @@
       gap: 0.5rem;
     }
 
-    .tooltip-content {
-      font-size: 0.8125rem;
-    }
-
-    .chart-tooltip {
-      max-width: 220px;
-      min-width: 160px;
-      padding: 0.75rem;
-    }
-
     .axis-label {
       font-size: 13px;
     }
+  }
+
+  /* Support du thème sombre */
+  @media (prefers-color-scheme: dark) {
+    .chart-header {
+      background: rgba(31, 41, 55, 0.5);
+      border-bottom-color: rgba(75, 85, 99, 0.3);
+    }
+
+    .chart-title {
+      color: #f3f4f6;
+    }
+
+    .chart-description {
+      color: #9ca3af;
+    }
+
+    .filter-label {
+      color: #e5e7eb;
+    }
+
+    .category-select {
+      background: rgba(31, 41, 55, 0.7);
+      border-color: rgba(75, 85, 99, 0.5);
+      color: #f3f4f6;
+    }
+
+    .axis-label {
+      fill: #e5e7eb;
+    }
+
+    .legend-label {
+      color: #e5e7eb;
+    }
+
+    .empty-state {
+      color: #9ca3af;
+    }
+  }
+  /* Tooltip styles */
+  .chart-tooltip {
+    position: absolute;
+    pointer-events: none;
+    z-index: 50;
+    background: rgba(17, 24, 39, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 5px);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 10px);
+    }
+  }
+
+  .tooltip-content {
+    font-size: 0.875rem;
+  }
+
+  .tooltip-month {
+    font-weight: 600;
+    color: #f9fafb;
+    margin-bottom: 0.5rem;
+    text-align: center;
+    font-size: 0.9375rem;
+  }
+
+  .tooltip-values {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .tooltip-values > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    white-space: nowrap;
+  }
+
+  .tooltip-label {
+    font-weight: 500;
+    opacity: 0.9;
+  }
+
+  .tooltip-label.expenses {
+    color: #fca5a5;
+  }
+
+  .tooltip-label.income {
+    color: #86efac;
+  }
+
+  .tooltip-label.net {
+    color: #93c5fd;
+  }
+
+  .tooltip-label.net.positive {
+    color: #86efac;
+  }
+
+  .tooltip-label.net.negative {
+    color: #fca5a5;
+  }
+
+  .tooltip-value {
+    font-weight: 600;
+    color: #f3f4f6;
+    font-family: var(--font-family-mono);
+  }
+
+  .tooltip-value.positive {
+    color: #86efac;
+  }
+
+  .tooltip-value.negative {
+    color: #fca5a5;
+  }
+
+  .tooltip-transactions {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .tooltip-transactions .tooltip-label {
+    color: #9ca3af;
+  }
+
+  .tooltip-transactions .tooltip-value {
+    color: #e5e7eb;
   }
 </style>

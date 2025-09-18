@@ -1,10 +1,15 @@
 <script setup lang="ts">
-  import { ref } from 'vue'
+  import { ref, defineAsyncComponent } from 'vue'
   import AppHeader from './components/layout/AppHeader.vue'
   import HeroSection from './components/layout/HeroSection.vue'
   import StartAnalysisSection from './components/layout/StartAnalysisSection.vue'
-  import AnalysesPage from './views/AnalysesPage.vue'
   import AppFooter from './components/layout/AppFooter.vue'
+  import ErrorBoundary from './components/shared/ErrorBoundary.vue'
+
+  // Lazy load the AnalysesPage component for better initial load performance
+  const AnalysesPage = defineAsyncComponent(
+    () => import('./views/AnalysesPage.vue')
+  )
 
   // État de navigation
   type ViewState = 'home' | 'analyses'
@@ -27,13 +32,23 @@
     <main class="main-content" role="main">
       <!-- Page d'accueil -->
       <template v-if="currentView === 'home'">
-        <HeroSection />
-        <StartAnalysisSection @start-analysis="handleStartAnalysis" />
+        <ErrorBoundary
+          fallback-title="Erreur de la page d'accueil"
+          fallback-message="Impossible de charger la page d'accueil. Veuillez rafraîchir votre navigateur."
+        >
+          <HeroSection />
+          <StartAnalysisSection @start-analysis="handleStartAnalysis" />
+        </ErrorBoundary>
       </template>
 
       <!-- Page des analyses -->
       <template v-if="currentView === 'analyses'">
-        <AnalysesPage />
+        <ErrorBoundary
+          fallback-title="Erreur de la page d'analyses"
+          fallback-message="Impossible de charger la page d'analyses. Veuillez rafraîchir votre navigateur."
+        >
+          <AnalysesPage />
+        </ErrorBoundary>
       </template>
     </main>
     <AppFooter />

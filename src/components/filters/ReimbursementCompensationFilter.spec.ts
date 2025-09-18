@@ -1,17 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ReimbursementCompensationFilter from './ReimbursementCompensationFilter.vue'
 import type { CsvAnalysisResult } from '@/types'
 import type { CompensationRule } from './ReimbursementCompensationFilter.vue'
-
-// Mock du composable usePerformanceMonitor
-vi.mock('@/composables/usePerformanceMonitor', () => ({
-  usePerformanceMonitor: () => ({
-    startMeasure: vi.fn(),
-    endMeasure: vi.fn(),
-    watchWithPerformance: vi.fn(),
-  }),
-}))
 
 describe('ReimbursementCompensationFilter', () => {
   let wrapper: ReturnType<typeof mount>

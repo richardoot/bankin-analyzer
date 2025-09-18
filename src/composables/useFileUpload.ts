@@ -7,7 +7,39 @@ import type {
 import { computed, ref } from 'vue'
 
 /**
- * Parse un CSV avec gestion correcte des retours à la ligne dans les champs
+ * Sécurise une cellule CSV contre l'injection de formules
+ */
+const sanitizeCSVCell = (content: string): string => {
+  if (!content || typeof content !== 'string') {
+    return content
+  }
+
+  const trimmedContent = content.trim()
+
+  // Détecter les caractères potentiellement dangereux en début de cellule
+  // Exclure les nombres négatifs légitimes (format monétaire)
+  const isNegativeNumber = /^-\d+([.,]\d+)?$/.test(trimmedContent)
+
+  if (!isNegativeNumber) {
+    const dangerousChars = ['=', '+', '@', '\t', '\r']
+    // Le tiret (-) seul ou suivi de non-chiffres est suspect
+    const suspiciousMinus =
+      trimmedContent.startsWith('-') && !/^-\d/.test(trimmedContent)
+
+    if (
+      dangerousChars.some(char => trimmedContent.startsWith(char)) ||
+      suspiciousMinus
+    ) {
+      // Échapper en préfixant avec une apostrophe (technique Excel/LibreOffice standard)
+      return `'${trimmedContent}`
+    }
+  }
+
+  return trimmedContent
+}
+
+/**
+ * Parse un CSV avec gestion correcte des retours à la ligne dans les champs et sécurisation anti-injection
  */
 const parseCSV = (csvText: string): string[][] => {
   const result: string[][] = []
@@ -29,14 +61,14 @@ const parseCSV = (csvText: string): string[][] => {
         inQuotes = !inQuotes
       }
     } else if (char === ';' && !inQuotes) {
-      // Séparateur de champ hors guillemets
-      row.push(current.trim())
+      // Séparateur de champ hors guillemets - avec sécurisation
+      row.push(sanitizeCSVCell(current))
       current = ''
     } else if (char === '\n' && !inQuotes) {
-      // Fin de ligne hors guillemets
+      // Fin de ligne hors guillemets - avec sécurisation
       if (current.trim() || row.length > 0) {
-        row.push(current.trim())
-        if (row.some(field => field.length > 0)) {
+        row.push(sanitizeCSVCell(current))
+        if (row.some(field => field && field.length > 0)) {
           result.push(row)
         }
         row = []
@@ -48,10 +80,10 @@ const parseCSV = (csvText: string): string[][] => {
     }
   }
 
-  // Ajouter la dernière ligne si elle n'est pas vide
+  // Ajouter la dernière ligne si elle n'est pas vide - avec sécurisation
   if (current.trim() || row.length > 0) {
-    row.push(current.trim())
-    if (row.some(field => field.length > 0)) {
+    row.push(sanitizeCSVCell(current))
+    if (row.some(field => field && field.length > 0)) {
       result.push(row)
     }
   }
@@ -141,11 +173,24 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
           'Note',
           'Pointée',
         ]
-        const hasValidHeaders = expectedHeaders.every(header =>
-          headers.some(h => h.toLowerCase() === header.toLowerCase())
-        )
+        // Normalisation plus flexible des en-têtes
+        const normalizeHeader = (header: string) =>
+          header
+            .toLowerCase()
+            .trim()
+            .normalize('NFD') // Décomposer les accents
+            .replace(/[\u0300-\u036f]/g, '') // Supprimer les accents
+            .replace(/[^a-z0-9]/g, '') // Garder que lettres et chiffres
+
+        const hasValidHeaders = expectedHeaders.every(expected => {
+          const normalizedExpected = normalizeHeader(expected)
+          return headers.some(h => normalizeHeader(h) === normalizedExpected)
+        })
 
         if (!hasValidHeaders) {
+          // Diagnostic détaillé des en-têtes pour les erreurs basiques
+          const foundHeaders = headers.map(h => `"${h.trim()}"`)
+
           resolve({
             isValid: false,
             transactionCount: 0,
@@ -167,8 +212,9 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
             },
             transactions: [],
             errors: [
-              'Format CSV Bankin non reconnu. En-têtes attendus : ' +
-                expectedHeaders.join(', '),
+              `Format CSV Bankin non reconnu.`,
+              `En-têtes trouvés: ${foundHeaders.join(', ')}`,
+              `En-têtes attendus: Date, Description, Compte, Montant, Catégorie, Sous-Catégorie, Note, Pointée`,
             ],
           })
           return
@@ -241,7 +287,14 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
 
             // Extraction du montant
             if (amountIndex >= 0 && parts[amountIndex]) {
-              const amount = parseFloat(parts[amountIndex].replace(',', '.'))
+              const rawAmount = parts[amountIndex]
+              // Nettoyage plus robuste du montant
+              const cleanAmount = rawAmount
+                .replace(/\s+/g, '') // Supprimer tous les espaces
+                .replace(/[€$£]/g, '') // Supprimer les symboles monétaires
+                .replace(/,/g, '.') // Remplacer virgules par points
+
+              const amount = parseFloat(cleanAmount)
               if (!isNaN(amount)) {
                 amounts.push(amount)
 
@@ -281,16 +334,16 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
                   }
                 }
 
-                // Collecte de la transaction individuelle
-                if (date && description && category) {
+                // Collecte de la transaction individuelle - Conditions moins strictes
+                if (date && (description || category)) {
                   transactions.push({
                     date,
-                    description,
+                    description: description || 'Transaction',
                     amount,
-                    category,
-                    account,
+                    category: category || 'Non classée',
+                    account: account || 'Compte principal',
                     type: transactionType,
-                    note,
+                    note: note || '',
                     isPointed,
                   })
                 }
@@ -309,6 +362,36 @@ const analyzeCsvFile = async (file: File): Promise<CsvAnalysisResult> => {
           0
         )
         const sortedDates = dates.filter(d => d).sort()
+
+        // Validation : au moins quelques transactions valides requises
+        if (transactions.length === 0) {
+          resolve({
+            isValid: false,
+            transactionCount: 0,
+            categoryCount: 0,
+            categories: [],
+            dateRange: { start: '', end: '' },
+            totalAmount: 0,
+            expenses: {
+              totalAmount: 0,
+              transactionCount: 0,
+              categories: [],
+              categoriesData: {},
+            },
+            income: {
+              totalAmount: 0,
+              transactionCount: 0,
+              categories: [],
+              categoriesData: {},
+            },
+            transactions: [],
+            errors: [
+              'Aucune transaction valide trouvée dans le fichier.',
+              'Vérifiez que le fichier contient des données avec dates, descriptions et montants corrects.',
+            ],
+          })
+          return
+        }
 
         resolve({
           isValid: true,

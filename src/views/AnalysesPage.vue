@@ -1,9 +1,10 @@
 <script setup lang="ts">
   import type { CsvAnalysisResult } from '@/types'
   import { ref } from 'vue'
+  import UploadSection from '../components/layout/UploadSection.vue'
   import DashboardPage from './DashboardPage.vue'
   import ReimbursementManager from '../components/reimbursement/ReimbursementManager.vue'
-  import UploadSection from '../components/layout/UploadSection.vue'
+  import ErrorBoundary from '../components/shared/ErrorBoundary.vue'
 
   // État local pour gérer l'affichage
   const showAnalysis = ref(false)
@@ -44,7 +45,12 @@
         </div>
 
         <div class="upload-wrapper">
-          <UploadSection @navigate-to-dashboard="handleNavigateToAnalysis" />
+          <ErrorBoundary
+            fallback-title="Erreur d'upload"
+            fallback-message="Impossible de charger l'interface d'upload. Veuillez rafraîchir la page."
+          >
+            <UploadSection @navigate-to-dashboard="handleNavigateToAnalysis" />
+          </ErrorBoundary>
         </div>
       </template>
 
@@ -105,10 +111,20 @@
         <!-- Contenu des onglets -->
         <div class="tab-content">
           <div v-if="activeTab === 'dashboard'" class="tab-panel">
-            <DashboardPage :analysis-result="analysisResult" />
+            <ErrorBoundary
+              fallback-title="Erreur du tableau de bord"
+              fallback-message="Impossible d'afficher le tableau de bord. Veuillez rafraîchir la page."
+            >
+              <DashboardPage :analysis-result="analysisResult" />
+            </ErrorBoundary>
           </div>
           <div v-if="activeTab === 'reimbursements'" class="tab-panel">
-            <ReimbursementManager :analysis-result="analysisResult" />
+            <ErrorBoundary
+              fallback-title="Erreur du gestionnaire de remboursements"
+              fallback-message="Impossible d'afficher le gestionnaire de remboursements. Veuillez rafraîchir la page."
+            >
+              <ReimbursementManager :analysis-result="analysisResult" />
+            </ErrorBoundary>
           </div>
         </div>
       </template>

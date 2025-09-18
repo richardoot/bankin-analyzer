@@ -1,31 +1,21 @@
 <script setup lang="ts">
-  import type { CsvAnalysisResult, Transaction } from '@/types'
+  import type {
+    CsvAnalysisResult,
+    Transaction,
+    PersonAssignment,
+    ReimbursementCategory,
+  } from '@/types'
   import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+  import BaseButton from '@/components/shared/BaseButton.vue'
+  import BaseCard from '@/components/shared/BaseCard.vue'
 
   interface Props {
     analysisResult: CsvAnalysisResult
   }
 
-  interface PersonAssignment {
-    personId: string
-    amount: number
-    categoryId?: string
-  }
-
   interface ExpenseAssignment {
     transactionId: string
     assignedPersons: PersonAssignment[]
-  }
-
-  interface ReimbursementCategory {
-    id: string
-    name: string
-    description: string
-    icon: string
-    color: string
-    keywords: string[]
-    isDefault: boolean
-    createdAt: Date
   }
 
   const props = defineProps<Props>()
@@ -688,15 +678,58 @@
 </script>
 
 <template>
-  <div class="reimbursement-section expenses-manager">
-    <h3 class="section-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-        <polyline points="7,10 12,15 17,10" />
-        <line x1="12" y1="15" x2="12" y2="3" />
-      </svg>
-      Gestion des dépenses et remboursements
-    </h3>
+  <BaseCard
+    variant="glass"
+    padding="lg"
+    rounded="lg"
+    class="reimbursement-section expenses-manager"
+  >
+    <!-- En-tête du gestionnaire -->
+    <div class="chart-header">
+      <div class="chart-header-content">
+        <div class="chart-title-section">
+          <h3 class="chart-title">
+            <svg
+              class="chart-title-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7,10 12,15 17,10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Gestion des dépenses et remboursements
+          </h3>
+          <p class="chart-description">
+            Assignation et suivi des remboursements pour les dépenses
+          </p>
+        </div>
+
+        <!-- Filtre par catégorie -->
+        <div
+          v-if="availableCategories && availableCategories.length > 0"
+          class="category-filter-section"
+        >
+          <label for="category-select" class="filter-label">
+            Filtrer par catégorie :
+          </label>
+          <select
+            id="category-select"
+            v-model="selectedCategory"
+            class="category-select"
+          >
+            <option
+              v-for="category in availableCategories"
+              :key="category"
+              :value="category"
+            >
+              {{ category }}
+            </option>
+          </select>
+        </div>
+      </div>
+    </div>
 
     <div class="section-content">
       <!-- Statistiques rapides -->
@@ -734,33 +767,8 @@
         <div class="stat-item">
           <span class="stat-label">Couverture :</span>
           <span class="stat-value coverage"
-            >{{ stats.reimbursementCoverage.toFixed(1) }}%</span
+            >{{ (stats.reimbursementCoverage || 0).toFixed(1) }}%</span
           >
-        </div>
-      </div>
-
-      <!-- Filtre par catégorie -->
-      <div class="filter-section">
-        <div class="filter-group">
-          <label for="category-select" class="filter-label">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M6 3h12l-4 4v8l-4 2V7L6 3z" />
-            </svg>
-            Filtrer par catégorie :
-          </label>
-          <select
-            id="category-select"
-            v-model="selectedCategory"
-            class="category-select"
-          >
-            <option
-              v-for="category in availableCategories"
-              :key="category"
-              :value="category"
-            >
-              {{ category }}
-            </option>
-          </select>
         </div>
       </div>
 
@@ -864,17 +872,21 @@
             </div>
 
             <div class="cell actions">
-              <button
-                class="associate-btn"
+              <BaseButton
+                variant="primary"
+                size="sm"
+                icon
                 title="Associer une personne"
                 @click="
                   openAssignModal(expense, paginationStats.startIndex + index)
                 "
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path d="M12 5v14m-7-7h14" />
-                </svg>
-              </button>
+                <template #icon-left>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M12 5v14m-7-7h14" />
+                  </svg>
+                </template>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -1115,65 +1127,124 @@
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeAssignModal">
+          <BaseButton variant="secondary" size="md" @click="closeAssignModal">
             Annuler
-          </button>
-          <button
-            class="btn btn-primary"
+          </BaseButton>
+          <BaseButton
+            variant="primary"
+            size="md"
             :disabled="!modalPersonId || !isModalAmountValid"
             @click="addPersonFromModal"
           >
             Ajouter
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
-  </div>
+  </BaseCard>
 </template>
 
 <style scoped>
-  .reimbursement-section {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border-radius: 1rem;
+  .expenses-manager {
     margin-bottom: 1.5rem;
   }
 
-  .section-title {
+  .expenses-section {
+    margin-bottom: 0;
+  }
+
+  /* En-tête du gestionnaire */
+  .chart-header {
+    background: rgba(248, 250, 252, 0.5);
+    backdrop-filter: blur(5px);
+    padding: 1.5rem 2rem 1rem;
+    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+  }
+
+  .chart-header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .chart-title-section {
+    text-align: left;
+    flex: 1;
+    min-width: 250px;
+  }
+
+  .chart-title {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.5rem;
     font-size: 1.25rem;
     font-weight: 600;
     color: #1f2937;
-    padding: 1.5rem 1.5rem 0;
-    margin-bottom: 1rem;
+    margin: 0 0 0.5rem;
   }
 
-  .section-title svg {
-    width: 1.5rem;
-    height: 1.5rem;
+  .chart-title-icon {
+    width: 1.25rem;
+    height: 1.25rem;
     color: #3b82f6;
   }
 
-  .section-content {
-    padding: 0 1.5rem 1.5rem;
+  .chart-description {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .category-filter-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 200px;
+  }
+
+  .filter-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    margin: 0;
+  }
+
+  .category-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid rgba(209, 213, 219, 0.5);
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    color: #374151;
+    background: var(--surface-color, rgba(255, 255, 255, 0.7));
+    backdrop-filter: blur(5px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+    min-width: 180px;
+  }
+
+  .category-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   /* Barre de statistiques */
   .stats-bar {
     display: flex;
     gap: 1.5rem;
-    padding: 1rem;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    border-radius: 8px;
+    padding: 1.25rem;
+    background: linear-gradient(145deg, #ffffff 0%, #fafbfc 100%);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-xl);
     margin-bottom: 1.5rem;
     flex-wrap: wrap;
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.05),
+      0 1px 3px rgba(0, 0, 0, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
   }
 
   .stat-item {
@@ -1184,14 +1255,16 @@
 
   .stat-label {
     font-size: 0.8rem;
-    color: #6b7280;
-    font-weight: 500;
+    color: var(--gray-500);
+    font-weight: var(--font-weight-medium);
+    letter-spacing: 0.01em;
   }
 
   .stat-value {
     font-size: 1.1rem;
-    font-weight: 600;
-    color: #1f2937;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-800);
+    letter-spacing: -0.01em;
   }
 
   .stat-value.assigned {
@@ -1218,60 +1291,13 @@
     color: #ea580c;
   }
 
-  /* Section de filtrage */
-  .filter-section {
-    margin-bottom: 1.5rem;
-  }
-
-  .filter-group {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-
-  .filter-label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-weight: 600;
-    color: #374151;
-    font-size: 0.9rem;
-    white-space: nowrap;
-  }
-
-  .filter-label svg {
-    width: 1rem;
-    height: 1rem;
-    color: #3b82f6;
-  }
-
-  .category-select {
-    padding: 0.75rem 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
-    font-size: 0.875rem;
-    color: #374151;
-    min-width: 200px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .category-select:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  }
-
   /* Liste des dépenses */
   .expenses-list {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    background: white;
+    border: 1px solid #e5e7eb;
     border-radius: 12px;
     overflow: hidden;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
   }
 
   .expenses-table {
@@ -1284,13 +1310,8 @@
     grid-template-columns: 80px 1fr 170px 90px 180px 150px 60px;
     gap: 0.75rem;
     padding: 1rem;
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.6) 0%,
-      rgba(249, 250, 251, 0.6) 100%
-    );
-    backdrop-filter: blur(5px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
     font-weight: 600;
     color: #374151;
     font-size: 0.875rem;
@@ -1311,8 +1332,7 @@
   }
 
   .expense-row:hover {
-    background: rgba(255, 255, 255, 0.4);
-    backdrop-filter: blur(5px);
+    background: #f9fafb;
   }
 
   .expense-row:last-child {
@@ -1355,8 +1375,7 @@
   }
 
   .category-badge {
-    background: rgba(219, 234, 254, 0.8);
-    backdrop-filter: blur(5px);
+    background: #dbeafe;
     color: #1e40af;
     padding: 0.375rem 0.75rem;
     border-radius: 16px;
@@ -1385,11 +1404,11 @@
   .amount-input {
     flex: 1;
     padding: 0.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
+    border: 1px solid #e5e7eb;
+    background: white;
     border-radius: 6px;
     font-size: 0.8rem;
+    color: #374151;
     text-align: right;
     transition: all 0.2s ease;
   }
@@ -1422,9 +1441,8 @@
   .person-select {
     width: 100%;
     padding: 0.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
+    border: 1px solid #e5e7eb;
+    background: white;
     border-radius: 6px;
     font-size: 0.8rem;
     cursor: pointer;
@@ -1443,10 +1461,9 @@
     gap: 0.5rem;
     margin-top: 0.5rem;
     padding: 0.5rem;
-    background: rgba(240, 249, 255, 0.8);
-    backdrop-filter: blur(5px);
+    background: #f0f9ff;
     border-radius: 6px;
-    border: 1px solid rgba(224, 242, 254, 0.5);
+    border: 1px solid #e0f2fe;
   }
 
   .person-avatar {
@@ -1517,9 +1534,8 @@
     align-items: center;
     gap: 1rem;
     padding: 1rem;
-    background: rgba(255, 251, 235, 0.8);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(252, 211, 77, 0.5);
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
     border-radius: 8px;
     margin-top: 1.5rem;
     color: #92400e;
@@ -1614,10 +1630,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 1.5rem;
-    background: rgba(249, 250, 251, 0.8);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
     border-radius: 8px;
     margin-top: 1.5rem;
   }
@@ -1651,22 +1665,21 @@
     justify-content: center;
     width: 2.5rem;
     height: 2.5rem;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
+    background: white;
     color: #374151;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid #e5e7eb;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .pagination-btn:hover:not(:disabled) {
-    background: rgba(243, 244, 246, 0.9);
-    border-color: rgba(156, 163, 175, 0.5);
+    background: #f3f4f6;
+    border-color: #9ca3af;
   }
 
   .pagination-btn:disabled {
-    background: rgba(249, 250, 251, 0.7);
+    background: #f9fafb;
     color: #d1d5db;
     cursor: not-allowed;
   }
@@ -1688,10 +1701,9 @@
     justify-content: center;
     width: 2.5rem;
     height: 2.5rem;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
+    background: white;
     color: #374151;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid #e5e7eb;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -1700,8 +1712,8 @@
   }
 
   .pagination-number:hover:not(:disabled) {
-    background: rgba(243, 244, 246, 0.9);
-    border-color: rgba(156, 163, 175, 0.5);
+    background: #f3f4f6;
+    border-color: #9ca3af;
   }
 
   .pagination-number.active {
@@ -1711,7 +1723,7 @@
   }
 
   .pagination-number:disabled {
-    background: rgba(249, 250, 251, 0.7);
+    background: #f9fafb;
     color: #d1d5db;
     cursor: not-allowed;
   }
@@ -1798,31 +1810,6 @@
     font-style: italic;
   }
 
-  .associate-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    background: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s;
-    padding: 0;
-  }
-
-  .associate-btn:hover {
-    background: #2563eb;
-    transform: translateY(-1px);
-  }
-
-  .associate-btn svg {
-    width: 18px;
-    height: 18px;
-  }
-
   /* Styles pour la modal */
   .modal-overlay {
     position: fixed;
@@ -1838,9 +1825,8 @@
   }
 
   .modal-content {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: white;
+    border: 1px solid #e5e7eb;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
     border-radius: 12px;
     width: 90%;
@@ -1854,13 +1840,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 1.5rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.6) 0%,
-      rgba(249, 250, 251, 0.6) 100%
-    );
-    backdrop-filter: blur(5px);
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
   }
 
   .modal-header h3 {
@@ -1891,12 +1872,11 @@
   }
 
   .expense-info {
-    background: rgba(249, 250, 251, 0.8);
-    backdrop-filter: blur(5px);
+    background: #f9fafb;
     border-radius: 8px;
     padding: 1rem;
     margin-bottom: 1.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid #e5e7eb;
   }
 
   .expense-detail {
@@ -1924,11 +1904,11 @@
   .form-control {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
+    border: 1px solid #e5e7eb;
+    background: white;
     border-radius: 6px;
     font-size: 0.9rem;
+    color: #374151;
     transition: border-color 0.2s;
   }
 
@@ -1985,10 +1965,9 @@
     align-items: center;
     gap: 0.375rem;
     padding: 0.5rem 0.75rem;
-    background: rgba(243, 244, 246, 0.8);
-    backdrop-filter: blur(5px);
+    background: #f3f4f6;
     color: #374151;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid #d1d5db;
     border-radius: 6px;
     font-size: 0.8rem;
     font-weight: 500;
@@ -1998,8 +1977,8 @@
   }
 
   .helper-btn:hover {
-    background: rgba(229, 231, 235, 0.9);
-    border-color: rgba(156, 163, 175, 0.5);
+    background: #e5e7eb;
+    border-color: #9ca3af;
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
@@ -2018,11 +1997,11 @@
   .custom-divider-input {
     width: 60px;
     padding: 0.375rem 0.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
+    border: 1px solid #e5e7eb;
+    background: white;
     border-radius: 4px;
     font-size: 0.8rem;
+    color: #374151;
     text-align: center;
     transition: border-color 0.2s ease;
   }
@@ -2038,44 +2017,8 @@
     justify-content: flex-end;
     gap: 0.75rem;
     padding: 1.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
-    background: rgba(249, 250, 251, 0.8);
-    backdrop-filter: blur(5px);
-  }
-
-  .btn {
-    padding: 0.75rem 1.5rem;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    border: none;
-  }
-
-  .btn-secondary {
-    background: rgba(243, 244, 246, 0.8);
-    backdrop-filter: blur(5px);
-    color: #374151;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-  }
-
-  .btn-secondary:hover {
-    background: rgba(229, 231, 235, 0.9);
-  }
-
-  .btn-primary {
-    background: #3b82f6;
-    color: white;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    background: #2563eb;
-  }
-
-  .btn-primary:disabled {
-    background: #9ca3af;
-    cursor: not-allowed;
+    border-top: 1px solid #e5e7eb;
+    background: #f9fafb;
   }
 
   /* Responsive */
@@ -2177,6 +2120,32 @@
 
     .person-assignment {
       flex: 1;
+    }
+  }
+
+  /* Support du thème sombre */
+  @media (prefers-color-scheme: dark) {
+    .chart-header {
+      background: rgba(31, 41, 55, 0.5);
+      border-bottom-color: rgba(75, 85, 99, 0.3);
+    }
+
+    .chart-title {
+      color: #f3f4f6;
+    }
+
+    .chart-description {
+      color: #9ca3af;
+    }
+
+    .filter-label {
+      color: #e5e7eb;
+    }
+
+    .category-select {
+      background: rgba(31, 41, 55, 0.7);
+      border-color: rgba(75, 85, 99, 0.5);
+      color: #f3f4f6;
     }
   }
 </style>

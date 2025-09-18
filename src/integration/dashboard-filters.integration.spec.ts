@@ -4,15 +4,12 @@ import CategoryFilter from '@/components/filters/CategoryFilter.vue'
 import AccountFilter from '@/components/filters/AccountFilter.vue'
 import JointAccountFilter from '@/components/filters/JointAccountFilter.vue'
 import ReimbursementCompensationFilter from '@/components/filters/ReimbursementCompensationFilter.vue'
-import type { CsvAnalysisResult } from '@/types'
 
-// Mock du composable usePerformanceMonitor pour ReimbursementCompensationFilter
-vi.mock('@/composables/usePerformanceMonitor', () => ({
-  usePerformanceMonitor: () => ({
-    startMeasure: vi.fn(),
-    endMeasure: vi.fn(),
-    watchWithPerformance: vi.fn(),
-  }),
+vi.mock('@/components/shared/BaseCard.vue', () => ({
+  default: {
+    name: 'BaseCard',
+    template: '<div class="base-card-mock"><slot /></div>',
+  },
 }))
 
 describe('Dashboard Filters Integration Tests', () => {
