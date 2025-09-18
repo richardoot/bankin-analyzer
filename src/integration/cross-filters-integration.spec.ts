@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DashboardPage from '@/components/DashboardPage.vue'
 import ReimbursementManager from '@/components/reimbursement/ReimbursementManager.vue'
+import { waitForAsyncComponent as _waitForAsyncComponent } from '@/test/setup'
 import type { CsvAnalysisResult } from '@/types'
 
 // Mock des composants lourds pour focus sur les filtres
@@ -102,15 +103,6 @@ vi.mock('@/components/reimbursement/ReimbursementSummary.vue', () => ({
     props: ['expensesManagerRef'],
     template: '<div class="summary-mock"></div>',
   },
-}))
-
-// Mock du composable usePerformanceMonitor
-vi.mock('@/composables/usePerformanceMonitor', () => ({
-  usePerformanceMonitor: () => ({
-    startMeasure: vi.fn(),
-    endMeasure: vi.fn(),
-    watchWithPerformance: vi.fn(),
-  }),
 }))
 
 describe('Cross-Filters Integration Tests', () => {

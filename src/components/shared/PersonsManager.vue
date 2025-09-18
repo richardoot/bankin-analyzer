@@ -1,26 +1,18 @@
 <script setup lang="ts">
   import { computed, ref } from 'vue'
-
-  // Interface pour les personnes
-  interface Person {
-    id: string
-    name: string
-    email?: string // Email optionnel
-  }
-
-  // Interfaces pour les assignations d'ExpensesReimbursementManager
-  interface PersonAssignment {
-    personId: string
-    amount: number
-  }
+  import type { Person, PersonAssignment } from '@/types'
+  import BaseModal from './BaseModal.vue'
+  import BaseButton from './BaseButton.vue'
+  import BaseCard from './BaseCard.vue'
+  import { useLocalStorage } from '@/composables/useLocalStorage'
 
   interface ExpenseAssignment {
     transactionId: string
     assignedPersons: PersonAssignment[]
   }
 
-  // Liste des personnes (chargée depuis localStorage)
-  const availablePersons = ref<Person[]>([])
+  const { usePersonsStorage } = useLocalStorage()
+  const { data: availablePersons, save: savePersons } = usePersonsStorage()
 
   // États pour la gestion du formulaire
   const showAddPersonForm = ref(false)
@@ -41,28 +33,7 @@
     )
   })
 
-  // Fonctions de persistance localStorage
-  const saveToStorage = () => {
-    localStorage.setItem(
-      'bankin-analyzer-persons',
-      JSON.stringify(availablePersons.value)
-    )
-  }
-
-  const loadFromStorage = () => {
-    try {
-      const stored = localStorage.getItem('bankin-analyzer-persons')
-      if (stored) {
-        availablePersons.value = JSON.parse(stored)
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des données:', error)
-      availablePersons.value = []
-    }
-  }
-
-  // Charger les données au démarrage
-  loadFromStorage()
+  // Les données sont maintenant gérées par usePersonsStorage - pas besoin de fonctions supplémentaires
 
   // Validation du formulaire
   const isFormValid = computed(() => {
@@ -125,7 +96,7 @@
     }
 
     availablePersons.value.push(person)
-    saveToStorage()
+    savePersons()
     resetForm()
   }
 
@@ -166,7 +137,7 @@
         availablePersons.value[personIndex] = updatedPerson
       }
     }
-    saveToStorage()
+    savePersons()
     resetForm()
   }
 
@@ -177,7 +148,7 @@
       availablePersons.value = availablePersons.value.filter(
         p => p.id !== personId
       )
-      saveToStorage()
+      savePersons()
 
       // Nettoyer toutes les assignations de cette personne dans les dépenses
       cleanPersonAssignments(personId)
@@ -235,12 +206,7 @@
     }
   }
 
-  // Fermer la modale en cliquant sur l'overlay
-  const closeModalOnOverlay = (event: Event) => {
-    if (event.target === event.currentTarget) {
-      resetForm()
-    }
-  }
+  // Fonction closeModalOnOverlay supprimée - gérée par BaseModal
 
   // Fonctions d'export/import
   const exportPersons = () => {
@@ -278,7 +244,7 @@
 
           if (validPersons.length > 0) {
             availablePersons.value = validPersons
-            saveToStorage()
+            savePersons()
             alert(`${validPersons.length} personne(s) importée(s) avec succès`)
           } else {
             alert('Aucune donnée valide trouvée dans le fichier')
@@ -297,363 +263,347 @@
 </script>
 
 <template>
-  <div class="reimbursement-section persons-section">
-    <h3 class="section-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-      </svg>
-      Gestion des personnes
-    </h3>
-    <div class="section-content placeholder-content">
-      <div class="placeholder-card">
-        <div class="placeholder-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-        </div>
-        <h4>Gestion des contacts</h4>
+  <BaseCard variant="glass" padding="lg" rounded="lg" class="persons-section">
+    <template #header>
+      <h4 class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+        Gestion des personnes
+        <span v-if="availablePersons.length > 0" class="title-badge">
+          {{ availablePersons.length }} personne{{
+            availablePersons.length > 1 ? 's' : ''
+          }}
+        </span>
+      </h4>
+    </template>
 
-        <!-- Aperçu des personnes existantes -->
-        <div class="persons-preview">
-          <div class="persons-header">
-            <h5>Personnes configurées actuellement :</h5>
-            <span v-if="availablePersons.length > 0" class="persons-count">
-              {{ filteredPersons.length }} / {{ availablePersons.length }}
-              {{ filteredPersons.length <= 1 ? 'personne' : 'personnes' }}
-              <span v-if="searchTerm">
-                trouvée{{ filteredPersons.length <= 1 ? '' : 's' }}
-              </span>
+    <!-- Annonces pour lecteurs d'écran -->
+    <div class="sr-only" aria-live="polite" aria-atomic="false">
+      <span v-if="searchTerm">
+        {{ filteredPersons.length }} personne{{
+          filteredPersons.length !== 1 ? 's' : ''
+        }}
+        trouvée{{ filteredPersons.length !== 1 ? 's' : '' }} pour "{{
+          searchTerm
+        }}"
+      </span>
+      <span v-else>
+        {{ availablePersons.length }} personne{{
+          availablePersons.length !== 1 ? 's' : ''
+        }}
+        total{{ availablePersons.length !== 1 ? 'es' : 'e' }}
+      </span>
+    </div>
+
+    <div class="section-content">
+      <!-- Aperçu des personnes existantes -->
+      <div class="persons-preview">
+        <div class="persons-header">
+          <h5>Personnes configurées actuellement :</h5>
+          <span v-if="availablePersons.length > 0" class="persons-count">
+            {{ filteredPersons.length }} / {{ availablePersons.length }}
+            {{ filteredPersons.length <= 1 ? 'personne' : 'personnes' }}
+            <span v-if="searchTerm">
+              trouvée{{ filteredPersons.length <= 1 ? '' : 's' }}
             </span>
-          </div>
+          </span>
+        </div>
 
-          <!-- Barre de recherche -->
-          <div class="search-container">
-            <div class="search-input-wrapper">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                class="search-icon"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.35-4.35" />
+        <!-- Barre de recherche -->
+        <div class="search-container">
+          <div class="search-input-wrapper">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              class="search-icon"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" />
+            </svg>
+            <input
+              v-model="searchTerm"
+              type="text"
+              placeholder="Rechercher par nom ou email..."
+              class="search-input"
+            />
+            <button
+              v-if="searchTerm"
+              class="clear-search"
+              title="Effacer la recherche"
+              @click="searchTerm = ''"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
-              <input
-                v-model="searchTerm"
-                type="text"
-                placeholder="Rechercher par nom ou email..."
-                class="search-input"
-              />
-              <button
-                v-if="searchTerm"
-                class="clear-search"
-                title="Effacer la recherche"
-                @click="searchTerm = ''"
-              >
+            </button>
+          </div>
+        </div>
+
+        <div class="persons-list">
+          <!-- Message quand aucune personne n'est trouvée -->
+          <div
+            v-if="filteredPersons.length === 0 && searchTerm"
+            class="no-results"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.35-4.35" />
+            </svg>
+            <p>Aucune personne trouvée pour "{{ searchTerm }}"</p>
+            <BaseButton variant="primary" size="sm" @click="searchTerm = ''">
+              <template #icon-left>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
-              </button>
-            </div>
+              </template>
+              Effacer
+            </BaseButton>
           </div>
 
-          <div class="persons-list">
-            <!-- Message quand aucune personne n'est trouvée -->
-            <div
-              v-if="filteredPersons.length === 0 && searchTerm"
-              class="no-results"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.35-4.35" />
-              </svg>
-              <p>Aucune personne trouvée pour "{{ searchTerm }}"</p>
-              <button class="clear-search-btn" @click="searchTerm = ''">
-                Effacer la recherche
-              </button>
-            </div>
-
-            <!-- Message quand aucune personne n'existe -->
-            <div v-else-if="availablePersons.length === 0" class="no-results">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-              <p>Aucune personne enregistrée</p>
-              <p class="no-results-subtitle">
-                Commencez par ajouter votre première personne
-              </p>
-            </div>
-
-            <!-- Liste des personnes -->
-            <div
-              v-for="person in filteredPersons"
-              :key="person.id"
-              class="person-item"
-            >
-              <div class="person-avatar">
-                {{ person.name.charAt(0).toUpperCase() }}
-              </div>
-              <div class="person-info">
-                <span class="person-name">{{ person.name }}</span>
-                <span v-if="person.email" class="person-email">{{
-                  person.email
-                }}</span>
-                <span v-else class="person-email no-email"
-                  >Aucun email renseigné</span
-                >
-              </div>
-              <div class="person-actions">
-                <button
-                  class="action-btn edit"
-                  title="Éditer"
-                  @click="startEditPerson(person.id)"
-                >
-                  ✏️
-                </button>
-                <button
-                  class="action-btn delete"
-                  title="Supprimer"
-                  @click="deletePerson(person.id)"
-                >
-                  🗑️
-                </button>
-              </div>
-            </div>
+          <!-- Message quand aucune personne n'existe -->
+          <div v-else-if="availablePersons.length === 0" class="no-results">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <p>Aucune personne enregistrée</p>
+            <p class="no-results-subtitle">
+              Commencez par ajouter votre première personne
+            </p>
           </div>
 
-          <!-- Boutons d'actions -->
-          <div class="action-buttons">
-            <button
-              class="add-person-btn primary"
-              @click="showAddPersonForm = !showAddPersonForm"
-            >
+          <!-- Liste des personnes -->
+          <div
+            v-for="person in filteredPersons"
+            :key="person.id"
+            class="person-item"
+          >
+            <div class="person-avatar">
+              {{ person.name.charAt(0).toUpperCase() }}
+            </div>
+            <div class="person-info">
+              <span class="person-name">{{ person.name }}</span>
+              <span v-if="person.email" class="person-email">{{
+                person.email
+              }}</span>
+              <span v-else class="person-email no-email"
+                >Aucun email renseigné</span
+              >
+            </div>
+            <div class="person-actions">
+              <BaseButton
+                variant="secondary"
+                size="sm"
+                icon
+                title="Éditer"
+                @click="startEditPerson(person.id)"
+              >
+                <template #icon-left>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path
+                      d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+                    />
+                    <path
+                      d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+                    />
+                  </svg>
+                </template>
+              </BaseButton>
+              <BaseButton
+                variant="danger"
+                size="sm"
+                icon
+                title="Supprimer"
+                @click="deletePerson(person.id)"
+              >
+                <template #icon-left>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <polyline points="3,6 5,6 21,6" />
+                    <path
+                      d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                    />
+                  </svg>
+                </template>
+              </BaseButton>
+            </div>
+          </div>
+        </div>
+
+        <!-- Boutons d'actions -->
+        <div class="action-buttons">
+          <BaseButton
+            variant="primary"
+            size="large"
+            class="add-person-btn"
+            @click="showAddPersonForm = !showAddPersonForm"
+          >
+            <template #icon-left>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="16" />
                 <line x1="8" y1="12" x2="16" y2="12" />
               </svg>
-              {{ editingPersonId ? 'Annuler' : 'Ajouter une personne' }}
-            </button>
+            </template>
+            {{ editingPersonId ? 'Annuler' : 'Ajouter une personne' }}
+          </BaseButton>
 
-            <div v-if="availablePersons.length > 0" class="secondary-actions">
-              <button
-                class="action-btn secondary"
-                title="Exporter les données"
-                @click="exportPersons"
-              >
+          <div v-if="availablePersons.length > 0" class="secondary-actions">
+            <BaseButton
+              variant="secondary"
+              size="medium"
+              title="Exporter les données"
+              @click="exportPersons"
+            >
+              <template #icon-left>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="7,10 12,15 17,10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                Exporter
-              </button>
+              </template>
+              Exporter
+            </BaseButton>
 
-              <label class="action-btn secondary" title="Importer des données">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17,8 12,3 7,8" />
-                  <line x1="12" y1="3" x2="12" y2="15" />
-                </svg>
-                Importer
-                <input
-                  type="file"
-                  accept=".json"
-                  class="hidden-file-input"
-                  @change="importPersons"
-                />
-              </label>
-            </div>
-          </div>
-
-          <!-- Modale de formulaire d'ajout/édition -->
-          <div
-            v-if="showAddPersonForm"
-            class="modal-overlay"
-            @click="closeModalOnOverlay"
-          >
-            <div class="modal-dialog" @click.stop>
-              <div class="modal-header">
-                <h5 class="modal-title">
-                  {{
-                    editingPersonId
-                      ? 'Modifier la personne'
-                      : 'Ajouter une nouvelle personne'
-                  }}
-                </h5>
-                <button
-                  type="button"
-                  class="modal-close-btn"
-                  @click="resetForm"
-                >
+            <label class="import-label">
+              <BaseButton
+                variant="secondary"
+                size="medium"
+                title="Importer des données"
+                as="span"
+              >
+                <template #icon-left>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17,8 12,3 7,8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
                   </svg>
-                </button>
-              </div>
-
-              <div class="modal-body">
-                <form @submit.prevent="submitForm">
-                  <div class="form-group">
-                    <label for="person-name">Nom complet</label>
-                    <input
-                      id="person-name"
-                      v-model="newPerson.name"
-                      type="text"
-                      placeholder="Entrez le nom complet"
-                      required
-                    />
-                  </div>
-                  <div class="form-group">
-                    <label for="person-email">Email (optionnel)</label>
-                    <input
-                      id="person-email"
-                      v-model="newPerson.email"
-                      type="email"
-                      placeholder="Entrez l'adresse email (optionnel)"
-                    />
-                    <div v-if="emailErrorMessage" class="error-message">
-                      {{ emailErrorMessage }}
-                    </div>
-                  </div>
-                  <div class="form-actions">
-                    <button
-                      type="button"
-                      class="btn-secondary"
-                      @click="resetForm"
-                    >
-                      Annuler
-                    </button>
-                    <button
-                      type="submit"
-                      class="btn-primary"
-                      :disabled="!isFormValid"
-                    >
-                      {{ editingPersonId ? 'Sauvegarder' : 'Ajouter' }}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
+                </template>
+                Importer
+              </BaseButton>
+              <input
+                type="file"
+                accept=".json"
+                class="hidden-file-input"
+                @change="importPersons"
+              />
+            </label>
           </div>
         </div>
+
+        <!-- Modale de formulaire d'ajout/édition -->
+        <BaseModal
+          :is-open="showAddPersonForm"
+          :title="
+            editingPersonId
+              ? 'Modifier la personne'
+              : 'Ajouter une nouvelle personne'
+          "
+          @close="resetForm"
+        >
+          <form @submit.prevent="submitForm">
+            <div class="form-group">
+              <label for="person-name">Nom complet</label>
+              <input
+                id="person-name"
+                v-model="newPerson.name"
+                type="text"
+                placeholder="Entrez le nom complet"
+                required
+                class="form-input"
+              />
+            </div>
+            <div class="form-group">
+              <label for="person-email">Email (optionnel)</label>
+              <input
+                id="person-email"
+                v-model="newPerson.email"
+                type="email"
+                placeholder="Entrez l'adresse email (optionnel)"
+                class="form-input"
+              />
+              <div v-if="emailErrorMessage" class="error-message">
+                {{ emailErrorMessage }}
+              </div>
+            </div>
+          </form>
+
+          <template #footer>
+            <BaseButton variant="secondary" size="medium" @click="resetForm">
+              Annuler
+            </BaseButton>
+            <BaseButton
+              variant="primary"
+              size="medium"
+              :disabled="!isFormValid"
+              @click="submitForm"
+            >
+              {{ editingPersonId ? 'Sauvegarder' : 'Ajouter' }}
+            </BaseButton>
+          </template>
+        </BaseModal>
       </div>
     </div>
-  </div>
+  </BaseCard>
 </template>
 
 <style scoped>
-  .reimbursement-section {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    border-radius: 1rem;
+  .persons-section {
     margin-bottom: 1.5rem;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
   }
 
   .section-title {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #1f2937;
-    padding: 1.5rem 1.5rem 0;
-    margin-bottom: 1rem;
+    gap: var(--spacing-3);
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--gray-900);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    margin: 0 0 var(--spacing-6) 0;
+    position: relative;
+  }
+
+  .section-title::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 60px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
+    border-radius: 2px;
   }
 
   .section-title svg {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 1.25rem;
+    height: 1.25rem;
     color: #3b82f6;
   }
 
-  .section-content {
-    padding: 0 1.5rem 1.5rem;
-  }
-
-  .placeholder-content {
-    text-align: center;
-  }
-
-  .placeholder-card {
-    background: rgba(255, 255, 255, 0.5);
-    backdrop-filter: blur(5px);
-    border: 2px dashed rgba(255, 255, 255, 0.4);
-    border-radius: 12px;
-    padding: 2rem;
-    transition: all 0.3s ease;
-  }
-
-  .placeholder-card:hover {
-    border-color: #3b82f6;
-    background: rgba(59, 130, 246, 0.1);
-    backdrop-filter: blur(8px);
-  }
-
-  .placeholder-icon {
-    width: 4rem;
-    height: 4rem;
-    margin: 0 auto 1.5rem;
-    background: #e5e7eb;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #6b7280;
-  }
-
-  .placeholder-icon svg {
-    width: 2rem;
-    height: 2rem;
-  }
-
-  .placeholder-card h4 {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #1f2937;
-    margin-bottom: 0.75rem;
-  }
-
-  .placeholder-card p {
-    color: #6b7280;
-    line-height: 1.6;
-    margin-bottom: 1.5rem;
-  }
-
-  .placeholder-features {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    justify-content: center;
-    margin-bottom: 2rem;
-  }
-
-  .feature-badge {
-    background: #dbeafe;
-    color: #1e40af;
-    padding: 0.375rem 0.75rem;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 500;
+  .title-badge {
+    background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
+    color: var(--primary-700);
+    padding: 0.375rem 0.875rem;
+    border-radius: 16px;
+    font-size: 0.75rem;
+    font-weight: var(--font-weight-semibold);
+    margin-left: auto;
+    border: 1px solid var(--primary-200);
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+    backdrop-filter: blur(10px);
   }
 
   /* Aperçu des personnes */
   .persons-preview {
-    border-top: 1px solid #e5e7eb;
-    padding-top: 1.5rem;
-    margin-top: 1.5rem;
     text-align: left;
   }
 
@@ -700,19 +650,17 @@
   .search-input {
     width: 100%;
     padding: 0.75rem 0.75rem 0.75rem 2.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid #e5e7eb;
     border-radius: 8px;
     font-size: 0.875rem;
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(5px);
+    background: white;
     transition: all 0.2s ease;
   }
 
   .search-input:focus {
     outline: none;
     border-color: #3b82f6;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(8px);
+    background: white;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
@@ -765,22 +713,6 @@
     color: #9ca3af !important;
   }
 
-  .clear-search-btn {
-    margin-top: 1rem;
-    padding: 0.5rem 1rem;
-    background: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .clear-search-btn:hover {
-    background: #2563eb;
-  }
-
   .persons-list {
     display: flex;
     flex-direction: column;
@@ -792,34 +724,75 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 0.75rem;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    transition: all 0.2s ease;
+    padding: 1rem;
+    background: linear-gradient(145deg, #ffffff 0%, #fafbfc 100%);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-xl);
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.04),
+      0 1px 3px rgba(0, 0, 0, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    transition: all var(--transition-spring);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .person-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
+    transform: scaleX(0);
+    transition: transform var(--transition-normal);
+    transform-origin: left;
+  }
+
+  .person-item:hover::before {
+    transform: scaleX(1);
   }
 
   .person-item:hover {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-    border-color: rgba(255, 255, 255, 0.5);
-    transform: translateY(-1px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    border-color: var(--primary-200);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow:
+      0 12px 28px rgba(0, 0, 0, 0.08),
+      0 6px 20px rgba(59, 130, 246, 0.12),
+      0 0 0 2px rgba(59, 130, 246, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  }
+
+  .person-item:hover .person-avatar {
+    transform: scale(1.1) rotate(5deg);
+    box-shadow:
+      0 6px 20px rgba(59, 130, 246, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
   }
 
   .person-avatar {
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 2.75rem;
+    height: 2.75rem;
     border-radius: 50%;
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    background: linear-gradient(
+      135deg,
+      var(--primary-500) 0%,
+      var(--primary-700) 100%
+    );
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 600;
-    font-size: 1rem;
+    font-weight: var(--font-weight-bold);
+    font-size: 1.125rem;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow:
+      0 4px 12px rgba(59, 130, 246, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transition: all var(--transition-spring);
+    flex-shrink: 0;
   }
 
   .person-info {
@@ -848,46 +821,6 @@
   .person-actions {
     display: flex;
     gap: 0.5rem;
-  }
-
-  .action-btn {
-    width: 2rem;
-    height: 2rem;
-    border: none;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .action-btn svg {
-    width: 1.1rem;
-    height: 1.1rem;
-    fill: currentColor;
-  }
-
-  .action-btn.edit {
-    background: #dbeafe;
-    color: #1e40af;
-  }
-
-  .action-btn.edit:hover {
-    background: #3b82f6;
-    color: white;
-    transform: scale(1.1);
-  }
-
-  .action-btn.delete {
-    background: #fee2e2;
-    color: #dc2626;
-  }
-
-  .action-btn.delete:hover {
-    background: #dc2626;
-    color: white;
-    transform: scale(1.1);
   }
 
   .add-person-btn {
@@ -983,11 +916,10 @@
   }
 
   .modal-dialog {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(15px);
+    background: white;
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
     max-width: 500px;
     width: 90%;
     max-height: 90vh;
@@ -1064,21 +996,28 @@
 
   .form-group input {
     width: 100%;
-    padding: 0.75rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 6px;
+    padding: 0.875rem 1rem;
+    border: 2px solid var(--gray-200);
+    border-radius: var(--radius-lg);
     font-size: 0.875rem;
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(5px);
-    transition: all 0.2s ease;
+    background: white;
+    color: var(--gray-800);
+    transition: all var(--transition-normal);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .form-group input:hover {
+    border-color: var(--gray-300);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   }
 
   .form-group input:focus {
     outline: none;
-    border-color: #3b82f6;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    border-color: var(--primary-400);
+    box-shadow:
+      0 0 0 4px rgba(59, 130, 246, 0.1),
+      0 4px 12px rgba(59, 130, 246, 0.15);
+    transform: translateY(-1px);
   }
 
   .error-message {
@@ -1087,68 +1026,8 @@
     margin-top: 0.5rem;
   }
 
-  .form-actions {
-    display: flex;
-    gap: 0.75rem;
-    justify-content: flex-end;
-    margin-top: 1.5rem;
-  }
-
-  .btn-secondary {
-    padding: 0.5rem 1rem;
-    background: #f3f4f6;
-    color: #374151;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-secondary:hover {
-    background: #e5e7eb;
-  }
-
-  .btn-primary {
-    padding: 0.5rem 1rem;
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-  }
-
-  .btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  /* Styles pour garantir l'affichage des SVG dans les boutons d'action */
-  .person-actions .action-btn svg {
-    display: block !important;
-    width: 1.1rem !important;
-    height: 1.1rem !important;
-    fill: currentColor !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-  }
-
   /* Responsive */
   @media (max-width: 768px) {
-    .placeholder-features {
-      flex-direction: column;
-      align-items: center;
-    }
-
     .secondary-actions {
       justify-content: center;
       gap: 0.375rem;
@@ -1177,16 +1056,6 @@
       width: 2rem;
       height: 2rem;
       font-size: 0.875rem;
-    }
-
-    .action-btn {
-      width: 1.75rem;
-      height: 1.75rem;
-    }
-
-    .action-btn svg {
-      width: 0.875rem;
-      height: 0.875rem;
     }
   }
 </style>

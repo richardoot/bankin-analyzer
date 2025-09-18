@@ -4,6 +4,7 @@
   import { usePieChart, type CategoryData } from '@/composables/usePieChart'
   import type { CsvAnalysisResult } from '@/types'
   import { computed, ref } from 'vue'
+  import BaseCard from '@/components/shared/BaseCard.vue'
   import BarChart from '../components/charts/BarChart.vue'
   import CategoryFilter from '../components/filters/CategoryFilter.vue'
   import JointAccountFilter from '../components/filters/JointAccountFilter.vue'
@@ -376,31 +377,23 @@
 </script>
 
 <template>
-  <div class="dashboard-manager">
-    <!-- En-tête avec titre -->
-    <div class="manager-header">
-      <div class="header-content">
-        <h2 class="manager-title">
-          <svg
-            class="title-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-          >
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <line x1="9" y1="9" x2="15" y2="9" />
-            <line x1="9" y1="15" x2="15" y2="15" />
-          </svg>
-          Tableau de bord financier
-        </h2>
-        <p class="manager-description">
-          Analyse détaillée de vos transactions - Dépenses et Revenus séparés
-        </p>
-      </div>
-    </div>
+  <BaseCard variant="glass" padding="lg" rounded="lg" class="dashboard-manager">
+    <template #header>
+      <h4 class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+          <line x1="9" y1="9" x2="15" y2="9" />
+          <line x1="9" y1="15" x2="15" y2="15" />
+        </svg>
+        Tableau de bord financier
+        <span class="title-badge"> Analyse complète </span>
+      </h4>
+      <p class="section-description">
+        Analyse détaillée de vos transactions - Dépenses et Revenus séparés
+      </p>
+    </template>
 
-    <!-- Contenu principal avec composants modulaires -->
-    <div class="manager-content">
+    <div class="section-content">
       <!-- Statistiques générales -->
       <div class="overview-stats">
         <div class="stat-card total">
@@ -865,61 +858,67 @@
         </div>
       </div>
     </div>
-  </div>
+  </BaseCard>
 </template>
 
 <style scoped>
   .dashboard-manager {
-    background: white;
-    border-radius: 1rem;
-    overflow: hidden;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    border: 1px solid #e5e7eb;
+    margin-bottom: 1.5rem;
   }
 
-  /* En-tête du gestionnaire */
-  .manager-header {
-    padding: 2rem;
-    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-    border-bottom: 1px solid #e5e7eb;
-  }
-
-  .header-content {
-    text-align: center;
-  }
-
-  .manager-title {
+  .section-title {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: #1f2937;
-    margin-bottom: 0.75rem;
-    line-height: 1.2;
+    gap: var(--spacing-3);
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--gray-900);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    margin: 0 0 var(--spacing-6) 0;
+    position: relative;
   }
 
-  .title-icon {
-    width: 2rem;
-    height: 2rem;
+  .section-title::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 60px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
+    border-radius: 2px;
+  }
+
+  .section-title svg {
+    width: 1.25rem;
+    height: 1.25rem;
     color: #3b82f6;
   }
 
-  .manager-description {
-    font-size: 1rem;
-    color: #6b7280;
-    line-height: 1.6;
-    max-width: 600px;
-    margin: 0 auto;
+  .title-badge {
+    background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
+    color: var(--primary-700);
+    padding: 0.375rem 0.875rem;
+    border-radius: 16px;
+    font-size: 0.75rem;
+    font-weight: var(--font-weight-semibold);
+    margin-left: auto;
+    border: 1px solid var(--primary-200);
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+    backdrop-filter: blur(10px);
   }
 
-  /* Contenu principal */
-  .manager-content {
-    padding: 2rem;
+  .section-description {
+    font-size: 0.875rem;
+    color: var(--gray-600);
+    margin: var(--spacing-3) 0 0;
+    line-height: 1.5;
+  }
+
+  .section-content {
     display: flex;
     flex-direction: column;
-    gap: 2rem;
+    gap: var(--spacing-6);
   }
 
   /* Statistiques générales */
@@ -1233,7 +1232,7 @@
     max-width: 100%;
   }
 
-  /* Bouton de filtrage avancé */
+  /* Bouton de filtres avancés */
   .advanced-filters-toggle {
     margin-bottom: 1rem;
   }
@@ -1302,17 +1301,17 @@
   .filters-container {
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(229, 231, 235, 0.3);
     border-radius: 0.75rem;
     padding: 1.5rem;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   }
 
   /* En-tête principal du panneau */
   .filters-main-header {
     margin-bottom: 1.5rem;
     text-align: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
     padding-bottom: 1rem;
   }
 
@@ -1363,10 +1362,10 @@
   .compact-filter-card {
     background: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(229, 231, 235, 0.3);
     border-radius: 0.75rem;
     overflow: hidden;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     transition: all 0.2s ease;
   }
 
@@ -1390,7 +1389,7 @@
       rgba(255, 255, 255, 0.9) 100%
     );
     backdrop-filter: blur(5px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    border-bottom: 1px solid rgba(241, 245, 249, 0.3);
   }
 
   .compact-filter-icon {
@@ -1582,8 +1581,8 @@
 
   /* Styles responsive généraux */
   @media (max-width: 1024px) {
-    .manager-content {
-      padding: 1.5rem;
+    .section-content {
+      gap: var(--spacing-4);
     }
 
     .overview-stats {
@@ -1617,11 +1616,6 @@
 
     .manager-description {
       font-size: 0.875rem;
-    }
-
-    .manager-content {
-      padding: 1rem;
-      gap: 1.5rem;
     }
 
     .tab-button {
@@ -1671,11 +1665,6 @@
       height: 1.5rem;
     }
 
-    .manager-content {
-      padding: 0.75rem;
-      gap: 1rem;
-    }
-
     .tabs-navigation {
       flex-direction: column;
     }
@@ -1698,6 +1687,56 @@
       flex-direction: column;
       text-align: center;
       gap: 1rem;
+    }
+  }
+
+  /* Thème sombre pour les filtres avancés */
+  @media (prefers-color-scheme: dark) {
+    .filters-container {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .filters-main-header {
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .filters-main-title h3 {
+      color: #e2e8f0;
+    }
+
+    .filters-main-icon {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+    }
+
+    .filters-main-description {
+      color: #94a3b8;
+    }
+
+    .compact-filter-card {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .compact-filter-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .compact-filter-header {
+      background: linear-gradient(
+        135deg,
+        rgba(30, 41, 59, 0.8) 0%,
+        rgba(51, 65, 85, 0.9) 100%
+      );
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .compact-filter-title h4 {
+      color: #e2e8f0;
+    }
+
+    .compact-filter-subtitle {
+      color: #94a3b8;
     }
   }
 </style>

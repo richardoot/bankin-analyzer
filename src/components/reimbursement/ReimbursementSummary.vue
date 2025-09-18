@@ -1,25 +1,24 @@
 <script setup lang="ts">
+  import BaseCard from '@/components/shared/BaseCard.vue'
+  import BaseButton from '@/components/shared/BaseButton.vue'
+  import { useLocalStorage } from '@/composables/useLocalStorage'
+  import { useFormatting } from '@/composables/useFormatting'
   import {
     usePdfExport,
     type DetailedReimbursementData,
     type ReimbursementData,
   } from '@/composables/usePdfExport'
-  import type {
-    Person,
-    PersonAssignment,
-    ReimbursementCategory,
-    Transaction,
-  } from '@/types'
-  import { computed, onMounted, onUnmounted, ref } from 'vue'
+  import type { PersonAssignment, Transaction } from '@/types'
+  import { computed, ref } from 'vue'
 
   interface Props {
     expensesManagerRef?: {
-      expenseAssignments?: Array<{
+      expenseAssignments: Array<{
         transactionId: string
         assignedPersons: PersonAssignment[]
       }>
-      filteredExpenses?: Transaction[]
-      stats?: {
+      filteredExpenses: Transaction[]
+      stats: {
         total: number
         assigned: number
         unassigned: number
@@ -33,21 +32,29 @@
 
   const props = defineProps<Props>()
 
+  // Composables modernes
+  const localStorage = useLocalStorage()
+  const { formatAmount, formatDateShort } = useFormatting()
+  const { exportToPdf } = usePdfExport()
+
   // État pour gérer les catégories expansées
   const expandedCategories = ref(new Set<string>())
 
   // État pour gérer les détails de transactions expansés par personne et catégorie
   const expandedTransactionDetails = ref(new Set<string>())
 
-  // États réactifs pour les données localStorage
-  const availablePersons = ref<Person[]>([])
-  const reimbursementCategories = ref<ReimbursementCategory[]>([])
-
-  // Hook pour l'export PDF
-  const { exportToPdf } = usePdfExport()
-
   // État pour gérer le chargement de l'export
   const isExporting = ref(false)
+
+  // Storage réactif via composables
+  const personsStorage = localStorage.usePersonsStorage()
+  const categoriesStorage = localStorage.useReimbursementCategoriesStorage()
+
+  // Données réactives depuis le storage
+  const availablePersons = computed(() => personsStorage.data.value || [])
+  const reimbursementCategories = computed(
+    () => categoriesStorage.data.value || []
+  )
 
   // Fonction pour basculer l'état d'une catégorie
   const toggleCategory = (category: string) => {
@@ -68,115 +75,21 @@
     }
   }
 
-  // Charger les personnes depuis localStorage
-  const loadPersons = () => {
-    try {
-      const stored = localStorage.getItem('bankin-analyzer-persons')
-      if (stored) {
-        availablePersons.value = JSON.parse(stored)
-      }
-    } catch (error) {
-      console.error('Erreur lors de la récupération des personnes:', error)
-      availablePersons.value = []
-    }
-  }
-
-  // Charger les catégories depuis localStorage
-  const loadCategories = () => {
-    try {
-      const stored = localStorage.getItem(
-        'bankin-analyzer-reimbursement-categories'
-      )
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        reimbursementCategories.value = parsed.map(
-          (
-            cat: Omit<ReimbursementCategory, 'createdAt'> & {
-              createdAt: string
-            }
-          ) => ({
-            ...cat,
-            createdAt: new Date(cat.createdAt),
-          })
-        )
-      }
-    } catch (_error) {
-      console.error('Erreur lors de la récupération des catégories:', _error)
-      reimbursementCategories.value = []
-    }
-  }
-
-  // Gestionnaire pour les changements de localStorage
-  const handleStorageChange = (event: StorageEvent) => {
-    if (event.key === 'bankin-analyzer-persons' && event.newValue) {
-      loadPersons()
-    }
-    if (
-      event.key === 'bankin-analyzer-reimbursement-categories' &&
-      event.newValue
-    ) {
-      loadCategories()
-    }
-  }
-
-  // Vérification périodique pour synchronisation (fallback)
-  const checkForUpdates = () => {
-    // Vérifier les personnes
-    try {
-      const storedPersons = localStorage.getItem('bankin-analyzer-persons')
-      if (storedPersons) {
-        const parsed = JSON.parse(storedPersons)
-        if (JSON.stringify(parsed) !== JSON.stringify(availablePersons.value)) {
-          loadPersons()
-        }
-      }
-    } catch (_error) {
-      // Ignorer les erreurs de parsing
-    }
-
-    // Vérifier les catégories
-    try {
-      const storedCategories = localStorage.getItem(
-        'bankin-analyzer-reimbursement-categories'
-      )
-      if (storedCategories) {
-        const parsed = JSON.parse(storedCategories)
-        const currentSerialized = JSON.stringify(
-          reimbursementCategories.value.map(cat => ({
-            ...cat,
-            createdAt: cat.createdAt.toISOString(),
-          }))
-        )
-        if (JSON.stringify(parsed) !== currentSerialized) {
-          loadCategories()
-        }
-      }
-    } catch (_error) {
-      // Ignorer les erreurs de parsing
-    }
-  }
-
-  // Initialisation et lifecycle
-  onMounted(() => {
-    loadPersons()
-    loadCategories()
-    window.addEventListener('storage', handleStorageChange)
-
-    // Vérification périodique toutes les 500ms
-    setInterval(checkForUpdates, 500)
-  })
-
-  onUnmounted(() => {
-    window.removeEventListener('storage', handleStorageChange)
-  })
-
   // Calcul des remboursements réels par personne
   const reimbursementData = computed<ReimbursementData[]>(() => {
-    if (!props.expensesManagerRef?.expenseAssignments) {
+    // Vérifier que la ref existe et contient des données
+    const managerRef = props.expensesManagerRef
+    if (!managerRef) {
       return []
     }
 
-    const assignments = props.expensesManagerRef.expenseAssignments
+    // Accéder aux données exposées par le composant
+    const assignments = managerRef.expenseAssignments
+    if (!assignments || assignments.length === 0) {
+      return []
+    }
+
+    // Forcer la réactivité en accédant aux personnes depuis le storage global
     const persons = availablePersons.value
 
     // Calculer les totaux par personne
@@ -213,11 +126,15 @@
 
   // Calcul des remboursements par catégorie assignée et par personne
   const reimbursementDataByCategory = computed(() => {
-    if (!props.expensesManagerRef?.expenseAssignments) {
+    const managerRef = props.expensesManagerRef
+    if (!managerRef) {
       return new Map()
     }
 
-    const assignments = props.expensesManagerRef.expenseAssignments
+    const assignments = managerRef.expenseAssignments
+    if (!assignments || assignments.length === 0) {
+      return new Map()
+    }
     const persons = availablePersons.value
     const categories = reimbursementCategories.value
 
@@ -287,11 +204,15 @@
   // Calcul détaillé des remboursements par personne avec catégories
   const detailedReimbursementData = computed<DetailedReimbursementData[]>(
     () => {
-      if (!props.expensesManagerRef?.expenseAssignments) {
+      const managerRef = props.expensesManagerRef
+      if (!managerRef) {
         return []
       }
 
-      const assignments = props.expensesManagerRef.expenseAssignments
+      const assignments = managerRef.expenseAssignments
+      if (!assignments || assignments.length === 0) {
+        return []
+      }
       const persons = availablePersons.value
       const categories = reimbursementCategories.value
 
@@ -388,10 +309,8 @@
 
   // Détails des transactions par personne et catégorie
   const expenseDetailsByPersonAndCategory = computed(() => {
-    if (
-      !props.expensesManagerRef?.expenseAssignments ||
-      !props.expensesManagerRef?.filteredExpenses
-    ) {
+    const managerRef = props.expensesManagerRef
+    if (!managerRef) {
       return new Map<
         string,
         Array<{
@@ -404,8 +323,20 @@
       >()
     }
 
-    const assignments = props.expensesManagerRef.expenseAssignments
-    const expenses = props.expensesManagerRef.filteredExpenses
+    const assignments = managerRef.expenseAssignments
+    const expenses = managerRef.filteredExpenses
+    if (!assignments || assignments.length === 0 || !expenses) {
+      return new Map<
+        string,
+        Array<{
+          date: string
+          description: string
+          note: string
+          baseAmount: number
+          reimbursementAmount: number
+        }>
+      >()
+    }
     const categories = reimbursementCategories.value
 
     const result = new Map<
@@ -464,16 +395,23 @@
     return expenseDetailsByPersonAndCategory.value.get(key) || []
   }
 
+  // Fonction pour formater les dates de transaction
+  const formatTransactionDate = (dateStr: string): string => {
+    return formatDateShort(dateStr)
+  }
+
   // Fonctions d'export PDF
   const handlePdfExport = async (): Promise<void> => {
-    if (reimbursementData.value.length === 0) {
-      alert('Aucune donnée à exporter.')
-      return
-    }
-
     isExporting.value = true
 
     try {
+      console.log('=== DEBUT EXPORT PDF ===')
+
+      if (reimbursementData.value.length === 0) {
+        alert('Aucune donnée à exporter.')
+        return
+      }
+
       // Préparer les données pour l'export
       const reimbursementDataForExport = reimbursementData.value
       const detailedDataForExport = detailedReimbursementData.value
@@ -499,7 +437,9 @@
       )
     } catch (error) {
       console.error("Erreur lors de l'export PDF:", error)
-      alert('Erreur lors de la génération du PDF. Veuillez réessayer.')
+      alert(
+        `Erreur lors de la génération du PDF: ${error instanceof Error ? error.message : 'Erreur inconnue'}`
+      )
     } finally {
       isExporting.value = false
     }
@@ -514,56 +454,13 @@
   const handleExcelExport = (): void => {
     alert('Export Excel - Fonctionnalité à implémenter')
   }
-
-  // Fonction pour formater les dates de transaction de manière robuste
-  const formatTransactionDate = (dateStr: string): string => {
-    try {
-      let date: Date | null = null
-
-      // Format ISO YYYY-MM-DD (fichiers de test)
-      if (dateStr.includes('-') && dateStr.length === 10) {
-        date = new Date(dateStr)
-      }
-      // Format français DD/MM/YYYY (Bankin)
-      else if (dateStr.includes('/')) {
-        const parts = dateStr.split('/')
-        if (parts.length === 3) {
-          const [day, month, year] = parts
-          if (day && month && year) {
-            date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
-          }
-        }
-      }
-
-      // Si la date est valide, la formater en français
-      if (date && !isNaN(date.getTime())) {
-        return date.toLocaleDateString('fr-FR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        })
-      }
-
-      // En cas d'échec, retourner la date originale
-      return dateStr
-    } catch (_error) {
-      return dateStr
-    }
-  }
 </script>
 
 <template>
-  <div class="reimbursement-section summary-section">
-    <h3 class="section-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <line x1="12" y1="1" x2="12" y2="23" />
-        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-      </svg>
-      Résumé des remboursements
-    </h3>
-    <div class="section-content">
-      <!-- Aperçu des remboursements par personne -->
-      <div class="reimbursement-preview">
+  <div class="reimbursement-section">
+    <!-- Aperçu des remboursements par personne -->
+    <BaseCard variant="glass" padding="lg" rounded="lg" class="section-card">
+      <template #header>
         <h4 class="preview-title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -579,50 +476,55 @@
             {{ reimbursementData.length }} personne(s)
           </span>
         </h4>
+      </template>
 
-        <div v-if="reimbursementData.length === 0" class="no-data-message">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-            <line x1="9" y1="9" x2="9.01" y2="9" />
-            <line x1="15" y1="9" x2="15.01" y2="9" />
-          </svg>
-          <p>Aucune assignation de dépense trouvée.</p>
-          <small>
-            Utilisez le gestionnaire des dépenses ci-dessus pour assigner des
-            montants aux personnes.
-          </small>
-        </div>
+      <div v-if="reimbursementData.length === 0" class="no-data-message">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+          <line x1="9" y1="9" x2="9.01" y2="9" />
+          <line x1="15" y1="9" x2="15.01" y2="9" />
+        </svg>
+        <p>Aucune assignation de dépense trouvée.</p>
+        <small>
+          Utilisez le gestionnaire des dépenses ci-dessus pour assigner des
+          montants aux personnes.
+        </small>
+      </div>
 
-        <div v-else class="reimbursement-list">
-          <div
-            v-for="item in reimbursementData"
-            :key="item.personId"
-            class="reimbursement-item"
-          >
-            <div class="person-info">
-              <div class="person-avatar">
-                {{ item.person.charAt(0).toUpperCase() }}
-              </div>
-              <div class="person-details">
-                <span class="person-name">{{ item.person }}</span>
-                <span class="person-status" :class="item.status">
-                  {{ item.status === 'valide' ? 'Validé' : 'En attente' }}
-                </span>
-              </div>
+      <div v-else class="reimbursement-list">
+        <div
+          v-for="item in reimbursementData"
+          :key="item.personId"
+          class="reimbursement-item"
+        >
+          <div class="person-info">
+            <div class="person-avatar">
+              {{ item.person.charAt(0).toUpperCase() }}
             </div>
-            <div class="amount-info">
-              <span class="amount">{{ item.amount.toFixed(2) }} €</span>
-              <button class="action-button" :class="item.status">
-                {{ item.status === 'valide' ? 'Traité' : 'Valider' }}
-              </button>
+            <div class="person-details">
+              <span class="person-name">{{ item.person }}</span>
+              <span class="person-status" :class="item.status">
+                {{ item.status === 'valide' ? 'Validé' : 'En attente' }}
+              </span>
             </div>
+          </div>
+          <div class="amount-info">
+            <span class="amount">{{ formatAmount(item.amount) }}</span>
+            <BaseButton
+              :variant="item.status === 'valide' ? 'success' : 'primary'"
+              size="sm"
+            >
+              {{ item.status === 'valide' ? 'Traité' : 'Valider' }}
+            </BaseButton>
           </div>
         </div>
       </div>
+    </BaseCard>
 
-      <!-- Détail des remboursements par personne avec catégories -->
-      <div class="detailed-reimbursement">
+    <!-- Détail des remboursements par personne avec catégories -->
+    <BaseCard variant="glass" padding="lg" rounded="lg" class="section-card">
+      <template #header>
         <h4 class="preview-title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -640,150 +542,157 @@
             {{ detailedReimbursementData.length }} personne(s)
           </span>
         </h4>
+      </template>
 
+      <div
+        v-if="detailedReimbursementData.length === 0"
+        class="no-data-message"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="8.5" cy="7" r="4" />
+          <path d="M20 8v6M23 11h-6" />
+        </svg>
+        <p>Aucune assignation avec catégorie trouvée.</p>
+        <small>
+          Assignez des catégories spécifiques lors de l'association des
+          personnes aux dépenses.
+        </small>
+      </div>
+
+      <div v-else class="detailed-person-list">
         <div
-          v-if="detailedReimbursementData.length === 0"
-          class="no-data-message"
+          v-for="personData in detailedReimbursementData"
+          :key="personData.personId"
+          class="detailed-person-section"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="8.5" cy="7" r="4" />
-            <path d="M20 8v6M23 11h-6" />
-          </svg>
-          <p>Aucune assignation avec catégorie trouvée.</p>
-          <small>
-            Assignez des catégories spécifiques lors de l'association des
-            personnes aux dépenses.
-          </small>
-        </div>
-
-        <div v-else class="detailed-person-list">
-          <div
-            v-for="personData in detailedReimbursementData"
-            :key="personData.personId"
-            class="detailed-person-section"
-          >
-            <div class="person-header">
-              <div class="person-info">
-                <div class="person-avatar">
-                  {{ personData.personName.charAt(0).toUpperCase() }}
-                </div>
-                <div class="person-details">
-                  <span class="person-name">{{ personData.personName }}</span>
-                  <span class="person-summary">
-                    {{ personData.categories.length }} catégorie(s) •
-                    {{ personData.totalAmount.toFixed(2) }} €
-                  </span>
-                </div>
+          <div class="person-header">
+            <div class="person-info">
+              <div class="person-avatar">
+                {{ personData.personName.charAt(0).toUpperCase() }}
               </div>
-              <div class="person-total">
-                <span class="total-amount">
-                  {{ personData.totalAmount.toFixed(2) }} €
+              <div class="person-details">
+                <span class="person-name">{{ personData.personName }}</span>
+                <span class="person-summary">
+                  {{ personData.categories.length }} catégorie(s) •
+                  {{ formatAmount(personData.totalAmount) }}
                 </span>
-                <button class="action-button" :class="personData.status">
-                  {{ personData.status === 'valide' ? 'Traité' : 'Valider' }}
-                </button>
               </div>
             </div>
+            <div class="person-total">
+              <span class="total-amount">
+                {{ formatAmount(personData.totalAmount) }}
+              </span>
+              <BaseButton
+                :variant="
+                  personData.status === 'valide' ? 'success' : 'primary'
+                "
+                size="sm"
+              >
+                {{ personData.status === 'valide' ? 'Traité' : 'Valider' }}
+              </BaseButton>
+            </div>
+          </div>
 
-            <div class="person-categories">
+          <div class="person-categories">
+            <div
+              v-for="category in personData.categories"
+              :key="`${personData.personId}-${category.categoryName}`"
+              class="category-detail-item"
+            >
               <div
-                v-for="category in personData.categories"
-                :key="`${personData.personId}-${category.categoryName}`"
-                class="category-detail-item"
+                class="category-header-clickable"
+                @click="
+                  toggleTransactionDetails(
+                    personData.personId,
+                    category.categoryName
+                  )
+                "
+              >
+                <div class="category-info">
+                  <span class="category-label">{{
+                    category.categoryName
+                  }}</span>
+                  <button class="expand-details-btn">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      :class="{
+                        rotated: expandedTransactionDetails.has(
+                          `${personData.personId}-${category.categoryName}`
+                        ),
+                      }"
+                    >
+                      <polyline points="6,9 12,15 18,9" />
+                    </svg>
+                  </button>
+                </div>
+                <span class="category-amount">
+                  {{ formatAmount(category.amount) }}
+                </span>
+              </div>
+
+              <!-- Détails des transactions -->
+              <div
+                v-show="
+                  expandedTransactionDetails.has(
+                    `${personData.personId}-${category.categoryName}`
+                  )
+                "
+                class="transaction-details"
               >
                 <div
-                  class="category-header-clickable"
-                  @click="
-                    toggleTransactionDetails(
-                      personData.personId,
-                      category.categoryName
-                    )
-                  "
+                  v-for="(transaction, index) in getTransactionDetails(
+                    personData.personId,
+                    category.categoryName
+                  )"
+                  :key="`${personData.personId}-${category.categoryName}-${index}`"
+                  class="transaction-detail-item"
                 >
-                  <div class="category-info">
-                    <span class="category-label">{{
-                      category.categoryName
-                    }}</span>
-                    <button class="expand-details-btn">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        :class="{
-                          rotated: expandedTransactionDetails.has(
-                            `${personData.personId}-${category.categoryName}`
-                          ),
-                        }"
-                      >
-                        <polyline points="6,9 12,15 18,9" />
-                      </svg>
-                    </button>
+                  <div class="transaction-info">
+                    <div class="transaction-date">
+                      {{ formatTransactionDate(transaction.date) }}
+                    </div>
+                    <div class="transaction-description">
+                      {{ transaction.description }}
+                    </div>
+                    <div v-if="transaction.note" class="transaction-note">
+                      {{ transaction.note }}
+                    </div>
                   </div>
-                  <span class="category-amount">
-                    {{ category.amount.toFixed(2) }} €
-                  </span>
+                  <div class="transaction-amounts">
+                    <div class="base-amount">
+                      Montant: {{ formatAmount(transaction.baseAmount) }}
+                    </div>
+                    <div class="reimbursement-amount">
+                      À rembourser:
+                      {{ formatAmount(transaction.reimbursementAmount) }}
+                    </div>
+                  </div>
                 </div>
 
-                <!-- Détails des transactions -->
                 <div
-                  v-show="
-                    expandedTransactionDetails.has(
-                      `${personData.personId}-${category.categoryName}`
-                    )
-                  "
-                  class="transaction-details"
-                >
-                  <div
-                    v-for="(transaction, index) in getTransactionDetails(
+                  v-if="
+                    getTransactionDetails(
                       personData.personId,
                       category.categoryName
-                    )"
-                    :key="`${personData.personId}-${category.categoryName}-${index}`"
-                    class="transaction-detail-item"
-                  >
-                    <div class="transaction-info">
-                      <div class="transaction-date">
-                        {{ formatTransactionDate(transaction.date) }}
-                      </div>
-                      <div class="transaction-description">
-                        {{ transaction.description }}
-                      </div>
-                      <div v-if="transaction.note" class="transaction-note">
-                        {{ transaction.note }}
-                      </div>
-                    </div>
-                    <div class="transaction-amounts">
-                      <div class="base-amount">
-                        Montant: {{ transaction.baseAmount.toFixed(2) }} €
-                      </div>
-                      <div class="reimbursement-amount">
-                        À rembourser:
-                        {{ transaction.reimbursementAmount.toFixed(2) }} €
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    v-if="
-                      getTransactionDetails(
-                        personData.personId,
-                        category.categoryName
-                      ).length === 0
-                    "
-                    class="no-transactions"
-                  >
-                    Aucune transaction trouvée
-                  </div>
+                    ).length === 0
+                  "
+                  class="no-transactions"
+                >
+                  Aucune transaction trouvée
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+    </BaseCard>
 
-      <!-- Aperçu des remboursements par catégorie -->
-      <div class="reimbursement-by-category">
+    <!-- Aperçu des remboursements par catégorie -->
+    <BaseCard variant="glass" padding="lg" rounded="lg" class="section-card">
+      <template #header>
         <h4 class="preview-title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
@@ -799,74 +708,76 @@
             {{ categoryTotals.length }} catégorie(s)
           </span>
         </h4>
+      </template>
 
-        <div v-if="categoryTotals.length === 0" class="no-data-message">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-            <line x1="16" y1="2" x2="16" y2="6" />
-            <line x1="8" y1="2" x2="8" y2="6" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-          </svg>
-          <p>Aucune donnée de catégorie trouvée.</p>
-          <small>
-            Les données de catégorie s'afficheront une fois les assignations
-            effectuées.
-          </small>
-        </div>
+      <div v-if="categoryTotals.length === 0" class="no-data-message">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+        <p>Aucune donnée de catégorie trouvée.</p>
+        <small>
+          Les données de catégorie s'afficheront une fois les assignations
+          effectuées.
+        </small>
+      </div>
 
-        <div v-else class="category-list">
-          <div
-            v-for="categoryData in categoryTotals"
-            :key="categoryData.category"
-            class="category-section"
-          >
-            <div class="category-header">
-              <div class="category-info">
-                <span class="category-name">
-                  {{ categoryData.category }}
-                </span>
-                <span class="category-total">
-                  {{ categoryData.total.toFixed(2) }} €
-                </span>
-              </div>
-              <button
-                class="category-toggle"
-                @click="toggleCategory(categoryData.category)"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <polyline points="6,9 12,15 18,9" />
-                </svg>
-              </button>
+      <div v-else class="category-list">
+        <div
+          v-for="categoryData in categoryTotals"
+          :key="categoryData.category"
+          class="category-section"
+        >
+          <div class="category-header">
+            <div class="category-info">
+              <span class="category-name">
+                {{ categoryData.category }}
+              </span>
+              <span class="category-total">
+                {{ formatAmount(categoryData.total) }}
+              </span>
             </div>
-
-            <div
-              v-show="expandedCategories.has(categoryData.category)"
-              class="category-persons"
+            <button
+              class="category-toggle"
+              @click="toggleCategory(categoryData.category)"
             >
-              <div
-                v-for="person in reimbursementDataByCategory.get(
-                  categoryData.category
-                ) || []"
-                :key="`${categoryData.category}-${person.personId}`"
-                class="category-person-item"
-              >
-                <div class="person-info">
-                  <div class="person-avatar small">
-                    {{ person.person.charAt(0).toUpperCase() }}
-                  </div>
-                  <span class="person-name">{{ person.person }}</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <polyline points="6,9 12,15 18,9" />
+              </svg>
+            </button>
+          </div>
+
+          <div
+            v-show="expandedCategories.has(categoryData.category)"
+            class="category-persons"
+          >
+            <div
+              v-for="person in reimbursementDataByCategory.get(
+                categoryData.category
+              ) || []"
+              :key="`${categoryData.category}-${person.personId}`"
+              class="category-person-item"
+            >
+              <div class="person-info">
+                <div class="person-avatar small">
+                  {{ person.person.charAt(0).toUpperCase() }}
                 </div>
-                <span class="person-amount">
-                  {{ person.amount.toFixed(2) }} €
-                </span>
+                <span class="person-name">{{ person.person }}</span>
               </div>
+              <span class="person-amount">
+                {{ formatAmount(person.amount) }}
+              </span>
             </div>
           </div>
         </div>
       </div>
+    </BaseCard>
 
-      <!-- Actions d'export -->
-      <div class="export-actions">
+    <!-- Actions d'export -->
+    <BaseCard variant="glass" padding="lg" rounded="lg" class="section-card">
+      <template #header>
         <h4 class="actions-title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -875,169 +786,77 @@
           </svg>
           Exporter les données
         </h4>
-        <div class="export-buttons">
-          <button class="export-btn csv" @click="handleCsvExport">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path
-                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-              />
-              <polyline points="14,2 14,8 20,8" />
-            </svg>
-            Exporter en CSV
-          </button>
-          <button class="export-btn pdf" @click="handlePdfExport">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path
-                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-              />
-              <polyline points="14,2 14,8 20,8" />
-              <line x1="16" y1="13" x2="8" y2="13" />
-              <line x1="16" y1="17" x2="8" y2="17" />
-              <polyline points="10,9 9,9 8,9" />
-            </svg>
-            Exporter en PDF
-          </button>
-          <button class="export-btn excel" @click="handleExcelExport">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <path d="M9 9h6v6H9z" />
-            </svg>
-            Exporter en Excel
-          </button>
-        </div>
+      </template>
+      <div class="export-buttons">
+        <BaseButton variant="secondary" @click="handleCsvExport">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path
+              d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+            />
+            <polyline points="14,2 14,8 20,8" />
+          </svg>
+          Exporter en CSV
+        </BaseButton>
+        <BaseButton
+          variant="primary"
+          :loading="isExporting"
+          @click="handlePdfExport"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path
+              d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+            />
+            <polyline points="14,2 14,8 20,8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10,9 9,9 8,9" />
+          </svg>
+          Exporter en PDF
+        </BaseButton>
+        <BaseButton variant="secondary" @click="handleExcelExport">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <path d="M9 9h6v6H9z" />
+          </svg>
+          Exporter en Excel
+        </BaseButton>
       </div>
-    </div>
+    </BaseCard>
   </div>
 </template>
 
 <style scoped>
   .reimbursement-section {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    border-radius: 1rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .section-title {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #1f2937;
-    padding: 1.5rem 1.5rem 0;
-    margin-bottom: 1rem;
-  }
-
-  .section-title svg {
-    width: 1.5rem;
-    height: 1.5rem;
-    color: #3b82f6;
-  }
-
-  .section-content {
-    padding: 0 1.5rem 1.5rem;
-  }
-
-  /* Résumé principal */
-  .summary-main {
-    margin-bottom: 2rem;
-  }
-
-  .summary-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1rem;
-  }
-
-  .summary-card {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1.5rem;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    background: rgba(249, 250, 251, 0.9);
-    backdrop-filter: blur(5px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
-  }
-
-  .summary-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  }
-
-  .summary-card.total {
-    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-    border-color: #3b82f6;
-  }
-
-  .summary-card.reimbursable {
-    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-    border-color: #10b981;
-  }
-
-  .summary-card.rate {
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-    border-color: #f59e0b;
-  }
-
-  .card-icon {
-    width: 3rem;
-    height: 3rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(255, 255, 255, 0.8);
-    color: #1f2937;
-  }
-
-  .card-icon svg {
-    width: 1.5rem;
-    height: 1.5rem;
-  }
-
-  .card-content {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 1.5rem;
   }
 
-  .card-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #6b7280;
-  }
-
-  .card-value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #1f2937;
-  }
-
-  /* Aperçu des remboursements */
-  .reimbursement-preview {
-    background: rgba(249, 250, 251, 0.9);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
+  .section-card {
+    margin-bottom: 0;
   }
 
   .preview-title {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #1f2937;
-    margin-bottom: 1.5rem;
+    gap: var(--spacing-3);
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--gray-900);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    margin: 0 0 var(--spacing-6) 0;
+    position: relative;
+  }
+
+  .preview-title::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 60px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-500), var(--primary-600));
+    border-radius: 2px;
   }
 
   .preview-title svg {
@@ -1046,15 +865,33 @@
     color: #3b82f6;
   }
 
+  .actions-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+  }
+
+  .actions-title svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: #3b82f6;
+  }
+
   .preview-badge {
-    background: rgba(251, 191, 36, 0.8);
-    backdrop-filter: blur(5px);
-    color: #92400e;
-    padding: 0.25rem 0.75rem;
-    border-radius: 12px;
+    background: linear-gradient(135deg, var(--primary-50), var(--primary-100));
+    color: var(--primary-700);
+    padding: 0.375rem 0.875rem;
+    border-radius: 16px;
     font-size: 0.75rem;
-    font-weight: 500;
+    font-weight: var(--font-weight-semibold);
     margin-left: auto;
+    border: 1px solid var(--primary-200);
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+    backdrop-filter: blur(10px);
   }
 
   .no-data-message {
@@ -1091,17 +928,18 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    border-radius: 8px;
+    padding: 1.5rem;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
     transition: all 0.2s ease;
   }
 
   .reimbursement-item:hover {
-    background: rgba(243, 244, 246, 0.9);
+    background: #f9fafb;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
   }
 
   .person-info {
@@ -1143,13 +981,11 @@
 
   .person-status.valide {
     background: rgba(209, 250, 229, 0.8);
-    backdrop-filter: blur(5px);
     color: #047857;
   }
 
   .person-status.en_attente {
     background: rgba(254, 243, 199, 0.8);
-    backdrop-filter: blur(5px);
     color: #92400e;
   }
 
@@ -1165,50 +1001,17 @@
     color: #1f2937;
   }
 
-  .action-button {
-    padding: 0.5rem 1rem;
-    border: none;
-    border-radius: 6px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
+  /* Export buttons */
+  .export-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
   }
 
-  .action-button.valide {
-    background: rgba(209, 250, 229, 0.8);
-    backdrop-filter: blur(5px);
-    color: #047857;
-  }
-
-  .action-button.en_attente {
-    background: #3b82f6;
-    color: white;
-  }
-
-  .action-button.en_attente:hover {
-    background: #1d4ed8;
-  }
-
-  /* Remboursements par catégorie */
-  .reimbursement-by-category {
-    background: rgba(248, 250, 252, 0.9);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-  }
-
-  /* Détail des remboursements par personne avec catégories */
-  .detailed-reimbursement {
-    background: rgba(255, 247, 237, 0.9);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(254, 215, 170, 0.5);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
+  .export-buttons svg {
+    width: 1rem;
+    height: 1rem;
+    margin-right: 0.5rem;
   }
 
   .detailed-person-list {
@@ -1218,10 +1021,8 @@
   }
 
   .detailed-person-section {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    background: white;
+    border: 1px solid #e5e7eb;
     border-radius: 12px;
     overflow: hidden;
   }
@@ -1231,13 +1032,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 1.25rem;
-    background: linear-gradient(
-      135deg,
-      rgba(248, 250, 252, 0.8) 0%,
-      rgba(241, 245, 249, 0.8) 100%
-    );
-    backdrop-filter: blur(5px);
-    border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
   }
 
   .person-summary {
@@ -1257,7 +1053,6 @@
     font-weight: 700;
     color: #0f172a;
     background: rgba(236, 253, 245, 0.8);
-    backdrop-filter: blur(5px);
     padding: 0.5rem 1rem;
     border-radius: 8px;
     border: 1px solid rgba(187, 247, 208, 0.5);
@@ -1265,14 +1060,13 @@
 
   .person-categories {
     padding: 0;
-    background: rgba(250, 250, 250, 0.8);
-    backdrop-filter: blur(5px);
+    background: #fafafa;
   }
 
   .category-detail-item {
     display: flex;
     flex-direction: column;
-    border-bottom: 1px solid rgba(243, 244, 246, 0.5);
+    border-bottom: 1px solid #f3f4f6;
     transition: all 0.2s ease;
   }
 
@@ -1290,8 +1084,7 @@
   }
 
   .category-header-clickable:hover {
-    background: rgba(249, 250, 251, 0.8);
-    backdrop-filter: blur(5px);
+    background: #f9fafb;
   }
 
   .category-info {
@@ -1314,8 +1107,7 @@
   }
 
   .expand-details-btn:hover {
-    background: rgba(229, 231, 235, 0.8);
-    backdrop-filter: blur(5px);
+    background: #e5e7eb;
     color: #374151;
   }
 
@@ -1330,9 +1122,8 @@
   }
 
   .transaction-details {
-    background: rgba(248, 250, 252, 0.8);
-    backdrop-filter: blur(5px);
-    border-top: 1px solid rgba(226, 232, 240, 0.5);
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
     padding: 0;
   }
 
@@ -1341,7 +1132,7 @@
     justify-content: space-between;
     align-items: flex-start;
     padding: 1rem 1.25rem;
-    border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+    border-bottom: 1px solid #e2e8f0;
     gap: 1rem;
   }
 
@@ -1361,7 +1152,6 @@
     font-weight: 600;
     color: #4f46e5;
     background: rgba(224, 231, 255, 0.8);
-    backdrop-filter: blur(5px);
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
     width: fit-content;
@@ -1398,7 +1188,6 @@
     font-weight: 600;
     color: #059669;
     background: rgba(209, 250, 229, 0.8);
-    backdrop-filter: blur(5px);
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
   }
@@ -1422,7 +1211,6 @@
     color: #059669;
     font-size: 1rem;
     background: rgba(209, 250, 229, 0.8);
-    backdrop-filter: blur(5px);
     padding: 0.375rem 0.75rem;
     border-radius: 6px;
   }
@@ -1434,10 +1222,8 @@
   }
 
   .category-section {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    background: white;
+    border: 1px solid #e5e7eb;
     border-radius: 8px;
     overflow: hidden;
     transition: all 0.2s ease;
@@ -1452,21 +1238,9 @@
     justify-content: space-between;
     align-items: center;
     padding: 1rem 1.25rem;
-    background: linear-gradient(
-      135deg,
-      rgba(249, 250, 251, 0.8) 0%,
-      rgba(243, 244, 246, 0.8) 100%
-    );
-    backdrop-filter: blur(5px);
-    border-bottom: 1px solid rgba(229, 231, 235, 0.5);
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
     cursor: pointer;
-  }
-
-  .category-info {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    flex: 1;
   }
 
   .category-name {
@@ -1480,7 +1254,6 @@
     color: #059669;
     font-size: 1.125rem;
     background: rgba(209, 250, 229, 0.8);
-    backdrop-filter: blur(5px);
     padding: 0.25rem 0.75rem;
     border-radius: 6px;
     margin-left: auto;
@@ -1498,8 +1271,7 @@
   }
 
   .category-toggle:hover {
-    background: rgba(229, 231, 235, 0.8);
-    backdrop-filter: blur(5px);
+    background: #e5e7eb;
     color: #374151;
   }
 
@@ -1518,7 +1290,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.875rem 1.25rem;
-    border-bottom: 1px solid rgba(243, 244, 246, 0.5);
+    border-bottom: 1px solid #f3f4f6;
     transition: all 0.2s ease;
   }
 
@@ -1527,8 +1299,7 @@
   }
 
   .category-person-item:hover {
-    background: rgba(249, 250, 251, 0.8);
-    backdrop-filter: blur(5px);
+    background: #f9fafb;
   }
 
   .person-avatar.small {
@@ -1543,133 +1314,8 @@
     font-size: 1rem;
   }
 
-  /* Actions d'export */
-  .export-actions {
-    background: rgba(243, 244, 246, 0.9);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .actions-title {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #1f2937;
-    margin-bottom: 1rem;
-  }
-
-  .actions-title svg {
-    width: 1.25rem;
-    height: 1.25rem;
-    color: #3b82f6;
-  }
-
-  .export-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-  }
-
-  .export-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
-    color: #374151;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .export-btn:hover {
-    background: rgba(249, 250, 251, 0.9);
-    border-color: #3b82f6;
-    color: #3b82f6;
-  }
-
-  .export-btn svg {
-    width: 1rem;
-    height: 1rem;
-  }
-
-  /* Fonctionnalités futures */
-  .future-features {
-    background: rgba(239, 246, 255, 0.9);
-    backdrop-filter: blur(5px);
-    border: 2px dashed rgba(59, 130, 246, 0.5);
-    border-radius: 12px;
-    padding: 1.5rem;
-  }
-
-  .feature-card {
-    text-align: center;
-  }
-
-  .feature-icon {
-    width: 3rem;
-    height: 3rem;
-    margin: 0 auto 1rem;
-    background: rgba(219, 234, 254, 0.8);
-    backdrop-filter: blur(5px);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #3b82f6;
-  }
-
-  .feature-icon svg {
-    width: 1.5rem;
-    height: 1.5rem;
-  }
-
-  .feature-card h5 {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #1f2937;
-    margin-bottom: 1rem;
-  }
-
-  .feature-list {
-    list-style: none;
-    padding: 0;
-    text-align: left;
-    max-width: 400px;
-    margin: 0 auto;
-  }
-
-  .feature-list li {
-    padding: 0.5rem 0;
-    color: #374151;
-    font-size: 0.9rem;
-    position: relative;
-    padding-left: 1.5rem;
-  }
-
-  .feature-list li::before {
-    content: '•';
-    color: #3b82f6;
-    font-weight: bold;
-    position: absolute;
-    left: 0;
-  }
-
   /* Responsive */
   @media (max-width: 768px) {
-    .summary-cards {
-      grid-template-columns: 1fr;
-    }
-
     .reimbursement-item {
       flex-direction: column;
       align-items: stretch;
@@ -1682,14 +1328,6 @@
 
     .export-buttons {
       flex-direction: column;
-    }
-
-    .export-btn {
-      justify-content: center;
-    }
-
-    .feature-list {
-      text-align: center;
     }
   }
 </style>

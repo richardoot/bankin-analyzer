@@ -16,37 +16,59 @@
   const currentAnalysisResult = ref<CsvAnalysisResult | null>(null)
 
   // Composable pour la logique d'upload
-  const { handleFileUpload, analysisResult } = useFileUpload()
+  const { handleFileUpload, analysisResult, uploadState } = useFileUpload()
 
   // Gestionnaire d'événements pour l'upload de fichier
   const handleFileUploaded = async (file: File): Promise<void> => {
-    console.log('Fichier uploadé:', file.name)
+    console.log('🔄 Fichier uploadé:', file.name)
 
-    try {
-      // Analyser le fichier
-      await handleFileUpload(file)
+    // Analyser le fichier
+    await handleFileUpload(file)
 
-      // Afficher la modale de validation si l'analyse est réussie
-      if (analysisResult.value && analysisResult.value.isValid) {
-        currentAnalysisResult.value = analysisResult.value
-        showValidationModal.value = true
-      } else if (analysisResult.value && !analysisResult.value.isValid) {
-        // Gérer les erreurs de validation
-        console.error('Fichier invalide:', analysisResult.value.errors)
-        handleUploadError(
-          analysisResult.value.errors?.join(', ') || 'Fichier invalide'
-        )
-      }
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Erreur inconnue'
-      handleUploadError(errorMessage)
+    console.log('📊 État après upload:', {
+      error: uploadState.value.error,
+      isValid: analysisResult.value?.isValid,
+      hasAnalysisResult: !!analysisResult.value,
+    })
+
+    // Vérifier le résultat après l'upload
+    if (uploadState.value.error) {
+      // Il y a une erreur (soit de validation, soit technique)
+      console.log('❌ Erreur détectée:', uploadState.value.error)
+      handleUploadError(uploadState.value.error)
+    } else if (analysisResult.value && analysisResult.value.isValid) {
+      // Succès - afficher la modale de validation
+      console.log('✅ Succès - Affichage de la modale')
+      currentAnalysisResult.value = analysisResult.value
+      showValidationModal.value = true
+    } else {
+      // Cas imprévu - erreur générique
+      console.log('⚠️ Cas imprévu')
+      handleUploadError('Erreur lors du traitement du fichier')
     }
   }
 
+  // État des erreurs d'upload
+  const uploadError = ref<string>('')
+  const showUploadError = ref(false)
+
   const handleUploadError = (error: string): void => {
-    console.error("Erreur lors de l'upload:", error)
-    // TODO: Implémenter la gestion d'erreur globale
+    console.error("🚨 Erreur lors de l'upload:", error)
+    console.log("🚨 Affichage de l'erreur à l'utilisateur")
+    uploadError.value = error
+    showUploadError.value = true
+
+    // Masquer l'erreur après 10 secondes
+    setTimeout(() => {
+      console.log("⏰ Masquage automatique de l'erreur après 10s")
+      showUploadError.value = false
+      uploadError.value = ''
+    }, 10000)
+  }
+
+  const dismissError = (): void => {
+    showUploadError.value = false
+    uploadError.value = ''
   }
 
   // Gestionnaires de la modale de validation
@@ -77,6 +99,37 @@
       </div>
 
       <div class="upload-wrapper">
+        <!-- Affichage des erreurs -->
+        <div v-if="showUploadError" class="error-alert" role="alert">
+          <div class="error-content">
+            <svg
+              class="error-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+            <div class="error-text">
+              <strong>Erreur d'importation</strong>
+              <p>{{ uploadError }}</p>
+            </div>
+            <button
+              type="button"
+              class="error-dismiss"
+              aria-label="Fermer l'erreur"
+              @click="dismissError"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
         <FileUpload
           :accepted-formats="['.csv']"
           max-size-label="10MB max"
@@ -215,8 +268,89 @@
 
   .upload-wrapper {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    gap: 1.5rem;
     align-items: center;
+  }
+
+  /* Styles pour les alertes d'erreur */
+  .error-alert {
+    width: 100%;
+    max-width: 600px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 12px;
+    overflow: hidden;
+    animation: slideInDown 0.3s ease-out;
+  }
+
+  @keyframes slideInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .error-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .error-icon {
+    width: 24px;
+    height: 24px;
+    color: #dc2626;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .error-text {
+    flex: 1;
+  }
+
+  .error-text strong {
+    display: block;
+    color: #991b1b;
+    font-weight: 600;
+    margin-bottom: 4px;
+    font-size: 14px;
+  }
+
+  .error-text p {
+    color: #7f1d1d;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .error-dismiss {
+    background: none;
+    border: none;
+    color: #dc2626;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .error-dismiss:hover {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  .error-dismiss svg {
+    width: 16px;
+    height: 16px;
   }
 
   .features-grid {
