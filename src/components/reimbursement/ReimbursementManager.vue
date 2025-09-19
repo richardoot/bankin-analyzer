@@ -6,7 +6,6 @@
   import ExpensesReimbursementManager from './ExpensesReimbursementManager.vue'
   import PersonsManager from '../shared/PersonsManager.vue'
   import ReimbursementCategoriesManager from './ReimbursementCategoriesManager.vue'
-  import ReimbursementStats from './ReimbursementStats.vue'
   import ReimbursementSummary from './ReimbursementSummary.vue'
 
   interface Props {
@@ -198,12 +197,6 @@
           </div>
         </div>
       </div>
-
-      <!-- Statistiques des remboursements -->
-      <ReimbursementStats
-        :analysis-result="filteredAnalysisResult"
-        :filtered-expenses="filteredExpenses"
-      />
 
       <!-- Gestionnaire des personnes -->
       <PersonsManager />
@@ -503,6 +496,90 @@
     .filters-main-icon svg {
       width: 0.875rem;
       height: 0.875rem;
+    }
+  }
+
+  /* Thème sombre */
+  @media (prefers-color-scheme: dark) {
+    .section-title {
+      color: #e2e8f0;
+    }
+
+    .section-description {
+      color: #94a3b8;
+    }
+
+    .title-badge {
+      background: linear-gradient(
+        135deg,
+        rgba(59, 130, 246, 0.2),
+        rgba(59, 130, 246, 0.3)
+      );
+      color: #60a5fa;
+      border-color: rgba(96, 165, 250, 0.3);
+    }
+
+    /* Bouton de filtres avancés - Mode sombre */
+    .advanced-filters-btn {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .advanced-filters-btn:hover {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(100, 116, 139, 0.5);
+    }
+
+    .advanced-filters-btn.active {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: rgba(96, 165, 250, 0.5);
+      color: #60a5fa;
+    }
+
+    /* Panneau de filtres avancés - Mode sombre */
+    .filters-container {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .filters-main-header {
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .filters-main-title h3 {
+      color: #e2e8f0;
+    }
+
+    .filters-main-description {
+      color: #94a3b8;
+    }
+
+    /* Cartes de filtres compacts - Mode sombre */
+    .compact-filter-card {
+      background: rgba(51, 65, 85, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .compact-filter-card:hover {
+      background: rgba(71, 85, 105, 0.9);
+    }
+
+    .compact-filter-header {
+      background: linear-gradient(
+        135deg,
+        rgba(51, 65, 85, 0.8) 0%,
+        rgba(30, 41, 59, 0.9) 100%
+      );
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .compact-filter-title h4 {
+      color: #e2e8f0;
+    }
+
+    .compact-filter-subtitle {
+      color: #94a3b8;
     }
   }
 </style>
