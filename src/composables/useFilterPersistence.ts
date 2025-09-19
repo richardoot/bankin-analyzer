@@ -48,9 +48,10 @@ export function useFilterPersistence(sessionId: Ref<string | null>) {
       const stored = localStorage.getItem(getStorageKey(id))
       if (stored) {
         const filters: PersistedFilters = JSON.parse(stored)
-        
+
         // Appliquer les filtres chargés
-        selectedExpenseCategories.value = filters.selectedExpenseCategories || []
+        selectedExpenseCategories.value =
+          filters.selectedExpenseCategories || []
         selectedIncomeCategories.value = filters.selectedIncomeCategories || []
         selectedJointAccounts.value = filters.selectedJointAccounts || []
         compensationRules.value = filters.compensationRules || []
@@ -59,7 +60,7 @@ export function useFilterPersistence(sessionId: Ref<string | null>) {
         showAdvancedFilters.value = filters.showAdvancedFilters || false
         showExpenseFilter.value = filters.showExpenseFilter || false
         showIncomeFilter.value = filters.showIncomeFilter || false
-        
+
         console.log('🔄 Filtres chargés pour la session:', id)
         return true
       }
@@ -83,7 +84,7 @@ export function useFilterPersistence(sessionId: Ref<string | null>) {
         showExpenseFilter: showExpenseFilter.value,
         showIncomeFilter: showIncomeFilter.value,
       }
-      
+
       localStorage.setItem(getStorageKey(id), JSON.stringify(filters))
       console.log('💾 Filtres sauvegardés pour la session:', id)
     } catch (error) {
@@ -93,8 +94,12 @@ export function useFilterPersistence(sessionId: Ref<string | null>) {
 
   // Fonction pour réinitialiser les filtres aux valeurs par défaut
   const resetFilters = () => {
-    selectedExpenseCategories.value = [...defaultFilters.selectedExpenseCategories]
-    selectedIncomeCategories.value = [...defaultFilters.selectedIncomeCategories]
+    selectedExpenseCategories.value = [
+      ...defaultFilters.selectedExpenseCategories,
+    ]
+    selectedIncomeCategories.value = [
+      ...defaultFilters.selectedIncomeCategories,
+    ]
     selectedJointAccounts.value = [...defaultFilters.selectedJointAccounts]
     compensationRules.value = [...defaultFilters.compensationRules]
     selectedExpenseMonth.value = defaultFilters.selectedExpenseMonth
