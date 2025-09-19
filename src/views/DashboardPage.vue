@@ -4,15 +4,13 @@
   import { usePieChart, type CategoryData } from '@/composables/usePieChart'
   import { useFilterPersistence } from '@/composables/useFilterPersistence'
   import type { CsvAnalysisResult, ImportSession } from '@/types'
-  import { computed, ref, watch, nextTick } from 'vue'
+  import { computed, watch, nextTick } from 'vue'
   import BaseCard from '@/components/shared/BaseCard.vue'
   import BarChart from '../components/charts/BarChart.vue'
   import CategoryFilter from '../components/filters/CategoryFilter.vue'
   import JointAccountFilter from '../components/filters/JointAccountFilter.vue'
   import PieChart from '../components/charts/PieChart.vue'
-  import ReimbursementCompensationFilter, {
-    type CompensationRule,
-  } from '../components/filters/ReimbursementCompensationFilter.vue'
+  import ReimbursementCompensationFilter from '../components/filters/ReimbursementCompensationFilter.vue'
   import TransactionsList from '../components/shared/TransactionsList.vue'
 
   interface Props {
@@ -73,7 +71,6 @@
     showAdvancedFilters,
     showExpenseFilter,
     showIncomeFilter,
-    resetFilters,
   } = useFilterPersistence(currentSessionId)
 
   // Utilisation du composable pour le filtrage par mois
@@ -106,11 +103,17 @@
     const incomeCategories = currentAnalysisResult.value.income?.categories
 
     // Seulement initialiser si les catégories ne sont pas déjà sélectionnées (première fois)
-    if (expenseCategories?.length && selectedExpenseCategories.value.length === 0) {
+    if (
+      expenseCategories?.length &&
+      selectedExpenseCategories.value.length === 0
+    ) {
       selectedExpenseCategories.value = [...expenseCategories].sort()
     }
 
-    if (incomeCategories?.length && selectedIncomeCategories.value.length === 0) {
+    if (
+      incomeCategories?.length &&
+      selectedIncomeCategories.value.length === 0
+    ) {
       selectedIncomeCategories.value = [...incomeCategories].sort()
     }
   }
@@ -1395,7 +1398,6 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     transform: translateY(-1px);
   }
-
 
   .compact-filter-header {
     display: flex;
