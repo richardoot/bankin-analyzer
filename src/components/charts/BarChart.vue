@@ -601,8 +601,8 @@
   })
 
   // Configuration du SVG
-  const svgWidth = 1200
-  const svgHeight = 500
+  const svgWidth = 1000
+  const svgHeight = 400
   const padding = {
     top: 30,
     right: 60,
@@ -760,8 +760,8 @@
   .bar-chart-container {
     width: 100%;
     max-width: 100%;
-    min-height: 600px;
-    margin-bottom: 1.5rem;
+    min-height: 450px;
+    margin-bottom: 1rem;
     overflow: visible;
     position: relative;
   }
@@ -844,9 +844,10 @@
   }
 
   .chart-container {
-    padding: 2rem;
+    padding: 1.5rem;
     position: relative;
     overflow: visible;
+    max-width: 100%;
   }
 
   .chart-svg-container {

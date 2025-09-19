@@ -1,133 +1,95 @@
 <script setup lang="ts">
-  import type { CsvAnalysisResult } from '@/types'
-  import { ref } from 'vue'
+  import { ref, computed } from 'vue'
   import UploadSection from '../components/layout/UploadSection.vue'
-  import DashboardPage from './DashboardPage.vue'
-  import ReimbursementManager from '../components/reimbursement/ReimbursementManager.vue'
   import ErrorBoundary from '../components/shared/ErrorBoundary.vue'
+  import ImportSelector from '../components/shared/ImportSelector.vue'
+  import { useImportManager } from '@/composables/useImportManager'
+
+  // Émissions pour communiquer avec le parent (App.vue)
+  interface Emits {
+    (e: 'navigate-to-dashboard', sessionId: string): void
+  }
+  const emit = defineEmits<Emits>()
+
+  // Import manager pour gérer les sessions
+  const { activeSession, sessions, switchToSession } = useImportManager()
 
   // État local pour gérer l'affichage
-  const showAnalysis = ref(false)
-  const analysisResult = ref<CsvAnalysisResult | null>(null)
-  const activeTab = ref<'dashboard' | 'reimbursements'>('dashboard')
+  const forceShowUpload = ref(false)
 
-  // Gestion de la navigation vers l'analyse
-  const handleNavigateToAnalysis = (result: CsvAnalysisResult): void => {
-    analysisResult.value = result
-    showAnalysis.value = true
-    activeTab.value = 'dashboard'
+  // Computed pour détecter s'il y a une session active
+  const _hasActiveSession = computed(() => !!activeSession.value)
+
+  // Gestion de la sélection d'une session existante
+  const handleNavigateToAnalysis = (sessionId: string): void => {
+    console.log('🎯 Navigation vers analyse avec session:', sessionId)
+    switchToSession(sessionId)
+    emit('navigate-to-dashboard', sessionId)
   }
 
-  // Fonction pour revenir à l'upload
-  const backToUpload = (): void => {
-    showAnalysis.value = false
-    analysisResult.value = null
-    activeTab.value = 'dashboard'
+  // Fonction pour forcer l'affichage de l'upload (pour le header)
+  const handleNewUpload = (): void => {
+    forceShowUpload.value = true
   }
 
-  // Fonction pour changer d'onglet
-  const setActiveTab = (tab: 'dashboard' | 'reimbursements'): void => {
-    activeTab.value = tab
+  // Quand on upload avec succès, naviguer vers le dashboard
+  const handleNavigateToAnalysisFromUpload = (sessionId: string): void => {
+    forceShowUpload.value = false
+    switchToSession(sessionId)
+    emit('navigate-to-dashboard', sessionId)
   }
+
+  // Exposer les fonctions pour le parent
+  defineExpose({
+    handleNewUpload,
+  })
+
+  // Removed setActiveTab - no longer needed
 </script>
 
 <template>
   <div class="analyses-page">
     <div class="analyses-container">
-      <!-- Affichage conditionnel : upload ou analyse -->
-      <template v-if="!showAnalysis">
-        <div class="page-header">
-          <h1 class="page-title">Analyses financières</h1>
-          <p class="page-description">
-            Uploadez votre fichier d'export CSV Bankin pour commencer l'analyse
-            de vos données financières
+      <div class="page-header">
+        <h1 class="page-title">Import de données</h1>
+        <p class="page-description">
+          Uploadez votre fichier d'export CSV Bankin pour commencer l'analyse de
+          vos données financières
+        </p>
+      </div>
+
+      <!-- Gestion des imports existants -->
+      <div v-if="sessions.length > 0" class="existing-imports-section">
+        <div class="section-header">
+          <h2 class="section-title">Imports existants</h2>
+          <p class="section-description">
+            Sélectionnez un import existant pour accéder aux analyses ou créez
+            un nouvel import
           </p>
         </div>
 
-        <div class="upload-wrapper">
-          <ErrorBoundary
-            fallback-title="Erreur d'upload"
-            fallback-message="Impossible de charger l'interface d'upload. Veuillez rafraîchir la page."
-          >
-            <UploadSection @navigate-to-dashboard="handleNavigateToAnalysis" />
-          </ErrorBoundary>
-        </div>
-      </template>
+        <ErrorBoundary
+          fallback-title="Erreur des imports"
+          fallback-message="Impossible de charger la liste des imports."
+        >
+          <ImportSelector
+            variant="full"
+            show-actions
+            @session-selected="handleNavigateToAnalysis"
+          />
+        </ErrorBoundary>
+      </div>
 
-      <!-- Interface d'analyse avec onglets -->
-      <template v-else-if="analysisResult">
-        <div class="analysis-header">
-          <button class="back-button" @click="backToUpload">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M19 12H5" />
-              <path d="M12 19l-7-7 7-7" />
-            </svg>
-            Nouvel upload
-          </button>
-
-          <!-- Navigation par onglets -->
-          <div class="tabs-navigation">
-            <button
-              class="tab-button"
-              :class="{ active: activeTab === 'dashboard' }"
-              @click="setActiveTab('dashboard')"
-            >
-              <svg
-                class="tab-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-              >
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <path d="M9 12h6" />
-                <path d="M9 16h6" />
-                <path d="M9 8h6" />
-              </svg>
-              Tableau de bord
-            </button>
-            <button
-              class="tab-button"
-              :class="{ active: activeTab === 'reimbursements' }"
-              @click="setActiveTab('reimbursements')"
-            >
-              <svg
-                class="tab-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-              >
-                <path
-                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                />
-                <polyline points="14,2 14,8 20,8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-              </svg>
-              Remboursements
-            </button>
-          </div>
-        </div>
-
-        <!-- Contenu des onglets -->
-        <div class="tab-content">
-          <div v-if="activeTab === 'dashboard'" class="tab-panel">
-            <ErrorBoundary
-              fallback-title="Erreur du tableau de bord"
-              fallback-message="Impossible d'afficher le tableau de bord. Veuillez rafraîchir la page."
-            >
-              <DashboardPage :analysis-result="analysisResult" />
-            </ErrorBoundary>
-          </div>
-          <div v-if="activeTab === 'reimbursements'" class="tab-panel">
-            <ErrorBoundary
-              fallback-title="Erreur du gestionnaire de remboursements"
-              fallback-message="Impossible d'afficher le gestionnaire de remboursements. Veuillez rafraîchir la page."
-            >
-              <ReimbursementManager :analysis-result="analysisResult" />
-            </ErrorBoundary>
-          </div>
-        </div>
-      </template>
+      <div class="upload-wrapper">
+        <ErrorBoundary
+          fallback-title="Erreur d'upload"
+          fallback-message="Impossible de charger l'interface d'upload. Veuillez rafraîchir la page."
+        >
+          <UploadSection
+            @navigate-to-dashboard="handleNavigateToAnalysisFromUpload"
+          />
+        </ErrorBoundary>
+      </div>
     </div>
   </div>
 </template>
@@ -169,35 +131,32 @@
     margin-bottom: 3rem;
   }
 
-  .dashboard-header {
+  /* Section des imports existants */
+  .existing-imports-section {
+    margin-bottom: 3rem;
+  }
+
+  .section-header {
+    text-align: center;
     margin-bottom: 2rem;
   }
 
-  .back-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: none;
-    border-radius: 0.75rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 0.9rem;
+  .section-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0 0 0.75rem;
   }
 
-  .back-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+  .section-description {
+    font-size: 1rem;
+    color: #6b7280;
+    line-height: 1.6;
+    max-width: 500px;
+    margin: 0 auto;
   }
 
-  .back-button svg {
-    width: 1.2rem;
-    height: 1.2rem;
-    stroke-width: 2;
-  }
+  /* Removed back-button styles - no longer needed */
 
   .results-section {
     background: white;
@@ -210,67 +169,7 @@
     display: none;
   }
 
-  /* Styles pour le header d'analyse */
-  .analysis-header {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-    margin-bottom: 2rem;
-  }
-
-  /* Styles pour la navigation par onglets */
-  .tabs-navigation {
-    display: flex;
-    gap: 1rem;
-    background: white;
-    padding: 0.5rem;
-    border-radius: 1rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    border: 1px solid #e5e7eb;
-  }
-
-  .tab-button {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 1rem 1.5rem;
-    border: none;
-    background: transparent;
-    color: #6b7280;
-    border-radius: 0.75rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    flex: 1;
-    justify-content: center;
-    font-size: 0.95rem;
-  }
-
-  .tab-button:hover {
-    background: #f3f4f6;
-    color: #374151;
-  }
-
-  .tab-button.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-  }
-
-  .tab-icon {
-    width: 1.25rem;
-    height: 1.25rem;
-    stroke-width: 2;
-  }
-
-  /* Contenu des onglets */
-  .tab-content {
-    margin-top: 1rem;
-  }
-
-  .tab-panel {
-    animation: fadeInUp 0.4s ease-out;
-  }
+  /* Removed tab styles - no longer needed */
 
   /* Mode sombre */
   @media (prefers-color-scheme: dark) {
@@ -286,28 +185,38 @@
       color: #d1d5db;
     }
 
-    .results-section {
-      background: #1f2937;
-      border: 1px solid #374151;
-    }
-
-    .tabs-navigation {
-      background: #1f2937;
-      border: 1px solid #374151;
-    }
-
-    .tab-button {
-      color: #d1d5db;
-    }
-
-    .tab-button:hover {
-      background: #374151;
+    .section-title {
       color: #f9fafb;
     }
 
-    .tab-button.active {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
+    .section-description {
+      color: #d1d5db;
+    }
+
+    .chart-card-title {
+      color: #f9fafb;
+    }
+
+    .chart-stats {
+      background: rgba(31, 41, 55, 0.5);
+      border-color: rgba(75, 85, 99, 0.3);
+    }
+
+    .stat-count {
+      color: #9ca3af;
+    }
+
+    .stat-label {
+      color: #9ca3af;
+    }
+
+    .stat-count {
+      color: #9ca3af;
+    }
+
+    .results-section {
+      background: #1f2937;
+      border: 1px solid #374151;
     }
   }
 
@@ -331,6 +240,146 @@
     animation-delay: 0.1s;
   }
 
+  /* Section des transactions */
+  .transactions-section {
+    margin-bottom: 3rem;
+  }
+
+  .transactions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 2rem;
+  }
+
+  .transaction-list-wrapper {
+    min-height: 400px;
+  }
+
+  .charts-grid {
+    display: flex;
+    justify-content: center;
+    margin-top: 2rem;
+  }
+
+  .chart-card {
+    min-height: 600px;
+    max-width: 1000px;
+    width: 100%;
+  }
+
+  .complete-analysis-card {
+    border-left: 4px solid #3b82f6;
+  }
+
+  .analysis-icon {
+    color: #3b82f6;
+  }
+
+  .chart-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0 0 1rem;
+  }
+
+  .chart-card-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .expenses-icon {
+    color: #ef4444;
+  }
+
+  .income-icon {
+    color: #10b981;
+  }
+
+  .chart-stats {
+    padding: 1rem;
+    background: rgba(248, 250, 252, 0.5);
+    border-radius: 0.5rem;
+    border: 1px solid rgba(229, 231, 235, 0.3);
+  }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  .stat-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+  }
+
+  .stat-amount {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .expenses-amount {
+    color: #ef4444;
+  }
+
+  .income-amount {
+    color: #10b981;
+  }
+
+  .stat-count {
+    font-size: 0.875rem;
+    color: #6b7280;
+    font-weight: 500;
+  }
+
+  .chart-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .chart-section {
+    width: 100%;
+    min-height: 400px;
+  }
+
+  /* Responsive pour les graphiques */
+  @media (max-width: 1200px) {
+    .chart-content {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    .chart-card {
+      min-height: 600px;
+    }
+
+    .stats-row {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    .transactions-grid {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+  }
+
   /* Responsive */
   @media (max-width: 768px) {
     .analyses-page {
@@ -347,36 +396,6 @@
 
     .results-section {
       padding: 1.5rem;
-    }
-
-    .analysis-header {
-      gap: 1rem;
-    }
-
-    .tabs-navigation {
-      flex-direction: column;
-      gap: 0.5rem;
-      padding: 0.75rem;
-    }
-
-    .tab-button {
-      padding: 0.875rem 1rem;
-      font-size: 0.9rem;
-    }
-
-    .tab-icon {
-      width: 1.1rem;
-      height: 1.1rem;
-    }
-
-    .back-button {
-      padding: 0.625rem 1.25rem;
-      font-size: 0.85rem;
-    }
-
-    .back-button svg {
-      width: 1rem;
-      height: 1rem;
     }
   }
 </style>

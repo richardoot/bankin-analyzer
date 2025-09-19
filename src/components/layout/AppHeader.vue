@@ -1,17 +1,33 @@
 <script setup lang="ts">
+  import ImportSelector from '@/components/shared/ImportSelector.vue'
+  import { useImportManager } from '@/composables/useImportManager'
+
   interface Props {
-    currentView?: 'home' | 'analyses'
+    currentView?: 'home' | 'analyses' | 'dashboard' | 'reimbursements'
   }
 
   interface Emits {
-    (e: 'navigate', view: 'home' | 'analyses'): void
+    (
+      e: 'navigate',
+      view: 'home' | 'analyses' | 'dashboard' | 'reimbursements'
+    ): void
+    (e: 'new-upload'): void
   }
 
   defineProps<Props>()
   const emit = defineEmits<Emits>()
 
-  const handleNavigation = (view: 'home' | 'analyses') => {
+  // Import manager pour afficher le sélecteur quand approprié
+  const { sessions, hasMultipleSessions } = useImportManager()
+
+  const handleNavigation = (
+    view: 'home' | 'analyses' | 'dashboard' | 'reimbursements'
+  ) => {
     emit('navigate', view)
+  }
+
+  const handleNewUpload = () => {
+    emit('new-upload')
   }
 </script>
 
@@ -34,34 +50,101 @@
         <span class="tagline">Analyse financière simplifiée</span>
       </div>
 
-      <nav
-        class="navigation"
-        role="navigation"
-        aria-label="Navigation principale"
-      >
-        <ul class="nav-list">
-          <li>
-            <button
-              class="nav-link"
-              :class="{ active: currentView === 'home' }"
-              @click="handleNavigation('home')"
-            >
-              Accueil
-            </button>
-          </li>
-          <li>
-            <button
-              class="nav-link"
-              :class="{ active: currentView === 'analyses' }"
-              @click="handleNavigation('analyses')"
-            >
-              Analyses
-            </button>
-          </li>
-          <li><a href="#" class="nav-link">Rapports</a></li>
-          <li><a href="#" class="nav-link">Aide</a></li>
-        </ul>
-      </nav>
+      <div class="header-right">
+        <nav
+          class="navigation"
+          role="navigation"
+          aria-label="Navigation principale"
+        >
+          <ul class="nav-list">
+            <li>
+              <button
+                class="nav-link"
+                :class="{ active: currentView === 'home' }"
+                @click="handleNavigation('home')"
+              >
+                Accueil
+              </button>
+            </li>
+            <li>
+              <button
+                class="nav-link"
+                :class="{ active: currentView === 'analyses' }"
+                @click="handleNavigation('analyses')"
+              >
+                Upload
+              </button>
+            </li>
+            <li>
+              <button
+                class="nav-link"
+                :class="{ active: currentView === 'dashboard' }"
+                @click="handleNavigation('dashboard')"
+              >
+                <svg
+                  class="nav-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <line x1="9" y1="9" x2="15" y2="9" />
+                  <line x1="9" y1="15" x2="15" y2="15" />
+                </svg>
+                Analyses
+              </button>
+            </li>
+            <li>
+              <button
+                class="nav-link"
+                :class="{ active: currentView === 'reimbursements' }"
+                @click="handleNavigation('reimbursements')"
+              >
+                <svg
+                  class="nav-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                >
+                  <path
+                    d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                  />
+                  <polyline points="14,2 14,8 20,8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+                Remboursements
+              </button>
+            </li>
+          </ul>
+        </nav>
+
+        <!-- Actions pour les imports -->
+        <div class="header-actions">
+          <!-- Bouton Nouvel Upload -->
+          <button
+            v-if="sessions.length > 0"
+            class="action-btn new-upload-btn"
+            title="Importer un nouveau fichier CSV"
+            @click="handleNewUpload"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              />
+              <polyline points="14,2 14,8 20,8" />
+              <line x1="12" y1="11" x2="12" y2="17" />
+              <line x1="9" y1="14" x2="15" y2="14" />
+            </svg>
+            <span class="action-text">Nouvel Import</span>
+          </button>
+
+          <!-- Sélecteur d'imports -->
+          <div v-if="hasMultipleSessions" class="import-selector-wrapper">
+            <ImportSelector variant="compact" :show-actions="false" />
+          </div>
+        </div>
+      </div>
     </div>
   </header>
 </template>
@@ -115,7 +198,52 @@
     margin-left: 2.5rem;
   }
 
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
   .navigation {
+    display: flex;
+    align-items: center;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.5rem;
+    color: white;
+    font-weight: 500;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .action-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .action-btn svg {
+    width: 1rem;
+    height: 1rem;
+    color: #fbbf24;
+  }
+
+  .import-selector-wrapper {
     display: flex;
     align-items: center;
   }
@@ -141,6 +269,21 @@
     cursor: pointer;
     font-size: 1rem;
     font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .nav-icon {
+    width: 1rem;
+    height: 1rem;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+  }
+
+  .nav-link:hover .nav-icon,
+  .nav-link.active .nav-icon {
+    opacity: 1;
   }
 
   .nav-link:hover {
@@ -158,11 +301,41 @@
     outline-offset: 2px;
   }
 
+  /* Style pour l'ImportSelector dans le header */
+  .import-selector-wrapper :deep(.compact-selector) {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .import-selector-wrapper :deep(.compact-selector:hover) {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
+  }
+
+  .import-selector-wrapper :deep(.selector-dropdown) {
+    color: white;
+  }
+
+  .import-selector-wrapper :deep(.selector-icon) {
+    color: #fbbf24;
+  }
+
+  .import-selector-wrapper :deep(.sessions-badge) {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  }
+
   /* Responsive */
   @media (max-width: 768px) {
     .header-container {
       flex-direction: column;
       text-align: center;
+      gap: 1.5rem;
+    }
+
+    .header-right {
+      flex-direction: column;
+      gap: 1rem;
     }
 
     .nav-list {
@@ -173,6 +346,24 @@
 
     .tagline {
       margin-left: 0;
+    }
+
+    .header-actions {
+      flex-direction: row;
+      justify-content: center;
+      gap: 0.75rem;
+    }
+
+    .action-btn .action-text {
+      display: none;
+    }
+
+    .action-btn {
+      padding: 0.5rem;
+    }
+
+    .import-selector-wrapper {
+      justify-content: center;
     }
   }
 </style>

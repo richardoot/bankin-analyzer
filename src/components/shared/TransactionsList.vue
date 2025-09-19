@@ -4,11 +4,7 @@
       <div class="header-title">
         <h3>
           <i class="fas fa-list-ul"></i>
-          {{
-            props.activeTab === 'expenses'
-              ? '50 dernières dépenses'
-              : '50 derniers revenus'
-          }}
+          {{ props.title }}
         </h3>
         <span class="transactions-count">
           {{ displayedTransactions.length }} transactions
@@ -82,27 +78,21 @@
 
   interface Props {
     transactions: Transaction[]
-    activeTab?: 'expenses' | 'income'
+    title?: string
   }
 
   const props = withDefaults(defineProps<Props>(), {
-    activeTab: 'expenses',
+    title: 'Toutes les transactions',
   })
 
   // État pour le filtre de catégorie
   const selectedCategory = ref<string>('')
 
-  // Calculer les catégories disponibles selon le type de transaction
+  // Calculer toutes les catégories disponibles
   const availableCategories = computed(() => {
     const categories = new Set<string>()
     props.transactions.forEach(transaction => {
-      // Filtrer par type selon l'onglet actif
-      const matchesType =
-        props.activeTab === 'expenses'
-          ? transaction.type === 'expense'
-          : transaction.type === 'income'
-
-      if (matchesType && transaction.category) {
+      if (transaction.category) {
         categories.add(transaction.category)
       }
     })
@@ -112,15 +102,6 @@
   // Trier les transactions par date (plus récente en premier) et prendre les 50 premières
   const displayedTransactions = computed(() => {
     let filteredTransactions = [...props.transactions]
-
-    // Filtrer par type selon l'onglet actif
-    filteredTransactions = filteredTransactions.filter(transaction => {
-      if (props.activeTab === 'expenses') {
-        return transaction.type === 'expense'
-      } else {
-        return transaction.type === 'income'
-      }
-    })
 
     // Filtrer par catégorie si une catégorie est sélectionnée
     if (selectedCategory.value) {
@@ -265,7 +246,7 @@
   }
 
   .transactions-table-wrapper {
-    max-height: 600px;
+    max-height: 400px;
     overflow-y: auto;
   }
 
