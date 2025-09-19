@@ -248,12 +248,14 @@
   .transactions-table-wrapper {
     max-height: 400px;
     overflow-y: auto;
+    overflow-x: auto;
   }
 
   .transactions-table {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
+    min-width: 600px;
   }
 
   .transactions-table thead th {
@@ -345,6 +347,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: #374151;
+    max-width: 0;
   }
 
   .note-cell {
@@ -354,6 +357,7 @@
     color: #6b7280;
     font-size: 0.875rem;
     font-style: italic;
+    max-width: 0;
   }
 
   .account-cell {
@@ -362,6 +366,7 @@
     white-space: nowrap;
     color: #6b7280;
     font-size: 0.875rem;
+    max-width: 0;
   }
 
   .amount-column {
@@ -512,6 +517,14 @@
       align-items: stretch;
     }
 
+    .transactions-header h3 {
+      font-size: 1.125rem;
+    }
+
+    .transactions-count {
+      font-size: 0.8125rem;
+    }
+
     .header-title {
       flex-direction: column;
       align-items: flex-start;
@@ -525,6 +538,8 @@
     .category-filter {
       width: 100%;
       min-width: unset;
+      font-size: 0.8125rem;
+      padding: 0.5rem 0.75rem;
     }
 
     .transactions-table-wrapper {
@@ -533,10 +548,38 @@
 
     .transactions-table {
       min-width: 100%;
+      font-size: 0.8125rem;
+    }
+
+    .transactions-table thead th {
+      padding: 0.75rem 0.5rem;
+      font-size: 0.75rem;
     }
 
     .transactions-table td {
       padding: 0.75rem 0.5rem;
+      font-size: 0.8125rem;
+    }
+
+    .date-cell {
+      font-size: 0.75rem;
+    }
+
+    .category-badge {
+      font-size: 0.6875rem;
+      padding: 0.1875rem 0.375rem;
+    }
+
+    .note-cell {
+      font-size: 0.75rem;
+    }
+
+    .account-cell {
+      font-size: 0.75rem;
+    }
+
+    .amount-cell {
+      font-size: 0.8125rem;
     }
 
     .transactions-table thead th:nth-child(1) {
@@ -557,5 +600,77 @@
     .transactions-table thead th:nth-child(6) {
       width: 10%;
     } /* Montant */
+  }
+
+  /* Styles spécifiques pour très petits écrans */
+  @media (max-width: 480px) {
+    .transactions-header h3 {
+      font-size: 1rem;
+    }
+
+    .transactions-count {
+      font-size: 0.75rem;
+    }
+
+    .category-filter {
+      font-size: 0.75rem;
+      padding: 0.375rem 0.5rem;
+    }
+
+    .transactions-table {
+      font-size: 0.75rem;
+    }
+
+    .transactions-table thead th {
+      padding: 0.5rem 0.375rem;
+      font-size: 0.6875rem;
+    }
+
+    .transactions-table td {
+      padding: 0.5rem 0.375rem;
+      font-size: 0.75rem;
+    }
+
+    .date-cell {
+      font-size: 0.6875rem;
+    }
+
+    .category-badge {
+      font-size: 0.625rem;
+      padding: 0.125rem 0.25rem;
+    }
+
+    .note-cell,
+    .account-cell {
+      font-size: 0.6875rem;
+    }
+
+    .amount-cell {
+      font-size: 0.75rem;
+    }
+
+    .transactions-table thead th:nth-child(1) {
+      width: 15%;
+    } /* Date */
+    .transactions-table thead th:nth-child(2) {
+      width: 20%;
+    } /* Catégorie */
+    .transactions-table thead th:nth-child(3) {
+      width: 25%;
+    } /* Description */
+    .transactions-table thead th:nth-child(4) {
+      width: 0%;
+      display: none;
+    } /* Note - masquée */
+    .transactions-table thead th:nth-child(5) {
+      width: 25%;
+    } /* Compte */
+    .transactions-table thead th:nth-child(6) {
+      width: 15%;
+    } /* Montant */
+
+    .transactions-table tbody tr td:nth-child(4) {
+      display: none;
+    } /* Masquer la colonne Note */
   }
 </style>

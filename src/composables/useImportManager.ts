@@ -151,6 +151,14 @@ export function useImportManager() {
 
     const isActiveSession = state.value.activeSessionId === sessionId
 
+    // Supprimer les filtres associés à cette session
+    try {
+      localStorage.removeItem(`bankin-analyzer-filters-${sessionId}`)
+      console.log('🗑️ Filtres supprimés pour la session:', sessionId)
+    } catch (error) {
+      console.warn('Erreur lors de la suppression des filtres:', error)
+    }
+
     // Supprimer la session
     state.value.sessions.splice(sessionIndex, 1)
 

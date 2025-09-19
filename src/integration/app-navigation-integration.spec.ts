@@ -6,10 +6,10 @@ import StartAnalysisSection from '@/components/layout/StartAnalysisSection.vue'
 import { waitForAsyncComponent as _waitForAsyncComponent } from '@/test/setup'
 
 // Mock des composants lourds pour focus sur la navigation
-vi.mock('@/views/AnalysesPage.vue', () => ({
+vi.mock('@/views/UploadPage.vue', () => ({
   default: {
-    name: 'AnalysesPage',
-    template: '<div class="analyses-page-mock">Analyses Page Content</div>',
+    name: 'UploadPage',
+    template: '<div class="upload-page-mock">Upload Page Content</div>',
     emits: [],
     setup() {
       return {}
@@ -48,9 +48,9 @@ describe('App Navigation Integration Tests', () => {
         global: {
           stubs: {
             // Stub the async component directly
-            AnalysesPage: {
+            UploadPage: {
               template:
-                '<div class="analyses-page-mock">Analyses Page Content</div>',
+                '<div class="upload-page-mock">Upload Page Content</div>',
             },
           },
         },
@@ -60,7 +60,7 @@ describe('App Navigation Integration Tests', () => {
 
     it("devrait afficher la page d'accueil par défaut", () => {
       expect(wrapper.find('.hero-section-mock').exists()).toBe(true)
-      expect(wrapper.find('.analyses-page-mock').exists()).toBe(false)
+      expect(wrapper.find('.upload-page-mock').exists()).toBe(false)
       expect(wrapper.vm.currentView).toBe('home')
     })
 
@@ -81,9 +81,9 @@ describe('App Navigation Integration Tests', () => {
       wrapper = mount(App, {
         global: {
           stubs: {
-            AnalysesPage: {
+            UploadPage: {
               template:
-                '<div class="analyses-page-mock">Analyses Page Content</div>',
+                '<div class="upload-page-mock">Upload Page Content</div>',
             },
           },
         },
@@ -100,7 +100,7 @@ describe('App Navigation Integration Tests', () => {
 
       // Vérifier que la vue a changé
       expect(wrapper.vm.currentView).toBe('analyses')
-      expect(wrapper.find('.analyses-page-mock').exists()).toBe(true)
+      expect(wrapper.find('.upload-page-mock').exists()).toBe(true)
       expect(wrapper.find('.hero-section-mock').exists()).toBe(false)
     })
 
@@ -118,7 +118,7 @@ describe('App Navigation Integration Tests', () => {
       // Vérifier que la vue a changé
       expect(wrapper.vm.currentView).toBe('home')
       expect(wrapper.find('.hero-section-mock').exists()).toBe(true)
-      expect(wrapper.find('.analyses-page-mock').exists()).toBe(false)
+      expect(wrapper.find('.upload-page-mock').exists()).toBe(false)
     })
 
     it("devrait mettre à jour l'état actif du header lors de la navigation", async () => {
@@ -138,9 +138,9 @@ describe('App Navigation Integration Tests', () => {
       wrapper = mount(App, {
         global: {
           stubs: {
-            AnalysesPage: {
+            UploadPage: {
               template:
-                '<div class="analyses-page-mock">Analyses Page Content</div>',
+                '<div class="upload-page-mock">Upload Page Content</div>',
             },
           },
         },
@@ -157,7 +157,7 @@ describe('App Navigation Integration Tests', () => {
 
       // Vérifier que la navigation a eu lieu
       expect(wrapper.vm.currentView).toBe('analyses')
-      expect(wrapper.find('.analyses-page-mock').exists()).toBe(true)
+      expect(wrapper.find('.upload-page-mock').exists()).toBe(true)
       expect(wrapper.find('.hero-section-mock').exists()).toBe(false)
     })
 
@@ -179,9 +179,9 @@ describe('App Navigation Integration Tests', () => {
       wrapper = mount(App, {
         global: {
           stubs: {
-            AnalysesPage: {
+            UploadPage: {
               template:
-                '<div class="analyses-page-mock">Analyses Page Content</div>',
+                '<div class="upload-page-mock">Upload Page Content</div>',
             },
           },
         },
@@ -193,7 +193,7 @@ describe('App Navigation Integration Tests', () => {
       // État initial
       expect(wrapper.vm.currentView).toBe('home')
       expect(wrapper.find('.hero-section-mock').exists()).toBe(true)
-      expect(wrapper.find('.analyses-page-mock').exists()).toBe(false)
+      expect(wrapper.find('.upload-page-mock').exists()).toBe(false)
 
       // Changer l'état directement
       wrapper.vm.currentView = 'analyses'
@@ -201,7 +201,7 @@ describe('App Navigation Integration Tests', () => {
 
       // Vérifier la cohérence
       expect(wrapper.find('.hero-section-mock').exists()).toBe(false)
-      expect(wrapper.find('.analyses-page-mock').exists()).toBe(true)
+      expect(wrapper.find('.upload-page-mock').exists()).toBe(true)
 
       const appHeader = wrapper.findComponent(AppHeader)
       expect(appHeader.props('currentView')).toBe('analyses')
@@ -215,7 +215,7 @@ describe('App Navigation Integration Tests', () => {
       await wrapper.vm.$nextTick()
 
       expect(wrapper.vm.currentView).toBe('analyses')
-      expect(wrapper.find('.analyses-page-mock').exists()).toBe(true)
+      expect(wrapper.find('.upload-page-mock').exists()).toBe(true)
 
       // Transition analyses -> home
       await appHeader.vm.$emit('navigate', 'home')
@@ -237,7 +237,7 @@ describe('App Navigation Integration Tests', () => {
 
       // Vérifier que l'état est préservé
       expect(wrapper.vm.currentView).toBe('analyses')
-      expect(wrapper.find('.analyses-page-mock').exists()).toBe(true)
+      expect(wrapper.find('.upload-page-mock').exists()).toBe(true)
     })
   })
 
@@ -246,9 +246,9 @@ describe('App Navigation Integration Tests', () => {
       wrapper = mount(App, {
         global: {
           stubs: {
-            AnalysesPage: {
+            UploadPage: {
               template:
-                '<div class="analyses-page-mock">Analyses Page Content</div>',
+                '<div class="upload-page-mock">Upload Page Content</div>',
             },
           },
         },
@@ -307,9 +307,9 @@ describe('App Navigation Integration Tests', () => {
       wrapper = mount(App, {
         global: {
           stubs: {
-            AnalysesPage: {
+            UploadPage: {
               template:
-                '<div class="analyses-page-mock">Analyses Page Content</div>',
+                '<div class="upload-page-mock">Upload Page Content</div>',
             },
           },
         },
@@ -321,7 +321,7 @@ describe('App Navigation Integration Tests', () => {
       // Vue home active
       expect(wrapper.find('.hero-section-mock').exists()).toBe(true)
       expect(wrapper.find('.start-analysis-section').exists()).toBe(true)
-      expect(wrapper.find('.analyses-page-mock').exists()).toBe(false)
+      expect(wrapper.find('.upload-page-mock').exists()).toBe(false)
 
       // Naviguer vers analyses
       const appHeader = wrapper.findComponent(AppHeader)
@@ -331,7 +331,7 @@ describe('App Navigation Integration Tests', () => {
       // Vue analyses active
       expect(wrapper.find('.hero-section-mock').exists()).toBe(false)
       expect(wrapper.find('.start-analysis-section').exists()).toBe(false)
-      expect(wrapper.find('.analyses-page-mock').exists()).toBe(true)
+      expect(wrapper.find('.upload-page-mock').exists()).toBe(true)
     })
 
     it('devrait maintenir les composants partagés', async () => {
@@ -373,9 +373,9 @@ describe('App Navigation Integration Tests', () => {
       wrapper = mount(App, {
         global: {
           stubs: {
-            AnalysesPage: {
+            UploadPage: {
               template:
-                '<div class="analyses-page-mock">Analyses Page Content</div>',
+                '<div class="upload-page-mock">Upload Page Content</div>',
             },
           },
         },
@@ -422,9 +422,9 @@ describe('App Navigation Integration Tests', () => {
       wrapper = mount(App, {
         global: {
           stubs: {
-            AnalysesPage: {
+            UploadPage: {
               template:
-                '<div class="analyses-page-mock">Analyses Page Content</div>',
+                '<div class="upload-page-mock">Upload Page Content</div>',
             },
           },
         },
@@ -443,7 +443,7 @@ describe('App Navigation Integration Tests', () => {
       // L'état change mais aucune vue n'est affichée car seuls 'home' et 'analyses' ont des templates
       expect(wrapper.vm.currentView).toBe('invalid-view')
       expect(wrapper.find('.hero-section-mock').exists()).toBe(false)
-      expect(wrapper.find('.analyses-page-mock').exists()).toBe(false)
+      expect(wrapper.find('.upload-page-mock').exists()).toBe(false)
     })
 
     it("devrait maintenir la cohérence lors d'événements rapides", async () => {
@@ -463,7 +463,7 @@ describe('App Navigation Integration Tests', () => {
 
       // Le dernier état devrait être respecté
       expect(wrapper.vm.currentView).toBe('analyses')
-      expect(wrapper.find('.analyses-page-mock').exists()).toBe(true)
+      expect(wrapper.find('.upload-page-mock').exists()).toBe(true)
     })
 
     it("devrait récupérer d'erreurs de composants", async () => {
@@ -490,9 +490,9 @@ describe('App Navigation Integration Tests', () => {
       wrapper = mount(App, {
         global: {
           stubs: {
-            AnalysesPage: {
+            UploadPage: {
               template:
-                '<div class="analyses-page-mock">Analyses Page Content</div>',
+                '<div class="upload-page-mock">Upload Page Content</div>',
             },
           },
         },
