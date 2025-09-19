@@ -1330,4 +1330,199 @@
       flex-direction: column;
     }
   }
+
+  /* Thème sombre */
+  @media (prefers-color-scheme: dark) {
+    /* Titres et badges */
+    .preview-title {
+      color: #e2e8f0;
+    }
+
+    .actions-title {
+      color: #e2e8f0;
+    }
+
+    .preview-badge {
+      background: linear-gradient(
+        135deg,
+        rgba(59, 130, 246, 0.2),
+        rgba(59, 130, 246, 0.3)
+      );
+      color: #60a5fa;
+      border-color: rgba(59, 130, 246, 0.4);
+    }
+
+    /* Messages sans données */
+    .no-data-message {
+      color: #94a3b8;
+    }
+
+    .no-data-message svg {
+      color: #475569;
+    }
+
+    .no-data-message p {
+      color: #e2e8f0;
+    }
+
+    /* Éléments de remboursement */
+    .reimbursement-item {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+    }
+
+    .reimbursement-item:hover {
+      background: rgba(51, 65, 85, 0.9);
+    }
+
+    .person-name {
+      color: #e2e8f0;
+    }
+
+    .person-status.valide {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+    }
+
+    .person-status.en_attente {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+    }
+
+    .amount {
+      color: #e2e8f0;
+    }
+
+    /* Sections détaillées des personnes */
+    .detailed-person-section {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+    }
+
+    .person-header {
+      background: rgba(51, 65, 85, 0.6);
+      border-bottom-color: rgba(71, 85, 105, 0.5);
+    }
+
+    .person-summary {
+      color: #94a3b8;
+    }
+
+    .total-amount {
+      color: #e2e8f0;
+      background: rgba(34, 197, 94, 0.2);
+      border-color: rgba(34, 197, 94, 0.4);
+    }
+
+    .person-categories {
+      background: rgba(51, 65, 85, 0.4);
+    }
+
+    .category-detail-item {
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .category-header-clickable:hover {
+      background: rgba(71, 85, 105, 0.5);
+    }
+
+    .expand-details-btn {
+      color: #94a3b8;
+    }
+
+    .expand-details-btn:hover {
+      background: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .category-label {
+      color: #e2e8f0;
+    }
+
+    .category-amount {
+      color: #4ade80;
+      background: rgba(34, 197, 94, 0.2);
+    }
+
+    /* Détails des transactions */
+    .transaction-details {
+      background: rgba(51, 65, 85, 0.6);
+      border-top-color: rgba(71, 85, 105, 0.5);
+    }
+
+    .transaction-detail-item {
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .transaction-date {
+      color: #60a5fa;
+      background: rgba(59, 130, 246, 0.2);
+    }
+
+    .transaction-description {
+      color: #e2e8f0;
+    }
+
+    .transaction-note {
+      color: #94a3b8;
+    }
+
+    .base-amount {
+      color: #94a3b8;
+    }
+
+    .reimbursement-amount {
+      color: #4ade80;
+      background: rgba(34, 197, 94, 0.2);
+    }
+
+    .no-transactions {
+      color: #94a3b8;
+    }
+
+    /* Sections de catégories */
+    .category-section {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+    }
+
+    .category-section:hover {
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .category-header {
+      background: rgba(51, 65, 85, 0.6);
+      border-bottom-color: rgba(71, 85, 105, 0.5);
+    }
+
+    .category-name {
+      color: #e2e8f0;
+    }
+
+    .category-total {
+      color: #4ade80;
+      background: rgba(34, 197, 94, 0.2);
+    }
+
+    .category-toggle {
+      color: #94a3b8;
+    }
+
+    .category-toggle:hover {
+      background: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .category-person-item {
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .category-person-item:hover {
+      background: rgba(71, 85, 105, 0.5);
+    }
+
+    .person-amount {
+      color: #e2e8f0;
+    }
+  }
 </style>

@@ -1058,4 +1058,158 @@
       font-size: 0.875rem;
     }
   }
+
+  /* Thème sombre */
+  @media (prefers-color-scheme: dark) {
+    .section-title {
+      color: #e2e8f0;
+    }
+
+    .title-badge {
+      background: linear-gradient(
+        135deg,
+        rgba(59, 130, 246, 0.2),
+        rgba(59, 130, 246, 0.3)
+      );
+      color: #60a5fa;
+      border-color: rgba(96, 165, 250, 0.3);
+    }
+
+    .persons-preview h5 {
+      color: #e2e8f0;
+    }
+
+    .persons-count {
+      color: #94a3b8;
+    }
+
+    /* Barre de recherche - Mode sombre */
+    .search-icon {
+      color: #6b7280;
+    }
+
+    .search-input {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .search-input:focus {
+      border-color: #60a5fa;
+      background: rgba(30, 41, 59, 0.9);
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+    }
+
+    .search-input::placeholder {
+      color: #94a3b8;
+    }
+
+    .clear-search {
+      background: rgba(71, 85, 105, 0.8);
+    }
+
+    .clear-search:hover {
+      background: rgba(100, 116, 139, 0.8);
+    }
+
+    .clear-search svg {
+      color: #94a3b8;
+    }
+
+    /* Messages "aucun résultat" - Mode sombre */
+    .no-results {
+      color: #94a3b8;
+    }
+
+    .no-results svg {
+      color: #64748b;
+    }
+
+    .no-results-subtitle {
+      color: #64748b !important;
+    }
+
+    /* Cartes de personnes - Mode sombre */
+    .person-item {
+      background: linear-gradient(
+        145deg,
+        rgba(30, 41, 59, 0.8) 0%,
+        rgba(51, 65, 85, 0.8) 100%
+      );
+      border-color: rgba(71, 85, 105, 0.3);
+      box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.2),
+        0 1px 3px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    .person-item:hover {
+      background: linear-gradient(
+        145deg,
+        rgba(51, 65, 85, 0.9) 0%,
+        rgba(71, 85, 105, 0.9) 100%
+      );
+      border-color: rgba(96, 165, 250, 0.5);
+      box-shadow:
+        0 12px 28px rgba(0, 0, 0, 0.3),
+        0 6px 20px rgba(59, 130, 246, 0.3),
+        0 0 0 2px rgba(59, 130, 246, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    .person-name {
+      color: #e2e8f0;
+    }
+
+    .person-email {
+      color: #94a3b8;
+    }
+
+    .person-email.no-email {
+      color: #64748b;
+    }
+
+    /* Boutons d'action - Mode sombre */
+    .action-btn.secondary {
+      background: rgba(30, 41, 59, 0.8);
+      color: #e2e8f0;
+      border-color: rgba(71, 85, 105, 0.5);
+    }
+
+    .action-btn.secondary:hover {
+      background: rgba(51, 65, 85, 0.9);
+    }
+
+    /* Formulaire dans la modale - Mode sombre */
+    .form-group label {
+      color: #e2e8f0;
+    }
+
+    .form-group input {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .form-group input:hover {
+      border-color: rgba(100, 116, 139, 0.5);
+      background: rgba(30, 41, 59, 0.9);
+    }
+
+    .form-group input:focus {
+      border-color: #60a5fa;
+      background: rgba(30, 41, 59, 0.9);
+      box-shadow:
+        0 0 0 4px rgba(96, 165, 250, 0.2),
+        0 4px 12px rgba(96, 165, 250, 0.25);
+    }
+
+    .form-group input::placeholder {
+      color: #94a3b8;
+    }
+
+    .error-message {
+      color: #fca5a5;
+    }
+  }
 </style>

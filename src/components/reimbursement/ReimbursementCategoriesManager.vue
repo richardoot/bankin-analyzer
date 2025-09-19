@@ -980,4 +980,194 @@
       width: calc(100% - 2rem);
     }
   }
+
+  /* Thème sombre */
+  @media (prefers-color-scheme: dark) {
+    .section-title {
+      color: #e2e8f0;
+    }
+
+    .title-badge {
+      background: linear-gradient(
+        135deg,
+        rgba(59, 130, 246, 0.2),
+        rgba(59, 130, 246, 0.3)
+      );
+      color: #60a5fa;
+      border-color: rgba(96, 165, 250, 0.3);
+    }
+
+    /* Cartes de statistiques - Mode sombre */
+    .stat-card {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .stat-card:hover {
+      background: rgba(51, 65, 85, 0.9);
+    }
+
+    .stat-label {
+      color: #94a3b8;
+    }
+
+    .stat-value {
+      color: #e2e8f0;
+    }
+
+    /* Cartes de catégories - Mode sombre */
+    .category-card {
+      background: linear-gradient(
+        145deg,
+        rgba(30, 41, 59, 0.8) 0%,
+        rgba(51, 65, 85, 0.8) 100%
+      );
+      border-color: rgba(71, 85, 105, 0.3);
+      box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.2),
+        0 1px 3px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    .category-card:hover {
+      background: linear-gradient(
+        145deg,
+        rgba(51, 65, 85, 0.9) 0%,
+        rgba(71, 85, 105, 0.9) 100%
+      );
+      border-color: rgba(96, 165, 250, 0.5);
+      box-shadow:
+        0 20px 40px rgba(0, 0, 0, 0.3),
+        0 8px 25px rgba(59, 130, 246, 0.3),
+        0 0 0 2px rgba(59, 130, 246, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    .category-name {
+      color: #e2e8f0;
+    }
+
+    .category-description {
+      color: #94a3b8;
+    }
+
+    .category-badge {
+      background: rgba(251, 191, 36, 0.8);
+      color: #fbbf24;
+    }
+
+    /* Mots-clés - Mode sombre */
+    .keyword-tag {
+      background: rgba(71, 85, 105, 0.8);
+      color: #e2e8f0;
+    }
+
+    .keyword-more {
+      background: rgba(100, 116, 139, 0.8);
+      color: #94a3b8;
+    }
+
+    /* Formulaire - Mode sombre */
+    .form-group label {
+      color: #e2e8f0;
+    }
+
+    .form-input,
+    .form-textarea {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .form-input:focus,
+    .form-textarea:focus {
+      border-color: #60a5fa;
+      background: rgba(30, 41, 59, 0.9);
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+    }
+
+    .form-input::placeholder,
+    .form-textarea::placeholder {
+      color: #94a3b8;
+    }
+
+    .form-help {
+      color: #94a3b8;
+    }
+
+    /* Sélecteurs d'icônes et couleurs - Mode sombre */
+    .icon-selector {
+      background: linear-gradient(
+        145deg,
+        rgba(30, 41, 59, 0.8) 0%,
+        rgba(51, 65, 85, 0.8) 100%
+      );
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .icon-option {
+      background: linear-gradient(
+        145deg,
+        rgba(51, 65, 85, 0.8) 0%,
+        rgba(71, 85, 105, 0.8) 100%
+      );
+      border-color: rgba(100, 116, 139, 0.5);
+      box-shadow:
+        0 2px 4px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    .icon-option:hover {
+      border-color: rgba(96, 165, 250, 0.5);
+      background: linear-gradient(
+        145deg,
+        rgba(71, 85, 105, 0.9) 0%,
+        rgba(100, 116, 139, 0.9) 100%
+      );
+    }
+
+    .icon-option.active {
+      border-color: #60a5fa;
+      background: linear-gradient(
+        145deg,
+        rgba(59, 130, 246, 0.2) 0%,
+        rgba(59, 130, 246, 0.3) 100%
+      );
+      color: #60a5fa;
+    }
+
+    .color-selector {
+      background: linear-gradient(
+        145deg,
+        rgba(30, 41, 59, 0.8) 0%,
+        rgba(51, 65, 85, 0.8) 100%
+      );
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .color-option {
+      border-color: rgba(255, 255, 255, 0.8);
+      box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.3),
+        0 2px 4px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+
+    .color-option:hover {
+      border-color: rgba(255, 255, 255, 1);
+    }
+
+    .color-option.active {
+      border-color: #60a5fa;
+      box-shadow:
+        0 12px 35px rgba(96, 165, 250, 0.4),
+        0 6px 20px rgba(0, 0, 0, 0.3),
+        0 0 0 4px rgba(96, 165, 250, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+
+    .color-option.active::before {
+      border-color: #60a5fa;
+    }
+  }
 </style>
