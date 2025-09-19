@@ -2,6 +2,7 @@
   import { useBarChart, type MonthlyData } from '@/composables/useBarChart'
   import { useMonthFilter } from '@/composables/useMonthFilter'
   import { usePieChart, type CategoryData } from '@/composables/usePieChart'
+  import { useFilterPersistence } from '@/composables/useFilterPersistence'
   import type { CsvAnalysisResult, ImportSession } from '@/types'
   import { computed, ref, watch, nextTick } from 'vue'
   import BaseCard from '@/components/shared/BaseCard.vue'
@@ -58,24 +59,22 @@
   // Computed pour détecter le mode multi-imports
   const _isMultiImportMode = computed(() => !!props.importSession)
 
-  // Removed tab state - dashboard now shows both expenses and income
+  // Computed pour obtenir l'ID de session actuel
+  const currentSessionId = computed(() => props.importSession?.id || null)
 
-  // État pour contrôler la visibilité du panneau de filtrage
-  const showAdvancedFilters = ref(false)
-
-  // États pour les filtres de catégories
-  const selectedExpenseCategories = ref<string[]>([])
-  const selectedIncomeCategories = ref<string[]>([])
-
-  // États pour les comptes joints
-  const selectedJointAccounts = ref<string[]>([])
-
-  // États pour les règles de compensation des remboursements
-  const compensationRules = ref<CompensationRule[]>([])
-
-  // États pour les filtres par mois des graphiques
-  const selectedExpenseMonth = ref<string>('')
-  const selectedIncomeMonth = ref<string>('')
+  // Utilisation du composable de persistance des filtres
+  const {
+    selectedExpenseCategories,
+    selectedIncomeCategories,
+    selectedJointAccounts,
+    compensationRules,
+    selectedExpenseMonth,
+    selectedIncomeMonth,
+    showAdvancedFilters,
+    showExpenseFilter,
+    showIncomeFilter,
+    resetFilters,
+  } = useFilterPersistence(currentSessionId)
 
   // Utilisation du composable pour le filtrage par mois
   const { generateAvailableMonths, parseDate } = useMonthFilter()
@@ -106,11 +105,12 @@
     const expenseCategories = currentAnalysisResult.value.expenses?.categories
     const incomeCategories = currentAnalysisResult.value.income?.categories
 
-    if (expenseCategories?.length) {
+    // Seulement initialiser si les catégories ne sont pas déjà sélectionnées (première fois)
+    if (expenseCategories?.length && selectedExpenseCategories.value.length === 0) {
       selectedExpenseCategories.value = [...expenseCategories].sort()
     }
 
-    if (incomeCategories?.length) {
+    if (incomeCategories?.length && selectedIncomeCategories.value.length === 0) {
       selectedIncomeCategories.value = [...incomeCategories].sort()
     }
   }
@@ -172,10 +172,17 @@
 
   // Removed currentSelectedCategories - now handled separately for each type
 
-  // Removed setActiveTab function - no more tabs
-
+  // Fonctions de toggle pour les filtres
   const toggleAdvancedFilters = () => {
     showAdvancedFilters.value = !showAdvancedFilters.value
+  }
+
+  const toggleExpenseFilter = () => {
+    showExpenseFilter.value = !showExpenseFilter.value
+  }
+
+  const toggleIncomeFilter = () => {
+    showIncomeFilter.value = !showIncomeFilter.value
   }
 
   const formatAmount = (amount: number): string => {
@@ -526,34 +533,8 @@
             </p>
           </div>
 
-          <!-- Grille compacte des filtres -->
-          <div class="filters-compact-grid">
-            <!-- Filtre Catégories -->
-            <div class="compact-filter-card">
-              <div class="compact-filter-header">
-                <div class="compact-filter-icon categories-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </div>
-                <div class="compact-filter-title">
-                  <h4>Catégories</h4>
-                  <span class="compact-filter-subtitle"
-                    >Filtrer par catégorie</span
-                  >
-                </div>
-              </div>
-              <div class="compact-filter-content">
-                <CategoryFilter
-                  :categories="availableExpenseCategories"
-                  :selected-categories="selectedExpenseCategories"
-                  @update:selected-categories="
-                    selectedExpenseCategories = $event
-                  "
-                />
-              </div>
-            </div>
-
+          <!-- Grille des filtres côte à côte -->
+          <div class="filters-side-by-side">
             <!-- Filtre Comptes Joints -->
             <div class="compact-filter-card">
               <div class="compact-filter-header">
@@ -581,7 +562,7 @@
             </div>
 
             <!-- Filtre Compensation -->
-            <div class="compact-filter-card full-width">
+            <div class="compact-filter-card">
               <div class="compact-filter-header">
                 <div class="compact-filter-icon compensation-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -676,6 +657,57 @@
                 <p class="section-stat-value">
                   {{ currentAnalysisResult.expenses.categories.length }}
                 </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bouton de filtre local pour les dépenses -->
+          <div class="section-filter-toggle">
+            <button
+              class="section-filter-btn"
+              :class="{ active: showExpenseFilter }"
+              @click="toggleExpenseFilter"
+            >
+              <svg
+                class="filter-toggle-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Filtrer les catégories
+              <svg
+                class="chevron-icon"
+                :class="{ rotated: showExpenseFilter }"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <polyline points="6,9 12,15 18,9" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Filtre de catégories local pour les dépenses -->
+          <div v-show="showExpenseFilter" class="section-local-filter">
+            <div class="local-filter-card">
+              <div class="local-filter-header">
+                <div class="local-filter-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </div>
+                <h4>Sélection des catégories de dépenses</h4>
+              </div>
+              <div class="local-filter-content">
+                <CategoryFilter
+                  :categories="availableExpenseCategories"
+                  :selected-categories="selectedExpenseCategories"
+                  @update:selected-categories="
+                    selectedExpenseCategories = $event
+                  "
+                />
               </div>
             </div>
           </div>
@@ -784,6 +816,57 @@
                 <p class="section-stat-value">
                   {{ currentAnalysisResult.income.categories.length }}
                 </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bouton de filtre local pour les revenus -->
+          <div class="section-filter-toggle">
+            <button
+              class="section-filter-btn"
+              :class="{ active: showIncomeFilter }"
+              @click="toggleIncomeFilter"
+            >
+              <svg
+                class="filter-toggle-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Filtrer les catégories
+              <svg
+                class="chevron-icon"
+                :class="{ rotated: showIncomeFilter }"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <polyline points="6,9 12,15 18,9" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Filtre de catégories local pour les revenus -->
+          <div v-show="showIncomeFilter" class="section-local-filter">
+            <div class="local-filter-card">
+              <div class="local-filter-header">
+                <div class="local-filter-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </div>
+                <h4>Sélection des catégories de revenus</h4>
+              </div>
+              <div class="local-filter-content">
+                <CategoryFilter
+                  :categories="availableIncomeCategories"
+                  :selected-categories="selectedIncomeCategories"
+                  @update:selected-categories="
+                    selectedIncomeCategories = $event
+                  "
+                />
               </div>
             </div>
           </div>
@@ -1291,8 +1374,8 @@
     margin: 0;
   }
 
-  /* Grille compacte des filtres */
-  .filters-compact-grid {
+  /* Grille des filtres côte à côte */
+  .filters-side-by-side {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
@@ -1313,9 +1396,6 @@
     transform: translateY(-1px);
   }
 
-  .compact-filter-card.full-width {
-    grid-column: 1 / -1;
-  }
 
   .compact-filter-header {
     display: flex;
@@ -1377,6 +1457,124 @@
     height: 100%;
   }
 
+  /* Boutons de filtres locaux */
+  .section-filter-toggle {
+    margin-bottom: 1rem;
+  }
+
+  .section-filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(229, 231, 235, 0.5);
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    width: 100%;
+    backdrop-filter: blur(5px);
+  }
+
+  .section-filter-btn:hover {
+    background: rgba(249, 250, 251, 0.9);
+    border-color: rgba(156, 163, 175, 0.5);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .section-filter-btn.active {
+    background: rgba(239, 246, 255, 0.9);
+    border-color: rgba(59, 130, 246, 0.5);
+    color: #1e40af;
+  }
+
+  .section-filter-btn .filter-toggle-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+  }
+
+  .section-filter-btn .chevron-icon {
+    width: 1rem;
+    height: 1rem;
+    transition: transform 0.2s ease;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .section-filter-btn .chevron-icon.rotated {
+    transform: rotate(180deg);
+  }
+
+  /* Filtres locaux des sections */
+  .section-local-filter {
+    margin-bottom: 1.5rem;
+    animation: slideDown 0.3s ease-out;
+  }
+
+  .local-filter-card {
+    background: rgba(248, 250, 252, 0.8);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(229, 231, 235, 0.4);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+  }
+
+  .local-filter-card:hover {
+    background: rgba(243, 244, 246, 0.9);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .local-filter-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(
+      135deg,
+      rgba(243, 244, 246, 0.8) 0%,
+      rgba(249, 250, 251, 0.9) 100%
+    );
+    backdrop-filter: blur(5px);
+    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+  }
+
+  .local-filter-icon {
+    width: 2rem;
+    height: 2rem;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .local-filter-icon svg {
+    width: 1rem;
+    height: 1rem;
+    color: white;
+  }
+
+  .local-filter-header h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin: 0;
+  }
+
+  .local-filter-content {
+    padding: 0;
+  }
+
   /* Section info */
   .info-section {
     margin-top: 1rem;
@@ -1436,13 +1634,9 @@
   }
 
   @media (max-width: 1200px) {
-    .filters-compact-grid {
+    .filters-side-by-side {
       grid-template-columns: 1fr;
       gap: 1.25rem;
-    }
-
-    .compact-filter-card.full-width {
-      grid-column: 1;
     }
   }
 
@@ -1464,6 +1658,22 @@
     .section-stats {
       grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
       gap: 0.75rem;
+    }
+
+    .section-filter-btn {
+      padding: 0.75rem;
+      font-size: 0.8125rem;
+    }
+
+    .local-filter-header {
+      flex-direction: column;
+      text-align: center;
+      gap: 0.5rem;
+      padding: 1rem;
+    }
+
+    .local-filter-header h4 {
+      font-size: 0.8125rem;
     }
 
     .chart-section {
@@ -1502,6 +1712,32 @@
       grid-template-columns: 1fr;
     }
 
+    .section-filter-btn {
+      padding: 0.625rem;
+      font-size: 0.75rem;
+      gap: 0.375rem;
+    }
+
+    .section-filter-btn .filter-toggle-icon,
+    .section-filter-btn .chevron-icon {
+      width: 0.875rem;
+      height: 0.875rem;
+    }
+
+    .local-filter-header {
+      padding: 0.75rem;
+    }
+
+    .local-filter-icon {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+
+    .local-filter-icon svg {
+      width: 0.875rem;
+      height: 0.875rem;
+    }
+
     .stat-card {
       flex-direction: column;
       text-align: center;
@@ -1529,6 +1765,41 @@
     .section-stat-card {
       background: rgba(51, 65, 85, 0.9);
       border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .local-filter-card {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .local-filter-header {
+      background: linear-gradient(
+        135deg,
+        rgba(51, 65, 85, 0.8) 0%,
+        rgba(30, 41, 59, 0.9) 100%
+      );
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .local-filter-header h4 {
+      color: #e2e8f0;
+    }
+
+    .section-filter-btn {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .section-filter-btn:hover {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(100, 116, 139, 0.5);
+    }
+
+    .section-filter-btn.active {
+      background: rgba(30, 58, 138, 0.3);
+      border-color: rgba(59, 130, 246, 0.5);
+      color: #93c5fd;
     }
 
     .section-stat-title {

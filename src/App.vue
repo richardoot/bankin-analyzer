@@ -9,8 +9,8 @@
   import { useImportManager } from '@/composables/useImportManager'
 
   // Lazy load components for better initial load performance
-  const AnalysesPage = defineAsyncComponent(
-    () => import('./views/AnalysesPage.vue')
+  const UploadPage = defineAsyncComponent(
+    () => import('./views/UploadPage.vue')
   )
   const DashboardPage = defineAsyncComponent(
     () => import('./views/DashboardPage.vue')
@@ -22,7 +22,7 @@
   // État de navigation
   type ViewState = 'home' | 'analyses' | 'dashboard' | 'reimbursements'
   const currentView = ref<ViewState>('home')
-  const analysesPageRef = ref()
+  const uploadPageRef = ref()
 
   // Import manager pour vérifier les sessions
   const { activeSession } = useImportManager()
@@ -51,8 +51,8 @@
     currentView.value = 'analyses'
     // Utiliser nextTick pour s'assurer que le composant est monté
     nextTick(() => {
-      if (analysesPageRef.value?.handleNewUpload) {
-        analysesPageRef.value.handleNewUpload()
+      if (uploadPageRef.value?.handleNewUpload) {
+        uploadPageRef.value.handleNewUpload()
       }
     })
   }
@@ -88,8 +88,8 @@
           fallback-title="Erreur de la page d'analyses"
           fallback-message="Impossible de charger la page d'analyses. Veuillez rafraîchir votre navigateur."
         >
-          <AnalysesPage
-            ref="analysesPageRef"
+          <UploadPage
+            ref="uploadPageRef"
             @navigate-to-dashboard="handleNavigateToDashboard"
           />
         </ErrorBoundary>
