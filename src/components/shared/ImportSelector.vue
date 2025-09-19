@@ -227,12 +227,11 @@
           </BaseButton>
 
           <BaseButton
-            v-if="sessions.length > 1"
             variant="danger"
             size="sm"
             icon
             title="Supprimer"
-            @click="(event) => handleDeleteSession(session.id, event)"
+            @click="event => handleDeleteSession(session.id, event)"
           >
             <template #icon>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
