@@ -128,54 +128,130 @@
       <!-- Informations contextuelles -->
       <div class="page-info">
         <div class="info-cards">
-          <div class="info-card">
-            <div class="info-icon expense-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <line x1="12" y1="1" x2="12" y2="23" />
-                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-              </svg>
+          <div class="info-card expense-card">
+            <div class="card-header">
+              <div class="info-icon expense-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M12 2v20" />
+                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+              </div>
+              <div class="card-badge">Dépenses</div>
             </div>
             <div class="info-content">
-              <h3 class="info-title">Dépenses Professionnelles</h3>
-              <p class="info-text">
-                Identifiez automatiquement les dépenses éligibles aux
-                remboursements
+              <h3 class="info-title">Identification Intelligente</h3>
+              <p class="info-description">
+                Détection automatique des dépenses professionnelles éligibles
+                aux remboursements avec classification par catégorie
               </p>
+              <div class="info-features">
+                <div class="feature-item">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fill-rule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  <span>Filtrage automatique</span>
+                </div>
+                <div class="feature-item">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fill-rule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  <span>Classification intelligente</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="info-card">
-            <div class="info-icon person-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
+          <div class="info-card person-card">
+            <div class="card-header">
+              <div class="info-icon person-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              </div>
+              <div class="card-badge">Collaborateurs</div>
             </div>
             <div class="info-content">
-              <h3 class="info-title">Gestion des Personnes</h3>
-              <p class="info-text">
-                Associez les dépenses aux collaborateurs pour un suivi précis
+              <h3 class="info-title">Gestion Multi-Personnes</h3>
+              <p class="info-description">
+                Assignez les dépenses à vos collaborateurs avec un suivi précis
+                des montants et catégories de remboursement
               </p>
+              <div class="info-features">
+                <div class="feature-item">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fill-rule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  <span>Assignation flexible</span>
+                </div>
+                <div class="feature-item">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fill-rule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  <span>Répartition intelligente</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="info-card">
-            <div class="info-icon report-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path
-                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                />
-                <polyline points="14,2 14,8 20,8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-              </svg>
+          <div class="info-card report-card">
+            <div class="card-header">
+              <div class="info-icon report-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path
+                    d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                  />
+                  <polyline points="14,2 14,8 20,8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+              </div>
+              <div class="card-badge">Rapports</div>
             </div>
             <div class="info-content">
-              <h3 class="info-title">Rapports Export</h3>
-              <p class="info-text">
-                Générez des rapports détaillés pour vos demandes de
-                remboursement
+              <h3 class="info-title">Export Professionnel</h3>
+              <p class="info-description">
+                Générez des rapports PDF détaillés avec totaux par personne,
+                catégorie et récapitulatifs pour vos remboursements
               </p>
+              <div class="info-features">
+                <div class="feature-item">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fill-rule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  <span>Export PDF haute qualité</span>
+                </div>
+                <div class="feature-item">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fill-rule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  <span>Récapitulatifs détaillés</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -298,35 +374,73 @@
 
   .info-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 2rem;
   }
 
   .info-card {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 0.5rem;
-    padding: 1rem;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 1rem;
+    padding: 2rem;
     display: flex;
-    align-items: center;
-    gap: 1rem;
-    transition: all 0.3s ease;
+    flex-direction: column;
+    gap: 1.5rem;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .info-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--card-gradient);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .info-card:hover::before {
+    opacity: 1;
   }
 
   .info-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .expense-card {
+    --card-gradient: linear-gradient(135deg, #ef4444, #dc2626);
+  }
+
+  .person-card {
+    --card-gradient: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  }
+
+  .report-card {
+    --card-gradient: linear-gradient(135deg, #10b981, #059669);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
   .info-icon {
-    width: 2rem;
-    height: 2rem;
-    border-radius: 0.375rem;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.75rem;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   }
 
   .expense-icon {
@@ -342,34 +456,64 @@
   }
 
   .info-icon svg {
-    width: 1rem;
-    height: 1rem;
+    width: 1.5rem;
+    height: 1.5rem;
     color: white;
   }
 
-  .info-content {
-    flex: 1;
-  }
-
-  .info-title {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #6b7280;
-    margin: 0 0 0.5rem;
+  .card-badge {
+    background: rgba(107, 114, 128, 0.1);
+    color: #374151;
+    padding: 0.375rem 0.875rem;
+    border-radius: 2rem;
+    font-size: 0.75rem;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
 
-  .info-text {
+  .info-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .info-title {
     font-size: 1.25rem;
     font-weight: 700;
     color: #1f2937;
-    line-height: 1.2;
     margin: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    width: 100%;
+    line-height: 1.3;
+  }
+
+  .info-description {
+    font-size: 0.95rem;
+    color: #6b7280;
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  .info-features {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .feature-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+    color: #374151;
+    font-weight: 500;
+  }
+
+  .feature-item svg {
+    width: 1rem;
+    height: 1rem;
+    color: #10b981;
+    flex-shrink: 0;
   }
 
   /* Responsive */
@@ -408,13 +552,31 @@
 
     .info-cards {
       grid-template-columns: 1fr;
-      gap: 1rem;
+      gap: 1.5rem;
     }
 
     .info-card {
+      padding: 1.5rem;
+    }
+
+    .card-header {
       flex-direction: column;
-      text-align: center;
-      padding: 1.25rem;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+
+    .info-icon {
+      width: 2.5rem;
+      height: 2.5rem;
+    }
+
+    .info-icon svg {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+
+    .info-title {
+      font-size: 1.125rem;
     }
   }
 
@@ -441,20 +603,35 @@
     }
 
     .info-card {
-      background: rgba(30, 41, 59, 0.8);
-      border-color: rgba(71, 85, 105, 0.3);
+      background: rgba(30, 41, 59, 0.95);
+      border-color: rgba(71, 85, 105, 0.4);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     }
 
     .info-card:hover {
-      background: rgba(51, 65, 85, 0.9);
+      background: rgba(51, 65, 85, 0.95);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
     }
 
-    .info-title {
+    .card-badge {
+      background: rgba(148, 163, 184, 0.15);
       color: #94a3b8;
     }
 
-    .info-text {
-      color: #e2e8f0;
+    .info-title {
+      color: #f1f5f9;
+    }
+
+    .info-description {
+      color: #94a3b8;
+    }
+
+    .feature-item {
+      color: #cbd5e1;
+    }
+
+    .feature-item svg {
+      color: #34d399;
     }
   }
 </style>
