@@ -8,6 +8,7 @@
   import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
   import BaseButton from '@/components/shared/BaseButton.vue'
   import BaseCard from '@/components/shared/BaseCard.vue'
+  import { useImportManager } from '@/composables/useImportManager'
 
   interface Props {
     analysisResult: CsvAnalysisResult
@@ -19,6 +20,9 @@
   }
 
   const props = defineProps<Props>()
+
+  // Import manager pour obtenir l'ID de session active
+  const { activeSession } = useImportManager()
 
   // États locaux
   const selectedCategory = ref<string>('')
@@ -146,12 +150,24 @@
     }
   }
 
+  // Générer la clé de stockage spécifique à la session
+  const getStorageKey = () => {
+    const sessionId = activeSession.value?.id
+    if (!sessionId) {
+      console.warn('Aucune session active trouvée pour les assignations')
+      return 'bankin-analyzer-expense-assignments-default'
+    }
+    return `bankin-analyzer-expense-assignments-${sessionId}`
+  }
+
   // Sauvegarder les assignations dans localStorage
   const saveAssignments = () => {
     try {
-      localStorage.setItem(
-        'bankin-analyzer-expense-assignments',
-        JSON.stringify(expenseAssignments.value)
+      const storageKey = getStorageKey()
+      localStorage.setItem(storageKey, JSON.stringify(expenseAssignments.value))
+      console.log(
+        '💾 Assignations sauvegardées pour la session:',
+        activeSession.value?.id
       )
     } catch (error) {
       console.warn('Erreur lors de la sauvegarde des assignations:', error)
@@ -161,9 +177,20 @@
   // Charger les assignations depuis localStorage
   const loadAssignments = () => {
     try {
-      const stored = localStorage.getItem('bankin-analyzer-expense-assignments')
+      const storageKey = getStorageKey()
+      const stored = localStorage.getItem(storageKey)
       if (stored) {
         expenseAssignments.value = JSON.parse(stored)
+        console.log(
+          '📖 Assignations chargées pour la session:',
+          activeSession.value?.id
+        )
+      } else {
+        expenseAssignments.value = []
+        console.log(
+          '📝 Nouvelles assignations pour la session:',
+          activeSession.value?.id
+        )
       }
     } catch (error) {
       console.warn('Erreur lors du chargement des assignations:', error)
@@ -622,6 +649,20 @@
       loadReimbursementCategories()
     }
   }
+
+  // Watcher pour recharger les assignations quand la session active change
+  watch(
+    () => activeSession.value?.id,
+    (newSessionId, oldSessionId) => {
+      if (newSessionId && newSessionId !== oldSessionId) {
+        console.log(
+          '🔄 Changement de session détecté, rechargement des assignations'
+        )
+        loadAssignments()
+      }
+    },
+    { immediate: true }
+  )
 
   // Ajouter l'écouteur d'événement au montage et le retirer au démontage
   onMounted(() => {
