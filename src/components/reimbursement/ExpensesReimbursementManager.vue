@@ -1343,6 +1343,7 @@
     display: flex;
     align-items: center;
     font-size: 0.875rem;
+    min-width: 0; /* Important pour permettre la troncature */
   }
 
   .cell.date {
@@ -1350,8 +1351,14 @@
     font-weight: 500;
   }
 
-  .description-content {
+  .cell.description {
+    min-width: 0; /* Force la cellule à respecter sa taille dans la grille */
     max-width: 100%;
+  }
+
+  .description-content {
+    width: 100%;
+    min-width: 0;
     overflow: hidden;
   }
 
@@ -1362,7 +1369,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 200px;
+    width: 100%;
+    min-width: 0;
   }
 
   .note-text {
@@ -2030,7 +2038,7 @@
     }
 
     .description-text {
-      max-width: 150px;
+      max-width: 100%;
     }
   }
 
