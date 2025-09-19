@@ -298,31 +298,31 @@
 
   .info-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
   }
 
   .info-card {
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 1rem;
-    padding: 2rem;
+    border-radius: 0.5rem;
+    padding: 1rem;
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: 1rem;
     transition: all 0.3s ease;
   }
 
   .info-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   }
 
   .info-icon {
-    width: 3rem;
-    height: 3rem;
-    border-radius: 0.75rem;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.375rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -342,8 +342,8 @@
   }
 
   .info-icon svg {
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 1rem;
+    height: 1rem;
     color: white;
   }
 
@@ -352,17 +352,24 @@
   }
 
   .info-title {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #1f2937;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6b7280;
     margin: 0 0 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .info-text {
-    font-size: 0.875rem;
-    color: #6b7280;
-    line-height: 1.5;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1f2937;
+    line-height: 1.2;
     margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
   }
 
   /* Responsive */
@@ -401,13 +408,13 @@
 
     .info-cards {
       grid-template-columns: 1fr;
-      gap: 1.5rem;
+      gap: 1rem;
     }
 
     .info-card {
       flex-direction: column;
       text-align: center;
-      padding: 1.5rem;
+      padding: 1.25rem;
     }
   }
 
@@ -434,16 +441,20 @@
     }
 
     .info-card {
-      background: rgba(31, 41, 55, 0.8);
-      border-color: rgba(75, 85, 99, 0.3);
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .info-card:hover {
+      background: rgba(51, 65, 85, 0.9);
     }
 
     .info-title {
-      color: #f9fafb;
+      color: #94a3b8;
     }
 
     .info-text {
-      color: #d1d5db;
+      color: #e2e8f0;
     }
   }
 </style>

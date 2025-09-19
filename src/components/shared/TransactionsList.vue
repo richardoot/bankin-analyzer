@@ -246,7 +246,7 @@
   }
 
   .transactions-table-wrapper {
-    max-height: 400px;
+    max-height: 600px;
     overflow-y: auto;
     overflow-x: auto;
   }
