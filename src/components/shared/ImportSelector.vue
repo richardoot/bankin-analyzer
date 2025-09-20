@@ -94,18 +94,6 @@
     class="import-selector-compact"
   >
     <div class="compact-selector">
-      <div class="selector-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path
-            d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-          />
-          <polyline points="14,2 14,8 20,8" />
-          <line x1="16" y1="13" x2="8" y2="13" />
-          <line x1="16" y1="17" x2="8" y2="17" />
-          <line x1="10" y1="9" x2="8" y2="9" />
-        </svg>
-      </div>
-
       <select
         class="selector-dropdown"
         :value="activeSession?.id || ''"
@@ -291,13 +279,6 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   }
 
-  .selector-icon {
-    width: 1rem;
-    height: 1rem;
-    color: #6366f1;
-    flex-shrink: 0;
-  }
-
   .selector-dropdown {
     background: transparent;
     border: none;
@@ -305,7 +286,8 @@
     font-weight: 500;
     color: #374151;
     cursor: pointer;
-    min-width: 180px;
+    flex: 1;
+    min-width: 0;
   }
 
   .selector-dropdown:focus {
@@ -315,12 +297,13 @@
   .sessions-badge {
     background: linear-gradient(135deg, #6366f1, #4f46e5);
     color: white;
-    padding: 0.125rem 0.5rem;
+    padding: 0.125rem 0.375rem;
     border-radius: 0.375rem;
     font-size: 0.75rem;
     font-weight: 600;
-    min-width: 1.5rem;
+    min-width: 1.25rem;
     text-align: center;
+    flex-shrink: 0;
   }
 
   /* Mode complet */

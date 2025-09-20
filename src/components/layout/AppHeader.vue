@@ -241,23 +241,23 @@
     outline-offset: 2px;
   }
 
-  /* Style amélioré pour l'ImportSelector dans le header */
+  /* Style harmonisé pour l'ImportSelector dans le header */
   .import-selector-wrapper :deep(.compact-selector) {
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 0.75rem;
-    padding: 0.75rem 1rem;
-    gap: 0.75rem;
-    min-width: 240px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+    min-width: auto;
+    max-width: 140px;
+    transition: all 0.2s ease;
   }
 
   .import-selector-wrapper :deep(.compact-selector:hover) {
     background: rgba(255, 255, 255, 0.25);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-    border-color: rgba(255, 255, 255, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 
   .import-selector-wrapper :deep(.selector-dropdown) {
@@ -265,8 +265,13 @@
     background: transparent;
     border: none;
     font-weight: 500;
-    font-size: 0.875rem;
-    min-width: 160px;
+    font-size: 1rem;
+    font-family: inherit;
+    min-width: 80px;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .import-selector-wrapper :deep(.selector-dropdown option) {
@@ -275,20 +280,15 @@
     padding: 0.5rem;
   }
 
-  .import-selector-wrapper :deep(.selector-icon) {
-    color: #fbbf24;
-    width: 1.25rem;
-    height: 1.25rem;
-  }
-
   .import-selector-wrapper :deep(.sessions-badge) {
     background: linear-gradient(135deg, #fbbf24, #f59e0b);
     color: #1f2937;
     font-weight: 600;
     font-size: 0.75rem;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.5rem;
-    box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.375rem;
+    min-width: 1.5rem;
+    text-align: center;
   }
 
   /* Responsive */
@@ -319,13 +319,14 @@
     }
 
     .import-selector-wrapper :deep(.compact-selector) {
-      min-width: 200px;
-      padding: 0.5rem 0.75rem;
+      padding: 0.5rem;
+      max-width: 120px;
     }
 
     .import-selector-wrapper :deep(.selector-dropdown) {
-      min-width: 120px;
-      font-size: 0.8125rem;
+      min-width: 60px;
+      max-width: 80px;
+      font-size: 0.875rem;
     }
   }
 </style>
