@@ -85,6 +85,24 @@
       minute: '2-digit',
     }).format(date)
   }
+
+  // Fonction pour ouvrir la liste déroulante quand on clique sur le conteneur
+  const handleContainerClick = (event: Event) => {
+    const target = event.target as HTMLElement
+    // Ne pas ouvrir si on clique déjà sur le select
+    if (target.tagName === 'SELECT' || target.tagName === 'OPTION') {
+      return
+    }
+
+    // Trouver le select dans le conteneur et l'ouvrir
+    const container = event.currentTarget as HTMLElement
+    const select = container.querySelector('select') as HTMLSelectElement
+    if (select) {
+      // Simuler un clic sur le select pour l'ouvrir
+      select.focus()
+      select.click()
+    }
+  }
 </script>
 
 <template>
@@ -93,7 +111,7 @@
     v-if="variant === 'compact' && hasMultipleSessions"
     class="import-selector-compact"
   >
-    <div class="compact-selector">
+    <div class="compact-selector" @click="handleContainerClick">
       <select
         class="selector-dropdown"
         :value="activeSession?.id || ''"
@@ -271,6 +289,7 @@
     border-radius: 0.5rem;
     padding: 0.5rem 0.75rem;
     transition: all 0.2s ease;
+    cursor: pointer;
   }
 
   .compact-selector:hover {
