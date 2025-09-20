@@ -241,37 +241,62 @@
     outline-offset: 2px;
   }
 
-  /* Style harmonisé pour l'ImportSelector dans le header */
+  /* Style distinctif pour l'ImportSelector dans le header */
   .import-selector-wrapper :deep(.compact-selector) {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 8px;
     padding: 0.5rem 0.75rem;
     gap: 0.5rem;
     min-width: auto;
     max-width: 140px;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    position: relative;
+  }
+
+  .import-selector-wrapper :deep(.compact-selector::before) {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(251, 191, 36, 0.1),
+      rgba(245, 158, 11, 0.1)
+    );
+    border-radius: 8px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .import-selector-wrapper :deep(.compact-selector:hover::before) {
+    opacity: 1;
   }
 
   .import-selector-wrapper :deep(.compact-selector:hover) {
-    background: rgba(255, 255, 255, 0.25);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+    border-color: rgba(251, 191, 36, 0.6);
   }
 
   .import-selector-wrapper :deep(.selector-dropdown) {
     color: white;
     background: transparent;
     border: none;
-    font-weight: 500;
-    font-size: 1rem;
+    font-weight: 600;
+    font-size: 0.875rem;
     font-family: inherit;
     min-width: 80px;
     max-width: 100px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   }
 
   .import-selector-wrapper :deep(.selector-dropdown option) {
@@ -283,12 +308,14 @@
   .import-selector-wrapper :deep(.sessions-badge) {
     background: linear-gradient(135deg, #fbbf24, #f59e0b);
     color: #1f2937;
-    font-weight: 600;
+    font-weight: 700;
     font-size: 0.75rem;
     padding: 0.125rem 0.375rem;
-    border-radius: 0.375rem;
+    border-radius: 0.5rem;
     min-width: 1.5rem;
     text-align: center;
+    box-shadow: 0 2px 6px rgba(251, 191, 36, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.3);
   }
 
   /* Responsive */
