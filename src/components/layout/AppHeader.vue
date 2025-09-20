@@ -271,6 +271,8 @@
     border-radius: 8px;
     opacity: 0;
     transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 1;
   }
 
   .import-selector-wrapper :deep(.compact-selector:hover::before) {
@@ -297,6 +299,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    position: relative;
+    z-index: 2;
   }
 
   .import-selector-wrapper :deep(.selector-dropdown option) {
