@@ -316,7 +316,7 @@
 
   .date-cell {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
     white-space: nowrap;
   }
@@ -606,7 +606,7 @@
     }
 
     .date-cell {
-      font-size: 0.75rem;
+      font-size: 0.6875rem;
     }
 
     .category-badge {
@@ -686,7 +686,7 @@
     }
 
     .date-cell {
-      font-size: 0.6875rem;
+      font-size: 0.625rem;
     }
 
     .category-badge {
