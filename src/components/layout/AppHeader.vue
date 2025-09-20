@@ -11,23 +11,18 @@
       e: 'navigate',
       view: 'home' | 'analyses' | 'dashboard' | 'reimbursements'
     ): void
-    (e: 'new-upload'): void
   }
 
   defineProps<Props>()
   const emit = defineEmits<Emits>()
 
   // Import manager pour afficher le sélecteur quand approprié
-  const { sessions, hasMultipleSessions } = useImportManager()
+  const { sessions } = useImportManager()
 
   const handleNavigation = (
     view: 'home' | 'analyses' | 'dashboard' | 'reimbursements'
   ) => {
     emit('navigate', view)
-  }
-
-  const handleNewUpload = () => {
-    emit('new-upload')
   }
 </script>
 
@@ -119,30 +114,9 @@
           </ul>
         </nav>
 
-        <!-- Actions pour les imports -->
-        <div class="header-actions">
-          <!-- Bouton Nouvel Upload -->
-          <button
-            v-if="sessions.length > 0"
-            class="action-btn new-upload-btn"
-            title="Importer un nouveau fichier CSV"
-            @click="handleNewUpload"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path
-                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-              />
-              <polyline points="14,2 14,8 20,8" />
-              <line x1="12" y1="11" x2="12" y2="17" />
-              <line x1="9" y1="14" x2="15" y2="14" />
-            </svg>
-            <span class="action-text">Nouvel Import</span>
-          </button>
-
-          <!-- Sélecteur d'imports -->
-          <div v-if="hasMultipleSessions" class="import-selector-wrapper">
-            <ImportSelector variant="compact" :show-actions="false" />
-          </div>
+        <!-- Sélecteur d'imports amélioré -->
+        <div v-if="sessions.length > 0" class="import-selector-wrapper">
+          <ImportSelector variant="compact" :show-actions="false" />
         </div>
       </div>
     </div>
@@ -209,40 +183,6 @@
     align-items: center;
   }
 
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-
-  .action-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 0.5rem;
-    color: white;
-    font-weight: 500;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .action-btn:hover {
-    background: rgba(255, 255, 255, 0.25);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  }
-
-  .action-btn svg {
-    width: 1rem;
-    height: 1rem;
-    color: #fbbf24;
-  }
-
   .import-selector-wrapper {
     display: flex;
     align-items: center;
@@ -301,28 +241,54 @@
     outline-offset: 2px;
   }
 
-  /* Style pour l'ImportSelector dans le header */
+  /* Style amélioré pour l'ImportSelector dans le header */
   .import-selector-wrapper :deep(.compact-selector) {
     background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    gap: 0.75rem;
+    min-width: 240px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   }
 
   .import-selector-wrapper :deep(.compact-selector:hover) {
     background: rgba(255, 255, 255, 0.25);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    border-color: rgba(255, 255, 255, 0.4);
   }
 
   .import-selector-wrapper :deep(.selector-dropdown) {
     color: white;
+    background: transparent;
+    border: none;
+    font-weight: 500;
+    font-size: 0.875rem;
+    min-width: 160px;
+  }
+
+  .import-selector-wrapper :deep(.selector-dropdown option) {
+    background: #374151;
+    color: #f3f4f6;
+    padding: 0.5rem;
   }
 
   .import-selector-wrapper :deep(.selector-icon) {
     color: #fbbf24;
+    width: 1.25rem;
+    height: 1.25rem;
   }
 
   .import-selector-wrapper :deep(.sessions-badge) {
     background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #1f2937;
+    font-weight: 600;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
   }
 
   /* Responsive */
@@ -348,22 +314,18 @@
       margin-left: 0;
     }
 
-    .header-actions {
-      flex-direction: row;
-      justify-content: center;
-      gap: 0.75rem;
-    }
-
-    .action-btn .action-text {
-      display: none;
-    }
-
-    .action-btn {
-      padding: 0.5rem;
-    }
-
     .import-selector-wrapper {
       justify-content: center;
+    }
+
+    .import-selector-wrapper :deep(.compact-selector) {
+      min-width: 200px;
+      padding: 0.5rem 0.75rem;
+    }
+
+    .import-selector-wrapper :deep(.selector-dropdown) {
+      min-width: 120px;
+      font-size: 0.8125rem;
     }
   }
 </style>
