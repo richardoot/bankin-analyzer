@@ -13,7 +13,7 @@
 
   const props = withDefaults(defineProps<Props>(), {
     title: '',
-    maxWidth: '600px',
+    maxWidth: '800px',
     showCloseButton: true,
     closeOnOverlay: true,
   })
@@ -32,42 +32,44 @@
 </script>
 
 <template>
-  <div v-if="isOpen" class="modal-overlay" @click="handleOverlayClick">
-    <div class="modal-content" :style="{ maxWidth }" @click.stop>
-      <!-- Header -->
-      <div
-        v-if="title || showCloseButton || $slots.header"
-        class="modal-header"
-      >
-        <div class="modal-title-section">
-          <slot name="header" :close="handleClose">
-            <h2 v-if="title" class="modal-title">{{ title }}</h2>
-          </slot>
-        </div>
-        <button
-          v-if="showCloseButton"
-          class="modal-close-button"
-          type="button"
-          @click="handleClose"
+  <Teleport to="body">
+    <div v-if="isOpen" class="modal-overlay" @click="handleOverlayClick">
+      <div class="modal-content" :style="{ maxWidth }" @click.stop>
+        <!-- Header -->
+        <div
+          v-if="title || showCloseButton || $slots.header"
+          class="modal-header"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
-      </div>
+          <div class="modal-title-section">
+            <slot name="header" :close="handleClose">
+              <h2 v-if="title" class="modal-title">{{ title }}</h2>
+            </slot>
+          </div>
+          <button
+            v-if="showCloseButton"
+            class="modal-close-button"
+            type="button"
+            @click="handleClose"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
 
-      <!-- Body -->
-      <div class="modal-body">
-        <slot :close="handleClose" />
-      </div>
+        <!-- Body -->
+        <div class="modal-body">
+          <slot :close="handleClose" />
+        </div>
 
-      <!-- Footer -->
-      <div v-if="$slots.footer" class="modal-footer">
-        <slot name="footer" :close="handleClose" />
+        <!-- Footer -->
+        <div v-if="$slots.footer" class="modal-footer">
+          <slot name="footer" :close="handleClose" />
+        </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -77,13 +79,14 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(12px);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: 9999;
     padding: 1rem;
+    animation: fadeIn 0.2s ease-out;
   }
 
   .modal-content {
@@ -96,6 +99,27 @@
     position: relative;
     display: flex;
     flex-direction: column;
+    animation: slideUp 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 
   .modal-header {

@@ -3,10 +3,11 @@
   import FileUpload from '../shared/FileUpload.vue'
   import ValidationModal from '../shared/ValidationModal.vue'
   import { useFileUpload } from '@/composables/useFileUpload'
+  import { useImportManager } from '@/composables/useImportManager'
   import type { CsvAnalysisResult } from '@/types'
 
   interface Emits {
-    (e: 'navigate-to-dashboard', analysisResult: CsvAnalysisResult): void
+    (e: 'navigate-to-dashboard', sessionId: string): void
   }
 
   const emit = defineEmits<Emits>()
@@ -14,6 +15,10 @@
   // État de la modale de validation
   const showValidationModal = ref(false)
   const currentAnalysisResult = ref<CsvAnalysisResult | null>(null)
+  const uploadedFileName = ref<string>('')
+
+  // Import manager pour créer les sessions
+  const { createSession } = useImportManager()
 
   // Composable pour la logique d'upload
   const { handleFileUpload, analysisResult, uploadState } = useFileUpload()
@@ -21,6 +26,9 @@
   // Gestionnaire d'événements pour l'upload de fichier
   const handleFileUploaded = async (file: File): Promise<void> => {
     console.log('🔄 Fichier uploadé:', file.name)
+
+    // Stocker le nom du fichier pour créer la session
+    uploadedFileName.value = file.name
 
     // Analyser le fichier
     await handleFileUpload(file)
@@ -74,7 +82,18 @@
   // Gestionnaires de la modale de validation
   const handleValidationConfirm = (): void => {
     if (currentAnalysisResult.value) {
-      emit('navigate-to-dashboard', currentAnalysisResult.value)
+      console.log('🎯 Création de session pour:', uploadedFileName.value)
+
+      // Créer une nouvelle session d'import
+      const sessionId = createSession(
+        currentAnalysisResult.value,
+        uploadedFileName.value
+      )
+
+      console.log('✅ Session créée:', sessionId)
+
+      // Émettre l'ID de la session au lieu de l'analysisResult
+      emit('navigate-to-dashboard', sessionId)
       showValidationModal.value = false
     }
   }

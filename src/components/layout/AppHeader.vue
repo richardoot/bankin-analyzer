@@ -1,16 +1,27 @@
 <script setup lang="ts">
+  import ImportSelector from '@/components/shared/ImportSelector.vue'
+  import { useImportManager } from '@/composables/useImportManager'
+
   interface Props {
-    currentView?: 'home' | 'analyses'
+    currentView?: 'home' | 'analyses' | 'dashboard' | 'reimbursements'
   }
 
   interface Emits {
-    (e: 'navigate', view: 'home' | 'analyses'): void
+    (
+      e: 'navigate',
+      view: 'home' | 'analyses' | 'dashboard' | 'reimbursements'
+    ): void
   }
 
   defineProps<Props>()
   const emit = defineEmits<Emits>()
 
-  const handleNavigation = (view: 'home' | 'analyses') => {
+  // Import manager pour afficher le sélecteur quand approprié
+  const { sessions } = useImportManager()
+
+  const handleNavigation = (
+    view: 'home' | 'analyses' | 'dashboard' | 'reimbursements'
+  ) => {
     emit('navigate', view)
   }
 </script>
@@ -34,34 +45,80 @@
         <span class="tagline">Analyse financière simplifiée</span>
       </div>
 
-      <nav
-        class="navigation"
-        role="navigation"
-        aria-label="Navigation principale"
-      >
-        <ul class="nav-list">
-          <li>
-            <button
-              class="nav-link"
-              :class="{ active: currentView === 'home' }"
-              @click="handleNavigation('home')"
-            >
-              Accueil
-            </button>
-          </li>
-          <li>
-            <button
-              class="nav-link"
-              :class="{ active: currentView === 'analyses' }"
-              @click="handleNavigation('analyses')"
-            >
-              Analyses
-            </button>
-          </li>
-          <li><a href="#" class="nav-link">Rapports</a></li>
-          <li><a href="#" class="nav-link">Aide</a></li>
-        </ul>
-      </nav>
+      <div class="header-right">
+        <nav
+          class="navigation"
+          role="navigation"
+          aria-label="Navigation principale"
+        >
+          <ul class="nav-list">
+            <li>
+              <button
+                class="nav-link"
+                :class="{ active: currentView === 'home' }"
+                @click="handleNavigation('home')"
+              >
+                Accueil
+              </button>
+            </li>
+            <li>
+              <button
+                class="nav-link"
+                :class="{ active: currentView === 'analyses' }"
+                @click="handleNavigation('analyses')"
+              >
+                Upload
+              </button>
+            </li>
+            <li>
+              <button
+                class="nav-link"
+                :class="{ active: currentView === 'dashboard' }"
+                @click="handleNavigation('dashboard')"
+              >
+                <svg
+                  class="nav-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <line x1="9" y1="9" x2="15" y2="9" />
+                  <line x1="9" y1="15" x2="15" y2="15" />
+                </svg>
+                Analyses
+              </button>
+            </li>
+            <li>
+              <button
+                class="nav-link"
+                :class="{ active: currentView === 'reimbursements' }"
+                @click="handleNavigation('reimbursements')"
+              >
+                <svg
+                  class="nav-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                >
+                  <path
+                    d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                  />
+                  <polyline points="14,2 14,8 20,8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                </svg>
+                Remboursements
+              </button>
+            </li>
+          </ul>
+        </nav>
+
+        <!-- Sélecteur d'imports amélioré -->
+        <div v-if="sessions.length > 0" class="import-selector-wrapper">
+          <ImportSelector variant="compact" :show-actions="false" />
+        </div>
+      </div>
     </div>
   </header>
 </template>
@@ -115,7 +172,18 @@
     margin-left: 2.5rem;
   }
 
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
   .navigation {
+    display: flex;
+    align-items: center;
+  }
+
+  .import-selector-wrapper {
     display: flex;
     align-items: center;
   }
@@ -141,6 +209,21 @@
     cursor: pointer;
     font-size: 1rem;
     font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .nav-icon {
+    width: 1rem;
+    height: 1rem;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+  }
+
+  .nav-link:hover .nav-icon,
+  .nav-link.active .nav-icon {
+    opacity: 1;
   }
 
   .nav-link:hover {
@@ -158,11 +241,106 @@
     outline-offset: 2px;
   }
 
+  /* Style amélioré pour l'ImportSelector custom dans le header */
+  .import-selector-wrapper :deep(.dropdown-trigger) {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+    min-width: 0;
+    max-width: 140px;
+    width: 140px;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  }
+
+  .import-selector-wrapper :deep(.dropdown-trigger::before) {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(251, 191, 36, 0.2),
+      rgba(245, 158, 11, 0.15)
+    );
+    border-radius: 12px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .import-selector-wrapper :deep(.dropdown-trigger:hover::before) {
+    opacity: 1;
+  }
+
+  .import-selector-wrapper :deep(.dropdown-trigger:hover) {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(251, 191, 36, 0.4);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  }
+
+  .import-selector-wrapper :deep(.session-name) {
+    color: white;
+    font-weight: 700;
+    font-size: 0.875rem;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    position: relative;
+    z-index: 2;
+    max-width: 80px;
+  }
+
+  .import-selector-wrapper :deep(.dropdown-arrow) {
+    color: rgba(255, 255, 255, 0.8);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    position: relative;
+    z-index: 2;
+  }
+
+  .import-selector-wrapper :deep(.sessions-badge) {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: #1f2937;
+    font-weight: 800;
+    font-size: 0.6875rem;
+    padding: 0.1875rem 0.4375rem;
+    border-radius: 0.75rem;
+    min-width: 1.25rem;
+    text-align: center;
+    box-shadow:
+      0 3px 8px rgba(251, 191, 36, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    position: relative;
+    z-index: 2;
+    transform: scale(0.9);
+    transition: transform 0.2s ease;
+  }
+
+  .import-selector-wrapper :deep(.compact-selector:hover .sessions-badge) {
+    transform: scale(1);
+    box-shadow:
+      0 4px 12px rgba(251, 191, 36, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  }
+
   /* Responsive */
   @media (max-width: 768px) {
     .header-container {
       flex-direction: column;
       text-align: center;
+      gap: 1.5rem;
+    }
+
+    .header-right {
+      flex-direction: column;
+      gap: 1rem;
     }
 
     .nav-list {
@@ -173,6 +351,28 @@
 
     .tagline {
       margin-left: 0;
+    }
+
+    .import-selector-wrapper {
+      justify-content: center;
+    }
+
+    .import-selector-wrapper :deep(.dropdown-trigger) {
+      gap: 0.375rem;
+      max-width: 120px;
+      width: 120px;
+      padding: 0.375rem 0.625rem;
+    }
+
+    .import-selector-wrapper :deep(.session-name) {
+      max-width: 60px;
+      font-size: 0.8125rem;
+    }
+
+    .import-selector-wrapper :deep(.sessions-badge) {
+      font-size: 0.625rem;
+      padding: 0.125rem 0.375rem;
+      min-width: 1rem;
     }
   }
 </style>

@@ -380,4 +380,106 @@
   .accounts-list::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
   }
+
+  /* Thème sombre */
+  @media (prefers-color-scheme: dark) {
+    .account-filter {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .filter-title {
+      color: #e2e8f0;
+    }
+
+    .filter-description {
+      color: #94a3b8;
+    }
+
+    /* Boutons d'action - Mode sombre */
+    .filter-action-btn {
+      background: rgba(51, 65, 85, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .filter-action-btn:hover:not(:disabled) {
+      background: rgba(71, 85, 105, 0.9);
+      border-color: rgba(100, 116, 139, 0.5);
+    }
+
+    .select-all:hover:not(:disabled) {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: rgba(34, 197, 94, 0.5);
+      color: #4ade80;
+    }
+
+    .deselect-all:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #f87171;
+    }
+
+    /* Liste des comptes - Mode sombre */
+    .accounts-list {
+      background: rgba(51, 65, 85, 0.6);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .account-filter-button {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .account-filter-button:hover {
+      background: rgba(51, 65, 85, 0.9);
+    }
+
+    .account-filter-button.selected {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: rgba(34, 197, 94, 0.5);
+      color: #4ade80;
+    }
+
+    .account-filter-button.excluded {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #f87171;
+    }
+
+    .account-filter-button.excluded:hover {
+      background: rgba(239, 68, 68, 0.25);
+    }
+
+    .account-filter-button.excluded .account-icon {
+      background: linear-gradient(135deg, #f87171, #ef4444);
+    }
+
+    /* Résumé - Mode sombre */
+    .filter-summary {
+      border-top-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .summary-text {
+      color: #94a3b8;
+    }
+
+    .summary-info {
+      color: #60a5fa;
+    }
+
+    /* Scrollbar - Mode sombre */
+    .accounts-list::-webkit-scrollbar-track {
+      background: rgba(51, 65, 85, 0.5);
+    }
+
+    .accounts-list::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.8);
+    }
+
+    .accounts-list::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.8);
+    }
+  }
 </style>

@@ -2,52 +2,90 @@
   import { useBarChart, type MonthlyData } from '@/composables/useBarChart'
   import { useMonthFilter } from '@/composables/useMonthFilter'
   import { usePieChart, type CategoryData } from '@/composables/usePieChart'
-  import type { CsvAnalysisResult } from '@/types'
-  import { computed, ref } from 'vue'
+  import { useFilterPersistence } from '@/composables/useFilterPersistence'
+  import type { CsvAnalysisResult, ImportSession } from '@/types'
+  import { computed, watch, nextTick } from 'vue'
   import BaseCard from '@/components/shared/BaseCard.vue'
   import BarChart from '../components/charts/BarChart.vue'
   import CategoryFilter from '../components/filters/CategoryFilter.vue'
   import JointAccountFilter from '../components/filters/JointAccountFilter.vue'
   import PieChart from '../components/charts/PieChart.vue'
-  import ReimbursementCompensationFilter, {
-    type CompensationRule,
-  } from '../components/filters/ReimbursementCompensationFilter.vue'
+  import ReimbursementCompensationFilter from '../components/filters/ReimbursementCompensationFilter.vue'
   import TransactionsList from '../components/shared/TransactionsList.vue'
 
   interface Props {
-    analysisResult: CsvAnalysisResult
+    analysisResult?: CsvAnalysisResult // Ancien format pour compatibilité
+    importSession?: ImportSession // Nouveau format multi-imports
   }
 
   const props = defineProps<Props>()
 
-  // État pour gérer l'onglet actif
-  const activeTab = ref<'expenses' | 'income'>('expenses')
+  // Computed pour auto-détecter le mode et obtenir l'analysisResult
+  const currentAnalysisResult = computed(() => {
+    // Priorité au nouveau format (importSession)
+    if (props.importSession) {
+      return props.importSession.analysisResult
+    }
+    // Fallback sur l'ancien format
+    if (props.analysisResult) {
+      return props.analysisResult
+    }
+    // Fallback par défaut (ne devrait pas arriver)
+    return {
+      isValid: false,
+      transactionCount: 0,
+      categoryCount: 0,
+      categories: [],
+      dateRange: { start: '', end: '' },
+      totalAmount: 0,
+      expenses: {
+        totalAmount: 0,
+        transactionCount: 0,
+        categories: [],
+        categoriesData: {},
+      },
+      income: {
+        totalAmount: 0,
+        transactionCount: 0,
+        categories: [],
+        categoriesData: {},
+      },
+      transactions: [],
+    } as CsvAnalysisResult
+  })
 
-  // État pour contrôler la visibilité du panneau de filtrage
-  const showAdvancedFilters = ref(false)
+  // Computed pour détecter le mode multi-imports
+  const _isMultiImportMode = computed(() => !!props.importSession)
 
-  // États pour les filtres de catégories
-  const selectedExpenseCategories = ref<string[]>([])
-  const selectedIncomeCategories = ref<string[]>([])
+  // Computed pour obtenir l'ID de session actuel
+  const currentSessionId = computed(() => props.importSession?.id || null)
 
-  // États pour les comptes joints
-  const selectedJointAccounts = ref<string[]>([])
-
-  // États pour les règles de compensation des remboursements
-  const compensationRules = ref<CompensationRule[]>([])
-
-  // États pour les filtres par mois des graphiques
-  const selectedExpenseMonth = ref<string>('')
-  const selectedIncomeMonth = ref<string>('')
+  // Utilisation du composable de persistance des filtres
+  const {
+    selectedExpenseCategories,
+    selectedIncomeCategories,
+    selectedJointAccounts,
+    compensationRules,
+    selectedExpenseMonth,
+    selectedIncomeMonth,
+    showAdvancedFilters,
+    showExpenseFilter,
+    showIncomeFilter,
+  } = useFilterPersistence(currentSessionId)
 
   // Utilisation du composable pour le filtrage par mois
   const { generateAvailableMonths, parseDate } = useMonthFilter()
 
-  // Calculer la liste des comptes uniques
+  // Calculer la liste des comptes uniques - avec cache
   const availableAccounts = computed(() => {
-    if (!props.analysisResult.isValid) return []
+    if (
+      !currentAnalysisResult.value?.isValid ||
+      !currentAnalysisResult.value?.transactions?.length
+    ) {
+      return []
+    }
     const accounts = new Set<string>()
-    props.analysisResult.transactions.forEach(transaction => {
+    currentAnalysisResult.value.transactions.forEach(transaction => {
       if (transaction.account) {
         accounts.add(transaction.account)
       }
@@ -57,67 +95,97 @@
 
   // Initialiser les catégories sélectionnées avec toutes les catégories disponibles (triées par ordre alphabétique)
   const initializeSelectedCategories = () => {
-    if (props.analysisResult.isValid) {
-      selectedExpenseCategories.value = [
-        ...props.analysisResult.expenses.categories.slice().sort(),
-      ]
-      selectedIncomeCategories.value = [
-        ...props.analysisResult.income.categories.slice().sort(),
-      ]
+    if (!currentAnalysisResult.value?.isValid) {
+      return
+    }
+
+    const expenseCategories = currentAnalysisResult.value.expenses?.categories
+    const incomeCategories = currentAnalysisResult.value.income?.categories
+
+    // Seulement initialiser si les catégories ne sont pas déjà sélectionnées (première fois)
+    if (
+      expenseCategories?.length &&
+      selectedExpenseCategories.value.length === 0
+    ) {
+      selectedExpenseCategories.value = [...expenseCategories].sort()
+    }
+
+    if (
+      incomeCategories?.length &&
+      selectedIncomeCategories.value.length === 0
+    ) {
+      selectedIncomeCategories.value = [...incomeCategories].sort()
     }
   }
 
-  // Initialiser au montage
-  initializeSelectedCategories()
-
-  // Catégories disponibles selon l'onglet actif (triées par ordre alphabétique)
-  const availableCategories = computed(() => {
-    if (!props.analysisResult.isValid) return []
-
-    if (activeTab.value === 'expenses') {
-      // Pour les dépenses : garder toutes les catégories visibles
-      return [...props.analysisResult.expenses.categories].sort()
-    } else {
-      // Pour les revenus : filtrer les catégories à valeur nulle après compensation
-      const allIncomeCategories = [...props.analysisResult.income.categories]
-
-      // Si aucune règle de compensation, afficher toutes les catégories
-      if (!compensationRules.value.length) {
-        return allIncomeCategories.sort()
-      }
-
-      // Filtrer les catégories de revenus qui ne sont pas mises à zéro par les associations
-      const hiddenCategories = new Set(
-        compensationRules.value.map(rule => rule.incomeCategory)
-      )
-
-      return allIncomeCategories
-        .filter(category => !hiddenCategories.has(category))
-        .sort()
-    }
-  })
-
-  // Catégories sélectionnées selon l'onglet actif
-  const currentSelectedCategories = computed({
-    get: () =>
-      activeTab.value === 'expenses'
-        ? selectedExpenseCategories.value
-        : selectedIncomeCategories.value,
-    set: value => {
-      if (activeTab.value === 'expenses') {
-        selectedExpenseCategories.value = value
-      } else {
-        selectedIncomeCategories.value = value
+  // Watcher pour initialiser les catégories quand les données sont prêtes
+  watch(
+    () => currentAnalysisResult.value.isValid,
+    isValid => {
+      if (isValid) {
+        nextTick(() => {
+          initializeSelectedCategories()
+        })
       }
     },
+    { immediate: true }
+  )
+
+  // Categories for expenses and income filters - avec cache
+  const availableExpenseCategories = computed(() => {
+    if (
+      !currentAnalysisResult.value?.isValid ||
+      !currentAnalysisResult.value?.expenses?.categories?.length
+    ) {
+      return []
+    }
+    return [...currentAnalysisResult.value.expenses.categories].sort()
   })
 
-  const setActiveTab = (tab: 'expenses' | 'income') => {
-    activeTab.value = tab
-  }
+  const availableIncomeCategories = computed(() => {
+    if (
+      !currentAnalysisResult.value?.isValid ||
+      !currentAnalysisResult.value?.income?.categories?.length
+    ) {
+      return []
+    }
+    return [...currentAnalysisResult.value.income.categories].sort()
+  })
 
+  const _availableIncomeCategories = computed(() => {
+    if (!currentAnalysisResult.value.isValid) return []
+    const allIncomeCategories = [
+      ...currentAnalysisResult.value.income.categories,
+    ]
+
+    // Si aucune règle de compensation, afficher toutes les catégories
+    if (!compensationRules.value.length) {
+      return allIncomeCategories.sort()
+    }
+
+    // Filtrer les catégories de revenus qui ne sont pas mises à zéro par les associations
+    const hiddenCategories = new Set(
+      compensationRules.value.map(rule => rule.incomeCategory)
+    )
+
+    return allIncomeCategories
+      .filter(category => !hiddenCategories.has(category))
+      .sort()
+  })
+
+  // Removed currentSelectedCategories - now handled separately for each type
+
+  // Fonctions de toggle pour les filtres
   const toggleAdvancedFilters = () => {
     showAdvancedFilters.value = !showAdvancedFilters.value
+  }
+
+  const toggleExpenseFilter = () => {
+    showExpenseFilter.value = !showExpenseFilter.value
+  }
+
+  const toggleIncomeFilter = () => {
+    showIncomeFilter.value = !showIncomeFilter.value
   }
 
   const formatAmount = (amount: number): string => {
@@ -138,7 +206,7 @@
   }
 
   // Utilisation du composable pour les graphiques avec filtrage
-  const analysisResultComputed = computed(() => props.analysisResult)
+  const analysisResultComputed = computed(() => currentAnalysisResult.value)
   const selectedExpenseCategoriesComputed = computed(
     () => selectedExpenseCategories.value
   )
@@ -146,41 +214,28 @@
     () => selectedIncomeCategories.value
   )
 
-  // Créer un analysisResult filtré par mois pour les dépenses
+  // Créer un analysisResult filtré par mois pour les dépenses - optimisé
   const expensesAnalysisResult = computed(() => {
-    console.log(
-      '🔍 expensesAnalysisResult - Mois sélectionné:',
-      selectedExpenseMonth.value
-    )
-
-    if (!props.analysisResult.isValid) return props.analysisResult
+    if (
+      !currentAnalysisResult.value?.isValid ||
+      !currentAnalysisResult.value?.transactions?.length
+    ) {
+      return currentAnalysisResult.value
+    }
 
     if (!selectedExpenseMonth.value) {
-      console.log(
-        '🔍 expensesAnalysisResult - Pas de mois sélectionné, retour de toutes les données'
-      )
-      return props.analysisResult
+      return currentAnalysisResult.value
     }
 
     // Filtrer les transactions pour le mois sélectionné (dépenses uniquement)
-    const filteredTransactions = props.analysisResult.transactions.filter(
-      transaction => {
-        if (!transaction.date || transaction.type !== 'expense') return false
+    const filteredTransactions =
+      currentAnalysisResult.value.transactions.filter(transaction => {
+        if (!transaction?.date || transaction?.type !== 'expense') return false
         const date = parseDate(transaction.date)
-        if (isNaN(date.getTime())) return false
+        if (!date || isNaN(date.getTime())) return false
         const transactionMonth = date.toISOString().substring(0, 7)
         return transactionMonth === selectedExpenseMonth.value
-      }
-    )
-
-    console.log(
-      '🔍 expensesAnalysisResult - Transactions filtrées:',
-      filteredTransactions.length,
-      'sur',
-      props.analysisResult.transactions.filter(t => t.type === 'expense')
-        .length,
-      'dépenses totales'
-    )
+      })
 
     // Recalculer les statistiques pour les dépenses filtrées
     const expenseCategoriesData: Record<string, number> = {}
@@ -188,7 +243,11 @@
     let totalExpenseAmount = 0
 
     filteredTransactions.forEach(transaction => {
-      if (transaction.category && transaction.type === 'expense') {
+      if (
+        transaction?.category &&
+        transaction?.type === 'expense' &&
+        transaction?.amount != null
+      ) {
         const amount = Math.abs(transaction.amount)
         expenseCategoriesData[transaction.category] =
           (expenseCategoriesData[transaction.category] || 0) + amount
@@ -197,13 +256,8 @@
       }
     })
 
-    console.log(
-      '🔍 expensesAnalysisResult - Catégories calculées:',
-      expenseCategoriesData
-    )
-
     const result = {
-      ...props.analysisResult,
+      ...currentAnalysisResult.value,
       transactions: filteredTransactions,
       expenses: {
         totalAmount: totalExpenseAmount,
@@ -217,40 +271,28 @@
     return result
   })
 
-  // Créer un analysisResult filtré par mois pour les revenus
+  // Créer un analysisResult filtré par mois pour les revenus - optimisé
   const incomeAnalysisResult = computed(() => {
-    console.log(
-      '🔍 incomeAnalysisResult - Mois sélectionné:',
-      selectedIncomeMonth.value
-    )
-
-    if (!props.analysisResult.isValid) return props.analysisResult
+    if (
+      !currentAnalysisResult.value?.isValid ||
+      !currentAnalysisResult.value?.transactions?.length
+    ) {
+      return currentAnalysisResult.value
+    }
 
     if (!selectedIncomeMonth.value) {
-      console.log(
-        '🔍 incomeAnalysisResult - Pas de mois sélectionné, retour de toutes les données'
-      )
-      return props.analysisResult
+      return currentAnalysisResult.value
     }
 
     // Filtrer les transactions pour le mois sélectionné (revenus uniquement)
-    const filteredTransactions = props.analysisResult.transactions.filter(
-      transaction => {
-        if (!transaction.date || transaction.type !== 'income') return false
+    const filteredTransactions =
+      currentAnalysisResult.value.transactions.filter(transaction => {
+        if (!transaction?.date || transaction?.type !== 'income') return false
         const date = parseDate(transaction.date)
-        if (isNaN(date.getTime())) return false
+        if (!date || isNaN(date.getTime())) return false
         const transactionMonth = date.toISOString().substring(0, 7)
         return transactionMonth === selectedIncomeMonth.value
-      }
-    )
-
-    console.log(
-      '🔍 incomeAnalysisResult - Transactions filtrées:',
-      filteredTransactions.length,
-      'sur',
-      props.analysisResult.transactions.filter(t => t.type === 'income').length,
-      'revenus totaux'
-    )
+      })
 
     // Recalculer les statistiques pour les revenus filtrés
     const incomeCategoriesData: Record<string, number> = {}
@@ -258,7 +300,11 @@
     let totalIncomeAmount = 0
 
     filteredTransactions.forEach(transaction => {
-      if (transaction.category && transaction.type === 'income') {
+      if (
+        transaction?.category &&
+        transaction?.type === 'income' &&
+        transaction?.amount != null
+      ) {
         const amount = Math.abs(transaction.amount)
         incomeCategoriesData[transaction.category] =
           (incomeCategoriesData[transaction.category] || 0) + amount
@@ -267,13 +313,8 @@
       }
     })
 
-    console.log(
-      '🔍 incomeAnalysisResult - Catégories calculées:',
-      incomeCategoriesData
-    )
-
     const result = {
-      ...props.analysisResult,
+      ...currentAnalysisResult.value,
       transactions: filteredTransactions,
       income: {
         totalAmount: totalIncomeAmount,
@@ -308,30 +349,17 @@
     computed(() => compensationRules.value)
   )
 
-  // Générer les mois disponibles à partir des transactions
+  // Générer les mois disponibles à partir des transactions - avec cache
   const availableMonths = computed(() => {
-    if (!props.analysisResult.isValid) return []
-    const months = generateAvailableMonths(props.analysisResult.transactions)
-    console.log('📅 DashboardPage - Mois disponibles générés:', months)
-    console.log(
-      '📅 DashboardPage - Nombre de transactions total:',
-      props.analysisResult.transactions.length
-    )
-
-    // Log quelques transactions pour debug
-    if (props.analysisResult.transactions.length > 0) {
-      console.log(
-        '📅 DashboardPage - Première transaction:',
-        props.analysisResult.transactions[0]
-      )
-      console.log(
-        '📅 DashboardPage - Dernière transaction:',
-        props.analysisResult.transactions[
-          props.analysisResult.transactions.length - 1
-        ]
-      )
+    if (
+      !currentAnalysisResult.value?.isValid ||
+      !currentAnalysisResult.value?.transactions?.length
+    ) {
+      return []
     }
-
+    const months = generateAvailableMonths(
+      currentAnalysisResult.value.transactions
+    )
     return months
   })
 
@@ -342,6 +370,31 @@
     selectedIncomeCategoriesComputed,
     computed(() => selectedJointAccounts.value)
   )
+
+  // Transactions filtrées pour les sections de comparaison - avec cache
+  const filteredExpenseTransactions = computed(() => {
+    if (
+      !currentAnalysisResult.value?.isValid ||
+      !currentAnalysisResult.value?.transactions?.length
+    ) {
+      return []
+    }
+    return currentAnalysisResult.value.transactions.filter(
+      transaction => transaction?.type === 'expense'
+    )
+  })
+
+  const filteredIncomeTransactions = computed(() => {
+    if (
+      !currentAnalysisResult.value?.isValid ||
+      !currentAnalysisResult.value?.transactions?.length
+    ) {
+      return []
+    }
+    return currentAnalysisResult.value.transactions.filter(
+      transaction => transaction?.type === 'income'
+    )
+  })
 
   // Gestion des interactions avec le graphique
   const handleCategoryClick = (category: CategoryData) => {
@@ -389,7 +442,8 @@
         <span class="title-badge"> Analyse complète </span>
       </h4>
       <p class="section-description">
-        Analyse détaillée de vos transactions - Dépenses et Revenus séparés
+        Analyse détaillée de vos transactions - Vue d'ensemble des dépenses et
+        revenus
       </p>
     </template>
 
@@ -407,7 +461,9 @@
           </div>
           <div class="stat-content">
             <h3 class="stat-title">Total Transactions</h3>
-            <p class="stat-value">{{ analysisResult.transactionCount }}</p>
+            <p class="stat-value">
+              {{ currentAnalysisResult.transactionCount }}
+            </p>
             <p class="stat-description">transactions analysées</p>
           </div>
         </div>
@@ -424,10 +480,10 @@
           <div class="stat-content">
             <h3 class="stat-title">Période d'analyse</h3>
             <p class="stat-value">
-              {{ formatDate(analysisResult.dateRange.start) }}
+              {{ formatDate(currentAnalysisResult.dateRange.start) }}
             </p>
             <p class="stat-description">
-              au {{ formatDate(analysisResult.dateRange.end) }}
+              au {{ formatDate(currentAnalysisResult.dateRange.end) }}
             </p>
           </div>
         </div>
@@ -480,34 +536,8 @@
             </p>
           </div>
 
-          <!-- Grille compacte des filtres -->
-          <div class="filters-compact-grid">
-            <!-- Filtre Catégories -->
-            <div class="compact-filter-card">
-              <div class="compact-filter-header">
-                <div class="compact-filter-icon categories-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </div>
-                <div class="compact-filter-title">
-                  <h4>Catégories</h4>
-                  <span class="compact-filter-subtitle"
-                    >Filtrer par catégorie</span
-                  >
-                </div>
-              </div>
-              <div class="compact-filter-content">
-                <CategoryFilter
-                  :categories="availableCategories"
-                  :selected-categories="currentSelectedCategories"
-                  @update:selected-categories="
-                    currentSelectedCategories = $event
-                  "
-                />
-              </div>
-            </div>
-
+          <!-- Grille des filtres côte à côte -->
+          <div class="filters-side-by-side">
             <!-- Filtre Comptes Joints -->
             <div class="compact-filter-card">
               <div class="compact-filter-header">
@@ -535,7 +565,7 @@
             </div>
 
             <!-- Filtre Compensation -->
-            <div class="compact-filter-card full-width">
+            <div class="compact-filter-card">
               <div class="compact-filter-header">
                 <div class="compact-filter-icon compensation-icon">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -553,7 +583,7 @@
               </div>
               <div class="compact-filter-content">
                 <ReimbursementCompensationFilter
-                  :analysis-result="analysisResult"
+                  :analysis-result="currentAnalysisResult"
                   :selected-rules="compensationRules"
                   :selected-expense-categories="selectedExpenseCategories"
                   :selected-income-categories="selectedIncomeCategories"
@@ -565,274 +595,321 @@
         </div>
       </div>
 
-      <!-- Système d'onglets Dépenses/Revenus -->
-      <div class="tabs-container">
-        <!-- Navigation des onglets -->
-        <div class="tabs-navigation">
-          <button
-            class="tab-button"
-            :class="{ active: activeTab === 'expenses' }"
-            @click="setActiveTab('expenses')"
-          >
-            <svg
-              class="tab-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-            >
-              <path d="M17 11l-3-3V2m0 6l-3 3m3-3h8" />
-              <path d="M7 21H4a2 2 0 01-2-2v-5h20v5a2 2 0 01-2 2h-3" />
-            </svg>
-            Dépenses
-            <span class="tab-badge expenses-badge">
-              {{ analysisResult.expenses.transactionCount }}
-            </span>
-          </button>
+      <!-- Analyses Dépenses et Revenus -->
+      <div class="dashboard-sections">
+        <!-- Section Dépenses -->
+        <div class="section-container expenses-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <svg
+                class="section-icon expenses-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <path d="M17 11l-3-3V2m0 6l-3 3m3-3h8" />
+                <path d="M7 21H4a2 2 0 01-2-2v-5h20v5a2 2 0 01-2 2h-3" />
+              </svg>
+              Analyse des Dépenses
+            </h2>
+            <p class="section-description">
+              Catégories de dépenses basées sur la colonne "Catégorie"
+            </p>
+          </div>
 
-          <button
-            class="tab-button"
-            :class="{ active: activeTab === 'income' }"
-            @click="setActiveTab('income')"
-          >
-            <svg
-              class="tab-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-            >
-              <path d="M7 13l3 3 7-7" />
-              <path
-                d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c2.35 0 4.49.91 6.08 2.4"
-              />
-            </svg>
-            Revenus
-            <span class="tab-badge income-badge">
-              {{ analysisResult.income.transactionCount }}
-            </span>
-          </button>
-        </div>
-
-        <!-- Contenu des onglets -->
-        <div class="tab-content">
-          <!-- Onglet Dépenses -->
-          <div
-            v-show="activeTab === 'expenses'"
-            class="tab-panel expenses-panel"
-          >
-            <div class="panel-header">
-              <h2 class="panel-title">
-                <svg
-                  class="panel-icon expenses-icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                >
-                  <path d="M17 11l-3-3V2m0 6l-3 3m3-3h8" />
-                  <path d="M7 21H4a2 2 0 01-2-2v-5h20v5a2 2 0 01-2 2h-3" />
+          <div class="section-stats">
+            <div class="section-stat-card">
+              <div class="section-stat-icon expenses">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <line x1="12" y1="1" x2="12" y2="23" />
+                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                 </svg>
-                Analyse des Dépenses
-              </h2>
-              <p class="panel-description">
-                Catégories de dépenses basées sur la colonne "Catégorie"
-              </p>
-            </div>
-
-            <div class="panel-stats">
-              <div class="panel-stat-card">
-                <div class="panel-stat-icon expenses">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <line x1="12" y1="1" x2="12" y2="23" />
-                    <path
-                      d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
-                    />
-                  </svg>
-                </div>
-                <div class="panel-stat-content">
-                  <h4 class="panel-stat-title">Montant total</h4>
-                  <p class="panel-stat-value expenses-amount">
-                    {{ formatAmount(expensesChartData.total) }}
-                  </p>
-                </div>
               </div>
-
-              <div class="panel-stat-card">
-                <div class="panel-stat-icon transactions">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M9 12l2 2 4-4" />
-                    <circle cx="12" cy="12" r="10" />
-                  </svg>
-                </div>
-                <div class="panel-stat-content">
-                  <h4 class="panel-stat-title">Transactions</h4>
-                  <p class="panel-stat-value">
-                    {{ analysisResult.expenses.transactionCount }}
-                  </p>
-                </div>
-              </div>
-
-              <div class="panel-stat-card">
-                <div class="panel-stat-icon categories">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1" />
-                  </svg>
-                </div>
-                <div class="panel-stat-content">
-                  <h4 class="panel-stat-title">Catégories</h4>
-                  <p class="panel-stat-value">
-                    {{ analysisResult.expenses.categories.length }}
-                  </p>
-                </div>
+              <div class="section-stat-content">
+                <h4 class="section-stat-title">Montant total</h4>
+                <p class="section-stat-value expenses-amount">
+                  {{ formatAmount(expensesChartData.total) }}
+                </p>
               </div>
             </div>
 
-            <!-- Graphique camembert des dépenses -->
-            <div class="chart-section">
-              <PieChart
-                :chart-data="expensesChartData"
-                title="Répartition des dépenses"
-                type="expenses"
-                :format-amount="formatChartAmount"
-                :format-percentage="formatPercentage"
-                :available-months="availableMonths"
-                :selected-month="selectedExpenseMonth"
-                @category-click="handleCategoryClick"
-                @category-hover="handleCategoryHover"
-                @month-change="handleExpenseMonthChange"
-              />
+            <div class="section-stat-card">
+              <div class="section-stat-icon transactions">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M9 12l2 2 4-4" />
+                  <circle cx="12" cy="12" r="10" />
+                </svg>
+              </div>
+              <div class="section-stat-content">
+                <h4 class="section-stat-title">Transactions</h4>
+                <p class="section-stat-value">
+                  {{ currentAnalysisResult.expenses.transactionCount }}
+                </p>
+              </div>
             </div>
 
-            <!-- Histogramme mensuel des dépenses -->
-            <div class="chart-section">
-              <BarChart
-                :chart-data="monthlyChartData"
-                :available-categories="availableCategories"
-                :analysis-result="analysisResult"
-                title="Évolution mensuelle des dépenses"
-                type="expenses"
-                :format-amount="formatBarAmount"
-                @month-click="handleMonthClick"
-                @month-hover="handleMonthHover"
-              />
-            </div>
-
-            <!-- Liste des transactions de dépenses -->
-            <div class="chart-section">
-              <TransactionsList
-                :transactions="analysisResult.transactions"
-                active-tab="expenses"
-              />
+            <div class="section-stat-card">
+              <div class="section-stat-icon categories">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1" />
+                </svg>
+              </div>
+              <div class="section-stat-content">
+                <h4 class="section-stat-title">Catégories</h4>
+                <p class="section-stat-value">
+                  {{ currentAnalysisResult.expenses.categories.length }}
+                </p>
+              </div>
             </div>
           </div>
 
-          <!-- Onglet Revenus -->
-          <div v-show="activeTab === 'income'" class="tab-panel income-panel">
-            <div class="panel-header">
-              <h2 class="panel-title">
-                <svg
-                  class="panel-icon income-icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                >
-                  <path d="M7 13l3 3 7-7" />
-                  <path
-                    d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c2.35 0 4.49.91 6.08 2.4"
-                  />
+          <!-- Bouton de filtre local pour les dépenses -->
+          <div class="section-filter-toggle">
+            <button
+              class="section-filter-btn"
+              :class="{ active: showExpenseFilter }"
+              @click="toggleExpenseFilter"
+            >
+              <svg
+                class="filter-toggle-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Filtrer les catégories
+              <svg
+                class="chevron-icon"
+                :class="{ rotated: showExpenseFilter }"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <polyline points="6,9 12,15 18,9" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Filtre de catégories local pour les dépenses -->
+          <div v-show="showExpenseFilter" class="section-local-filter">
+            <div class="local-filter-card">
+              <div class="local-filter-header">
+                <div class="local-filter-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </div>
+                <h4>Sélection des catégories de dépenses</h4>
+              </div>
+              <div class="local-filter-content">
+                <CategoryFilter
+                  :categories="availableExpenseCategories"
+                  :selected-categories="selectedExpenseCategories"
+                  @update:selected-categories="
+                    selectedExpenseCategories = $event
+                  "
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Graphique camembert des dépenses -->
+          <div class="chart-section">
+            <PieChart
+              :chart-data="expensesChartData"
+              title="Répartition des dépenses"
+              type="expenses"
+              :format-amount="formatChartAmount"
+              :format-percentage="formatPercentage"
+              :available-months="availableMonths"
+              :selected-month="selectedExpenseMonth"
+              @category-click="handleCategoryClick"
+              @category-hover="handleCategoryHover"
+              @month-change="handleExpenseMonthChange"
+            />
+          </div>
+
+          <!-- Histogramme des dépenses -->
+          <div class="chart-section">
+            <BarChart
+              :chart-data="monthlyChartData"
+              :available-categories="availableExpenseCategories"
+              :analysis-result="currentAnalysisResult"
+              title="Évolution mensuelle des dépenses"
+              type="expenses"
+              :format-amount="formatBarAmount"
+              @month-click="handleMonthClick"
+              @month-hover="handleMonthHover"
+            />
+          </div>
+
+          <!-- Liste des transactions de dépenses -->
+          <div class="chart-section">
+            <TransactionsList
+              :transactions="filteredExpenseTransactions"
+              title="Transactions de dépenses"
+            />
+          </div>
+        </div>
+
+        <!-- Section Revenus -->
+        <div class="section-container income-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <svg
+                class="section-icon income-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <path d="M7 13l3 3 7-7" />
+                <path
+                  d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c2.35 0 4.49.91 6.08 2.4"
+                />
+              </svg>
+              Analyse des Revenus
+            </h2>
+            <p class="section-description">
+              Sources de revenus basées sur la colonne "Sous-Catégorie"
+            </p>
+          </div>
+
+          <div class="section-stats">
+            <div class="section-stat-card">
+              <div class="section-stat-icon income">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <line x1="12" y1="1" x2="12" y2="23" />
+                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                 </svg>
-                Analyse des Revenus
-              </h2>
-              <p class="panel-description">
-                Sources de revenus basées sur la colonne "Sous-Catégorie"
-              </p>
-            </div>
-
-            <div class="panel-stats">
-              <div class="panel-stat-card">
-                <div class="panel-stat-icon income">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <line x1="12" y1="1" x2="12" y2="23" />
-                    <path
-                      d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
-                    />
-                  </svg>
-                </div>
-                <div class="panel-stat-content">
-                  <h4 class="panel-stat-title">Montant total</h4>
-                  <p class="panel-stat-value income-amount">
-                    {{ formatAmount(incomeChartData.total) }}
-                  </p>
-                </div>
               </div>
-
-              <div class="panel-stat-card">
-                <div class="panel-stat-icon transactions">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path d="M9 12l2 2 4-4" />
-                    <circle cx="12" cy="12" r="10" />
-                  </svg>
-                </div>
-                <div class="panel-stat-content">
-                  <h4 class="panel-stat-title">Transactions</h4>
-                  <p class="panel-stat-value">
-                    {{ analysisResult.income.transactionCount }}
-                  </p>
-                </div>
-              </div>
-
-              <div class="panel-stat-card">
-                <div class="panel-stat-icon categories">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1" />
-                  </svg>
-                </div>
-                <div class="panel-stat-content">
-                  <h4 class="panel-stat-title">Catégories</h4>
-                  <p class="panel-stat-value">
-                    {{ analysisResult.income.categories.length }}
-                  </p>
-                </div>
+              <div class="section-stat-content">
+                <h4 class="section-stat-title">Montant total</h4>
+                <p class="section-stat-value income-amount">
+                  {{ formatAmount(incomeChartData.total) }}
+                </p>
               </div>
             </div>
 
-            <!-- Graphique camembert des revenus -->
-            <div class="chart-section">
-              <PieChart
-                :chart-data="incomeChartData"
-                title="Répartition des revenus"
-                type="income"
-                :format-amount="formatChartAmount"
-                :format-percentage="formatPercentage"
-                :available-months="availableMonths"
-                :selected-month="selectedIncomeMonth"
-                @category-click="handleCategoryClick"
-                @category-hover="handleCategoryHover"
-                @month-change="handleIncomeMonthChange"
-              />
+            <div class="section-stat-card">
+              <div class="section-stat-icon transactions">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M9 12l2 2 4-4" />
+                  <circle cx="12" cy="12" r="10" />
+                </svg>
+              </div>
+              <div class="section-stat-content">
+                <h4 class="section-stat-title">Transactions</h4>
+                <p class="section-stat-value">
+                  {{ currentAnalysisResult.income.transactionCount }}
+                </p>
+              </div>
             </div>
 
-            <!-- Histogramme mensuel des revenus -->
-            <div class="chart-section">
-              <BarChart
-                :chart-data="monthlyChartData"
-                :available-categories="availableCategories"
-                :analysis-result="analysisResult"
-                title="Évolution mensuelle des revenus"
-                type="income"
-                :format-amount="formatBarAmount"
-                @month-click="handleMonthClick"
-                @month-hover="handleMonthHover"
-              />
+            <div class="section-stat-card">
+              <div class="section-stat-icon categories">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1" />
+                </svg>
+              </div>
+              <div class="section-stat-content">
+                <h4 class="section-stat-title">Catégories</h4>
+                <p class="section-stat-value">
+                  {{ currentAnalysisResult.income.categories.length }}
+                </p>
+              </div>
             </div>
+          </div>
 
-            <!-- Liste des transactions de revenus -->
-            <div class="chart-section">
-              <TransactionsList
-                :transactions="analysisResult.transactions"
-                active-tab="income"
-              />
+          <!-- Bouton de filtre local pour les revenus -->
+          <div class="section-filter-toggle">
+            <button
+              class="section-filter-btn"
+              :class="{ active: showIncomeFilter }"
+              @click="toggleIncomeFilter"
+            >
+              <svg
+                class="filter-toggle-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Filtrer les catégories
+              <svg
+                class="chevron-icon"
+                :class="{ rotated: showIncomeFilter }"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <polyline points="6,9 12,15 18,9" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Filtre de catégories local pour les revenus -->
+          <div v-show="showIncomeFilter" class="section-local-filter">
+            <div class="local-filter-card">
+              <div class="local-filter-header">
+                <div class="local-filter-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </div>
+                <h4>Sélection des catégories de revenus</h4>
+              </div>
+              <div class="local-filter-content">
+                <CategoryFilter
+                  :categories="availableIncomeCategories"
+                  :selected-categories="selectedIncomeCategories"
+                  @update:selected-categories="
+                    selectedIncomeCategories = $event
+                  "
+                />
+              </div>
             </div>
+          </div>
+
+          <!-- Graphique camembert des revenus -->
+          <div class="chart-section">
+            <PieChart
+              :chart-data="incomeChartData"
+              title="Répartition des revenus"
+              type="income"
+              :format-amount="formatChartAmount"
+              :format-percentage="formatPercentage"
+              :available-months="availableMonths"
+              :selected-month="selectedIncomeMonth"
+              @category-click="handleCategoryClick"
+              @category-hover="handleCategoryHover"
+              @month-change="handleIncomeMonthChange"
+            />
+          </div>
+
+          <!-- Histogramme des revenus -->
+          <div class="chart-section">
+            <BarChart
+              :chart-data="monthlyChartData"
+              :available-categories="availableIncomeCategories"
+              :analysis-result="currentAnalysisResult"
+              title="Évolution mensuelle des revenus"
+              type="income"
+              :format-amount="formatBarAmount"
+              @month-click="handleMonthClick"
+              @month-hover="handleMonthHover"
+            />
+          </div>
+
+          <!-- Liste des transactions de revenus -->
+          <div class="chart-section">
+            <TransactionsList
+              :transactions="filteredIncomeTransactions"
+              title="Transactions de revenus"
+            />
           </div>
         </div>
       </div>
@@ -864,6 +941,9 @@
 <style scoped>
   .dashboard-manager {
     margin-bottom: 1.5rem;
+    overflow-x: hidden;
+    max-width: 100vw;
+    box-sizing: border-box;
   }
 
   .section-title {
@@ -919,25 +999,27 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-6);
+    overflow-x: hidden;
+    max-width: 100%;
   }
 
   /* Statistiques générales */
   .overview-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
     margin-bottom: 1rem;
   }
 
   .stat-card {
     background: white;
-    border-radius: 0.75rem;
-    padding: 1.5rem;
+    border-radius: 0.5rem;
+    padding: 1rem;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     border: 1px solid #f3f4f6;
     display: flex;
     align-items: center;
-    gap: 1.25rem;
+    gap: 1rem;
     transition: all 0.3s ease;
   }
 
@@ -947,9 +1029,9 @@
   }
 
   .stat-icon {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 0.5rem;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.375rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -957,8 +1039,8 @@
   }
 
   .stat-icon svg {
-    width: 1.25rem;
-    height: 1.25rem;
+    width: 1rem;
+    height: 1rem;
     color: white;
   }
 
@@ -984,7 +1066,7 @@
   }
 
   .stat-value {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: #1f2937;
     margin: 0 0 0.25rem;
@@ -996,129 +1078,63 @@
     margin: 0;
   }
 
-  /* Système d'onglets */
-  .tabs-container {
+  /* Dashboard sections - side by side layout */
+  .dashboard-sections {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    overflow-x: hidden;
+  }
+
+  .section-container {
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(10px);
     border-radius: 1rem;
+    padding: 1.5rem;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    border: 1px solid rgba(0, 0, 0, 0.2);
-    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    min-width: 0;
+    overflow-x: hidden;
   }
 
-  .tabs-navigation {
-    display: flex;
-    background: rgba(249, 250, 251, 0.8);
-    backdrop-filter: blur(5px);
-    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+  .expenses-section {
+    border-left: 4px solid #ef4444;
   }
 
-  .tab-button {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    padding: 1.25rem 2rem;
-    background: transparent;
-    border: none;
-    font-size: 1rem;
-    font-weight: 500;
-    color: #6b7280;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    position: relative;
+  .income-section {
+    border-left: 4px solid #10b981;
   }
 
-  .tab-button:hover {
-    background: rgba(243, 244, 246, 0.8);
-    color: #374151;
-  }
-
-  .tab-button.active {
-    background: rgba(255, 255, 255, 0.9);
+  .combined-charts-section {
+    grid-column: 1 / -1;
+    background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(10px);
-    color: #1f2937;
-    font-weight: 600;
-  }
-
-  .tab-button.active::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-  }
-
-  .tab-icon {
-    width: 1.25rem;
-    height: 1.25rem;
-    transition: transform 0.2s ease;
-  }
-
-  .tab-button.active .tab-icon {
-    transform: scale(1.1);
-  }
-
-  .tab-badge {
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.5rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: white;
-    min-width: 1.5rem;
-    text-align: center;
-  }
-
-  .expenses-badge {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
-  }
-
-  .income-badge {
-    background: linear-gradient(135deg, #10b981, #059669);
-  }
-
-  .tab-content {
-    padding: 0;
-  }
-
-  .tab-panel {
+    border-radius: 1rem;
     padding: 2rem;
-    animation: fadeIn 0.3s ease-in-out;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.1);
   }
 
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .panel-header {
-    margin-bottom: 2rem;
+  .section-header {
+    margin-bottom: 1.5rem;
     text-align: center;
   }
 
-  .panel-title {
+  .section-title {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     font-weight: 600;
     color: #1f2937;
     margin: 0 0 0.75rem;
   }
 
-  .panel-icon {
-    width: 1.75rem;
-    height: 1.75rem;
+  .section-icon {
+    width: 1.5rem;
+    height: 1.5rem;
   }
 
   .expenses-icon {
@@ -1129,41 +1145,44 @@
     color: #10b981;
   }
 
-  .panel-description {
-    font-size: 1rem;
+  .section-description {
+    font-size: 0.875rem;
     color: #6b7280;
     margin: 0;
     line-height: 1.5;
   }
 
-  .panel-stats {
+  .section-stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
   }
 
-  .panel-stat-card {
+  .section-stat-card {
     background: rgba(249, 250, 251, 0.6);
     backdrop-filter: blur(5px);
     border-radius: 0.75rem;
-    padding: 1.5rem;
+    padding: 0.75rem;
     border: 1px solid rgba(229, 231, 235, 0.3);
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 1rem;
+    gap: 0.5rem;
     transition: all 0.2s ease;
+    text-align: center;
+    min-width: 0;
   }
 
-  .panel-stat-card:hover {
+  .section-stat-card:hover {
     background: rgba(243, 244, 246, 0.8);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
 
-  .panel-stat-icon {
-    width: 2.5rem;
-    height: 2.5rem;
+  .section-stat-icon {
+    width: 1.75rem;
+    height: 1.75rem;
     border-radius: 0.5rem;
     display: flex;
     align-items: center;
@@ -1171,35 +1190,35 @@
     flex-shrink: 0;
   }
 
-  .panel-stat-icon svg {
-    width: 1.25rem;
-    height: 1.25rem;
+  .section-stat-icon svg {
+    width: 1rem;
+    height: 1rem;
     color: white;
   }
 
-  .panel-stat-icon.expenses {
+  .section-stat-icon.expenses {
     background: linear-gradient(135deg, #ef4444, #dc2626);
   }
 
-  .panel-stat-icon.income {
+  .section-stat-icon.income {
     background: linear-gradient(135deg, #10b981, #059669);
   }
 
-  .panel-stat-icon.transactions {
+  .section-stat-icon.transactions {
     background: linear-gradient(135deg, #6366f1, #4f46e5);
   }
 
-  .panel-stat-icon.categories {
+  .section-stat-icon.categories {
     background: linear-gradient(135deg, #f59e0b, #d97706);
   }
 
-  .panel-stat-content {
+  .section-stat-content {
     flex: 1;
     min-width: 0;
   }
 
-  .panel-stat-title {
-    font-size: 0.875rem;
+  .section-stat-title {
+    font-size: 0.75rem;
     font-weight: 500;
     color: #6b7280;
     margin: 0 0 0.5rem;
@@ -1207,12 +1226,16 @@
     letter-spacing: 0.05em;
   }
 
-  .panel-stat-value {
-    font-size: 1.5rem;
+  .section-stat-value {
+    font-size: 1.125rem;
     font-weight: 700;
     color: #1f2937;
     margin: 0;
     line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
   }
 
   .expenses-amount {
@@ -1225,11 +1248,13 @@
 
   /* Section graphique */
   .chart-section {
-    margin: 2rem 0;
+    margin: 1.5rem 0;
     display: flex;
     justify-content: center;
     width: 100%;
     max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
   }
 
   /* Bouton de filtres avancés */
@@ -1352,8 +1377,8 @@
     margin: 0;
   }
 
-  /* Grille compacte des filtres */
-  .filters-compact-grid {
+  /* Grille des filtres côte à côte */
+  .filters-side-by-side {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
@@ -1372,10 +1397,6 @@
   .compact-filter-card:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     transform: translateY(-1px);
-  }
-
-  .compact-filter-card.full-width {
-    grid-column: 1 / -1;
   }
 
   .compact-filter-header {
@@ -1438,23 +1459,122 @@
     height: 100%;
   }
 
-  /* Masquer les en-têtes originaux des composants de filtres */
-  .compact-filter-content .filter-header {
-    display: none;
+  /* Boutons de filtres locaux */
+  .section-filter-toggle {
+    margin-bottom: 1rem;
   }
 
-  /* Ajustements pour les composants de filtres dans le layout compact */
-  /*.compact-filter-content .category-filter,
-  .compact-filter-content .joint-account-filter {
-    border: none;
-    background: transparent;
-    box-shadow: none;
-  }*/
+  .section-filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(229, 231, 235, 0.5);
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    width: 100%;
+    backdrop-filter: blur(5px);
+  }
 
-  .compact-filter-content .categories-list,
-  .compact-filter-content .accounts-list {
-    max-height: 150px;
-    overflow-y: auto;
+  .section-filter-btn:hover {
+    background: rgba(249, 250, 251, 0.9);
+    border-color: rgba(156, 163, 175, 0.5);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .section-filter-btn.active {
+    background: rgba(239, 246, 255, 0.9);
+    border-color: rgba(59, 130, 246, 0.5);
+    color: #1e40af;
+  }
+
+  .section-filter-btn .filter-toggle-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+  }
+
+  .section-filter-btn .chevron-icon {
+    width: 1rem;
+    height: 1rem;
+    transition: transform 0.2s ease;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .section-filter-btn .chevron-icon.rotated {
+    transform: rotate(180deg);
+  }
+
+  /* Filtres locaux des sections */
+  .section-local-filter {
+    margin-bottom: 1.5rem;
+    animation: slideDown 0.3s ease-out;
+  }
+
+  .local-filter-card {
+    background: rgba(248, 250, 252, 0.8);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(229, 231, 235, 0.4);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+  }
+
+  .local-filter-card:hover {
+    background: rgba(243, 244, 246, 0.9);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .local-filter-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(
+      135deg,
+      rgba(243, 244, 246, 0.8) 0%,
+      rgba(249, 250, 251, 0.9) 100%
+    );
+    backdrop-filter: blur(5px);
+    border-bottom: 1px solid rgba(229, 231, 235, 0.3);
+  }
+
+  .local-filter-icon {
+    width: 2rem;
+    height: 2rem;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .local-filter-icon svg {
+    width: 1rem;
+    height: 1rem;
+    color: white;
+  }
+
+  .local-filter-header h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin: 0;
+  }
+
+  .local-filter-content {
+    padding: 0;
   }
 
   /* Section info */
@@ -1507,96 +1627,18 @@
     line-height: 1.5;
   }
 
-  /* Responsive pour les filtres compacts */
+  /* Responsive */
+  @media (max-width: 1400px) {
+    .dashboard-sections {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+  }
+
   @media (max-width: 1200px) {
-    .filters-compact-grid {
+    .filters-side-by-side {
       grid-template-columns: 1fr;
       gap: 1.25rem;
-    }
-
-    .compact-filter-card.full-width {
-      grid-column: 1;
-    }
-  }
-
-  @media (max-width: 768px) {
-    .filters-container {
-      padding: 1.5rem;
-      margin: 1rem 0;
-    }
-
-    .filters-main-title h3 {
-      font-size: 1.25rem;
-    }
-
-    .filters-main-description {
-      font-size: 0.875rem;
-    }
-
-    .compact-filter-header {
-      padding: 1rem 1.25rem;
-    }
-
-    .compact-filter-content {
-      padding: 1.25rem;
-    }
-
-    .compact-filter-icon {
-      width: 2rem;
-      height: 2rem;
-    }
-
-    .compact-filter-icon svg {
-      width: 1rem;
-      height: 1rem;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .filters-container {
-      padding: 1rem;
-    }
-
-    .filters-main-header {
-      margin-bottom: 1.5rem;
-    }
-
-    .compact-filter-header {
-      padding: 0.875rem 1rem;
-    }
-
-    .compact-filter-content {
-      padding: 1rem;
-    }
-
-    .filters-compact-grid {
-      gap: 1rem;
-    }
-  }
-
-  /* Styles pour les sections transactions */
-  .transactions-section {
-    margin-top: 2rem;
-  }
-
-  /* Styles responsive généraux */
-  @media (max-width: 1024px) {
-    .section-content {
-      gap: var(--spacing-4);
-    }
-
-    .overview-stats {
-      grid-template-columns: 1fr;
-      gap: 1rem;
-    }
-
-    .panel-stats {
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 1rem;
-    }
-
-    .chart-section {
-      margin: 1.5rem 0;
     }
   }
 
@@ -1606,41 +1648,54 @@
       margin: 0.5rem;
     }
 
-    .manager-header {
-      padding: 1.5rem;
+    .section-content {
+      gap: var(--spacing-4);
     }
 
-    .manager-title {
-      font-size: 1.5rem;
-    }
-
-    .manager-description {
-      font-size: 0.875rem;
-    }
-
-    .tab-button {
-      padding: 1rem;
-      font-size: 0.875rem;
-    }
-
-    .tab-panel {
-      padding: 1.5rem;
-    }
-
-    .panel-title {
-      font-size: 1.5rem;
-    }
-
-    .panel-stats {
+    .overview-stats {
       grid-template-columns: 1fr;
+      gap: 1rem;
     }
 
-    .stat-card {
-      padding: 1.25rem;
+    .section-stats {
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 0.75rem;
     }
 
-    .stat-value {
+    .section-filter-btn {
+      padding: 0.75rem;
+      font-size: 0.8125rem;
+    }
+
+    .local-filter-header {
+      flex-direction: column;
+      text-align: center;
+      gap: 0.5rem;
+      padding: 1rem;
+    }
+
+    .local-filter-header h4 {
+      font-size: 0.8125rem;
+    }
+
+    .chart-section {
+      margin: 1.5rem 0;
+    }
+
+    .section-container,
+    .combined-charts-section {
+      padding: 1.5rem;
+    }
+
+    .section-title {
       font-size: 1.25rem;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .section-icon {
+      width: 1.25rem;
+      height: 1.25rem;
     }
   }
 
@@ -1650,48 +1705,124 @@
       border-radius: 0.375rem;
     }
 
-    .manager-header {
+    .section-container,
+    .combined-charts-section {
       padding: 1rem;
     }
 
-    .manager-title {
-      font-size: 1.25rem;
-      flex-direction: column;
-      gap: 0.5rem;
+    .section-stats {
+      grid-template-columns: 1fr;
     }
 
-    .title-icon {
+    .section-filter-btn {
+      padding: 0.625rem;
+      font-size: 0.75rem;
+      gap: 0.375rem;
+    }
+
+    .section-filter-btn .filter-toggle-icon,
+    .section-filter-btn .chevron-icon {
+      width: 0.875rem;
+      height: 0.875rem;
+    }
+
+    .local-filter-header {
+      padding: 0.75rem;
+    }
+
+    .local-filter-icon {
       width: 1.5rem;
       height: 1.5rem;
     }
 
-    .tabs-navigation {
-      flex-direction: column;
-    }
-
-    .tab-button {
-      padding: 0.75rem;
-    }
-
-    .tab-panel {
-      padding: 1rem;
-    }
-
-    .panel-title {
-      font-size: 1.25rem;
-      flex-direction: column;
-      gap: 0.5rem;
+    .local-filter-icon svg {
+      width: 0.875rem;
+      height: 0.875rem;
     }
 
     .stat-card {
       flex-direction: column;
       text-align: center;
       gap: 1rem;
+      padding: 1.25rem;
     }
   }
 
-  /* Thème sombre pour les filtres avancés */
+  /* Thème sombre */
   @media (prefers-color-scheme: dark) {
+    .dashboard-sections .section-container,
+    .dashboard-sections .combined-charts-section {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .section-title {
+      color: #e2e8f0;
+    }
+
+    .section-description {
+      color: #94a3b8;
+    }
+
+    .section-stat-card {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .local-filter-card {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .local-filter-header {
+      background: linear-gradient(
+        135deg,
+        rgba(51, 65, 85, 0.8) 0%,
+        rgba(30, 41, 59, 0.9) 100%
+      );
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .local-filter-header h4 {
+      color: #e2e8f0;
+    }
+
+    .section-filter-btn {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .section-filter-btn:hover {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(100, 116, 139, 0.5);
+    }
+
+    .section-filter-btn.active {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: rgba(96, 165, 250, 0.5);
+      color: #60a5fa;
+    }
+
+    /* Bouton de filtres avancés - Mode sombre */
+    .advanced-filters-btn {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .advanced-filters-btn:hover {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(100, 116, 139, 0.5);
+    }
+
+    .advanced-filters-btn.active {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: rgba(96, 165, 250, 0.5);
+      color: #60a5fa;
+    }
+
+    /* Panneau de filtres avancés - Mode sombre */
     .filters-container {
       background: rgba(30, 41, 59, 0.8);
       border-color: rgba(71, 85, 105, 0.3);
@@ -1705,28 +1836,25 @@
       color: #e2e8f0;
     }
 
-    .filters-main-icon {
-      background: linear-gradient(135deg, #6366f1, #4f46e5);
-    }
-
     .filters-main-description {
       color: #94a3b8;
     }
 
+    /* Cartes de filtres compacts - Mode sombre */
     .compact-filter-card {
-      background: rgba(51, 65, 85, 0.9);
+      background: rgba(51, 65, 85, 0.8);
       border-color: rgba(71, 85, 105, 0.3);
     }
 
     .compact-filter-card:hover {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      background: rgba(71, 85, 105, 0.9);
     }
 
     .compact-filter-header {
       background: linear-gradient(
         135deg,
-        rgba(30, 41, 59, 0.8) 0%,
-        rgba(51, 65, 85, 0.9) 100%
+        rgba(51, 65, 85, 0.8) 0%,
+        rgba(30, 41, 59, 0.9) 100%
       );
       border-bottom-color: rgba(71, 85, 105, 0.3);
     }
@@ -1737,6 +1865,46 @@
 
     .compact-filter-subtitle {
       color: #94a3b8;
+    }
+
+    .section-stat-title {
+      color: #94a3b8;
+    }
+
+    .section-stat-value {
+      color: #e2e8f0;
+    }
+
+    /* Cartes statistiques en haut - Mode sombre */
+    .stat-card {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .stat-card:hover {
+      background: rgba(51, 65, 85, 0.9);
+    }
+
+    .stat-title {
+      color: #94a3b8;
+    }
+
+    .stat-value {
+      color: #e2e8f0;
+    }
+
+    .stat-description {
+      color: #94a3b8;
+    }
+
+    .title-badge {
+      background: linear-gradient(
+        135deg,
+        rgba(59, 130, 246, 0.2),
+        rgba(59, 130, 246, 0.3)
+      );
+      color: #60a5fa;
+      border-color: rgba(96, 165, 250, 0.3);
     }
   }
 </style>
