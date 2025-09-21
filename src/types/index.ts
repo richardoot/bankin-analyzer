@@ -84,3 +84,21 @@ export interface PersonAssignment {
   amount: number
   categoryId?: string
 }
+
+// Types pour la gestion multi-imports
+export interface ImportSession {
+  id: string
+  name: string
+  fileName: string
+  originalFileName: string
+  uploadDate: Date
+  lastAccessDate: Date
+  isActive: boolean
+  analysisResult: CsvAnalysisResult
+}
+
+export interface ImportManagerState {
+  sessions: ImportSession[]
+  activeSessionId: string | null
+  nextSessionNumber: number
+}

@@ -8,6 +8,7 @@
   import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
   import BaseButton from '@/components/shared/BaseButton.vue'
   import BaseCard from '@/components/shared/BaseCard.vue'
+  import { useImportManager } from '@/composables/useImportManager'
 
   interface Props {
     analysisResult: CsvAnalysisResult
@@ -19,6 +20,9 @@
   }
 
   const props = defineProps<Props>()
+
+  // Import manager pour obtenir l'ID de session active
+  const { activeSession } = useImportManager()
 
   // États locaux
   const selectedCategory = ref<string>('')
@@ -146,12 +150,24 @@
     }
   }
 
+  // Générer la clé de stockage spécifique à la session
+  const getStorageKey = () => {
+    const sessionId = activeSession.value?.id
+    if (!sessionId) {
+      console.warn('Aucune session active trouvée pour les assignations')
+      return 'bankin-analyzer-expense-assignments-default'
+    }
+    return `bankin-analyzer-expense-assignments-${sessionId}`
+  }
+
   // Sauvegarder les assignations dans localStorage
   const saveAssignments = () => {
     try {
-      localStorage.setItem(
-        'bankin-analyzer-expense-assignments',
-        JSON.stringify(expenseAssignments.value)
+      const storageKey = getStorageKey()
+      localStorage.setItem(storageKey, JSON.stringify(expenseAssignments.value))
+      console.log(
+        '💾 Assignations sauvegardées pour la session:',
+        activeSession.value?.id
       )
     } catch (error) {
       console.warn('Erreur lors de la sauvegarde des assignations:', error)
@@ -161,9 +177,20 @@
   // Charger les assignations depuis localStorage
   const loadAssignments = () => {
     try {
-      const stored = localStorage.getItem('bankin-analyzer-expense-assignments')
+      const storageKey = getStorageKey()
+      const stored = localStorage.getItem(storageKey)
       if (stored) {
         expenseAssignments.value = JSON.parse(stored)
+        console.log(
+          '📖 Assignations chargées pour la session:',
+          activeSession.value?.id
+        )
+      } else {
+        expenseAssignments.value = []
+        console.log(
+          '📝 Nouvelles assignations pour la session:',
+          activeSession.value?.id
+        )
       }
     } catch (error) {
       console.warn('Erreur lors du chargement des assignations:', error)
@@ -622,6 +649,20 @@
       loadReimbursementCategories()
     }
   }
+
+  // Watcher pour recharger les assignations quand la session active change
+  watch(
+    () => activeSession.value?.id,
+    (newSessionId, oldSessionId) => {
+      if (newSessionId && newSessionId !== oldSessionId) {
+        console.log(
+          '🔄 Changement de session détecté, rechargement des assignations'
+        )
+        loadAssignments()
+      }
+    },
+    { immediate: true }
+  )
 
   // Ajouter l'écouteur d'événement au montage et le retirer au démontage
   onMounted(() => {
@@ -1343,6 +1384,7 @@
     display: flex;
     align-items: center;
     font-size: 0.875rem;
+    min-width: 0; /* Important pour permettre la troncature */
   }
 
   .cell.date {
@@ -1350,8 +1392,14 @@
     font-weight: 500;
   }
 
-  .description-content {
+  .cell.description {
+    min-width: 0; /* Force la cellule à respecter sa taille dans la grille */
     max-width: 100%;
+  }
+
+  .description-content {
+    width: 100%;
+    min-width: 0;
     overflow: hidden;
   }
 
@@ -1362,7 +1410,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 200px;
+    width: 100%;
+    min-width: 0;
   }
 
   .note-text {
@@ -2030,7 +2079,7 @@
     }
 
     .description-text {
-      max-width: 150px;
+      max-width: 100%;
     }
   }
 
@@ -2146,6 +2195,294 @@
       background: rgba(31, 41, 55, 0.7);
       border-color: rgba(75, 85, 99, 0.5);
       color: #f3f4f6;
+    }
+
+    .category-select:focus {
+      border-color: #60a5fa;
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+    }
+
+    /* Barre de statistiques - Mode sombre */
+    .stats-bar {
+      background: linear-gradient(
+        145deg,
+        rgba(30, 41, 59, 0.8) 0%,
+        rgba(51, 65, 85, 0.8) 100%
+      );
+      border-color: rgba(71, 85, 105, 0.3);
+      box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.2),
+        0 1px 3px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    .stat-label {
+      color: #94a3b8;
+    }
+
+    .stat-value {
+      color: #e2e8f0;
+    }
+
+    /* Liste des dépenses - Mode sombre */
+    .expenses-list {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .table-header {
+      background: rgba(51, 65, 85, 0.8);
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+      color: #e2e8f0;
+    }
+
+    .expense-row {
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .expense-row:hover {
+      background: rgba(51, 65, 85, 0.6);
+    }
+
+    .cell.date {
+      color: #94a3b8;
+    }
+
+    .description-text {
+      color: #e2e8f0;
+    }
+
+    .note-text {
+      color: #94a3b8;
+    }
+
+    .category-badge {
+      background: rgba(59, 130, 246, 0.2);
+      color: #60a5fa;
+    }
+
+    .amount-value {
+      color: #fca5a5;
+    }
+
+    .no-assignment-text {
+      color: #94a3b8;
+    }
+
+    /* Contrôles de pagination - Mode sombre */
+    .pagination-controls {
+      background: rgba(51, 65, 85, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .pagination-info {
+      color: #e2e8f0;
+    }
+
+    .pagination-text {
+      color: #94a3b8;
+    }
+
+    .pagination-pages {
+      color: #e2e8f0;
+    }
+
+    .pagination-btn {
+      background: rgba(30, 41, 59, 0.8);
+      color: #e2e8f0;
+      border-color: rgba(71, 85, 105, 0.5);
+    }
+
+    .pagination-btn:hover:not(:disabled) {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(100, 116, 139, 0.5);
+    }
+
+    .pagination-btn:disabled {
+      background: rgba(51, 65, 85, 0.5);
+      color: #64748b;
+    }
+
+    .pagination-number {
+      background: rgba(30, 41, 59, 0.8);
+      color: #e2e8f0;
+      border-color: rgba(71, 85, 105, 0.5);
+    }
+
+    .pagination-number:hover:not(:disabled) {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(100, 116, 139, 0.5);
+    }
+
+    .pagination-number.active {
+      background: #60a5fa;
+      color: #1e293b;
+      border-color: #60a5fa;
+    }
+
+    .pagination-number:disabled {
+      background: rgba(51, 65, 85, 0.5);
+      color: #64748b;
+    }
+
+    /* État vide - Mode sombre */
+    .empty-state {
+      color: #94a3b8;
+    }
+
+    .empty-state h4 {
+      color: #e2e8f0;
+    }
+
+    .empty-state svg {
+      color: #64748b;
+    }
+
+    /* Message d'aide - Mode sombre */
+    .help-message {
+      background: rgba(251, 191, 36, 0.1);
+      border-color: rgba(251, 191, 36, 0.3);
+      color: #fbbf24;
+    }
+
+    .help-message svg {
+      color: #fbbf24;
+    }
+
+    /* Assignations de personnes - Mode sombre */
+    .assigned-person {
+      background: rgba(59, 130, 246, 0.1);
+      border-color: rgba(96, 165, 250, 0.3);
+    }
+
+    .person-name {
+      color: #e2e8f0;
+    }
+
+    .person-email {
+      color: #94a3b8;
+    }
+
+    /* Formulaires - Mode sombre */
+    .amount-input,
+    .person-select {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .amount-input:focus,
+    .person-select:focus {
+      border-color: #60a5fa;
+      background: rgba(30, 41, 59, 0.9);
+      box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+    }
+
+    .amount-input:invalid {
+      border-color: #fca5a5;
+      box-shadow: 0 0 0 2px rgba(252, 165, 165, 0.2);
+    }
+
+    .currency-symbol {
+      color: #94a3b8;
+    }
+
+    /* Modal - Mode sombre */
+    .modal-content {
+      background: rgba(30, 41, 59, 0.95);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .modal-header {
+      background: rgba(51, 65, 85, 0.8);
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .modal-header h3 {
+      color: #e2e8f0;
+    }
+
+    .modal-close {
+      color: #94a3b8;
+    }
+
+    .modal-close:hover {
+      color: #e2e8f0;
+    }
+
+    .expense-info {
+      background: rgba(51, 65, 85, 0.8);
+      border-color: rgba(71, 85, 105, 0.3);
+    }
+
+    .expense-detail {
+      color: #e2e8f0;
+    }
+
+    .form-group label {
+      color: #e2e8f0;
+    }
+
+    .form-control {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .form-control:focus {
+      border-color: #60a5fa;
+      background: rgba(30, 41, 59, 0.9);
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+    }
+
+    .form-control.invalid {
+      border-color: #fca5a5;
+      box-shadow: 0 0 0 3px rgba(252, 165, 165, 0.2);
+    }
+
+    .form-control::placeholder {
+      color: #94a3b8;
+    }
+
+    .help-text {
+      color: #94a3b8;
+    }
+
+    .error-text {
+      color: #fca5a5;
+    }
+
+    .modal-footer {
+      background: rgba(51, 65, 85, 0.8);
+      border-top-color: rgba(71, 85, 105, 0.3);
+    }
+
+    /* Boutons d'aide - Mode sombre */
+    .helper-btn {
+      background: rgba(51, 65, 85, 0.8);
+      color: #e2e8f0;
+      border-color: rgba(71, 85, 105, 0.5);
+    }
+
+    .helper-btn:hover {
+      background: rgba(71, 85, 105, 0.9);
+      border-color: rgba(100, 116, 139, 0.5);
+    }
+
+    .custom-divider-input {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(71, 85, 105, 0.5);
+      color: #e2e8f0;
+    }
+
+    .custom-divider-input:focus {
+      border-color: #60a5fa;
+      background: rgba(30, 41, 59, 0.9);
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+    }
+
+    .custom-divider-input::placeholder {
+      color: #94a3b8;
     }
   }
 </style>
