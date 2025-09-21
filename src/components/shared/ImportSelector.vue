@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { computed } from 'vue'
+  import { computed, ref, onMounted, onUnmounted } from 'vue'
   import { useImportManager } from '@/composables/useImportManager'
   import BaseButton from '@/components/shared/BaseButton.vue'
   // Props pour personnaliser l'affichage
@@ -86,23 +86,52 @@
     }).format(date)
   }
 
-  // Fonction pour ouvrir la liste déroulante quand on clique sur le conteneur
-  const handleContainerClick = (event: Event) => {
-    const target = event.target as HTMLElement
-    // Ne pas ouvrir si on clique déjà sur le select
-    if (target.tagName === 'SELECT' || target.tagName === 'OPTION') {
-      return
-    }
+  // États pour la dropdown custom
+  const isDropdownOpen = ref(false)
 
-    // Trouver le select dans le conteneur et l'ouvrir
-    const container = event.currentTarget as HTMLElement
-    const select = container.querySelector('select') as HTMLSelectElement
-    if (select) {
-      // Simuler un clic sur le select pour l'ouvrir
-      select.focus()
-      select.click()
+  // Fonction pour ouvrir/fermer la dropdown
+  const toggleDropdown = (event: Event) => {
+    event.stopPropagation()
+    isDropdownOpen.value = !isDropdownOpen.value
+  }
+
+  // Fonction pour sélectionner un import
+  const selectImport = (sessionId: string) => {
+    handleSessionSwitch(sessionId)
+    isDropdownOpen.value = false
+  }
+
+  // Fermer la dropdown quand on clique ailleurs
+  const closeDropdown = () => {
+    isDropdownOpen.value = false
+  }
+
+  // Écouter les clics extérieurs
+  const handleDocumentClick = (event: Event) => {
+    const target = event.target as HTMLElement
+    const dropdown = document.querySelector('.custom-dropdown')
+    if (dropdown && !dropdown.contains(target)) {
+      closeDropdown()
     }
   }
+
+  // Ajouter/supprimer l'écouteur d'événements
+  const addDocumentListener = () => {
+    document.addEventListener('click', handleDocumentClick)
+  }
+
+  const removeDocumentListener = () => {
+    document.removeEventListener('click', handleDocumentClick)
+  }
+
+  // Lifecycle hooks
+  onMounted(() => {
+    addDocumentListener()
+  })
+
+  onUnmounted(() => {
+    removeDocumentListener()
+  })
 </script>
 
 <template>
@@ -111,25 +140,64 @@
     v-if="variant === 'compact' && hasMultipleSessions"
     class="import-selector-compact"
   >
-    <div class="compact-selector" @click="handleContainerClick">
-      <select
-        class="selector-dropdown"
-        :value="activeSession?.id || ''"
-        @change="
-          handleSessionSwitch(($event.target as HTMLSelectElement).value)
-        "
-      >
-        <option disabled value="">Choisir un import...</option>
-        <option
-          v-for="session in sortedSessions"
-          :key="session.id"
-          :value="session.id"
-        >
-          {{ session.name }}
-        </option>
-      </select>
+    <div class="custom-dropdown" :class="{ open: isDropdownOpen }">
+      <!-- Trigger de la dropdown -->
+      <div class="dropdown-trigger" @click="toggleDropdown">
+        <div class="current-selection">
+          <span class="session-name">{{
+            activeSession?.name || 'Sélectionner'
+          }}</span>
+          <svg
+            class="dropdown-arrow"
+            :class="{ rotated: isDropdownOpen }"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <polyline points="6,9 12,15 18,9"></polyline>
+          </svg>
+        </div>
+        <div class="sessions-badge">{{ sessions.length }}</div>
+      </div>
 
-      <div class="sessions-badge">{{ sessions.length }}</div>
+      <!-- Dropdown content -->
+      <div v-if="isDropdownOpen" class="dropdown-content">
+        <div class="dropdown-header">
+          <span>Sélectionner un import</span>
+        </div>
+        <div class="dropdown-items">
+          <div
+            v-for="session in sortedSessions"
+            :key="session.id"
+            class="dropdown-item"
+            :class="{ active: session.id === activeSession?.id }"
+            @click="selectImport(session.id)"
+          >
+            <div class="item-main">
+              <div class="item-name">{{ session.name }}</div>
+              <div class="item-info">
+                <span class="transaction-count"
+                  >{{
+                    session.analysisResult.transactionCount
+                  }}
+                  transactions</span
+                >
+                <span class="upload-date">{{
+                  formatDate(session.uploadDate)
+                }}</span>
+              </div>
+            </div>
+            <div
+              v-if="session.id === activeSession?.id"
+              class="active-indicator"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <polyline points="20,6 9,17 4,12"></polyline>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -273,44 +341,59 @@
 </template>
 
 <style scoped>
-  /* Mode compact */
+  /* Mode compact - Dropdown custom */
   .import-selector-compact {
     display: flex;
     align-items: center;
   }
 
-  .compact-selector {
+  .custom-dropdown {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .dropdown-trigger {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(5px);
-    border: 1px solid rgba(229, 231, 235, 0.5);
-    border-radius: 0.5rem;
-    padding: 0.5rem 0.75rem;
+    cursor: pointer;
     transition: all 0.2s ease;
-    cursor: pointer;
+    min-width: 0;
   }
 
-  .compact-selector:hover {
-    background: rgba(243, 244, 246, 0.9);
+  .dropdown-trigger:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   }
 
-  .selector-dropdown {
-    background: transparent;
-    border: none;
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #374151;
-    cursor: pointer;
+  .current-selection {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
     flex: 1;
     min-width: 0;
   }
 
-  .selector-dropdown:focus {
-    outline: none;
+  .session-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .dropdown-arrow {
+    width: 1rem;
+    height: 1rem;
+    color: rgba(255, 255, 255, 0.7);
+    transition: transform 0.2s ease;
+  }
+
+  .dropdown-arrow.rotated {
+    transform: rotate(180deg);
   }
 
   .sessions-badge {
@@ -323,6 +406,110 @@
     min-width: 1.25rem;
     text-align: center;
     flex-shrink: 0;
+  }
+
+  /* Dropdown content */
+  .dropdown-content {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    min-width: 320px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    animation: dropdownSlide 0.2s ease-out;
+  }
+
+  @keyframes dropdownSlide {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .dropdown-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .dropdown-items {
+    max-height: 240px;
+    overflow-y: auto;
+  }
+
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .dropdown-item:last-child {
+    border-bottom: none;
+  }
+
+  .dropdown-item:hover {
+    background: rgba(59, 130, 246, 0.1);
+  }
+
+  .dropdown-item.active {
+    background: rgba(59, 130, 246, 0.15);
+  }
+
+  .item-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .item-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .transaction-count {
+    font-size: 0.75rem;
+    color: #6b7280;
+    font-weight: 500;
+  }
+
+  .upload-date {
+    font-size: 0.6875rem;
+    color: #9ca3af;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  }
+
+  .active-indicator {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: #3b82f6;
+    flex-shrink: 0;
+    margin-left: 0.5rem;
   }
 
   /* Mode complet */
@@ -521,13 +708,33 @@
 
   /* Responsive */
   @media (max-width: 768px) {
-    .compact-selector {
-      padding: 0.375rem 0.5rem;
+    .dropdown-trigger {
+      gap: 0.25rem;
     }
 
-    .selector-dropdown {
-      min-width: 120px;
+    .session-name {
       font-size: 0.8125rem;
+    }
+
+    .dropdown-content {
+      min-width: 280px;
+      right: -10px;
+    }
+
+    .dropdown-item {
+      padding: 0.75rem;
+    }
+
+    .item-name {
+      font-size: 0.8125rem;
+    }
+
+    .transaction-count {
+      font-size: 0.6875rem;
+    }
+
+    .upload-date {
+      font-size: 0.625rem;
     }
 
     .session-item {
@@ -543,7 +750,40 @@
 
   /* Thème sombre */
   @media (prefers-color-scheme: dark) {
-    .compact-selector,
+    .dropdown-content {
+      background: rgba(30, 41, 59, 0.95);
+      border-color: rgba(71, 85, 105, 0.4);
+    }
+
+    .dropdown-header {
+      border-bottom-color: rgba(71, 85, 105, 0.3);
+      color: #94a3b8;
+    }
+
+    .dropdown-item {
+      border-bottom-color: rgba(71, 85, 105, 0.2);
+    }
+
+    .dropdown-item:hover {
+      background: rgba(99, 102, 241, 0.2);
+    }
+
+    .dropdown-item.active {
+      background: rgba(99, 102, 241, 0.3);
+    }
+
+    .item-name {
+      color: #e2e8f0;
+    }
+
+    .transaction-count {
+      color: #94a3b8;
+    }
+
+    .upload-date {
+      color: #6b7280;
+    }
+
     .session-item {
       background: rgba(30, 41, 59, 0.8);
       border-color: rgba(71, 85, 105, 0.3);

@@ -241,22 +241,23 @@
     outline-offset: 2px;
   }
 
-  /* Style distinctif pour l'ImportSelector dans le header */
-  .import-selector-wrapper :deep(.compact-selector) {
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    border-radius: 8px;
+  /* Style amélioré pour l'ImportSelector custom dans le header */
+  .import-selector-wrapper :deep(.dropdown-trigger) {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
     padding: 0.5rem 0.75rem;
     gap: 0.5rem;
-    min-width: auto;
+    min-width: 0;
     max-width: 140px;
+    width: 140px;
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     position: relative;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   }
 
-  .import-selector-wrapper :deep(.compact-selector::before) {
+  .import-selector-wrapper :deep(.dropdown-trigger::before) {
     content: '';
     position: absolute;
     top: 0;
@@ -265,61 +266,68 @@
     bottom: 0;
     background: linear-gradient(
       135deg,
-      rgba(251, 191, 36, 0.1),
-      rgba(245, 158, 11, 0.1)
+      rgba(251, 191, 36, 0.2),
+      rgba(245, 158, 11, 0.15)
     );
-    border-radius: 8px;
+    border-radius: 12px;
     opacity: 0;
     transition: opacity 0.3s ease;
     pointer-events: none;
-    z-index: 1;
+    z-index: 0;
   }
 
-  .import-selector-wrapper :deep(.compact-selector:hover::before) {
+  .import-selector-wrapper :deep(.dropdown-trigger:hover::before) {
     opacity: 1;
   }
 
-  .import-selector-wrapper :deep(.compact-selector:hover) {
-    background: rgba(255, 255, 255, 0.3);
+  .import-selector-wrapper :deep(.dropdown-trigger:hover) {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-    border-color: rgba(251, 191, 36, 0.6);
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(251, 191, 36, 0.4);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
   }
 
-  .import-selector-wrapper :deep(.selector-dropdown) {
+  .import-selector-wrapper :deep(.session-name) {
     color: white;
-    background: transparent;
-    border: none;
-    font-weight: 600;
+    font-weight: 700;
     font-size: 0.875rem;
-    font-family: inherit;
-    min-width: 80px;
-    max-width: 100px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     position: relative;
     z-index: 2;
+    max-width: 80px;
   }
 
-  .import-selector-wrapper :deep(.selector-dropdown option) {
-    background: #374151;
-    color: #f3f4f6;
-    padding: 0.5rem;
+  .import-selector-wrapper :deep(.dropdown-arrow) {
+    color: rgba(255, 255, 255, 0.8);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    position: relative;
+    z-index: 2;
   }
 
   .import-selector-wrapper :deep(.sessions-badge) {
     background: linear-gradient(135deg, #fbbf24, #f59e0b);
     color: #1f2937;
-    font-weight: 700;
-    font-size: 0.75rem;
-    padding: 0.125rem 0.375rem;
-    border-radius: 0.5rem;
-    min-width: 1.5rem;
+    font-weight: 800;
+    font-size: 0.6875rem;
+    padding: 0.1875rem 0.4375rem;
+    border-radius: 0.75rem;
+    min-width: 1.25rem;
     text-align: center;
-    box-shadow: 0 2px 6px rgba(251, 191, 36, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow:
+      0 3px 8px rgba(251, 191, 36, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    position: relative;
+    z-index: 2;
+    transform: scale(0.9);
+    transition: transform 0.2s ease;
+  }
+
+  .import-selector-wrapper :deep(.compact-selector:hover .sessions-badge) {
+    transform: scale(1);
+    box-shadow:
+      0 4px 12px rgba(251, 191, 36, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
   }
 
   /* Responsive */
@@ -349,15 +357,22 @@
       justify-content: center;
     }
 
-    .import-selector-wrapper :deep(.compact-selector) {
-      padding: 0.5rem;
+    .import-selector-wrapper :deep(.dropdown-trigger) {
+      gap: 0.375rem;
       max-width: 120px;
+      width: 120px;
+      padding: 0.375rem 0.625rem;
     }
 
-    .import-selector-wrapper :deep(.selector-dropdown) {
-      min-width: 60px;
-      max-width: 80px;
-      font-size: 0.875rem;
+    .import-selector-wrapper :deep(.session-name) {
+      max-width: 60px;
+      font-size: 0.8125rem;
+    }
+
+    .import-selector-wrapper :deep(.sessions-badge) {
+      font-size: 0.625rem;
+      padding: 0.125rem 0.375rem;
+      min-width: 1rem;
     }
   }
 </style>

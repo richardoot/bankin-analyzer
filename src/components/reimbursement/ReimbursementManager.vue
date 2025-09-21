@@ -198,11 +198,14 @@
         </div>
       </div>
 
-      <!-- Gestionnaire des personnes -->
-      <PersonsManager />
+      <!-- Gestionnaires côte à côte -->
+      <div class="managers-grid">
+        <!-- Gestionnaire des personnes -->
+        <PersonsManager />
 
-      <!-- Gestionnaire des catégories de remboursement -->
-      <ReimbursementCategoriesManager />
+        <!-- Gestionnaire des catégories de remboursement -->
+        <ReimbursementCategoriesManager />
+      </div>
 
       <!-- Gestionnaire des dépenses et remboursements -->
       <ExpensesReimbursementManager
@@ -469,10 +472,23 @@
     padding: 0;
   }
 
+  /* Grille pour les gestionnaires côte à côte */
+  .managers-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
   /* Responsive */
   @media (max-width: 768px) {
     .section-content {
       gap: var(--spacing-4);
+    }
+
+    .managers-grid {
+      grid-template-columns: 1fr;
+      gap: 1rem;
     }
 
     .filters-container {
