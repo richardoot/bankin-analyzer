@@ -1,0 +1,52 @@
+# Agent OS Standards Index
+
+backend:
+  api:
+    description: Needs description - run /index-standards
+  migrations:
+    description: Needs description - run /index-standards
+  models:
+    description: Needs description - run /index-standards
+  nestjs:
+    description: Needs description - run /index-standards
+  nodejs:
+    description: Needs description - run /index-standards
+  npm-package-management:
+    description: Needs description - run /index-standards
+  performance-optimization:
+    description: Needs description - run /index-standards
+  pnpm:
+    description: Needs description - run /index-standards
+  prisma:
+    description: Needs description - run /index-standards
+  queries:
+    description: Needs description - run /index-standards
+  telemetry-monitoring:
+    description: Needs description - run /index-standards
+
+frontend:
+  accessibility:
+    description: Needs description - run /index-standards
+  components:
+    description: Needs description - run /index-standards
+  css:
+    description: Needs description - run /index-standards
+  design-system:
+    description: Needs description - run /index-standards
+  performance-optimization:
+    description: Needs description - run /index-standards
+  responsive-design:
+    description: Needs description - run /index-standards
+  responsive:
+    description: Needs description - run /index-standards
+  tailwind-css-best-practices-2025:
+    description: Needs description - run /index-standards
+  tailwind-css:
+    description: Needs description - run /index-standards
+  vite:
+    description: Needs description - run /index-standards
+  vitest:
+    description: Needs description - run /index-standards
+  vuejs:
+    description: Needs description - run /index-standards
+
