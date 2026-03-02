@@ -84,6 +84,28 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function signInWithGoogle(): Promise<void> {
+    try {
+      loading.value = true
+      error.value = null
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/profile`,
+        },
+      })
+      if (oauthError) {
+        throw oauthError
+      }
+    } catch (err) {
+      error.value =
+        err instanceof Error ? err.message : 'Failed to sign in with Google'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   function clearError(): void {
     error.value = null
   }
@@ -98,6 +120,7 @@ export const useAuthStore = defineStore('auth', () => {
     signIn,
     signUp,
     signOut,
+    signInWithGoogle,
     clearError,
   }
 })
