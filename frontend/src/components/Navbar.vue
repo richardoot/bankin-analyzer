@@ -1,10 +1,29 @@
 <script setup lang="ts">
-  import { ref } from 'vue'
+  import { ref, computed } from 'vue'
+  import { useRouter } from 'vue-router'
+  import { useAuthStore } from '@/stores/auth'
+
+  const router = useRouter()
+  const authStore = useAuthStore()
 
   const isMobileMenuOpen = ref(false)
 
+  const isAuthenticated = computed(() => authStore.isAuthenticated)
+  const userEmail = computed(() => authStore.user?.email)
+  const loading = computed(() => authStore.loading)
+
   const toggleMobileMenu = (): void => {
     isMobileMenuOpen.value = !isMobileMenuOpen.value
+  }
+
+  const closeMobileMenu = (): void => {
+    isMobileMenuOpen.value = false
+  }
+
+  const handleSignOut = async (): Promise<void> => {
+    await authStore.signOut()
+    closeMobileMenu()
+    await router.push('/')
   }
 </script>
 
@@ -14,7 +33,11 @@
       <div class="flex h-16 items-center justify-between">
         <!-- Logo -->
         <div class="flex items-center">
-          <div class="flex items-center gap-2">
+          <RouterLink
+            to="/"
+            class="flex items-center gap-2"
+            @click="closeMobileMenu"
+          >
             <svg
               class="h-8 w-8 text-emerald-500"
               fill="none"
@@ -31,23 +54,42 @@
             <span class="text-xl font-bold text-gray-900"
               >Finance Analyzer</span
             >
-          </div>
+          </RouterLink>
         </div>
 
         <!-- Desktop Navigation -->
         <div class="hidden md:flex md:items-center md:gap-4">
-          <button
-            type="button"
-            class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            Se connecter
-          </button>
-          <button
-            type="button"
-            class="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 transition-colors"
-          >
-            S'inscrire
-          </button>
+          <template v-if="isAuthenticated">
+            <span class="text-sm text-gray-600">{{ userEmail }}</span>
+            <RouterLink
+              to="/profile"
+              class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Mon profil
+            </RouterLink>
+            <button
+              type="button"
+              :disabled="loading"
+              class="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 transition-colors disabled:opacity-50"
+              @click="handleSignOut"
+            >
+              Deconnexion
+            </button>
+          </template>
+          <template v-else>
+            <RouterLink
+              to="/login"
+              class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Se connecter
+            </RouterLink>
+            <RouterLink
+              to="/login?signup=true"
+              class="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 transition-colors"
+            >
+              S'inscrire
+            </RouterLink>
+          </template>
         </div>
 
         <!-- Mobile menu button -->
@@ -94,18 +136,40 @@
     <!-- Mobile menu -->
     <div v-if="isMobileMenuOpen" class="md:hidden border-t border-gray-200">
       <div class="space-y-2 px-4 py-4">
-        <button
-          type="button"
-          class="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          Se connecter
-        </button>
-        <button
-          type="button"
-          class="w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 transition-colors"
-        >
-          S'inscrire
-        </button>
+        <template v-if="isAuthenticated">
+          <p class="px-4 py-2 text-sm text-gray-600">{{ userEmail }}</p>
+          <RouterLink
+            to="/profile"
+            class="block w-full rounded-lg border border-gray-300 px-4 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            @click="closeMobileMenu"
+          >
+            Mon profil
+          </RouterLink>
+          <button
+            type="button"
+            :disabled="loading"
+            class="w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 transition-colors disabled:opacity-50"
+            @click="handleSignOut"
+          >
+            Deconnexion
+          </button>
+        </template>
+        <template v-else>
+          <RouterLink
+            to="/login"
+            class="block w-full rounded-lg border border-gray-300 px-4 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            @click="closeMobileMenu"
+          >
+            Se connecter
+          </RouterLink>
+          <RouterLink
+            to="/login?signup=true"
+            class="block w-full rounded-lg bg-emerald-500 px-4 py-2 text-center text-sm font-medium text-white hover:bg-emerald-600 transition-colors"
+            @click="closeMobileMenu"
+          >
+            S'inscrire
+          </RouterLink>
+        </template>
       </div>
     </div>
   </nav>

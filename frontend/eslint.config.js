@@ -99,7 +99,12 @@ export default [
       'vue/define-emits-declaration': ['error', 'type-based'],
       'vue/define-props-declaration': ['error', 'type-based'],
       'vue/no-empty-component-block': 'error',
-      'vue/no-undef-components': 'error',
+      'vue/no-undef-components': [
+        'error',
+        {
+          ignorePatterns: ['RouterLink', 'RouterView'],
+        },
+      ],
       'vue/no-unused-emit-declarations': 'error',
       'vue/no-unused-refs': 'error',
       'vue/block-lang': [
