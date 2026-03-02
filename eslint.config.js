@@ -88,8 +88,11 @@ export default [
   prettierConfig,
   {
     name: 'root/config-files',
-    files: ['*.config.{js,ts,mjs}', '*.config.*.{js,ts,mjs}'],
+    files: ['**/*.config.{js,ts,mjs}', '**/*.config.*.{js,ts,mjs}'],
     languageOptions: {
+      globals: {
+        URL: 'readonly',
+      },
       parserOptions: {
         project: null,
       },

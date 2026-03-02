@@ -1,17 +1,17 @@
 <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const message = ref('Bankin Analyzer')
+  import Navbar from './components/Navbar.vue'
+  import HeroSection from './components/HeroSection.vue'
+  import FeaturesSection from './components/FeaturesSection.vue'
+  import Footer from './components/Footer.vue'
 </script>
 
 <template>
-  <div>
-    <h1>{{ message }}</h1>
+  <div class="min-h-screen bg-white">
+    <Navbar />
+    <main>
+      <HeroSection />
+      <FeaturesSection />
+    </main>
+    <Footer />
   </div>
 </template>
-
-<style scoped>
-  h1 {
-    color: #333;
-  }
-</style>

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 import pluginVue from 'eslint-plugin-vue'
@@ -10,14 +11,21 @@ import {
   prettierConfig,
 } from '../eslint.config.js'
 
+const __dirname = fileURLToPath(new URL('.', import.meta.url))
+
 export default [
+  // Ignore config files for TypeScript parsing
+  {
+    ignores: ['eslint.config.js', 'vite.config.ts'],
+  },
+
   // Import shared configurations
   sharedIgnores,
   js.configs.recommended,
 
   // Vue-specific configurations
   ...pluginVue.configs['flat/recommended'],
-  ...vueTsEslintConfig(),
+  ...vueTsEslintConfig({ rootDir: __dirname }),
 
   // Shared rules
   sharedJavaScriptConfig,
@@ -33,7 +41,7 @@ export default [
       parser: tseslint.parser,
       parserOptions: {
         projectService: true,
-        tsconfigRootDir: import.meta.dirname,
+        tsconfigRootDir: __dirname,
         extraFileExtensions: ['.vue'],
       },
     },
@@ -72,6 +80,13 @@ export default [
       },
     },
     rules: {
+      // Interdire les blocs <style> (forcer Tailwind CSS)
+      'vue/block-order': [
+        'error',
+        {
+          order: ['script', 'template'], // Pas de style autorisé
+        },
+      ],
       'vue/multi-word-component-names': 'off',
       'vue/component-definition-name-casing': ['error', 'PascalCase'],
       'vue/component-name-in-template-casing': ['error', 'PascalCase'],
