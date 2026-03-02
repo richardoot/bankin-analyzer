@@ -137,3 +137,17 @@ dist
 
 # gemini cli
 .gemini
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+build/
