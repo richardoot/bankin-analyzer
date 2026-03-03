@@ -4,6 +4,7 @@ import type { TestingModule } from '@nestjs/testing'
 import { NotFoundException } from '@nestjs/common'
 import { UsersService } from './users.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { SupabaseService } from '../auth/supabase.service'
 
 const mockUser = {
   id: '550e8400-e29b-41d4-a716-446655440000',
@@ -22,6 +23,10 @@ const mockPrismaService = {
   },
 }
 
+const mockSupabaseService = {
+  deleteUser: vi.fn(),
+}
+
 describe('UsersService', () => {
   let service: UsersService
 
@@ -32,6 +37,10 @@ describe('UsersService', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: SupabaseService,
+          useValue: mockSupabaseService,
         },
       ],
     }).compile()
@@ -126,13 +135,17 @@ describe('UsersService', () => {
   })
 
   describe('delete', () => {
-    it('should delete a user', async () => {
+    it('should delete user from Supabase and PostgreSQL', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser)
+      mockSupabaseService.deleteUser.mockResolvedValue(undefined)
       mockPrismaService.user.delete.mockResolvedValue(mockUser)
 
       const result = await service.delete(mockUser.id)
 
       expect(result).toEqual(mockUser)
+      expect(mockSupabaseService.deleteUser).toHaveBeenCalledWith(
+        mockUser.supabaseId
+      )
       expect(mockPrismaService.user.delete).toHaveBeenCalledWith({
         where: { id: mockUser.id },
       })
@@ -144,6 +157,18 @@ describe('UsersService', () => {
       await expect(service.delete('non-existent-id')).rejects.toThrow(
         NotFoundException
       )
+    })
+
+    it('should throw error if Supabase deletion fails', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue(mockUser)
+      mockSupabaseService.deleteUser.mockRejectedValue(
+        new Error('Failed to delete user from Supabase')
+      )
+
+      await expect(service.delete(mockUser.id)).rejects.toThrow(
+        'Failed to delete user from Supabase'
+      )
+      expect(mockPrismaService.user.delete).not.toHaveBeenCalled()
     })
   })
 })
