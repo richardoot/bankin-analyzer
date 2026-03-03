@@ -11,6 +11,10 @@ import {
 export default [
   // Import shared configurations
   sharedIgnores,
+  // Ignore generated files and config files
+  {
+    ignores: ['src/generated/**', 'eslint.config.js'],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
 
@@ -27,7 +31,7 @@ export default [
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
-        projectService: true,
+        project: './tsconfig.eslint.json',
         tsconfigRootDir: import.meta.dirname,
       },
       globals: {
@@ -82,6 +86,20 @@ export default [
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
+
+  // Prisma config file
+  {
+    name: 'backend/prisma-config',
+    files: ['prisma/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
     },
   },
 

@@ -151,3 +151,6 @@ Thumbs.db
 
 # Build outputs
 build/
+
+# Prisma generated client
+backend/src/generated/*
