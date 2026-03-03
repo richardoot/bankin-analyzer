@@ -1,13 +1,16 @@
 <script setup lang="ts">
-  import { computed } from 'vue'
+  import { computed, ref } from 'vue'
   import { useRouter } from 'vue-router'
   import { useAuthStore } from '@/stores/auth'
+  import DeleteAccountModal from '@/components/DeleteAccountModal.vue'
 
   const router = useRouter()
   const authStore = useAuthStore()
 
   const user = computed(() => authStore.user)
   const loading = computed(() => authStore.loading)
+  const isDeleteModalOpen = ref(false)
+  const isDeleting = ref(false)
 
   const createdAt = computed(() => {
     if (!user.value?.created_at) {
@@ -23,6 +26,19 @@
   const handleSignOut = async (): Promise<void> => {
     await authStore.signOut()
     await router.push('/')
+  }
+
+  const handleDeleteAccount = async (): Promise<void> => {
+    try {
+      isDeleting.value = true
+      await authStore.deleteAccount()
+      isDeleteModalOpen.value = false
+      await router.push('/login')
+    } catch {
+      // Error is handled in the store
+    } finally {
+      isDeleting.value = false
+    }
   }
 </script>
 
@@ -134,6 +150,29 @@
           </RouterLink>
         </div>
       </div>
+
+      <!-- Danger Zone -->
+      <div class="mt-8 rounded-2xl border-2 border-red-200 bg-red-50 p-8">
+        <h3 class="mb-2 text-lg font-semibold text-red-700">Zone de danger</h3>
+        <p class="mb-6 text-sm text-red-600">
+          Les actions dans cette zone sont irreversibles. Procedez avec
+          precaution.
+        </p>
+        <button
+          type="button"
+          class="rounded-lg bg-red-600 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          @click="isDeleteModalOpen = true"
+        >
+          Supprimer mon compte
+        </button>
+      </div>
     </div>
+
+    <DeleteAccountModal
+      :is-open="isDeleteModalOpen"
+      :loading="isDeleting"
+      @close="isDeleteModalOpen = false"
+      @confirm="handleDeleteAccount"
+    />
   </div>
 </template>

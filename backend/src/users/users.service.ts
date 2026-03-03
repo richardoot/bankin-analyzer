@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { SupabaseService } from '../auth/supabase.service'
 import type { CreateUserDto } from './dto'
 import type { User } from '../generated/prisma'
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly supabaseService: SupabaseService
+  ) {}
 
   async findAll(): Promise<User[]> {
     return this.prisma.user.findMany({
@@ -43,6 +47,10 @@ export class UsersService {
   async delete(id: string): Promise<User> {
     const user = await this.findOne(id)
 
+    // Delete from Supabase Auth first
+    await this.supabaseService.deleteUser(user.supabaseId)
+
+    // Then delete from PostgreSQL
     return this.prisma.user.delete({
       where: { id: user.id },
     })

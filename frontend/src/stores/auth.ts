@@ -2,14 +2,31 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
+import type { DbUser } from '@/lib/api'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const session = ref<Session | null>(null)
+  const dbUser = ref<DbUser | null>(null)
   const loading = ref(true)
   const error = ref<string | null>(null)
 
   const isAuthenticated = computed(() => !!user.value)
+
+  async function syncWithBackend(): Promise<void> {
+    if (!session.value?.access_token) {
+      dbUser.value = null
+      return
+    }
+
+    try {
+      dbUser.value = await api.getMe()
+    } catch (err) {
+      console.error('Failed to sync with backend:', err)
+      dbUser.value = null
+    }
+  }
 
   async function initialize(): Promise<void> {
     try {
@@ -17,6 +34,10 @@ export const useAuthStore = defineStore('auth', () => {
       const { data } = await supabase.auth.getSession()
       session.value = data.session
       user.value = data.session?.user ?? null
+
+      if (data.session) {
+        await syncWithBackend()
+      }
     } catch (err) {
       error.value =
         err instanceof Error ? err.message : 'Failed to initialize auth'
@@ -24,9 +45,15 @@ export const useAuthStore = defineStore('auth', () => {
       loading.value = false
     }
 
-    supabase.auth.onAuthStateChange((_event, newSession) => {
+    supabase.auth.onAuthStateChange(async (_event, newSession) => {
       session.value = newSession
       user.value = newSession?.user ?? null
+
+      if (newSession) {
+        await syncWithBackend()
+      } else {
+        dbUser.value = null
+      }
     })
   }
 
@@ -110,9 +137,28 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
   }
 
+  async function deleteAccount(): Promise<void> {
+    try {
+      loading.value = true
+      error.value = null
+
+      await api.deleteAccount()
+      await supabase.auth.signOut()
+
+      dbUser.value = null
+    } catch (err) {
+      error.value =
+        err instanceof Error ? err.message : 'Failed to delete account'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     user,
     session,
+    dbUser,
     loading,
     error,
     isAuthenticated,
@@ -122,5 +168,7 @@ export const useAuthStore = defineStore('auth', () => {
     signOut,
     signInWithGoogle,
     clearError,
+    syncWithBackend,
+    deleteAccount,
   }
 })

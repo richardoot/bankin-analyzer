@@ -39,4 +39,12 @@ export class SupabaseService {
 
     return user
   }
+
+  async deleteUser(supabaseId: string): Promise<void> {
+    const { error } = await this.supabase.auth.admin.deleteUser(supabaseId)
+
+    if (error) {
+      throw new Error(`Failed to delete user from Supabase: ${error.message}`)
+    }
+  }
 }
