@@ -5,15 +5,18 @@
   import { useDashboardData } from '@/composables/useDashboardData'
 
   const {
-    incomeByMonth,
     totalExpenses,
     totalIncome,
     expensesByCategory,
     incomeByCategory,
     availableExpenseCategories,
+    availableIncomeCategories,
     selectedCategory,
+    selectedIncomeCategory,
     filteredExpensesByMonth,
+    filteredIncomeByMonth,
     setSelectedCategory,
+    setSelectedIncomeCategory,
     isLoading,
     error,
     fetchData,
@@ -34,6 +37,12 @@
     const target = event.target as HTMLSelectElement
     const value = target.value
     setSelectedCategory(value === '' ? null : value)
+  }
+
+  function handleIncomeCategoryChange(event: Event) {
+    const target = event.target as HTMLSelectElement
+    const value = target.value
+    setSelectedIncomeCategory(value === '' ? null : value)
   }
 </script>
 
@@ -138,14 +147,31 @@
             </div>
           </div>
 
-          <!-- Right column: Income -->
+          <!-- Right column: Income with filter -->
           <div class="bg-white rounded-xl shadow-sm p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">
-              Revenus par mois
-            </h2>
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-lg font-semibold text-gray-900">
+                Revenus par mois
+              </h2>
+              <select
+                v-if="availableIncomeCategories.length > 0"
+                :value="selectedIncomeCategory ?? ''"
+                class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                @change="handleIncomeCategoryChange"
+              >
+                <option value="">Toutes les catégories</option>
+                <option
+                  v-for="cat in availableIncomeCategories"
+                  :key="cat"
+                  :value="cat"
+                >
+                  {{ cat }}
+                </option>
+              </select>
+            </div>
             <div v-if="totalIncome > 0">
               <MonthlyBarChart
-                :data="incomeByMonth"
+                :data="filteredIncomeByMonth"
                 title="Revenus"
                 color="#22c55e"
               />

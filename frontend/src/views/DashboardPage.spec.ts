@@ -327,8 +327,60 @@ describe('DashboardPage', () => {
 
       await flushPromises()
 
-      const select = wrapper.find('select')
-      await select.setValue('Alimentation')
+      const selects = wrapper.findAll('select')
+      await selects[0].setValue('Alimentation')
+
+      // The component should still render without errors
+      expect(wrapper.findAll('.apexcharts-mock').length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('income category filter', () => {
+    it('should display two category filter dropdowns', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const wrapper = mount(DashboardPage, {
+        global: {
+          plugins: [router],
+        },
+      })
+
+      await flushPromises()
+
+      const selects = wrapper.findAll('select')
+      expect(selects.length).toBe(2)
+    })
+
+    it('should list available income categories in second dropdown', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const wrapper = mount(DashboardPage, {
+        global: {
+          plugins: [router],
+        },
+      })
+
+      await flushPromises()
+
+      const selects = wrapper.findAll('select')
+      const incomeSelect = selects[1]
+      expect(incomeSelect.text()).toContain('Toutes les catégories')
+      expect(incomeSelect.text()).toContain('Salaires')
+    })
+
+    it('should update income chart when category is selected', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const wrapper = mount(DashboardPage, {
+        global: {
+          plugins: [router],
+        },
+      })
+
+      await flushPromises()
+
+      const selects = wrapper.findAll('select')
+      await selects[1].setValue('Salaires')
 
       // The component should still render without errors
       expect(wrapper.findAll('.apexcharts-mock').length).toBeGreaterThan(0)

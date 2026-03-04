@@ -338,4 +338,75 @@ describe('useDashboardData', () => {
       expect(selectedCategory.value).toBeNull()
     })
   })
+
+  describe('income category filter', () => {
+    it('should return available income categories sorted alphabetically', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const { fetchData, availableIncomeCategories } = useDashboardData()
+      await fetchData()
+
+      expect(availableIncomeCategories.value).toEqual(['Salaires'])
+    })
+
+    it('should return all income when no category is selected', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const { fetchData, filteredIncomeByMonth, selectedIncomeCategory } =
+        useDashboardData()
+      await fetchData()
+
+      expect(selectedIncomeCategory.value).toBeNull()
+      expect(filteredIncomeByMonth.value.labels).toEqual([
+        'Jan 2024',
+        'Fév 2024',
+      ])
+      expect(filteredIncomeByMonth.value.values).toEqual([2500, 2500])
+    })
+
+    it('should filter income by selected category', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const { fetchData, filteredIncomeByMonth, setSelectedIncomeCategory } =
+        useDashboardData()
+      await fetchData()
+
+      setSelectedIncomeCategory('Salaires')
+
+      expect(filteredIncomeByMonth.value.labels).toEqual([
+        'Jan 2024',
+        'Fév 2024',
+      ])
+      expect(filteredIncomeByMonth.value.values).toEqual([2500, 2500])
+    })
+
+    it('should return empty data when no income matches the selected category', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const { fetchData, filteredIncomeByMonth, setSelectedIncomeCategory } =
+        useDashboardData()
+      await fetchData()
+
+      setSelectedIncomeCategory('Catégorie Inexistante')
+
+      expect(filteredIncomeByMonth.value.labels).toEqual([])
+      expect(filteredIncomeByMonth.value.values).toEqual([])
+    })
+
+    it('should update selected income category', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const { fetchData, selectedIncomeCategory, setSelectedIncomeCategory } =
+        useDashboardData()
+      await fetchData()
+
+      expect(selectedIncomeCategory.value).toBeNull()
+
+      setSelectedIncomeCategory('Salaires')
+      expect(selectedIncomeCategory.value).toBe('Salaires')
+
+      setSelectedIncomeCategory(null)
+      expect(selectedIncomeCategory.value).toBeNull()
+    })
+  })
 })

@@ -33,6 +33,7 @@ export function useDashboardData() {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const selectedCategory = ref<string | null>(null)
+  const selectedIncomeCategory = ref<string | null>(null)
 
   const monthlyData = computed<MonthlyData[]>(() => {
     const dataByMonth = new Map<string, { expenses: number; income: number }>()
@@ -178,8 +179,58 @@ export function useDashboardData() {
     }
   })
 
+  // Available income categories for dropdown
+  const availableIncomeCategories = computed<string[]>(() => {
+    const categories = new Set<string>()
+    for (const tx of transactions.value) {
+      if (tx.type === 'INCOME' && tx.categoryName) {
+        categories.add(tx.categoryName)
+      }
+    }
+    return Array.from(categories).sort()
+  })
+
+  // Filtered income by month (when category is selected)
+  const filteredIncomeByMonth = computed<ChartData>(() => {
+    if (!selectedIncomeCategory.value) {
+      return incomeByMonth.value
+    }
+
+    const dataByMonth = new Map<string, number>()
+
+    for (const tx of transactions.value) {
+      if (
+        tx.type === 'INCOME' &&
+        tx.categoryName === selectedIncomeCategory.value
+      ) {
+        const date = new Date(tx.date)
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+
+        const current = dataByMonth.get(monthKey) ?? 0
+        dataByMonth.set(monthKey, current + tx.amount)
+      }
+    }
+
+    // Sort by month
+    const sortedMonths = Array.from(dataByMonth.keys()).sort()
+
+    return {
+      labels: sortedMonths.map(month => {
+        const [year, monthNum] = month.split('-')
+        return `${MONTH_LABELS[monthNum]} ${year}`
+      }),
+      values: sortedMonths.map(
+        month => Math.round((dataByMonth.get(month) ?? 0) * 100) / 100
+      ),
+    }
+  })
+
   function setSelectedCategory(category: string | null) {
     selectedCategory.value = category
+  }
+
+  function setSelectedIncomeCategory(category: string | null) {
+    selectedIncomeCategory.value = category
   }
 
   async function fetchData() {
@@ -208,9 +259,13 @@ export function useDashboardData() {
     expensesByCategory,
     incomeByCategory,
     availableExpenseCategories,
+    availableIncomeCategories,
     selectedCategory,
+    selectedIncomeCategory,
     filteredExpensesByMonth,
+    filteredIncomeByMonth,
     setSelectedCategory,
+    setSelectedIncomeCategory,
     isLoading,
     error,
     fetchData,
