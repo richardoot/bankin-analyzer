@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { computed } from 'vue'
+  import { computed, ref } from 'vue'
   import { useFiltersStore } from '@/stores/filters'
 
   const props = defineProps<{
@@ -31,6 +31,43 @@
       .sort((a, b) => a.localeCompare(b, 'fr'))
     return [...visible, ...hidden]
   })
+
+  // === Section remboursements ===
+  const selectedExpenseForAssoc = ref<string>('')
+  const selectedIncomeForAssoc = ref<string>('')
+
+  // Catégories dépenses disponibles (non masquées, non déjà associées)
+  const availableExpensesForAssoc = computed(() =>
+    props.allExpenseCategories
+      .filter(cat => !filtersStore.isExpenseCategoryHidden(cat))
+      .filter(cat => !filtersStore.getReimbursementCategory(cat))
+      .sort((a, b) => a.localeCompare(b, 'fr'))
+  )
+
+  // Catégories revenus disponibles (non masquées, non déjà associées)
+  const availableIncomesForAssoc = computed(() =>
+    props.allIncomeCategories
+      .filter(cat => !filtersStore.isIncomeCategoryHidden(cat))
+      .filter(cat => !filtersStore.isIncomeUsedAsReimbursement(cat))
+      .sort((a, b) => a.localeCompare(b, 'fr'))
+  )
+
+  // Validation du formulaire
+  const canAddAssociation = computed(
+    () => selectedExpenseForAssoc.value && selectedIncomeForAssoc.value
+  )
+
+  // Ajouter une association
+  function addAssociation() {
+    if (!canAddAssociation.value) return
+    filtersStore.setCategoryAssociation(
+      selectedExpenseForAssoc.value,
+      selectedIncomeForAssoc.value
+    )
+    // Reset le formulaire
+    selectedExpenseForAssoc.value = ''
+    selectedIncomeForAssoc.value = ''
+  }
 </script>
 
 <template>
@@ -303,6 +340,149 @@
             class="text-sm text-gray-500 italic bg-gray-50 rounded-lg p-4"
           >
             Aucune catégorie de revenus disponible.
+          </p>
+        </div>
+
+        <!-- Section associations remboursements -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <svg
+              class="w-4 h-4 text-amber-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+              />
+            </svg>
+            <h3 class="text-sm font-medium text-gray-700">Remboursements</h3>
+            <span class="text-xs text-gray-400">(déduits des dépenses)</span>
+          </div>
+
+          <!-- Formulaire d'ajout : 2 dropdowns + bouton -->
+          <div
+            v-if="
+              availableExpensesForAssoc.length > 0 &&
+              availableIncomesForAssoc.length > 0
+            "
+            class="flex flex-wrap items-center gap-3 mb-4"
+          >
+            <select
+              v-model="selectedExpenseForAssoc"
+              class="flex-1 min-w-[140px] px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+            >
+              <option value="">Catégorie dépense</option>
+              <option
+                v-for="cat in availableExpensesForAssoc"
+                :key="cat"
+                :value="cat"
+              >
+                {{ cat }}
+              </option>
+            </select>
+
+            <svg
+              class="w-4 h-4 text-gray-400 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M17 8l4 4m0 0l-4 4m4-4H3"
+              />
+            </svg>
+
+            <select
+              v-model="selectedIncomeForAssoc"
+              class="flex-1 min-w-[140px] px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+            >
+              <option value="">Remboursement</option>
+              <option
+                v-for="cat in availableIncomesForAssoc"
+                :key="cat"
+                :value="cat"
+              >
+                {{ cat }}
+              </option>
+            </select>
+
+            <button
+              :disabled="!canAddAssociation"
+              class="px-4 py-2 text-sm font-medium rounded-lg transition-all duration-150"
+              :class="
+                canAddAssociation
+                  ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm'
+                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              "
+              @click="addAssociation"
+            >
+              Lier
+            </button>
+          </div>
+
+          <p
+            v-else-if="filtersStore.categoryAssociations.length === 0"
+            class="text-sm text-gray-500 italic bg-gray-50 rounded-lg p-4 mb-4"
+          >
+            Aucune catégorie disponible pour créer une association.
+          </p>
+
+          <!-- Liste des associations existantes -->
+          <div
+            v-if="filtersStore.categoryAssociations.length > 0"
+            class="space-y-2 max-h-[200px] overflow-y-auto"
+          >
+            <div
+              v-for="assoc in filtersStore.categoryAssociations"
+              :key="assoc.expenseCategory"
+              class="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg"
+            >
+              <span class="text-sm">
+                <span class="font-medium text-gray-700">{{
+                  assoc.expenseCategory
+                }}</span>
+                <span class="text-gray-400 mx-2">→</span>
+                <span class="text-amber-700">{{ assoc.incomeCategory }}</span>
+              </span>
+              <button
+                class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                title="Supprimer l'association"
+                @click="
+                  filtersStore.removeCategoryAssociation(assoc.expenseCategory)
+                "
+              >
+                <svg
+                  class="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <p
+            v-else-if="
+              availableExpensesForAssoc.length > 0 ||
+              availableIncomesForAssoc.length > 0
+            "
+            class="text-sm text-gray-500 italic"
+          >
+            Aucune association configurée
           </p>
         </div>
       </div>

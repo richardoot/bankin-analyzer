@@ -132,6 +132,7 @@
               </h2>
               <select
                 v-if="availableExpenseCategories.length > 0"
+                data-testid="expense-category-filter"
                 :value="selectedCategory ?? ''"
                 class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 @change="handleCategoryChange"
@@ -166,6 +167,7 @@
               </h2>
               <select
                 v-if="availableIncomeCategories.length > 0"
+                data-testid="income-category-filter"
                 :value="selectedIncomeCategory ?? ''"
                 class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 @change="handleIncomeCategoryChange"

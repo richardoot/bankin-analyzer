@@ -44,6 +44,26 @@ export function useDashboardData() {
     return tx.amount / divisor
   }
 
+  // Calcul des remboursements par catégorie de dépenses
+  const reimbursementsByExpenseCategory = computed<Map<string, number>>(() => {
+    const map = new Map<string, number>()
+
+    for (const tx of transactions.value) {
+      if (tx.type === 'INCOME') {
+        const incomeCategory = tx.categoryName || 'Autre'
+        // Trouver si cette catégorie est un remboursement associé
+        const assoc = filtersStore.categoryAssociations.find(
+          a => a.incomeCategory === incomeCategory
+        )
+        if (assoc) {
+          const current = map.get(assoc.expenseCategory) ?? 0
+          map.set(assoc.expenseCategory, current + getAdjustedAmount(tx))
+        }
+      }
+    }
+    return map
+  })
+
   const monthlyData = computed<MonthlyData[]>(() => {
     const dataByMonth = new Map<string, { expenses: number; income: number }>()
 
@@ -57,6 +77,12 @@ export function useDashboardData() {
       )
         continue
       if (tx.type === 'INCOME' && filtersStore.isIncomeCategoryHidden(category))
+        continue
+      // Skip income categories used as reimbursements
+      if (
+        tx.type === 'INCOME' &&
+        filtersStore.isIncomeUsedAsReimbursement(category)
+      )
         continue
 
       const date = new Date(tx.date)
@@ -74,17 +100,38 @@ export function useDashboardData() {
       dataByMonth.set(monthKey, monthData)
     }
 
+    // Déduire les remboursements des dépenses
+    const totalReimbursements = Array.from(
+      reimbursementsByExpenseCategory.value.values()
+    ).reduce((sum, val) => sum + val, 0)
+
     // Sort by month and convert to array
     const sortedMonths = Array.from(dataByMonth.keys()).sort()
+
+    // Répartir les remboursements proportionnellement sur les mois
+    const totalExpensesBeforeDeduction = sortedMonths.reduce((sum, month) => {
+      const data = dataByMonth.get(month) ?? { expenses: 0, income: 0 }
+      return sum + data.expenses
+    }, 0)
 
     return sortedMonths.map(month => {
       const [year, monthNum] = month.split('-')
       const data = dataByMonth.get(month) ?? { expenses: 0, income: 0 }
 
+      // Déduire proportionnellement les remboursements
+      let adjustedExpenses = data.expenses
+      if (totalExpensesBeforeDeduction > 0 && totalReimbursements > 0) {
+        const proportion = data.expenses / totalExpensesBeforeDeduction
+        adjustedExpenses = Math.max(
+          0,
+          data.expenses - totalReimbursements * proportion
+        )
+      }
+
       return {
         month,
         label: `${MONTH_LABELS[monthNum]} ${year}`,
-        expenses: Math.round(data.expenses * 100) / 100,
+        expenses: Math.round(adjustedExpenses * 100) / 100,
         income: Math.round(data.income * 100) / 100,
       }
     })
@@ -127,6 +174,15 @@ export function useDashboardData() {
       }
     }
 
+    // Déduire les remboursements
+    for (const [
+      expenseCategory,
+      reimbursement,
+    ] of reimbursementsByExpenseCategory.value) {
+      const current = dataByCategory.get(expenseCategory) ?? 0
+      dataByCategory.set(expenseCategory, Math.max(0, current - reimbursement))
+    }
+
     // Sort by amount descending
     const sorted = [...dataByCategory.entries()].sort((a, b) => b[1] - a[1])
 
@@ -144,6 +200,8 @@ export function useDashboardData() {
       if (tx.type === 'INCOME') {
         const category = tx.categoryName || 'Autre'
         if (filtersStore.isIncomeCategoryHidden(category)) continue
+        // Masquer si utilisée comme remboursement
+        if (filtersStore.isIncomeUsedAsReimbursement(category)) continue
         const current = dataByCategory.get(category) ?? 0
         dataByCategory.set(category, current + getAdjustedAmount(tx))
       }

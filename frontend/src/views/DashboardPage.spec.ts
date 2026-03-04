@@ -281,7 +281,7 @@ describe('DashboardPage', () => {
 
       await flushPromises()
 
-      const select = wrapper.find('select')
+      const select = wrapper.find('[data-testid="expense-category-filter"]')
       expect(select.exists()).toBe(true)
     })
 
@@ -296,7 +296,7 @@ describe('DashboardPage', () => {
 
       await flushPromises()
 
-      const select = wrapper.find('select')
+      const select = wrapper.find('[data-testid="expense-category-filter"]')
       expect(select.text()).toContain('Toutes les catégories')
     })
 
@@ -311,7 +311,7 @@ describe('DashboardPage', () => {
 
       await flushPromises()
 
-      const select = wrapper.find('select')
+      const select = wrapper.find('[data-testid="expense-category-filter"]')
       expect(select.text()).toContain('Alimentation')
       expect(select.text()).toContain('Logement')
     })
@@ -327,8 +327,8 @@ describe('DashboardPage', () => {
 
       await flushPromises()
 
-      const selects = wrapper.findAll('select')
-      await selects[0].setValue('Alimentation')
+      const select = wrapper.find('[data-testid="expense-category-filter"]')
+      await select.setValue('Alimentation')
 
       // The component should still render without errors
       expect(wrapper.findAll('.apexcharts-mock').length).toBeGreaterThan(0)
@@ -347,8 +347,14 @@ describe('DashboardPage', () => {
 
       await flushPromises()
 
-      const selects = wrapper.findAll('select')
-      expect(selects.length).toBe(2)
+      const expenseSelect = wrapper.find(
+        '[data-testid="expense-category-filter"]'
+      )
+      const incomeSelect = wrapper.find(
+        '[data-testid="income-category-filter"]'
+      )
+      expect(expenseSelect.exists()).toBe(true)
+      expect(incomeSelect.exists()).toBe(true)
     })
 
     it('should list available income categories in second dropdown', async () => {
@@ -362,8 +368,9 @@ describe('DashboardPage', () => {
 
       await flushPromises()
 
-      const selects = wrapper.findAll('select')
-      const incomeSelect = selects[1]
+      const incomeSelect = wrapper.find(
+        '[data-testid="income-category-filter"]'
+      )
       expect(incomeSelect.text()).toContain('Toutes les catégories')
       expect(incomeSelect.text()).toContain('Salaires')
     })
@@ -379,8 +386,10 @@ describe('DashboardPage', () => {
 
       await flushPromises()
 
-      const selects = wrapper.findAll('select')
-      await selects[1].setValue('Salaires')
+      const incomeSelect = wrapper.find(
+        '[data-testid="income-category-filter"]'
+      )
+      await incomeSelect.setValue('Salaires')
 
       // The component should still render without errors
       expect(wrapper.findAll('.apexcharts-mock').length).toBeGreaterThan(0)
