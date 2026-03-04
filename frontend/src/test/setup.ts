@@ -1,5 +1,11 @@
-import { vi } from 'vitest'
+import { vi, beforeEach } from 'vitest'
 import { config } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+
+// Create a fresh Pinia instance before each test
+beforeEach(() => {
+  setActivePinia(createPinia())
+})
 
 // Mock Supabase
 vi.mock('@/lib/supabase', () => ({
@@ -39,3 +45,12 @@ config.global.stubs = {
     template: '<div><slot /></div>',
   },
 }
+
+// Mock localStorage for tests
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+}
+vi.stubGlobal('localStorage', localStorageMock)

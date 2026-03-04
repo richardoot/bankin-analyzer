@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { api, type TransactionDto } from '@/lib/api'
+import { useFiltersStore } from '@/stores/filters'
 
 export interface MonthlyData {
   month: string // "2024-01", "2024-02", ...
@@ -29,11 +30,19 @@ const MONTH_LABELS: Record<string, string> = {
 }
 
 export function useDashboardData() {
+  const filtersStore = useFiltersStore()
+
   const transactions = ref<TransactionDto[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const selectedCategory = ref<string | null>(null)
   const selectedIncomeCategory = ref<string | null>(null)
+
+  // Helper pour obtenir le montant ajusté (divisé par 2 si compte joint)
+  function getAdjustedAmount(tx: TransactionDto): number {
+    const divisor = filtersStore.isJointAccount(tx.account) ? 2 : 1
+    return tx.amount / divisor
+  }
 
   const monthlyData = computed<MonthlyData[]>(() => {
     const dataByMonth = new Map<string, { expenses: number; income: number }>()
@@ -46,9 +55,9 @@ export function useDashboardData() {
       const monthData = existing ?? { expenses: 0, income: 0 }
 
       if (tx.type === 'EXPENSE') {
-        monthData.expenses += Math.abs(tx.amount)
+        monthData.expenses += Math.abs(getAdjustedAmount(tx))
       } else {
-        monthData.income += tx.amount
+        monthData.income += getAdjustedAmount(tx)
       }
 
       dataByMonth.set(monthKey, monthData)
@@ -102,7 +111,7 @@ export function useDashboardData() {
       if (tx.type === 'EXPENSE') {
         const category = tx.categoryName || 'Autre'
         const current = dataByCategory.get(category) ?? 0
-        dataByCategory.set(category, current + Math.abs(tx.amount))
+        dataByCategory.set(category, current + Math.abs(getAdjustedAmount(tx)))
       }
     }
 
@@ -123,7 +132,7 @@ export function useDashboardData() {
       if (tx.type === 'INCOME') {
         const category = tx.categoryName || 'Autre'
         const current = dataByCategory.get(category) ?? 0
-        dataByCategory.set(category, current + tx.amount)
+        dataByCategory.set(category, current + getAdjustedAmount(tx))
       }
     }
 
@@ -161,7 +170,7 @@ export function useDashboardData() {
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 
         const current = dataByMonth.get(monthKey) ?? 0
-        dataByMonth.set(monthKey, current + Math.abs(tx.amount))
+        dataByMonth.set(monthKey, current + Math.abs(getAdjustedAmount(tx)))
       }
     }
 
@@ -207,7 +216,7 @@ export function useDashboardData() {
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 
         const current = dataByMonth.get(monthKey) ?? 0
-        dataByMonth.set(monthKey, current + tx.amount)
+        dataByMonth.set(monthKey, current + getAdjustedAmount(tx))
       }
     }
 
@@ -223,6 +232,17 @@ export function useDashboardData() {
         month => Math.round((dataByMonth.get(month) ?? 0) * 100) / 100
       ),
     }
+  })
+
+  // Available accounts for joint account filter
+  const availableAccounts = computed<string[]>(() => {
+    const accounts = new Set<string>()
+    for (const tx of transactions.value) {
+      if (tx.account) {
+        accounts.add(tx.account)
+      }
+    }
+    return Array.from(accounts).sort()
   })
 
   function setSelectedCategory(category: string | null) {
@@ -260,6 +280,7 @@ export function useDashboardData() {
     incomeByCategory,
     availableExpenseCategories,
     availableIncomeCategories,
+    availableAccounts,
     selectedCategory,
     selectedIncomeCategory,
     filteredExpensesByMonth,

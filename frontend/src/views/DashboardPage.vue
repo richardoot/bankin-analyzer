@@ -2,6 +2,7 @@
   import { onMounted } from 'vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import CategoryPieChart from '@/components/charts/CategoryPieChart.vue'
+  import AdvancedFiltersPanel from '@/components/filters/AdvancedFiltersPanel.vue'
   import { useDashboardData } from '@/composables/useDashboardData'
 
   const {
@@ -11,6 +12,7 @@
     incomeByCategory,
     availableExpenseCategories,
     availableIncomeCategories,
+    availableAccounts,
     selectedCategory,
     selectedIncomeCategory,
     filteredExpensesByMonth,
@@ -87,6 +89,9 @@
 
       <!-- Content -->
       <template v-else-if="!error">
+        <!-- Advanced filters panel -->
+        <AdvancedFiltersPanel :available-accounts="availableAccounts" />
+
         <!-- Summary cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div
