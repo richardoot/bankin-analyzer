@@ -101,7 +101,7 @@
       const description = values[descIdx] || ''
       const account = values[accountIdx] || ''
       const rawAmount = values[amountIdx] || '0'
-      const category = values[categoryIdx] || 'Autre'
+      const rawCategory = values[categoryIdx] || 'Autre'
       const subcategory = values[subcategoryIdx] || undefined
       const note = values[noteIdx] || undefined
       const rawPointed = values[pointedIdx] || 'Non'
@@ -128,6 +128,11 @@
       // Parse pointed
       const isPointed = rawPointed.toLowerCase() === 'oui'
 
+      // For income transactions, use subcategory as category
+      // (Bankin always uses "Entrées d'argent" as category for income)
+      const isIncome = amount >= 0
+      const category = isIncome && subcategory ? subcategory : rawCategory
+
       transactions.push({
         date: isoDate,
         description,
@@ -135,7 +140,7 @@
         category,
         subcategory: subcategory || undefined,
         account,
-        type: amount < 0 ? 'EXPENSE' : 'INCOME',
+        type: isIncome ? 'INCOME' : 'EXPENSE',
         note: note || undefined,
         isPointed,
       })

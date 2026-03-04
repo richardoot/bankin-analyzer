@@ -202,6 +202,34 @@ describe('ImportPage', () => {
 
       expect(wrapper.text()).toContain('Format CSV invalide')
     })
+
+    it('should use subcategory as category for income transactions', async () => {
+      const csvContent = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
+"15/01/2024";"Salaire janvier";"Compte Courant";"2500.00";"Entrées d'argent";"Salaires";"";"Oui"
+"16/01/2024";"Restaurant";"Compte Courant";"-45.00";"Alimentation";"Restaurant";"";"Non"`
+
+      const wrapper = mount(ImportPage, {
+        global: {
+          plugins: [router],
+        },
+      })
+
+      const file = new File([csvContent], 'export.csv', { type: 'text/csv' })
+      const input = wrapper.find('input[type="file"]')
+
+      Object.defineProperty(input.element, 'files', {
+        value: [file],
+      })
+      await input.trigger('change')
+      await flushPromises()
+
+      // Income transaction should use subcategory "Salaires" as category
+      expect(wrapper.text()).toContain('Salaires')
+      // Expense transaction should keep original category "Alimentation"
+      expect(wrapper.text()).toContain('Alimentation')
+      // The original category "Entrées d'argent" should not appear
+      expect(wrapper.text()).not.toContain("Entrées d'argent")
+    })
   })
 
   describe('import submission', () => {
