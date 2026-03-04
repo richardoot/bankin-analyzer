@@ -292,8 +292,8 @@
             <p class="text-sm text-gray-500">{{ file?.name }}</p>
           </div>
           <button
-            @click="cancelImport"
             class="text-gray-500 hover:text-gray-700"
+            @click="cancelImport"
           >
             <svg
               class="w-6 h-6"
@@ -368,15 +368,15 @@
         <!-- Actions -->
         <div class="flex gap-4">
           <button
-            @click="cancelImport"
             class="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+            @click="cancelImport"
           >
             Annuler
           </button>
           <button
-            @click="submitImport"
             :disabled="isUploading"
             class="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            @click="submitImport"
           >
             <span v-if="isUploading">Import en cours...</span>
             <span v-else

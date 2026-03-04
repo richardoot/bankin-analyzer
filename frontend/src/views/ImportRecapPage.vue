@@ -18,8 +18,8 @@
     router.push({ name: 'import' })
   }
 
-  function goToProfile() {
-    router.push({ name: 'profile' })
+  function goToDashboard() {
+    router.push({ name: 'dashboard' })
   }
 </script>
 
@@ -125,16 +125,16 @@
         <!-- Actions -->
         <div class="flex gap-4">
           <button
-            @click="goToImport"
             class="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+            @click="goToImport"
           >
             Nouvel import
           </button>
           <button
-            @click="goToProfile"
-            class="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+            class="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
+            @click="goToDashboard"
           >
-            Retour au profil
+            Voir le dashboard
           </button>
         </div>
       </div>

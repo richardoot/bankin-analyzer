@@ -15,9 +15,9 @@ describe('ImportRecapPage', () => {
           component: { template: '<div>Import</div>' },
         },
         {
-          path: '/profile',
-          name: 'profile',
-          component: { template: '<div>Profile</div>' },
+          path: '/dashboard',
+          name: 'dashboard',
+          component: { template: '<div>Dashboard</div>' },
         },
         {
           path: '/import/recap',
@@ -135,7 +135,7 @@ describe('ImportRecapPage', () => {
     })
 
     expect(wrapper.text()).toContain('Nouvel import')
-    expect(wrapper.text()).toContain('Retour au profil')
+    expect(wrapper.text()).toContain('Voir le dashboard')
   })
 
   it('should navigate to import page when clicking "Nouvel import"', async () => {
@@ -158,12 +158,14 @@ describe('ImportRecapPage', () => {
     const newImportButton = wrapper
       .findAll('button')
       .find(b => b.text().includes('Nouvel import'))
-    await newImportButton!.trigger('click')
+    if (newImportButton) {
+      await newImportButton.trigger('click')
+    }
 
     expect(pushSpy).toHaveBeenCalledWith({ name: 'import' })
   })
 
-  it('should navigate to profile page when clicking "Retour au profil"', async () => {
+  it('should navigate to dashboard when clicking "Voir le dashboard"', async () => {
     const router = createRouterWithQuery({
       imported: '10',
       duplicates: '0',
@@ -180,12 +182,14 @@ describe('ImportRecapPage', () => {
       },
     })
 
-    const profileButton = wrapper
+    const dashboardButton = wrapper
       .findAll('button')
-      .find(b => b.text().includes('Retour au profil'))
-    await profileButton!.trigger('click')
+      .find(b => b.text().includes('Voir le dashboard'))
+    if (dashboardButton) {
+      await dashboardButton.trigger('click')
+    }
 
-    expect(pushSpy).toHaveBeenCalledWith({ name: 'profile' })
+    expect(pushSpy).toHaveBeenCalledWith({ name: 'dashboard' })
   })
 
   it('should handle missing query parameters gracefully', async () => {

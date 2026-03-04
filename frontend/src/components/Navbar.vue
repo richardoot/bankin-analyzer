@@ -62,6 +62,12 @@
           <template v-if="isAuthenticated">
             <span class="text-sm text-gray-600">{{ userEmail }}</span>
             <RouterLink
+              to="/dashboard"
+              class="rounded-lg border border-emerald-500 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+            >
+              Dashboard
+            </RouterLink>
+            <RouterLink
               to="/import"
               class="rounded-lg border border-indigo-500 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
             >
@@ -144,6 +150,13 @@
       <div class="space-y-2 px-4 py-4">
         <template v-if="isAuthenticated">
           <p class="px-4 py-2 text-sm text-gray-600">{{ userEmail }}</p>
+          <RouterLink
+            to="/dashboard"
+            class="block w-full rounded-lg border border-emerald-500 bg-emerald-50 px-4 py-2 text-center text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+            @click="closeMobileMenu"
+          >
+            Dashboard
+          </RouterLink>
           <RouterLink
             to="/import"
             class="block w-full rounded-lg border border-indigo-500 bg-indigo-50 px-4 py-2 text-center text-sm font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"

@@ -237,7 +237,9 @@ describe('ImportPage', () => {
         .find(b => b.text().includes('Importer'))
       expect(importButton).toBeDefined()
 
-      await importButton!.trigger('click')
+      if (importButton) {
+        await importButton.trigger('click')
+      }
       await flushPromises()
 
       expect(api.importTransactions).toHaveBeenCalledWith(
@@ -279,7 +281,9 @@ describe('ImportPage', () => {
       const importButton = wrapper
         .findAll('button')
         .find(b => b.text().includes('Importer'))
-      await importButton!.trigger('click')
+      if (importButton) {
+        await importButton.trigger('click')
+      }
       await flushPromises()
 
       expect(wrapper.text()).toContain('Server error')
@@ -311,7 +315,9 @@ describe('ImportPage', () => {
       const cancelButton = wrapper
         .findAll('button')
         .find(b => b.text().includes('Annuler'))
-      await cancelButton!.trigger('click')
+      if (cancelButton) {
+        await cancelButton.trigger('click')
+      }
 
       // Should show upload zone again
       expect(wrapper.text()).toContain('Glissez-déposez votre fichier CSV')
