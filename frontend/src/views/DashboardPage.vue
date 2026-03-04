@@ -10,6 +10,8 @@
     totalIncome,
     expensesByCategory,
     incomeByCategory,
+    allExpenseCategories,
+    allIncomeCategories,
     availableExpenseCategories,
     availableIncomeCategories,
     availableAccounts,
@@ -90,7 +92,11 @@
       <!-- Content -->
       <template v-else-if="!error">
         <!-- Advanced filters panel -->
-        <AdvancedFiltersPanel :available-accounts="availableAccounts" />
+        <AdvancedFiltersPanel
+          :available-accounts="availableAccounts"
+          :all-expense-categories="allExpenseCategories"
+          :all-income-categories="allIncomeCategories"
+        />
 
         <!-- Summary cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">

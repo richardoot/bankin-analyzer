@@ -48,6 +48,17 @@ export function useDashboardData() {
     const dataByMonth = new Map<string, { expenses: number; income: number }>()
 
     for (const tx of transactions.value) {
+      const category = tx.categoryName || 'Autre'
+
+      // Skip hidden categories
+      if (
+        tx.type === 'EXPENSE' &&
+        filtersStore.isExpenseCategoryHidden(category)
+      )
+        continue
+      if (tx.type === 'INCOME' && filtersStore.isIncomeCategoryHidden(category))
+        continue
+
       const date = new Date(tx.date)
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 
@@ -110,6 +121,7 @@ export function useDashboardData() {
     for (const tx of transactions.value) {
       if (tx.type === 'EXPENSE') {
         const category = tx.categoryName || 'Autre'
+        if (filtersStore.isExpenseCategoryHidden(category)) continue
         const current = dataByCategory.get(category) ?? 0
         dataByCategory.set(category, current + Math.abs(getAdjustedAmount(tx)))
       }
@@ -131,6 +143,7 @@ export function useDashboardData() {
     for (const tx of transactions.value) {
       if (tx.type === 'INCOME') {
         const category = tx.categoryName || 'Autre'
+        if (filtersStore.isIncomeCategoryHidden(category)) continue
         const current = dataByCategory.get(category) ?? 0
         dataByCategory.set(category, current + getAdjustedAmount(tx))
       }
@@ -145,8 +158,8 @@ export function useDashboardData() {
     }
   })
 
-  // Available expense categories for dropdown
-  const availableExpenseCategories = computed<string[]>(() => {
+  // All expense categories (for filter panel)
+  const allExpenseCategories = computed<string[]>(() => {
     const categories = new Set<string>()
     for (const tx of transactions.value) {
       if (tx.type === 'EXPENSE' && tx.categoryName) {
@@ -154,6 +167,13 @@ export function useDashboardData() {
       }
     }
     return Array.from(categories).sort()
+  })
+
+  // Available expense categories for dropdown (excludes hidden)
+  const availableExpenseCategories = computed<string[]>(() => {
+    return allExpenseCategories.value.filter(
+      cat => !filtersStore.isExpenseCategoryHidden(cat)
+    )
   })
 
   // Filtered expenses by month (when category is selected)
@@ -166,6 +186,9 @@ export function useDashboardData() {
 
     for (const tx of transactions.value) {
       if (tx.type === 'EXPENSE' && tx.categoryName === selectedCategory.value) {
+        const category = tx.categoryName || 'Autre'
+        if (filtersStore.isExpenseCategoryHidden(category)) continue
+
         const date = new Date(tx.date)
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 
@@ -188,8 +211,8 @@ export function useDashboardData() {
     }
   })
 
-  // Available income categories for dropdown
-  const availableIncomeCategories = computed<string[]>(() => {
+  // All income categories (for filter panel)
+  const allIncomeCategories = computed<string[]>(() => {
     const categories = new Set<string>()
     for (const tx of transactions.value) {
       if (tx.type === 'INCOME' && tx.categoryName) {
@@ -197,6 +220,13 @@ export function useDashboardData() {
       }
     }
     return Array.from(categories).sort()
+  })
+
+  // Available income categories for dropdown (excludes hidden)
+  const availableIncomeCategories = computed<string[]>(() => {
+    return allIncomeCategories.value.filter(
+      cat => !filtersStore.isIncomeCategoryHidden(cat)
+    )
   })
 
   // Filtered income by month (when category is selected)
@@ -212,6 +242,9 @@ export function useDashboardData() {
         tx.type === 'INCOME' &&
         tx.categoryName === selectedIncomeCategory.value
       ) {
+        const category = tx.categoryName || 'Autre'
+        if (filtersStore.isIncomeCategoryHidden(category)) continue
+
         const date = new Date(tx.date)
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 
@@ -278,6 +311,8 @@ export function useDashboardData() {
     totalIncome,
     expensesByCategory,
     incomeByCategory,
+    allExpenseCategories,
+    allIncomeCategories,
     availableExpenseCategories,
     availableIncomeCategories,
     availableAccounts,

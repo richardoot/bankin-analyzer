@@ -42,6 +42,8 @@ describe('useFiltersStore', () => {
       'bankin-analyzer-filters',
       JSON.stringify({
         jointAccounts: ['Compte Courant'],
+        hiddenExpenseCategories: [],
+        hiddenIncomeCategories: [],
         isPanelExpanded: true,
       })
     )
@@ -102,7 +104,12 @@ describe('useFiltersStore', () => {
 
     expect(localStorage.setItem).toHaveBeenCalledWith(
       'bankin-analyzer-filters',
-      JSON.stringify({ jointAccounts: [], isPanelExpanded: false })
+      JSON.stringify({
+        jointAccounts: [],
+        hiddenExpenseCategories: [],
+        hiddenIncomeCategories: [],
+        isPanelExpanded: false,
+      })
     )
   })
 
@@ -130,5 +137,77 @@ describe('useFiltersStore', () => {
 
     store.toggleJointAccount('Compte A')
     expect(store.activeFiltersCount).toBe(1)
+  })
+
+  it('should start with empty hidden categories', () => {
+    const store = useFiltersStore()
+    expect(store.hiddenExpenseCategories).toEqual([])
+    expect(store.hiddenIncomeCategories).toEqual([])
+  })
+
+  it('should toggle hidden expense category', () => {
+    const store = useFiltersStore()
+
+    store.toggleHiddenExpenseCategory('Restaurant')
+    expect(store.isExpenseCategoryHidden('Restaurant')).toBe(true)
+
+    store.toggleHiddenExpenseCategory('Restaurant')
+    expect(store.isExpenseCategoryHidden('Restaurant')).toBe(false)
+  })
+
+  it('should toggle hidden income category', () => {
+    const store = useFiltersStore()
+
+    store.toggleHiddenIncomeCategory('Salaire')
+    expect(store.isIncomeCategoryHidden('Salaire')).toBe(true)
+
+    store.toggleHiddenIncomeCategory('Salaire')
+    expect(store.isIncomeCategoryHidden('Salaire')).toBe(false)
+  })
+
+  it('should include hidden categories in activeFiltersCount', () => {
+    const store = useFiltersStore()
+
+    store.toggleHiddenExpenseCategory('Restaurant')
+    expect(store.activeFiltersCount).toBe(1)
+
+    store.toggleHiddenIncomeCategory('Salaire')
+    expect(store.activeFiltersCount).toBe(2)
+
+    store.toggleJointAccount('Compte A')
+    expect(store.activeFiltersCount).toBe(3)
+  })
+
+  it('should persist hidden categories to localStorage', () => {
+    const store = useFiltersStore()
+
+    store.toggleHiddenExpenseCategory('Restaurant')
+
+    expect(localStorage.setItem).toHaveBeenCalledWith(
+      'bankin-analyzer-filters',
+      JSON.stringify({
+        jointAccounts: [],
+        hiddenExpenseCategories: ['Restaurant'],
+        hiddenIncomeCategories: [],
+        isPanelExpanded: true,
+      })
+    )
+  })
+
+  it('should restore hidden categories from localStorage', () => {
+    vi.mocked(localStorage.getItem).mockReturnValue(
+      JSON.stringify({
+        jointAccounts: [],
+        hiddenExpenseCategories: ['Restaurant'],
+        hiddenIncomeCategories: ['Salaire'],
+        isPanelExpanded: true,
+      })
+    )
+
+    setActivePinia(createPinia())
+    const store = useFiltersStore()
+
+    expect(store.isExpenseCategoryHidden('Restaurant')).toBe(true)
+    expect(store.isIncomeCategoryHidden('Salaire')).toBe(true)
   })
 })
