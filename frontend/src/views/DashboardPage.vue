@@ -1,13 +1,19 @@
 <script setup lang="ts">
   import { onMounted } from 'vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
+  import CategoryPieChart from '@/components/charts/CategoryPieChart.vue'
   import { useDashboardData } from '@/composables/useDashboardData'
 
   const {
-    expensesByMonth,
     incomeByMonth,
     totalExpenses,
     totalIncome,
+    expensesByCategory,
+    incomeByCategory,
+    availableExpenseCategories,
+    selectedCategory,
+    filteredExpensesByMonth,
+    setSelectedCategory,
     isLoading,
     error,
     fetchData,
@@ -22,6 +28,12 @@
       style: 'currency',
       currency: 'EUR',
     }).format(value)
+  }
+
+  function handleCategoryChange(event: Event) {
+    const target = event.target as HTMLSelectElement
+    const value = target.value
+    setSelectedCategory(value === '' ? null : value)
   }
 </script>
 
@@ -90,16 +102,33 @@
           </div>
         </div>
 
-        <!-- Charts grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <!-- Left column: Expenses -->
+        <!-- Charts grid: Bar charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          <!-- Left column: Expenses with filter -->
           <div class="bg-white rounded-xl shadow-sm p-6">
-            <h2 class="text-lg font-semibold text-gray-900 mb-4">
-              Dépenses par mois
-            </h2>
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-lg font-semibold text-gray-900">
+                Dépenses par mois
+              </h2>
+              <select
+                v-if="availableExpenseCategories.length > 0"
+                :value="selectedCategory ?? ''"
+                class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                @change="handleCategoryChange"
+              >
+                <option value="">Toutes les catégories</option>
+                <option
+                  v-for="cat in availableExpenseCategories"
+                  :key="cat"
+                  :value="cat"
+                >
+                  {{ cat }}
+                </option>
+              </select>
+            </div>
             <div v-if="totalExpenses > 0">
               <MonthlyBarChart
-                :data="expensesByMonth"
+                :data="filteredExpensesByMonth"
                 title="Dépenses"
                 color="#ef4444"
               />
@@ -120,6 +149,35 @@
                 title="Revenus"
                 color="#22c55e"
               />
+            </div>
+            <div v-else class="py-12 text-center text-gray-500">
+              Aucun revenu enregistré
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts grid: Pie charts by category -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <!-- Left column: Expenses by category -->
+          <div class="bg-white rounded-xl shadow-sm p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+              Dépenses par catégorie
+            </h2>
+            <div v-if="expensesByCategory.values.length > 0" class="h-80">
+              <CategoryPieChart :data="expensesByCategory" title="Dépenses" />
+            </div>
+            <div v-else class="py-12 text-center text-gray-500">
+              Aucune dépense enregistrée
+            </div>
+          </div>
+
+          <!-- Right column: Income by category -->
+          <div class="bg-white rounded-xl shadow-sm p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+              Revenus par catégorie
+            </h2>
+            <div v-if="incomeByCategory.values.length > 0" class="h-80">
+              <CategoryPieChart :data="incomeByCategory" title="Revenus" />
             </div>
             <div v-else class="py-12 text-center text-gray-500">
               Aucun revenu enregistré

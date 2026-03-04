@@ -21,6 +21,7 @@ describe('useDashboardData', () => {
       amount: -45.5,
       type: 'EXPENSE' as const,
       account: 'Compte Courant',
+      categoryName: 'Alimentation',
       isPointed: false,
       createdAt: '2024-01-15T00:00:00.000Z',
     },
@@ -31,6 +32,7 @@ describe('useDashboardData', () => {
       amount: -120.0,
       type: 'EXPENSE' as const,
       account: 'Compte Courant',
+      categoryName: 'Alimentation',
       isPointed: false,
       createdAt: '2024-01-20T00:00:00.000Z',
     },
@@ -41,6 +43,7 @@ describe('useDashboardData', () => {
       amount: 2500.0,
       type: 'INCOME' as const,
       account: 'Compte Courant',
+      categoryName: 'Salaires',
       isPointed: true,
       createdAt: '2024-01-25T00:00:00.000Z',
     },
@@ -51,6 +54,7 @@ describe('useDashboardData', () => {
       amount: -800.0,
       type: 'EXPENSE' as const,
       account: 'Compte Courant',
+      categoryName: 'Logement',
       isPointed: false,
       createdAt: '2024-02-10T00:00:00.000Z',
     },
@@ -61,6 +65,7 @@ describe('useDashboardData', () => {
       amount: 2500.0,
       type: 'INCOME' as const,
       account: 'Compte Courant',
+      categoryName: 'Salaires',
       isPointed: true,
       createdAt: '2024-02-25T00:00:00.000Z',
     },
@@ -209,5 +214,128 @@ describe('useDashboardData', () => {
       '2024-02',
       '2024-03',
     ])
+  })
+
+  describe('category aggregation', () => {
+    it('should aggregate expenses by category', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const { fetchData, expensesByCategory } = useDashboardData()
+      await fetchData()
+
+      // Logement: 800, Alimentation: 165.5
+      expect(expensesByCategory.value.labels).toEqual([
+        'Logement',
+        'Alimentation',
+      ])
+      expect(expensesByCategory.value.values).toEqual([800, 165.5])
+    })
+
+    it('should aggregate income by category', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const { fetchData, incomeByCategory } = useDashboardData()
+      await fetchData()
+
+      expect(incomeByCategory.value.labels).toEqual(['Salaires'])
+      expect(incomeByCategory.value.values).toEqual([5000])
+    })
+
+    it('should return available expense categories sorted alphabetically', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const { fetchData, availableExpenseCategories } = useDashboardData()
+      await fetchData()
+
+      expect(availableExpenseCategories.value).toEqual([
+        'Alimentation',
+        'Logement',
+      ])
+    })
+
+    it('should handle transactions without category', async () => {
+      const transactionsWithoutCategory = [
+        {
+          id: '1',
+          date: '2024-01-15T00:00:00.000Z',
+          description: 'Transaction sans catégorie',
+          amount: -50,
+          type: 'EXPENSE' as const,
+          account: 'Compte',
+          isPointed: false,
+          createdAt: '2024-01-15T00:00:00.000Z',
+        },
+      ]
+
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        transactionsWithoutCategory
+      )
+
+      const { fetchData, expensesByCategory } = useDashboardData()
+      await fetchData()
+
+      expect(expensesByCategory.value.labels).toEqual(['Autre'])
+      expect(expensesByCategory.value.values).toEqual([50])
+    })
+  })
+
+  describe('category filter', () => {
+    it('should return all expenses when no category is selected', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const { fetchData, filteredExpensesByMonth, selectedCategory } =
+        useDashboardData()
+      await fetchData()
+
+      expect(selectedCategory.value).toBeNull()
+      expect(filteredExpensesByMonth.value.labels).toEqual([
+        'Jan 2024',
+        'Fév 2024',
+      ])
+      expect(filteredExpensesByMonth.value.values).toEqual([165.5, 800])
+    })
+
+    it('should filter expenses by selected category', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
+        useDashboardData()
+      await fetchData()
+
+      setSelectedCategory('Alimentation')
+
+      // Only Alimentation expenses in January
+      expect(filteredExpensesByMonth.value.labels).toEqual(['Jan 2024'])
+      expect(filteredExpensesByMonth.value.values).toEqual([165.5])
+    })
+
+    it('should return empty data when no transactions match the selected category', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
+        useDashboardData()
+      await fetchData()
+
+      setSelectedCategory('Catégorie Inexistante')
+
+      expect(filteredExpensesByMonth.value.labels).toEqual([])
+      expect(filteredExpensesByMonth.value.values).toEqual([])
+    })
+
+    it('should update selected category', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const { fetchData, selectedCategory, setSelectedCategory } =
+        useDashboardData()
+      await fetchData()
+
+      expect(selectedCategory.value).toBeNull()
+
+      setSelectedCategory('Alimentation')
+      expect(selectedCategory.value).toBe('Alimentation')
+
+      setSelectedCategory(null)
+      expect(selectedCategory.value).toBeNull()
+    })
   })
 })

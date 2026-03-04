@@ -47,6 +47,7 @@ describe('DashboardPage', () => {
       amount: -45.5,
       type: 'EXPENSE' as const,
       account: 'Compte Courant',
+      categoryName: 'Alimentation',
       isPointed: false,
       createdAt: '2024-01-15T00:00:00.000Z',
     },
@@ -57,8 +58,20 @@ describe('DashboardPage', () => {
       amount: 2500.0,
       type: 'INCOME' as const,
       account: 'Compte Courant',
+      categoryName: 'Salaires',
       isPointed: true,
       createdAt: '2024-01-25T00:00:00.000Z',
+    },
+    {
+      id: '3',
+      date: '2024-01-20T00:00:00.000Z',
+      description: 'Loyer',
+      amount: -800.0,
+      type: 'EXPENSE' as const,
+      account: 'Compte Courant',
+      categoryName: 'Logement',
+      isPointed: false,
+      createdAt: '2024-01-20T00:00:00.000Z',
     },
   ]
 
@@ -146,7 +159,8 @@ describe('DashboardPage', () => {
 
     await flushPromises()
 
-    expect(wrapper.findAll('.apexcharts-mock').length).toBe(2)
+    // 2 bar charts (expenses, income) + 2 pie charts (expenses by category, income by category)
+    expect(wrapper.findAll('.apexcharts-mock').length).toBe(4)
   })
 
   it('should display empty state when no transactions', async () => {
@@ -219,6 +233,7 @@ describe('DashboardPage', () => {
         amount: -45.5,
         type: 'EXPENSE' as const,
         account: 'Compte Courant',
+        categoryName: 'Alimentation',
         isPointed: false,
         createdAt: '2024-01-15T00:00:00.000Z',
       },
@@ -235,5 +250,88 @@ describe('DashboardPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('Aucun revenu enregistré')
+  })
+
+  describe('pie charts', () => {
+    it('should display pie chart section titles', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const wrapper = mount(DashboardPage, {
+        global: {
+          plugins: [router],
+        },
+      })
+
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Dépenses par catégorie')
+      expect(wrapper.text()).toContain('Revenus par catégorie')
+    })
+  })
+
+  describe('category filter', () => {
+    it('should display category filter dropdown', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const wrapper = mount(DashboardPage, {
+        global: {
+          plugins: [router],
+        },
+      })
+
+      await flushPromises()
+
+      const select = wrapper.find('select')
+      expect(select.exists()).toBe(true)
+    })
+
+    it('should have "Toutes les catégories" as default option', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const wrapper = mount(DashboardPage, {
+        global: {
+          plugins: [router],
+        },
+      })
+
+      await flushPromises()
+
+      const select = wrapper.find('select')
+      expect(select.text()).toContain('Toutes les catégories')
+    })
+
+    it('should list available expense categories in dropdown', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const wrapper = mount(DashboardPage, {
+        global: {
+          plugins: [router],
+        },
+      })
+
+      await flushPromises()
+
+      const select = wrapper.find('select')
+      expect(select.text()).toContain('Alimentation')
+      expect(select.text()).toContain('Logement')
+    })
+
+    it('should update chart when category is selected', async () => {
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+
+      const wrapper = mount(DashboardPage, {
+        global: {
+          plugins: [router],
+        },
+      })
+
+      await flushPromises()
+
+      const select = wrapper.find('select')
+      await select.setValue('Alimentation')
+
+      // The component should still render without errors
+      expect(wrapper.findAll('.apexcharts-mock').length).toBeGreaterThan(0)
+    })
   })
 })

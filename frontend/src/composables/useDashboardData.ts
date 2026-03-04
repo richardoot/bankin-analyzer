@@ -32,6 +32,7 @@ export function useDashboardData() {
   const transactions = ref<TransactionDto[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  const selectedCategory = ref<string | null>(null)
 
   const monthlyData = computed<MonthlyData[]>(() => {
     const dataByMonth = new Map<string, { expenses: number; income: number }>()
@@ -92,6 +93,95 @@ export function useDashboardData() {
       ) / 100
   )
 
+  // Aggregation by category for expenses
+  const expensesByCategory = computed<ChartData>(() => {
+    const dataByCategory = new Map<string, number>()
+
+    for (const tx of transactions.value) {
+      if (tx.type === 'EXPENSE') {
+        const category = tx.categoryName || 'Autre'
+        const current = dataByCategory.get(category) ?? 0
+        dataByCategory.set(category, current + Math.abs(tx.amount))
+      }
+    }
+
+    // Sort by amount descending
+    const sorted = [...dataByCategory.entries()].sort((a, b) => b[1] - a[1])
+
+    return {
+      labels: sorted.map(([cat]) => cat),
+      values: sorted.map(([, val]) => Math.round(val * 100) / 100),
+    }
+  })
+
+  // Aggregation by category for income
+  const incomeByCategory = computed<ChartData>(() => {
+    const dataByCategory = new Map<string, number>()
+
+    for (const tx of transactions.value) {
+      if (tx.type === 'INCOME') {
+        const category = tx.categoryName || 'Autre'
+        const current = dataByCategory.get(category) ?? 0
+        dataByCategory.set(category, current + tx.amount)
+      }
+    }
+
+    // Sort by amount descending
+    const sorted = [...dataByCategory.entries()].sort((a, b) => b[1] - a[1])
+
+    return {
+      labels: sorted.map(([cat]) => cat),
+      values: sorted.map(([, val]) => Math.round(val * 100) / 100),
+    }
+  })
+
+  // Available expense categories for dropdown
+  const availableExpenseCategories = computed<string[]>(() => {
+    const categories = new Set<string>()
+    for (const tx of transactions.value) {
+      if (tx.type === 'EXPENSE' && tx.categoryName) {
+        categories.add(tx.categoryName)
+      }
+    }
+    return Array.from(categories).sort()
+  })
+
+  // Filtered expenses by month (when category is selected)
+  const filteredExpensesByMonth = computed<ChartData>(() => {
+    if (!selectedCategory.value) {
+      return expensesByMonth.value
+    }
+
+    const dataByMonth = new Map<string, number>()
+
+    for (const tx of transactions.value) {
+      if (tx.type === 'EXPENSE' && tx.categoryName === selectedCategory.value) {
+        const date = new Date(tx.date)
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+
+        const current = dataByMonth.get(monthKey) ?? 0
+        dataByMonth.set(monthKey, current + Math.abs(tx.amount))
+      }
+    }
+
+    // Sort by month
+    const sortedMonths = Array.from(dataByMonth.keys()).sort()
+
+    return {
+      labels: sortedMonths.map(month => {
+        const [year, monthNum] = month.split('-')
+        return `${MONTH_LABELS[monthNum]} ${year}`
+      }),
+      values: sortedMonths.map(
+        month => Math.round((dataByMonth.get(month) ?? 0) * 100) / 100
+      ),
+    }
+  })
+
+  function setSelectedCategory(category: string | null) {
+    selectedCategory.value = category
+  }
+
   async function fetchData() {
     isLoading.value = true
     error.value = null
@@ -115,6 +205,12 @@ export function useDashboardData() {
     incomeByMonth,
     totalExpenses,
     totalIncome,
+    expensesByCategory,
+    incomeByCategory,
+    availableExpenseCategories,
+    selectedCategory,
+    filteredExpensesByMonth,
+    setSelectedCategory,
     isLoading,
     error,
     fetchData,
