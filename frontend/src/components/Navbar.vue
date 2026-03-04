@@ -62,6 +62,12 @@
           <template v-if="isAuthenticated">
             <span class="text-sm text-gray-600">{{ userEmail }}</span>
             <RouterLink
+              to="/import"
+              class="rounded-lg border border-indigo-500 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
+            >
+              Import CSV
+            </RouterLink>
+            <RouterLink
               to="/profile"
               class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
@@ -138,6 +144,13 @@
       <div class="space-y-2 px-4 py-4">
         <template v-if="isAuthenticated">
           <p class="px-4 py-2 text-sm text-gray-600">{{ userEmail }}</p>
+          <RouterLink
+            to="/import"
+            class="block w-full rounded-lg border border-indigo-500 bg-indigo-50 px-4 py-2 text-center text-sm font-medium text-indigo-700 hover:bg-indigo-100 transition-colors"
+            @click="closeMobileMenu"
+          >
+            Import CSV
+          </RouterLink>
           <RouterLink
             to="/profile"
             class="block w-full rounded-lg border border-gray-300 px-4 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"

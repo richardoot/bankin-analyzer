@@ -26,6 +26,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/EmailConfirmationPage.vue'),
     meta: { guestOnly: true },
   },
+  {
+    path: '/import',
+    name: 'import',
+    component: () => import('@/views/ImportPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/import/recap',
+    name: 'import-recap',
+    component: () => import('@/views/ImportRecapPage.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

@@ -11,6 +11,46 @@ export interface DbUser {
   updatedAt: string
 }
 
+export interface ImportTransactionDto {
+  date: string
+  description: string
+  amount: number
+  category: string
+  subcategory?: string
+  account: string
+  type: 'EXPENSE' | 'INCOME'
+  note?: string
+  isPointed?: boolean
+}
+
+export interface ImportResultDto {
+  imported: number
+  duplicates: number
+  total: number
+}
+
+export interface CategoryDto {
+  id: string
+  name: string
+  type: 'EXPENSE' | 'INCOME'
+  createdAt: string
+}
+
+export interface TransactionDto {
+  id: string
+  date: string
+  description: string
+  amount: number
+  type: 'EXPENSE' | 'INCOME'
+  account: string
+  subcategory?: string | null
+  note?: string | null
+  isPointed: boolean
+  categoryId?: string | null
+  categoryName?: string
+  createdAt: string
+}
+
 async function getAuthHeaders(): Promise<HeadersInit> {
   const {
     data: { session },
@@ -48,5 +88,44 @@ export const api = {
     if (!response.ok) {
       throw new Error('Failed to delete account')
     }
+  },
+
+  async importTransactions(
+    transactions: ImportTransactionDto[]
+  ): Promise<ImportResultDto> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/transactions/import`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ transactions }),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to import transactions')
+    }
+
+    return response.json() as Promise<ImportResultDto>
+  },
+
+  async getCategories(): Promise<CategoryDto[]> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/categories`, { headers })
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch categories')
+    }
+
+    return response.json() as Promise<CategoryDto[]>
+  },
+
+  async getTransactions(): Promise<TransactionDto[]> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/transactions`, { headers })
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch transactions')
+    }
+
+    return response.json() as Promise<TransactionDto[]>
   },
 }
