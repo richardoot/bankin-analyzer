@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module'
 import { AuthModule } from './auth/auth.module'
 import { CategoriesModule } from './categories/categories.module'
 import { TransactionsModule } from './transactions/transactions.module'
+import { FilterPreferencesModule } from './filter-preferences/filter-preferences.module'
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { TransactionsModule } from './transactions/transactions.module'
     AuthModule,
     CategoriesModule,
     TransactionsModule,
+    FilterPreferencesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

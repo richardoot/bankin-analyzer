@@ -14,8 +14,9 @@ model User {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  transactions Transaction[]
-  categories   Category[]
+  transactions      Transaction[]
+  categories        Category[]
+  filterPreferences FilterPreferences?
 
   @@map("users")
 }
@@ -62,4 +63,20 @@ model Category {
 enum TransactionType {
   EXPENSE
   INCOME
+}
+
+model FilterPreferences {
+  id                      String   @id @default(uuid())
+  userId                  String   @unique @map("user_id")
+  jointAccounts           String[] @default([]) @map("joint_accounts")
+  hiddenExpenseCategories String[] @default([]) @map("hidden_expense_categories")
+  hiddenIncomeCategories  String[] @default([]) @map("hidden_income_categories")
+  categoryAssociations    Json     @default("[]") @map("category_associations")
+  isPanelExpanded         Boolean  @default(true) @map("is_panel_expanded")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("filter_preferences")
 }
