@@ -274,6 +274,30 @@ describe('TransactionsService', () => {
 
       expect(firstCallHash).toBe(secondCallHash)
     })
+
+    it('should compute different hash for transactions with different descriptions', async () => {
+      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
+      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
+      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+
+      const transactionA = {
+        ...createTransactionDto,
+        description: 'Restaurant A',
+      }
+      const transactionB = {
+        ...createTransactionDto,
+        description: 'Restaurant B',
+      }
+
+      await service.importTransactions(mockUserId, [transactionA, transactionB])
+
+      const hashA =
+        mockPrismaService.transaction.findUnique.mock.calls[0]?.[0].where.hash
+      const hashB =
+        mockPrismaService.transaction.findUnique.mock.calls[1]?.[0].where.hash
+
+      expect(hashA).not.toBe(hashB)
+    })
   })
 
   describe('update', () => {

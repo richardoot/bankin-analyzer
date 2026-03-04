@@ -16,9 +16,10 @@ export class TransactionsService {
     userId: string,
     date: Date,
     amount: number,
-    account: string
+    account: string,
+    description: string
   ): string {
-    const data = `${userId}|${date.toISOString()}|${amount}|${account}`
+    const data = `${userId}|${date.toISOString()}|${amount}|${account}|${description}`
     return createHash('sha256').update(data).digest('hex')
   }
 
@@ -71,7 +72,13 @@ export class TransactionsService {
 
     for (const tx of transactions) {
       const date = new Date(tx.date)
-      const hash = this.computeHash(userId, date, tx.amount, tx.account)
+      const hash = this.computeHash(
+        userId,
+        date,
+        tx.amount,
+        tx.account,
+        tx.description
+      )
 
       // Check if transaction already exists
       const existing = await this.prisma.transaction.findUnique({
