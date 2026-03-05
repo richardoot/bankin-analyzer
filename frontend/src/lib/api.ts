@@ -51,6 +51,19 @@ export interface TransactionDto {
   createdAt: string
 }
 
+export interface CategoryAssociationDto {
+  expenseCategory: string
+  incomeCategory: string
+}
+
+export interface FilterPreferencesDto {
+  jointAccounts: string[]
+  hiddenExpenseCategories: string[]
+  hiddenIncomeCategories: string[]
+  categoryAssociations: CategoryAssociationDto[]
+  isPanelExpanded: boolean
+}
+
 async function getAuthHeaders(): Promise<HeadersInit> {
   const {
     data: { session },
@@ -127,5 +140,35 @@ export const api = {
     }
 
     return response.json() as Promise<TransactionDto[]>
+  },
+
+  async getFilterPreferences(): Promise<FilterPreferencesDto> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/filter-preferences`, {
+      headers,
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch filter preferences')
+    }
+
+    return response.json() as Promise<FilterPreferencesDto>
+  },
+
+  async updateFilterPreferences(
+    preferences: Partial<FilterPreferencesDto>
+  ): Promise<FilterPreferencesDto> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/filter-preferences`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(preferences),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to update filter preferences')
+    }
+
+    return response.json() as Promise<FilterPreferencesDto>
   },
 }

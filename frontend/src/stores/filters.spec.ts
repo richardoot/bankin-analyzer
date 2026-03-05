@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useFiltersStore } from './filters'
 
+// Mock auth store to return not authenticated
+vi.mock('./auth', () => ({
+  useAuthStore: () => ({
+    isAuthenticated: false,
+  }),
+}))
+
 describe('useFiltersStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -48,6 +55,14 @@ describe('useFiltersStore', () => {
         isPanelExpanded: true,
       })
     )
+  })
+
+  it('should mark as having unsaved changes when toggling joint account', () => {
+    const store = useFiltersStore()
+
+    expect(store.hasUnsavedChanges).toBe(false)
+    store.toggleJointAccount('Compte Courant')
+    expect(store.hasUnsavedChanges).toBe(true)
   })
 
   it('should restore from localStorage on init', () => {

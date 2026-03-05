@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { api } from '@/lib/api'
 
 const STORAGE_KEY = 'bankin-analyzer-filters'
 
@@ -15,6 +16,11 @@ export const useFiltersStore = defineStore('filters', () => {
   const hiddenIncomeCategories = ref<string[]>([])
   const categoryAssociations = ref<CategoryAssociation[]>([])
   const isPanelExpanded = ref(true)
+
+  // État de synchronisation
+  const isSyncing = ref(false)
+  const lastSyncError = ref<string | null>(null)
+  const hasUnsavedChanges = ref(false)
 
   // Initialiser depuis localStorage
   function initFromStorage() {
@@ -47,10 +53,84 @@ export const useFiltersStore = defineStore('filters', () => {
     )
   }
 
+  // Marquer comme modifié et sauvegarder en localStorage
+  function markAsChanged() {
+    hasUnsavedChanges.value = true
+    saveToStorage()
+  }
+
+  // Sauvegarder vers le backend (appelé manuellement via bouton)
+  async function saveToBackend(): Promise<boolean> {
+    try {
+      // Import dynamique pour éviter la dépendance circulaire
+      const { useAuthStore } = await import('./auth')
+      const authStore = useAuthStore()
+
+      if (!authStore.isAuthenticated) {
+        return false
+      }
+
+      isSyncing.value = true
+      lastSyncError.value = null
+
+      await api.updateFilterPreferences({
+        jointAccounts: jointAccounts.value,
+        hiddenExpenseCategories: hiddenExpenseCategories.value,
+        hiddenIncomeCategories: hiddenIncomeCategories.value,
+        categoryAssociations: categoryAssociations.value,
+        isPanelExpanded: isPanelExpanded.value,
+      })
+
+      // Sync localStorage avec les données sauvegardées
+      saveToStorage()
+      hasUnsavedChanges.value = false
+      return true
+    } catch (error) {
+      console.error('Failed to save filter preferences:', error)
+      lastSyncError.value =
+        error instanceof Error ? error.message : 'Sync failed'
+      return false
+    } finally {
+      isSyncing.value = false
+    }
+  }
+
+  // Charger depuis le backend (priorité DB > localStorage)
+  async function loadFromBackend() {
+    // Import dynamique pour éviter la dépendance circulaire
+    const { useAuthStore } = await import('./auth')
+    const authStore = useAuthStore()
+    if (!authStore.isAuthenticated) {
+      initFromStorage()
+      return
+    }
+
+    try {
+      isSyncing.value = true
+      lastSyncError.value = null
+      const prefs = await api.getFilterPreferences()
+      jointAccounts.value = prefs.jointAccounts
+      hiddenExpenseCategories.value = prefs.hiddenExpenseCategories
+      hiddenIncomeCategories.value = prefs.hiddenIncomeCategories
+      categoryAssociations.value = prefs.categoryAssociations
+      isPanelExpanded.value = prefs.isPanelExpanded
+      // Sync localStorage avec les données backend
+      saveToStorage()
+      hasUnsavedChanges.value = false
+    } catch (error) {
+      lastSyncError.value =
+        error instanceof Error ? error.message : 'Load failed'
+      // Fallback localStorage
+      initFromStorage()
+    } finally {
+      isSyncing.value = false
+    }
+  }
+
   // Toggle panel expansion
   function togglePanelExpanded() {
     isPanelExpanded.value = !isPanelExpanded.value
-    saveToStorage()
+    markAsChanged()
   }
 
   // Actions
@@ -61,7 +141,7 @@ export const useFiltersStore = defineStore('filters', () => {
     } else {
       jointAccounts.value.splice(index, 1)
     }
-    saveToStorage()
+    markAsChanged()
   }
 
   function isJointAccount(account: string): boolean {
@@ -76,7 +156,7 @@ export const useFiltersStore = defineStore('filters', () => {
     } else {
       hiddenExpenseCategories.value.splice(index, 1)
     }
-    saveToStorage()
+    markAsChanged()
   }
 
   function toggleHiddenIncomeCategory(category: string) {
@@ -86,7 +166,7 @@ export const useFiltersStore = defineStore('filters', () => {
     } else {
       hiddenIncomeCategories.value.splice(index, 1)
     }
-    saveToStorage()
+    markAsChanged()
   }
 
   function isExpenseCategoryHidden(category: string): boolean {
@@ -123,7 +203,7 @@ export const useFiltersStore = defineStore('filters', () => {
       categoryAssociations.value.push({ expenseCategory, incomeCategory })
     }
 
-    saveToStorage()
+    markAsChanged()
   }
 
   function getReimbursementCategory(expenseCategory: string): string | null {
@@ -145,7 +225,7 @@ export const useFiltersStore = defineStore('filters', () => {
     )
     if (idx !== -1) {
       categoryAssociations.value.splice(idx, 1)
-      saveToStorage()
+      markAsChanged()
     }
   }
 
@@ -158,9 +238,6 @@ export const useFiltersStore = defineStore('filters', () => {
     () => new Set(hiddenIncomeCategories.value)
   )
 
-  // Init
-  initFromStorage()
-
   // Computed pour le nombre de filtres actifs
   const activeFiltersCount = computed(
     () =>
@@ -169,6 +246,10 @@ export const useFiltersStore = defineStore('filters', () => {
       hiddenIncomeCategories.value.length +
       categoryAssociations.value.length
   )
+
+  // Init - charger depuis localStorage au démarrage
+  // Le chargement depuis le backend sera fait après l'initialisation de l'auth
+  initFromStorage()
 
   return {
     jointAccounts,
@@ -191,5 +272,11 @@ export const useFiltersStore = defineStore('filters', () => {
     isPanelExpanded,
     togglePanelExpanded,
     activeFiltersCount,
+    // Sync functions
+    isSyncing,
+    lastSyncError,
+    hasUnsavedChanges,
+    loadFromBackend,
+    saveToBackend,
   }
 })

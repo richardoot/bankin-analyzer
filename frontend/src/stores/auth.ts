@@ -22,6 +22,11 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       dbUser.value = await api.getMe()
+      // Charger les préférences de filtrage depuis le backend
+      // Import dynamique pour éviter la dépendance circulaire
+      const { useFiltersStore } = await import('./filters')
+      const filtersStore = useFiltersStore()
+      await filtersStore.loadFromBackend()
     } catch (err) {
       console.error('Failed to sync with backend:', err)
       dbUser.value = null
