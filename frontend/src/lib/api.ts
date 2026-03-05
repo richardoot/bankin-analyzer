@@ -64,6 +64,24 @@ export interface FilterPreferencesDto {
   isPanelExpanded: boolean
 }
 
+export interface PersonDto {
+  id: string
+  name: string
+  email: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreatePersonDto {
+  name: string
+  email?: string
+}
+
+export interface UpdatePersonDto {
+  name?: string
+  email?: string
+}
+
 async function getAuthHeaders(): Promise<HeadersInit> {
   const {
     data: { session },
@@ -170,5 +188,59 @@ export const api = {
     }
 
     return response.json() as Promise<FilterPreferencesDto>
+  },
+
+  // Persons API
+  async getPersons(): Promise<PersonDto[]> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/persons`, { headers })
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch persons')
+    }
+
+    return response.json() as Promise<PersonDto[]>
+  },
+
+  async createPerson(dto: CreatePersonDto): Promise<PersonDto> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/persons`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to create person')
+    }
+
+    return response.json() as Promise<PersonDto>
+  },
+
+  async updatePerson(id: string, dto: UpdatePersonDto): Promise<PersonDto> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/persons/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to update person')
+    }
+
+    return response.json() as Promise<PersonDto>
+  },
+
+  async deletePerson(id: string): Promise<void> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/persons/${id}`, {
+      method: 'DELETE',
+      headers,
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to delete person')
+    }
   },
 }

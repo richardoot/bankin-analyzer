@@ -74,6 +74,12 @@
               Import CSV
             </RouterLink>
             <RouterLink
+              to="/reimbursements"
+              class="rounded-lg border border-amber-500 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+            >
+              Remboursements
+            </RouterLink>
+            <RouterLink
               to="/profile"
               class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
@@ -163,6 +169,13 @@
             @click="closeMobileMenu"
           >
             Import CSV
+          </RouterLink>
+          <RouterLink
+            to="/reimbursements"
+            class="block w-full rounded-lg border border-amber-500 bg-amber-50 px-4 py-2 text-center text-sm font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+            @click="closeMobileMenu"
+          >
+            Remboursements
           </RouterLink>
           <RouterLink
             to="/profile"
