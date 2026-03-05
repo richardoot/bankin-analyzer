@@ -8,6 +8,8 @@ import { AuthModule } from './auth/auth.module'
 import { CategoriesModule } from './categories/categories.module'
 import { TransactionsModule } from './transactions/transactions.module'
 import { FilterPreferencesModule } from './filter-preferences/filter-preferences.module'
+import { PersonsModule } from './persons/persons.module'
+import { ReimbursementsModule } from './reimbursements/reimbursements.module'
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { FilterPreferencesModule } from './filter-preferences/filter-preferences
     CategoriesModule,
     TransactionsModule,
     FilterPreferencesModule,
+    PersonsModule,
+    ReimbursementsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

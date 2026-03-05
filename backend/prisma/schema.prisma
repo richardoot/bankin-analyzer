@@ -14,9 +14,11 @@ model User {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  transactions      Transaction[]
-  categories        Category[]
-  filterPreferences FilterPreferences?
+  transactions          Transaction[]
+  categories            Category[]
+  filterPreferences     FilterPreferences?
+  persons               Person[]
+  reimbursementRequests ReimbursementRequest[]
 
   @@map("users")
 }
@@ -37,8 +39,9 @@ model Transaction {
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @updatedAt @map("updated_at")
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category Category? @relation(fields: [categoryId], references: [id])
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category              Category?              @relation(fields: [categoryId], references: [id])
+  reimbursementRequests ReimbursementRequest[]
 
   @@index([userId])
   @@index([userId, date])
@@ -53,8 +56,9 @@ model Category {
   type      TransactionType
   createdAt DateTime        @default(now()) @map("created_at")
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions          Transaction[]
+  reimbursementRequests ReimbursementRequest[]
 
   @@unique([userId, name, type])
   @@map("categories")
@@ -63,6 +67,12 @@ model Category {
 enum TransactionType {
   EXPENSE
   INCOME
+}
+
+enum ReimbursementStatus {
+  PENDING
+  PARTIAL
+  COMPLETED
 }
 
 model FilterPreferences {
@@ -79,4 +89,45 @@ model FilterPreferences {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("filter_preferences")
+}
+
+model Person {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  email     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reimbursementRequests ReimbursementRequest[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("persons")
+}
+
+model ReimbursementRequest {
+  id             String              @id @default(uuid())
+  userId         String              @map("user_id")
+  transactionId  String              @map("transaction_id")
+  personId       String              @map("person_id")
+  categoryId     String?             @map("category_id")
+  amount         Decimal             @db.Decimal(12, 2)
+  amountReceived Decimal             @default(0) @map("amount_received") @db.Decimal(12, 2)
+  status         ReimbursementStatus @default(PENDING)
+  note           String?
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  person      Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
+  category    Category?   @relation(fields: [categoryId], references: [id])
+
+  @@index([userId])
+  @@index([transactionId])
+  @@index([personId])
+  @@index([status])
+  @@map("reimbursement_requests")
 }
