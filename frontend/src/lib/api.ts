@@ -82,6 +82,30 @@ export interface UpdatePersonDto {
   email?: string
 }
 
+export interface ReimbursementDto {
+  id: string
+  transactionId: string
+  personId: string
+  personName: string
+  categoryId: string | null
+  categoryName: string | null
+  amount: number
+  amountReceived: number
+  amountRemaining: number
+  status: 'PENDING' | 'PARTIAL' | 'COMPLETED'
+  note: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateReimbursementDto {
+  transactionId: string
+  personId: string
+  amount: number
+  categoryId?: string
+  note?: string
+}
+
 async function getAuthHeaders(): Promise<HeadersInit> {
   const {
     data: { session },
@@ -241,6 +265,47 @@ export const api = {
 
     if (!response.ok) {
       throw new Error('Failed to delete person')
+    }
+  },
+
+  // Reimbursements API
+  async getReimbursements(): Promise<ReimbursementDto[]> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/reimbursements`, { headers })
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch reimbursements')
+    }
+
+    return response.json() as Promise<ReimbursementDto[]>
+  },
+
+  async createReimbursement(
+    dto: CreateReimbursementDto
+  ): Promise<ReimbursementDto> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/reimbursements`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to create reimbursement')
+    }
+
+    return response.json() as Promise<ReimbursementDto>
+  },
+
+  async deleteReimbursement(id: string): Promise<void> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/reimbursements/${id}`, {
+      method: 'DELETE',
+      headers,
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to delete reimbursement')
     }
   },
 }

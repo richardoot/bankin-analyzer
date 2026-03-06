@@ -11,6 +11,10 @@ vi.mock('@/lib/api', () => ({
     updatePerson: vi.fn(),
     deletePerson: vi.fn(),
     getTransactions: vi.fn(),
+    getCategories: vi.fn(),
+    getReimbursements: vi.fn(),
+    createReimbursement: vi.fn(),
+    deleteReimbursement: vi.fn(),
   },
 }))
 
@@ -86,7 +90,14 @@ describe('ReimbursementPage', () => {
     },
   ]
 
+  // Helper to set up default mocks
+  const setupDefaultMocks = () => {
+    vi.mocked(api.getCategories).mockResolvedValue([])
+    vi.mocked(api.getReimbursements).mockResolvedValue([])
+  }
+
   const mountComponent = async () => {
+    setupDefaultMocks()
     const wrapper = mount(ReimbursementPage, {
       global: {
         plugins: [router],
@@ -404,6 +415,7 @@ describe('ReimbursementPage', () => {
       ]
       vi.mocked(api.getPersons).mockResolvedValue(testPersons)
       vi.mocked(api.getTransactions).mockResolvedValue([])
+      setupDefaultMocks()
 
       const wrapper = mount(ReimbursementPage, {
         global: {
@@ -428,6 +440,7 @@ describe('ReimbursementPage', () => {
     it('should close modal when clicking cancel', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
       vi.mocked(api.getTransactions).mockResolvedValue([])
+      setupDefaultMocks()
 
       const wrapper = mount(ReimbursementPage, {
         global: {
@@ -461,6 +474,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
       vi.mocked(api.getTransactions).mockResolvedValue([])
       vi.mocked(api.deletePerson).mockResolvedValue()
+      setupDefaultMocks()
 
       const wrapper = mount(ReimbursementPage, {
         global: {
@@ -494,6 +508,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
       vi.mocked(api.getTransactions).mockResolvedValue([])
       vi.mocked(api.deletePerson).mockResolvedValue()
+      setupDefaultMocks()
 
       const wrapper = mount(ReimbursementPage, {
         global: {
@@ -769,6 +784,681 @@ describe('ReimbursementPage', () => {
       const wrapper = await mountComponent()
 
       expect(wrapper.text()).toContain('Failed to fetch')
+    })
+  })
+
+  describe('Reimbursements', () => {
+    const mockReimbursements = [
+      {
+        id: 'r1',
+        transactionId: '1',
+        personId: '1',
+        personName: 'Alice Dupont',
+        categoryId: 'cat1',
+        categoryName: 'Remboursement',
+        amount: 25,
+        amountReceived: 0,
+        amountRemaining: 25,
+        status: 'PENDING' as const,
+        note: null,
+        createdAt: '2024-01-15T00:00:00.000Z',
+        updatedAt: '2024-01-15T00:00:00.000Z',
+      },
+    ]
+
+    it('should display assign button on transactions', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+
+      const wrapper = await mountComponent()
+
+      const assignButtons = wrapper
+        .findAll('button')
+        .filter(b => b.text().includes('Assigner'))
+      expect(assignButtons.length).toBeGreaterThan(0)
+    })
+
+    it('should display reimbursements under transaction', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      // Should display the person name from reimbursement under the transaction
+      expect(wrapper.text()).toContain('Alice Dupont')
+    })
+
+    it('should open reimbursement modal when clicking assign button', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+      vi.mocked(api.getCategories).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      expect(wrapper.text()).toContain('Assigner un remboursement')
+      expect(wrapper.text()).toContain('Selectionnez une personne')
+    })
+
+    it('should call createReimbursement API when submitting', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.createReimbursement).mockResolvedValue(
+        mockReimbursements[0]
+      )
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      // Open modal
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      // Select person
+      const personSelect = wrapper.findAll('select')[1] // Second select (first is category filter)
+      await personSelect.setValue('1')
+
+      // Click confirm
+      const confirmButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Confirmer'))
+      await confirmButton?.trigger('click')
+      await flushPromises()
+
+      expect(api.createReimbursement).toHaveBeenCalled()
+    })
+  })
+
+  describe('Reimbursement modal - Transaction info', () => {
+    it('should display total amount and remaining amount in modal', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      // Open modal on first transaction (-45.50€)
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      expect(wrapper.text()).toContain('Montant total')
+      expect(wrapper.text()).toContain('Restant a assigner')
+      expect(wrapper.text()).toContain('-45,50')
+    })
+
+    it('should display already assigned amount when transaction has reimbursements', async () => {
+      const partialReimbursement = {
+        id: 'r1',
+        transactionId: '1',
+        personId: '1',
+        personName: 'Alice Dupont',
+        categoryId: null,
+        categoryName: null,
+        amount: 20,
+        amountReceived: 0,
+        amountRemaining: 20,
+        status: 'PENDING' as const,
+        note: null,
+        createdAt: '2024-01-15T00:00:00.000Z',
+        updatedAt: '2024-01-15T00:00:00.000Z',
+      }
+
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([partialReimbursement])
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      // Open modal on first transaction (which has a partial reimbursement)
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      expect(wrapper.text()).toContain('Deja assigne')
+    })
+  })
+
+  describe('Reimbursement modal - Amount shortcuts', () => {
+    it('should display amount shortcuts in modal', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      expect(wrapper.text()).toContain('Raccourcis')
+      expect(wrapper.text()).toContain('100%')
+      expect(wrapper.text()).toContain('/ 2')
+      expect(wrapper.text()).toContain('/ 3')
+      expect(wrapper.text()).toContain('/ 4')
+      expect(wrapper.text()).toContain('Appliquer')
+    })
+
+    it('should set full amount when clicking 100% button', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      // Click 100% button
+      const fullAmountButton = wrapper
+        .findAll('button')
+        .find(b => b.text() === '100%')
+      await fullAmountButton?.trigger('click')
+
+      // Check the amount input value (45.50 for the first transaction)
+      const amountInput = wrapper.find('input[type="number"]')
+      expect((amountInput.element as HTMLInputElement).value).toBe('45.5')
+    })
+
+    it('should divide amount by 2 when clicking /2 button', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      // Click /2 button
+      const divideBy2Button = wrapper
+        .findAll('button')
+        .find(b => b.text() === '/ 2')
+      await divideBy2Button?.trigger('click')
+
+      // Check the amount input value (45.50 / 2 = 22.75)
+      const amountInput = wrapper.find('input[type="number"]')
+      expect((amountInput.element as HTMLInputElement).value).toBe('22.75')
+    })
+
+    it('should divide amount by 3 when clicking /3 button', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      // Click /3 button
+      const divideBy3Button = wrapper
+        .findAll('button')
+        .find(b => b.text() === '/ 3')
+      await divideBy3Button?.trigger('click')
+
+      // Check the amount input value (45.50 / 3 = 15.17 rounded)
+      const amountInput = wrapper.find('input[type="number"]')
+      expect((amountInput.element as HTMLInputElement).value).toBe('15.17')
+    })
+
+    it('should divide amount by 4 when clicking /4 button', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      // Click /4 button
+      const divideBy4Button = wrapper
+        .findAll('button')
+        .find(b => b.text() === '/ 4')
+      await divideBy4Button?.trigger('click')
+
+      // Check the amount input value (45.50 / 4 = 11.38 rounded)
+      const amountInput = wrapper.find('input[type="number"]')
+      expect((amountInput.element as HTMLInputElement).value).toBe('11.38')
+    })
+
+    it('should apply custom divisor when clicking Appliquer button', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      // Find custom divisor input and set value to 5
+      const customDivisorInput = wrapper.findAll('input[type="number"]')[1] // Second number input
+      await customDivisorInput.setValue(5)
+
+      // Click Appliquer button
+      const applyButton = wrapper
+        .findAll('button')
+        .find(b => b.text() === 'Appliquer')
+      await applyButton?.trigger('click')
+
+      // Check the amount input value (45.50 / 5 = 9.10)
+      const amountInput = wrapper.find('input[type="number"]')
+      expect((amountInput.element as HTMLInputElement).value).toBe('9.1')
+    })
+
+    it('should cap amount at remaining when shortcut exceeds remaining', async () => {
+      const partialReimbursement = {
+        id: 'r1',
+        transactionId: '1',
+        personId: '1',
+        personName: 'Alice Dupont',
+        categoryId: null,
+        categoryName: null,
+        amount: 40,
+        amountReceived: 0,
+        amountRemaining: 40,
+        status: 'PENDING' as const,
+        note: null,
+        createdAt: '2024-01-15T00:00:00.000Z',
+        updatedAt: '2024-01-15T00:00:00.000Z',
+      }
+
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([partialReimbursement])
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      // Transaction 1 has 45.50€ total, 40€ already assigned, so 5.50€ remaining
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      // Click /2 button (would be 22.75€ but only 5.50€ remaining)
+      const divideBy2Button = wrapper
+        .findAll('button')
+        .find(b => b.text() === '/ 2')
+      await divideBy2Button?.trigger('click')
+
+      // Amount should be capped at remaining (5.50)
+      const amountInput = wrapper.find('input[type="number"]')
+      expect((amountInput.element as HTMLInputElement).value).toBe('5.5')
+    })
+  })
+
+  describe('Reimbursement modal - Amount validation', () => {
+    it('should show warning when amount exceeds remaining', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      // Set amount higher than transaction amount
+      const amountInput = wrapper.find('input[type="number"]')
+      await amountInput.setValue(100)
+
+      expect(wrapper.text()).toContain('Le montant depasse le restant')
+    })
+
+    it('should disable confirm button when amount exceeds remaining', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      // Select a person
+      const personSelect = wrapper.findAll('select')[1]
+      await personSelect.setValue('1')
+
+      // Set amount higher than transaction amount
+      const amountInput = wrapper.find('input[type="number"]')
+      await amountInput.setValue(100)
+
+      // Confirm button should be disabled
+      const confirmButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Confirmer'))
+      expect(confirmButton?.attributes('disabled')).toBeDefined()
+    })
+
+    it('should disable 100% button when full amount exceeds remaining', async () => {
+      const partialReimbursement = {
+        id: 'r1',
+        transactionId: '1',
+        personId: '1',
+        personName: 'Alice Dupont',
+        categoryId: null,
+        categoryName: null,
+        amount: 40,
+        amountReceived: 0,
+        amountRemaining: 40,
+        status: 'PENDING' as const,
+        note: null,
+        createdAt: '2024-01-15T00:00:00.000Z',
+        updatedAt: '2024-01-15T00:00:00.000Z',
+      }
+
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([partialReimbursement])
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: {
+              template: '<div><slot /></div>',
+            },
+          },
+        },
+      })
+      await flushPromises()
+
+      // Transaction 1 has 45.50€ total, 40€ already assigned
+      const assignButton = wrapper
+        .findAll('button')
+        .find(b => b.text().includes('Assigner'))
+      await assignButton?.trigger('click')
+
+      // 100% button should be disabled because 45.50 > 5.50 remaining
+      const fullAmountButton = wrapper
+        .findAll('button')
+        .find(b => b.text() === '100%')
+      expect(fullAmountButton?.attributes('disabled')).toBeDefined()
+    })
+  })
+
+  describe('Summary section', () => {
+    const mockReimbursements = [
+      {
+        id: 'r1',
+        transactionId: '1',
+        personId: '1',
+        personName: 'Alice Dupont',
+        categoryId: 'cat1',
+        categoryName: 'Courses',
+        amount: 25,
+        amountReceived: 0,
+        amountRemaining: 25,
+        status: 'PENDING' as const,
+        note: null,
+        createdAt: '2024-01-15T00:00:00.000Z',
+        updatedAt: '2024-01-15T00:00:00.000Z',
+      },
+      {
+        id: 'r2',
+        transactionId: '3',
+        personId: '1',
+        personName: 'Alice Dupont',
+        categoryId: 'cat2',
+        categoryName: 'Sante',
+        amount: 20,
+        amountReceived: 0,
+        amountRemaining: 20,
+        status: 'PENDING' as const,
+        note: null,
+        createdAt: '2024-01-20T00:00:00.000Z',
+        updatedAt: '2024-01-20T00:00:00.000Z',
+      },
+    ]
+
+    it('should display summary section when reimbursements exist', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Recapitulatif des Remboursements')
+      expect(wrapper.text()).toContain('Total General')
+    })
+
+    it('should display person totals in summary', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      // Alice should have 45€ total (25 + 20)
+      expect(wrapper.text()).toContain('Alice Dupont')
+    })
+
+    it('should display category breakdown in summary', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getCategories).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
+
+      const wrapper = mount(ReimbursementPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Courses')
+      expect(wrapper.text()).toContain('Sante')
+    })
+
+    it('should not display summary when no reimbursements', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+
+      const wrapper = await mountComponent()
+
+      expect(wrapper.text()).not.toContain('Recapitulatif des Remboursements')
     })
   })
 })
