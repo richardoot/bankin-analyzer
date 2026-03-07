@@ -154,3 +154,6 @@ build/
 
 # Prisma generated client
 backend/src/generated/*
+
+#Docker env
+.env.docker
