@@ -5,6 +5,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  schemas  = ["app"]
 }
 
 model User {
@@ -21,6 +22,7 @@ model User {
   reimbursementRequests ReimbursementRequest[]
 
   @@map("users")
+  @@schema("app")
 }
 
 model Transaction {
@@ -47,6 +49,7 @@ model Transaction {
   @@index([userId, date])
   @@index([type])
   @@map("transactions")
+  @@schema("app")
 }
 
 model Category {
@@ -62,17 +65,22 @@ model Category {
 
   @@unique([userId, name, type])
   @@map("categories")
+  @@schema("app")
 }
 
 enum TransactionType {
   EXPENSE
   INCOME
+
+  @@schema("app")
 }
 
 enum ReimbursementStatus {
   PENDING
   PARTIAL
   COMPLETED
+
+  @@schema("app")
 }
 
 model FilterPreferences {
@@ -89,6 +97,7 @@ model FilterPreferences {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("filter_preferences")
+  @@schema("app")
 }
 
 model Person {
@@ -105,6 +114,7 @@ model Person {
   @@unique([userId, name])
   @@index([userId])
   @@map("persons")
+  @@schema("app")
 }
 
 model ReimbursementRequest {
@@ -130,4 +140,5 @@ model ReimbursementRequest {
   @@index([personId])
   @@index([status])
   @@map("reimbursement_requests")
+  @@schema("app")
 }

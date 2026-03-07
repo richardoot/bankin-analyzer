@@ -79,6 +79,10 @@ web_modules/
 .env.production.local
 .env.local
 
+# Docker environment (keep .env.docker.example, ignore custom env)
+# Note: .env.docker contains demo keys safe for local dev
+.env.docker
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
@@ -155,5 +159,3 @@ build/
 # Prisma generated client
 backend/src/generated/*
 
-#Docker env
-.env.docker

@@ -18,6 +18,7 @@
     "test:e2e": "vitest run --config vitest.config.e2e.ts",
     "prisma:generate": "prisma generate --config prisma/prisma.config.ts",
     "prisma:migrate": "prisma migrate dev --config prisma/prisma.config.ts",
+    "prisma:deploy": "prisma migrate deploy --config prisma/prisma.config.ts",
     "prisma:studio": "prisma studio --config prisma/prisma.config.ts"
   },
   "dependencies": {
