@@ -336,8 +336,9 @@
   // Confirm delete person
   async function confirmDeletePerson() {
     if (!personToDelete.value) return
-    await personsStore.removePerson(personToDelete.value.id)
-    personToDelete.value = null
+    const idToDelete = personToDelete.value.id
+    personToDelete.value = null // Close modal immediately
+    await personsStore.removePerson(idToDelete)
   }
 
   // Start editing person
