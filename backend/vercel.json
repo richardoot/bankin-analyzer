@@ -1,0 +1,5 @@
+{
+  "buildCommand": "pnpm build:vercel",
+  "installCommand": "pnpm install",
+  "outputDirectory": "dist"
+}
