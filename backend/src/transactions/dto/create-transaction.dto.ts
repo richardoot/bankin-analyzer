@@ -48,4 +48,12 @@ export class CreateTransactionDto {
   @IsOptional()
   @IsBoolean()
   isPointed?: boolean
+
+  @ApiPropertyOptional({
+    description:
+      'Force import even if duplicate detected (backend generates unique key)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  forceImport?: boolean
 }

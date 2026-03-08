@@ -47,6 +47,7 @@ const mockTransaction2 = {
 }
 
 const mockTransactionsService = {
+  previewImport: vi.fn(),
   importTransactions: vi.fn(),
   findAllByUser: vi.fn(),
   findOne: vi.fn(),
@@ -129,6 +130,237 @@ describe('TransactionsController', () => {
       const result = await controller.importTransactions(mockUser, importDto)
 
       expect(result.duplicates).toBe(1)
+    })
+
+    it('should pass forceImport flag to service', async () => {
+      const importDto = {
+        transactions: [
+          {
+            date: '2024-01-15T10:30:00.000Z',
+            description: 'Restaurant',
+            amount: -45.5,
+            category: 'Alimentation',
+            account: 'Compte Courant',
+            type: TransactionType.EXPENSE,
+            forceImport: true,
+          },
+        ],
+      }
+      const importResult = { imported: 1, duplicates: 0, total: 1 }
+      mockTransactionsService.importTransactions.mockResolvedValue(importResult)
+
+      await controller.importTransactions(mockUser, importDto)
+
+      expect(mockTransactionsService.importTransactions).toHaveBeenCalledWith(
+        mockUser.id,
+        expect.arrayContaining([expect.objectContaining({ forceImport: true })])
+      )
+    })
+  })
+
+  describe('previewImport', () => {
+    const importDto = {
+      transactions: [
+        {
+          date: '2024-01-15T10:30:00.000Z',
+          description: 'Restaurant',
+          amount: -45.5,
+          category: 'Alimentation',
+          account: 'Compte Courant',
+          type: TransactionType.EXPENSE,
+        },
+      ],
+    }
+
+    it('should return preview result with no duplicates', async () => {
+      const previewResult = {
+        newCount: 1,
+        internalDuplicateCount: 0,
+        externalDuplicateCount: 0,
+        total: 1,
+        internalDuplicates: [],
+        externalDuplicates: [],
+      }
+      mockTransactionsService.previewImport.mockResolvedValue(previewResult)
+
+      const result = await controller.previewImport(mockUser, importDto)
+
+      expect(result).toEqual(previewResult)
+      expect(mockTransactionsService.previewImport).toHaveBeenCalledWith(
+        mockUser.id,
+        importDto.transactions
+      )
+    })
+
+    it('should return preview result with internal duplicates', async () => {
+      const duplicateDto = {
+        transactions: [
+          {
+            date: '2024-01-15T10:30:00.000Z',
+            description: 'Restaurant',
+            amount: -45.5,
+            category: 'Alimentation',
+            account: 'Compte Courant',
+            type: TransactionType.EXPENSE,
+          },
+          {
+            date: '2024-01-15T10:30:00.000Z',
+            description: 'Restaurant',
+            amount: -45.5,
+            category: 'Alimentation',
+            account: 'Compte Courant',
+            type: TransactionType.EXPENSE,
+          },
+        ],
+      }
+      const previewResult = {
+        newCount: 0,
+        internalDuplicateCount: 1,
+        externalDuplicateCount: 0,
+        total: 2,
+        internalDuplicates: [
+          {
+            hash: 'abc123',
+            indices: [0, 1],
+            transactions: [
+              {
+                index: 0,
+                date: '2024-01-15T10:30:00.000Z',
+                description: 'Restaurant',
+                amount: -45.5,
+                account: 'Compte Courant',
+                category: 'Alimentation',
+                type: TransactionType.EXPENSE,
+              },
+              {
+                index: 1,
+                date: '2024-01-15T10:30:00.000Z',
+                description: 'Restaurant',
+                amount: -45.5,
+                account: 'Compte Courant',
+                category: 'Alimentation',
+                type: TransactionType.EXPENSE,
+              },
+            ],
+          },
+        ],
+        externalDuplicates: [],
+      }
+      mockTransactionsService.previewImport.mockResolvedValue(previewResult)
+
+      const result = await controller.previewImport(mockUser, duplicateDto)
+
+      expect(result.internalDuplicateCount).toBe(1)
+      expect(result.internalDuplicates).toHaveLength(1)
+      expect(result.internalDuplicates[0]?.indices).toEqual([0, 1])
+    })
+
+    it('should return preview result with external duplicates', async () => {
+      const previewResult = {
+        newCount: 0,
+        internalDuplicateCount: 0,
+        externalDuplicateCount: 1,
+        total: 1,
+        internalDuplicates: [],
+        externalDuplicates: [
+          {
+            hash: 'abc123',
+            uploaded: {
+              index: 0,
+              date: '2024-01-15T10:30:00.000Z',
+              description: 'Restaurant',
+              amount: -45.5,
+              account: 'Compte Courant',
+              category: 'Alimentation',
+              type: TransactionType.EXPENSE,
+            },
+            existing: {
+              id: mockTransaction.id,
+              date: '2024-01-15T10:30:00.000Z',
+              description: 'Restaurant',
+              amount: -45.5,
+              account: 'Compte Courant',
+              categoryName: 'Alimentation',
+              type: TransactionType.EXPENSE,
+              createdAt: '2024-01-15T10:30:00.000Z',
+            },
+          },
+        ],
+      }
+      mockTransactionsService.previewImport.mockResolvedValue(previewResult)
+
+      const result = await controller.previewImport(mockUser, importDto)
+
+      expect(result.externalDuplicateCount).toBe(1)
+      expect(result.externalDuplicates).toHaveLength(1)
+      expect(result.externalDuplicates[0]?.existing.id).toBe(mockTransaction.id)
+    })
+
+    it('should return preview result with mixed duplicates', async () => {
+      const mixedDto = {
+        transactions: [
+          {
+            date: '2024-01-15T10:30:00.000Z',
+            description: 'New Restaurant',
+            amount: -30,
+            category: 'Alimentation',
+            account: 'Compte Courant',
+            type: TransactionType.EXPENSE,
+          },
+          {
+            date: '2024-01-15T10:30:00.000Z',
+            description: 'Restaurant',
+            amount: -45.5,
+            category: 'Alimentation',
+            account: 'Compte Courant',
+            type: TransactionType.EXPENSE,
+          },
+          {
+            date: '2024-01-16T10:30:00.000Z',
+            description: 'Supermarché',
+            amount: -85,
+            category: 'Alimentation',
+            account: 'Compte Courant',
+            type: TransactionType.EXPENSE,
+          },
+          {
+            date: '2024-01-16T10:30:00.000Z',
+            description: 'Supermarché',
+            amount: -85,
+            category: 'Alimentation',
+            account: 'Compte Courant',
+            type: TransactionType.EXPENSE,
+          },
+        ],
+      }
+      const previewResult = {
+        newCount: 1,
+        internalDuplicateCount: 1,
+        externalDuplicateCount: 1,
+        total: 4,
+        internalDuplicates: [
+          {
+            hash: 'def456',
+            indices: [2, 3],
+            transactions: [],
+          },
+        ],
+        externalDuplicates: [
+          {
+            hash: 'abc123',
+            uploaded: { index: 1 },
+            existing: { id: mockTransaction.id },
+          },
+        ],
+      }
+      mockTransactionsService.previewImport.mockResolvedValue(previewResult)
+
+      const result = await controller.previewImport(mockUser, mixedDto)
+
+      expect(result.newCount).toBe(1)
+      expect(result.internalDuplicateCount).toBe(1)
+      expect(result.externalDuplicateCount).toBe(1)
+      expect(result.total).toBe(4)
     })
   })
 

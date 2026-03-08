@@ -20,6 +20,7 @@ import { TransactionsService } from './transactions.service'
 import {
   ImportTransactionsDto,
   ImportResultDto,
+  ImportPreviewResultDto,
   TransactionResponseDto,
 } from './dto'
 import { SupabaseGuard, CurrentUser } from '../auth'
@@ -31,6 +32,18 @@ import type { User, TransactionType } from '../generated/prisma'
 @Controller('transactions')
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
+
+  @Post('import/preview')
+  @ApiOperation({
+    summary: 'Preview import - analyze duplicates without writing to DB',
+  })
+  @ApiResponse({ status: 200, type: ImportPreviewResultDto })
+  async previewImport(
+    @CurrentUser() user: User,
+    @Body() dto: ImportTransactionsDto
+  ): Promise<ImportPreviewResultDto> {
+    return this.transactionsService.previewImport(user.id, dto.transactions)
+  }
 
   @Post('import')
   @ApiOperation({ summary: 'Import transactions with deduplication' })
