@@ -1,16 +1,24 @@
 <script setup lang="ts">
   import { ref } from 'vue'
   import { useRouter } from 'vue-router'
-  import { api, type ImportTransactionDto } from '@/lib/api'
+  import {
+    api,
+    type ImportTransactionDto,
+    type ImportPreviewResultDto,
+  } from '@/lib/api'
+  import DuplicatesReviewModal from '@/components/DuplicatesReviewModal.vue'
 
   const router = useRouter()
 
   const file = ref<File | null>(null)
   const isDragOver = ref(false)
   const isUploading = ref(false)
+  const isPreviewLoading = ref(false)
   const error = ref<string | null>(null)
   const parsedTransactions = ref<ImportTransactionDto[]>([])
   const showPreview = ref(false)
+  const showDuplicatesModal = ref(false)
+  const previewResult = ref<ImportPreviewResultDto | null>(null)
 
   function handleDragOver(e: DragEvent) {
     e.preventDefault()
@@ -183,11 +191,47 @@
   async function submitImport() {
     if (parsedTransactions.value.length === 0) return
 
+    isPreviewLoading.value = true
+    error.value = null
+
+    try {
+      // Step 1: Preview to detect duplicates
+      const preview = await api.previewImport(parsedTransactions.value)
+
+      // If duplicates detected, show modal
+      if (
+        preview.internalDuplicateCount > 0 ||
+        preview.externalDuplicateCount > 0
+      ) {
+        previewResult.value = preview
+        showDuplicatesModal.value = true
+        return
+      }
+
+      // No duplicates → Direct import
+      await performImport(new Set())
+    } catch (err) {
+      error.value =
+        err instanceof Error ? err.message : 'Erreur lors du preview'
+    } finally {
+      isPreviewLoading.value = false
+    }
+  }
+
+  async function performImport(forceIndices: Set<number>) {
     isUploading.value = true
     error.value = null
 
     try {
-      const result = await api.importTransactions(parsedTransactions.value)
+      // Mark selected transactions with forceImport=true
+      const transactionsToImport = parsedTransactions.value.map(
+        (tx, index) => ({
+          ...tx,
+          forceImport: forceIndices.has(index),
+        })
+      )
+
+      const result = await api.importTransactions(transactionsToImport)
 
       // Get unique categories count
       const uniqueCategories = new Set(
@@ -209,7 +253,17 @@
         err instanceof Error ? err.message : "Erreur lors de l'import"
     } finally {
       isUploading.value = false
+      showDuplicatesModal.value = false
     }
+  }
+
+  function handleDuplicatesConfirm(selectedIndices: Set<number>) {
+    performImport(selectedIndices)
+  }
+
+  function handleDuplicatesClose() {
+    showDuplicatesModal.value = false
+    previewResult.value = null
   }
 
   function cancelImport() {
@@ -379,11 +433,12 @@
             Annuler
           </button>
           <button
-            :disabled="isUploading"
+            :disabled="isUploading || isPreviewLoading"
             class="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             @click="submitImport"
           >
-            <span v-if="isUploading">Import en cours...</span>
+            <span v-if="isPreviewLoading">Analyse en cours...</span>
+            <span v-else-if="isUploading">Import en cours...</span>
             <span v-else
               >Importer {{ parsedTransactions.length }} transactions</span
             >
@@ -391,5 +446,14 @@
         </div>
       </div>
     </div>
+
+    <!-- Duplicates Review Modal -->
+    <DuplicatesReviewModal
+      :is-open="showDuplicatesModal"
+      :loading="isUploading"
+      :preview-result="previewResult"
+      @close="handleDuplicatesClose"
+      @confirm="handleDuplicatesConfirm"
+    />
   </div>
 </template>

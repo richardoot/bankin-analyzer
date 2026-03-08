@@ -21,6 +21,54 @@ export interface ImportTransactionDto {
   type: 'EXPENSE' | 'INCOME'
   note?: string
   isPointed?: boolean
+  forceImport?: boolean
+}
+
+// Import Preview DTOs
+export interface UploadedTransactionDto {
+  index: number
+  date: string
+  description: string
+  amount: number
+  account: string
+  category: string
+  type: 'EXPENSE' | 'INCOME'
+  subcategory?: string
+  note?: string
+}
+
+export interface ExistingTransactionDto {
+  id: string
+  date: string
+  description: string
+  amount: number
+  account: string
+  categoryName?: string
+  type: 'EXPENSE' | 'INCOME'
+  subcategory?: string
+  note?: string
+  createdAt: string
+}
+
+export interface InternalDuplicateDto {
+  hash: string
+  indices: number[]
+  transactions: UploadedTransactionDto[]
+}
+
+export interface ExternalDuplicateDto {
+  hash: string
+  uploaded: UploadedTransactionDto
+  existing: ExistingTransactionDto
+}
+
+export interface ImportPreviewResultDto {
+  newCount: number
+  internalDuplicateCount: number
+  externalDuplicateCount: number
+  total: number
+  internalDuplicates: InternalDuplicateDto[]
+  externalDuplicates: ExternalDuplicateDto[]
 }
 
 export interface ImportResultDto {
@@ -143,6 +191,26 @@ export const api = {
     if (!response.ok) {
       throw new Error('Failed to delete account')
     }
+  },
+
+  async previewImport(
+    transactions: ImportTransactionDto[]
+  ): Promise<ImportPreviewResultDto> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(
+      `${API_BASE_URL}/transactions/import/preview`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ transactions }),
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to preview import')
+    }
+
+    return response.json() as Promise<ImportPreviewResultDto>
   },
 
   async importTransactions(
