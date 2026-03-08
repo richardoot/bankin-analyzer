@@ -1,8 +1,9 @@
-import { Test, TestingModule } from '@nestjs/testing'
+import type { TestingModule } from '@nestjs/testing'
+import { Test } from '@nestjs/testing'
 import { FilterPreferencesController } from './filter-preferences.controller'
 import { FilterPreferencesService } from './filter-preferences.service'
 import { SupabaseGuard } from '../auth'
-import { FilterPreferences, User } from '../generated/prisma'
+import type { FilterPreferences, User } from '../generated/prisma'
 
 describe('FilterPreferencesController', () => {
   let controller: FilterPreferencesController

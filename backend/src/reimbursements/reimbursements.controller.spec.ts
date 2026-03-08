@@ -205,7 +205,7 @@ describe('ReimbursementsController', () => {
         transactionId: mockReimbursementResponse.transactionId,
         personId: mockReimbursementResponse.personId,
         amount: 30,
-        categoryId: mockReimbursementResponse.categoryId!,
+        categoryId: mockReimbursementResponse.categoryId,
         note: 'Test note',
       }
       mockReimbursementsService.create.mockResolvedValue(

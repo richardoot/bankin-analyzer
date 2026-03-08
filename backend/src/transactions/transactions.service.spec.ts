@@ -50,6 +50,7 @@ const mockPrismaService = {
     findFirst: vi.fn(),
     findUnique: vi.fn(),
     create: vi.fn(),
+    createMany: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
   },
@@ -57,6 +58,7 @@ const mockPrismaService = {
 
 const mockCategoriesService = {
   findOrCreate: vi.fn(),
+  findOrCreateMany: vi.fn(),
 }
 
 describe('TransactionsService', () => {
@@ -185,9 +187,10 @@ describe('TransactionsService', () => {
     }
 
     it('should import new transactions', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      // Batch lookup returns no existing hashes
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 1 })
 
       const result = await service.importTransactions(mockUserId, [
         createTransactionDto,
@@ -198,17 +201,22 @@ describe('TransactionsService', () => {
         duplicates: 0,
         total: 1,
       })
-      expect(mockCategoriesService.findOrCreate).toHaveBeenCalledWith(
+      expect(mockCategoriesService.findOrCreateMany).toHaveBeenCalledWith(
         mockUserId,
-        'Alimentation',
-        TransactionType.EXPENSE
+        [{ name: 'Alimentation', type: TransactionType.EXPENSE }]
       )
-      expect(mockPrismaService.transaction.create).toHaveBeenCalled()
+      expect(mockPrismaService.transaction.createMany).toHaveBeenCalled()
     })
 
     it('should skip duplicate transactions based on hash', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(
-        mockTransaction
+      // Batch lookup returns the same hash that was queried
+      mockPrismaService.transaction.findMany.mockImplementation(
+        async ({ where }) => {
+          if (where?.hash?.in) {
+            return where.hash.in.map((hash: string) => ({ hash }))
+          }
+          return []
+        }
       )
 
       const result = await service.importTransactions(mockUserId, [
@@ -220,7 +228,7 @@ describe('TransactionsService', () => {
         duplicates: 1,
         total: 1,
       })
-      expect(mockPrismaService.transaction.create).not.toHaveBeenCalled()
+      expect(mockPrismaService.transaction.createMany).not.toHaveBeenCalled()
     })
 
     it('should handle mixed new and duplicate transactions', async () => {
@@ -230,14 +238,20 @@ describe('TransactionsService', () => {
         amount: -30.0,
       }
 
-      // First call: duplicate found
-      // Second call: no duplicate
-      mockPrismaService.transaction.findUnique
-        .mockResolvedValueOnce(mockTransaction)
-        .mockResolvedValueOnce(null)
+      // First findMany call returns one existing hash (for first transaction)
+      // We need to compute the hash that would be computed for createTransactionDto
+      mockPrismaService.transaction.findMany.mockImplementation(
+        async ({ where }) => {
+          // Return one hash (simulating first transaction is a duplicate)
+          if (where?.hash?.in && where.hash.in.length === 2) {
+            return [{ hash: where.hash.in[0] }]
+          }
+          return []
+        }
+      )
 
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction2)
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 1 })
 
       const result = await service.importTransactions(mockUserId, [
         createTransactionDto,
@@ -252,33 +266,34 @@ describe('TransactionsService', () => {
     })
 
     it('should compute consistent hash for same transaction data', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 1 })
 
       // Import same transaction twice (simulating two imports)
       await service.importTransactions(mockUserId, [createTransactionDto])
 
-      const firstCallHash =
-        mockPrismaService.transaction.findUnique.mock.calls[0]?.[0].where.hash
+      // Get the hashes from the first findMany call
+      const firstCallHashes =
+        mockPrismaService.transaction.findMany.mock.calls[0]?.[0].where.hash.in
 
       vi.clearAllMocks()
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 1 })
 
       await service.importTransactions(mockUserId, [createTransactionDto])
 
-      const secondCallHash =
-        mockPrismaService.transaction.findUnique.mock.calls[0]?.[0].where.hash
+      const secondCallHashes =
+        mockPrismaService.transaction.findMany.mock.calls[0]?.[0].where.hash.in
 
-      expect(firstCallHash).toBe(secondCallHash)
+      expect(firstCallHashes[0]).toBe(secondCallHashes[0])
     })
 
     it('should compute different hash for transactions with different descriptions', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 2 })
 
       const transactionA = {
         ...createTransactionDto,
@@ -291,12 +306,13 @@ describe('TransactionsService', () => {
 
       await service.importTransactions(mockUserId, [transactionA, transactionB])
 
-      const hashA =
-        mockPrismaService.transaction.findUnique.mock.calls[0]?.[0].where.hash
-      const hashB =
-        mockPrismaService.transaction.findUnique.mock.calls[1]?.[0].where.hash
+      // Get the hashes from findMany call
+      const hashes =
+        mockPrismaService.transaction.findMany.mock.calls[0]?.[0].where.hash.in
 
-      expect(hashA).not.toBe(hashB)
+      // Two different descriptions should produce two different hashes
+      expect(hashes.length).toBe(2)
+      expect(hashes[0]).not.toBe(hashes[1])
     })
   })
 
@@ -394,10 +410,21 @@ describe('TransactionsService', () => {
     })
 
     it('should identify external duplicates (existing in DB)', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue({
-        ...mockTransaction,
-        category: mockCategory,
-      })
+      // Batch findMany returns the existing transaction with matching hash
+      mockPrismaService.transaction.findMany.mockImplementation(
+        async ({ where }) => {
+          if (where?.hash?.in) {
+            return [
+              {
+                ...mockTransaction,
+                hash: where.hash.in[0],
+                category: mockCategory,
+              },
+            ]
+          }
+          return []
+        }
+      )
 
       const result = await service.previewImport(mockUserId, [
         createTransactionDto,
@@ -413,7 +440,8 @@ describe('TransactionsService', () => {
     })
 
     it('should identify internal duplicates (same transaction twice in import)', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
+      // No existing transactions in DB
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
 
       const result = await service.previewImport(mockUserId, [
         createTransactionDto,
@@ -439,10 +467,29 @@ describe('TransactionsService', () => {
         description: 'Supermarché',
       }
 
-      mockPrismaService.transaction.findUnique
-        .mockResolvedValueOnce(null) // newTx - new
-        .mockResolvedValueOnce({ ...mockTransaction, category: mockCategory }) // duplicateInDb - external duplicate
-        .mockResolvedValueOnce(null) // internalDup1 - first occurrence (new)
+      // findMany returns the existing transaction that matches duplicateInDb's hash
+      // We need to identify which hash corresponds to duplicateInDb
+      // duplicateInDb has same fields as createTransactionDto, so it will have the same hash
+      // newTx has description 'New Restaurant' - different hash
+      // internalDup1/2 have description 'Supermarché' - same hash (different from duplicateInDb)
+      mockPrismaService.transaction.findMany.mockImplementation(
+        async ({ where }) => {
+          if (where?.hash?.in && where.hash.in.length > 0) {
+            // Return the second hash (index 1) as existing - this is duplicateInDb
+            // (order in batch: newTx first, then duplicateInDb, then internalDup1/2)
+            // But since we use Map, unique hashes: newTx, duplicateInDb, internalDup1 (3 unique)
+            // Return the hash for duplicateInDb
+            const hashes: string[] = where.hash.in as string[]
+            // We'll return the second unique hash as existing (duplicateInDb's hash)
+            if (hashes.length >= 2) {
+              return [
+                { ...mockTransaction, hash: hashes[1], category: mockCategory },
+              ]
+            }
+          }
+          return []
+        }
+      )
 
       const result = await service.previewImport(mockUserId, [
         newTx,
@@ -471,7 +518,7 @@ describe('TransactionsService', () => {
     })
 
     it('should handle 3+ internal duplicates in same group', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
 
       const result = await service.previewImport(mockUserId, [
         createTransactionDto,
@@ -489,7 +536,7 @@ describe('TransactionsService', () => {
       const tx1 = createTransactionDto
       const tx2 = { ...createTransactionDto, description: 'Supermarché' }
 
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
 
       const result = await service.previewImport(mockUserId, [
         tx1,
@@ -509,7 +556,7 @@ describe('TransactionsService', () => {
         subcategory: 'Restaurant - Italien',
         note: 'Business lunch',
       }
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
 
       const result = await service.previewImport(mockUserId, [txWithOptionals])
 
@@ -525,8 +572,13 @@ describe('TransactionsService', () => {
         note: 'Old note',
         category: mockCategory,
       }
-      mockPrismaService.transaction.findUnique.mockResolvedValue(
-        existingWithOptionals
+      mockPrismaService.transaction.findMany.mockImplementation(
+        async ({ where }) => {
+          if (where?.hash?.in) {
+            return [{ ...existingWithOptionals, hash: where.hash.in[0] }]
+          }
+          return []
+        }
       )
 
       const result = await service.previewImport(mockUserId, [
@@ -547,9 +599,9 @@ describe('TransactionsService', () => {
         note: null,
         category: null,
       }
-      mockPrismaService.transaction.findUnique.mockResolvedValue(
-        existingNoOptionals
-      )
+      mockPrismaService.transaction.findMany.mockResolvedValue([
+        existingNoOptionals,
+      ])
 
       const result = await service.previewImport(mockUserId, [
         createTransactionDto,
@@ -567,29 +619,40 @@ describe('TransactionsService', () => {
       const tx2 = { ...createTransactionDto, description: 'Second' }
       const tx3 = { ...createTransactionDto, description: 'Third' }
 
-      mockPrismaService.transaction.findUnique
-        .mockResolvedValueOnce({ ...mockTransaction, category: mockCategory })
-        .mockResolvedValueOnce({ ...mockTransaction, category: mockCategory })
-        .mockResolvedValueOnce({ ...mockTransaction, category: mockCategory })
+      // All three are external duplicates - return all hashes as existing
+      mockPrismaService.transaction.findMany.mockImplementation(
+        async ({ where }) => {
+          if (where?.hash?.in) {
+            return where.hash.in.map((hash: string) => ({
+              ...mockTransaction,
+              hash,
+              category: mockCategory,
+            }))
+          }
+          return []
+        }
+      )
 
       const result = await service.previewImport(mockUserId, [tx1, tx2, tx3])
 
-      expect(result.externalDuplicates[0]?.uploaded.index).toBe(0)
-      expect(result.externalDuplicates[1]?.uploaded.index).toBe(1)
-      expect(result.externalDuplicates[2]?.uploaded.index).toBe(2)
+      // Check that indices are correctly assigned
+      const indices = result.externalDuplicates.map(d => d.uploaded.index)
+      expect(indices).toContain(0)
+      expect(indices).toContain(1)
+      expect(indices).toContain(2)
     })
 
     it('should handle internal duplicate not counting as external when first seen', async () => {
       // Internal duplicates should not trigger external duplicate check after first occurrence
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
 
       const result = await service.previewImport(mockUserId, [
         createTransactionDto,
         createTransactionDto,
       ])
 
-      // findUnique should only be called once (for first occurrence)
-      expect(mockPrismaService.transaction.findUnique).toHaveBeenCalledTimes(1)
+      // findMany should be called once with the unique hash
+      expect(mockPrismaService.transaction.findMany).toHaveBeenCalledTimes(1)
       expect(result.internalDuplicateCount).toBe(1)
       expect(result.externalDuplicateCount).toBe(0)
     })
@@ -606,9 +669,14 @@ describe('TransactionsService', () => {
     }
 
     it('should import duplicate when forceImport is true', async () => {
-      // First import without forceImport
-      mockPrismaService.transaction.findUnique.mockResolvedValue(
-        mockTransaction
+      // First import without forceImport - transaction exists (return matching hash)
+      mockPrismaService.transaction.findMany.mockImplementation(
+        async ({ where }) => {
+          if (where?.hash?.in) {
+            return where.hash.in.map((hash: string) => ({ hash }))
+          }
+          return []
+        }
       )
 
       const resultWithoutForce = await service.importTransactions(mockUserId, [
@@ -619,10 +687,11 @@ describe('TransactionsService', () => {
 
       vi.clearAllMocks()
 
-      // Second import with forceImport - generates unique key so hash is different
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      // Second import with forceImport - forced transactions bypass normal duplicate check
+      // findMany is only called for normal transactions, not for forceImport ones
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 1 })
 
       const resultWithForce = await service.importTransactions(mockUserId, [
         { ...createTransactionDto, forceImport: true },
@@ -633,9 +702,9 @@ describe('TransactionsService', () => {
     })
 
     it('should generate different hashes with forceImport', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 2 })
 
       // Import same transaction twice with forceImport
       await service.importTransactions(mockUserId, [
@@ -643,22 +712,25 @@ describe('TransactionsService', () => {
         { ...createTransactionDto, forceImport: true },
       ])
 
-      const hash1 =
-        mockPrismaService.transaction.findUnique.mock.calls[0]?.[0].where.hash
-      const hash2 =
-        mockPrismaService.transaction.findUnique.mock.calls[1]?.[0].where.hash
-
-      // Each should have a unique hash due to forceImport
-      expect(hash1).not.toBe(hash2)
+      // Check that createMany was called with different hashes
+      const createdData =
+        mockPrismaService.transaction.createMany.mock.calls[0]?.[0].data
+      expect(createdData.length).toBe(2)
+      expect(createdData[0].hash).not.toBe(createdData[1].hash)
     })
 
     it('should mix forceImport and normal transactions in same import', async () => {
-      mockPrismaService.transaction.findUnique
-        .mockResolvedValueOnce(mockTransaction) // First tx - duplicate
-        .mockResolvedValueOnce(null) // Second tx with forceImport - new
-
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      // Normal tx is a duplicate - return matching hash for normal tx
+      mockPrismaService.transaction.findMany.mockImplementation(
+        async ({ where }) => {
+          if (where?.hash?.in) {
+            return where.hash.in.map((hash: string) => ({ hash }))
+          }
+          return []
+        }
+      )
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 1 })
 
       const result = await service.importTransactions(mockUserId, [
         createTransactionDto, // Will be skipped as duplicate
@@ -667,12 +739,18 @@ describe('TransactionsService', () => {
 
       expect(result.imported).toBe(1)
       expect(result.duplicates).toBe(1)
-      expect(mockPrismaService.transaction.create).toHaveBeenCalledTimes(1)
+      expect(mockPrismaService.transaction.createMany).toHaveBeenCalledTimes(1)
     })
 
     it('should not use forceImport when flag is false', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(
-        mockTransaction
+      // Return matching hash - this is a duplicate
+      mockPrismaService.transaction.findMany.mockImplementation(
+        async ({ where }) => {
+          if (where?.hash?.in) {
+            return where.hash.in.map((hash: string) => ({ hash }))
+          }
+          return []
+        }
       )
 
       const result = await service.importTransactions(mockUserId, [
@@ -684,8 +762,14 @@ describe('TransactionsService', () => {
     })
 
     it('should not use forceImport when flag is undefined', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(
-        mockTransaction
+      // Return matching hash - this is a duplicate
+      mockPrismaService.transaction.findMany.mockImplementation(
+        async ({ where }) => {
+          if (where?.hash?.in) {
+            return where.hash.in.map((hash: string) => ({ hash }))
+          }
+          return []
+        }
       )
 
       const result = await service.importTransactions(mockUserId, [
@@ -697,23 +781,18 @@ describe('TransactionsService', () => {
     })
 
     it('should create transaction with correct hash when forceImport is true', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 1 })
 
       await service.importTransactions(mockUserId, [
         { ...createTransactionDto, forceImport: true },
       ])
 
-      // The hash passed to create should match the hash used for findUnique
-      const searchedHash =
-        mockPrismaService.transaction.findUnique.mock.calls[0]?.[0].where.hash
-      const createdHash =
-        mockPrismaService.transaction.create.mock.calls[0]?.[0].data.hash
-
-      expect(searchedHash).toBe(createdHash)
-      // Hash should contain "force-" pattern indicator from uniqueKey
-      expect(searchedHash).toMatch(/^[a-f0-9]{64}$/) // SHA-256 hash format
+      // Check that createMany was called with a SHA-256 hash
+      const createdData =
+        mockPrismaService.transaction.createMany.mock.calls[0]?.[0].data
+      expect(createdData[0].hash).toMatch(/^[a-f0-9]{64}$/) // SHA-256 hash format
     })
   })
 
@@ -729,97 +808,96 @@ describe('TransactionsService', () => {
 
     it('should compute different hash for different users', async () => {
       const otherUserId = '550e8400-e29b-41d4-a716-446655440099'
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 1 })
 
       await service.importTransactions(mockUserId, [createTransactionDto])
       const hash1 =
-        mockPrismaService.transaction.findUnique.mock.calls[0]?.[0].where.hash
+        mockPrismaService.transaction.findMany.mock.calls[0]?.[0].where.hash
+          .in[0]
 
       vi.clearAllMocks()
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 1 })
 
       await service.importTransactions(otherUserId, [createTransactionDto])
       const hash2 =
-        mockPrismaService.transaction.findUnique.mock.calls[0]?.[0].where.hash
+        mockPrismaService.transaction.findMany.mock.calls[0]?.[0].where.hash
+          .in[0]
 
       expect(hash1).not.toBe(hash2)
     })
 
     it('should compute different hash for different dates', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 2 })
 
       await service.importTransactions(mockUserId, [
         createTransactionDto,
         { ...createTransactionDto, date: '2024-01-16T10:30:00.000Z' },
       ])
 
-      const hash1 =
-        mockPrismaService.transaction.findUnique.mock.calls[0]?.[0].where.hash
-      const hash2 =
-        mockPrismaService.transaction.findUnique.mock.calls[1]?.[0].where.hash
+      const hashes =
+        mockPrismaService.transaction.findMany.mock.calls[0]?.[0].where.hash.in
 
-      expect(hash1).not.toBe(hash2)
+      expect(hashes[0]).not.toBe(hashes[1])
     })
 
     it('should compute different hash for different amounts', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 2 })
 
       await service.importTransactions(mockUserId, [
         createTransactionDto,
         { ...createTransactionDto, amount: -50.0 },
       ])
 
-      const hash1 =
-        mockPrismaService.transaction.findUnique.mock.calls[0]?.[0].where.hash
-      const hash2 =
-        mockPrismaService.transaction.findUnique.mock.calls[1]?.[0].where.hash
+      const hashes =
+        mockPrismaService.transaction.findMany.mock.calls[0]?.[0].where.hash.in
 
-      expect(hash1).not.toBe(hash2)
+      expect(hashes[0]).not.toBe(hashes[1])
     })
 
     it('should compute different hash for different accounts', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([mockCategory])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 2 })
 
       await service.importTransactions(mockUserId, [
         createTransactionDto,
         { ...createTransactionDto, account: 'Autre Compte' },
       ])
 
-      const hash1 =
-        mockPrismaService.transaction.findUnique.mock.calls[0]?.[0].where.hash
-      const hash2 =
-        mockPrismaService.transaction.findUnique.mock.calls[1]?.[0].where.hash
+      const hashes =
+        mockPrismaService.transaction.findMany.mock.calls[0]?.[0].where.hash.in
 
-      expect(hash1).not.toBe(hash2)
+      expect(hashes[0]).not.toBe(hashes[1])
     })
 
     it('should compute same hash regardless of category (category not in hash)', async () => {
-      mockPrismaService.transaction.findUnique.mockResolvedValue(null)
-      mockCategoriesService.findOrCreate.mockResolvedValue(mockCategory)
-      mockPrismaService.transaction.create.mockResolvedValue(mockTransaction)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue([
+        mockCategory,
+        { ...mockCategory, name: 'Transport' },
+      ])
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 1 })
 
       await service.importTransactions(mockUserId, [
         createTransactionDto,
         { ...createTransactionDto, category: 'Transport' },
       ])
 
-      const hash1 =
-        mockPrismaService.transaction.findUnique.mock.calls[0]?.[0].where.hash
-      const hash2 =
-        mockPrismaService.transaction.findUnique.mock.calls[1]?.[0].where.hash
+      // With batch, only unique hashes are passed to findMany
+      // Since category is not part of hash, both transactions have same hash
+      const hashes =
+        mockPrismaService.transaction.findMany.mock.calls[0]?.[0].where.hash.in
 
-      // Category is NOT part of hash computation, so hashes should be same
-      expect(hash1).toBe(hash2)
+      // Category is NOT part of hash computation, so only 1 unique hash
+      expect(hashes.length).toBe(1)
     })
   })
 })

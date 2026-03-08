@@ -10,7 +10,16 @@ import type {
   UploadedTransactionDto,
   InternalDuplicateDto,
   ExternalDuplicateDto,
+  ExistingTransactionDto,
 } from './dto'
+
+// Internal type for batch processing
+interface HashData {
+  index: number
+  hash: string
+  tx: CreateTransactionDto
+  date: Date
+}
 
 @Injectable()
 export class TransactionsService {
@@ -34,6 +43,64 @@ export class TransactionsService {
 
   private generateUniqueKey(): string {
     return `force-${Date.now()}-${randomUUID().slice(0, 8)}`
+  }
+
+  /**
+   * Compute hashes for all transactions in memory (no DB queries)
+   */
+  private computeHashesWithData(
+    userId: string,
+    transactions: CreateTransactionDto[]
+  ): HashData[] {
+    return transactions.map((tx, index) => ({
+      index,
+      hash: this.computeHash(
+        userId,
+        new Date(tx.date),
+        tx.amount,
+        tx.account,
+        tx.description
+      ),
+      tx,
+      date: new Date(tx.date),
+    }))
+  }
+
+  /**
+   * Convert HashData to UploadedTransactionDto for API response
+   */
+  private toUploadedDto(data: HashData): UploadedTransactionDto {
+    return {
+      index: data.index,
+      date: data.tx.date,
+      description: data.tx.description,
+      amount: data.tx.amount,
+      account: data.tx.account,
+      category: data.tx.category,
+      type: data.tx.type,
+      ...(data.tx.subcategory && { subcategory: data.tx.subcategory }),
+      ...(data.tx.note && { note: data.tx.note }),
+    }
+  }
+
+  /**
+   * Convert DB Transaction to ExistingTransactionDto for API response
+   */
+  private toExistingDto(
+    tx: Transaction & { category?: { name: string } | null }
+  ): ExistingTransactionDto {
+    return {
+      id: tx.id,
+      date: tx.date.toISOString(),
+      description: tx.description,
+      amount: Number(tx.amount),
+      account: tx.account,
+      type: tx.type,
+      createdAt: tx.createdAt.toISOString(),
+      ...(tx.category?.name && { categoryName: tx.category.name }),
+      ...(tx.subcategory && { subcategory: tx.subcategory }),
+      ...(tx.note && { note: tx.note }),
+    }
   }
 
   async findAllByUser(
@@ -76,101 +143,85 @@ export class TransactionsService {
     return transaction
   }
 
+  /**
+   * Preview import with batch hash lookups for better performance.
+   * Reduces N DB queries to 1 single query.
+   */
   async previewImport(
     userId: string,
     transactions: CreateTransactionDto[]
   ): Promise<ImportPreviewResultDto> {
+    if (transactions.length === 0) {
+      return {
+        newCount: 0,
+        internalDuplicateCount: 0,
+        externalDuplicateCount: 0,
+        total: 0,
+        internalDuplicates: [],
+        externalDuplicates: [],
+      }
+    }
+
+    // 1. Compute all hashes in memory (no DB queries)
+    const hashesData = this.computeHashesWithData(userId, transactions)
+
+    // 2. Detect INTERNAL duplicates (same hash in this batch)
+    const hashToIndices = new Map<string, number[]>()
+    for (const { index, hash } of hashesData) {
+      const existing = hashToIndices.get(hash) || []
+      existing.push(index)
+      hashToIndices.set(hash, existing)
+    }
+
+    // 3. Collect unique hashes for DB query
+    const uniqueHashes = [...hashToIndices.keys()]
+
+    // 4. ONE SINGLE query to check existence in DB
+    const existingInDb = await this.prisma.transaction.findMany({
+      where: {
+        hash: { in: uniqueHashes },
+        userId,
+      },
+      include: { category: true },
+    })
+    const existingHashSet = new Set(existingInDb.map(t => t.hash))
+    const existingByHash = new Map(existingInDb.map(t => [t.hash, t]))
+
+    // 5. Build results
+    const internalDuplicates: InternalDuplicateDto[] = []
     const externalDuplicates: ExternalDuplicateDto[] = []
-    const internalDuplicatesMap = new Map<
-      string,
-      { indices: number[]; transactions: UploadedTransactionDto[] }
-    >()
-    const processedHashes = new Set<string>()
     let newCount = 0
 
-    for (const [i, tx] of transactions.entries()) {
-      const date = new Date(tx.date)
-      const hash = this.computeHash(
-        userId,
-        date,
-        tx.amount,
-        tx.account,
-        tx.description
-      )
+    for (const [hash, indices] of hashToIndices) {
+      const txsData = indices
+        .map(i => hashesData[i])
+        .filter((d): d is HashData => d !== undefined)
 
-      const uploadedTx: UploadedTransactionDto = {
-        index: i,
-        date: tx.date,
-        description: tx.description,
-        amount: tx.amount,
-        account: tx.account,
-        category: tx.category,
-        type: tx.type,
-        ...(tx.subcategory && { subcategory: tx.subcategory }),
-        ...(tx.note && { note: tx.note }),
-      }
-
-      // Check for INTERNAL duplicate (already seen in this import)
-      if (processedHashes.has(hash)) {
-        const existing = internalDuplicatesMap.get(hash)
-        if (existing) {
-          existing.indices.push(i)
-          existing.transactions.push(uploadedTx)
+      // Case: EXTERNAL duplicate (exists in DB)
+      if (existingHashSet.has(hash)) {
+        const existing = existingByHash.get(hash)!
+        for (const data of txsData) {
+          externalDuplicates.push({
+            hash,
+            uploaded: this.toUploadedDto(data),
+            existing: this.toExistingDto(existing),
+          })
         }
         continue
       }
 
-      processedHashes.add(hash)
-
-      // Check for EXTERNAL duplicate (exists in DB)
-      const existingInDb = await this.prisma.transaction.findUnique({
-        where: { hash },
-        include: { category: true },
-      })
-
-      if (existingInDb) {
-        externalDuplicates.push({
-          hash,
-          uploaded: uploadedTx,
-          existing: {
-            id: existingInDb.id,
-            date: existingInDb.date.toISOString(),
-            description: existingInDb.description,
-            amount: Number(existingInDb.amount),
-            account: existingInDb.account,
-            type: existingInDb.type,
-            createdAt: existingInDb.createdAt.toISOString(),
-            ...(existingInDb.category?.name && {
-              categoryName: existingInDb.category.name,
-            }),
-            ...(existingInDb.subcategory && {
-              subcategory: existingInDb.subcategory,
-            }),
-            ...(existingInDb.note && { note: existingInDb.note }),
-          },
-        })
-      } else {
-        // First occurrence, prepare for internal duplicate detection
-        internalDuplicatesMap.set(hash, {
-          indices: [i],
-          transactions: [uploadedTx],
-        })
-        newCount++
-      }
-    }
-
-    // Filter to keep only actual internal duplicates (>1 occurrence)
-    const internalDuplicates: InternalDuplicateDto[] = []
-    for (const [hash, data] of internalDuplicatesMap) {
-      if (data.indices.length > 1) {
+      // Case: INTERNAL duplicate (>1 occurrence of same hash)
+      if (indices.length > 1) {
         internalDuplicates.push({
           hash,
-          indices: data.indices,
-          transactions: data.transactions,
+          indices,
+          transactions: txsData.map(d => this.toUploadedDto(d)),
         })
-        // Adjust newCount: first occurrence was counted but it's a duplicate group
-        newCount--
+        continue
       }
+
+      // Case: New unique transaction
+      newCount++
     }
 
     return {
@@ -183,66 +234,125 @@ export class TransactionsService {
     }
   }
 
+  /**
+   * Import transactions with batch operations for better performance.
+   * Reduces N*3 DB queries to ~4 queries total.
+   */
   async importTransactions(
     userId: string,
     transactions: CreateTransactionDto[]
   ): Promise<ImportResultDto> {
-    let imported = 0
-    let duplicates = 0
+    if (transactions.length === 0) {
+      return { imported: 0, duplicates: 0, total: 0 }
+    }
+
+    // 1. Separate normal transactions from forceImport ones
+    const normalTxs: CreateTransactionDto[] = []
+    const forcedTxs: CreateTransactionDto[] = []
 
     for (const tx of transactions) {
-      const date = new Date(tx.date)
+      if (tx.forceImport) {
+        forcedTxs.push(tx)
+      } else {
+        normalTxs.push(tx)
+      }
+    }
 
-      // If forceImport is true, generate a unique key to bypass duplicate detection
-      const uniqueKey = tx.forceImport ? this.generateUniqueKey() : undefined
-      const hash = this.computeHash(
+    // 2. Batch lookup for normal transactions
+    const hashesData = this.computeHashesWithData(userId, normalTxs)
+    const uniqueHashes = [...new Set(hashesData.map(h => h.hash))]
+
+    const existingHashes = new Set(
+      (
+        await this.prisma.transaction.findMany({
+          where: { hash: { in: uniqueHashes }, userId },
+          select: { hash: true },
+        })
+      ).map(t => t.hash)
+    )
+
+    // 3. Filter non-duplicates (keep only first occurrence of each hash)
+    const seenHashes = new Set<string>()
+    const toImport: HashData[] = []
+
+    for (const data of hashesData) {
+      if (!existingHashes.has(data.hash) && !seenHashes.has(data.hash)) {
+        toImport.push(data)
+        seenHashes.add(data.hash)
+      }
+    }
+
+    const duplicates = hashesData.length - toImport.length
+
+    // 4. Prepare forced transactions (with uniqueKey for unique hash)
+    const forcedData = forcedTxs.map(tx => ({
+      tx,
+      date: new Date(tx.date),
+      hash: this.computeHash(
         userId,
-        date,
+        new Date(tx.date),
         tx.amount,
         tx.account,
         tx.description,
-        uniqueKey
-      )
+        this.generateUniqueKey()
+      ),
+    }))
 
-      // Check if transaction already exists (will never match if forceImport=true)
-      const existing = await this.prisma.transaction.findUnique({
-        where: { hash },
-      })
+    // 5. Batch create/fetch all categories
+    const allTxsToImport = [...toImport.map(t => t.tx), ...forcedTxs]
 
-      if (existing) {
-        duplicates++
-        continue
-      }
-
-      // Find or create category
-      const category = await this.categoriesService.findOrCreate(
-        userId,
-        tx.category,
-        tx.type
-      )
-
-      // Create transaction
-      await this.prisma.transaction.create({
-        data: {
-          userId,
-          categoryId: category.id,
-          hash,
-          date,
-          description: tx.description,
-          amount: tx.amount,
-          type: tx.type,
-          account: tx.account,
-          subcategory: tx.subcategory ?? null,
-          note: tx.note ?? null,
-          isPointed: tx.isPointed ?? false,
-        },
-      })
-
-      imported++
+    if (allTxsToImport.length === 0) {
+      return { imported: 0, duplicates, total: transactions.length }
     }
 
+    const categoryInputs = allTxsToImport.map(tx => ({
+      name: tx.category,
+      type: tx.type,
+    }))
+
+    const categories = await this.categoriesService.findOrCreateMany(
+      userId,
+      categoryInputs
+    )
+    const categoryByName = new Map(categories.map(c => [c.name, c]))
+
+    // 6. Bulk insert with createMany
+    const dataToCreate = [
+      ...toImport.map(({ hash, date, tx }) => ({
+        userId,
+        categoryId: categoryByName.get(tx.category)!.id,
+        hash,
+        date,
+        description: tx.description,
+        amount: tx.amount,
+        type: tx.type,
+        account: tx.account,
+        subcategory: tx.subcategory ?? null,
+        note: tx.note ?? null,
+        isPointed: tx.isPointed ?? false,
+      })),
+      ...forcedData.map(({ hash, date, tx }) => ({
+        userId,
+        categoryId: categoryByName.get(tx.category)!.id,
+        hash,
+        date,
+        description: tx.description,
+        amount: tx.amount,
+        type: tx.type,
+        account: tx.account,
+        subcategory: tx.subcategory ?? null,
+        note: tx.note ?? null,
+        isPointed: tx.isPointed ?? false,
+      })),
+    ]
+
+    await this.prisma.transaction.createMany({
+      data: dataToCreate,
+      skipDuplicates: true,
+    })
+
     return {
-      imported,
+      imported: dataToCreate.length,
       duplicates,
       total: transactions.length,
     }

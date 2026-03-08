@@ -104,7 +104,7 @@ describe('PersonsService', () => {
 
       const result = await service.create(mockPerson.userId, {
         name: mockPerson.name,
-        email: mockPerson.email!,
+        email: mockPerson.email,
       })
 
       expect(result).toEqual(mockPerson)

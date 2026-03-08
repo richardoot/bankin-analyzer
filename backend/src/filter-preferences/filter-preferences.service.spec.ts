@@ -1,7 +1,8 @@
-import { Test, TestingModule } from '@nestjs/testing'
+import type { TestingModule } from '@nestjs/testing'
+import { Test } from '@nestjs/testing'
 import { FilterPreferencesService } from './filter-preferences.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { FilterPreferences } from '../generated/prisma'
+import type { FilterPreferences } from '../generated/prisma'
 
 describe('FilterPreferencesService', () => {
   let service: FilterPreferencesService

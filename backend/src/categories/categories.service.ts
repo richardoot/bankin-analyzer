@@ -37,4 +37,51 @@ export class CategoriesService {
   async create(userId: string, dto: CreateCategoryDto): Promise<Category> {
     return this.findOrCreate(userId, dto.name, dto.type)
   }
+
+  /**
+   * Batch find or create multiple categories.
+   * Much more efficient than calling findOrCreate() N times.
+   */
+  async findOrCreateMany(
+    userId: string,
+    categories: Array<{ name: string; type: TransactionType }>
+  ): Promise<Category[]> {
+    if (categories.length === 0) {
+      return []
+    }
+
+    // Deduplicate by name|type
+    const uniqueCategories = [
+      ...new Map(categories.map(c => [`${c.name}|${c.type}`, c])).values(),
+    ]
+
+    // 1. Find all existing categories in one query
+    const existing = await this.prisma.category.findMany({
+      where: {
+        userId,
+        OR: uniqueCategories.map(c => ({ name: c.name, type: c.type })),
+      },
+    })
+    const existingSet = new Set(existing.map(c => `${c.name}|${c.type}`))
+
+    // 2. Create missing ones in batch
+    const toCreate = uniqueCategories.filter(
+      c => !existingSet.has(`${c.name}|${c.type}`)
+    )
+
+    if (toCreate.length > 0) {
+      await this.prisma.category.createMany({
+        data: toCreate.map(c => ({ userId, name: c.name, type: c.type })),
+        skipDuplicates: true,
+      })
+    }
+
+    // 3. Return all categories
+    return this.prisma.category.findMany({
+      where: {
+        userId,
+        OR: uniqueCategories.map(c => ({ name: c.name, type: c.type })),
+      },
+    })
+  }
 }
