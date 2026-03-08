@@ -10,6 +10,7 @@ import { TransactionsModule } from './transactions/transactions.module'
 import { FilterPreferencesModule } from './filter-preferences/filter-preferences.module'
 import { PersonsModule } from './persons/persons.module'
 import { ReimbursementsModule } from './reimbursements/reimbursements.module'
+import { ImportHistoriesModule } from './import-histories/import-histories.module'
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ReimbursementsModule } from './reimbursements/reimbursements.module'
     FilterPreferencesModule,
     PersonsModule,
     ReimbursementsModule,
+    ImportHistoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

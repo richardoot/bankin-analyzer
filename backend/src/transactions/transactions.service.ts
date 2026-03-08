@@ -310,7 +310,7 @@ export class TransactionsService {
       type: tx.type,
     }))
 
-    const categories = await this.categoriesService.findOrCreateMany(
+    const { categories } = await this.categoriesService.findOrCreateMany(
       userId,
       categoryInputs
     )

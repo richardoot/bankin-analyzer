@@ -20,6 +20,7 @@ model User {
   filterPreferences     FilterPreferences?
   persons               Person[]
   reimbursementRequests ReimbursementRequest[]
+  importHistories       ImportHistory[]
 
   @@map("users")
   @@schema("app")
@@ -140,5 +141,34 @@ model ReimbursementRequest {
   @@index([personId])
   @@index([status])
   @@map("reimbursement_requests")
+  @@schema("app")
+}
+
+model ImportHistory {
+  id String @id @default(uuid())
+
+  userId String @map("user_id")
+
+  // Statistiques d'import
+  transactionsImported Int @map("transactions_imported")
+  categoriesCreated    Int @map("categories_created")
+  duplicatesSkipped    Int @map("duplicates_skipped")
+  totalInFile          Int @map("total_in_file")
+
+  // Plage de dates des transactions
+  dateRangeStart DateTime @map("date_range_start")
+  dateRangeEnd   DateTime @map("date_range_end")
+
+  // Métadonnées
+  accounts String[]
+  fileName String?  @map("file_name")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@map("import_histories")
   @@schema("app")
 }

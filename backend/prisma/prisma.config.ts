@@ -18,7 +18,7 @@ export default defineConfig({
   schema: path.join(__dirname, 'schema.prisma'),
 
   migrate: {
-    async adapter() {
+    adapter() {
       const pool = new pg.Pool({ connectionString })
       return new PrismaPg(pool)
     },

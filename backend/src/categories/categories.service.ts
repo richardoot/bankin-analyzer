@@ -41,13 +41,14 @@ export class CategoriesService {
   /**
    * Batch find or create multiple categories.
    * Much more efficient than calling findOrCreate() N times.
+   * Returns all categories and count of newly created ones.
    */
   async findOrCreateMany(
     userId: string,
     categories: Array<{ name: string; type: TransactionType }>
-  ): Promise<Category[]> {
+  ): Promise<{ categories: Category[]; newCount: number }> {
     if (categories.length === 0) {
-      return []
+      return { categories: [], newCount: 0 }
     }
 
     // Deduplicate by name|type
@@ -76,12 +77,14 @@ export class CategoriesService {
       })
     }
 
-    // 3. Return all categories
-    return this.prisma.category.findMany({
+    // 3. Return all categories and count of new ones
+    const allCategories = await this.prisma.category.findMany({
       where: {
         userId,
         OR: uniqueCategories.map(c => ({ name: c.name, type: c.type })),
       },
     })
+
+    return { categories: allCategories, newCount: toCreate.length }
   }
 }
