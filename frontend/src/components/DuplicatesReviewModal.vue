@@ -65,6 +65,57 @@
     return internalSkipped + externalSkipped
   })
 
+  // Get all internal duplicate indices (flattened from all groups)
+  const allInternalIndices = computed(() => {
+    if (!props.previewResult) return []
+    return props.previewResult.internalDuplicates.flatMap(
+      group => group.indices
+    )
+  })
+
+  // Check if all internal duplicates are selected
+  const allInternalSelected = computed(() => {
+    if (allInternalIndices.value.length === 0) return false
+    return allInternalIndices.value.every(idx =>
+      selectedInternalIndices.value.has(idx)
+    )
+  })
+
+  // Check if some (but not all) internal duplicates are selected
+  const someInternalSelected = computed(() => {
+    if (allInternalIndices.value.length === 0) return false
+    const selectedCount = selectedInternalIndices.value.size
+    return selectedCount > 0 && selectedCount < allInternalIndices.value.length
+  })
+
+  // Check if all external duplicates are selected
+  const allExternalSelected = computed(() => {
+    if (
+      !props.previewResult ||
+      props.previewResult.externalDuplicates.length === 0
+    ) {
+      return false
+    }
+    return props.previewResult.externalDuplicates.every(dup =>
+      selectedExternalIndices.value.has(dup.uploaded.index)
+    )
+  })
+
+  // Check if some (but not all) external duplicates are selected
+  const someExternalSelected = computed(() => {
+    if (
+      !props.previewResult ||
+      props.previewResult.externalDuplicates.length === 0
+    ) {
+      return false
+    }
+    const selectedCount = selectedExternalIndices.value.size
+    return (
+      selectedCount > 0 &&
+      selectedCount < props.previewResult.externalDuplicates.length
+    )
+  })
+
   function toggleInternalIndex(index: number) {
     const newSet = new Set(selectedInternalIndices.value)
     if (newSet.has(index)) {
@@ -75,6 +126,16 @@
     selectedInternalIndices.value = newSet
   }
 
+  function toggleAllInternalDuplicates() {
+    if (allInternalSelected.value) {
+      // Deselect all
+      selectedInternalIndices.value = new Set()
+    } else {
+      // Select all
+      selectedInternalIndices.value = new Set(allInternalIndices.value)
+    }
+  }
+
   function toggleExternalIndex(index: number) {
     const newSet = new Set(selectedExternalIndices.value)
     if (newSet.has(index)) {
@@ -83,6 +144,21 @@
       newSet.add(index)
     }
     selectedExternalIndices.value = newSet
+  }
+
+  function toggleAllExternalDuplicates() {
+    if (!props.previewResult) return
+
+    if (allExternalSelected.value) {
+      // Deselect all
+      selectedExternalIndices.value = new Set()
+    } else {
+      // Select all
+      const allIndices = new Set(
+        props.previewResult.externalDuplicates.map(dup => dup.uploaded.index)
+      )
+      selectedExternalIndices.value = allIndices
+    }
   }
 
   function handleClose() {
@@ -198,22 +274,34 @@
               v-if="previewResult.internalDuplicates.length > 0"
               class="space-y-4"
             >
-              <h3 class="font-medium text-gray-900 flex items-center gap-2">
-                <svg
-                  class="w-5 h-5 text-amber-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+              <div class="flex items-center justify-between">
+                <h3 class="font-medium text-gray-900 flex items-center gap-2">
+                  <svg
+                    class="w-5 h-5 text-amber-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                    />
+                  </svg>
+                  Doublons internes (dans ce fichier)
+                </h3>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    :checked="allInternalSelected"
+                    :indeterminate="someInternalSelected"
+                    class="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                    @change="toggleAllInternalDuplicates"
                   />
-                </svg>
-                Doublons internes (dans ce fichier)
-              </h3>
+                  <span class="text-sm text-gray-600">Tout selectionner</span>
+                </label>
+              </div>
               <p class="text-sm text-gray-500">
                 Ces transactions apparaissent plusieurs fois dans votre fichier.
                 Selectionnez celles a importer.
@@ -273,22 +361,34 @@
               v-if="previewResult.externalDuplicates.length > 0"
               class="space-y-4"
             >
-              <h3 class="font-medium text-gray-900 flex items-center gap-2">
-                <svg
-                  class="w-5 h-5 text-red-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+              <div class="flex items-center justify-between">
+                <h3 class="font-medium text-gray-900 flex items-center gap-2">
+                  <svg
+                    class="w-5 h-5 text-red-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+                    />
+                  </svg>
+                  Deja en base de donnees
+                </h3>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    :checked="allExternalSelected"
+                    :indeterminate="someExternalSelected"
+                    class="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                    @change="toggleAllExternalDuplicates"
                   />
-                </svg>
-                Deja en base de donnees
-              </h3>
+                  <span class="text-sm text-gray-600">Tout selectionner</span>
+                </label>
+              </div>
               <p class="text-sm text-gray-500">
                 Ces transactions existent deja dans votre historique. Cochez
                 pour les importer quand meme.

@@ -6,8 +6,18 @@ import ImportPage from './ImportPage.vue'
 // Mock the API
 vi.mock('@/lib/api', () => ({
   api: {
+    previewImport: vi.fn(),
     importTransactions: vi.fn(),
   },
+}))
+
+// Mock the hash utils (to avoid crypto.subtle issues in tests)
+vi.mock('@/lib/hashUtils', () => ({
+  computeAllHashes: vi
+    .fn()
+    .mockImplementation((transactions: unknown[]) =>
+      Promise.resolve(transactions.map((_, i) => `hash-${i}`))
+    ),
 }))
 
 import { api } from '@/lib/api'
@@ -237,7 +247,17 @@ describe('ImportPage', () => {
       const csvContent = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
 "15/01/2024";"Test";"Compte";"-50.00";"Cat";"Sub";"";"Oui"`
 
-      vi.mocked(api.importTransactions).mockResolvedValueOnce({
+      // Mock preview with no duplicates (triggers direct import)
+      vi.mocked(api.previewImport).mockResolvedValue({
+        newCount: 1,
+        internalDuplicateCount: 0,
+        externalDuplicateCount: 0,
+        total: 1,
+        internalDuplicates: [],
+        externalDuplicates: [],
+      })
+
+      vi.mocked(api.importTransactions).mockResolvedValue({
         imported: 1,
         duplicates: 0,
         total: 1,
@@ -270,6 +290,8 @@ describe('ImportPage', () => {
       }
       await flushPromises()
 
+      // Preview is called first, then import
+      expect(api.previewImport).toHaveBeenCalled()
       expect(api.importTransactions).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({
@@ -285,9 +307,8 @@ describe('ImportPage', () => {
       const csvContent = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
 "15/01/2024";"Test";"Compte";"-50.00";"Cat";"Sub";"";"Oui"`
 
-      vi.mocked(api.importTransactions).mockRejectedValueOnce(
-        new Error('Server error')
-      )
+      // Mock preview to fail
+      vi.mocked(api.previewImport).mockRejectedValue(new Error('Server error'))
 
       const wrapper = mount(ImportPage, {
         global: {

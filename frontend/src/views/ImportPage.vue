@@ -1,14 +1,23 @@
 <script setup lang="ts">
-  import { ref } from 'vue'
+  import { ref, computed } from 'vue'
   import { useRouter } from 'vue-router'
   import {
-    api,
     type ImportTransactionDto,
     type ImportPreviewResultDto,
   } from '@/lib/api'
+  import {
+    useChunkedImport,
+    PartialImportError,
+  } from '@/composables/useChunkedImport'
   import DuplicatesReviewModal from '@/components/DuplicatesReviewModal.vue'
 
   const router = useRouter()
+  const {
+    progress,
+    chunkedPreviewImport,
+    chunkedImportTransactions,
+    resetProgress,
+  } = useChunkedImport()
 
   const file = ref<File | null>(null)
   const isDragOver = ref(false)
@@ -19,6 +28,16 @@
   const showPreview = ref(false)
   const showDuplicatesModal = ref(false)
   const previewResult = ref<ImportPreviewResultDto | null>(null)
+  const partialImportError = ref<PartialImportError | null>(null)
+
+  // Show progress bar during chunking
+  const showProgressBar = computed(() => {
+    return (
+      progress.value.phase === 'hashing' ||
+      progress.value.phase === 'previewing' ||
+      progress.value.phase === 'importing'
+    )
+  })
 
   function handleDragOver(e: DragEvent) {
     e.preventDefault()
@@ -193,17 +212,20 @@
 
     isPreviewLoading.value = true
     error.value = null
+    partialImportError.value = null
+    resetProgress()
 
     try {
-      // Step 1: Preview to detect duplicates
-      const preview = await api.previewImport(parsedTransactions.value)
+      // Step 1: Chunked preview to detect duplicates
+      const preview = await chunkedPreviewImport(parsedTransactions.value)
 
       // If duplicates detected, show modal
       if (
         preview.internalDuplicateCount > 0 ||
         preview.externalDuplicateCount > 0
       ) {
-        previewResult.value = preview
+        // Convert ConsolidatedPreview to ImportPreviewResultDto format
+        previewResult.value = preview as ImportPreviewResultDto
         showDuplicatesModal.value = true
         return
       }
@@ -221,17 +243,15 @@
   async function performImport(forceIndices: Set<number>) {
     isUploading.value = true
     error.value = null
+    partialImportError.value = null
+    resetProgress()
 
     try {
-      // Mark selected transactions with forceImport=true
-      const transactionsToImport = parsedTransactions.value.map(
-        (tx, index) => ({
-          ...tx,
-          forceImport: forceIndices.has(index),
-        })
+      // Chunked import with automatic retry
+      const result = await chunkedImportTransactions(
+        parsedTransactions.value,
+        forceIndices
       )
-
-      const result = await api.importTransactions(transactionsToImport)
 
       // Get unique categories count
       const uniqueCategories = new Set(
@@ -249,8 +269,14 @@
         },
       })
     } catch (err) {
-      error.value =
-        err instanceof Error ? err.message : "Erreur lors de l'import"
+      if (err instanceof PartialImportError) {
+        // Partial import failure - show retry UI
+        partialImportError.value = err
+        error.value = `Import echoue au chunk ${err.details.failedAtChunk + 1}/${err.details.chunksTotal}. ${err.details.imported} transactions importees sur ${err.details.total}.`
+      } else {
+        error.value =
+          err instanceof Error ? err.message : "Erreur lors de l'import"
+      }
     } finally {
       isUploading.value = false
       showDuplicatesModal.value = false
@@ -271,6 +297,16 @@
     parsedTransactions.value = []
     showPreview.value = false
     error.value = null
+    partialImportError.value = null
+    resetProgress()
+  }
+
+  function retryImport() {
+    // Retry the full import - thanks to idempotent design,
+    // already imported transactions will be detected as duplicates
+    partialImportError.value = null
+    error.value = null
+    submitImport()
   }
 
   function formatAmount(amount: number): string {
@@ -291,9 +327,81 @@
         </p>
       </div>
 
+      <!-- Progress bar during chunking -->
+      <div
+        v-if="showProgressBar"
+        class="mb-6 bg-white border border-indigo-200 rounded-lg p-4"
+      >
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm font-medium text-indigo-700">
+            {{ progress.message }}
+          </span>
+          <span class="text-sm text-indigo-600">{{ progress.percent }}%</span>
+        </div>
+        <div class="w-full bg-indigo-100 rounded-full h-2.5">
+          <div
+            class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+            :style="{ width: `${progress.percent}%` }"
+          ></div>
+        </div>
+        <div
+          v-if="progress.totalChunks > 1"
+          class="mt-2 text-xs text-indigo-500"
+        >
+          Chunk {{ progress.completedChunks }}/{{ progress.totalChunks }}
+        </div>
+      </div>
+
+      <!-- Partial import error with retry -->
+      <div
+        v-if="partialImportError"
+        class="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4"
+      >
+        <div class="flex items-start gap-3">
+          <svg
+            class="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+          <div class="flex-1">
+            <h3 class="font-medium text-amber-800">Import partiel</h3>
+            <p class="text-sm text-amber-700 mt-1">
+              {{ partialImportError.details.imported }} transactions importees
+              sur {{ partialImportError.details.total }}.
+            </p>
+            <p class="text-xs text-amber-600 mt-2">
+              Vous pouvez reessayer sans risque de dupliquer les transactions
+              deja importees.
+            </p>
+            <div class="mt-3 flex gap-2">
+              <button
+                class="px-3 py-1.5 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 transition-colors"
+                @click="retryImport"
+              >
+                Reessayer l'import
+              </button>
+              <button
+                class="px-3 py-1.5 border border-amber-300 text-amber-700 text-sm rounded-lg hover:bg-amber-100 transition-colors"
+                @click="cancelImport"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Error message -->
       <div
-        v-if="error"
+        v-if="error && !partialImportError"
         class="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"
       >
         {{ error }}
