@@ -1,21 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { api } from './api'
+import { api, AuthError } from './api'
 
 // Mock fetch globally
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
-// Mock supabase
+// Use vi.hoisted to define mocks that will be available in vi.mock
+const { mockGetSession, mockRefreshSession } = vi.hoisted(() => ({
+  mockGetSession: vi.fn(),
+  mockRefreshSession: vi.fn(),
+}))
+
 vi.mock('./supabase', () => ({
   supabase: {
     auth: {
-      getSession: vi.fn().mockResolvedValue({
-        data: {
-          session: {
-            access_token: 'test-token',
-          },
-        },
-      }),
+      getSession: mockGetSession,
+      refreshSession: mockRefreshSession,
     },
   },
 }))
@@ -23,6 +23,14 @@ vi.mock('./supabase', () => ({
 describe('api', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Default mock for getSession - returns valid token
+    mockGetSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: 'test-token',
+        },
+      },
+    })
   })
 
   describe('getMe', () => {
@@ -55,9 +63,10 @@ describe('api', () => {
     })
 
     it('should throw error when request fails', async () => {
+      // Use 500 status to test non-401 error handling
       mockFetch.mockResolvedValueOnce({
         ok: false,
-        status: 401,
+        status: 500,
       })
 
       await expect(api.getMe()).rejects.toThrow('Failed to fetch user')
@@ -244,6 +253,107 @@ describe('api', () => {
           }),
         })
       )
+    })
+  })
+
+  describe('token refresh on 401', () => {
+    it('should retry request after refreshing token on 401', async () => {
+      const mockTransactions = [
+        {
+          id: 'tx-1',
+          date: '2024-01-15T00:00:00.000Z',
+          description: 'Restaurant',
+          amount: -45.5,
+          type: 'EXPENSE',
+          account: 'Compte Courant',
+          isPointed: false,
+          categoryName: 'Alimentation',
+          createdAt: '2024-01-15T00:00:00.000Z',
+        },
+      ]
+
+      // First call returns 401, second call succeeds
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(mockTransactions),
+        })
+
+      // Refresh succeeds and returns new token
+      mockRefreshSession.mockResolvedValueOnce({ error: null })
+      mockGetSession
+        .mockResolvedValueOnce({
+          data: { session: { access_token: 'test-token' } },
+        })
+        .mockResolvedValueOnce({
+          data: { session: { access_token: 'new-token' } },
+        })
+
+      const result = await api.getTransactions()
+
+      expect(mockRefreshSession).toHaveBeenCalledTimes(1)
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+      expect(result).toEqual(mockTransactions)
+    })
+
+    it('should throw AuthError when refresh fails', async () => {
+      // First call returns 401
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+      })
+
+      // Refresh fails
+      mockRefreshSession.mockResolvedValueOnce({
+        error: new Error('Refresh token expired'),
+      })
+
+      const error = await api.getTransactions().catch(e => e)
+      expect(error).toBeInstanceOf(AuthError)
+      expect(error.message).toBe('Session expiree, veuillez vous reconnecter')
+    })
+
+    it('should not retry on non-401 errors', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+      })
+
+      await expect(api.getTransactions()).rejects.toThrow(
+        'Failed to fetch transactions'
+      )
+      expect(mockRefreshSession).not.toHaveBeenCalled()
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    })
+
+    it('should throw error if retry also fails with 401', async () => {
+      // Both calls return 401
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+        })
+
+      // Refresh succeeds
+      mockRefreshSession.mockResolvedValueOnce({ error: null })
+      mockGetSession.mockResolvedValue({
+        data: { session: { access_token: 'new-token' } },
+      })
+
+      // Should throw generic error after retry fails
+      await expect(api.getTransactions()).rejects.toThrow(
+        'Failed to fetch transactions'
+      )
+      expect(mockRefreshSession).toHaveBeenCalledTimes(1)
+      expect(mockFetch).toHaveBeenCalledTimes(2)
     })
   })
 })

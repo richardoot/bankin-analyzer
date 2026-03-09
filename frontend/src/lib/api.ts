@@ -3,6 +3,14 @@ import { supabase } from './supabase'
 const API_BASE_URL =
   (import.meta.env.VITE_API_URL as string) || 'http://localhost:3000'
 
+// Custom error for authentication failures
+export class AuthError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AuthError'
+  }
+}
+
 export interface DbUser {
   id: string
   supabaseId: string
@@ -199,7 +207,7 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   } = await supabase.auth.getSession()
 
   if (!session?.access_token) {
-    throw new Error('No active session')
+    throw new AuthError('No active session')
   }
 
   return {
@@ -208,10 +216,38 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   }
 }
 
+/**
+ * Fetch wrapper that handles 401 errors by refreshing the token and retrying.
+ * Throws AuthError if refresh fails.
+ */
+async function fetchWithAuth(
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  // First attempt
+  const headers = await getAuthHeaders()
+  let response = await fetch(url, { ...options, headers })
+
+  // If 401, try to refresh token and retry
+  if (response.status === 401) {
+    const { error } = await supabase.auth.refreshSession()
+
+    if (error) {
+      // Refresh failed - session is invalid
+      throw new AuthError('Session expiree, veuillez vous reconnecter')
+    }
+
+    // Retry with new token
+    const newHeaders = await getAuthHeaders()
+    response = await fetch(url, { ...options, headers: newHeaders })
+  }
+
+  return response
+}
+
 export const api = {
   async getMe(): Promise<DbUser> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/users/me`, { headers })
+    const response = await fetchWithAuth(`${API_BASE_URL}/users/me`)
 
     if (!response.ok) {
       throw new Error('Failed to fetch user')
@@ -221,10 +257,8 @@ export const api = {
   },
 
   async deleteAccount(): Promise<void> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/users/me`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/users/me`, {
       method: 'DELETE',
-      headers,
     })
 
     if (!response.ok) {
@@ -235,12 +269,10 @@ export const api = {
   async previewImport(
     transactions: ImportTransactionDto[]
   ): Promise<ImportPreviewResultDto> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(
+    const response = await fetchWithAuth(
       `${API_BASE_URL}/transactions/import/preview`,
       {
         method: 'POST',
-        headers,
         body: JSON.stringify({ transactions }),
       }
     )
@@ -256,12 +288,13 @@ export const api = {
     transactions: ImportTransactionDto[],
     importHistoryId?: string
   ): Promise<ImportResultDto> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/transactions/import`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ transactions, importHistoryId }),
-    })
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/transactions/import`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ transactions, importHistoryId }),
+      }
+    )
 
     if (!response.ok) {
       throw new Error('Failed to import transactions')
@@ -271,8 +304,7 @@ export const api = {
   },
 
   async getCategories(): Promise<CategoryDto[]> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/categories`, { headers })
+    const response = await fetchWithAuth(`${API_BASE_URL}/categories`)
 
     if (!response.ok) {
       throw new Error('Failed to fetch categories')
@@ -282,8 +314,7 @@ export const api = {
   },
 
   async getTransactions(): Promise<TransactionDto[]> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/transactions`, { headers })
+    const response = await fetchWithAuth(`${API_BASE_URL}/transactions`)
 
     if (!response.ok) {
       throw new Error('Failed to fetch transactions')
@@ -293,10 +324,7 @@ export const api = {
   },
 
   async getFilterPreferences(): Promise<FilterPreferencesDto> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/filter-preferences`, {
-      headers,
-    })
+    const response = await fetchWithAuth(`${API_BASE_URL}/filter-preferences`)
 
     if (!response.ok) {
       throw new Error('Failed to fetch filter preferences')
@@ -308,10 +336,8 @@ export const api = {
   async updateFilterPreferences(
     preferences: Partial<FilterPreferencesDto>
   ): Promise<FilterPreferencesDto> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/filter-preferences`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/filter-preferences`, {
       method: 'PUT',
-      headers,
       body: JSON.stringify(preferences),
     })
 
@@ -324,8 +350,7 @@ export const api = {
 
   // Persons API
   async getPersons(): Promise<PersonDto[]> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/persons`, { headers })
+    const response = await fetchWithAuth(`${API_BASE_URL}/persons`)
 
     if (!response.ok) {
       throw new Error('Failed to fetch persons')
@@ -335,10 +360,8 @@ export const api = {
   },
 
   async createPerson(dto: CreatePersonDto): Promise<PersonDto> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/persons`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/persons`, {
       method: 'POST',
-      headers,
       body: JSON.stringify(dto),
     })
 
@@ -350,10 +373,8 @@ export const api = {
   },
 
   async updatePerson(id: string, dto: UpdatePersonDto): Promise<PersonDto> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/persons/${id}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/persons/${id}`, {
       method: 'PATCH',
-      headers,
       body: JSON.stringify(dto),
     })
 
@@ -365,10 +386,8 @@ export const api = {
   },
 
   async deletePerson(id: string): Promise<void> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/persons/${id}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/persons/${id}`, {
       method: 'DELETE',
-      headers,
     })
 
     if (!response.ok) {
@@ -378,8 +397,7 @@ export const api = {
 
   // Reimbursements API
   async getReimbursements(): Promise<ReimbursementDto[]> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/reimbursements`, { headers })
+    const response = await fetchWithAuth(`${API_BASE_URL}/reimbursements`)
 
     if (!response.ok) {
       throw new Error('Failed to fetch reimbursements')
@@ -391,10 +409,8 @@ export const api = {
   async createReimbursement(
     dto: CreateReimbursementDto
   ): Promise<ReimbursementDto> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/reimbursements`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/reimbursements`, {
       method: 'POST',
-      headers,
       body: JSON.stringify(dto),
     })
 
@@ -406,11 +422,12 @@ export const api = {
   },
 
   async deleteReimbursement(id: string): Promise<void> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/reimbursements/${id}`, {
-      method: 'DELETE',
-      headers,
-    })
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/reimbursements/${id}`,
+      {
+        method: 'DELETE',
+      }
+    )
 
     if (!response.ok) {
       throw new Error('Failed to delete reimbursement')
@@ -419,10 +436,7 @@ export const api = {
 
   // Import Histories API
   async getImportHistories(): Promise<ImportHistoryDto[]> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/import-histories`, {
-      headers,
-    })
+    const response = await fetchWithAuth(`${API_BASE_URL}/import-histories`)
 
     if (!response.ok) {
       throw new Error('Failed to fetch import histories')
@@ -432,12 +446,8 @@ export const api = {
   },
 
   async getLatestImportDate(): Promise<{ date: string | null }> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(
-      `${API_BASE_URL}/import-histories/latest-date`,
-      {
-        headers,
-      }
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/import-histories/latest-date`
     )
 
     if (!response.ok) {
@@ -450,10 +460,8 @@ export const api = {
   async createImportHistory(
     dto: CreateImportHistoryDto
   ): Promise<ImportHistoryDto> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/import-histories`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/import-histories`, {
       method: 'POST',
-      headers,
       body: JSON.stringify(dto),
     })
 
@@ -465,12 +473,13 @@ export const api = {
   },
 
   async startImport(dto: StartImportDto): Promise<ImportHistoryDto> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/import-histories/start`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(dto),
-    })
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/import-histories/start`,
+      {
+        method: 'POST',
+        body: JSON.stringify(dto),
+      }
+    )
 
     if (!response.ok) {
       throw new Error('Failed to start import')
@@ -483,12 +492,10 @@ export const api = {
     id: string,
     dto: FinalizeImportDto
   ): Promise<ImportHistoryDto> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(
+    const response = await fetchWithAuth(
       `${API_BASE_URL}/import-histories/${id}/finalize`,
       {
         method: 'PUT',
-        headers,
         body: JSON.stringify(dto),
       }
     )
@@ -501,11 +508,12 @@ export const api = {
   },
 
   async deleteImport(id: string): Promise<void> {
-    const headers = await getAuthHeaders()
-    const response = await fetch(`${API_BASE_URL}/import-histories/${id}`, {
-      method: 'DELETE',
-      headers,
-    })
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/import-histories/${id}`,
+      {
+        method: 'DELETE',
+      }
+    )
 
     if (!response.ok) {
       throw new Error('Failed to delete import')
