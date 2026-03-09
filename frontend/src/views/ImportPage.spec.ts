@@ -8,6 +8,8 @@ vi.mock('@/lib/api', () => ({
   api: {
     previewImport: vi.fn(),
     importTransactions: vi.fn(),
+    startImport: vi.fn(),
+    finalizeImport: vi.fn(),
   },
 }))
 
@@ -257,10 +259,39 @@ describe('ImportPage', () => {
         externalDuplicates: [],
       })
 
+      // Mock startImport to return an import history with ID
+      vi.mocked(api.startImport).mockResolvedValue({
+        id: 'import-123',
+        status: 'IN_PROGRESS',
+        transactionsImported: 0,
+        categoriesCreated: 0,
+        duplicatesSkipped: 0,
+        totalInFile: 1,
+        dateRangeStart: null,
+        dateRangeEnd: null,
+        accounts: [],
+        fileName: 'export.csv',
+        createdAt: new Date().toISOString(),
+      })
+
       vi.mocked(api.importTransactions).mockResolvedValue({
         imported: 1,
         duplicates: 0,
         total: 1,
+      })
+
+      vi.mocked(api.finalizeImport).mockResolvedValue({
+        id: 'import-123',
+        status: 'COMPLETED',
+        transactionsImported: 1,
+        categoriesCreated: 0,
+        duplicatesSkipped: 0,
+        totalInFile: 1,
+        dateRangeStart: '2024-01-15',
+        dateRangeEnd: '2024-01-15',
+        accounts: ['Compte'],
+        fileName: 'export.csv',
+        createdAt: new Date().toISOString(),
       })
 
       const wrapper = mount(ImportPage, {
@@ -290,8 +321,9 @@ describe('ImportPage', () => {
       }
       await flushPromises()
 
-      // Preview is called first, then import
+      // Preview is called first, then startImport, then importTransactions, then finalizeImport
       expect(api.previewImport).toHaveBeenCalled()
+      expect(api.startImport).toHaveBeenCalled()
       expect(api.importTransactions).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({
@@ -299,7 +331,15 @@ describe('ImportPage', () => {
             amount: -50,
             type: 'EXPENSE',
           }),
-        ])
+        ]),
+        'import-123'
+      )
+      expect(api.finalizeImport).toHaveBeenCalledWith(
+        'import-123',
+        expect.objectContaining({
+          transactionsImported: 1,
+          duplicatesSkipped: 0,
+        })
       )
     })
 
