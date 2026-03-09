@@ -6,6 +6,8 @@
   const latestDate = ref<string | null>(null)
   const isLoading = ref(true)
   const error = ref<string | null>(null)
+  const deleteConfirmId = ref<string | null>(null)
+  const isDeleting = ref(false)
 
   const hasHistories = computed(() => histories.value.length > 0)
 
@@ -19,7 +21,8 @@
     })
   }
 
-  const formatDate = (dateString: string): string => {
+  const formatDate = (dateString: string | null): string => {
+    if (!dateString) return '-'
     return new Date(dateString).toLocaleDateString('fr-FR', {
       day: '2-digit',
       month: '2-digit',
@@ -35,6 +38,50 @@
       year: 'numeric',
     })
   })
+
+  const getStatusLabel = (status: string): string => {
+    switch (status) {
+      case 'COMPLETED':
+        return 'Termine'
+      case 'IN_PROGRESS':
+        return 'En cours'
+      case 'FAILED':
+        return 'Echoue'
+      default:
+        return status
+    }
+  }
+
+  const getStatusClass = (
+    status: string
+  ): { bg: string; text: string; icon: string } => {
+    switch (status) {
+      case 'COMPLETED':
+        return {
+          bg: 'bg-emerald-100',
+          text: 'text-emerald-600',
+          icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+        }
+      case 'IN_PROGRESS':
+        return {
+          bg: 'bg-amber-100',
+          text: 'text-amber-600',
+          icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+        }
+      case 'FAILED':
+        return {
+          bg: 'bg-red-100',
+          text: 'text-red-600',
+          icon: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z',
+        }
+      default:
+        return {
+          bg: 'bg-gray-100',
+          text: 'text-gray-600',
+          icon: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+        }
+    }
+  }
 
   const fetchData = async (): Promise<void> => {
     try {
@@ -55,6 +102,28 @@
           : "Erreur lors du chargement de l'historique"
     } finally {
       isLoading.value = false
+    }
+  }
+
+  const confirmDelete = (id: string): void => {
+    deleteConfirmId.value = id
+  }
+
+  const cancelDelete = (): void => {
+    deleteConfirmId.value = null
+  }
+
+  const deleteImport = async (id: string): Promise<void> => {
+    try {
+      isDeleting.value = true
+      await api.deleteImport(id)
+      deleteConfirmId.value = null
+      await fetchData()
+    } catch (e) {
+      error.value =
+        e instanceof Error ? e.message : 'Erreur lors de la suppression'
+    } finally {
+      isDeleting.value = false
     }
   }
 
@@ -173,10 +242,12 @@
           >
             <div class="flex items-center gap-3">
               <div
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100"
+                class="flex h-10 w-10 items-center justify-center rounded-full"
+                :class="getStatusClass(history.status).bg"
               >
                 <svg
-                  class="h-5 w-5 text-emerald-600"
+                  class="h-5 w-5"
+                  :class="getStatusClass(history.status).text"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -185,18 +256,68 @@
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     stroke-width="2"
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    :d="getStatusClass(history.status).icon"
                   />
                 </svg>
               </div>
               <div>
-                <p class="font-semibold text-gray-900">
-                  {{ formatDateTime(history.createdAt) }}
-                </p>
+                <div class="flex items-center gap-2">
+                  <p class="font-semibold text-gray-900">
+                    {{ formatDateTime(history.createdAt) }}
+                  </p>
+                  <span
+                    class="rounded-full px-2 py-0.5 text-xs font-medium"
+                    :class="[
+                      getStatusClass(history.status).bg,
+                      getStatusClass(history.status).text,
+                    ]"
+                  >
+                    {{ getStatusLabel(history.status) }}
+                  </span>
+                </div>
                 <p v-if="history.fileName" class="text-sm text-gray-500">
                   {{ history.fileName }}
                 </p>
               </div>
+            </div>
+            <!-- Delete Button -->
+            <button
+              v-if="deleteConfirmId !== history.id"
+              class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+              title="Supprimer cet import"
+              @click="confirmDelete(history.id)"
+            >
+              <svg
+                class="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
+              </svg>
+            </button>
+            <!-- Delete Confirmation -->
+            <div v-else class="flex items-center gap-2">
+              <span class="text-sm text-red-600">Supprimer ?</span>
+              <button
+                class="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                :disabled="isDeleting"
+                @click="deleteImport(history.id)"
+              >
+                {{ isDeleting ? 'Suppression...' : 'Oui' }}
+              </button>
+              <button
+                class="rounded-lg bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-300"
+                :disabled="isDeleting"
+                @click="cancelDelete"
+              >
+                Non
+              </button>
             </div>
           </div>
 

@@ -27,28 +27,31 @@ model User {
 }
 
 model Transaction {
-  id          String          @id @default(uuid())
-  userId      String          @map("user_id")
-  categoryId  String?         @map("category_id")
-  hash        String          @unique
-  date        DateTime
-  description String
-  amount      Decimal         @db.Decimal(12, 2)
-  type        TransactionType
-  account     String
-  subcategory String?
-  note        String?
-  isPointed   Boolean         @default(false) @map("is_pointed")
-  createdAt   DateTime        @default(now()) @map("created_at")
-  updatedAt   DateTime        @updatedAt @map("updated_at")
+  id              String          @id @default(uuid())
+  userId          String          @map("user_id")
+  categoryId      String?         @map("category_id")
+  importHistoryId String?         @map("import_history_id")
+  hash            String          @unique
+  date            DateTime
+  description     String
+  amount          Decimal         @db.Decimal(12, 2)
+  type            TransactionType
+  account         String
+  subcategory     String?
+  note            String?
+  isPointed       Boolean         @default(false) @map("is_pointed")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
 
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   category              Category?              @relation(fields: [categoryId], references: [id])
+  importHistory         ImportHistory?         @relation(fields: [importHistoryId], references: [id], onDelete: SetNull)
   reimbursementRequests ReimbursementRequest[]
 
   @@index([userId])
   @@index([userId, date])
   @@index([type])
+  @@index([importHistoryId])
   @@map("transactions")
   @@schema("app")
 }
@@ -80,6 +83,14 @@ enum ReimbursementStatus {
   PENDING
   PARTIAL
   COMPLETED
+
+  @@schema("app")
+}
+
+enum ImportStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
 
   @@schema("app")
 }
@@ -149,26 +160,31 @@ model ImportHistory {
 
   userId String @map("user_id")
 
+  // Statut de l'import
+  status ImportStatus @default(IN_PROGRESS)
+
   // Statistiques d'import
-  transactionsImported Int @map("transactions_imported")
-  categoriesCreated    Int @map("categories_created")
-  duplicatesSkipped    Int @map("duplicates_skipped")
+  transactionsImported Int @default(0) @map("transactions_imported")
+  categoriesCreated    Int @default(0) @map("categories_created")
+  duplicatesSkipped    Int @default(0) @map("duplicates_skipped")
   totalInFile          Int @map("total_in_file")
 
   // Plage de dates des transactions
-  dateRangeStart DateTime @map("date_range_start")
-  dateRangeEnd   DateTime @map("date_range_end")
+  dateRangeStart DateTime? @map("date_range_start")
+  dateRangeEnd   DateTime? @map("date_range_end")
 
   // Métadonnées
-  accounts String[]
+  accounts String[] @default([])
   fileName String?  @map("file_name")
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
 
   @@index([userId])
   @@index([userId, createdAt])
+  @@index([status])
   @@map("import_histories")
   @@schema("app")
 }

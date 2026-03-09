@@ -247,11 +247,18 @@
     partialImportError.value = null
     resetProgress()
 
+    // Start import history BEFORE importing transactions
+    const importHistory = await api.startImport({
+      totalInFile: parsedTransactions.value.length,
+      fileName: file.value?.name,
+    })
+
     try {
-      // Chunked import with automatic retry
+      // Chunked import with automatic retry, passing importHistoryId
       const result = await chunkedImportTransactions(
         parsedTransactions.value,
-        forceIndices
+        forceIndices,
+        importHistory.id
       )
 
       // Get unique categories and accounts
@@ -269,19 +276,15 @@
       const dateRangeStart = new Date(Math.min(...dates)).toISOString()
       const dateRangeEnd = new Date(Math.max(...dates)).toISOString()
 
-      // Create import history entry (only if transactions were imported)
-      if (result.imported > 0) {
-        await api.createImportHistory({
-          transactionsImported: result.imported,
-          categoriesCreated: 0, // Categories are created on backend, we don't track new ones here
-          duplicatesSkipped: result.duplicates,
-          totalInFile: result.total,
-          dateRangeStart,
-          dateRangeEnd,
-          accounts: uniqueAccounts,
-          fileName: file.value?.name,
-        })
-      }
+      // Finalize import history with final stats
+      await api.finalizeImport(importHistory.id, {
+        transactionsImported: result.imported,
+        categoriesCreated: 0, // Categories are created on backend, we don't track new ones here
+        duplicatesSkipped: result.duplicates,
+        dateRangeStart,
+        dateRangeEnd,
+        accounts: uniqueAccounts,
+      })
 
       // Navigate to recap page with result
       router.push({
@@ -296,6 +299,8 @@
     } catch (err) {
       if (err instanceof PartialImportError) {
         // Partial import failure - show retry UI
+        // The import history stays in IN_PROGRESS status
+        // User can delete it from the history page if needed
         partialImportError.value = err
         error.value = `Import echoue au chunk ${err.details.failedAtChunk + 1}/${err.details.chunksTotal}. ${err.details.imported} transactions importees sur ${err.details.total}.`
       } else {

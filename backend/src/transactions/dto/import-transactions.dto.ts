@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
-import { IsArray, ValidateNested } from 'class-validator'
+import { IsArray, IsOptional, IsString, ValidateNested } from 'class-validator'
 import { CreateTransactionDto } from './create-transaction.dto'
 
 export class ImportTransactionsDto {
@@ -12,6 +12,14 @@ export class ImportTransactionsDto {
   @ValidateNested({ each: true })
   @Type(() => CreateTransactionDto)
   transactions!: CreateTransactionDto[]
+
+  @ApiProperty({
+    required: false,
+    description: 'Import history ID to link transactions to',
+  })
+  @IsOptional()
+  @IsString()
+  importHistoryId?: string
 }
 
 export class ImportResultDto {

@@ -237,10 +237,12 @@ export class TransactionsService {
   /**
    * Import transactions with batch operations for better performance.
    * Reduces N*3 DB queries to ~4 queries total.
+   * @param importHistoryId - Optional import history ID to link transactions
    */
   async importTransactions(
     userId: string,
-    transactions: CreateTransactionDto[]
+    transactions: CreateTransactionDto[],
+    importHistoryId?: string
   ): Promise<ImportResultDto> {
     if (transactions.length === 0) {
       return { imported: 0, duplicates: 0, total: 0 }
@@ -321,6 +323,7 @@ export class TransactionsService {
       ...toImport.map(({ hash, date, tx }) => ({
         userId,
         categoryId: categoryByName.get(tx.category)!.id,
+        importHistoryId: importHistoryId ?? null,
         hash,
         date,
         description: tx.description,
@@ -334,6 +337,7 @@ export class TransactionsService {
       ...forcedData.map(({ hash, date, tx }) => ({
         userId,
         categoryId: categoryByName.get(tx.category)!.id,
+        importHistoryId: importHistoryId ?? null,
         hash,
         date,
         description: tx.description,

@@ -99,7 +99,8 @@ describe('TransactionsController', () => {
       expect(result).toEqual(importResult)
       expect(mockTransactionsService.importTransactions).toHaveBeenCalledWith(
         mockUser.id,
-        importDto.transactions
+        importDto.transactions,
+        undefined
       )
     })
 
@@ -153,7 +154,10 @@ describe('TransactionsController', () => {
 
       expect(mockTransactionsService.importTransactions).toHaveBeenCalledWith(
         mockUser.id,
-        expect.arrayContaining([expect.objectContaining({ forceImport: true })])
+        expect.arrayContaining([
+          expect.objectContaining({ forceImport: true }),
+        ]),
+        undefined
       )
     })
   })

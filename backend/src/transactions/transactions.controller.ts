@@ -54,7 +54,8 @@ export class TransactionsController {
   ): Promise<ImportResultDto> {
     return this.transactionsService.importTransactions(
       user.id,
-      dto.transactions
+      dto.transactions,
+      dto.importHistoryId
     )
   }
 

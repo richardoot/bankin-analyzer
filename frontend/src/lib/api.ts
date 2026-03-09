@@ -156,15 +156,30 @@ export interface CreateReimbursementDto {
 
 export interface ImportHistoryDto {
   id: string
+  status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
   transactionsImported: number
   categoriesCreated: number
   duplicatesSkipped: number
   totalInFile: number
-  dateRangeStart: string
-  dateRangeEnd: string
+  dateRangeStart: string | null
+  dateRangeEnd: string | null
   accounts: string[]
   fileName: string | null
   createdAt: string
+}
+
+export interface StartImportDto {
+  totalInFile: number
+  fileName?: string
+}
+
+export interface FinalizeImportDto {
+  transactionsImported: number
+  categoriesCreated: number
+  duplicatesSkipped: number
+  dateRangeStart: string
+  dateRangeEnd: string
+  accounts: string[]
 }
 
 export interface CreateImportHistoryDto {
@@ -238,13 +253,14 @@ export const api = {
   },
 
   async importTransactions(
-    transactions: ImportTransactionDto[]
+    transactions: ImportTransactionDto[],
+    importHistoryId?: string
   ): Promise<ImportResultDto> {
     const headers = await getAuthHeaders()
     const response = await fetch(`${API_BASE_URL}/transactions/import`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ transactions }),
+      body: JSON.stringify({ transactions, importHistoryId }),
     })
 
     if (!response.ok) {
@@ -446,5 +462,53 @@ export const api = {
     }
 
     return response.json() as Promise<ImportHistoryDto>
+  },
+
+  async startImport(dto: StartImportDto): Promise<ImportHistoryDto> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/import-histories/start`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to start import')
+    }
+
+    return response.json() as Promise<ImportHistoryDto>
+  },
+
+  async finalizeImport(
+    id: string,
+    dto: FinalizeImportDto
+  ): Promise<ImportHistoryDto> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(
+      `${API_BASE_URL}/import-histories/${id}/finalize`,
+      {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(dto),
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to finalize import')
+    }
+
+    return response.json() as Promise<ImportHistoryDto>
+  },
+
+  async deleteImport(id: string): Promise<void> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/import-histories/${id}`, {
+      method: 'DELETE',
+      headers,
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to delete import')
+    }
   },
 }

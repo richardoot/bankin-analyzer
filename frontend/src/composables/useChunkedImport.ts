@@ -274,10 +274,12 @@ export function useChunkedImport() {
    * Import transactions with chunking and automatic retry.
    * @param transactions All transactions from CSV
    * @param forceImportIndices Indices of transactions to force-import (bypass duplicate check)
+   * @param importHistoryId Optional import history ID to link transactions to
    */
   async function chunkedImportTransactions(
     transactions: ImportTransactionDto[],
-    forceImportIndices: Set<number> = new Set()
+    forceImportIndices: Set<number> = new Set(),
+    importHistoryId?: string
   ): Promise<ImportResultDto> {
     progress.value = {
       phase: 'hashing',
@@ -330,7 +332,10 @@ export function useChunkedImport() {
             await sleep(delay)
           }
 
-          const result = await api.importTransactions(chunks[i])
+          const result = await api.importTransactions(
+            chunks[i],
+            importHistoryId
+          )
           totalImported += result.imported
           totalDuplicates += result.duplicates
           success = true
