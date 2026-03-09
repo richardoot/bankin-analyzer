@@ -154,6 +154,30 @@ export interface CreateReimbursementDto {
   note?: string
 }
 
+export interface ImportHistoryDto {
+  id: string
+  transactionsImported: number
+  categoriesCreated: number
+  duplicatesSkipped: number
+  totalInFile: number
+  dateRangeStart: string
+  dateRangeEnd: string
+  accounts: string[]
+  fileName: string | null
+  createdAt: string
+}
+
+export interface CreateImportHistoryDto {
+  transactionsImported: number
+  categoriesCreated: number
+  duplicatesSkipped: number
+  totalInFile: number
+  dateRangeStart: string
+  dateRangeEnd: string
+  accounts: string[]
+  fileName?: string
+}
+
 async function getAuthHeaders(): Promise<HeadersInit> {
   const {
     data: { session },
@@ -375,5 +399,52 @@ export const api = {
     if (!response.ok) {
       throw new Error('Failed to delete reimbursement')
     }
+  },
+
+  // Import Histories API
+  async getImportHistories(): Promise<ImportHistoryDto[]> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/import-histories`, {
+      headers,
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch import histories')
+    }
+
+    return response.json() as Promise<ImportHistoryDto[]>
+  },
+
+  async getLatestImportDate(): Promise<{ date: string | null }> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(
+      `${API_BASE_URL}/import-histories/latest-date`,
+      {
+        headers,
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch latest import date')
+    }
+
+    return response.json() as Promise<{ date: string | null }>
+  },
+
+  async createImportHistory(
+    dto: CreateImportHistoryDto
+  ): Promise<ImportHistoryDto> {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE_URL}/import-histories`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to create import history')
+    }
+
+    return response.json() as Promise<ImportHistoryDto>
   },
 }

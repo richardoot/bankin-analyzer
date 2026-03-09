@@ -39,6 +39,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/import/history',
+    name: 'import-history',
+    component: () => import('@/views/ImportHistoryPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/dashboard',
     name: 'dashboard',
     component: () => import('@/views/DashboardPage.vue'),

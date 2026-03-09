@@ -2,6 +2,7 @@
   import { ref, computed } from 'vue'
   import { useRouter } from 'vue-router'
   import {
+    api,
     type ImportTransactionDto,
     type ImportPreviewResultDto,
   } from '@/lib/api'
@@ -253,10 +254,34 @@
         forceIndices
       )
 
-      // Get unique categories count
+      // Get unique categories and accounts
       const uniqueCategories = new Set(
         parsedTransactions.value.map(t => t.category)
       )
+      const uniqueAccounts = [
+        ...new Set(parsedTransactions.value.map(t => t.account)),
+      ]
+
+      // Calculate date range from transactions
+      const dates = parsedTransactions.value.map(t =>
+        new Date(t.date).getTime()
+      )
+      const dateRangeStart = new Date(Math.min(...dates)).toISOString()
+      const dateRangeEnd = new Date(Math.max(...dates)).toISOString()
+
+      // Create import history entry (only if transactions were imported)
+      if (result.imported > 0) {
+        await api.createImportHistory({
+          transactionsImported: result.imported,
+          categoriesCreated: 0, // Categories are created on backend, we don't track new ones here
+          duplicatesSkipped: result.duplicates,
+          totalInFile: result.total,
+          dateRangeStart,
+          dateRangeEnd,
+          accounts: uniqueAccounts,
+          fileName: file.value?.name,
+        })
+      }
 
       // Navigate to recap page with result
       router.push({
