@@ -60,6 +60,31 @@ export const useAuthStore = defineStore('auth', () => {
         dbUser.value = null
       }
     })
+
+    // Refresh session when tab becomes visible again after inactivity
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible' && session.value) {
+        try {
+          const { data, error: refreshError } =
+            await supabase.auth.refreshSession()
+          if (!refreshError && data.session) {
+            session.value = data.session
+            user.value = data.session.user
+            // Re-sync with backend to ensure data is fresh
+            await syncWithBackend()
+          } else if (refreshError) {
+            // Session is truly expired, clear local state
+            console.warn('Session expired, please log in again')
+            session.value = null
+            user.value = null
+            dbUser.value = null
+          }
+        } catch (err) {
+          // Silently handle - session might just need a page refresh
+          console.debug('Session refresh on visibility change:', err)
+        }
+      }
+    })
   }
 
   async function signIn(email: string, password: string): Promise<void> {

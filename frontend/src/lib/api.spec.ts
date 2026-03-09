@@ -256,6 +256,35 @@ describe('api', () => {
     })
   })
 
+  describe('session timeout', () => {
+    it('should throw AuthError when getSession times out', async () => {
+      vi.useFakeTimers()
+
+      // Mock getSession to never resolve (simulating hang)
+      mockGetSession.mockImplementation(() => new Promise(() => {}))
+
+      // Start the API call and immediately attach catch handler to prevent unhandled rejection
+      let caughtError: Error | null = null
+      const promise = api.getTransactions().catch(e => {
+        caughtError = e
+      })
+
+      // Fast-forward past the timeout (10000ms)
+      await vi.advanceTimersByTimeAsync(10100)
+
+      // Wait for promise to settle
+      await promise
+
+      // Verify the error
+      expect(caughtError).toBeInstanceOf(AuthError)
+      expect(caughtError?.message).toBe(
+        'Session timeout - veuillez rafraichir la page'
+      )
+
+      vi.useRealTimers()
+    }, 15000)
+  })
+
   describe('token refresh on 401', () => {
     it('should retry request after refreshing token on 401', async () => {
       const mockTransactions = [

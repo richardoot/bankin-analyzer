@@ -9,4 +9,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    storageKey: 'finance-analyzer-auth',
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+})

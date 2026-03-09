@@ -1,7 +1,10 @@
+import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 
 const API_BASE_URL =
   (import.meta.env.VITE_API_URL as string) || 'http://localhost:3000'
+
+const SESSION_TIMEOUT_MS = 10000
 
 // Custom error for authentication failures
 export class AuthError extends Error {
@@ -201,10 +204,28 @@ export interface CreateImportHistoryDto {
   fileName?: string
 }
 
+/**
+ * Get session with timeout protection.
+ * Prevents hanging when getSession() doesn't resolve after inactivity.
+ */
+async function getSessionWithTimeout(): Promise<Session | null> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(
+      () =>
+        reject(new AuthError('Session timeout - veuillez rafraichir la page')),
+      SESSION_TIMEOUT_MS
+    )
+  })
+
+  const sessionPromise = supabase.auth
+    .getSession()
+    .then(({ data }) => data.session)
+
+  return Promise.race([sessionPromise, timeoutPromise])
+}
+
 async function getAuthHeaders(): Promise<HeadersInit> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  const session = await getSessionWithTimeout()
 
   if (!session?.access_token) {
     throw new AuthError('No active session')
