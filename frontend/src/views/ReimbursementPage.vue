@@ -135,11 +135,39 @@
   }
 
   // Summary by person
+  interface CategorySummary {
+    categoryId: string
+    categoryName: string
+    amount: number
+    reimbursements: ReimbursementDto[]
+  }
+
   interface PersonSummary {
     personId: string
     personName: string
     total: number
-    byCategory: { categoryId: string; categoryName: string; amount: number }[]
+    byCategory: CategorySummary[]
+  }
+
+  // Expand/collapse state for categories (key: "personId:categoryId")
+  const expandedCategories = ref<Set<string>>(new Set())
+
+  function toggleCategoryExpanded(personId: string, categoryId: string) {
+    const key = `${personId}:${categoryId}`
+    if (expandedCategories.value.has(key)) {
+      expandedCategories.value.delete(key)
+    } else {
+      expandedCategories.value.add(key)
+    }
+  }
+
+  function isCategoryExpanded(personId: string, categoryId: string): boolean {
+    return expandedCategories.value.has(`${personId}:${categoryId}`)
+  }
+
+  function getTransactionDescription(transactionId: string): string {
+    const tx = transactions.value.find(t => t.id === transactionId)
+    return tx?.description || 'Transaction inconnue'
   }
 
   const summaryByPerson = computed((): PersonSummary[] => {
@@ -149,7 +177,14 @@
         personId: string
         personName: string
         total: number
-        byCategory: Map<string, { categoryName: string; amount: number }>
+        byCategory: Map<
+          string,
+          {
+            categoryName: string
+            amount: number
+            reimbursements: ReimbursementDto[]
+          }
+        >
       }
     >()
 
@@ -168,9 +203,15 @@
       const catKey = r.categoryId || 'none'
       const catName = r.categoryName || 'Sans categorie'
       if (!person.byCategory.has(catKey)) {
-        person.byCategory.set(catKey, { categoryName: catName, amount: 0 })
+        person.byCategory.set(catKey, {
+          categoryName: catName,
+          amount: 0,
+          reimbursements: [],
+        })
       }
-      person.byCategory.get(catKey)!.amount += r.amountRemaining
+      const category = person.byCategory.get(catKey)!
+      category.amount += r.amountRemaining
+      category.reimbursements.push(r)
     })
 
     return Array.from(map.values()).map(p => ({
@@ -181,6 +222,7 @@
         categoryId: id,
         categoryName: data.categoryName,
         amount: data.amount,
+        reimbursements: data.reimbursements,
       })),
     }))
   })
@@ -1033,18 +1075,68 @@
 
             <!-- Categories breakdown -->
             <div class="ml-13 space-y-1">
-              <div
-                v-for="cat in person.byCategory"
-                :key="cat.categoryId"
-                class="flex items-center justify-between text-sm"
-              >
-                <span class="text-gray-600 flex items-center gap-2">
-                  <span class="w-2 h-2 bg-amber-400 rounded-full"></span>
-                  {{ cat.categoryName }}
-                </span>
-                <span class="font-medium text-gray-700">
-                  {{ formatCurrency(cat.amount) }}
-                </span>
+              <div v-for="cat in person.byCategory" :key="cat.categoryId">
+                <!-- Category header - clickable -->
+                <button
+                  class="w-full flex items-center justify-between py-1.5 px-2 -ml-2 hover:bg-gray-50 rounded transition-colors text-sm"
+                  @click="
+                    toggleCategoryExpanded(person.personId, cat.categoryId)
+                  "
+                >
+                  <span class="text-gray-600 flex items-center gap-2">
+                    <svg
+                      class="w-3 h-3 text-gray-400 transition-transform duration-200"
+                      :class="{
+                        'rotate-90': isCategoryExpanded(
+                          person.personId,
+                          cat.categoryId
+                        ),
+                      }"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                    {{ cat.categoryName }}
+                    <span class="text-xs text-gray-400"
+                      >({{ cat.reimbursements.length }})</span
+                    >
+                  </span>
+                  <span class="font-medium text-gray-700">
+                    {{ formatCurrency(cat.amount) }}
+                  </span>
+                </button>
+
+                <!-- Transaction details - collapsible -->
+                <div
+                  class="transition-all duration-200 ease-in-out overflow-hidden"
+                  :class="
+                    isCategoryExpanded(person.personId, cat.categoryId)
+                      ? 'max-h-[500px] opacity-100'
+                      : 'max-h-0 opacity-0'
+                  "
+                >
+                  <div class="ml-5 mt-1 mb-2 space-y-1">
+                    <div
+                      v-for="r in cat.reimbursements"
+                      :key="r.id"
+                      class="flex justify-between text-xs text-gray-500 py-1 pl-3 border-l-2 border-amber-200"
+                    >
+                      <span class="truncate mr-2">
+                        {{ getTransactionDescription(r.transactionId) }}
+                      </span>
+                      <span class="font-medium whitespace-nowrap">
+                        {{ formatCurrency(r.amountRemaining) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
