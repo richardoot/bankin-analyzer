@@ -3,6 +3,9 @@
   import { usePersonsStore } from '@/stores/persons'
   import { api } from '@/lib/api'
   import type { TransactionDto, ReimbursementDto, CategoryDto } from '@/lib/api'
+  import { usePdfExport } from '@/composables/usePdfExport'
+
+  const { exportReimbursementsToPdf } = usePdfExport()
 
   const personsStore = usePersonsStore()
 
@@ -168,6 +171,16 @@
   function getTransactionDescription(transactionId: string): string {
     const tx = transactions.value.find(t => t.id === transactionId)
     return tx?.description || 'Transaction inconnue'
+  }
+
+  function getTransactionDate(transactionId: string): string {
+    const tx = transactions.value.find(t => t.id === transactionId)
+    if (!tx) return '--/--/----'
+    return new Date(tx.date).toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })
   }
 
   const summaryByPerson = computed((): PersonSummary[] => {
@@ -1057,9 +1070,37 @@
         v-if="reimbursements.length > 0"
         class="bg-white rounded-xl shadow-sm p-6 mt-8"
       >
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">
-          Recapitulatif des Remboursements
-        </h2>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-gray-900">
+            Recapitulatif des Remboursements
+          </h2>
+          <button
+            class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
+            @click="
+              exportReimbursementsToPdf(
+                summaryByPerson,
+                totalDue,
+                getTransactionDescription,
+                getTransactionDate
+              )
+            "
+          >
+            <svg
+              class="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
+            </svg>
+            Export PDF
+          </button>
+        </div>
 
         <div class="space-y-4">
           <div
