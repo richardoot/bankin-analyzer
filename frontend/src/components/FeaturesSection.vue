@@ -55,14 +55,18 @@
 </script>
 
 <template>
-  <section class="bg-white py-20">
+  <section class="bg-white dark:bg-slate-900 py-20 transition-colors">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <!-- How it works -->
       <div class="text-center">
-        <h2 class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+        <h2
+          class="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-4xl"
+        >
           Comment ca marche ?
         </h2>
-        <p class="mx-auto mt-4 max-w-2xl text-lg text-gray-600">
+        <p
+          class="mx-auto mt-4 max-w-2xl text-lg text-gray-600 dark:text-gray-400"
+        >
           Trois etapes simples pour analyser vos finances
         </p>
       </div>
@@ -76,7 +80,7 @@
         >
           <!-- Step number -->
           <div
-            class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-2xl font-bold text-emerald-600"
+            class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-2xl font-bold text-emerald-600 dark:text-emerald-400"
           >
             {{ step.number }}
           </div>
@@ -87,7 +91,7 @@
             class="absolute right-0 top-8 hidden -translate-y-1/2 translate-x-1/2 sm:block"
           >
             <svg
-              class="h-6 w-6 text-gray-300"
+              class="h-6 w-6 text-gray-300 dark:text-gray-600"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -101,10 +105,14 @@
             </svg>
           </div>
 
-          <h3 class="mt-4 text-xl font-semibold text-gray-900">
+          <h3
+            class="mt-4 text-xl font-semibold text-gray-900 dark:text-gray-100"
+          >
             {{ step.title }}
           </h3>
-          <p class="mt-2 text-gray-600">{{ step.description }}</p>
+          <p class="mt-2 text-gray-600 dark:text-gray-400">
+            {{ step.description }}
+          </p>
         </div>
       </div>
 
@@ -112,7 +120,7 @@
       <div class="mt-24">
         <div class="text-center">
           <h2
-            class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl"
+            class="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-4xl"
           >
             Fonctionnalites principales
           </h2>
@@ -122,19 +130,20 @@
           <div
             v-for="feature in features"
             :key="feature.title"
-            class="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md"
+            class="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 shadow-sm dark:shadow-slate-900/20 transition-shadow hover:shadow-md dark:hover:shadow-slate-900/30"
           >
             <div
               class="flex h-12 w-12 items-center justify-center rounded-xl"
               :class="{
-                'bg-blue-100': feature.color === 'blue',
-                'bg-purple-100': feature.color === 'purple',
+                'bg-blue-100 dark:bg-blue-900/30': feature.color === 'blue',
+                'bg-purple-100 dark:bg-purple-900/30':
+                  feature.color === 'purple',
               }"
             >
               <!-- Chart icon -->
               <svg
                 v-if="feature.icon === 'chart-bar'"
-                class="h-6 w-6 text-blue-600"
+                class="h-6 w-6 text-blue-600 dark:text-blue-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -149,7 +158,7 @@
               <!-- Users icon -->
               <svg
                 v-if="feature.icon === 'users'"
-                class="h-6 w-6 text-purple-600"
+                class="h-6 w-6 text-purple-600 dark:text-purple-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -163,10 +172,14 @@
               </svg>
             </div>
 
-            <h3 class="mt-4 text-xl font-semibold text-gray-900">
+            <h3
+              class="mt-4 text-xl font-semibold text-gray-900 dark:text-gray-100"
+            >
               {{ feature.title }}
             </h3>
-            <p class="mt-2 text-gray-600">{{ feature.description }}</p>
+            <p class="mt-2 text-gray-600 dark:text-gray-400">
+              {{ feature.description }}
+            </p>
           </div>
         </div>
       </div>

@@ -7,16 +7,18 @@
 
 <template>
   <div
-    class="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-gray-50 px-4"
+    class="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-gray-50 dark:bg-slate-800 px-4 transition-colors"
   >
     <div class="w-full max-w-md text-center">
-      <div class="rounded-2xl bg-white p-8 shadow-lg">
+      <div
+        class="rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
+      >
         <!-- Icon -->
         <div
-          class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100"
+          class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30"
         >
           <svg
-            class="h-10 w-10 text-emerald-600"
+            class="h-10 w-10 text-emerald-600 dark:text-emerald-400"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -31,29 +33,33 @@
         </div>
 
         <!-- Title -->
-        <h1 class="mt-6 text-2xl font-bold text-gray-900">
+        <h1 class="mt-6 text-2xl font-bold text-gray-900 dark:text-gray-100">
           Verifiez votre boite mail
         </h1>
 
         <!-- Description -->
-        <p class="mt-4 text-gray-600">
+        <p class="mt-4 text-gray-600 dark:text-gray-400">
           Nous avons envoye un lien de confirmation a
-          <span v-if="email" class="font-medium text-gray-900">{{
-            email
-          }}</span>
+          <span
+            v-if="email"
+            class="font-medium text-gray-900 dark:text-gray-100"
+            >{{ email }}</span
+          >
           <span v-else>votre adresse email</span>.
         </p>
 
-        <p class="mt-2 text-gray-600">
+        <p class="mt-2 text-gray-600 dark:text-gray-400">
           Cliquez sur le lien dans l'email pour activer votre compte.
         </p>
 
         <!-- Info box -->
-        <div class="mt-6 rounded-lg bg-blue-50 p-4 text-left">
+        <div
+          class="mt-6 rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4 text-left"
+        >
           <div class="flex">
             <div class="flex-shrink-0">
               <svg
-                class="h-5 w-5 text-blue-600"
+                class="h-5 w-5 text-blue-600 dark:text-blue-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -67,7 +73,7 @@
               </svg>
             </div>
             <div class="ml-3">
-              <p class="text-sm text-blue-700">
+              <p class="text-sm text-blue-700 dark:text-blue-300">
                 Si vous ne trouvez pas l'email, verifiez votre dossier spam.
               </p>
             </div>
@@ -78,7 +84,7 @@
         <div class="mt-8">
           <RouterLink
             to="/login"
-            class="inline-flex items-center gap-2 text-sm font-medium text-emerald-600 hover:text-emerald-700"
+            class="inline-flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400"
           >
             <svg
               class="h-4 w-4"

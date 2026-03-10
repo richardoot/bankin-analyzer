@@ -88,16 +88,18 @@
 </script>
 
 <template>
-  <div class="bg-white rounded-xl shadow-sm mb-8 overflow-hidden">
+  <div
+    class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 mb-8 overflow-hidden"
+  >
     <!-- Header cliquable -->
     <button
-      class="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+      class="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
       @click="filtersStore.togglePanelExpanded()"
     >
       <div class="flex items-center gap-3">
-        <div class="p-2 bg-indigo-100 rounded-lg">
+        <div class="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
           <svg
-            class="w-5 h-5 text-indigo-600"
+            class="w-5 h-5 text-indigo-600 dark:text-indigo-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -111,13 +113,15 @@
           </svg>
         </div>
         <div class="text-left">
-          <h2 class="text-lg font-semibold text-gray-900">Filtres avancés</h2>
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Filtres avancés
+          </h2>
           <p
             v-if="
               !filtersStore.isPanelExpanded &&
               filtersStore.activeFiltersCount > 0
             "
-            class="text-sm text-indigo-600"
+            class="text-sm text-indigo-600 dark:text-indigo-400"
           >
             {{ filtersStore.activeFiltersCount }} filtre{{
               filtersStore.activeFiltersCount > 1 ? 's' : ''
@@ -131,7 +135,7 @@
         <!-- Badge filtres actifs -->
         <span
           v-if="filtersStore.activeFiltersCount > 0"
-          class="px-2.5 py-1 bg-indigo-100 text-indigo-700 text-sm font-medium rounded-full"
+          class="px-2.5 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-sm font-medium rounded-full"
         >
           {{ filtersStore.activeFiltersCount }}
         </span>
@@ -142,10 +146,10 @@
           class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-150"
           :class="
             filtersStore.isSyncing
-              ? 'bg-gray-100 text-gray-400 cursor-wait'
+              ? 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-wait'
               : saveSuccess
                 ? 'bg-green-500 text-white'
-                : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
+                : 'bg-indigo-600 dark:bg-indigo-500 text-white hover:bg-indigo-700 dark:hover:bg-indigo-600 shadow-sm'
           "
           :disabled="filtersStore.isSyncing"
           @click="handleSave"
@@ -207,7 +211,7 @@
 
         <!-- Chevron -->
         <svg
-          class="w-5 h-5 text-gray-400 transition-transform duration-200"
+          class="w-5 h-5 text-gray-400 dark:text-gray-500 transition-transform duration-200"
           :class="{ 'rotate-180': filtersStore.isPanelExpanded }"
           fill="none"
           stroke="currentColor"
@@ -232,12 +236,14 @@
           : 'max-h-0 opacity-0 overflow-hidden'
       "
     >
-      <div class="px-6 pb-6 border-t border-gray-100 space-y-6">
+      <div
+        class="px-6 pb-6 border-t border-gray-100 dark:border-slate-700 space-y-6"
+      >
         <!-- Section comptes joints -->
         <div class="pt-4">
           <div class="flex items-center gap-2 mb-3">
             <svg
-              class="w-4 h-4 text-gray-500"
+              class="w-4 h-4 text-gray-500 dark:text-gray-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -249,8 +255,12 @@
                 d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
               />
             </svg>
-            <h3 class="text-sm font-medium text-gray-700">Comptes joints</h3>
-            <span class="text-xs text-gray-400">(montants ÷2)</span>
+            <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Comptes joints
+            </h3>
+            <span class="text-xs text-gray-400 dark:text-gray-500"
+              >(montants ÷2)</span
+            >
           </div>
 
           <div v-if="availableAccounts.length > 0" class="flex flex-wrap gap-2">
@@ -260,8 +270,8 @@
               class="group px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150"
               :class="
                 filtersStore.isJointAccount(account)
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:shadow-sm'
+                  ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-900/30'
+                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 hover:shadow-sm'
               "
               @click="filtersStore.toggleJointAccount(account)"
             >
@@ -283,7 +293,7 @@
                 {{ account }}
                 <span
                   v-if="filtersStore.isJointAccount(account)"
-                  class="text-indigo-200 font-normal"
+                  class="text-indigo-200 dark:text-indigo-300 font-normal"
                   >÷2</span
                 >
               </span>
@@ -292,7 +302,7 @@
 
           <p
             v-else
-            class="text-sm text-gray-500 italic bg-gray-50 rounded-lg p-4"
+            class="text-sm text-gray-500 dark:text-gray-400 italic bg-gray-50 dark:bg-slate-800 rounded-lg p-4"
           >
             Aucun compte disponible. Importez des transactions pour voir vos
             comptes.
@@ -303,7 +313,7 @@
         <div>
           <div class="flex items-center gap-2 mb-3">
             <svg
-              class="w-4 h-4 text-red-500"
+              class="w-4 h-4 text-red-500 dark:text-red-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -315,10 +325,12 @@
                 d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
               />
             </svg>
-            <h3 class="text-sm font-medium text-gray-700">
+            <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
               Catégories de dépenses masquées
             </h3>
-            <span class="text-xs text-gray-400">(exclues des calculs)</span>
+            <span class="text-xs text-gray-400 dark:text-gray-500"
+              >(exclues des calculs)</span
+            >
           </div>
 
           <div
@@ -331,8 +343,8 @@
               class="group px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150"
               :class="
                 filtersStore.isExpenseCategoryHidden(category)
-                  ? 'bg-red-600 text-white shadow-md shadow-red-200'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:shadow-sm'
+                  ? 'bg-red-600 dark:bg-red-500 text-white shadow-md shadow-red-200 dark:shadow-red-900/30'
+                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 hover:shadow-sm'
               "
               @click="filtersStore.toggleHiddenExpenseCategory(category)"
             >
@@ -358,7 +370,7 @@
 
           <p
             v-else
-            class="text-sm text-gray-500 italic bg-gray-50 rounded-lg p-4"
+            class="text-sm text-gray-500 dark:text-gray-400 italic bg-gray-50 dark:bg-slate-800 rounded-lg p-4"
           >
             Aucune catégorie de dépenses disponible.
           </p>
@@ -368,7 +380,7 @@
         <div>
           <div class="flex items-center gap-2 mb-3">
             <svg
-              class="w-4 h-4 text-green-500"
+              class="w-4 h-4 text-green-500 dark:text-green-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -380,10 +392,12 @@
                 d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
               />
             </svg>
-            <h3 class="text-sm font-medium text-gray-700">
+            <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
               Catégories de revenus masquées
             </h3>
-            <span class="text-xs text-gray-400">(exclues des calculs)</span>
+            <span class="text-xs text-gray-400 dark:text-gray-500"
+              >(exclues des calculs)</span
+            >
           </div>
 
           <div
@@ -396,8 +410,8 @@
               class="group px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150"
               :class="
                 filtersStore.isIncomeCategoryHidden(category)
-                  ? 'bg-red-600 text-white shadow-md shadow-red-200'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:shadow-sm'
+                  ? 'bg-red-600 dark:bg-red-500 text-white shadow-md shadow-red-200 dark:shadow-red-900/30'
+                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 hover:shadow-sm'
               "
               @click="filtersStore.toggleHiddenIncomeCategory(category)"
             >
@@ -423,7 +437,7 @@
 
           <p
             v-else
-            class="text-sm text-gray-500 italic bg-gray-50 rounded-lg p-4"
+            class="text-sm text-gray-500 dark:text-gray-400 italic bg-gray-50 dark:bg-slate-800 rounded-lg p-4"
           >
             Aucune catégorie de revenus disponible.
           </p>
@@ -433,7 +447,7 @@
         <div>
           <div class="flex items-center gap-2 mb-3">
             <svg
-              class="w-4 h-4 text-amber-500"
+              class="w-4 h-4 text-amber-500 dark:text-amber-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -445,8 +459,12 @@
                 d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
               />
             </svg>
-            <h3 class="text-sm font-medium text-gray-700">Remboursements</h3>
-            <span class="text-xs text-gray-400">(déduits des dépenses)</span>
+            <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Remboursements
+            </h3>
+            <span class="text-xs text-gray-400 dark:text-gray-500"
+              >(déduits des dépenses)</span
+            >
           </div>
 
           <!-- Formulaire d'ajout : 2 dropdowns + bouton -->
@@ -459,7 +477,7 @@
           >
             <select
               v-model="selectedExpenseForAssoc"
-              class="flex-1 min-w-[140px] px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              class="flex-1 min-w-[140px] px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400"
             >
               <option value="">Catégorie dépense</option>
               <option
@@ -472,7 +490,7 @@
             </select>
 
             <svg
-              class="w-4 h-4 text-gray-400 flex-shrink-0"
+              class="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -487,7 +505,7 @@
 
             <select
               v-model="selectedIncomeForAssoc"
-              class="flex-1 min-w-[140px] px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+              class="flex-1 min-w-[140px] px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400"
             >
               <option value="">Remboursement</option>
               <option
@@ -504,8 +522,8 @@
               class="px-4 py-2 text-sm font-medium rounded-lg transition-all duration-150"
               :class="
                 canAddAssociation
-                  ? 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm'
-                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  ? 'bg-amber-500 dark:bg-amber-600 text-white hover:bg-amber-600 dark:hover:bg-amber-500 shadow-sm'
+                  : 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
               "
               @click="addAssociation"
             >
@@ -515,7 +533,7 @@
 
           <p
             v-else-if="filtersStore.categoryAssociations.length === 0"
-            class="text-sm text-gray-500 italic bg-gray-50 rounded-lg p-4 mb-4"
+            class="text-sm text-gray-500 dark:text-gray-400 italic bg-gray-50 dark:bg-slate-800 rounded-lg p-4 mb-4"
           >
             Aucune catégorie disponible pour créer une association.
           </p>
@@ -528,17 +546,19 @@
             <div
               v-for="assoc in filtersStore.categoryAssociations"
               :key="assoc.expenseCategory"
-              class="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-lg"
+              class="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg"
             >
               <span class="text-sm">
-                <span class="font-medium text-gray-700">{{
+                <span class="font-medium text-gray-700 dark:text-gray-300">{{
                   assoc.expenseCategory
                 }}</span>
-                <span class="text-gray-400 mx-2">→</span>
-                <span class="text-amber-700">{{ assoc.incomeCategory }}</span>
+                <span class="text-gray-400 dark:text-gray-500 mx-2">→</span>
+                <span class="text-amber-700 dark:text-amber-400">{{
+                  assoc.incomeCategory
+                }}</span>
               </span>
               <button
-                class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                class="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                 title="Supprimer l'association"
                 @click="
                   filtersStore.removeCategoryAssociation(assoc.expenseCategory)
@@ -566,7 +586,7 @@
               availableExpensesForAssoc.length > 0 ||
               availableIncomesForAssoc.length > 0
             "
-            class="text-sm text-gray-500 italic"
+            class="text-sm text-gray-500 dark:text-gray-400 italic"
           >
             Aucune association configurée
           </p>

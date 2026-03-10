@@ -3,13 +3,15 @@
 </script>
 
 <template>
-  <section class="bg-gradient-to-b from-white to-gray-50 py-20 sm:py-32">
+  <section
+    class="bg-gradient-to-b from-white to-gray-50 dark:from-slate-900 dark:to-slate-800 py-20 sm:py-32 transition-colors"
+  >
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div class="text-center">
         <!-- Badge -->
         <div class="mb-6">
           <span
-            class="inline-flex items-center rounded-full bg-emerald-50 px-4 py-1.5 text-sm font-medium text-emerald-700"
+            class="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-900/30 px-4 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400"
           >
             <svg class="mr-1.5 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
               <path
@@ -24,18 +26,20 @@
 
         <!-- Title -->
         <h1
-          class="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl md:text-6xl"
+          class="text-4xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-5xl md:text-6xl"
         >
           <span class="block">Analysez vos finances</span>
           <span
-            class="block bg-gradient-to-r from-emerald-500 to-emerald-600 bg-clip-text text-transparent"
+            class="block bg-gradient-to-r from-emerald-500 to-emerald-600 dark:from-emerald-400 dark:to-emerald-500 bg-clip-text text-transparent"
           >
             en toute simplicite
           </span>
         </h1>
 
         <!-- Subtitle -->
-        <p class="mx-auto mt-6 max-w-2xl text-lg text-gray-600 sm:text-xl">
+        <p
+          class="mx-auto mt-6 max-w-2xl text-lg text-gray-600 dark:text-gray-400 sm:text-xl"
+        >
           Importez vos exports CSV Bankin et visualisez instantanement vos
           depenses, revenus et remboursements. Aucune connexion bancaire
           requise.
@@ -47,7 +51,7 @@
         >
           <button
             type="button"
-            class="flex items-center gap-2 rounded-lg bg-emerald-500 px-6 py-3 text-base font-medium text-white shadow-lg shadow-emerald-500/30 hover:bg-emerald-600 transition-all hover:shadow-emerald-500/40"
+            class="flex items-center gap-2 rounded-lg bg-emerald-500 dark:bg-emerald-600 px-6 py-3 text-base font-medium text-white shadow-lg shadow-emerald-500/30 dark:shadow-emerald-600/20 hover:bg-emerald-600 dark:hover:bg-emerald-500 transition-all hover:shadow-emerald-500/40 dark:hover:shadow-emerald-500/30"
           >
             <svg
               class="h-5 w-5"
@@ -66,7 +70,7 @@
           </button>
           <button
             type="button"
-            class="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-6 py-3 text-base font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            class="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-6 py-3 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
           >
             <svg
               class="h-5 w-5"
@@ -88,16 +92,34 @@
         <!-- Stats -->
         <div class="mt-16 grid grid-cols-2 gap-8 sm:grid-cols-3">
           <div>
-            <p class="text-3xl font-bold text-emerald-500">100%</p>
-            <p class="mt-1 text-sm text-gray-600">Donnees locales</p>
+            <p
+              class="text-3xl font-bold text-emerald-500 dark:text-emerald-400"
+            >
+              100%
+            </p>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Donnees locales
+            </p>
           </div>
           <div>
-            <p class="text-3xl font-bold text-emerald-500">0 €</p>
-            <p class="mt-1 text-sm text-gray-600">Totalement gratuit</p>
+            <p
+              class="text-3xl font-bold text-emerald-500 dark:text-emerald-400"
+            >
+              0 €
+            </p>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Totalement gratuit
+            </p>
           </div>
           <div class="col-span-2 sm:col-span-1">
-            <p class="text-3xl font-bold text-emerald-500">30s</p>
-            <p class="mt-1 text-sm text-gray-600">Pour demarrer</p>
+            <p
+              class="text-3xl font-bold text-emerald-500 dark:text-emerald-400"
+            >
+              30s
+            </p>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Pour demarrer
+            </p>
           </div>
         </div>
       </div>

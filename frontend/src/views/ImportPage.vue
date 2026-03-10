@@ -348,11 +348,15 @@
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 py-12">
+  <div
+    class="min-h-screen bg-gray-50 dark:bg-slate-800 py-12 transition-colors"
+  >
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">Import de transactions</h1>
-        <p class="mt-2 text-gray-600">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          Import de transactions
+        </h1>
+        <p class="mt-2 text-gray-600 dark:text-gray-400">
           Importez vos transactions depuis un export CSV Bankin
         </p>
       </div>
@@ -360,23 +364,29 @@
       <!-- Progress bar during chunking -->
       <div
         v-if="showProgressBar"
-        class="mb-6 bg-white border border-indigo-200 rounded-lg p-4"
+        class="mb-6 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4"
       >
         <div class="flex items-center justify-between mb-2">
-          <span class="text-sm font-medium text-indigo-700">
+          <span
+            class="text-sm font-medium text-indigo-700 dark:text-indigo-400"
+          >
             {{ progress.message }}
           </span>
-          <span class="text-sm text-indigo-600">{{ progress.percent }}%</span>
+          <span class="text-sm text-indigo-600 dark:text-indigo-400"
+            >{{ progress.percent }}%</span
+          >
         </div>
-        <div class="w-full bg-indigo-100 rounded-full h-2.5">
+        <div
+          class="w-full bg-indigo-100 dark:bg-indigo-900/30 rounded-full h-2.5"
+        >
           <div
-            class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+            class="bg-indigo-600 dark:bg-indigo-500 h-2.5 rounded-full transition-all duration-300"
             :style="{ width: `${progress.percent}%` }"
           ></div>
         </div>
         <div
           v-if="progress.totalChunks > 1"
-          class="mt-2 text-xs text-indigo-500"
+          class="mt-2 text-xs text-indigo-500 dark:text-indigo-400"
         >
           Chunk {{ progress.completedChunks }}/{{ progress.totalChunks }}
         </div>
@@ -385,11 +395,11 @@
       <!-- Partial import error with retry -->
       <div
         v-if="partialImportError"
-        class="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4"
+        class="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4"
       >
         <div class="flex items-start gap-3">
           <svg
-            class="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5"
+            class="w-6 h-6 text-amber-600 dark:text-amber-500 flex-shrink-0 mt-0.5"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -402,12 +412,14 @@
             />
           </svg>
           <div class="flex-1">
-            <h3 class="font-medium text-amber-800">Import partiel</h3>
-            <p class="text-sm text-amber-700 mt-1">
+            <h3 class="font-medium text-amber-800 dark:text-amber-400">
+              Import partiel
+            </h3>
+            <p class="text-sm text-amber-700 dark:text-amber-400/80 mt-1">
               {{ partialImportError.details.imported }} transactions importees
               sur {{ partialImportError.details.total }}.
             </p>
-            <p class="text-xs text-amber-600 mt-2">
+            <p class="text-xs text-amber-600 dark:text-amber-500 mt-2">
               Vous pouvez reessayer sans risque de dupliquer les transactions
               deja importees.
             </p>
@@ -419,7 +431,7 @@
                 Reessayer l'import
               </button>
               <button
-                class="px-3 py-1.5 border border-amber-300 text-amber-700 text-sm rounded-lg hover:bg-amber-100 transition-colors"
+                class="px-3 py-1.5 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 text-sm rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
                 @click="cancelImport"
               >
                 Annuler
@@ -432,7 +444,7 @@
       <!-- Error message -->
       <div
         v-if="error && !partialImportError"
-        class="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"
+        class="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg"
       >
         {{ error }}
       </div>
@@ -440,9 +452,11 @@
       <!-- File upload zone -->
       <div
         v-if="!showPreview"
-        class="bg-white rounded-xl shadow-sm border-2 border-dashed transition-colors"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border-2 border-dashed transition-colors"
         :class="
-          isDragOver ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300'
+          isDragOver
+            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+            : 'border-gray-300 dark:border-slate-600'
         "
         @dragover="handleDragOver"
         @dragleave="handleDragLeave"
@@ -452,7 +466,7 @@
           class="flex flex-col items-center justify-center py-16 cursor-pointer"
         >
           <svg
-            class="w-16 h-16 text-gray-400 mb-4"
+            class="w-16 h-16 text-gray-400 dark:text-gray-500 mb-4"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -464,10 +478,10 @@
               d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
             />
           </svg>
-          <span class="text-lg font-medium text-gray-700">
+          <span class="text-lg font-medium text-gray-700 dark:text-gray-300">
             Glissez-déposez votre fichier CSV ici
           </span>
-          <span class="text-sm text-gray-500 mt-1"
+          <span class="text-sm text-gray-500 dark:text-gray-400 mt-1"
             >ou cliquez pour parcourir</span
           >
           <input
@@ -480,16 +494,21 @@
       </div>
 
       <!-- Preview -->
-      <div v-if="showPreview" class="bg-white rounded-xl shadow-sm p-6">
+      <div
+        v-if="showPreview"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
+      >
         <div class="flex items-center justify-between mb-6">
           <div>
-            <h2 class="text-xl font-semibold text-gray-900">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
               Aperçu de l'import
             </h2>
-            <p class="text-sm text-gray-500">{{ file?.name }}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+              {{ file?.name }}
+            </p>
           </div>
           <button
-            class="text-gray-500 hover:text-gray-700"
+            class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             @click="cancelImport"
           >
             <svg
@@ -510,51 +529,75 @@
 
         <!-- Stats -->
         <div class="grid grid-cols-3 gap-4 mb-6">
-          <div class="bg-indigo-50 rounded-lg p-4 text-center">
-            <div class="text-2xl font-bold text-indigo-600">
+          <div
+            class="bg-indigo-50 dark:bg-indigo-900/30 rounded-lg p-4 text-center"
+          >
+            <div
+              class="text-2xl font-bold text-indigo-600 dark:text-indigo-400"
+            >
               {{ parsedTransactions.length }}
             </div>
-            <div class="text-sm text-indigo-800">Transactions</div>
+            <div class="text-sm text-indigo-800 dark:text-indigo-300">
+              Transactions
+            </div>
           </div>
-          <div class="bg-green-50 rounded-lg p-4 text-center">
-            <div class="text-2xl font-bold text-green-600">
+          <div
+            class="bg-green-50 dark:bg-green-900/30 rounded-lg p-4 text-center"
+          >
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400">
               {{ new Set(parsedTransactions.map(t => t.category)).size }}
             </div>
-            <div class="text-sm text-green-800">Catégories</div>
+            <div class="text-sm text-green-800 dark:text-green-300">
+              Catégories
+            </div>
           </div>
-          <div class="bg-amber-50 rounded-lg p-4 text-center">
-            <div class="text-2xl font-bold text-amber-600">
+          <div
+            class="bg-amber-50 dark:bg-amber-900/30 rounded-lg p-4 text-center"
+          >
+            <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">
               {{ new Set(parsedTransactions.map(t => t.account)).size }}
             </div>
-            <div class="text-sm text-amber-800">Comptes</div>
+            <div class="text-sm text-amber-800 dark:text-amber-300">
+              Comptes
+            </div>
           </div>
         </div>
 
         <!-- Transaction preview list -->
-        <div class="border rounded-lg overflow-hidden mb-6">
-          <div class="bg-gray-50 px-4 py-2 border-b">
-            <span class="text-sm font-medium text-gray-700">
+        <div
+          class="border dark:border-slate-700 rounded-lg overflow-hidden mb-6"
+        >
+          <div
+            class="bg-gray-50 dark:bg-slate-800 px-4 py-2 border-b dark:border-slate-700"
+          >
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
               Aperçu des 5 premières transactions
             </span>
           </div>
-          <div class="divide-y max-h-64 overflow-y-auto">
+          <div class="divide-y dark:divide-slate-700 max-h-64 overflow-y-auto">
             <div
               v-for="(tx, index) in parsedTransactions.slice(0, 5)"
               :key="index"
-              class="px-4 py-3 flex items-center justify-between"
+              class="px-4 py-3 flex items-center justify-between bg-white dark:bg-slate-900"
             >
               <div>
-                <div class="font-medium text-gray-900 text-sm">
+                <div
+                  class="font-medium text-gray-900 dark:text-gray-100 text-sm"
+                >
                   {{ tx.description }}
                 </div>
-                <div class="text-xs text-gray-500">
+                <div class="text-xs text-gray-500 dark:text-gray-400">
                   {{ new Date(tx.date).toLocaleDateString('fr-FR') }} -
                   {{ tx.category }}
                 </div>
               </div>
               <div
                 class="font-semibold"
-                :class="tx.amount < 0 ? 'text-red-600' : 'text-green-600'"
+                :class="
+                  tx.amount < 0
+                    ? 'text-red-600 dark:text-red-500'
+                    : 'text-green-600 dark:text-green-500'
+                "
               >
                 {{ formatAmount(tx.amount) }}
               </div>
@@ -565,14 +608,14 @@
         <!-- Actions -->
         <div class="flex gap-4">
           <button
-            class="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+            class="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
             @click="cancelImport"
           >
             Annuler
           </button>
           <button
             :disabled="isUploading || isPreviewLoading"
-            class="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            class="flex-1 px-4 py-3 bg-indigo-600 dark:bg-indigo-500 text-white rounded-lg font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             @click="submitImport"
           >
             <span v-if="isPreviewLoading">Analyse en cours...</span>

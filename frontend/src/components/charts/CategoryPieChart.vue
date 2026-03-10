@@ -2,6 +2,7 @@
   import { computed } from 'vue'
   import VueApexCharts from 'vue3-apexcharts'
   import type { ApexOptions } from 'apexcharts'
+  import { useChartTheme } from '@/composables/useChartTheme'
 
   export interface ChartData {
     labels: string[]
@@ -13,16 +14,20 @@
     title: string
   }>()
 
+  const { isDark, strokeColor, donutNameColor, donutValueColor } =
+    useChartTheme()
+
   const chartOptions = computed<ApexOptions>(() => ({
     chart: {
       type: 'donut',
       fontFamily: 'Inter, system-ui, sans-serif',
+      background: 'transparent',
       dropShadow: {
         enabled: true,
         top: 2,
         left: 0,
         blur: 8,
-        opacity: 0.15,
+        opacity: isDark.value ? 0.3 : 0.15,
       },
       animations: {
         enabled: true,
@@ -48,12 +53,12 @@
     stroke: {
       show: true,
       width: 3,
-      colors: ['#ffffff'],
+      colors: [strokeColor.value],
     },
     tooltip: {
       enabled: true,
       fillSeriesColor: false,
-      theme: 'light',
+      theme: isDark.value ? 'dark' : 'light',
       style: {
         fontSize: '13px',
         fontFamily: 'Inter, system-ui, sans-serif',
@@ -80,7 +85,7 @@
               fontSize: '14px',
               fontFamily: 'Inter, system-ui, sans-serif',
               fontWeight: 500,
-              color: '#6b7280',
+              color: donutNameColor.value,
               offsetY: -8,
             },
             value: {
@@ -88,7 +93,7 @@
               fontSize: '24px',
               fontFamily: 'Inter, system-ui, sans-serif',
               fontWeight: 700,
-              color: '#111827',
+              color: donutValueColor.value,
               offsetY: 4,
               formatter: (val: string) => {
                 return new Intl.NumberFormat('fr-FR', {
@@ -105,7 +110,7 @@
               fontSize: '14px',
               fontFamily: 'Inter, system-ui, sans-serif',
               fontWeight: 500,
-              color: '#6b7280',
+              color: donutNameColor.value,
               formatter: () => {
                 const total = props.data.values.reduce(
                   (sum, val) => sum + val,
@@ -157,12 +162,13 @@
   <div class="w-full h-full">
     <VueApexCharts
       v-if="data.values.length > 0"
+      :key="isDark ? 'dark' : 'light'"
       type="donut"
       height="100%"
       :options="chartOptions"
       :series="series"
     />
-    <div v-else class="py-12 text-center text-gray-500">
+    <div v-else class="py-12 text-center text-gray-500 dark:text-gray-400">
       Aucune donnée disponible
     </div>
   </div>

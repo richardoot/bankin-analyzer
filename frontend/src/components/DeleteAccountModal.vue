@@ -40,14 +40,14 @@
         <div class="fixed inset-0 bg-black/50" @click="handleClose" />
 
         <div
-          class="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+          class="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-xl dark:shadow-slate-900/30"
         >
           <div class="mb-4 flex items-center gap-3">
             <div
-              class="flex h-10 w-10 items-center justify-center rounded-full bg-red-100"
+              class="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30"
             >
               <svg
-                class="h-6 w-6 text-red-600"
+                class="h-6 w-6 text-red-600 dark:text-red-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -60,15 +60,17 @@
                 />
               </svg>
             </div>
-            <h2 class="text-xl font-semibold text-gray-900">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
               Supprimer mon compte
             </h2>
           </div>
 
-          <div class="mb-6 space-y-3 text-sm text-gray-600">
+          <div class="mb-6 space-y-3 text-sm text-gray-600 dark:text-gray-400">
             <p>
               Cette action est
-              <strong class="text-red-600">irréversible</strong>.
+              <strong class="text-red-600 dark:text-red-400"
+                >irréversible</strong
+              >.
             </p>
             <p>En supprimant votre compte :</p>
             <ul class="list-inside list-disc space-y-1 pl-2">
@@ -81,17 +83,19 @@
           <div class="mb-6">
             <label
               for="confirmation"
-              class="mb-2 block text-sm font-medium text-gray-700"
+              class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
               Tapez
-              <strong class="text-red-600">{{ CONFIRMATION_WORD }}</strong> pour
-              confirmer
+              <strong class="text-red-600 dark:text-red-400">{{
+                CONFIRMATION_WORD
+              }}</strong>
+              pour confirmer
             </label>
             <input
               id="confirmation"
               v-model="confirmationText"
               type="text"
-              class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-red-500 focus:ring-2 focus:ring-red-500 focus:outline-none"
+              class="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 px-4 py-2 focus:border-red-500 dark:focus:border-red-400 focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400 focus:outline-none"
               placeholder="Tapez SUPPRIMER"
               :disabled="loading"
             />
@@ -100,7 +104,7 @@
           <div class="flex gap-3">
             <button
               type="button"
-              class="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+              class="flex-1 rounded-lg border border-gray-300 dark:border-slate-600 px-4 py-2 text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50"
               :disabled="loading"
               @click="handleClose"
             >
@@ -108,7 +112,7 @@
             </button>
             <button
               type="button"
-              class="flex-1 rounded-lg bg-red-600 px-4 py-2 text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              class="flex-1 rounded-lg bg-red-600 dark:bg-red-500 px-4 py-2 text-white transition-colors hover:bg-red-700 dark:hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="!isConfirmationValid || loading"
               @click="handleConfirm"
             >

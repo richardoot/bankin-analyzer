@@ -131,15 +131,22 @@
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-4rem)] bg-gray-50 py-12">
+  <div
+    class="min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-slate-800 py-12 transition-colors"
+  >
     <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
       <!-- Header -->
       <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">Historique des imports</h1>
-        <p v-if="formatLatestDate" class="mt-2 text-gray-600">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          Historique des imports
+        </h1>
+        <p
+          v-if="formatLatestDate"
+          class="mt-2 text-gray-600 dark:text-gray-400"
+        >
           Derniere transaction importee : {{ formatLatestDate }}
         </p>
-        <p v-else-if="!isLoading" class="mt-2 text-gray-600">
+        <p v-else-if="!isLoading" class="mt-2 text-gray-600 dark:text-gray-400">
           Aucun import effectue pour le moment
         </p>
       </div>
@@ -147,20 +154,22 @@
       <!-- Loading State -->
       <div
         v-if="isLoading"
-        class="flex items-center justify-center rounded-2xl bg-white p-12 shadow-lg"
+        class="flex items-center justify-center rounded-2xl bg-white dark:bg-slate-900 p-12 shadow-lg dark:shadow-slate-900/20"
       >
         <div class="text-center">
           <div
-            class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-600"
+            class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-emerald-200 dark:border-emerald-800 border-t-emerald-600 dark:border-t-emerald-500"
           ></div>
-          <p class="mt-4 text-gray-600">Chargement de l'historique...</p>
+          <p class="mt-4 text-gray-600 dark:text-gray-400">
+            Chargement de l'historique...
+          </p>
         </div>
       </div>
 
       <!-- Error State -->
       <div
         v-else-if="error"
-        class="rounded-2xl border-2 border-red-200 bg-red-50 p-8 text-center"
+        class="rounded-2xl border-2 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-8 text-center"
       >
         <svg
           class="mx-auto h-12 w-12 text-red-500"
@@ -175,7 +184,7 @@
             d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
           />
         </svg>
-        <p class="mt-4 text-red-700">{{ error }}</p>
+        <p class="mt-4 text-red-700 dark:text-red-400">{{ error }}</p>
         <button
           class="mt-4 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
           @click="fetchData"
@@ -187,10 +196,10 @@
       <!-- Empty State -->
       <div
         v-else-if="!hasHistories"
-        class="rounded-2xl bg-white p-12 text-center shadow-lg"
+        class="rounded-2xl bg-white dark:bg-slate-900 p-12 text-center shadow-lg dark:shadow-slate-900/20"
       >
         <svg
-          class="mx-auto h-16 w-16 text-gray-400"
+          class="mx-auto h-16 w-16 text-gray-400 dark:text-gray-500"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -202,10 +211,10 @@
             d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
           />
         </svg>
-        <h3 class="mt-4 text-lg font-semibold text-gray-900">
+        <h3 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
           Aucun import effectue
         </h3>
-        <p class="mt-2 text-gray-600">
+        <p class="mt-2 text-gray-600 dark:text-gray-400">
           Commencez par importer vos transactions depuis un fichier CSV.
         </p>
         <RouterLink
@@ -234,11 +243,11 @@
         <div
           v-for="history in histories"
           :key="history.id"
-          class="rounded-2xl bg-white p-6 shadow-lg transition-shadow hover:shadow-xl"
+          class="rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-lg dark:shadow-slate-900/20 transition-shadow hover:shadow-xl dark:hover:shadow-slate-900/40"
         >
           <!-- Date Header -->
           <div
-            class="mb-4 flex items-center justify-between border-b border-gray-100 pb-4"
+            class="mb-4 flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-4"
           >
             <div class="flex items-center gap-3">
               <div
@@ -262,7 +271,7 @@
               </div>
               <div>
                 <div class="flex items-center gap-2">
-                  <p class="font-semibold text-gray-900">
+                  <p class="font-semibold text-gray-900 dark:text-gray-100">
                     {{ formatDateTime(history.createdAt) }}
                   </p>
                   <span
@@ -275,7 +284,10 @@
                     {{ getStatusLabel(history.status) }}
                   </span>
                 </div>
-                <p v-if="history.fileName" class="text-sm text-gray-500">
+                <p
+                  v-if="history.fileName"
+                  class="text-sm text-gray-500 dark:text-gray-400"
+                >
                   {{ history.fileName }}
                 </p>
               </div>
@@ -283,7 +295,7 @@
             <!-- Delete Button -->
             <button
               v-if="deleteConfirmId !== history.id"
-              class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+              class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400"
               title="Supprimer cet import"
               @click="confirmDelete(history.id)"
             >
@@ -303,7 +315,9 @@
             </button>
             <!-- Delete Confirmation -->
             <div v-else class="flex items-center gap-2">
-              <span class="text-sm text-red-600">Supprimer ?</span>
+              <span class="text-sm text-red-600 dark:text-red-400"
+                >Supprimer ?</span
+              >
               <button
                 class="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
                 :disabled="isDeleting"
@@ -312,7 +326,7 @@
                 {{ isDeleting ? 'Suppression...' : 'Oui' }}
               </button>
               <button
-                class="rounded-lg bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-300"
+                class="rounded-lg bg-gray-200 dark:bg-slate-700 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-300 dark:hover:bg-slate-600"
                 :disabled="isDeleting"
                 @click="cancelDelete"
               >
@@ -324,41 +338,53 @@
           <!-- Stats Grid -->
           <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <!-- Transactions Imported -->
-            <div class="rounded-lg bg-emerald-50 p-3">
-              <p class="text-2xl font-bold text-emerald-700">
+            <div class="rounded-lg bg-emerald-50 dark:bg-emerald-900/30 p-3">
+              <p
+                class="text-2xl font-bold text-emerald-700 dark:text-emerald-400"
+              >
                 {{ history.transactionsImported.toLocaleString('fr-FR') }}
               </p>
-              <p class="text-sm text-emerald-600">transactions importees</p>
+              <p class="text-sm text-emerald-600 dark:text-emerald-500">
+                transactions importees
+              </p>
             </div>
 
             <!-- Total in File -->
-            <div class="rounded-lg bg-gray-50 p-3">
-              <p class="text-2xl font-bold text-gray-700">
+            <div class="rounded-lg bg-gray-50 dark:bg-slate-800 p-3">
+              <p class="text-2xl font-bold text-gray-700 dark:text-gray-300">
                 {{ history.totalInFile.toLocaleString('fr-FR') }}
               </p>
-              <p class="text-sm text-gray-600">dans le fichier</p>
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                dans le fichier
+              </p>
             </div>
 
             <!-- Duplicates Skipped -->
-            <div class="rounded-lg bg-amber-50 p-3">
-              <p class="text-2xl font-bold text-amber-700">
+            <div class="rounded-lg bg-amber-50 dark:bg-amber-900/30 p-3">
+              <p class="text-2xl font-bold text-amber-700 dark:text-amber-400">
                 {{ history.duplicatesSkipped.toLocaleString('fr-FR') }}
               </p>
-              <p class="text-sm text-amber-600">doublons ignores</p>
+              <p class="text-sm text-amber-600 dark:text-amber-500">
+                doublons ignores
+              </p>
             </div>
 
             <!-- Categories Created -->
-            <div class="rounded-lg bg-indigo-50 p-3">
-              <p class="text-2xl font-bold text-indigo-700">
+            <div class="rounded-lg bg-indigo-50 dark:bg-indigo-900/30 p-3">
+              <p
+                class="text-2xl font-bold text-indigo-700 dark:text-indigo-400"
+              >
                 {{ history.categoriesCreated.toLocaleString('fr-FR') }}
               </p>
-              <p class="text-sm text-indigo-600">nouvelles categories</p>
+              <p class="text-sm text-indigo-600 dark:text-indigo-500">
+                nouvelles categories
+              </p>
             </div>
           </div>
 
           <!-- Period and Accounts -->
           <div
-            class="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600"
+            class="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400"
           >
             <!-- Date Range -->
             <div class="flex items-center gap-2">
@@ -403,7 +429,7 @@
                 <span
                   v-for="account in history.accounts"
                   :key="account"
-                  class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700"
+                  class="rounded-full bg-gray-100 dark:bg-slate-700 px-2 py-0.5 text-xs font-medium text-gray-700 dark:text-gray-300"
                 >
                   {{ account }}
                 </span>

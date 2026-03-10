@@ -2,6 +2,7 @@
   import { computed } from 'vue'
   import VueApexCharts from 'vue3-apexcharts'
   import type { ApexOptions } from 'apexcharts'
+  import { useChartTheme } from '@/composables/useChartTheme'
 
   export interface ChartData {
     labels: string[]
@@ -14,6 +15,8 @@
     color: string
   }>()
 
+  const { isDark, labelColor, chartTheme } = useChartTheme()
+
   const chartOptions = computed<ApexOptions>(() => ({
     chart: {
       type: 'bar',
@@ -21,6 +24,7 @@
         show: false,
       },
       fontFamily: 'inherit',
+      background: 'transparent',
     },
     plotOptions: {
       bar: {
@@ -35,7 +39,7 @@
       categories: props.data.labels,
       labels: {
         style: {
-          colors: '#6b7280',
+          colors: labelColor.value,
           fontSize: '12px',
         },
       },
@@ -49,7 +53,7 @@
     yaxis: {
       labels: {
         style: {
-          colors: '#6b7280',
+          colors: labelColor.value,
           fontSize: '12px',
         },
         formatter: (value: number) => {
@@ -62,11 +66,12 @@
       },
     },
     grid: {
-      borderColor: '#e5e7eb',
+      borderColor: chartTheme.value.grid?.borderColor || '#e5e7eb',
       strokeDashArray: 4,
     },
     colors: [props.color],
     tooltip: {
+      theme: isDark.value ? 'dark' : 'light',
       y: {
         formatter: (value: number) => {
           return new Intl.NumberFormat('fr-FR', {
@@ -89,6 +94,7 @@
 <template>
   <div class="w-full">
     <VueApexCharts
+      :key="isDark ? 'dark' : 'light'"
       type="bar"
       height="300"
       :options="chartOptions"

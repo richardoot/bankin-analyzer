@@ -456,28 +456,32 @@
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 py-8">
+  <div class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <!-- Header -->
       <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
           Gestion des Remboursements
         </h1>
-        <p class="mt-2 text-gray-600">
+        <p class="mt-2 text-gray-600 dark:text-gray-400">
           Gerez les personnes et suivez les transactions a rembourser
         </p>
       </div>
 
       <!-- Persons Section -->
-      <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
+      <div
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6 mb-8"
+      >
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold text-gray-900">Personnes</h2>
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Personnes
+          </h2>
         </div>
 
         <!-- Error state for persons -->
         <div
           v-if="personsStore.error"
-          class="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex justify-between items-center"
+          class="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg flex justify-between items-center"
         >
           <span>{{ personsStore.error }}</span>
           <button
@@ -500,14 +504,14 @@
             v-model="newPersonName"
             type="text"
             placeholder="Nom de la personne"
-            class="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            class="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400"
             @keyup.enter="handleAddPerson"
           />
           <input
             v-model="newPersonEmail"
             type="email"
             placeholder="Email (optionnel)"
-            class="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            class="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400"
             @keyup.enter="handleAddPerson"
           />
           <button
@@ -515,8 +519,8 @@
             class="px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2"
             :class="
               newPersonName.trim() && !isAddingPerson
-                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                ? 'bg-indigo-600 dark:bg-indigo-500 text-white hover:bg-indigo-700 dark:hover:bg-indigo-600'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
             "
             @click="handleAddPerson"
           >
@@ -561,7 +565,7 @@
         <!-- Persons list -->
         <div
           v-if="personsStore.isLoading && personsStore.persons.length === 0"
-          class="flex items-center gap-2 text-gray-500"
+          class="flex items-center gap-2 text-gray-500 dark:text-gray-400"
         >
           <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
             <circle
@@ -583,7 +587,7 @@
 
         <div
           v-else-if="personsStore.persons.length === 0"
-          class="text-gray-500 text-sm"
+          class="text-gray-500 dark:text-gray-400 text-sm"
         >
           Aucune personne ajoutee. Commencez par ajouter une personne ci-dessus.
         </div>
@@ -596,38 +600,42 @@
           <div
             v-for="person in personsStore.persons"
             :key="person.id"
-            class="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+            class="bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg p-4 hover:shadow-md dark:hover:shadow-slate-900/30 transition-shadow"
           >
             <!-- Edit mode -->
             <div v-if="editingPersonId === person.id">
               <div class="flex items-center gap-3 mb-3">
                 <!-- Avatar with first letter -->
                 <div
-                  class="flex-shrink-0 h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center"
+                  class="flex-shrink-0 h-10 w-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center"
                 >
-                  <span class="text-lg font-semibold text-indigo-600">
+                  <span
+                    class="text-lg font-semibold text-indigo-600 dark:text-indigo-400"
+                  >
                     {{ person.name.charAt(0).toUpperCase() }}
                   </span>
                 </div>
-                <span class="text-sm text-gray-500">Modification en cours</span>
+                <span class="text-sm text-gray-500 dark:text-gray-400"
+                  >Modification en cours</span
+                >
               </div>
               <input
                 v-model="editingPersonName"
                 type="text"
-                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 mb-3"
+                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 mb-3"
                 placeholder="Nom de la personne"
                 @keyup.enter="saveEditPerson(person.id)"
                 @keyup.escape="cancelEditPerson"
               />
               <div class="flex gap-2">
                 <button
-                  class="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
+                  class="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 rounded-lg transition-colors"
                   @click="saveEditPerson(person.id)"
                 >
                   Enregistrer
                 </button>
                 <button
-                  class="flex-1 px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                  class="flex-1 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-slate-600 hover:bg-gray-300 dark:hover:bg-slate-500 rounded-lg transition-colors"
                   @click="cancelEditPerson"
                 >
                   Annuler
@@ -639,9 +647,11 @@
             <div v-else class="flex items-start gap-3">
               <!-- Avatar with first letter -->
               <div
-                class="flex-shrink-0 h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center"
+                class="flex-shrink-0 h-10 w-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center"
               >
-                <span class="text-lg font-semibold text-indigo-600">
+                <span
+                  class="text-lg font-semibold text-indigo-600 dark:text-indigo-400"
+                >
                   {{ person.name.charAt(0).toUpperCase() }}
                 </span>
               </div>
@@ -649,11 +659,13 @@
               <!-- Name and email -->
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1">
-                  <h3 class="font-medium text-gray-900 truncate">
+                  <h3
+                    class="font-medium text-gray-900 dark:text-gray-100 truncate"
+                  >
                     {{ person.name }}
                   </h3>
                   <button
-                    class="flex-shrink-0 p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
+                    class="flex-shrink-0 p-1 text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded"
                     title="Modifier le nom"
                     @click="startEditPerson(person.id, person.name)"
                   >
@@ -674,18 +686,21 @@
                 </div>
                 <p
                   v-if="person.email"
-                  class="text-xs text-gray-500 truncate mt-0.5"
+                  class="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5"
                 >
                   {{ person.email }}
                 </p>
-                <p v-else class="text-xs text-gray-400 italic mt-0.5">
+                <p
+                  v-else
+                  class="text-xs text-gray-400 dark:text-gray-500 italic mt-0.5"
+                >
                   Pas d'email
                 </p>
               </div>
 
               <!-- Delete button -->
               <button
-                class="flex-shrink-0 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                class="flex-shrink-0 p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                 title="Supprimer"
                 @click="showDeleteConfirmation(person.id, person.name)"
               >
@@ -709,12 +724,14 @@
       </div>
 
       <!-- Transactions Section -->
-      <div class="bg-white rounded-xl shadow-sm p-6">
+      <div
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
+      >
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold text-gray-900">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
             Transactions Depenses
           </h2>
-          <div class="text-sm text-gray-500">
+          <div class="text-sm text-gray-500 dark:text-gray-400">
             {{ filteredTransactions.length }} transaction(s)
           </div>
         </div>
@@ -723,10 +740,12 @@
         <div class="flex flex-wrap gap-4 mb-6">
           <!-- Category filter -->
           <div class="flex items-center gap-2">
-            <label class="text-sm text-gray-600">Categorie:</label>
+            <label class="text-sm text-gray-600 dark:text-gray-400"
+              >Categorie:</label
+            >
             <select
               v-model="selectedCategory"
-              class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              class="px-3 py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400"
             >
               <option :value="null">Toutes</option>
               <option v-for="cat in categories" :key="cat" :value="cat">
@@ -740,16 +759,18 @@
             <input
               v-model="showOnlyNotPointed"
               type="checkbox"
-              class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+              class="h-4 w-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-slate-600 rounded focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
             />
-            <span class="text-sm text-gray-600">Uniquement non pointees</span>
+            <span class="text-sm text-gray-600 dark:text-gray-400"
+              >Uniquement non pointees</span
+            >
           </label>
         </div>
 
         <!-- Error state for transactions -->
         <div
           v-if="transactionsError"
-          class="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"
+          class="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg"
         >
           {{ transactionsError }}
         </div>
@@ -759,7 +780,7 @@
           v-if="isLoadingTransactions"
           class="flex justify-center items-center py-12"
         >
-          <div class="flex items-center gap-3 text-gray-500">
+          <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
             <svg class="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
               <circle
                 class="opacity-25"
@@ -783,7 +804,7 @@
         <template v-else-if="!transactionsError">
           <div
             v-if="filteredTransactions.length === 0"
-            class="text-center py-12 text-gray-500"
+            class="text-center py-12 text-gray-500 dark:text-gray-400"
           >
             Aucune transaction trouvee avec les filtres actuels.
           </div>
@@ -791,7 +812,7 @@
           <div v-else>
             <!-- Table header -->
             <div
-              class="hidden md:grid grid-cols-12 gap-4 px-4 py-2 bg-gray-50 rounded-t-lg text-sm font-medium text-gray-500"
+              class="hidden md:grid grid-cols-12 gap-4 px-4 py-2 bg-gray-50 dark:bg-slate-800 rounded-t-lg text-sm font-medium text-gray-500 dark:text-gray-400"
             >
               <div class="col-span-1">Date</div>
               <div class="col-span-3">Description</div>
@@ -803,28 +824,34 @@
             </div>
 
             <!-- Transactions rows -->
-            <div class="divide-y">
+            <div class="divide-y dark:divide-slate-700">
               <div
                 v-for="tx in paginatedTransactions"
                 :key="tx.id"
-                class="px-4 py-3 hover:bg-gray-50 transition-colors"
+                class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <!-- Main row -->
                 <div
                   class="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 items-center"
                 >
                   <!-- Date -->
-                  <div class="col-span-1 text-sm text-gray-600">
+                  <div
+                    class="col-span-1 text-sm text-gray-600 dark:text-gray-400"
+                  >
                     {{ formatDate(tx.date) }}
                   </div>
 
                   <!-- Description -->
-                  <div class="col-span-3 text-sm font-medium text-gray-900">
+                  <div
+                    class="col-span-3 text-sm font-medium text-gray-900 dark:text-gray-100"
+                  >
                     {{ tx.description }}
                   </div>
 
                   <!-- Note -->
-                  <div class="col-span-2 text-sm text-gray-500">
+                  <div
+                    class="col-span-2 text-sm text-gray-500 dark:text-gray-400"
+                  >
                     <span
                       v-if="tx.note"
                       class="block truncate"
@@ -832,32 +859,38 @@
                     >
                       {{ tx.note }}
                     </span>
-                    <span v-else class="text-gray-300">-</span>
+                    <span v-else class="text-gray-300 dark:text-gray-600"
+                      >-</span
+                    >
                   </div>
 
                   <!-- Amount -->
                   <div class="col-span-2 text-sm font-semibold text-right">
-                    <span class="text-red-600">
+                    <span class="text-red-600 dark:text-red-500">
                       {{ formatCurrency(tx.amount) }}
                     </span>
                   </div>
 
                   <!-- Category -->
-                  <div class="col-span-2 text-sm text-gray-600">
+                  <div
+                    class="col-span-2 text-sm text-gray-600 dark:text-gray-400"
+                  >
                     <span
                       v-if="tx.categoryName"
-                      class="inline-flex px-2 py-0.5 bg-gray-100 rounded-full text-xs"
+                      class="inline-flex px-2 py-0.5 bg-gray-100 dark:bg-slate-700 rounded-full text-xs"
                     >
                       {{ tx.categoryName }}
                     </span>
-                    <span v-else class="text-gray-400">-</span>
+                    <span v-else class="text-gray-400 dark:text-gray-500"
+                      >-</span
+                    >
                   </div>
 
                   <!-- Pointed status -->
                   <div class="col-span-1 flex justify-center">
                     <span
                       v-if="tx.isPointed"
-                      class="inline-flex items-center justify-center h-5 w-5 rounded-full bg-green-100 text-green-600"
+                      class="inline-flex items-center justify-center h-5 w-5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
                     >
                       <svg
                         class="h-3 w-3"
@@ -873,7 +906,7 @@
                     </span>
                     <span
                       v-else
-                      class="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gray-100 text-gray-400"
+                      class="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500"
                     >
                       <svg
                         class="h-3 w-3"
@@ -893,7 +926,7 @@
                   <div class="col-span-1 flex justify-center">
                     <button
                       v-if="getRemainingAmount(tx) > 0"
-                      class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
+                      class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
                       @click="openReimbursementModal(tx)"
                     >
                       <svg
@@ -911,7 +944,10 @@
                       </svg>
                       Assigner
                     </button>
-                    <span v-else class="text-xs text-green-600 font-medium">
+                    <span
+                      v-else
+                      class="text-xs text-green-600 dark:text-green-400 font-medium"
+                    >
                       Assigne
                     </span>
                   </div>
@@ -920,7 +956,7 @@
                 <!-- Reimbursements for this transaction -->
                 <div
                   v-if="getReimbursementsForTransaction(tx.id).length > 0"
-                  class="mt-2 ml-4 pl-4 border-l-2 border-amber-200"
+                  class="mt-2 ml-4 pl-4 border-l-2 border-amber-200 dark:border-amber-700"
                 >
                   <div
                     v-for="reimb in getReimbursementsForTransaction(tx.id)"
@@ -929,24 +965,28 @@
                   >
                     <div class="flex items-center gap-2">
                       <span
-                        class="inline-flex items-center justify-center h-6 w-6 rounded-full bg-amber-100 text-amber-700 text-xs font-medium"
+                        class="inline-flex items-center justify-center h-6 w-6 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium"
                       >
                         {{ reimb.personName.charAt(0).toUpperCase() }}
                       </span>
-                      <span class="text-gray-700">{{ reimb.personName }}</span>
-                      <span class="text-gray-500">:</span>
-                      <span class="font-medium text-amber-700">
+                      <span class="text-gray-700 dark:text-gray-300">{{
+                        reimb.personName
+                      }}</span>
+                      <span class="text-gray-500 dark:text-gray-400">:</span>
+                      <span
+                        class="font-medium text-amber-700 dark:text-amber-400"
+                      >
                         {{ formatCurrency(reimb.amount) }}
                       </span>
                       <span
                         v-if="reimb.categoryName"
-                        class="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded"
+                        class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded"
                       >
                         {{ reimb.categoryName }}
                       </span>
                     </div>
                     <button
-                      class="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      class="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                       title="Supprimer"
                       @click="handleDeleteReimbursement(reimb.id)"
                     >
@@ -968,7 +1008,7 @@
                   <!-- Remaining amount -->
                   <div
                     v-if="getRemainingAmount(tx) > 0"
-                    class="text-xs text-gray-500 mt-1"
+                    class="text-xs text-gray-500 dark:text-gray-400 mt-1"
                   >
                     Restant: {{ formatCurrency(getRemainingAmount(tx)) }}
                   </div>
@@ -979,9 +1019,9 @@
             <!-- Pagination -->
             <div
               v-if="totalPages > 1"
-              class="flex items-center justify-between mt-6 pt-4 border-t"
+              class="flex items-center justify-between mt-6 pt-4 border-t dark:border-slate-700"
             >
-              <div class="text-sm text-gray-500">
+              <div class="text-sm text-gray-500 dark:text-gray-400">
                 Page {{ currentPage }} sur {{ totalPages }}
               </div>
 
@@ -992,8 +1032,8 @@
                   class="px-3 py-1.5 text-sm rounded-lg transition-colors"
                   :class="
                     currentPage === 1
-                      ? 'text-gray-300 cursor-not-allowed'
-                      : 'text-gray-600 hover:bg-gray-100'
+                      ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
                   "
                   @click="goToPage(currentPage - 1)"
                 >
@@ -1016,7 +1056,7 @@
                 <template v-for="page in visiblePages" :key="page">
                   <span
                     v-if="page < 0"
-                    class="px-2 py-1.5 text-sm text-gray-400"
+                    class="px-2 py-1.5 text-sm text-gray-400 dark:text-gray-500"
                   >
                     ...
                   </span>
@@ -1025,8 +1065,8 @@
                     class="px-3 py-1.5 text-sm rounded-lg transition-colors"
                     :class="
                       page === currentPage
-                        ? 'bg-indigo-600 text-white'
-                        : 'text-gray-600 hover:bg-gray-100'
+                        ? 'bg-indigo-600 dark:bg-indigo-500 text-white'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
                     "
                     @click="goToPage(page)"
                   >
@@ -1040,8 +1080,8 @@
                   class="px-3 py-1.5 text-sm rounded-lg transition-colors"
                   :class="
                     currentPage === totalPages
-                      ? 'text-gray-300 cursor-not-allowed'
-                      : 'text-gray-600 hover:bg-gray-100'
+                      ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
                   "
                   @click="goToPage(currentPage + 1)"
                 >
@@ -1068,14 +1108,14 @@
       <!-- Summary Section -->
       <div
         v-if="reimbursements.length > 0"
-        class="bg-white rounded-xl shadow-sm p-6 mt-8"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6 mt-8"
       >
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold text-gray-900">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
             Recapitulatif des Remboursements
           </h2>
           <button
-            class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
+            class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
             @click="
               exportReimbursementsToPdf(
                 summaryByPerson,
@@ -1106,23 +1146,25 @@
           <div
             v-for="person in summaryByPerson"
             :key="person.personId"
-            class="border border-gray-200 rounded-lg p-4"
+            class="border border-gray-200 dark:border-slate-700 rounded-lg p-4"
           >
             <!-- Person header -->
             <div class="flex items-center justify-between mb-3">
               <div class="flex items-center gap-3">
                 <div
-                  class="h-10 w-10 bg-amber-100 rounded-full flex items-center justify-center"
+                  class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center"
                 >
-                  <span class="text-lg font-semibold text-amber-700">
+                  <span
+                    class="text-lg font-semibold text-amber-700 dark:text-amber-400"
+                  >
                     {{ person.personName.charAt(0).toUpperCase() }}
                   </span>
                 </div>
-                <h3 class="font-medium text-gray-900">
+                <h3 class="font-medium text-gray-900 dark:text-gray-100">
                   {{ person.personName }}
                 </h3>
               </div>
-              <div class="text-lg font-bold text-amber-700">
+              <div class="text-lg font-bold text-amber-700 dark:text-amber-400">
                 {{ formatCurrency(person.total) }}
               </div>
             </div>
@@ -1132,14 +1174,16 @@
               <div v-for="cat in person.byCategory" :key="cat.categoryId">
                 <!-- Category header - clickable -->
                 <button
-                  class="w-full flex items-center justify-between py-1.5 px-2 -ml-2 hover:bg-gray-50 rounded transition-colors text-sm"
+                  class="w-full flex items-center justify-between py-1.5 px-2 -ml-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors text-sm"
                   @click="
                     toggleCategoryExpanded(person.personId, cat.categoryId)
                   "
                 >
-                  <span class="text-gray-600 flex items-center gap-2">
+                  <span
+                    class="text-gray-600 dark:text-gray-400 flex items-center gap-2"
+                  >
                     <svg
-                      class="w-3 h-3 text-gray-400 transition-transform duration-200"
+                      class="w-3 h-3 text-gray-400 dark:text-gray-500 transition-transform duration-200"
                       :class="{
                         'rotate-90': isCategoryExpanded(
                           person.personId,
@@ -1158,11 +1202,11 @@
                       />
                     </svg>
                     {{ cat.categoryName }}
-                    <span class="text-xs text-gray-400"
+                    <span class="text-xs text-gray-400 dark:text-gray-500"
                       >({{ cat.reimbursements.length }})</span
                     >
                   </span>
-                  <span class="font-medium text-gray-700">
+                  <span class="font-medium text-gray-700 dark:text-gray-300">
                     {{ formatCurrency(cat.amount) }}
                   </span>
                 </button>
@@ -1180,7 +1224,7 @@
                     <div
                       v-for="r in cat.reimbursements"
                       :key="r.id"
-                      class="flex justify-between text-xs text-gray-500 py-1 pl-3 border-l-2 border-amber-200"
+                      class="flex justify-between text-xs text-gray-500 dark:text-gray-400 py-1 pl-3 border-l-2 border-amber-200 dark:border-amber-700"
                     >
                       <span class="truncate mr-2">
                         {{ getTransactionDescription(r.transactionId) }}
@@ -1197,12 +1241,12 @@
 
           <!-- Total -->
           <div
-            class="border-t-2 border-amber-200 pt-4 flex items-center justify-between"
+            class="border-t-2 border-amber-200 dark:border-amber-700 pt-4 flex items-center justify-between"
           >
-            <span class="text-lg font-semibold text-gray-900"
+            <span class="text-lg font-semibold text-gray-900 dark:text-gray-100"
               >Total General</span
             >
-            <span class="text-xl font-bold text-amber-700">
+            <span class="text-xl font-bold text-amber-700 dark:text-amber-400">
               {{ formatCurrency(totalDue) }}
             </span>
           </div>
@@ -1224,36 +1268,46 @@
 
         <!-- Modal -->
         <div
-          class="relative bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6"
+          class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
         >
           <!-- Header -->
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">
+          <h3
+            class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
+          >
             Assigner un remboursement
           </h3>
 
           <!-- Transaction info -->
-          <div class="bg-gray-50 rounded-lg p-4 mb-4">
-            <div class="text-sm text-gray-600 mb-2">
+          <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 mb-4">
+            <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">
               {{ formatDate(selectedTransaction.date) }} -
               {{ selectedTransaction.description }}
             </div>
             <div class="grid grid-cols-2 gap-3">
-              <div class="bg-white rounded-lg p-2 border border-gray-200">
-                <div class="text-xs text-gray-500 mb-0.5">Montant total</div>
-                <div class="text-lg font-semibold text-red-600">
+              <div
+                class="bg-white dark:bg-slate-700 rounded-lg p-2 border border-gray-200 dark:border-slate-600"
+              >
+                <div class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">
+                  Montant total
+                </div>
+                <div
+                  class="text-lg font-semibold text-red-600 dark:text-red-500"
+                >
                   {{ formatCurrency(selectedTransaction.amount) }}
                 </div>
               </div>
-              <div class="bg-white rounded-lg p-2 border border-gray-200">
-                <div class="text-xs text-gray-500 mb-0.5">
+              <div
+                class="bg-white dark:bg-slate-700 rounded-lg p-2 border border-gray-200 dark:border-slate-600"
+              >
+                <div class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">
                   Restant a assigner
                 </div>
                 <div
                   class="text-lg font-semibold"
                   :class="
                     getRemainingAmount(selectedTransaction) > 0
-                      ? 'text-amber-600'
-                      : 'text-green-600'
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-green-600 dark:text-green-400'
                   "
                 >
                   {{ formatCurrency(getRemainingAmount(selectedTransaction)) }}
@@ -1265,7 +1319,7 @@
                 getRemainingAmount(selectedTransaction) <
                 Math.abs(selectedTransaction.amount)
               "
-              class="mt-2 text-xs text-gray-500"
+              class="mt-2 text-xs text-gray-500 dark:text-gray-400"
             >
               Deja assigne:
               {{
@@ -1281,12 +1335,14 @@
           <div class="space-y-4">
             <!-- Person select -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
                 Personne *
               </label>
               <select
                 v-model="reimbursementForm.personId"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400"
               >
                 <option value="">Selectionnez une personne</option>
                 <option
@@ -1301,7 +1357,9 @@
 
             <!-- Amount input -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
                 Montant *
               </label>
               <input
@@ -1310,12 +1368,12 @@
                 step="0.01"
                 min="0.01"
                 :max="getRemainingAmount(selectedTransaction)"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400"
               />
 
               <!-- Amount shortcuts -->
               <div class="mt-2">
-                <div class="text-xs text-gray-500 mb-1.5">
+                <div class="text-xs text-gray-500 dark:text-gray-400 mb-1.5">
                   Raccourcis (base:
                   {{ formatCurrency(Math.abs(selectedTransaction.amount)) }})
                 </div>
@@ -1327,8 +1385,8 @@
                     :class="
                       Math.abs(selectedTransaction.amount) <=
                       getRemainingAmount(selectedTransaction)
-                        ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                        : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                        ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+                        : 'border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                     "
                     :disabled="
                       Math.abs(selectedTransaction.amount) >
@@ -1345,8 +1403,8 @@
                     :class="
                       Math.abs(selectedTransaction.amount) / 2 <=
                       getRemainingAmount(selectedTransaction)
-                        ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                        : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                        ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+                        : 'border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                     "
                     :disabled="
                       Math.abs(selectedTransaction.amount) / 2 >
@@ -1363,8 +1421,8 @@
                     :class="
                       Math.abs(selectedTransaction.amount) / 3 <=
                       getRemainingAmount(selectedTransaction)
-                        ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                        : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                        ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+                        : 'border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                     "
                     :disabled="
                       Math.abs(selectedTransaction.amount) / 3 >
@@ -1381,8 +1439,8 @@
                     :class="
                       Math.abs(selectedTransaction.amount) / 4 <=
                       getRemainingAmount(selectedTransaction)
-                        ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                        : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                        ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+                        : 'border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                     "
                     :disabled="
                       Math.abs(selectedTransaction.amount) / 4 >
@@ -1395,13 +1453,15 @@
 
                   <!-- Custom divisor -->
                   <div class="flex items-center gap-1">
-                    <span class="text-xs text-gray-500">/</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400"
+                      >/</span
+                    >
                     <input
                       v-model.number="customDivisor"
                       type="number"
                       min="1"
                       max="100"
-                      class="w-12 px-1.5 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                      class="w-12 px-1.5 py-1 text-xs border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400"
                       @keyup.enter="applyCustomDivisor"
                     />
                     <button
@@ -1411,8 +1471,8 @@
                         customDivisor > 0 &&
                         Math.abs(selectedTransaction.amount) / customDivisor <=
                           getRemainingAmount(selectedTransaction)
-                          ? 'border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                          : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                          ? 'border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30'
+                          : 'border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                       "
                       :disabled="
                         customDivisor <= 0 ||
@@ -1432,7 +1492,7 @@
                     reimbursementForm.amount >
                     getRemainingAmount(selectedTransaction)
                   "
-                  class="mt-2 text-xs text-red-600 flex items-center gap-1"
+                  class="mt-2 text-xs text-red-600 dark:text-red-400 flex items-center gap-1"
                 >
                   <svg
                     class="h-3.5 w-3.5"
@@ -1454,12 +1514,14 @@
 
             <!-- Category select -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
                 Categorie (optionnel)
               </label>
               <select
                 v-model="reimbursementForm.categoryId"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400"
               >
                 <option value="">Sans categorie</option>
                 <option
@@ -1474,14 +1536,16 @@
 
             <!-- Note input -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
                 Note (optionnel)
               </label>
               <input
                 v-model="reimbursementForm.note"
                 type="text"
                 placeholder="Ajouter une note..."
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400"
               />
             </div>
           </div>
@@ -1489,7 +1553,7 @@
           <!-- Buttons -->
           <div class="flex gap-3 mt-6">
             <button
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
               @click="closeReimbursementModal"
             >
               Annuler
@@ -1509,8 +1573,8 @@
                 reimbursementForm.amount <=
                   getRemainingAmount(selectedTransaction) &&
                 !isCreatingReimbursement
-                  ? 'bg-amber-600 hover:bg-amber-700'
-                  : 'bg-gray-300 cursor-not-allowed'
+                  ? 'bg-amber-600 dark:bg-amber-500 hover:bg-amber-700 dark:hover:bg-amber-600'
+                  : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
               "
               @click="handleCreateReimbursement"
             >
@@ -1533,15 +1597,15 @@
 
         <!-- Modal -->
         <div
-          class="relative bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6"
+          class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
         >
           <!-- Icon -->
           <div class="flex justify-center mb-4">
             <div
-              class="h-12 w-12 bg-red-100 rounded-full flex items-center justify-center"
+              class="h-12 w-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center"
             >
               <svg
-                class="h-6 w-6 text-red-600"
+                class="h-6 w-6 text-red-600 dark:text-red-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -1557,14 +1621,16 @@
           </div>
 
           <!-- Title -->
-          <h3 class="text-lg font-semibold text-gray-900 text-center mb-2">
+          <h3
+            class="text-lg font-semibold text-gray-900 dark:text-gray-100 text-center mb-2"
+          >
             Supprimer cette personne ?
           </h3>
 
           <!-- Message -->
-          <p class="text-gray-600 text-center mb-6">
+          <p class="text-gray-600 dark:text-gray-400 text-center mb-6">
             Etes-vous sur de vouloir supprimer
-            <span class="font-medium text-gray-900">{{
+            <span class="font-medium text-gray-900 dark:text-gray-100">{{
               personToDelete.name
             }}</span>
             ? Cette action est irreversible.
@@ -1573,13 +1639,13 @@
           <!-- Buttons -->
           <div class="flex gap-3">
             <button
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
               @click="cancelDelete"
             >
               Annuler
             </button>
             <button
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 dark:bg-red-500 hover:bg-red-700 dark:hover:bg-red-600 rounded-lg transition-colors"
               @click="confirmDeletePerson"
             >
               Supprimer

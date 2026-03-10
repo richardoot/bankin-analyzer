@@ -196,16 +196,18 @@
         <div class="fixed inset-0 bg-black/50" @click="handleClose" />
 
         <div
-          class="relative z-10 w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col"
+          class="relative z-10 w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-xl dark:shadow-slate-900/30 flex flex-col"
         >
           <!-- Header -->
-          <div class="flex items-center justify-between p-6 border-b">
+          <div
+            class="flex items-center justify-between p-6 border-b dark:border-slate-700"
+          >
             <div class="flex items-center gap-3">
               <div
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100"
+                class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30"
               >
                 <svg
-                  class="h-6 w-6 text-amber-600"
+                  class="h-6 w-6 text-amber-600 dark:text-amber-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -218,12 +220,14 @@
                   />
                 </svg>
               </div>
-              <h2 class="text-xl font-semibold text-gray-900">
+              <h2
+                class="text-xl font-semibold text-gray-900 dark:text-gray-100"
+              >
                 Doublons detectes
               </h2>
             </div>
             <button
-              class="text-gray-400 hover:text-gray-600"
+              class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               @click="handleClose"
             >
               <svg
@@ -245,26 +249,38 @@
           <!-- Content -->
           <div class="flex-1 overflow-y-auto p-6 space-y-6">
             <!-- Summary -->
-            <div class="bg-gray-50 rounded-lg p-4">
-              <h3 class="font-medium text-gray-900 mb-3">Resume</h3>
+            <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
+              <h3 class="font-medium text-gray-900 dark:text-gray-100 mb-3">
+                Resume
+              </h3>
               <div class="grid grid-cols-3 gap-4 text-sm">
                 <div class="text-center">
-                  <div class="text-2xl font-bold text-green-600">
+                  <div
+                    class="text-2xl font-bold text-green-600 dark:text-green-400"
+                  >
                     {{ previewResult.newCount }}
                   </div>
-                  <div class="text-gray-600">Nouvelles</div>
+                  <div class="text-gray-600 dark:text-gray-400">Nouvelles</div>
                 </div>
                 <div class="text-center">
-                  <div class="text-2xl font-bold text-amber-600">
+                  <div
+                    class="text-2xl font-bold text-amber-600 dark:text-amber-400"
+                  >
                     {{ previewResult.internalDuplicateCount }}
                   </div>
-                  <div class="text-gray-600">Doublons internes</div>
+                  <div class="text-gray-600 dark:text-gray-400">
+                    Doublons internes
+                  </div>
                 </div>
                 <div class="text-center">
-                  <div class="text-2xl font-bold text-red-600">
+                  <div
+                    class="text-2xl font-bold text-red-600 dark:text-red-400"
+                  >
                     {{ previewResult.externalDuplicateCount }}
                   </div>
-                  <div class="text-gray-600">Deja importees</div>
+                  <div class="text-gray-600 dark:text-gray-400">
+                    Deja importees
+                  </div>
                 </div>
               </div>
             </div>
@@ -275,9 +291,11 @@
               class="space-y-4"
             >
               <div class="flex items-center justify-between">
-                <h3 class="font-medium text-gray-900 flex items-center gap-2">
+                <h3
+                  class="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2"
+                >
                   <svg
-                    class="w-5 h-5 text-amber-500"
+                    class="w-5 h-5 text-amber-500 dark:text-amber-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -296,13 +314,15 @@
                     type="checkbox"
                     :checked="allInternalSelected"
                     :indeterminate="someInternalSelected"
-                    class="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                    class="h-4 w-4 text-indigo-600 dark:text-indigo-500 rounded border-gray-300 dark:border-slate-600 focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
                     @change="toggleAllInternalDuplicates"
                   />
-                  <span class="text-sm text-gray-600">Tout selectionner</span>
+                  <span class="text-sm text-gray-600 dark:text-gray-400"
+                    >Tout selectionner</span
+                  >
                 </label>
               </div>
-              <p class="text-sm text-gray-500">
+              <p class="text-sm text-gray-500 dark:text-gray-400">
                 Ces transactions apparaissent plusieurs fois dans votre fichier.
                 Selectionnez celles a importer.
               </p>
@@ -310,44 +330,52 @@
               <div
                 v-for="(group, groupIdx) in previewResult.internalDuplicates"
                 :key="group.hash"
-                class="border rounded-lg overflow-hidden"
+                class="border dark:border-slate-700 rounded-lg overflow-hidden"
               >
-                <div class="bg-amber-50 px-4 py-2 border-b">
-                  <span class="text-sm font-medium text-amber-800">
+                <div
+                  class="bg-amber-50 dark:bg-amber-900/20 px-4 py-2 border-b dark:border-amber-800"
+                >
+                  <span
+                    class="text-sm font-medium text-amber-800 dark:text-amber-400"
+                  >
                     Groupe {{ groupIdx + 1 }}: {{ group.indices.length }}
                     transactions identiques
                   </span>
                 </div>
-                <div class="divide-y">
+                <div class="divide-y dark:divide-slate-700">
                   <div
                     v-for="tx in group.transactions"
                     :key="tx.index"
-                    class="px-4 py-3 flex items-center gap-4 hover:bg-gray-50"
+                    class="px-4 py-3 flex items-center gap-4 hover:bg-gray-50 dark:hover:bg-slate-800"
                   >
                     <input
                       type="checkbox"
                       :checked="selectedInternalIndices.has(tx.index)"
-                      class="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                      class="h-4 w-4 text-indigo-600 dark:text-indigo-500 rounded border-gray-300 dark:border-slate-600 focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
                       @change="toggleInternalIndex(tx.index)"
                     />
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center justify-between">
-                        <span class="text-xs text-gray-400"
+                        <span class="text-xs text-gray-400 dark:text-gray-500"
                           >#{{ tx.index + 1 }}</span
                         >
                         <span
                           class="font-semibold"
                           :class="
-                            tx.amount < 0 ? 'text-red-600' : 'text-green-600'
+                            tx.amount < 0
+                              ? 'text-red-600 dark:text-red-500'
+                              : 'text-green-600 dark:text-green-500'
                           "
                         >
                           {{ formatAmount(tx.amount) }}
                         </span>
                       </div>
-                      <div class="font-medium text-gray-900 truncate">
+                      <div
+                        class="font-medium text-gray-900 dark:text-gray-100 truncate"
+                      >
                         {{ tx.description }}
                       </div>
-                      <div class="text-sm text-gray-500">
+                      <div class="text-sm text-gray-500 dark:text-gray-400">
                         {{ formatDate(tx.date) }} - {{ tx.category }}
                       </div>
                     </div>
@@ -362,9 +390,11 @@
               class="space-y-4"
             >
               <div class="flex items-center justify-between">
-                <h3 class="font-medium text-gray-900 flex items-center gap-2">
+                <h3
+                  class="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2"
+                >
                   <svg
-                    class="w-5 h-5 text-red-500"
+                    class="w-5 h-5 text-red-500 dark:text-red-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -383,13 +413,15 @@
                     type="checkbox"
                     :checked="allExternalSelected"
                     :indeterminate="someExternalSelected"
-                    class="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                    class="h-4 w-4 text-indigo-600 dark:text-indigo-500 rounded border-gray-300 dark:border-slate-600 focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
                     @change="toggleAllExternalDuplicates"
                   />
-                  <span class="text-sm text-gray-600">Tout selectionner</span>
+                  <span class="text-sm text-gray-600 dark:text-gray-400"
+                    >Tout selectionner</span
+                  >
                 </label>
               </div>
-              <p class="text-sm text-gray-500">
+              <p class="text-sm text-gray-500 dark:text-gray-400">
                 Ces transactions existent deja dans votre historique. Cochez
                 pour les importer quand meme.
               </p>
@@ -397,84 +429,104 @@
               <div
                 v-for="dup in previewResult.externalDuplicates"
                 :key="dup.hash"
-                class="border rounded-lg overflow-hidden"
+                class="border dark:border-slate-700 rounded-lg overflow-hidden"
               >
-                <div class="bg-red-50 px-4 py-2 border-b">
-                  <span class="text-sm font-medium text-red-800">
+                <div
+                  class="bg-red-50 dark:bg-red-900/20 px-4 py-2 border-b dark:border-red-800"
+                >
+                  <span
+                    class="text-sm font-medium text-red-800 dark:text-red-400"
+                  >
                     Transaction #{{ dup.uploaded.index + 1 }} existe deja
                   </span>
                 </div>
 
                 <!-- Side by side comparison -->
-                <div class="grid grid-cols-2 divide-x">
+                <div class="grid grid-cols-2 divide-x dark:divide-slate-700">
                   <!-- Uploaded -->
                   <div class="p-4">
                     <div
-                      class="text-xs font-medium text-gray-500 uppercase mb-2"
+                      class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-2"
                     >
                       Dans l'import
                     </div>
                     <div class="space-y-1 text-sm">
                       <div>
-                        <span class="text-gray-500">Date:</span>
+                        <span class="text-gray-500 dark:text-gray-400"
+                          >Date:</span
+                        >
                         {{ formatDate(dup.uploaded.date) }}
                       </div>
                       <div class="truncate">
-                        <span class="text-gray-500">Description:</span>
+                        <span class="text-gray-500 dark:text-gray-400"
+                          >Description:</span
+                        >
                         {{ dup.uploaded.description }}
                       </div>
                       <div>
-                        <span class="text-gray-500">Montant:</span>
+                        <span class="text-gray-500 dark:text-gray-400"
+                          >Montant:</span
+                        >
                         <span
                           :class="
                             dup.uploaded.amount < 0
-                              ? 'text-red-600'
-                              : 'text-green-600'
+                              ? 'text-red-600 dark:text-red-500'
+                              : 'text-green-600 dark:text-green-500'
                           "
                         >
                           {{ formatAmount(dup.uploaded.amount) }}
                         </span>
                       </div>
                       <div>
-                        <span class="text-gray-500">Categorie:</span>
+                        <span class="text-gray-500 dark:text-gray-400"
+                          >Categorie:</span
+                        >
                         {{ dup.uploaded.category }}
                       </div>
                     </div>
                   </div>
 
                   <!-- Existing -->
-                  <div class="p-4 bg-gray-50">
+                  <div class="p-4 bg-gray-50 dark:bg-slate-800">
                     <div
-                      class="text-xs font-medium text-gray-500 uppercase mb-2"
+                      class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-2"
                     >
                       En base
                     </div>
                     <div class="space-y-1 text-sm">
                       <div>
-                        <span class="text-gray-500">Date:</span>
+                        <span class="text-gray-500 dark:text-gray-400"
+                          >Date:</span
+                        >
                         {{ formatDate(dup.existing.date) }}
                       </div>
                       <div class="truncate">
-                        <span class="text-gray-500">Description:</span>
+                        <span class="text-gray-500 dark:text-gray-400"
+                          >Description:</span
+                        >
                         {{ dup.existing.description }}
                       </div>
                       <div>
-                        <span class="text-gray-500">Montant:</span>
+                        <span class="text-gray-500 dark:text-gray-400"
+                          >Montant:</span
+                        >
                         <span
                           :class="
                             dup.existing.amount < 0
-                              ? 'text-red-600'
-                              : 'text-green-600'
+                              ? 'text-red-600 dark:text-red-500'
+                              : 'text-green-600 dark:text-green-500'
                           "
                         >
                           {{ formatAmount(dup.existing.amount) }}
                         </span>
                       </div>
                       <div>
-                        <span class="text-gray-500">Categorie:</span>
+                        <span class="text-gray-500 dark:text-gray-400"
+                          >Categorie:</span
+                        >
                         {{ dup.existing.categoryName || '-' }}
                       </div>
-                      <div class="text-xs text-gray-400">
+                      <div class="text-xs text-gray-400 dark:text-gray-500">
                         Importe le {{ formatDate(dup.existing.createdAt) }}
                       </div>
                     </div>
@@ -482,15 +534,17 @@
                 </div>
 
                 <!-- Force import checkbox -->
-                <div class="px-4 py-3 bg-gray-50 border-t">
+                <div
+                  class="px-4 py-3 bg-gray-50 dark:bg-slate-800 border-t dark:border-slate-700"
+                >
                   <label class="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       :checked="selectedExternalIndices.has(dup.uploaded.index)"
-                      class="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                      class="h-4 w-4 text-indigo-600 dark:text-indigo-500 rounded border-gray-300 dark:border-slate-600 focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
                       @change="toggleExternalIndex(dup.uploaded.index)"
                     />
-                    <span class="text-sm text-gray-700"
+                    <span class="text-sm text-gray-700 dark:text-gray-300"
                       >Importer quand meme</span
                     >
                   </label>
@@ -501,20 +555,22 @@
 
           <!-- Footer -->
           <div
-            class="flex items-center justify-between p-6 border-t bg-gray-50"
+            class="flex items-center justify-between p-6 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-800"
           >
-            <div class="text-sm text-gray-600">
-              <span class="font-medium text-green-600">{{
+            <div class="text-sm text-gray-600 dark:text-gray-400">
+              <span class="font-medium text-green-600 dark:text-green-400">{{
                 totalToImport
               }}</span>
               a importer,
-              <span class="font-medium text-gray-500">{{ totalSkipped }}</span>
+              <span class="font-medium text-gray-500 dark:text-gray-400">{{
+                totalSkipped
+              }}</span>
               ignores
             </div>
             <div class="flex gap-3">
               <button
                 type="button"
-                class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
+                class="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
                 :disabled="loading"
                 @click="handleClose"
               >
@@ -522,7 +578,7 @@
               </button>
               <button
                 type="button"
-                class="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-lg font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="loading || totalToImport === 0"
                 @click="handleConfirm"
               >
