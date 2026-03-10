@@ -780,12 +780,13 @@
             <div
               class="hidden md:grid grid-cols-12 gap-4 px-4 py-2 bg-gray-50 rounded-t-lg text-sm font-medium text-gray-500"
             >
-              <div class="col-span-2">Date</div>
+              <div class="col-span-1">Date</div>
               <div class="col-span-3">Description</div>
+              <div class="col-span-2">Note</div>
               <div class="col-span-2 text-right">Montant</div>
               <div class="col-span-2">Categorie</div>
               <div class="col-span-1 text-center">Pointe</div>
-              <div class="col-span-2 text-center">Actions</div>
+              <div class="col-span-1 text-center">Actions</div>
             </div>
 
             <!-- Transactions rows -->
@@ -800,13 +801,25 @@
                   class="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 items-center"
                 >
                   <!-- Date -->
-                  <div class="col-span-2 text-sm text-gray-600">
+                  <div class="col-span-1 text-sm text-gray-600">
                     {{ formatDate(tx.date) }}
                   </div>
 
                   <!-- Description -->
                   <div class="col-span-3 text-sm font-medium text-gray-900">
                     {{ tx.description }}
+                  </div>
+
+                  <!-- Note -->
+                  <div class="col-span-2 text-sm text-gray-500">
+                    <span
+                      v-if="tx.note"
+                      class="block truncate"
+                      :title="tx.note"
+                    >
+                      {{ tx.note }}
+                    </span>
+                    <span v-else class="text-gray-300">-</span>
                   </div>
 
                   <!-- Amount -->
@@ -864,7 +877,7 @@
                   </div>
 
                   <!-- Actions -->
-                  <div class="col-span-2 flex justify-center">
+                  <div class="col-span-1 flex justify-center">
                     <button
                       v-if="getRemainingAmount(tx) > 0"
                       class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
