@@ -21,6 +21,7 @@ model User {
   persons               Person[]
   reimbursementRequests ReimbursementRequest[]
   importHistories       ImportHistory[]
+  settlements           Settlement[]
 
   @@map("users")
   @@schema("app")
@@ -47,6 +48,7 @@ model Transaction {
   category              Category?              @relation(fields: [categoryId], references: [id])
   importHistory         ImportHistory?         @relation(fields: [importHistoryId], references: [id], onDelete: SetNull)
   reimbursementRequests ReimbursementRequest[]
+  settlementsAsIncome   Settlement[]           @relation("SettlementIncome")
 
   @@index([userId])
   @@index([userId, date])
@@ -122,6 +124,7 @@ model Person {
 
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   reimbursementRequests ReimbursementRequest[]
+  settlements           Settlement[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -146,6 +149,7 @@ model ReimbursementRequest {
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   person      Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
   category    Category?   @relation(fields: [categoryId], references: [id])
+  settlements SettlementReimbursement[]
 
   @@index([userId])
   @@index([transactionId])
@@ -186,5 +190,41 @@ model ImportHistory {
   @@index([userId, createdAt])
   @@index([status])
   @@map("import_histories")
+  @@schema("app")
+}
+
+model Settlement {
+  id                  String   @id @default(uuid())
+  userId              String   @map("user_id")
+  personId            String   @map("person_id")
+  incomeTransactionId String   @map("income_transaction_id")
+  amountUsed          Decimal  @map("amount_used") @db.Decimal(12, 2)
+  note                String?
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  user              User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person            Person                    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  incomeTransaction Transaction               @relation("SettlementIncome", fields: [incomeTransactionId], references: [id], onDelete: Cascade)
+  reimbursements    SettlementReimbursement[]
+
+  @@index([userId])
+  @@index([personId])
+  @@index([incomeTransactionId])
+  @@map("settlements")
+  @@schema("app")
+}
+
+model SettlementReimbursement {
+  id              String  @id @default(uuid())
+  settlementId    String  @map("settlement_id")
+  reimbursementId String  @map("reimbursement_id")
+  amountSettled   Decimal @map("amount_settled") @db.Decimal(12, 2)
+
+  settlement    Settlement           @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  reimbursement ReimbursementRequest @relation(fields: [reimbursementId], references: [id], onDelete: Cascade)
+
+  @@unique([settlementId, reimbursementId])
+  @@index([reimbursementId])
+  @@map("settlement_reimbursements")
   @@schema("app")
 }

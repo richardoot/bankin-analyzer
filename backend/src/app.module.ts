@@ -11,6 +11,7 @@ import { FilterPreferencesModule } from './filter-preferences/filter-preferences
 import { PersonsModule } from './persons/persons.module'
 import { ReimbursementsModule } from './reimbursements/reimbursements.module'
 import { ImportHistoriesModule } from './import-histories/import-histories.module'
+import { SettlementsModule } from './settlements/settlements.module'
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ImportHistoriesModule } from './import-histories/import-histories.modul
     PersonsModule,
     ReimbursementsModule,
     ImportHistoriesModule,
+    SettlementsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
