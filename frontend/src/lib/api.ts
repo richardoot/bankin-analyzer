@@ -165,6 +165,52 @@ export interface CreateReimbursementDto {
   note?: string
 }
 
+// Settlement DTOs
+export interface SettlementReimbursementItemDto {
+  reimbursementId: string
+  amountSettled: number
+}
+
+export interface CreateSettlementDto {
+  personId: string
+  incomeTransactionId: string
+  reimbursements: SettlementReimbursementItemDto[]
+  note?: string
+  forceComplete?: boolean
+}
+
+export interface SettlementReimbursementResponseDto {
+  reimbursementId: string
+  transactionId: string
+  transactionDescription: string
+  transactionDate: string
+  categoryId: string | null
+  categoryName: string | null
+  originalAmount: number
+  amountSettled: number
+}
+
+export interface SettlementDto {
+  id: string
+  personId: string
+  personName: string
+  incomeTransactionId: string
+  incomeTransactionDescription: string
+  incomeTransactionDate: string
+  incomeTransactionAmount: number
+  amountUsed: number
+  note: string | null
+  createdAt: string
+  reimbursements: SettlementReimbursementResponseDto[]
+}
+
+export interface TransactionAvailableAmountDto {
+  transactionId: string
+  totalAmount: number
+  usedAmount: number
+  availableAmount: number
+}
+
 export interface ImportHistoryDto {
   id: string
   status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
@@ -452,6 +498,67 @@ export const api = {
 
     if (!response.ok) {
       throw new Error('Failed to delete reimbursement')
+    }
+  },
+
+  // Settlements API
+  async getSettlements(personId?: string): Promise<SettlementDto[]> {
+    const url = personId
+      ? `${API_BASE_URL}/settlements?personId=${personId}`
+      : `${API_BASE_URL}/settlements`
+    const response = await fetchWithAuth(url)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch settlements')
+    }
+
+    return response.json() as Promise<SettlementDto[]>
+  },
+
+  async getSettlement(id: string): Promise<SettlementDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/settlements/${id}`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch settlement')
+    }
+
+    return response.json() as Promise<SettlementDto>
+  },
+
+  async getTransactionAvailableAmount(
+    id: string
+  ): Promise<TransactionAvailableAmountDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/settlements/transaction/${id}/available-amount`
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch transaction available amount')
+    }
+
+    return response.json() as Promise<TransactionAvailableAmountDto>
+  },
+
+  async createSettlement(dto: CreateSettlementDto): Promise<SettlementDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/settlements`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to create settlement')
+    }
+
+    return response.json() as Promise<SettlementDto>
+  },
+
+  async deleteSettlement(id: string): Promise<void> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/settlements/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to delete settlement')
     }
   },
 

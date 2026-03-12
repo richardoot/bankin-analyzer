@@ -2,8 +2,16 @@
   import { ref, computed, onMounted, watch } from 'vue'
   import { usePersonsStore } from '@/stores/persons'
   import { api } from '@/lib/api'
-  import type { TransactionDto, ReimbursementDto, CategoryDto } from '@/lib/api'
+  import type {
+    TransactionDto,
+    ReimbursementDto,
+    CategoryDto,
+    SettlementDto,
+  } from '@/lib/api'
   import { usePdfExport } from '@/composables/usePdfExport'
+  import SettlementModal from '@/components/settlements/SettlementModal.vue'
+  import SettlementHistorySection from '@/components/settlements/SettlementHistorySection.vue'
+  import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
 
   const { exportReimbursementsToPdf } = usePdfExport()
 
@@ -33,6 +41,23 @@
   const reimbursements = ref<ReimbursementDto[]>([])
   const isLoadingReimbursements = ref(false)
   const reimbursementsError = ref<string | null>(null)
+
+  // Settlements state
+  const settlements = ref<SettlementDto[]>([])
+  const isLoadingSettlements = ref(false)
+  const settlementsError = ref<string | null>(null)
+
+  // Settlement modal state
+  const showSettlementModal = ref(false)
+  const settlementModalPersonId = ref<string | null>(null)
+  const settlementModalPersonName = ref<string>('')
+
+  // Settlement detail modal state
+  const showSettlementDetailModal = ref(false)
+  const selectedSettlement = ref<SettlementDto | null>(null)
+
+  // Settlement delete confirmation
+  const settlementToDelete = ref<string | null>(null)
 
   // Modal state for adding reimbursement
   const showReimbursementModal = ref(false)
@@ -139,16 +164,21 @@
 
   // Summary by person
   interface CategorySummary {
-    categoryId: string
+    categoryId: string | null
     categoryName: string
     amount: number
+    amountReceived: number
+    amountRemaining: number
     reimbursements: ReimbursementDto[]
+    status: 'PENDING' | 'PARTIAL' | 'COMPLETED'
   }
 
   interface PersonSummary {
     personId: string
     personName: string
     total: number
+    totalReceived: number
+    totalRemaining: number
     byCategory: CategorySummary[]
   }
 
@@ -190,53 +220,83 @@
         personId: string
         personName: string
         total: number
+        totalReceived: number
+        totalRemaining: number
         byCategory: Map<
           string,
           {
+            categoryId: string | null
             categoryName: string
             amount: number
+            amountReceived: number
+            amountRemaining: number
             reimbursements: ReimbursementDto[]
           }
         >
       }
     >()
 
-    reimbursements.value.forEach(r => {
-      if (!map.has(r.personId)) {
-        map.set(r.personId, {
-          personId: r.personId,
-          personName: r.personName,
-          total: 0,
-          byCategory: new Map(),
-        })
-      }
-      const person = map.get(r.personId)!
-      person.total += r.amountRemaining
+    // Only include reimbursements with remaining amount (not fully settled)
+    reimbursements.value
+      .filter(r => r.amountRemaining > 0)
+      .forEach(r => {
+        if (!map.has(r.personId)) {
+          map.set(r.personId, {
+            personId: r.personId,
+            personName: r.personName,
+            total: 0,
+            totalReceived: 0,
+            totalRemaining: 0,
+            byCategory: new Map(),
+          })
+        }
+        const person = map.get(r.personId)!
+        person.total += r.amount
+        person.totalReceived += r.amountReceived
+        person.totalRemaining += r.amountRemaining
 
-      const catKey = r.categoryId || 'none'
-      const catName = r.categoryName || 'Sans categorie'
-      if (!person.byCategory.has(catKey)) {
-        person.byCategory.set(catKey, {
-          categoryName: catName,
-          amount: 0,
-          reimbursements: [],
-        })
-      }
-      const category = person.byCategory.get(catKey)!
-      category.amount += r.amountRemaining
-      category.reimbursements.push(r)
-    })
+        const catKey = r.categoryId || 'none'
+        const catName = r.categoryName || 'Sans categorie'
+        if (!person.byCategory.has(catKey)) {
+          person.byCategory.set(catKey, {
+            categoryId: r.categoryId,
+            categoryName: catName,
+            amount: 0,
+            amountReceived: 0,
+            amountRemaining: 0,
+            reimbursements: [],
+          })
+        }
+        const category = person.byCategory.get(catKey)!
+        category.amount += r.amount
+        category.amountReceived += r.amountReceived
+        category.amountRemaining += r.amountRemaining
+        category.reimbursements.push(r)
+      })
 
     return Array.from(map.values()).map(p => ({
       personId: p.personId,
       personName: p.personName,
       total: p.total,
-      byCategory: Array.from(p.byCategory.entries()).map(([id, data]) => ({
-        categoryId: id,
-        categoryName: data.categoryName,
-        amount: data.amount,
-        reimbursements: data.reimbursements,
-      })),
+      totalReceived: p.totalReceived,
+      totalRemaining: p.totalRemaining,
+      byCategory: Array.from(p.byCategory.entries()).map(([, data]) => {
+        let status: 'PENDING' | 'PARTIAL' | 'COMPLETED' = 'PENDING'
+        if (data.amountReceived >= data.amount) {
+          status = 'COMPLETED'
+        } else if (data.amountReceived > 0) {
+          status = 'PARTIAL'
+        }
+        return {
+          categoryId: data.categoryId,
+          categoryName: data.categoryName,
+          amount: data.amount,
+          amountReceived: data.amountReceived,
+          amountRemaining: data.amountRemaining,
+          reimbursements: data.reimbursements,
+          status,
+        }
+      }),
     }))
   })
 
@@ -284,6 +344,126 @@
         err instanceof Error ? err.message : 'Failed to fetch reimbursements'
     } finally {
       isLoadingReimbursements.value = false
+    }
+  }
+
+  // Fetch settlements
+  async function fetchSettlements() {
+    try {
+      isLoadingSettlements.value = true
+      settlementsError.value = null
+      settlements.value = await api.getSettlements()
+    } catch (err) {
+      settlementsError.value =
+        err instanceof Error ? err.message : 'Failed to fetch settlements'
+    } finally {
+      isLoadingSettlements.value = false
+    }
+  }
+
+  // Get pending reimbursements by category for a specific person
+  function getPendingByCategoryForPerson(personId: string): Map<
+    string | null,
+    {
+      categoryId: string | null
+      categoryName: string
+      amount: number
+      reimbursements: ReimbursementDto[]
+    }
+  > {
+    const result = new Map<
+      string | null,
+      {
+        categoryId: string | null
+        categoryName: string
+        amount: number
+        reimbursements: ReimbursementDto[]
+      }
+    >()
+
+    // Only include reimbursements with remaining amount
+    reimbursements.value
+      .filter(r => r.personId === personId && r.amountRemaining > 0)
+      .forEach(r => {
+        const catKey = r.categoryId
+        const catName = r.categoryName || 'Sans categorie'
+
+        if (!result.has(catKey)) {
+          result.set(catKey, {
+            categoryId: r.categoryId,
+            categoryName: catName,
+            amount: 0,
+            reimbursements: [],
+          })
+        }
+
+        const category = result.get(catKey)!
+        category.amount += r.amountRemaining
+        category.reimbursements.push(r)
+      })
+
+    return result
+  }
+
+  // Open settlement modal for a person
+  function openSettlementModal(personId: string, personName: string) {
+    settlementModalPersonId.value = personId
+    settlementModalPersonName.value = personName
+    showSettlementModal.value = true
+  }
+
+  // Handle settlement created
+  async function handleSettlementCreated(settlement: SettlementDto) {
+    settlements.value.unshift(settlement)
+    // Refresh reimbursements to get updated amounts
+    await fetchReimbursements()
+  }
+
+  // View settlement details
+  function viewSettlementDetails(settlement: SettlementDto) {
+    selectedSettlement.value = settlement
+    showSettlementDetailModal.value = true
+  }
+
+  // Close settlement detail modal
+  function closeSettlementDetailModal() {
+    showSettlementDetailModal.value = false
+    selectedSettlement.value = null
+  }
+
+  // Request settlement deletion
+  function requestDeleteSettlement(settlementId: string) {
+    settlementToDelete.value = settlementId
+  }
+
+  // Cancel settlement deletion
+  function cancelDeleteSettlement() {
+    settlementToDelete.value = null
+  }
+
+  // Confirm delete settlement
+  async function confirmDeleteSettlement() {
+    if (!settlementToDelete.value) return
+
+    const idToDelete = settlementToDelete.value
+    settlementToDelete.value = null
+    showSettlementDetailModal.value = false
+    selectedSettlement.value = null
+
+    try {
+      await api.deleteSettlement(idToDelete)
+      settlements.value = settlements.value.filter(s => s.id !== idToDelete)
+      // Refresh reimbursements to restore amounts
+      await fetchReimbursements()
+    } catch (err) {
+      console.error('Failed to delete settlement:', err)
+    }
+  }
+
+  // Handle delete from detail modal
+  function handleDeleteFromDetailModal() {
+    if (selectedSettlement.value) {
+      requestDeleteSettlement(selectedSettlement.value.id)
     }
   }
 
@@ -452,6 +632,7 @@
     fetchTransactions()
     fetchCategories()
     fetchReimbursements()
+    fetchSettlements()
   })
 </script>
 
@@ -1149,7 +1330,7 @@
             class="border border-gray-200 dark:border-slate-700 rounded-lg p-4"
           >
             <!-- Person header -->
-            <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center justify-between mb-2">
               <div class="flex items-center gap-3">
                 <div
                   class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center"
@@ -1160,9 +1341,15 @@
                     {{ person.personName.charAt(0).toUpperCase() }}
                   </span>
                 </div>
-                <h3 class="font-medium text-gray-900 dark:text-gray-100">
-                  {{ person.personName }}
-                </h3>
+                <div>
+                  <h3 class="font-medium text-gray-900 dark:text-gray-100">
+                    {{ person.personName }}
+                  </h3>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                    Recu: {{ formatCurrency(person.totalReceived) }} | En
+                    attente: {{ formatCurrency(person.totalRemaining) }}
+                  </p>
+                </div>
               </div>
               <div class="text-lg font-bold text-amber-700 dark:text-amber-400">
                 {{ formatCurrency(person.total) }}
@@ -1171,12 +1358,18 @@
 
             <!-- Categories breakdown -->
             <div class="ml-13 space-y-1">
-              <div v-for="cat in person.byCategory" :key="cat.categoryId">
+              <div
+                v-for="cat in person.byCategory"
+                :key="cat.categoryId ?? 'none'"
+              >
                 <!-- Category header - clickable -->
                 <button
                   class="w-full flex items-center justify-between py-1.5 px-2 -ml-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors text-sm"
                   @click="
-                    toggleCategoryExpanded(person.personId, cat.categoryId)
+                    toggleCategoryExpanded(
+                      person.personId,
+                      cat.categoryId ?? 'none'
+                    )
                   "
                 >
                   <span
@@ -1187,7 +1380,7 @@
                       :class="{
                         'rotate-90': isCategoryExpanded(
                           person.personId,
-                          cat.categoryId
+                          cat.categoryId ?? 'none'
                         ),
                       }"
                       fill="none"
@@ -1205,9 +1398,28 @@
                     <span class="text-xs text-gray-400 dark:text-gray-500"
                       >({{ cat.reimbursements.length }})</span
                     >
+                    <!-- Status badge -->
+                    <span
+                      v-if="cat.status === 'COMPLETED'"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                    >
+                      Regle
+                    </span>
+                    <span
+                      v-else-if="cat.status === 'PARTIAL'"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                    >
+                      Partiel
+                    </span>
+                    <span
+                      v-else
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400"
+                    >
+                      En attente
+                    </span>
                   </span>
                   <span class="font-medium text-gray-700 dark:text-gray-300">
-                    {{ formatCurrency(cat.amount) }}
+                    {{ formatCurrency(cat.amountRemaining) }}
                   </span>
                 </button>
 
@@ -1215,7 +1427,10 @@
                 <div
                   class="transition-all duration-200 ease-in-out overflow-hidden"
                   :class="
-                    isCategoryExpanded(person.personId, cat.categoryId)
+                    isCategoryExpanded(
+                      person.personId,
+                      cat.categoryId ?? 'none'
+                    )
                       ? 'max-h-[500px] opacity-100'
                       : 'max-h-0 opacity-0'
                   "
@@ -1231,11 +1446,47 @@
                       </span>
                       <span class="font-medium whitespace-nowrap">
                         {{ formatCurrency(r.amountRemaining) }}
+                        <span
+                          v-if="r.amountReceived > 0"
+                          class="text-emerald-600 dark:text-emerald-400 ml-1"
+                        >
+                          (recu: {{ formatCurrency(r.amountReceived) }})
+                        </span>
                       </span>
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
+
+            <!-- Settlement button -->
+            <div
+              v-if="person.totalRemaining > 0"
+              class="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700"
+            >
+              <button
+                type="button"
+                class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                @click="openSettlementModal(person.personId, person.personName)"
+              >
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                Enregistrer un reglement ({{
+                  formatCurrency(person.totalRemaining)
+                }}
+                en attente)
+              </button>
             </div>
           </div>
 
@@ -1252,6 +1503,16 @@
           </div>
         </div>
       </div>
+
+      <!-- Settlement History Section -->
+      <SettlementHistorySection
+        v-if="settlements.length > 0 || isLoadingSettlements"
+        :settlements="settlements"
+        :is-loading="isLoadingSettlements"
+        class="mt-8"
+        @delete="requestDeleteSettlement"
+        @view-details="viewSettlementDetails"
+      />
     </div>
 
     <!-- Reimbursement Modal -->
@@ -1649,6 +1910,95 @@
               @click="confirmDeletePerson"
             >
               Supprimer
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Settlement Modal -->
+    <SettlementModal
+      :is-open="showSettlementModal"
+      :person-id="settlementModalPersonId ?? ''"
+      :person-name="settlementModalPersonName"
+      :pending-by-category="
+        getPendingByCategoryForPerson(settlementModalPersonId ?? '')
+      "
+      @close="showSettlementModal = false"
+      @confirm="handleSettlementCreated"
+    />
+
+    <!-- Settlement Detail Modal -->
+    <SettlementDetailModal
+      :is-open="showSettlementDetailModal"
+      :settlement="selectedSettlement"
+      @close="closeSettlementDetailModal"
+      @delete="handleDeleteFromDetailModal"
+    />
+
+    <!-- Settlement delete confirmation modal -->
+    <Teleport to="body">
+      <div
+        v-if="settlementToDelete"
+        class="fixed inset-0 z-50 flex items-center justify-center"
+      >
+        <!-- Backdrop -->
+        <div
+          class="absolute inset-0 bg-black/50"
+          @click="cancelDeleteSettlement"
+        />
+
+        <!-- Modal -->
+        <div
+          class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
+        >
+          <!-- Icon -->
+          <div class="flex justify-center mb-4">
+            <div
+              class="h-12 w-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center"
+            >
+              <svg
+                class="h-6 w-6 text-red-600 dark:text-red-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+            </div>
+          </div>
+
+          <!-- Title -->
+          <h3
+            class="text-lg font-semibold text-gray-900 dark:text-gray-100 text-center mb-2"
+          >
+            Annuler ce reglement ?
+          </h3>
+
+          <!-- Message -->
+          <p class="text-gray-600 dark:text-gray-400 text-center mb-6">
+            Cette action va annuler le reglement et restaurer les montants en
+            attente sur les remboursements associes.
+          </p>
+
+          <!-- Buttons -->
+          <div class="flex gap-3">
+            <button
+              class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
+              @click="cancelDeleteSettlement"
+            >
+              Non, conserver
+            </button>
+            <button
+              class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 dark:bg-red-500 hover:bg-red-700 dark:hover:bg-red-600 rounded-lg transition-colors"
+              @click="confirmDeleteSettlement"
+            >
+              Oui, annuler
             </button>
           </div>
         </div>
