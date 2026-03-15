@@ -51,7 +51,6 @@ describe('useFiltersStore', () => {
         jointAccounts: ['Compte Courant'],
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
-        categoryAssociations: [],
         isPanelExpanded: true,
       })
     )
@@ -124,7 +123,6 @@ describe('useFiltersStore', () => {
         jointAccounts: [],
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
-        categoryAssociations: [],
         isPanelExpanded: false,
       })
     )
@@ -206,7 +204,6 @@ describe('useFiltersStore', () => {
         jointAccounts: [],
         hiddenExpenseCategories: ['Restaurant'],
         hiddenIncomeCategories: [],
-        categoryAssociations: [],
         isPanelExpanded: true,
       })
     )
@@ -227,150 +224,5 @@ describe('useFiltersStore', () => {
 
     expect(store.isExpenseCategoryHidden('Restaurant')).toBe(true)
     expect(store.isIncomeCategoryHidden('Salaire')).toBe(true)
-  })
-
-  // Tests pour les associations de catégories (remboursements)
-  it('should start with empty category associations', () => {
-    const store = useFiltersStore()
-    expect(store.categoryAssociations).toEqual([])
-  })
-
-  it('should set category association', () => {
-    const store = useFiltersStore()
-
-    store.setCategoryAssociation('Santé', 'Remboursement santé')
-
-    expect(store.categoryAssociations).toHaveLength(1)
-    expect(store.categoryAssociations[0]).toEqual({
-      expenseCategory: 'Santé',
-      incomeCategory: 'Remboursement santé',
-    })
-  })
-
-  it('should get reimbursement category', () => {
-    const store = useFiltersStore()
-
-    store.setCategoryAssociation('Santé', 'Remboursement santé')
-
-    expect(store.getReimbursementCategory('Santé')).toBe('Remboursement santé')
-    expect(store.getReimbursementCategory('Transport')).toBeNull()
-  })
-
-  it('should check if income is used as reimbursement', () => {
-    const store = useFiltersStore()
-
-    store.setCategoryAssociation('Santé', 'Remboursement santé')
-
-    expect(store.isIncomeUsedAsReimbursement('Remboursement santé')).toBe(true)
-    expect(store.isIncomeUsedAsReimbursement('Salaire')).toBe(false)
-  })
-
-  it('should remove association when setting null', () => {
-    const store = useFiltersStore()
-
-    store.setCategoryAssociation('Santé', 'Remboursement santé')
-    store.setCategoryAssociation('Santé', null)
-
-    expect(store.categoryAssociations).toHaveLength(0)
-    expect(store.getReimbursementCategory('Santé')).toBeNull()
-  })
-
-  it('should replace existing expense association', () => {
-    const store = useFiltersStore()
-
-    store.setCategoryAssociation('Santé', 'Remboursement santé')
-    store.setCategoryAssociation('Santé', 'Mutuelle')
-
-    expect(store.categoryAssociations).toHaveLength(1)
-    expect(store.getReimbursementCategory('Santé')).toBe('Mutuelle')
-  })
-
-  it('should replace existing income association', () => {
-    const store = useFiltersStore()
-
-    store.setCategoryAssociation('Santé', 'Remboursement santé')
-    store.setCategoryAssociation('Transport', 'Remboursement santé')
-
-    expect(store.categoryAssociations).toHaveLength(1)
-    expect(store.getReimbursementCategory('Santé')).toBeNull()
-    expect(store.getReimbursementCategory('Transport')).toBe(
-      'Remboursement santé'
-    )
-  })
-
-  it('should remove category association', () => {
-    const store = useFiltersStore()
-
-    store.setCategoryAssociation('Santé', 'Remboursement santé')
-    store.setCategoryAssociation('Transport', 'Remboursement transport')
-    expect(store.categoryAssociations).toHaveLength(2)
-
-    store.removeCategoryAssociation('Santé')
-
-    expect(store.categoryAssociations).toHaveLength(1)
-    expect(store.getReimbursementCategory('Santé')).toBeNull()
-    expect(store.getReimbursementCategory('Transport')).toBe(
-      'Remboursement transport'
-    )
-  })
-
-  it('should do nothing when removing non-existent association', () => {
-    const store = useFiltersStore()
-
-    store.setCategoryAssociation('Santé', 'Remboursement santé')
-    store.removeCategoryAssociation('Transport') // Does not exist
-
-    expect(store.categoryAssociations).toHaveLength(1)
-    expect(store.getReimbursementCategory('Santé')).toBe('Remboursement santé')
-  })
-
-  it('should include category associations in activeFiltersCount', () => {
-    const store = useFiltersStore()
-
-    store.setCategoryAssociation('Santé', 'Remboursement santé')
-    expect(store.activeFiltersCount).toBe(1)
-
-    store.setCategoryAssociation('Transport', 'Remboursement transport')
-    expect(store.activeFiltersCount).toBe(2)
-  })
-
-  it('should persist category associations to localStorage', () => {
-    const store = useFiltersStore()
-
-    store.setCategoryAssociation('Santé', 'Remboursement santé')
-
-    expect(localStorage.setItem).toHaveBeenCalledWith(
-      'bankin-analyzer-filters',
-      JSON.stringify({
-        jointAccounts: [],
-        hiddenExpenseCategories: [],
-        hiddenIncomeCategories: [],
-        categoryAssociations: [
-          { expenseCategory: 'Santé', incomeCategory: 'Remboursement santé' },
-        ],
-        isPanelExpanded: true,
-      })
-    )
-  })
-
-  it('should restore category associations from localStorage', () => {
-    vi.mocked(localStorage.getItem).mockReturnValue(
-      JSON.stringify({
-        jointAccounts: [],
-        hiddenExpenseCategories: [],
-        hiddenIncomeCategories: [],
-        categoryAssociations: [
-          { expenseCategory: 'Santé', incomeCategory: 'Remboursement santé' },
-        ],
-        isPanelExpanded: true,
-      })
-    )
-
-    setActivePinia(createPinia())
-    const store = useFiltersStore()
-
-    expect(store.categoryAssociations).toHaveLength(1)
-    expect(store.getReimbursementCategory('Santé')).toBe('Remboursement santé')
-    expect(store.isIncomeUsedAsReimbursement('Remboursement santé')).toBe(true)
   })
 })

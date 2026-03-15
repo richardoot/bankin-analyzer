@@ -20,6 +20,7 @@
     { to: '/import', label: 'Import' },
     { to: '/import/history', label: 'Historique' },
     { to: '/reimbursements', label: 'Remboursements' },
+    { to: '/preferences', label: 'Preferences' },
   ]
 
   const isActiveRoute = (path: string): boolean => {

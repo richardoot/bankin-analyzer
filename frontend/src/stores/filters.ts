@@ -4,17 +4,11 @@ import { api } from '@/lib/api'
 
 const STORAGE_KEY = 'bankin-analyzer-filters'
 
-export interface CategoryAssociation {
-  expenseCategory: string
-  incomeCategory: string
-}
-
 export const useFiltersStore = defineStore('filters', () => {
   // État
   const jointAccounts = ref<string[]>([])
   const hiddenExpenseCategories = ref<string[]>([])
   const hiddenIncomeCategories = ref<string[]>([])
-  const categoryAssociations = ref<CategoryAssociation[]>([])
   const isPanelExpanded = ref(true)
 
   // État de synchronisation
@@ -31,7 +25,6 @@ export const useFiltersStore = defineStore('filters', () => {
         jointAccounts.value = data.jointAccounts || []
         hiddenExpenseCategories.value = data.hiddenExpenseCategories || []
         hiddenIncomeCategories.value = data.hiddenIncomeCategories || []
-        categoryAssociations.value = data.categoryAssociations || []
         isPanelExpanded.value = data.isPanelExpanded ?? true
       } catch {
         // Ignore parsing errors
@@ -47,7 +40,6 @@ export const useFiltersStore = defineStore('filters', () => {
         jointAccounts: jointAccounts.value,
         hiddenExpenseCategories: hiddenExpenseCategories.value,
         hiddenIncomeCategories: hiddenIncomeCategories.value,
-        categoryAssociations: categoryAssociations.value,
         isPanelExpanded: isPanelExpanded.value,
       })
     )
@@ -77,7 +69,6 @@ export const useFiltersStore = defineStore('filters', () => {
         jointAccounts: jointAccounts.value,
         hiddenExpenseCategories: hiddenExpenseCategories.value,
         hiddenIncomeCategories: hiddenIncomeCategories.value,
-        categoryAssociations: categoryAssociations.value,
         isPanelExpanded: isPanelExpanded.value,
       })
 
@@ -112,7 +103,6 @@ export const useFiltersStore = defineStore('filters', () => {
       jointAccounts.value = prefs.jointAccounts
       hiddenExpenseCategories.value = prefs.hiddenExpenseCategories
       hiddenIncomeCategories.value = prefs.hiddenIncomeCategories
-      categoryAssociations.value = prefs.categoryAssociations
       isPanelExpanded.value = prefs.isPanelExpanded
       // Sync localStorage avec les données backend
       saveToStorage()
@@ -177,58 +167,6 @@ export const useFiltersStore = defineStore('filters', () => {
     return hiddenIncomeCategories.value.includes(category)
   }
 
-  // Actions pour associations catégories dépenses/remboursements
-  function setCategoryAssociation(
-    expenseCategory: string,
-    incomeCategory: string | null
-  ) {
-    // Supprimer l'ancienne association de cette catégorie de dépenses
-    const existingExpenseIdx = categoryAssociations.value.findIndex(
-      a => a.expenseCategory === expenseCategory
-    )
-    if (existingExpenseIdx !== -1) {
-      categoryAssociations.value.splice(existingExpenseIdx, 1)
-    }
-
-    // Supprimer l'ancienne association de cette catégorie de revenus (si fournie)
-    if (incomeCategory) {
-      const existingIncomeIdx = categoryAssociations.value.findIndex(
-        a => a.incomeCategory === incomeCategory
-      )
-      if (existingIncomeIdx !== -1) {
-        categoryAssociations.value.splice(existingIncomeIdx, 1)
-      }
-
-      // Ajouter la nouvelle association
-      categoryAssociations.value.push({ expenseCategory, incomeCategory })
-    }
-
-    markAsChanged()
-  }
-
-  function getReimbursementCategory(expenseCategory: string): string | null {
-    const assoc = categoryAssociations.value.find(
-      a => a.expenseCategory === expenseCategory
-    )
-    return assoc?.incomeCategory ?? null
-  }
-
-  function isIncomeUsedAsReimbursement(incomeCategory: string): boolean {
-    return categoryAssociations.value.some(
-      a => a.incomeCategory === incomeCategory
-    )
-  }
-
-  function removeCategoryAssociation(expenseCategory: string) {
-    const idx = categoryAssociations.value.findIndex(
-      a => a.expenseCategory === expenseCategory
-    )
-    if (idx !== -1) {
-      categoryAssociations.value.splice(idx, 1)
-      markAsChanged()
-    }
-  }
-
   // Computed
   const jointAccountsSet = computed(() => new Set(jointAccounts.value))
   const hiddenExpenseCategoriesSet = computed(
@@ -243,8 +181,7 @@ export const useFiltersStore = defineStore('filters', () => {
     () =>
       jointAccounts.value.length +
       hiddenExpenseCategories.value.length +
-      hiddenIncomeCategories.value.length +
-      categoryAssociations.value.length
+      hiddenIncomeCategories.value.length
   )
 
   // Init - charger depuis localStorage au démarrage
@@ -264,11 +201,6 @@ export const useFiltersStore = defineStore('filters', () => {
     hiddenIncomeCategoriesSet,
     toggleHiddenIncomeCategory,
     isIncomeCategoryHidden,
-    categoryAssociations,
-    setCategoryAssociation,
-    removeCategoryAssociation,
-    getReimbursementCategory,
-    isIncomeUsedAsReimbursement,
     isPanelExpanded,
     togglePanelExpanded,
     activeFiltersCount,

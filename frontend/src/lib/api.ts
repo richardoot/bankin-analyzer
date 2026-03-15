@@ -110,16 +110,10 @@ export interface TransactionDto {
   createdAt: string
 }
 
-export interface CategoryAssociationDto {
-  expenseCategory: string
-  incomeCategory: string
-}
-
 export interface FilterPreferencesDto {
   jointAccounts: string[]
   hiddenExpenseCategories: string[]
   hiddenIncomeCategories: string[]
-  categoryAssociations: CategoryAssociationDto[]
   isPanelExpanded: boolean
 }
 
@@ -250,6 +244,20 @@ export interface CreateImportHistoryDto {
   fileName?: string
 }
 
+// Category Associations DTOs (DB-based)
+export interface DbCategoryAssociationDto {
+  id: string
+  expenseCategoryId: string
+  expenseCategoryName: string
+  incomeCategoryId: string
+  incomeCategoryName: string
+}
+
+export interface CreateCategoryAssociationDto {
+  expenseCategoryId: string
+  incomeCategoryId: string
+}
+
 // Dashboard DTOs
 export interface MonthlyDataDto {
   month: string
@@ -267,7 +275,6 @@ export interface DashboardFiltersDto {
   jointAccounts?: string[]
   hiddenExpenseCategories?: string[]
   hiddenIncomeCategories?: string[]
-  categoryAssociations?: CategoryAssociationDto[]
 }
 
 export interface DashboardSummaryDto {
@@ -692,6 +699,53 @@ export const api = {
 
     if (!response.ok) {
       throw new Error('Failed to delete import')
+    }
+  },
+
+  // Category Associations API
+  async getCategoryAssociations(): Promise<DbCategoryAssociationDto[]> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/category-associations`
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch category associations')
+    }
+
+    return response.json() as Promise<DbCategoryAssociationDto[]>
+  },
+
+  async createCategoryAssociation(
+    dto: CreateCategoryAssociationDto
+  ): Promise<DbCategoryAssociationDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/category-associations`,
+      {
+        method: 'POST',
+        body: JSON.stringify(dto),
+      }
+    )
+
+    if (!response.ok) {
+      if (response.status === 409) {
+        throw new Error('Cette association existe déjà')
+      }
+      throw new Error('Failed to create category association')
+    }
+
+    return response.json() as Promise<DbCategoryAssociationDto>
+  },
+
+  async deleteCategoryAssociation(id: string): Promise<void> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/category-associations/${id}`,
+      {
+        method: 'DELETE',
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to delete category association')
     }
   },
 }

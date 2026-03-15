@@ -15,7 +15,6 @@ vi.mock('@/stores/filters', () => ({
     jointAccounts: [],
     hiddenExpenseCategories: [],
     hiddenIncomeCategories: [],
-    categoryAssociations: [],
     isJointAccount: vi.fn(() => false),
     isExpenseCategoryHidden: vi.fn(() => false),
     isIncomeCategoryHidden: vi.fn(() => false),
@@ -83,7 +82,6 @@ describe('useDashboardData', () => {
         jointAccounts: [],
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
-        categoryAssociations: [],
       })
       expect(isLoading.value).toBe(false)
       expect(error.value).toBeNull()

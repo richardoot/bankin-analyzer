@@ -1,11 +1,12 @@
 <script setup lang="ts">
-  import { ref, computed, watch } from 'vue'
+  import { ref, computed, watch, onMounted } from 'vue'
   import {
     api,
     type ReimbursementDto,
     type TransactionDto,
     type SettlementDto,
   } from '@/lib/api'
+  import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
 
   interface CategoryGroup {
     categoryId: string | null
@@ -30,6 +31,16 @@
     close: []
     confirm: [settlement: SettlementDto]
   }>()
+
+  // Category associations store
+  const categoryAssociationsStore = useCategoryAssociationsStore()
+
+  onMounted(async () => {
+    // Load category associations if not already loaded
+    if (categoryAssociationsStore.associations.length === 0) {
+      await categoryAssociationsStore.load()
+    }
+  })
 
   // State
   const currentStep = ref<1 | 2 | 3>(1)
@@ -78,6 +89,23 @@
 
   const canProceedStep1 = computed(() => selectedCategoryIds.value.size > 0)
   const canProceedStep2 = computed(() => selectedTransactionId.value !== null)
+
+  // Get associated income category names for selected expense categories
+  const associatedIncomeCategoryNames = computed(() => {
+    const names = new Set<string>()
+    for (const category of selectedCategories.value) {
+      if (category.categoryId) {
+        const association =
+          categoryAssociationsStore.getIncomeCategoryForExpense(
+            category.categoryId
+          )
+        if (association) {
+          names.add(association.incomeCategoryName)
+        }
+      }
+    }
+    return names
+  })
 
   // Watchers
   watch(
@@ -138,7 +166,15 @@
     try {
       // Load all income transactions
       const allTransactions = await api.getTransactions()
-      const incomeOnly = allTransactions.filter(t => t.type === 'INCOME')
+      let incomeOnly = allTransactions.filter(t => t.type === 'INCOME')
+
+      // Filter by associated income categories if any associations exist
+      const associatedNames = associatedIncomeCategoryNames.value
+      if (associatedNames.size > 0) {
+        incomeOnly = incomeOnly.filter(
+          t => t.categoryName && associatedNames.has(t.categoryName)
+        )
+      }
 
       // Get available amount for each transaction
       const transactionsWithAvailable: TransactionWithAvailable[] = []

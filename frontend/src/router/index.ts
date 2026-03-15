@@ -56,6 +56,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/ReimbursementPage.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/preferences',
+    name: 'preferences',
+    component: () => import('@/views/PreferencesPage.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

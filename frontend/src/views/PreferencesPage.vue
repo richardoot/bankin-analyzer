@@ -1,0 +1,482 @@
+<script setup lang="ts">
+  import { ref, onMounted, computed } from 'vue'
+  import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
+  import { api, type CategoryDto } from '@/lib/api'
+
+  const categoryAssociationsStore = useCategoryAssociationsStore()
+
+  const categories = ref<CategoryDto[]>([])
+  const isLoadingCategories = ref(false)
+  const isModalOpen = ref(false)
+  const isCreating = ref(false)
+  const createError = ref<string | null>(null)
+
+  // Form state
+  const selectedExpenseCategoryId = ref('')
+  const selectedIncomeCategoryId = ref('')
+
+  // Computed categories by type
+  const expenseCategories = computed(() =>
+    categories.value.filter(c => c.type === 'EXPENSE')
+  )
+
+  const incomeCategories = computed(() =>
+    categories.value.filter(c => c.type === 'INCOME')
+  )
+
+  // Filter out already-associated categories
+  const availableExpenseCategories = computed(() => {
+    const usedExpenseIds = new Set(
+      categoryAssociationsStore.associations.map(a => a.expenseCategoryId)
+    )
+    return expenseCategories.value.filter(c => !usedExpenseIds.has(c.id))
+  })
+
+  const availableIncomeCategories = computed(() => {
+    const usedIncomeIds = new Set(
+      categoryAssociationsStore.associations.map(a => a.incomeCategoryId)
+    )
+    return incomeCategories.value.filter(c => !usedIncomeIds.has(c.id))
+  })
+
+  const canCreate = computed(
+    () =>
+      selectedExpenseCategoryId.value !== '' &&
+      selectedIncomeCategoryId.value !== ''
+  )
+
+  onMounted(async () => {
+    await Promise.all([loadCategories(), categoryAssociationsStore.load()])
+  })
+
+  async function loadCategories(): Promise<void> {
+    try {
+      isLoadingCategories.value = true
+      categories.value = await api.getCategories()
+    } catch (err) {
+      console.error('Failed to load categories:', err)
+    } finally {
+      isLoadingCategories.value = false
+    }
+  }
+
+  function openModal(): void {
+    selectedExpenseCategoryId.value = ''
+    selectedIncomeCategoryId.value = ''
+    createError.value = null
+    isModalOpen.value = true
+  }
+
+  function closeModal(): void {
+    isModalOpen.value = false
+  }
+
+  async function handleCreate(): Promise<void> {
+    if (!canCreate.value) return
+
+    try {
+      isCreating.value = true
+      createError.value = null
+
+      const result = await categoryAssociationsStore.create({
+        expenseCategoryId: selectedExpenseCategoryId.value,
+        incomeCategoryId: selectedIncomeCategoryId.value,
+      })
+
+      if (result) {
+        closeModal()
+      } else {
+        createError.value =
+          categoryAssociationsStore.error || 'Erreur lors de la creation'
+      }
+    } catch (err) {
+      createError.value =
+        err instanceof Error ? err.message : 'Erreur lors de la creation'
+    } finally {
+      isCreating.value = false
+    }
+  }
+
+  async function handleDelete(id: string): Promise<void> {
+    await categoryAssociationsStore.remove(id)
+  }
+</script>
+
+<template>
+  <div
+    class="min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-slate-800 py-12 transition-colors"
+  >
+    <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          Preferences
+        </h1>
+        <p class="mt-2 text-gray-600 dark:text-gray-400">
+          Configurez vos parametres et associations
+        </p>
+      </div>
+
+      <!-- Category Associations Section -->
+      <div
+        class="rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
+      >
+        <div class="mb-6 flex items-center justify-between">
+          <div>
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              Associations de categories
+            </h2>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Associez une categorie de depense a une categorie de revenu pour
+              les remboursements
+            </p>
+          </div>
+          <button
+            type="button"
+            class="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-white transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+            :disabled="
+              categoryAssociationsStore.isLoading ||
+              availableExpenseCategories.length === 0 ||
+              availableIncomeCategories.length === 0
+            "
+            @click="openModal"
+          >
+            <svg
+              class="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Ajouter
+          </button>
+        </div>
+
+        <!-- Loading State -->
+        <div
+          v-if="
+            categoryAssociationsStore.isLoading &&
+            categoryAssociationsStore.associations.length === 0
+          "
+          class="flex justify-center py-8"
+        >
+          <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+            <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              />
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+            <span>Chargement...</span>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div
+          v-else-if="categoryAssociationsStore.associations.length === 0"
+          class="py-8 text-center"
+        >
+          <svg
+            class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+            />
+          </svg>
+          <h3 class="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">
+            Aucune association
+          </h3>
+          <p class="mt-2 text-gray-600 dark:text-gray-400">
+            Creez une association entre une categorie de depense et une
+            categorie de revenu pour faciliter le suivi des remboursements.
+          </p>
+        </div>
+
+        <!-- Associations Table -->
+        <div
+          v-else
+          class="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700"
+        >
+          <table
+            class="min-w-full divide-y divide-gray-200 dark:divide-slate-700"
+          >
+            <thead class="bg-gray-50 dark:bg-slate-800">
+              <tr>
+                <th
+                  class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+                >
+                  Categorie de depense
+                </th>
+                <th
+                  class="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+                ></th>
+                <th
+                  class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+                >
+                  Categorie de revenu
+                </th>
+                <th class="px-6 py-3 text-right">
+                  <span class="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody
+              class="divide-y divide-gray-200 dark:divide-slate-700 bg-white dark:bg-slate-900"
+            >
+              <tr
+                v-for="association in categoryAssociationsStore.associations"
+                :key="association.id"
+              >
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100"
+                >
+                  <span
+                    class="inline-flex items-center rounded-full bg-red-100 dark:bg-red-900/30 px-3 py-1 text-sm font-medium text-red-800 dark:text-red-300"
+                  >
+                    {{ association.expenseCategoryName }}
+                  </span>
+                </td>
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-center text-gray-400 dark:text-gray-600"
+                >
+                  <svg
+                    class="mx-auto h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M14 5l7 7m0 0l-7 7m7-7H3"
+                    />
+                  </svg>
+                </td>
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100"
+                >
+                  <span
+                    class="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-3 py-1 text-sm font-medium text-emerald-800 dark:text-emerald-300"
+                  >
+                    {{ association.incomeCategoryName }}
+                  </span>
+                </td>
+                <td
+                  class="whitespace-nowrap px-6 py-4 text-right text-sm font-medium"
+                >
+                  <button
+                    type="button"
+                    class="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 transition-colors"
+                    @click="handleDelete(association.id)"
+                  >
+                    <svg
+                      class="h-5 w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Info box -->
+        <div
+          class="mt-6 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4"
+        >
+          <div class="flex">
+            <div class="flex-shrink-0">
+              <svg
+                class="h-5 w-5 text-blue-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <p class="text-sm text-blue-700 dark:text-blue-300">
+                Les associations permettent de deduire automatiquement les
+                remboursements des depenses associees dans le Dashboard, et de
+                filtrer les revenus pertinents lors du reglement d'un
+                remboursement.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Association Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="isModalOpen"
+          class="fixed inset-0 z-50 flex items-center justify-center"
+        >
+          <div class="fixed inset-0 bg-black/50" @click="closeModal" />
+
+          <div
+            class="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-xl dark:shadow-slate-900/30"
+          >
+            <div class="mb-6">
+              <h2
+                class="text-xl font-semibold text-gray-900 dark:text-gray-100"
+              >
+                Nouvelle association
+              </h2>
+              <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Associez une categorie de depense a une categorie de revenu
+              </p>
+            </div>
+
+            <!-- Error message -->
+            <div
+              v-if="createError"
+              class="mb-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400"
+            >
+              {{ createError }}
+            </div>
+
+            <div class="space-y-4">
+              <!-- Expense Category Select -->
+              <div>
+                <label
+                  for="expense-category"
+                  class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Categorie de depense
+                </label>
+                <select
+                  id="expense-category"
+                  v-model="selectedExpenseCategoryId"
+                  class="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 px-4 py-2 focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400 focus:outline-none"
+                  :disabled="isCreating"
+                >
+                  <option value="">Selectionnez une categorie</option>
+                  <option
+                    v-for="category in availableExpenseCategories"
+                    :key="category.id"
+                    :value="category.id"
+                  >
+                    {{ category.name }}
+                  </option>
+                </select>
+              </div>
+
+              <!-- Arrow indicator -->
+              <div class="flex justify-center text-gray-400 dark:text-gray-600">
+                <svg
+                  class="h-6 w-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                  />
+                </svg>
+              </div>
+
+              <!-- Income Category Select -->
+              <div>
+                <label
+                  for="income-category"
+                  class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Categorie de revenu (remboursement)
+                </label>
+                <select
+                  id="income-category"
+                  v-model="selectedIncomeCategoryId"
+                  class="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 px-4 py-2 focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400 focus:outline-none"
+                  :disabled="isCreating"
+                >
+                  <option value="">Selectionnez une categorie</option>
+                  <option
+                    v-for="category in availableIncomeCategories"
+                    :key="category.id"
+                    :value="category.id"
+                  >
+                    {{ category.name }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <div class="mt-6 flex gap-3">
+              <button
+                type="button"
+                class="flex-1 rounded-lg border border-gray-300 dark:border-slate-600 px-4 py-2 text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50"
+                :disabled="isCreating"
+                @click="closeModal"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                class="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!canCreate || isCreating"
+                @click="handleCreate"
+              >
+                {{ isCreating ? 'Creation...' : 'Creer' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+  </div>
+</template>
+
+<style scoped>
+  .modal-enter-active,
+  .modal-leave-active {
+    transition: opacity 0.2s ease;
+  }
+
+  .modal-enter-from,
+  .modal-leave-to {
+    opacity: 0;
+  }
+</style>

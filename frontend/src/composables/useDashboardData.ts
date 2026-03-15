@@ -227,7 +227,6 @@ export function useDashboardData() {
         jointAccounts: filtersStore.jointAccounts,
         hiddenExpenseCategories: filtersStore.hiddenExpenseCategories,
         hiddenIncomeCategories: filtersStore.hiddenIncomeCategories,
-        categoryAssociations: filtersStore.categoryAssociations,
       })
 
       // Reset drill-down state when reloading
@@ -249,7 +248,6 @@ export function useDashboardData() {
       filtersStore.jointAccounts,
       filtersStore.hiddenExpenseCategories,
       filtersStore.hiddenIncomeCategories,
-      filtersStore.categoryAssociations,
     ],
     () => {
       if (summaryData.value) {
