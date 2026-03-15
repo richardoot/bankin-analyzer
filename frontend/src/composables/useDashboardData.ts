@@ -1,5 +1,5 @@
-import { ref, computed } from 'vue'
-import { api, type TransactionDto } from '@/lib/api'
+import { ref, computed, watch } from 'vue'
+import { api, type DashboardSummaryDto, type TransactionDto } from '@/lib/api'
 import { useFiltersStore } from '@/stores/filters'
 
 export interface MonthlyData {
@@ -32,110 +32,22 @@ const MONTH_LABELS: Record<string, string> = {
 export function useDashboardData() {
   const filtersStore = useFiltersStore()
 
+  // Pre-aggregated data from backend
+  const summaryData = ref<DashboardSummaryDto | null>(null)
+
+  // Transactions for drill-down (loaded on demand)
   const transactions = ref<TransactionDto[]>([])
+  const transactionsLoaded = ref(false)
+
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const selectedCategory = ref<string | null>(null)
   const selectedIncomeCategory = ref<string | null>(null)
 
-  // Helper pour obtenir le montant ajusté (divisé par 2 si compte joint)
-  function getAdjustedAmount(tx: TransactionDto): number {
-    const divisor = filtersStore.isJointAccount(tx.account) ? 2 : 1
-    return tx.amount / divisor
-  }
-
-  // Calcul des remboursements par catégorie de dépenses
-  const reimbursementsByExpenseCategory = computed<Map<string, number>>(() => {
-    const map = new Map<string, number>()
-
-    for (const tx of transactions.value) {
-      if (tx.type === 'INCOME') {
-        const incomeCategory = tx.categoryName || 'Autre'
-        // Trouver si cette catégorie est un remboursement associé
-        const assoc = filtersStore.categoryAssociations.find(
-          a => a.incomeCategory === incomeCategory
-        )
-        if (assoc) {
-          const current = map.get(assoc.expenseCategory) ?? 0
-          map.set(assoc.expenseCategory, current + getAdjustedAmount(tx))
-        }
-      }
-    }
-    return map
-  })
-
-  const monthlyData = computed<MonthlyData[]>(() => {
-    const dataByMonth = new Map<string, { expenses: number; income: number }>()
-
-    for (const tx of transactions.value) {
-      const category = tx.categoryName || 'Autre'
-
-      // Skip hidden categories
-      if (
-        tx.type === 'EXPENSE' &&
-        filtersStore.isExpenseCategoryHidden(category)
-      )
-        continue
-      if (tx.type === 'INCOME' && filtersStore.isIncomeCategoryHidden(category))
-        continue
-      // Skip income categories used as reimbursements
-      if (
-        tx.type === 'INCOME' &&
-        filtersStore.isIncomeUsedAsReimbursement(category)
-      )
-        continue
-
-      const date = new Date(tx.date)
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-
-      const existing = dataByMonth.get(monthKey)
-      const monthData = existing ?? { expenses: 0, income: 0 }
-
-      if (tx.type === 'EXPENSE') {
-        monthData.expenses += Math.abs(getAdjustedAmount(tx))
-      } else {
-        monthData.income += getAdjustedAmount(tx)
-      }
-
-      dataByMonth.set(monthKey, monthData)
-    }
-
-    // Déduire les remboursements des dépenses
-    const totalReimbursements = Array.from(
-      reimbursementsByExpenseCategory.value.values()
-    ).reduce((sum, val) => sum + val, 0)
-
-    // Sort by month and convert to array
-    const sortedMonths = Array.from(dataByMonth.keys()).sort()
-
-    // Répartir les remboursements proportionnellement sur les mois
-    const totalExpensesBeforeDeduction = sortedMonths.reduce((sum, month) => {
-      const data = dataByMonth.get(month) ?? { expenses: 0, income: 0 }
-      return sum + data.expenses
-    }, 0)
-
-    return sortedMonths.map(month => {
-      const [year, monthNum] = month.split('-')
-      const data = dataByMonth.get(month) ?? { expenses: 0, income: 0 }
-
-      // Déduire proportionnellement les remboursements
-      let adjustedExpenses = data.expenses
-      if (totalExpensesBeforeDeduction > 0 && totalReimbursements > 0) {
-        const proportion = data.expenses / totalExpensesBeforeDeduction
-        adjustedExpenses = Math.max(
-          0,
-          data.expenses - totalReimbursements * proportion
-        )
-      }
-
-      return {
-        month,
-        label: `${MONTH_LABELS[monthNum]} ${year}`,
-        expenses: Math.round(adjustedExpenses * 100) / 100,
-        income: Math.round(data.income * 100) / 100,
-      }
-    })
-  })
+  // Transform backend data to component format
+  const monthlyData = computed<MonthlyData[]>(
+    () => summaryData.value?.monthlyData ?? []
+  )
 
   const expensesByMonth = computed<ChartData>(() => ({
     labels: monthlyData.value.map(d => d.label),
@@ -147,97 +59,66 @@ export function useDashboardData() {
     values: monthlyData.value.map(d => d.income),
   }))
 
-  const totalExpenses = computed(
-    () =>
-      Math.round(
-        monthlyData.value.reduce((sum, d) => sum + d.expenses, 0) * 100
-      ) / 100
-  )
+  const totalExpenses = computed(() => summaryData.value?.totalExpenses ?? 0)
+  const totalIncome = computed(() => summaryData.value?.totalIncome ?? 0)
 
-  const totalIncome = computed(
-    () =>
-      Math.round(
-        monthlyData.value.reduce((sum, d) => sum + d.income, 0) * 100
-      ) / 100
-  )
-
-  // Aggregation by category for expenses
   const expensesByCategory = computed<ChartData>(() => {
-    const dataByCategory = new Map<string, number>()
-
-    for (const tx of transactions.value) {
-      if (tx.type === 'EXPENSE') {
-        const category = tx.categoryName || 'Autre'
-        if (filtersStore.isExpenseCategoryHidden(category)) continue
-        const current = dataByCategory.get(category) ?? 0
-        dataByCategory.set(category, current + Math.abs(getAdjustedAmount(tx)))
-      }
-    }
-
-    // Déduire les remboursements
-    for (const [
-      expenseCategory,
-      reimbursement,
-    ] of reimbursementsByExpenseCategory.value) {
-      const current = dataByCategory.get(expenseCategory) ?? 0
-      dataByCategory.set(expenseCategory, Math.max(0, current - reimbursement))
-    }
-
-    // Sort by amount descending
-    const sorted = [...dataByCategory.entries()].sort((a, b) => b[1] - a[1])
-
+    const data = summaryData.value?.expensesByCategory ?? []
     return {
-      labels: sorted.map(([cat]) => cat),
-      values: sorted.map(([, val]) => Math.round(val * 100) / 100),
+      labels: data.map(d => d.category),
+      values: data.map(d => d.amount),
     }
   })
 
-  // Aggregation by category for income
   const incomeByCategory = computed<ChartData>(() => {
-    const dataByCategory = new Map<string, number>()
-
-    for (const tx of transactions.value) {
-      if (tx.type === 'INCOME') {
-        const category = tx.categoryName || 'Autre'
-        if (filtersStore.isIncomeCategoryHidden(category)) continue
-        // Masquer si utilisée comme remboursement
-        if (filtersStore.isIncomeUsedAsReimbursement(category)) continue
-        const current = dataByCategory.get(category) ?? 0
-        dataByCategory.set(category, current + getAdjustedAmount(tx))
-      }
-    }
-
-    // Sort by amount descending
-    const sorted = [...dataByCategory.entries()].sort((a, b) => b[1] - a[1])
-
+    const data = summaryData.value?.incomeByCategory ?? []
     return {
-      labels: sorted.map(([cat]) => cat),
-      values: sorted.map(([, val]) => Math.round(val * 100) / 100),
+      labels: data.map(d => d.category),
+      values: data.map(d => d.amount),
     }
   })
 
-  // All expense categories (for filter panel)
-  const allExpenseCategories = computed<string[]>(() => {
-    const categories = new Set<string>()
-    for (const tx of transactions.value) {
-      if (tx.type === 'EXPENSE' && tx.categoryName) {
-        categories.add(tx.categoryName)
-      }
-    }
-    return Array.from(categories).sort()
-  })
+  // All categories (for filter panel)
+  const allExpenseCategories = computed<string[]>(
+    () => summaryData.value?.allExpenseCategories ?? []
+  )
 
-  // Available expense categories for dropdown (excludes hidden)
-  const availableExpenseCategories = computed<string[]>(() => {
-    return allExpenseCategories.value.filter(
+  const allIncomeCategories = computed<string[]>(
+    () => summaryData.value?.allIncomeCategories ?? []
+  )
+
+  // Available categories (excludes hidden)
+  const availableExpenseCategories = computed<string[]>(() =>
+    allExpenseCategories.value.filter(
       cat => !filtersStore.isExpenseCategoryHidden(cat)
     )
-  })
+  )
 
-  // Filtered expenses by month (when category is selected)
+  const availableIncomeCategories = computed<string[]>(() =>
+    allIncomeCategories.value.filter(
+      cat => !filtersStore.isIncomeCategoryHidden(cat)
+    )
+  )
+
+  // Available accounts for joint account filter
+  const availableAccounts = computed<string[]>(
+    () => summaryData.value?.availableAccounts ?? []
+  )
+
+  // Helper pour obtenir le montant ajusté (divisé par 2 si compte joint)
+  function getAdjustedAmount(tx: TransactionDto): number {
+    const divisor = filtersStore.isJointAccount(tx.account) ? 2 : 1
+    return tx.amount / divisor
+  }
+
+  // Filtered expenses by month (when category is selected) - requires transactions
   const filteredExpensesByMonth = computed<ChartData>(() => {
     if (!selectedCategory.value) {
       return expensesByMonth.value
+    }
+
+    if (!transactionsLoaded.value) {
+      return { labels: [], values: [] }
     }
 
     const dataByMonth = new Map<string, number>()
@@ -269,28 +150,14 @@ export function useDashboardData() {
     }
   })
 
-  // All income categories (for filter panel)
-  const allIncomeCategories = computed<string[]>(() => {
-    const categories = new Set<string>()
-    for (const tx of transactions.value) {
-      if (tx.type === 'INCOME' && tx.categoryName) {
-        categories.add(tx.categoryName)
-      }
-    }
-    return Array.from(categories).sort()
-  })
-
-  // Available income categories for dropdown (excludes hidden)
-  const availableIncomeCategories = computed<string[]>(() => {
-    return allIncomeCategories.value.filter(
-      cat => !filtersStore.isIncomeCategoryHidden(cat)
-    )
-  })
-
-  // Filtered income by month (when category is selected)
+  // Filtered income by month (when category is selected) - requires transactions
   const filteredIncomeByMonth = computed<ChartData>(() => {
     if (!selectedIncomeCategory.value) {
       return incomeByMonth.value
+    }
+
+    if (!transactionsLoaded.value) {
+      return { labels: [], values: [] }
     }
 
     const dataByMonth = new Map<string, number>()
@@ -325,23 +192,30 @@ export function useDashboardData() {
     }
   })
 
-  // Available accounts for joint account filter
-  const availableAccounts = computed<string[]>(() => {
-    const accounts = new Set<string>()
-    for (const tx of transactions.value) {
-      if (tx.account) {
-        accounts.add(tx.account)
-      }
-    }
-    return Array.from(accounts).sort()
-  })
+  // Load transactions for drill-down (on demand)
+  async function loadTransactionsForDrillDown() {
+    if (transactionsLoaded.value) return
 
-  function setSelectedCategory(category: string | null) {
-    selectedCategory.value = category
+    try {
+      transactions.value = await api.getTransactions()
+      transactionsLoaded.value = true
+    } catch (err) {
+      console.error('Failed to load transactions for drill-down:', err)
+    }
   }
 
-  function setSelectedIncomeCategory(category: string | null) {
+  async function setSelectedCategory(category: string | null) {
+    selectedCategory.value = category
+    if (category && !transactionsLoaded.value) {
+      await loadTransactionsForDrillDown()
+    }
+  }
+
+  async function setSelectedIncomeCategory(category: string | null) {
     selectedIncomeCategory.value = category
+    if (category && !transactionsLoaded.value) {
+      await loadTransactionsForDrillDown()
+    }
   }
 
   async function fetchData() {
@@ -349,7 +223,16 @@ export function useDashboardData() {
     error.value = null
 
     try {
-      transactions.value = await api.getTransactions()
+      summaryData.value = await api.getDashboardSummary({
+        jointAccounts: filtersStore.jointAccounts,
+        hiddenExpenseCategories: filtersStore.hiddenExpenseCategories,
+        hiddenIncomeCategories: filtersStore.hiddenIncomeCategories,
+        categoryAssociations: filtersStore.categoryAssociations,
+      })
+
+      // Reset drill-down state when reloading
+      transactionsLoaded.value = false
+      transactions.value = []
     } catch (err) {
       error.value =
         err instanceof Error
@@ -359,6 +242,22 @@ export function useDashboardData() {
       isLoading.value = false
     }
   }
+
+  // Auto-refetch when filters change
+  watch(
+    () => [
+      filtersStore.jointAccounts,
+      filtersStore.hiddenExpenseCategories,
+      filtersStore.hiddenIncomeCategories,
+      filtersStore.categoryAssociations,
+    ],
+    () => {
+      if (summaryData.value) {
+        fetchData()
+      }
+    },
+    { deep: true }
+  )
 
   return {
     transactions,

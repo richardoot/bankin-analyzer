@@ -250,6 +250,37 @@ export interface CreateImportHistoryDto {
   fileName?: string
 }
 
+// Dashboard DTOs
+export interface MonthlyDataDto {
+  month: string
+  label: string
+  expenses: number
+  income: number
+}
+
+export interface CategoryDataDto {
+  category: string
+  amount: number
+}
+
+export interface DashboardFiltersDto {
+  jointAccounts?: string[]
+  hiddenExpenseCategories?: string[]
+  hiddenIncomeCategories?: string[]
+  categoryAssociations?: CategoryAssociationDto[]
+}
+
+export interface DashboardSummaryDto {
+  monthlyData: MonthlyDataDto[]
+  expensesByCategory: CategoryDataDto[]
+  incomeByCategory: CategoryDataDto[]
+  totalExpenses: number
+  totalIncome: number
+  allExpenseCategories: string[]
+  allIncomeCategories: string[]
+  availableAccounts: string[]
+}
+
 /**
  * Get session with timeout protection.
  * Prevents hanging when getSession() doesn't resolve after inactivity.
@@ -413,6 +444,22 @@ export const api = {
     }
 
     return response.json() as Promise<FilterPreferencesDto>
+  },
+
+  // Dashboard API
+  async getDashboardSummary(
+    filters: DashboardFiltersDto
+  ): Promise<DashboardSummaryDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/dashboard/summary`, {
+      method: 'POST',
+      body: JSON.stringify(filters),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch dashboard summary')
+    }
+
+    return response.json() as Promise<DashboardSummaryDto>
   },
 
   // Persons API

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
 import DashboardPage from './DashboardPage.vue'
+import type { DashboardSummaryDto } from '@/lib/api'
 
 // Mock vue3-apexcharts
 vi.mock('vue3-apexcharts', () => ({
@@ -15,8 +16,36 @@ vi.mock('vue3-apexcharts', () => ({
 // Mock the API
 vi.mock('@/lib/api', () => ({
   api: {
+    getDashboardSummary: vi.fn(),
     getTransactions: vi.fn(),
   },
+}))
+
+// Mock the filters store
+vi.mock('@/stores/filters', () => ({
+  useFiltersStore: () => ({
+    jointAccounts: [],
+    hiddenExpenseCategories: [],
+    hiddenIncomeCategories: [],
+    categoryAssociations: [],
+    isJointAccount: vi.fn(() => false),
+    isExpenseCategoryHidden: vi.fn(() => false),
+    isIncomeCategoryHidden: vi.fn(() => false),
+    isIncomeUsedAsReimbursement: vi.fn(() => false),
+    loadFromBackend: vi.fn(),
+    isPanelExpanded: true,
+    togglePanelExpanded: vi.fn(),
+    activeFiltersCount: 0,
+    toggleJointAccount: vi.fn(),
+    toggleHiddenExpenseCategory: vi.fn(),
+    toggleHiddenIncomeCategory: vi.fn(),
+    setCategoryAssociation: vi.fn(),
+    removeCategoryAssociation: vi.fn(),
+    getReimbursementCategory: vi.fn(() => null),
+    saveToBackend: vi.fn(),
+    isSyncing: false,
+    hasUnsavedChanges: false,
+  }),
 }))
 
 import { api } from '@/lib/api'
@@ -39,44 +68,61 @@ describe('DashboardPage', () => {
     vi.clearAllMocks()
   })
 
-  const mockTransactions = [
-    {
-      id: '1',
-      date: '2024-01-15T00:00:00.000Z',
-      description: 'Restaurant',
-      amount: -45.5,
-      type: 'EXPENSE' as const,
-      account: 'Compte Courant',
-      categoryName: 'Alimentation',
-      isPointed: false,
-      createdAt: '2024-01-15T00:00:00.000Z',
-    },
-    {
-      id: '2',
-      date: '2024-01-25T00:00:00.000Z',
-      description: 'Salaire',
-      amount: 2500.0,
-      type: 'INCOME' as const,
-      account: 'Compte Courant',
-      categoryName: 'Salaires',
-      isPointed: true,
-      createdAt: '2024-01-25T00:00:00.000Z',
-    },
-    {
-      id: '3',
-      date: '2024-01-20T00:00:00.000Z',
-      description: 'Loyer',
-      amount: -800.0,
-      type: 'EXPENSE' as const,
-      account: 'Compte Courant',
-      categoryName: 'Logement',
-      isPointed: false,
-      createdAt: '2024-01-20T00:00:00.000Z',
-    },
-  ]
+  const mockSummary: DashboardSummaryDto = {
+    monthlyData: [
+      { month: '2024-01', label: 'Jan 2024', expenses: 845.5, income: 2500 },
+    ],
+    expensesByCategory: [
+      { category: 'Logement', amount: 800 },
+      { category: 'Alimentation', amount: 45.5 },
+    ],
+    incomeByCategory: [{ category: 'Salaires', amount: 2500 }],
+    totalExpenses: 845.5,
+    totalIncome: 2500,
+    allExpenseCategories: ['Alimentation', 'Logement'],
+    allIncomeCategories: ['Salaires'],
+    availableAccounts: ['Compte Courant'],
+  }
+
+  const mockEmptySummary: DashboardSummaryDto = {
+    monthlyData: [],
+    expensesByCategory: [],
+    incomeByCategory: [],
+    totalExpenses: 0,
+    totalIncome: 0,
+    allExpenseCategories: [],
+    allIncomeCategories: [],
+    availableAccounts: [],
+  }
+
+  const mockIncomeOnlySummary: DashboardSummaryDto = {
+    monthlyData: [
+      { month: '2024-01', label: 'Jan 2024', expenses: 0, income: 2500 },
+    ],
+    expensesByCategory: [],
+    incomeByCategory: [{ category: 'Salaires', amount: 2500 }],
+    totalExpenses: 0,
+    totalIncome: 2500,
+    allExpenseCategories: [],
+    allIncomeCategories: ['Salaires'],
+    availableAccounts: ['Compte Courant'],
+  }
+
+  const mockExpenseOnlySummary: DashboardSummaryDto = {
+    monthlyData: [
+      { month: '2024-01', label: 'Jan 2024', expenses: 45.5, income: 0 },
+    ],
+    expensesByCategory: [{ category: 'Alimentation', amount: 45.5 }],
+    incomeByCategory: [],
+    totalExpenses: 45.5,
+    totalIncome: 0,
+    allExpenseCategories: ['Alimentation'],
+    allIncomeCategories: [],
+    availableAccounts: ['Compte Courant'],
+  }
 
   it('should display page title', async () => {
-    vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
     const wrapper = mount(DashboardPage, {
       global: {
@@ -90,8 +136,8 @@ describe('DashboardPage', () => {
     expect(wrapper.text()).toContain("Vue d'ensemble de vos finances")
   })
 
-  it('should fetch transactions on mount', async () => {
-    vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+  it('should fetch dashboard summary on mount', async () => {
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
     mount(DashboardPage, {
       global: {
@@ -101,11 +147,13 @@ describe('DashboardPage', () => {
 
     await flushPromises()
 
-    expect(api.getTransactions).toHaveBeenCalled()
+    expect(api.getDashboardSummary).toHaveBeenCalled()
   })
 
   it('should display error message on API failure', async () => {
-    vi.mocked(api.getTransactions).mockRejectedValue(new Error('Network error'))
+    vi.mocked(api.getDashboardSummary).mockRejectedValue(
+      new Error('Network error')
+    )
 
     const wrapper = mount(DashboardPage, {
       global: {
@@ -119,7 +167,7 @@ describe('DashboardPage', () => {
   })
 
   it('should display total expenses and income', async () => {
-    vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
     const wrapper = mount(DashboardPage, {
       global: {
@@ -134,7 +182,7 @@ describe('DashboardPage', () => {
   })
 
   it('should display chart sections', async () => {
-    vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
     const wrapper = mount(DashboardPage, {
       global: {
@@ -149,7 +197,7 @@ describe('DashboardPage', () => {
   })
 
   it('should render charts when data is available', async () => {
-    vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
     const wrapper = mount(DashboardPage, {
       global: {
@@ -164,7 +212,7 @@ describe('DashboardPage', () => {
   })
 
   it('should display empty state when no transactions', async () => {
-    vi.mocked(api.getTransactions).mockResolvedValue([])
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(mockEmptySummary)
 
     const wrapper = mount(DashboardPage, {
       global: {
@@ -179,7 +227,7 @@ describe('DashboardPage', () => {
   })
 
   it('should have link to import page in empty state', async () => {
-    vi.mocked(api.getTransactions).mockResolvedValue([])
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(mockEmptySummary)
 
     const wrapper = mount(DashboardPage, {
       global: {
@@ -198,20 +246,7 @@ describe('DashboardPage', () => {
   })
 
   it('should display "no expenses" message when only income', async () => {
-    const incomeOnly = [
-      {
-        id: '1',
-        date: '2024-01-25T00:00:00.000Z',
-        description: 'Salaire',
-        amount: 2500.0,
-        type: 'INCOME' as const,
-        account: 'Compte Courant',
-        isPointed: true,
-        createdAt: '2024-01-25T00:00:00.000Z',
-      },
-    ]
-
-    vi.mocked(api.getTransactions).mockResolvedValue(incomeOnly)
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(mockIncomeOnlySummary)
 
     const wrapper = mount(DashboardPage, {
       global: {
@@ -225,21 +260,7 @@ describe('DashboardPage', () => {
   })
 
   it('should display "no income" message when only expenses', async () => {
-    const expensesOnly = [
-      {
-        id: '1',
-        date: '2024-01-15T00:00:00.000Z',
-        description: 'Restaurant',
-        amount: -45.5,
-        type: 'EXPENSE' as const,
-        account: 'Compte Courant',
-        categoryName: 'Alimentation',
-        isPointed: false,
-        createdAt: '2024-01-15T00:00:00.000Z',
-      },
-    ]
-
-    vi.mocked(api.getTransactions).mockResolvedValue(expensesOnly)
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(mockExpenseOnlySummary)
 
     const wrapper = mount(DashboardPage, {
       global: {
@@ -254,7 +275,7 @@ describe('DashboardPage', () => {
 
   describe('pie charts', () => {
     it('should display pie chart section titles', async () => {
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
       const wrapper = mount(DashboardPage, {
         global: {
@@ -271,7 +292,7 @@ describe('DashboardPage', () => {
 
   describe('category filter', () => {
     it('should display category filter dropdown', async () => {
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
       const wrapper = mount(DashboardPage, {
         global: {
@@ -286,7 +307,7 @@ describe('DashboardPage', () => {
     })
 
     it('should have "Toutes les catégories" as default option', async () => {
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
       const wrapper = mount(DashboardPage, {
         global: {
@@ -301,7 +322,7 @@ describe('DashboardPage', () => {
     })
 
     it('should list available expense categories in dropdown', async () => {
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
       const wrapper = mount(DashboardPage, {
         global: {
@@ -317,7 +338,8 @@ describe('DashboardPage', () => {
     })
 
     it('should update chart when category is selected', async () => {
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getTransactions).mockResolvedValue([])
 
       const wrapper = mount(DashboardPage, {
         global: {
@@ -337,7 +359,7 @@ describe('DashboardPage', () => {
 
   describe('income category filter', () => {
     it('should display two category filter dropdowns', async () => {
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
       const wrapper = mount(DashboardPage, {
         global: {
@@ -358,7 +380,7 @@ describe('DashboardPage', () => {
     })
 
     it('should list available income categories in second dropdown', async () => {
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
       const wrapper = mount(DashboardPage, {
         global: {
@@ -376,7 +398,8 @@ describe('DashboardPage', () => {
     })
 
     it('should update income chart when category is selected', async () => {
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getTransactions).mockResolvedValue([])
 
       const wrapper = mount(DashboardPage, {
         global: {
