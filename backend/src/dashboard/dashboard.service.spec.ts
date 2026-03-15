@@ -40,6 +40,9 @@ describe('DashboardService', () => {
     transaction: {
       findMany: vi.fn(),
     },
+    categoryAssociation: {
+      findMany: vi.fn(),
+    },
   }
 
   beforeEach(async () => {
@@ -56,6 +59,9 @@ describe('DashboardService', () => {
     service = module.get<DashboardService>(DashboardService)
 
     vi.clearAllMocks()
+
+    // Default mock: no category associations
+    mockPrismaService.categoryAssociation.findMany.mockResolvedValue([])
   })
 
   describe('getSummary', () => {
@@ -261,15 +267,18 @@ describe('DashboardService', () => {
       ]
 
       mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-1',
+          incomeCategoryId: 'cat-2',
+          expenseCategory: { name: 'Santé' },
+          incomeCategory: { name: 'Remboursement Mutuelle' },
+        },
+      ])
 
-      const result = await service.getSummary(mockUserId, {
-        categoryAssociations: [
-          {
-            expenseCategory: 'Santé',
-            incomeCategory: 'Remboursement Mutuelle',
-          },
-        ],
-      })
+      const result = await service.getSummary(mockUserId, {})
 
       // Santé: 500 - 200 = 300
       expect(result.expensesByCategory).toEqual([
@@ -297,15 +306,18 @@ describe('DashboardService', () => {
       ]
 
       mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-1',
+          incomeCategoryId: 'cat-2',
+          expenseCategory: { name: 'Santé' },
+          incomeCategory: { name: 'Remboursement Mutuelle' },
+        },
+      ])
 
-      const result = await service.getSummary(mockUserId, {
-        categoryAssociations: [
-          {
-            expenseCategory: 'Santé',
-            incomeCategory: 'Remboursement Mutuelle',
-          },
-        ],
-      })
+      const result = await service.getSummary(mockUserId, {})
 
       // Should not go negative
       expect(result.expensesByCategory).toEqual([
@@ -424,12 +436,18 @@ describe('DashboardService', () => {
       ]
 
       mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-1',
+          incomeCategoryId: 'cat-2',
+          expenseCategory: { name: 'Santé' },
+          incomeCategory: { name: 'Remboursement' },
+        },
+      ])
 
-      const result = await service.getSummary(mockUserId, {
-        categoryAssociations: [
-          { expenseCategory: 'Santé', incomeCategory: 'Remboursement' },
-        ],
-      })
+      const result = await service.getSummary(mockUserId, {})
 
       // Total expenses: 400, Total reimbursement: 100
       // Jan proportion: 100/400 = 0.25, deduction: 100 * 0.25 = 25, result: 100 - 25 = 75

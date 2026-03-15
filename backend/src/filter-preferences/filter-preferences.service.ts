@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { FilterPreferences, Prisma } from '../generated/prisma'
+import { FilterPreferences } from '../generated/prisma'
 import { UpdateFilterPreferencesDto } from './dto'
 
 @Injectable()
@@ -24,8 +24,7 @@ export class FilterPreferencesService {
         jointAccounts: dto.jointAccounts ?? [],
         hiddenExpenseCategories: dto.hiddenExpenseCategories ?? [],
         hiddenIncomeCategories: dto.hiddenIncomeCategories ?? [],
-        categoryAssociations:
-          (dto.categoryAssociations as unknown as Prisma.InputJsonValue) ?? [],
+        categoryAssociations: [], // Deprecated: use CategoryAssociation table
         isPanelExpanded: dto.isPanelExpanded ?? true,
       },
       update: {
@@ -37,10 +36,6 @@ export class FilterPreferencesService {
         }),
         ...(dto.hiddenIncomeCategories !== undefined && {
           hiddenIncomeCategories: dto.hiddenIncomeCategories,
-        }),
-        ...(dto.categoryAssociations !== undefined && {
-          categoryAssociations:
-            dto.categoryAssociations as unknown as Prisma.InputJsonValue,
         }),
         ...(dto.isPanelExpanded !== undefined && {
           isPanelExpanded: dto.isPanelExpanded,

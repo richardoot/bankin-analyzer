@@ -23,9 +23,7 @@ describe('FilterPreferencesController', () => {
     jointAccounts: ['Compte Courant'],
     hiddenExpenseCategories: ['Loisirs'],
     hiddenIncomeCategories: ['Revenus exceptionnels'],
-    categoryAssociations: [
-      { expenseCategory: 'Santé', incomeCategory: 'Remboursement santé' },
-    ],
+    categoryAssociations: [], // Deprecated: use CategoryAssociation table
     isPanelExpanded: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -68,7 +66,6 @@ describe('FilterPreferencesController', () => {
         jointAccounts: mockFilterPreferences.jointAccounts,
         hiddenExpenseCategories: mockFilterPreferences.hiddenExpenseCategories,
         hiddenIncomeCategories: mockFilterPreferences.hiddenIncomeCategories,
-        categoryAssociations: mockFilterPreferences.categoryAssociations,
         isPanelExpanded: mockFilterPreferences.isPanelExpanded,
       })
       expect(service.findByUser).toHaveBeenCalledWith(mockUser.id)
@@ -83,7 +80,6 @@ describe('FilterPreferencesController', () => {
         jointAccounts: [],
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
-        categoryAssociations: [],
         isPanelExpanded: true,
       })
       expect(service.findByUser).toHaveBeenCalledWith(mockUser.id)
@@ -95,7 +91,6 @@ describe('FilterPreferencesController', () => {
         jointAccounts: [],
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
-        categoryAssociations: [],
       }
       mockService.findByUser.mockResolvedValue(emptyPreferences)
 
@@ -104,7 +99,6 @@ describe('FilterPreferencesController', () => {
       expect(result.jointAccounts).toEqual([])
       expect(result.hiddenExpenseCategories).toEqual([])
       expect(result.hiddenIncomeCategories).toEqual([])
-      expect(result.categoryAssociations).toEqual([])
     })
   })
 
@@ -120,7 +114,6 @@ describe('FilterPreferencesController', () => {
         ...mockFilterPreferences,
         ...dto,
         hiddenIncomeCategories: [],
-        categoryAssociations: [],
       }
 
       mockService.upsert.mockResolvedValue(updatedPreferences)
@@ -131,7 +124,6 @@ describe('FilterPreferencesController', () => {
         jointAccounts: dto.jointAccounts,
         hiddenExpenseCategories: dto.hiddenExpenseCategories,
         hiddenIncomeCategories: [],
-        categoryAssociations: [],
         isPanelExpanded: dto.isPanelExpanded,
       })
       expect(service.upsert).toHaveBeenCalledWith(mockUser.id, dto)
@@ -150,25 +142,6 @@ describe('FilterPreferencesController', () => {
       const result = await controller.update(mockUser, dto)
 
       expect(result.jointAccounts).toEqual(dto.jointAccounts)
-      expect(service.upsert).toHaveBeenCalledWith(mockUser.id, dto)
-    })
-
-    it('should update categoryAssociations', async () => {
-      const dto = {
-        categoryAssociations: [
-          { expenseCategory: 'Transport', incomeCategory: 'Remboursement km' },
-          { expenseCategory: 'Santé', incomeCategory: 'Mutuelle' },
-        ],
-      }
-
-      mockService.upsert.mockResolvedValue({
-        ...mockFilterPreferences,
-        categoryAssociations: dto.categoryAssociations,
-      })
-
-      const result = await controller.update(mockUser, dto)
-
-      expect(result.categoryAssociations).toEqual(dto.categoryAssociations)
       expect(service.upsert).toHaveBeenCalledWith(mockUser.id, dto)
     })
 

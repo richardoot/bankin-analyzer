@@ -1,5 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { CategoryAssociationDto } from './update-filter-preferences.dto'
 
 export class FilterPreferencesDto {
   @ApiProperty({
@@ -19,12 +18,6 @@ export class FilterPreferencesDto {
     type: [String],
   })
   hiddenIncomeCategories!: string[]
-
-  @ApiProperty({
-    description: 'List of expense-to-income category associations',
-    type: [CategoryAssociationDto],
-  })
-  categoryAssociations!: CategoryAssociationDto[]
 
   @ApiProperty({
     description: 'Whether the advanced filters panel is expanded',

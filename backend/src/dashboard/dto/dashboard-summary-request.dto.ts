@@ -1,14 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
-import { IsString, IsArray, IsOptional, ValidateNested } from 'class-validator'
-import { Type } from 'class-transformer'
-
-export class CategoryAssociationDto {
-  @IsString()
-  expenseCategory!: string
-
-  @IsString()
-  incomeCategory!: string
-}
+import { IsString, IsArray, IsOptional } from 'class-validator'
 
 export class DashboardFiltersDto {
   @ApiPropertyOptional({
@@ -37,14 +28,4 @@ export class DashboardFiltersDto {
   @IsArray()
   @IsString({ each: true })
   hiddenIncomeCategories?: string[]
-
-  @ApiPropertyOptional({
-    description: 'Category associations for reimbursements',
-    type: [CategoryAssociationDto],
-  })
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CategoryAssociationDto)
-  categoryAssociations?: CategoryAssociationDto[]
 }

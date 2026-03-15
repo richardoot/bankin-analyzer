@@ -13,6 +13,7 @@ import { ReimbursementsModule } from './reimbursements/reimbursements.module'
 import { ImportHistoriesModule } from './import-histories/import-histories.module'
 import { SettlementsModule } from './settlements/settlements.module'
 import { DashboardModule } from './dashboard/dashboard.module'
+import { CategoryAssociationModule } from './category-association/category-association.module'
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { DashboardModule } from './dashboard/dashboard.module'
     ImportHistoriesModule,
     SettlementsModule,
     DashboardModule,
+    CategoryAssociationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

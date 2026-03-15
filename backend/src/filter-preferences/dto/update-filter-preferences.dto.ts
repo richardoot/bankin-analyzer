@@ -1,20 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
-import {
-  IsString,
-  IsArray,
-  IsOptional,
-  IsBoolean,
-  ValidateNested,
-} from 'class-validator'
-import { Type } from 'class-transformer'
-
-export class CategoryAssociationDto {
-  @IsString()
-  expenseCategory!: string
-
-  @IsString()
-  incomeCategory!: string
-}
+import { IsString, IsArray, IsOptional, IsBoolean } from 'class-validator'
 
 export class UpdateFilterPreferencesDto {
   @ApiPropertyOptional({
@@ -43,16 +28,6 @@ export class UpdateFilterPreferencesDto {
   @IsArray()
   @IsString({ each: true })
   hiddenIncomeCategories?: string[]
-
-  @ApiPropertyOptional({
-    description: 'List of expense-to-income category associations',
-    type: [CategoryAssociationDto],
-  })
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CategoryAssociationDto)
-  categoryAssociations?: CategoryAssociationDto[]
 
   @ApiPropertyOptional({
     description: 'Whether the advanced filters panel is expanded',

@@ -38,7 +38,21 @@ export class DashboardService {
     const hiddenIncomeCategoriesSet = new Set(
       filters.hiddenIncomeCategories ?? []
     )
-    const categoryAssociations = filters.categoryAssociations ?? []
+
+    // Fetch category associations from database
+    const dbAssociations = await this.prisma.categoryAssociation.findMany({
+      where: { userId },
+      include: {
+        expenseCategory: true,
+        incomeCategory: true,
+      },
+    })
+
+    // Convert DB associations to name-based associations
+    const categoryAssociations = dbAssociations.map(a => ({
+      expenseCategory: a.expenseCategory.name,
+      incomeCategory: a.incomeCategory.name,
+    }))
 
     // Build a set of income categories used as reimbursements
     const reimbursementIncomeCategories = new Set(

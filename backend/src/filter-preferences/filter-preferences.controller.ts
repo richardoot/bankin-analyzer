@@ -6,11 +6,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger'
 import { FilterPreferencesService } from './filter-preferences.service'
-import {
-  FilterPreferencesDto,
-  UpdateFilterPreferencesDto,
-  CategoryAssociationDto,
-} from './dto'
+import { FilterPreferencesDto, UpdateFilterPreferencesDto } from './dto'
 import { SupabaseGuard, CurrentUser } from '../auth'
 import type { User } from '../generated/prisma'
 
@@ -32,7 +28,6 @@ export class FilterPreferencesController {
         jointAccounts: [],
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
-        categoryAssociations: [],
         isPanelExpanded: true,
       }
     }
@@ -41,8 +36,6 @@ export class FilterPreferencesController {
       jointAccounts: prefs.jointAccounts,
       hiddenExpenseCategories: prefs.hiddenExpenseCategories,
       hiddenIncomeCategories: prefs.hiddenIncomeCategories,
-      categoryAssociations:
-        prefs.categoryAssociations as unknown as CategoryAssociationDto[],
       isPanelExpanded: prefs.isPanelExpanded,
     }
   }
@@ -60,8 +53,6 @@ export class FilterPreferencesController {
       jointAccounts: prefs.jointAccounts,
       hiddenExpenseCategories: prefs.hiddenExpenseCategories,
       hiddenIncomeCategories: prefs.hiddenIncomeCategories,
-      categoryAssociations:
-        prefs.categoryAssociations as unknown as CategoryAssociationDto[],
       isPanelExpanded: prefs.isPanelExpanded,
     }
   }

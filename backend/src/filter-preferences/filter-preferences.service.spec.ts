@@ -16,9 +16,7 @@ describe('FilterPreferencesService', () => {
     jointAccounts: ['Compte Courant'],
     hiddenExpenseCategories: ['Loisirs'],
     hiddenIncomeCategories: ['Revenus exceptionnels'],
-    categoryAssociations: [
-      { expenseCategory: 'Santé', incomeCategory: 'Remboursement santé' },
-    ],
+    categoryAssociations: [], // Deprecated: use CategoryAssociation table
     isPanelExpanded: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -80,12 +78,6 @@ describe('FilterPreferencesService', () => {
         jointAccounts: ['Compte Joint'],
         hiddenExpenseCategories: ['Shopping'],
         hiddenIncomeCategories: ['Primes'],
-        categoryAssociations: [
-          {
-            expenseCategory: 'Transport',
-            incomeCategory: 'Remboursement transport',
-          },
-        ],
         isPanelExpanded: false,
       }
 
@@ -108,14 +100,13 @@ describe('FilterPreferencesService', () => {
           jointAccounts: dto.jointAccounts,
           hiddenExpenseCategories: dto.hiddenExpenseCategories,
           hiddenIncomeCategories: dto.hiddenIncomeCategories,
-          categoryAssociations: dto.categoryAssociations,
+          categoryAssociations: [],
           isPanelExpanded: dto.isPanelExpanded,
         },
         update: {
           jointAccounts: dto.jointAccounts,
           hiddenExpenseCategories: dto.hiddenExpenseCategories,
           hiddenIncomeCategories: dto.hiddenIncomeCategories,
-          categoryAssociations: dto.categoryAssociations,
           isPanelExpanded: dto.isPanelExpanded,
         },
       })
@@ -201,37 +192,6 @@ describe('FilterPreferencesService', () => {
         },
         update: {
           isPanelExpanded: false,
-        },
-      })
-    })
-
-    it('should update categoryAssociations when provided', async () => {
-      const dto = {
-        categoryAssociations: [
-          { expenseCategory: 'Santé', incomeCategory: 'Mutuelle' },
-          { expenseCategory: 'Transport', incomeCategory: 'Remboursement km' },
-        ],
-      }
-
-      mockPrismaService.filterPreferences.upsert.mockResolvedValue({
-        ...mockFilterPreferences,
-        categoryAssociations: dto.categoryAssociations,
-      })
-
-      await service.upsert(mockUserId, dto)
-
-      expect(prisma.filterPreferences.upsert).toHaveBeenCalledWith({
-        where: { userId: mockUserId },
-        create: {
-          userId: mockUserId,
-          jointAccounts: [],
-          hiddenExpenseCategories: [],
-          hiddenIncomeCategories: [],
-          categoryAssociations: dto.categoryAssociations,
-          isPanelExpanded: true,
-        },
-        update: {
-          categoryAssociations: dto.categoryAssociations,
         },
       })
     })

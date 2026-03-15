@@ -22,6 +22,7 @@ model User {
   reimbursementRequests ReimbursementRequest[]
   importHistories       ImportHistory[]
   settlements           Settlement[]
+  categoryAssociations  CategoryAssociation[]
 
   @@map("users")
   @@schema("app")
@@ -65,9 +66,11 @@ model Category {
   type      TransactionType
   createdAt DateTime        @default(now()) @map("created_at")
 
-  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions          Transaction[]
-  reimbursementRequests ReimbursementRequest[]
+  user                        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions                Transaction[]
+  reimbursementRequests       ReimbursementRequest[]
+  expenseCategoryAssociations CategoryAssociation[]  @relation("ExpenseCategory")
+  incomeCategoryAssociations  CategoryAssociation[]  @relation("IncomeCategory")
 
   @@unique([userId, name, type])
   @@map("categories")
@@ -226,5 +229,24 @@ model SettlementReimbursement {
   @@unique([settlementId, reimbursementId])
   @@index([reimbursementId])
   @@map("settlement_reimbursements")
+  @@schema("app")
+}
+
+model CategoryAssociation {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  expenseCategoryId String   @map("expense_category_id")
+  incomeCategoryId  String   @map("income_category_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expenseCategory Category @relation("ExpenseCategory", fields: [expenseCategoryId], references: [id], onDelete: Cascade)
+  incomeCategory  Category @relation("IncomeCategory", fields: [incomeCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, expenseCategoryId])
+  @@unique([userId, incomeCategoryId])
+  @@index([userId])
+  @@map("category_associations")
   @@schema("app")
 }
