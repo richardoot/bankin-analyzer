@@ -410,7 +410,7 @@ describe('DashboardService', () => {
       ])
     })
 
-    it('should distribute reimbursements proportionally across months', async () => {
+    it('should deduct reimbursements from the month they occurred', async () => {
       const transactions = [
         createMockTransaction({
           id: '1',
@@ -449,11 +449,15 @@ describe('DashboardService', () => {
 
       const result = await service.getSummary(mockUserId, {})
 
-      // Total expenses: 400, Total reimbursement: 100
-      // Jan proportion: 100/400 = 0.25, deduction: 100 * 0.25 = 25, result: 100 - 25 = 75
-      // Feb proportion: 300/400 = 0.75, deduction: 100 * 0.75 = 75, result: 300 - 75 = 225
-      expect(result.monthlyData[0].expenses).toBe(75)
-      expect(result.monthlyData[1].expenses).toBe(225)
+      // Jan: expenses = 100, reimbursement = 100 in same month, netExpenses = 0
+      // Feb: expenses = 300, no reimbursement, netExpenses = 300
+      expect(result.monthlyData[0].expenses).toBe(100)
+      expect(result.monthlyData[0].netExpenses).toBe(0)
+      expect(result.monthlyData[1].expenses).toBe(300)
+      expect(result.monthlyData[1].netExpenses).toBe(300)
+
+      // Total should be sum of netExpenses
+      expect(result.totalExpenses).toBe(300)
     })
 
     it('should round amounts to 2 decimal places', async () => {

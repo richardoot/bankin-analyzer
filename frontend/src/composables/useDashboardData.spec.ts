@@ -22,9 +22,17 @@ vi.mock('@/stores/filters', () => ({
   }),
 }))
 
+// Configurable mock for category associations
+let mockAssociations: Array<{
+  expenseCategoryName: string
+  incomeCategoryName: string
+}> = []
+
 vi.mock('@/stores/categoryAssociations', () => ({
   useCategoryAssociationsStore: () => ({
-    associations: [],
+    get associations() {
+      return mockAssociations
+    },
     isLoading: false,
     error: null,
     load: vi.fn().mockResolvedValue(undefined),
@@ -35,12 +43,25 @@ vi.mock('@/stores/categoryAssociations', () => ({
 describe('useDashboardData', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockAssociations = []
   })
 
   const mockSummary: DashboardSummaryDto = {
     monthlyData: [
-      { month: '2024-01', label: 'Jan 2024', expenses: 165.5, income: 2500 },
-      { month: '2024-02', label: 'Fév 2024', expenses: 800, income: 2500 },
+      {
+        month: '2024-01',
+        label: 'Jan 2024',
+        expenses: 165.5,
+        netExpenses: 165.5,
+        income: 2500,
+      },
+      {
+        month: '2024-02',
+        label: 'Fév 2024',
+        expenses: 800,
+        netExpenses: 800,
+        income: 2500,
+      },
     ],
     expensesByCategory: [
       { category: 'Logement', amount: 800 },
@@ -267,7 +288,17 @@ describe('useDashboardData', () => {
 
     it('should load transactions when category is selected for drill-down', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: mockTransactions,
+        meta: {
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
 
       const { fetchData, setSelectedCategory, selectedCategory } =
         useDashboardData()
@@ -281,7 +312,17 @@ describe('useDashboardData', () => {
 
     it('should filter expenses by selected category after loading transactions', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: mockTransactions,
+        meta: {
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
 
       const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
         useDashboardData()
@@ -296,7 +337,17 @@ describe('useDashboardData', () => {
 
     it('should return empty data when no transactions match selected category', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: mockTransactions,
+        meta: {
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
 
       const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
         useDashboardData()
@@ -310,7 +361,17 @@ describe('useDashboardData', () => {
 
     it('should not reload transactions if already loaded', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: mockTransactions,
+        meta: {
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
 
       const { fetchData, setSelectedCategory, setSelectedIncomeCategory } =
         useDashboardData()
@@ -325,7 +386,17 @@ describe('useDashboardData', () => {
 
     it('should clear selected category', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: mockTransactions,
+        meta: {
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
 
       const { fetchData, selectedCategory, setSelectedCategory } =
         useDashboardData()
@@ -336,6 +407,79 @@ describe('useDashboardData', () => {
 
       await setSelectedCategory(null)
       expect(selectedCategory.value).toBeNull()
+    })
+
+    it('should deduct reimbursements from filtered expenses when category has association', async () => {
+      const transactionsWithReimbursements: TransactionDto[] = [
+        {
+          id: '1',
+          date: '2024-01-15T00:00:00.000Z',
+          description: 'Frais médicaux',
+          amount: -100.0,
+          type: 'EXPENSE',
+          account: 'Compte Courant',
+          categoryName: 'Santé',
+          isPointed: false,
+          createdAt: '2024-01-15T00:00:00.000Z',
+        },
+        {
+          id: '2',
+          date: '2024-01-20T00:00:00.000Z',
+          description: 'Remboursement mutuelle',
+          amount: 60.0,
+          type: 'INCOME',
+          account: 'Compte Courant',
+          categoryName: 'Remboursement Santé',
+          isPointed: false,
+          createdAt: '2024-01-20T00:00:00.000Z',
+        },
+        {
+          id: '3',
+          date: '2024-02-10T00:00:00.000Z',
+          description: 'Frais médicaux',
+          amount: -200.0,
+          type: 'EXPENSE',
+          account: 'Compte Courant',
+          categoryName: 'Santé',
+          isPointed: false,
+          createdAt: '2024-02-10T00:00:00.000Z',
+        },
+      ]
+
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: transactionsWithReimbursements,
+        meta: {
+          total: 3,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
+
+      // Configure the mock associations
+      mockAssociations = [
+        {
+          expenseCategoryName: 'Santé',
+          incomeCategoryName: 'Remboursement Santé',
+        },
+      ]
+
+      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
+        useDashboardData()
+      await fetchData()
+
+      await setSelectedCategory('Santé')
+
+      // Jan: 100 expense - 60 reimbursement = 40 net
+      // Feb: 200 expense - 0 reimbursement = 200 net
+      expect(filteredExpensesByMonth.value.labels).toEqual([
+        'Jan 2024',
+        'Fév 2024',
+      ])
+      expect(filteredExpensesByMonth.value.values).toEqual([40, 200])
     })
   })
 
@@ -382,7 +526,17 @@ describe('useDashboardData', () => {
 
     it('should filter income by selected category', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockIncomeTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: mockIncomeTransactions,
+        meta: {
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
 
       const { fetchData, filteredIncomeByMonth, setSelectedIncomeCategory } =
         useDashboardData()
@@ -399,7 +553,17 @@ describe('useDashboardData', () => {
 
     it('should update selected income category', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockIncomeTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: mockIncomeTransactions,
+        meta: {
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
 
       const { fetchData, selectedIncomeCategory, setSelectedIncomeCategory } =
         useDashboardData()
@@ -418,7 +582,17 @@ describe('useDashboardData', () => {
   describe('data reset on refetch', () => {
     it('should reset transactions when fetchData is called again', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: mockTransactions,
+        meta: {
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
 
       const { fetchData, setSelectedCategory, transactions } =
         useDashboardData()

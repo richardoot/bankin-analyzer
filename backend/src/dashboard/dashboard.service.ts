@@ -67,7 +67,10 @@ export class DashboardService {
     })
 
     // Build aggregation data structures
-    const monthlyMap = new Map<string, { expenses: number; income: number }>()
+    const monthlyMap = new Map<
+      string,
+      { expenses: number; income: number; reimbursements: number }
+    >()
     const expenseByCategoryMap = new Map<string, number>()
     const incomeByCategoryMap = new Map<string, number>()
     const reimbursementsByExpenseCategory = new Map<string, number>()
@@ -92,18 +95,31 @@ export class DashboardService {
         allIncomeCategories.add(categoryName)
       }
 
-      // Calculate reimbursements first (income categories associated with expense categories)
+      // Calculate reimbursements (income categories associated with expense categories)
+      // Track by expense category for category chart, and by month for monthly chart
       if (tx.type === TransactionType.INCOME) {
         const assoc = categoryAssociations.find(
           a => a.incomeCategory === categoryName
         )
         if (assoc) {
+          // Track reimbursements by expense category
           const current =
             reimbursementsByExpenseCategory.get(assoc.expenseCategory) ?? 0
           reimbursementsByExpenseCategory.set(
             assoc.expenseCategory,
             current + adjustedAmount
           )
+
+          // Track reimbursements by month
+          const date = new Date(tx.date)
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+          const monthData = monthlyMap.get(monthKey) ?? {
+            expenses: 0,
+            income: 0,
+            reimbursements: 0,
+          }
+          monthData.reimbursements += adjustedAmount
+          monthlyMap.set(monthKey, monthData)
         }
       }
 
@@ -131,7 +147,11 @@ export class DashboardService {
       // Monthly aggregation
       const date = new Date(tx.date)
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      const monthData = monthlyMap.get(monthKey) ?? { expenses: 0, income: 0 }
+      const monthData = monthlyMap.get(monthKey) ?? {
+        expenses: 0,
+        income: 0,
+        reimbursements: 0,
+      }
 
       if (tx.type === TransactionType.EXPENSE) {
         monthData.expenses += Math.abs(adjustedAmount)
@@ -165,37 +185,27 @@ export class DashboardService {
       )
     }
 
-    // Calculate total reimbursements for monthly proportional deduction
-    const totalReimbursements = Array.from(
-      reimbursementsByExpenseCategory.values()
-    ).reduce((sum, val) => sum + val, 0)
-
     // Sort months and build monthly data with reimbursement deductions
     const sortedMonths = Array.from(monthlyMap.keys()).sort()
-    const totalExpensesBeforeDeduction = sortedMonths.reduce((sum, month) => {
-      return sum + (monthlyMap.get(month)?.expenses ?? 0)
-    }, 0)
 
     const monthlyData: MonthlyDataDto[] = sortedMonths.map(month => {
       const parts = month.split('-')
       const year = parts[0] ?? ''
       const monthNum = parts[1] ?? '01'
-      const data = monthlyMap.get(month) ?? { expenses: 0, income: 0 }
-
-      // Proportional reimbursement deduction
-      let adjustedExpenses = data.expenses
-      if (totalExpensesBeforeDeduction > 0 && totalReimbursements > 0) {
-        const proportion = data.expenses / totalExpensesBeforeDeduction
-        adjustedExpenses = Math.max(
-          0,
-          data.expenses - totalReimbursements * proportion
-        )
+      const data = monthlyMap.get(month) ?? {
+        expenses: 0,
+        income: 0,
+        reimbursements: 0,
       }
+
+      // Net expenses = gross expenses - reimbursements for this month
+      const netExpenses = Math.max(0, data.expenses - data.reimbursements)
 
       return {
         month,
         label: `${MONTH_LABELS[monthNum] ?? monthNum} ${year}`,
-        expenses: Math.round(adjustedExpenses * 100) / 100,
+        expenses: Math.round(data.expenses * 100) / 100,
+        netExpenses: Math.round(netExpenses * 100) / 100,
         income: Math.round(data.income * 100) / 100,
       }
     })
@@ -219,9 +229,9 @@ export class DashboardService {
         amount: Math.round(amount * 100) / 100,
       }))
 
-    // Calculate totals
+    // Calculate totals (use netExpenses for total)
     const totalExpenses =
-      Math.round(monthlyData.reduce((sum, d) => sum + d.expenses, 0) * 100) /
+      Math.round(monthlyData.reduce((sum, d) => sum + d.netExpenses, 0) * 100) /
       100
     const totalIncome =
       Math.round(monthlyData.reduce((sum, d) => sum + d.income, 0) * 100) / 100

@@ -10,6 +10,12 @@ export class MonthlyDataDto {
   @ApiProperty({ description: 'Total expenses for the month (absolute value)' })
   expenses!: number
 
+  @ApiProperty({
+    description:
+      'Net expenses for the month (expenses minus reimbursements from associated income categories)',
+  })
+  netExpenses!: number
+
   @ApiProperty({ description: 'Total income for the month' })
   income!: number
 }

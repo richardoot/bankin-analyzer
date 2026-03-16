@@ -119,6 +119,15 @@ export const useCategoryAssociationsStore = defineStore(
       return associatedIncomeCategoryNames.value.has(categoryName)
     }
 
+    function getAssociatedIncomeCategoryNameByExpenseName(
+      expenseCategoryName: string
+    ): string | null {
+      const assoc = associations.value.find(
+        a => a.expenseCategoryName === expenseCategoryName
+      )
+      return assoc?.incomeCategoryName ?? null
+    }
+
     function reset(): void {
       associations.value = []
       error.value = null
@@ -137,6 +146,7 @@ export const useCategoryAssociationsStore = defineStore(
       getIncomeCategoryNameForExpense,
       getExpenseCategoryNameForIncome,
       isIncomeCategoryAssociated,
+      getAssociatedIncomeCategoryNameByExpenseName,
       reset,
     }
   }

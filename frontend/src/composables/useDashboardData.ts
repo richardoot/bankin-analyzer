@@ -6,7 +6,8 @@ import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
 export interface MonthlyData {
   month: string // "2024-01", "2024-02", ...
   label: string // "Jan 2024", "Fév 2024", ...
-  expenses: number // somme des dépenses (valeur absolue)
+  expenses: number // dépenses brutes (valeur absolue)
+  netExpenses: number // dépenses nettes (après déduction des remboursements)
   income: number // somme des revenus
 }
 
@@ -53,7 +54,7 @@ export function useDashboardData() {
 
   const expensesByMonth = computed<ChartData>(() => ({
     labels: monthlyData.value.map(d => d.label),
-    values: monthlyData.value.map(d => d.expenses),
+    values: monthlyData.value.map(d => d.netExpenses),
   }))
 
   const incomeByMonth = computed<ChartData>(() => ({
@@ -118,6 +119,7 @@ export function useDashboardData() {
   }
 
   // Filtered expenses by month (when category is selected) - requires transactions
+  // Deducts reimbursements from associated income category
   const filteredExpensesByMonth = computed<ChartData>(() => {
     if (!selectedCategory.value) {
       return expensesByMonth.value
@@ -127,31 +129,67 @@ export function useDashboardData() {
       return { labels: [], values: [] }
     }
 
-    const dataByMonth = new Map<string, number>()
+    const expensesByMonthMap = new Map<string, number>()
+    const reimbursementsByMonthMap = new Map<string, number>()
+
+    // Find the associated income category for this expense category
+    // Access associations directly to ensure Vue tracks the dependency
+    const association = categoryAssociationsStore.associations.find(
+      a => a.expenseCategoryName === selectedCategory.value
+    )
+    const associatedIncomeCategory = association?.incomeCategoryName ?? null
 
     for (const tx of transactions.value) {
+      const date = new Date(tx.date)
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+
+      // Sum expenses for selected category
       if (tx.type === 'EXPENSE' && tx.categoryName === selectedCategory.value) {
         const category = tx.categoryName || 'Autre'
         if (filtersStore.isExpenseCategoryHidden(category)) continue
 
-        const date = new Date(tx.date)
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+        const current = expensesByMonthMap.get(monthKey) ?? 0
+        expensesByMonthMap.set(
+          monthKey,
+          current + Math.abs(getAdjustedAmount(tx))
+        )
+      }
 
-        const current = dataByMonth.get(monthKey) ?? 0
-        dataByMonth.set(monthKey, current + Math.abs(getAdjustedAmount(tx)))
+      // Sum reimbursements from associated income category
+      if (
+        associatedIncomeCategory &&
+        tx.type === 'INCOME' &&
+        tx.categoryName === associatedIncomeCategory
+      ) {
+        const current = reimbursementsByMonthMap.get(monthKey) ?? 0
+        reimbursementsByMonthMap.set(monthKey, current + getAdjustedAmount(tx))
       }
     }
 
-    // Sort by month
-    const sortedMonths = Array.from(dataByMonth.keys()).sort()
+    // Combine all months (expenses and reimbursements may have different months)
+    const allMonths = new Set([
+      ...expensesByMonthMap.keys(),
+      ...reimbursementsByMonthMap.keys(),
+    ])
+    const sortedMonths = Array.from(allMonths).sort()
+
+    // Calculate net expenses per month
+    const netExpensesByMonth = sortedMonths
+      .map(month => {
+        const expenses = expensesByMonthMap.get(month) ?? 0
+        const reimbursements = reimbursementsByMonthMap.get(month) ?? 0
+        const netExpenses = Math.max(0, expenses - reimbursements)
+        return { month, netExpenses }
+      })
+      .filter(d => d.netExpenses > 0) // Only include months with positive net expenses
 
     return {
-      labels: sortedMonths.map(month => {
-        const [year, monthNum] = month.split('-')
+      labels: netExpensesByMonth.map(d => {
+        const [year, monthNum] = d.month.split('-')
         return `${MONTH_LABELS[monthNum]} ${year}`
       }),
-      values: sortedMonths.map(
-        month => Math.round((dataByMonth.get(month) ?? 0) * 100) / 100
+      values: netExpensesByMonth.map(
+        d => Math.round(d.netExpenses * 100) / 100
       ),
     }
   })
@@ -199,11 +237,27 @@ export function useDashboardData() {
   })
 
   // Load transactions for drill-down (on demand)
+  // Fetches all transactions by paginating through all pages
   async function loadTransactionsForDrillDown() {
     if (transactionsLoaded.value) return
 
     try {
-      transactions.value = await api.getTransactions()
+      const allTransactions: TransactionDto[] = []
+      let page = 1
+      const limit = 100 // Maximum allowed by backend
+
+      // Fetch all pages
+      while (true) {
+        const response = await api.getTransactions({ page, limit })
+        allTransactions.push(...response.data)
+
+        if (!response.meta.hasNextPage) {
+          break
+        }
+        page++
+      }
+
+      transactions.value = allTransactions
       transactionsLoaded.value = true
     } catch (err) {
       console.error('Failed to load transactions for drill-down:', err)

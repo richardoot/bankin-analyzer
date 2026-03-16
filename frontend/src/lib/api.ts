@@ -288,6 +288,7 @@ export interface MonthlyDataDto {
   month: string
   label: string
   expenses: number
+  netExpenses: number
   income: number
 }
 

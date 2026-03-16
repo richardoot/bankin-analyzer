@@ -334,7 +334,17 @@ describe('DashboardPage', () => {
 
     it('should update chart when category is selected', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: [],
+        meta: {
+          total: 0,
+          page: 1,
+          limit: 100,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
 
       const wrapper = mount(DashboardPage, {
         global: {
@@ -394,7 +404,17 @@ describe('DashboardPage', () => {
 
     it('should update income chart when category is selected', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: [],
+        meta: {
+          total: 0,
+          page: 1,
+          limit: 100,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
 
       const wrapper = mount(DashboardPage, {
         global: {
