@@ -30,6 +30,15 @@ export const useCategoryAssociationsStore = defineStore(
       return map
     })
 
+    // Set of income category names that have associations
+    const associatedIncomeCategoryNames = computed(() => {
+      const names = new Set<string>()
+      for (const assoc of associations.value) {
+        names.add(assoc.incomeCategoryName)
+      }
+      return names
+    })
+
     async function load(): Promise<void> {
       try {
         isLoading.value = true
@@ -106,6 +115,10 @@ export const useCategoryAssociationsStore = defineStore(
       return assoc?.expenseCategoryName ?? null
     }
 
+    function isIncomeCategoryAssociated(categoryName: string): boolean {
+      return associatedIncomeCategoryNames.value.has(categoryName)
+    }
+
     function reset(): void {
       associations.value = []
       error.value = null
@@ -115,6 +128,7 @@ export const useCategoryAssociationsStore = defineStore(
       associations,
       isLoading,
       error,
+      associatedIncomeCategoryNames,
       load,
       create,
       remove,
@@ -122,6 +136,7 @@ export const useCategoryAssociationsStore = defineStore(
       getExpenseCategoryForIncome,
       getIncomeCategoryNameForExpense,
       getExpenseCategoryNameForIncome,
+      isIncomeCategoryAssociated,
       reset,
     }
   }

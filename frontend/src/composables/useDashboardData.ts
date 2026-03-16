@@ -1,6 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import { api, type DashboardSummaryDto, type TransactionDto } from '@/lib/api'
 import { useFiltersStore } from '@/stores/filters'
+import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
 
 export interface MonthlyData {
   month: string // "2024-01", "2024-02", ...
@@ -31,6 +32,7 @@ const MONTH_LABELS: Record<string, string> = {
 
 export function useDashboardData() {
   const filtersStore = useFiltersStore()
+  const categoryAssociationsStore = useCategoryAssociationsStore()
 
   // Pre-aggregated data from backend
   const summaryData = ref<DashboardSummaryDto | null>(null)
@@ -83,8 +85,11 @@ export function useDashboardData() {
     () => summaryData.value?.allExpenseCategories ?? []
   )
 
-  const allIncomeCategories = computed<string[]>(
-    () => summaryData.value?.allIncomeCategories ?? []
+  // All income categories excluding those associated with expense categories
+  const allIncomeCategories = computed<string[]>(() =>
+    (summaryData.value?.allIncomeCategories ?? []).filter(
+      cat => !categoryAssociationsStore.isIncomeCategoryAssociated(cat)
+    )
   )
 
   // Available categories (excludes hidden)
@@ -94,6 +99,7 @@ export function useDashboardData() {
     )
   )
 
+  // Available income categories (excludes hidden and associated)
   const availableIncomeCategories = computed<string[]>(() =>
     allIncomeCategories.value.filter(
       cat => !filtersStore.isIncomeCategoryHidden(cat)
@@ -223,11 +229,17 @@ export function useDashboardData() {
     error.value = null
 
     try {
-      summaryData.value = await api.getDashboardSummary({
-        jointAccounts: filtersStore.jointAccounts,
-        hiddenExpenseCategories: filtersStore.hiddenExpenseCategories,
-        hiddenIncomeCategories: filtersStore.hiddenIncomeCategories,
-      })
+      // Load dashboard summary and category associations in parallel
+      const [summary] = await Promise.all([
+        api.getDashboardSummary({
+          jointAccounts: filtersStore.jointAccounts,
+          hiddenExpenseCategories: filtersStore.hiddenExpenseCategories,
+          hiddenIncomeCategories: filtersStore.hiddenIncomeCategories,
+        }),
+        categoryAssociationsStore.load(),
+      ])
+
+      summaryData.value = summary
 
       // Reset drill-down state when reloading
       transactionsLoaded.value = false

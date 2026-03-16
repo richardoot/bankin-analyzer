@@ -7,6 +7,7 @@ vi.mock('@/lib/api', () => ({
   api: {
     getDashboardSummary: vi.fn(),
     getTransactions: vi.fn(),
+    getCategoryAssociations: vi.fn(),
   },
 }))
 
@@ -18,6 +19,16 @@ vi.mock('@/stores/filters', () => ({
     isJointAccount: vi.fn(() => false),
     isExpenseCategoryHidden: vi.fn(() => false),
     isIncomeCategoryHidden: vi.fn(() => false),
+  }),
+}))
+
+vi.mock('@/stores/categoryAssociations', () => ({
+  useCategoryAssociationsStore: () => ({
+    associations: [],
+    isLoading: false,
+    error: null,
+    load: vi.fn().mockResolvedValue(undefined),
+    isIncomeCategoryAssociated: vi.fn(() => false),
   }),
 }))
 
