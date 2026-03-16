@@ -81,61 +81,26 @@
   const currentPage = ref(1)
   const pageSize = 20
 
-  // Check if we need to use frontend filtering (for showOnlyNotPointed)
-  const useBackendPagination = computed(() => !showOnlyNotPointed.value)
-
   // Computed: expense categories for filter dropdown
   const categories = computed(() => {
     return allCategories.value
       .filter(c => c.type === 'EXPENSE')
-      .map(c => c.name)
-      .sort()
+      .sort((a, b) => a.name.localeCompare(b.name))
   })
 
-  // Computed: filtered transactions (for local filtering when showOnlyNotPointed is active)
-  const filteredTransactions = computed(() => {
-    return transactions.value.filter(t => {
-      // Only EXPENSE type (backend already filters this when using backend pagination)
-      if (t.type !== 'EXPENSE') return false
-      // Category filter (backend already filters this when using backend pagination)
-      if (
-        !useBackendPagination.value &&
-        selectedCategory.value &&
-        t.categoryName !== selectedCategory.value
-      )
-        return false
-      // Not pointed filter (show only transactions that are NOT pointed) - always local
-      if (showOnlyNotPointed.value && t.isPointed) return false
-      return true
-    })
-  })
-
-  // Computed: paginated transactions
+  // Computed: paginated transactions (backend handles all filtering)
   const paginatedTransactions = computed(() => {
-    if (useBackendPagination.value) {
-      // Backend pagination: transactions are already paginated
-      return transactions.value.filter(t => t.type === 'EXPENSE')
-    } else {
-      // Frontend pagination: slice filtered transactions
-      const start = (currentPage.value - 1) * pageSize
-      return filteredTransactions.value.slice(start, start + pageSize)
-    }
+    return transactions.value.filter(t => t.type === 'EXPENSE')
   })
 
   // Computed: total pages
   const totalPages = computed(() => {
-    if (useBackendPagination.value && transactionsMeta.value) {
-      return transactionsMeta.value.totalPages
-    }
-    return Math.ceil(filteredTransactions.value.length / pageSize)
+    return transactionsMeta.value?.totalPages ?? 0
   })
 
   // Computed: total transactions count (for display)
   const totalTransactions = computed(() => {
-    if (useBackendPagination.value && transactionsMeta.value) {
-      return transactionsMeta.value.total
-    }
-    return filteredTransactions.value.length
+    return transactionsMeta.value?.total ?? 0
   })
 
   // Computed: page numbers to display
@@ -357,9 +322,9 @@
     }
   })
 
-  // Refetch when page changes (only for backend pagination)
+  // Refetch when page changes
   watch(currentPage, (newPage, oldPage) => {
-    if (newPage !== oldPage && useBackendPagination.value) {
+    if (newPage !== oldPage) {
       fetchTransactions()
     }
   })
@@ -370,26 +335,15 @@
       isLoadingTransactions.value = true
       transactionsError.value = null
 
-      if (useBackendPagination.value) {
-        // Use backend pagination
-        const response = await api.getTransactions({
-          page: currentPage.value,
-          limit: pageSize,
-          type: 'EXPENSE',
-          categoryId: selectedCategory.value || undefined,
-        })
-        transactions.value = response.data
-        transactionsMeta.value = response.meta
-      } else {
-        // Load all EXPENSE transactions for frontend filtering (showOnlyNotPointed)
-        const response = await api.getTransactions({
-          page: 1,
-          limit: 1000, // Load more for local filtering
-          type: 'EXPENSE',
-        })
-        transactions.value = response.data
-        transactionsMeta.value = null
-      }
+      const response = await api.getTransactions({
+        page: currentPage.value,
+        limit: pageSize,
+        type: 'EXPENSE',
+        categoryId: selectedCategory.value || undefined,
+        isPointed: showOnlyNotPointed.value ? false : undefined,
+      })
+      transactions.value = response.data
+      transactionsMeta.value = response.meta
     } catch (err) {
       transactionsError.value =
         err instanceof Error ? err.message : 'Failed to fetch transactions'
@@ -1003,8 +957,8 @@
               class="px-3 py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400"
             >
               <option :value="null">Toutes</option>
-              <option v-for="cat in categories" :key="cat" :value="cat">
-                {{ cat }}
+              <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                {{ cat.name }}
               </option>
             </select>
           </div>
@@ -1058,7 +1012,7 @@
         <!-- Transactions list -->
         <template v-else-if="!transactionsError">
           <div
-            v-if="filteredTransactions.length === 0"
+            v-if="paginatedTransactions.length === 0"
             class="text-center py-12 text-gray-500 dark:text-gray-400"
           >
             Aucune transaction trouvee avec les filtres actuels.

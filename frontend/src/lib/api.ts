@@ -132,6 +132,7 @@ export interface TransactionQueryParams {
   startDate?: string
   endDate?: string
   categoryId?: string
+  isPointed?: boolean
 }
 
 export interface FilterPreferencesDto {
@@ -453,6 +454,8 @@ export const api = {
     if (params?.startDate) searchParams.set('startDate', params.startDate)
     if (params?.endDate) searchParams.set('endDate', params.endDate)
     if (params?.categoryId) searchParams.set('categoryId', params.categoryId)
+    if (params?.isPointed !== undefined)
+      searchParams.set('isPointed', params.isPointed.toString())
 
     const queryString = searchParams.toString()
     const url = queryString

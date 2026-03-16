@@ -714,14 +714,22 @@ describe('ReimbursementPage', () => {
 
     it('should filter to show only non-pointed transactions when checked', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue(
-        paginatedResponse(mockTransactions)
+      // Backend filters: initial load returns all EXPENSE, after checkbox returns only non-pointed
+      const expenseTransactions = mockTransactions.filter(
+        t => t.type === 'EXPENSE'
       )
+      const nonPointedTransactions = expenseTransactions.filter(
+        t => !t.isPointed
+      )
+      vi.mocked(api.getTransactions)
+        .mockResolvedValueOnce(paginatedResponse(expenseTransactions)) // Initial load
+        .mockResolvedValueOnce(paginatedResponse(nonPointedTransactions)) // After checkbox
 
       const wrapper = await mountComponent()
 
       const checkbox = wrapper.find('input[type="checkbox"]')
       await checkbox.setValue(true)
+      await flushPromises()
 
       // Only Restaurant is not pointed (Pharmacie is pointed)
       expect(wrapper.text()).toContain('Restaurant')

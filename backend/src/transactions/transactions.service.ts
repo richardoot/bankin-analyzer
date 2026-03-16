@@ -138,12 +138,14 @@ export class TransactionsService {
       startDate?: Date
       endDate?: Date
       categoryId?: string
+      isPointed?: boolean
     }
   ): Promise<{ data: Transaction[]; total: number }> {
     const where = {
       userId,
       ...(filters?.type && { type: filters.type }),
       ...(filters?.categoryId && { categoryId: filters.categoryId }),
+      ...(filters?.isPointed !== undefined && { isPointed: filters.isPointed }),
       ...(filters?.startDate &&
         filters?.endDate && {
           date: {

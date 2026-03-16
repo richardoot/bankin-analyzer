@@ -84,6 +84,7 @@ export class TransactionsController {
   @ApiQuery({ name: 'startDate', required: false, type: String })
   @ApiQuery({ name: 'endDate', required: false, type: String })
   @ApiQuery({ name: 'categoryId', required: false, type: String })
+  @ApiQuery({ name: 'isPointed', required: false, type: Boolean })
   async findAll(
     @CurrentUser() user: User,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
@@ -91,7 +92,8 @@ export class TransactionsController {
     @Query('type') type?: TransactionType,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Query('categoryId') categoryId?: string
+    @Query('categoryId') categoryId?: string,
+    @Query('isPointed') isPointed?: string
   ): Promise<PaginatedTransactionsResponseDto> {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
@@ -101,12 +103,14 @@ export class TransactionsController {
       startDate?: Date
       endDate?: Date
       categoryId?: string
+      isPointed?: boolean
     } = {}
 
     if (type) filters.type = type
     if (startDate) filters.startDate = new Date(startDate)
     if (endDate) filters.endDate = new Date(endDate)
     if (categoryId) filters.categoryId = categoryId
+    if (isPointed !== undefined) filters.isPointed = isPointed === 'true'
 
     const { data: transactions, total } =
       await this.transactionsService.findAllByUserPaginated(
