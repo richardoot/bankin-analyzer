@@ -153,6 +153,24 @@
     return reimbursements.value.filter(r => r.transactionId === txId)
   }
 
+  // Get settlements for a specific reimbursement
+  function getSettlementsForReimbursement(
+    reimbursementId: string
+  ): SettlementDto[] {
+    return settlements.value.filter(s =>
+      s.reimbursements.some(r => r.reimbursementId === reimbursementId)
+    )
+  }
+
+  // Show settlement detail for a reimbursement
+  function showSettlementForReimbursement(reimbursementId: string) {
+    const settlementsList = getSettlementsForReimbursement(reimbursementId)
+    if (settlementsList.length > 0) {
+      selectedSettlement.value = settlementsList[0]
+      showSettlementDetailModal.value = true
+    }
+  }
+
   // Get remaining amount to assign for a transaction
   function getRemainingAmount(tx: TransactionDto): number {
     const assigned = getReimbursementsForTransaction(tx.id).reduce(
@@ -1144,47 +1162,89 @@
                     :key="reimb.id"
                     class="flex items-center justify-between py-1 text-sm"
                   >
-                    <div class="flex items-center gap-2">
-                      <span
-                        class="inline-flex items-center justify-center h-6 w-6 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium"
+                    <!-- Remboursement regle (COMPLETED) -->
+                    <template v-if="reimb.status === 'COMPLETED'">
+                      <div class="flex items-center gap-2">
+                        <button
+                          class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-medium hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
+                          title="Voir le reglement"
+                          @click="showSettlementForReimbursement(reimb.id)"
+                        >
+                          <svg
+                            class="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          <span>{{ formatCurrency(reimb.amount) }}</span>
+                        </button>
+                        <span
+                          v-if="reimb.categoryName"
+                          class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded"
+                        >
+                          {{ reimb.categoryName }}
+                        </span>
+                      </div>
+                    </template>
+
+                    <!-- Remboursement en attente ou partiel -->
+                    <template v-else>
+                      <div class="flex items-center gap-2">
+                        <span
+                          class="inline-flex items-center justify-center h-6 w-6 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium"
+                        >
+                          {{ reimb.personName.charAt(0).toUpperCase() }}
+                        </span>
+                        <span class="text-gray-700 dark:text-gray-300">{{
+                          reimb.personName
+                        }}</span>
+                        <span class="text-gray-500 dark:text-gray-400">:</span>
+                        <span
+                          class="font-medium text-amber-700 dark:text-amber-400"
+                        >
+                          {{ formatCurrency(reimb.amount) }}
+                        </span>
+                        <!-- Indication du montant recu pour PARTIAL -->
+                        <span
+                          v-if="reimb.status === 'PARTIAL'"
+                          class="text-xs text-green-600 dark:text-green-400"
+                        >
+                          (recu: {{ formatCurrency(reimb.amountReceived) }})
+                        </span>
+                        <span
+                          v-if="reimb.categoryName"
+                          class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded"
+                        >
+                          {{ reimb.categoryName }}
+                        </span>
+                      </div>
+                      <button
+                        class="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                        title="Supprimer"
+                        @click="handleDeleteReimbursement(reimb.id)"
                       >
-                        {{ reimb.personName.charAt(0).toUpperCase() }}
-                      </span>
-                      <span class="text-gray-700 dark:text-gray-300">{{
-                        reimb.personName
-                      }}</span>
-                      <span class="text-gray-500 dark:text-gray-400">:</span>
-                      <span
-                        class="font-medium text-amber-700 dark:text-amber-400"
-                      >
-                        {{ formatCurrency(reimb.amount) }}
-                      </span>
-                      <span
-                        v-if="reimb.categoryName"
-                        class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded"
-                      >
-                        {{ reimb.categoryName }}
-                      </span>
-                    </div>
-                    <button
-                      class="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                      title="Supprimer"
-                      @click="handleDeleteReimbursement(reimb.id)"
-                    >
-                      <svg
-                        class="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
+                        <svg
+                          class="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </template>
                   </div>
                   <!-- Remaining amount -->
                   <div
