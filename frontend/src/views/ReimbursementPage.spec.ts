@@ -15,6 +15,7 @@ vi.mock('@/lib/api', () => ({
     getReimbursements: vi.fn(),
     createReimbursement: vi.fn(),
     deleteReimbursement: vi.fn(),
+    getSettlements: vi.fn(),
   },
 }))
 
@@ -90,10 +91,45 @@ describe('ReimbursementPage', () => {
     },
   ]
 
+  const mockCategories = [
+    {
+      id: 'cat1',
+      name: 'Alimentation',
+      type: 'EXPENSE' as const,
+      createdAt: '2024-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'cat2',
+      name: 'Sante',
+      type: 'EXPENSE' as const,
+      createdAt: '2024-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'cat3',
+      name: 'Salaires',
+      type: 'INCOME' as const,
+      createdAt: '2024-01-01T00:00:00.000Z',
+    },
+  ]
+
+  // Helper to create paginated response
+  const paginatedResponse = <T>(data: T[], page = 1, limit = 20) => ({
+    data,
+    meta: {
+      total: data.length,
+      page,
+      limit,
+      totalPages: Math.ceil(data.length / limit) || 0,
+      hasNextPage: page < Math.ceil(data.length / limit),
+      hasPreviousPage: page > 1,
+    },
+  })
+
   // Helper to set up default mocks
   const setupDefaultMocks = () => {
-    vi.mocked(api.getCategories).mockResolvedValue([])
+    vi.mocked(api.getCategories).mockResolvedValue(mockCategories)
     vi.mocked(api.getReimbursements).mockResolvedValue([])
+    vi.mocked(api.getSettlements).mockResolvedValue([])
   }
 
   const mountComponent = async () => {
@@ -113,7 +149,7 @@ describe('ReimbursementPage', () => {
   describe('Page display', () => {
     it('should display page title', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -122,7 +158,7 @@ describe('ReimbursementPage', () => {
 
     it('should fetch persons and transactions on mount', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       await mountComponent()
 
@@ -134,7 +170,7 @@ describe('ReimbursementPage', () => {
   describe('Persons section', () => {
     it('should display "Personnes" section title', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -143,7 +179,7 @@ describe('ReimbursementPage', () => {
 
     it('should display empty state when no persons', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -152,7 +188,7 @@ describe('ReimbursementPage', () => {
 
     it('should display person cards when persons exist', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -162,7 +198,7 @@ describe('ReimbursementPage', () => {
 
     it('should display person email when available', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -171,7 +207,7 @@ describe('ReimbursementPage', () => {
 
     it('should display "Pas d\'email" when email is null', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -180,7 +216,7 @@ describe('ReimbursementPage', () => {
 
     it('should display first letter of name as avatar for each person', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -197,7 +233,7 @@ describe('ReimbursementPage', () => {
   describe('Add person', () => {
     it('should have input fields for name and email', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -210,7 +246,7 @@ describe('ReimbursementPage', () => {
 
     it('should have disabled add button when name is empty', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -220,7 +256,7 @@ describe('ReimbursementPage', () => {
 
     it('should enable add button when name is filled', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -235,7 +271,7 @@ describe('ReimbursementPage', () => {
 
     it('should call createPerson API when adding a person', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
       vi.mocked(api.createPerson).mockResolvedValue({
         id: '3',
         name: 'Charlie',
@@ -265,7 +301,7 @@ describe('ReimbursementPage', () => {
 
     it('should clear inputs after successful add', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
       vi.mocked(api.createPerson).mockResolvedValue({
         id: '3',
         name: 'Charlie',
@@ -292,7 +328,7 @@ describe('ReimbursementPage', () => {
   describe('Edit person', () => {
     it('should have edit button for each person', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -302,7 +338,7 @@ describe('ReimbursementPage', () => {
 
     it('should show edit form when clicking edit button', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -316,7 +352,7 @@ describe('ReimbursementPage', () => {
 
     it('should populate input with current name when editing', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -333,7 +369,7 @@ describe('ReimbursementPage', () => {
 
     it('should call updatePerson API when saving edit', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
       vi.mocked(api.updatePerson).mockResolvedValue({
         ...mockPersons[0],
         name: 'Alice Updated',
@@ -365,7 +401,7 @@ describe('ReimbursementPage', () => {
 
     it('should cancel edit when clicking cancel button', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -384,7 +420,7 @@ describe('ReimbursementPage', () => {
 
     it('should hide delete button while editing', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -414,7 +450,7 @@ describe('ReimbursementPage', () => {
         },
       ]
       vi.mocked(api.getPersons).mockResolvedValue(testPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
       setupDefaultMocks()
 
       const wrapper = mount(ReimbursementPage, {
@@ -439,7 +475,7 @@ describe('ReimbursementPage', () => {
 
     it('should close modal when clicking cancel', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
       setupDefaultMocks()
 
       const wrapper = mount(ReimbursementPage, {
@@ -472,7 +508,7 @@ describe('ReimbursementPage', () => {
 
     it('should call deletePerson API when confirming delete', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
       vi.mocked(api.deletePerson).mockResolvedValue()
       setupDefaultMocks()
 
@@ -506,7 +542,7 @@ describe('ReimbursementPage', () => {
 
     it('should close modal after successful delete', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
       vi.mocked(api.deletePerson).mockResolvedValue()
       setupDefaultMocks()
 
@@ -541,7 +577,9 @@ describe('ReimbursementPage', () => {
   describe('Transactions section', () => {
     it('should display "Transactions Depenses" section title', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
 
       const wrapper = await mountComponent()
 
@@ -550,7 +588,9 @@ describe('ReimbursementPage', () => {
 
     it('should only display EXPENSE type transactions', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
 
       const wrapper = await mountComponent()
 
@@ -570,7 +610,13 @@ describe('ReimbursementPage', () => {
 
     it('should display transaction count', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      // Backend returns only EXPENSE transactions
+      const expenseTransactions = mockTransactions.filter(
+        t => t.type === 'EXPENSE'
+      )
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(expenseTransactions)
+      )
 
       const wrapper = await mountComponent()
 
@@ -580,19 +626,21 @@ describe('ReimbursementPage', () => {
 
     it('should display empty state when no expense transactions', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue([
-        {
-          id: '1',
-          date: '2024-01-25T00:00:00.000Z',
-          description: 'Salaire',
-          amount: 2500.0,
-          type: 'INCOME' as const,
-          account: 'Compte Courant',
-          categoryName: 'Salaires',
-          isPointed: true,
-          createdAt: '2024-01-25T00:00:00.000Z',
-        },
-      ])
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse([
+          {
+            id: '1',
+            date: '2024-01-25T00:00:00.000Z',
+            description: 'Salaire',
+            amount: 2500.0,
+            type: 'INCOME' as const,
+            account: 'Compte Courant',
+            categoryName: 'Salaires',
+            isPointed: true,
+            createdAt: '2024-01-25T00:00:00.000Z',
+          },
+        ])
+      )
 
       const wrapper = await mountComponent()
 
@@ -603,7 +651,9 @@ describe('ReimbursementPage', () => {
   describe('Category filter', () => {
     it('should display category filter dropdown', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
 
       const wrapper = await mountComponent()
 
@@ -614,7 +664,9 @@ describe('ReimbursementPage', () => {
 
     it('should list unique expense categories', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
 
       const wrapper = await mountComponent()
 
@@ -626,12 +678,19 @@ describe('ReimbursementPage', () => {
 
     it('should filter transactions by category', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      // Initial load returns all transactions, filtered load returns only matching
+      const filteredTransactions = mockTransactions.filter(
+        t => t.categoryName === 'Alimentation'
+      )
+      vi.mocked(api.getTransactions)
+        .mockResolvedValueOnce(paginatedResponse(mockTransactions)) // Initial load
+        .mockResolvedValueOnce(paginatedResponse(filteredTransactions)) // After filter
 
       const wrapper = await mountComponent()
 
       const select = wrapper.find('select')
       await select.setValue('Alimentation')
+      await flushPromises()
 
       expect(wrapper.text()).toContain('Restaurant')
       expect(wrapper.text()).not.toContain('Pharmacie')
@@ -642,7 +701,9 @@ describe('ReimbursementPage', () => {
   describe('Not pointed filter', () => {
     it('should display "Uniquement non pointees" checkbox', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
 
       const wrapper = await mountComponent()
 
@@ -653,7 +714,9 @@ describe('ReimbursementPage', () => {
 
     it('should filter to show only non-pointed transactions when checked', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
 
       const wrapper = await mountComponent()
 
@@ -670,7 +733,9 @@ describe('ReimbursementPage', () => {
   describe('Pagination', () => {
     it('should not display pagination when less than 20 transactions', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
 
       const wrapper = await mountComponent()
 
@@ -693,7 +758,9 @@ describe('ReimbursementPage', () => {
         createdAt: '2024-01-15T00:00:00.000Z',
       }))
 
-      vi.mocked(api.getTransactions).mockResolvedValue(manyTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValueOnce(
+        paginatedResponse(manyTransactions)
+      )
 
       const wrapper = await mountComponent()
 
@@ -715,7 +782,34 @@ describe('ReimbursementPage', () => {
         createdAt: '2024-01-15T00:00:00.000Z',
       }))
 
-      vi.mocked(api.getTransactions).mockResolvedValue(manyTransactions)
+      // Page 1: first 20 transactions
+      const page1Response = {
+        data: manyTransactions.slice(0, 20),
+        meta: {
+          total: 25,
+          page: 1,
+          limit: 20,
+          totalPages: 2,
+          hasNextPage: true,
+          hasPreviousPage: false,
+        },
+      }
+      // Page 2: last 5 transactions
+      const page2Response = {
+        data: manyTransactions.slice(20),
+        meta: {
+          total: 25,
+          page: 2,
+          limit: 20,
+          totalPages: 2,
+          hasNextPage: false,
+          hasPreviousPage: true,
+        },
+      }
+
+      vi.mocked(api.getTransactions)
+        .mockResolvedValueOnce(page1Response)
+        .mockResolvedValueOnce(page2Response)
 
       const wrapper = await mountComponent()
 
@@ -724,6 +818,7 @@ describe('ReimbursementPage', () => {
         .findAll('button')
         .find(b => b.find('path[d="M9 5l7 7-7 7"]').exists())
       await nextButton?.trigger('click')
+      await flushPromises()
 
       expect(wrapper.text()).toContain('Page 2 sur 2')
       expect(wrapper.text()).toContain('Transaction 21')
@@ -732,6 +827,7 @@ describe('ReimbursementPage', () => {
     it('should reset to page 1 when filter changes', async () => {
       vi.mocked(api.getPersons).mockResolvedValue([])
 
+      // Use category names that match mockCategories (Alimentation, Sante)
       const manyTransactions = Array.from({ length: 25 }, (_, i) => ({
         id: String(i + 1),
         date: '2024-01-15T00:00:00.000Z',
@@ -739,12 +835,44 @@ describe('ReimbursementPage', () => {
         amount: -10,
         type: 'EXPENSE' as const,
         account: 'Compte',
-        categoryName: i < 15 ? 'Cat1' : 'Cat2',
+        categoryName: i < 15 ? 'Alimentation' : 'Sante',
         isPointed: false,
         createdAt: '2024-01-15T00:00:00.000Z',
       }))
 
-      vi.mocked(api.getTransactions).mockResolvedValue(manyTransactions)
+      const alimentationTransactions = manyTransactions.filter(
+        t => t.categoryName === 'Alimentation'
+      )
+
+      // Page 1: first 20 transactions
+      const page1Response = {
+        data: manyTransactions.slice(0, 20),
+        meta: {
+          total: 25,
+          page: 1,
+          limit: 20,
+          totalPages: 2,
+          hasNextPage: true,
+          hasPreviousPage: false,
+        },
+      }
+      // Page 2 response with correct total meta
+      const page2Response = {
+        data: manyTransactions.slice(20),
+        meta: {
+          total: 25,
+          page: 2,
+          limit: 20,
+          totalPages: 2,
+          hasNextPage: false,
+          hasPreviousPage: true,
+        },
+      }
+
+      vi.mocked(api.getTransactions)
+        .mockResolvedValueOnce(page1Response) // Initial load
+        .mockResolvedValueOnce(page2Response) // Page 2
+        .mockResolvedValueOnce(paginatedResponse(alimentationTransactions)) // After category filter
 
       const wrapper = await mountComponent()
 
@@ -753,14 +881,16 @@ describe('ReimbursementPage', () => {
         .findAll('button')
         .find(b => b.find('path[d="M9 5l7 7-7 7"]').exists())
       await nextButton?.trigger('click')
+      await flushPromises()
 
       expect(wrapper.text()).toContain('Page 2')
 
-      // Change category filter
+      // Change category filter to Alimentation
       const select = wrapper.find('select')
-      await select.setValue('Cat1')
+      await select.setValue('Alimentation')
+      await flushPromises()
 
-      // Should reset to page 1
+      // Should reset to page 1 with 15 Alimentation transactions
       expect(wrapper.text()).toContain('15 transaction(s)')
     })
   })
@@ -768,7 +898,7 @@ describe('ReimbursementPage', () => {
   describe('Error handling', () => {
     it('should display error when persons API fails', async () => {
       vi.mocked(api.getPersons).mockRejectedValue(new Error('Network error'))
-      vi.mocked(api.getTransactions).mockResolvedValue([])
+      vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
 
       const wrapper = await mountComponent()
 
@@ -808,7 +938,9 @@ describe('ReimbursementPage', () => {
 
     it('should display assign button on transactions', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
       const wrapper = await mountComponent()
@@ -821,7 +953,9 @@ describe('ReimbursementPage', () => {
 
     it('should display reimbursements under transaction', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
 
@@ -841,7 +975,9 @@ describe('ReimbursementPage', () => {
 
     it('should open reimbursement modal when clicking assign button', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getReimbursements).mockResolvedValue([])
       vi.mocked(api.getCategories).mockResolvedValue([])
 
@@ -868,7 +1004,9 @@ describe('ReimbursementPage', () => {
 
     it('should call createReimbursement API when submitting', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getReimbursements).mockResolvedValue([])
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.createReimbursement).mockResolvedValue(
@@ -911,7 +1049,9 @@ describe('ReimbursementPage', () => {
   describe('Reimbursement modal - Transaction info', () => {
     it('should display total amount and remaining amount in modal', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
@@ -956,7 +1096,9 @@ describe('ReimbursementPage', () => {
       }
 
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([partialReimbursement])
 
@@ -985,7 +1127,9 @@ describe('ReimbursementPage', () => {
   describe('Reimbursement modal - Amount shortcuts', () => {
     it('should display amount shortcuts in modal', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
@@ -1016,7 +1160,9 @@ describe('ReimbursementPage', () => {
 
     it('should set full amount when clicking 100% button', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
@@ -1050,7 +1196,9 @@ describe('ReimbursementPage', () => {
 
     it('should divide amount by 2 when clicking /2 button', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
@@ -1084,7 +1232,9 @@ describe('ReimbursementPage', () => {
 
     it('should divide amount by 3 when clicking /3 button', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
@@ -1118,7 +1268,9 @@ describe('ReimbursementPage', () => {
 
     it('should divide amount by 4 when clicking /4 button', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
@@ -1152,7 +1304,9 @@ describe('ReimbursementPage', () => {
 
     it('should apply custom divisor when clicking Appliquer button', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
@@ -1206,7 +1360,9 @@ describe('ReimbursementPage', () => {
       }
 
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([partialReimbursement])
 
@@ -1243,7 +1399,9 @@ describe('ReimbursementPage', () => {
   describe('Reimbursement modal - Amount validation', () => {
     it('should show warning when amount exceeds remaining', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
@@ -1273,7 +1431,9 @@ describe('ReimbursementPage', () => {
 
     it('should disable confirm button when amount exceeds remaining', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
@@ -1327,7 +1487,9 @@ describe('ReimbursementPage', () => {
       }
 
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([partialReimbursement])
 
@@ -1393,7 +1555,9 @@ describe('ReimbursementPage', () => {
 
     it('should display summary section when reimbursements exist', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
 
@@ -1413,7 +1577,9 @@ describe('ReimbursementPage', () => {
 
     it('should display person totals in summary', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
 
@@ -1433,7 +1599,9 @@ describe('ReimbursementPage', () => {
 
     it('should display category breakdown in summary', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
 
@@ -1453,7 +1621,9 @@ describe('ReimbursementPage', () => {
 
     it('should not display summary when no reimbursements', async () => {
       vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
-      vi.mocked(api.getTransactions).mockResolvedValue(mockTransactions)
+      vi.mocked(api.getTransactions).mockResolvedValue(
+        paginatedResponse(mockTransactions)
+      )
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
       const wrapper = await mountComponent()

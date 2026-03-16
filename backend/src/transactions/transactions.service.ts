@@ -130,6 +130,43 @@ export class TransactionsService {
     })
   }
 
+  async findAllByUserPaginated(
+    userId: string,
+    pagination: { page: number; limit: number },
+    filters?: {
+      type?: TransactionType
+      startDate?: Date
+      endDate?: Date
+      categoryId?: string
+    }
+  ): Promise<{ data: Transaction[]; total: number }> {
+    const where = {
+      userId,
+      ...(filters?.type && { type: filters.type }),
+      ...(filters?.categoryId && { categoryId: filters.categoryId }),
+      ...(filters?.startDate &&
+        filters?.endDate && {
+          date: {
+            gte: filters.startDate,
+            lte: filters.endDate,
+          },
+        }),
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where,
+        include: { category: true },
+        orderBy: { date: 'desc' },
+        skip: (pagination.page - 1) * pagination.limit,
+        take: pagination.limit,
+      }),
+      this.prisma.transaction.count({ where }),
+    ])
+
+    return { data, total }
+  }
+
   async findOne(id: string, userId: string): Promise<Transaction> {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, userId },

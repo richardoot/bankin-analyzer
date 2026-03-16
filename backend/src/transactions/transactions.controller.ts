@@ -8,6 +8,8 @@ import {
   Param,
   Query,
   UseGuards,
+  DefaultValuePipe,
+  ParseIntPipe,
 } from '@nestjs/common'
 import {
   ApiTags,
@@ -23,6 +25,8 @@ import {
   ImportPreviewResultDto,
   TransactionResponseDto,
 } from './dto'
+import { PaginatedTransactionsResponseDto } from './dto/paginated-transactions-response.dto'
+import { createPaginationMeta } from '../common/dto/pagination.dto'
 import { SupabaseGuard, CurrentUser } from '../auth'
 import type { User, TransactionType } from '../generated/prisma'
 
@@ -60,19 +64,38 @@ export class TransactionsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all transactions for the current user' })
-  @ApiResponse({ status: 200, type: [TransactionResponseDto] })
+  @ApiOperation({
+    summary: 'Get all transactions for the current user (paginated)',
+  })
+  @ApiResponse({ status: 200, type: PaginatedTransactionsResponseDto })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20, max: 100)',
+  })
   @ApiQuery({ name: 'type', required: false, enum: ['EXPENSE', 'INCOME'] })
   @ApiQuery({ name: 'startDate', required: false, type: String })
   @ApiQuery({ name: 'endDate', required: false, type: String })
   @ApiQuery({ name: 'categoryId', required: false, type: String })
   async findAll(
     @CurrentUser() user: User,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('type') type?: TransactionType,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('categoryId') categoryId?: string
-  ): Promise<TransactionResponseDto[]> {
+  ): Promise<PaginatedTransactionsResponseDto> {
+    // Clamp limit to max 100
+    const clampedLimit = Math.min(Math.max(limit, 1), 100)
+
     const filters: {
       type?: TransactionType
       startDate?: Date
@@ -85,12 +108,14 @@ export class TransactionsController {
     if (endDate) filters.endDate = new Date(endDate)
     if (categoryId) filters.categoryId = categoryId
 
-    const transactions = await this.transactionsService.findAllByUser(
-      user.id,
-      Object.keys(filters).length > 0 ? filters : undefined
-    )
+    const { data: transactions, total } =
+      await this.transactionsService.findAllByUserPaginated(
+        user.id,
+        { page, limit: clampedLimit },
+        Object.keys(filters).length > 0 ? filters : undefined
+      )
 
-    return transactions.map(tx => {
+    const data = transactions.map(tx => {
       const category = (tx as { category?: { name: string } }).category
       return {
         id: tx.id,
@@ -107,6 +132,11 @@ export class TransactionsController {
         createdAt: tx.createdAt,
       }
     })
+
+    return {
+      data,
+      meta: createPaginationMeta(total, page, clampedLimit),
+    }
   }
 
   @Get(':id')

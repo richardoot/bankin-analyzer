@@ -7,6 +7,7 @@
     ReimbursementDto,
     CategoryDto,
     SettlementDto,
+    PaginationMeta,
   } from '@/lib/api'
   import { usePdfExport } from '@/composables/usePdfExport'
   import SettlementModal from '@/components/settlements/SettlementModal.vue'
@@ -33,6 +34,7 @@
   const transactions = ref<TransactionDto[]>([])
   const isLoadingTransactions = ref(false)
   const transactionsError = ref<string | null>(null)
+  const transactionsMeta = ref<PaginationMeta | null>(null)
 
   // Categories state
   const allCategories = ref<CategoryDto[]>([])
@@ -79,26 +81,30 @@
   const currentPage = ref(1)
   const pageSize = 20
 
-  // Computed: extract unique categories from transactions
+  // Check if we need to use frontend filtering (for showOnlyNotPointed)
+  const useBackendPagination = computed(() => !showOnlyNotPointed.value)
+
+  // Computed: expense categories for filter dropdown
   const categories = computed(() => {
-    const cats = new Set<string>()
-    transactions.value.forEach(t => {
-      if (t.categoryName) {
-        cats.add(t.categoryName)
-      }
-    })
-    return Array.from(cats).sort()
+    return allCategories.value
+      .filter(c => c.type === 'EXPENSE')
+      .map(c => c.name)
+      .sort()
   })
 
-  // Computed: filtered transactions
+  // Computed: filtered transactions (for local filtering when showOnlyNotPointed is active)
   const filteredTransactions = computed(() => {
     return transactions.value.filter(t => {
-      // Only EXPENSE type
+      // Only EXPENSE type (backend already filters this when using backend pagination)
       if (t.type !== 'EXPENSE') return false
-      // Category filter
-      if (selectedCategory.value && t.categoryName !== selectedCategory.value)
+      // Category filter (backend already filters this when using backend pagination)
+      if (
+        !useBackendPagination.value &&
+        selectedCategory.value &&
+        t.categoryName !== selectedCategory.value
+      )
         return false
-      // Not pointed filter (show only transactions that are NOT pointed)
+      // Not pointed filter (show only transactions that are NOT pointed) - always local
       if (showOnlyNotPointed.value && t.isPointed) return false
       return true
     })
@@ -106,14 +112,31 @@
 
   // Computed: paginated transactions
   const paginatedTransactions = computed(() => {
-    const start = (currentPage.value - 1) * pageSize
-    return filteredTransactions.value.slice(start, start + pageSize)
+    if (useBackendPagination.value) {
+      // Backend pagination: transactions are already paginated
+      return transactions.value.filter(t => t.type === 'EXPENSE')
+    } else {
+      // Frontend pagination: slice filtered transactions
+      const start = (currentPage.value - 1) * pageSize
+      return filteredTransactions.value.slice(start, start + pageSize)
+    }
   })
 
   // Computed: total pages
-  const totalPages = computed(() =>
-    Math.ceil(filteredTransactions.value.length / pageSize)
-  )
+  const totalPages = computed(() => {
+    if (useBackendPagination.value && transactionsMeta.value) {
+      return transactionsMeta.value.totalPages
+    }
+    return Math.ceil(filteredTransactions.value.length / pageSize)
+  })
+
+  // Computed: total transactions count (for display)
+  const totalTransactions = computed(() => {
+    if (useBackendPagination.value && transactionsMeta.value) {
+      return transactionsMeta.value.total
+    }
+    return filteredTransactions.value.length
+  })
 
   // Computed: page numbers to display
   const visiblePages = computed(() => {
@@ -323,9 +346,22 @@
     reimbursements.value.reduce((sum, r) => sum + r.amountRemaining, 0)
   )
 
-  // Reset page when filters change
+  // Refetch when filters change (reset to page 1)
   watch([selectedCategory, showOnlyNotPointed], () => {
+    const wasOnPage1 = currentPage.value === 1
     currentPage.value = 1
+    // Only fetch here if we were already on page 1
+    // (otherwise the currentPage watcher will handle it)
+    if (wasOnPage1) {
+      fetchTransactions()
+    }
+  })
+
+  // Refetch when page changes (only for backend pagination)
+  watch(currentPage, (newPage, oldPage) => {
+    if (newPage !== oldPage && useBackendPagination.value) {
+      fetchTransactions()
+    }
   })
 
   // Fetch transactions
@@ -333,7 +369,27 @@
     try {
       isLoadingTransactions.value = true
       transactionsError.value = null
-      transactions.value = await api.getTransactions()
+
+      if (useBackendPagination.value) {
+        // Use backend pagination
+        const response = await api.getTransactions({
+          page: currentPage.value,
+          limit: pageSize,
+          type: 'EXPENSE',
+          categoryId: selectedCategory.value || undefined,
+        })
+        transactions.value = response.data
+        transactionsMeta.value = response.meta
+      } else {
+        // Load all EXPENSE transactions for frontend filtering (showOnlyNotPointed)
+        const response = await api.getTransactions({
+          page: 1,
+          limit: 1000, // Load more for local filtering
+          type: 'EXPENSE',
+        })
+        transactions.value = response.data
+        transactionsMeta.value = null
+      }
     } catch (err) {
       transactionsError.value =
         err instanceof Error ? err.message : 'Failed to fetch transactions'
@@ -931,7 +987,7 @@
             Transactions Depenses
           </h2>
           <div class="text-sm text-gray-500 dark:text-gray-400">
-            {{ filteredTransactions.length }} transaction(s)
+            {{ totalTransactions }} transaction(s)
           </div>
         </div>
 

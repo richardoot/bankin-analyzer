@@ -149,9 +149,12 @@
     error.value = null
 
     try {
-      // Load all income transactions
-      const allTransactions = await api.getTransactions()
-      let incomeOnly = allTransactions.filter(t => t.type === 'INCOME')
+      // Load income transactions using paginated API
+      const response = await api.getTransactions({
+        type: 'INCOME',
+        limit: 100, // Load enough for selection
+      })
+      let incomeOnly = response.data
 
       // Filter by selected reimbursement category names if any
       const categoryNames = selectedIncomeCategoryNames.value

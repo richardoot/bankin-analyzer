@@ -110,6 +110,30 @@ export interface TransactionDto {
   createdAt: string
 }
 
+// Pagination types
+export interface PaginationMeta {
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+  hasNextPage: boolean
+  hasPreviousPage: boolean
+}
+
+export interface PaginatedResponse<T> {
+  data: T[]
+  meta: PaginationMeta
+}
+
+export interface TransactionQueryParams {
+  page?: number
+  limit?: number
+  type?: 'EXPENSE' | 'INCOME'
+  startDate?: string
+  endDate?: string
+  categoryId?: string
+}
+
 export interface FilterPreferencesDto {
   jointAccounts: string[]
   hiddenExpenseCategories: string[]
@@ -418,14 +442,30 @@ export const api = {
     return response.json() as Promise<CategoryDto[]>
   },
 
-  async getTransactions(): Promise<TransactionDto[]> {
-    const response = await fetchWithAuth(`${API_BASE_URL}/transactions`)
+  async getTransactions(
+    params?: TransactionQueryParams
+  ): Promise<PaginatedResponse<TransactionDto>> {
+    const searchParams = new URLSearchParams()
+
+    if (params?.page) searchParams.set('page', params.page.toString())
+    if (params?.limit) searchParams.set('limit', params.limit.toString())
+    if (params?.type) searchParams.set('type', params.type)
+    if (params?.startDate) searchParams.set('startDate', params.startDate)
+    if (params?.endDate) searchParams.set('endDate', params.endDate)
+    if (params?.categoryId) searchParams.set('categoryId', params.categoryId)
+
+    const queryString = searchParams.toString()
+    const url = queryString
+      ? `${API_BASE_URL}/transactions?${queryString}`
+      : `${API_BASE_URL}/transactions`
+
+    const response = await fetchWithAuth(url)
 
     if (!response.ok) {
       throw new Error('Failed to fetch transactions')
     }
 
-    return response.json() as Promise<TransactionDto[]>
+    return response.json() as Promise<PaginatedResponse<TransactionDto>>
   },
 
   async getFilterPreferences(): Promise<FilterPreferencesDto> {

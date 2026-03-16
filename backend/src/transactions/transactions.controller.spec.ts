@@ -50,6 +50,7 @@ const mockTransactionsService = {
   previewImport: vi.fn(),
   importTransactions: vi.fn(),
   findAllByUser: vi.fn(),
+  findAllByUserPaginated: vi.fn(),
   findOne: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
@@ -369,38 +370,63 @@ describe('TransactionsController', () => {
   })
 
   describe('findAll', () => {
-    it('should return all transactions for current user', async () => {
-      mockTransactionsService.findAllByUser.mockResolvedValue([
-        mockTransaction,
-        mockTransaction2,
-      ])
+    it('should return paginated transactions for current user', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [mockTransaction, mockTransaction2],
+        total: 2,
+      })
 
-      const result = await controller.findAll(mockUser)
+      const result = await controller.findAll(mockUser, 1, 20)
 
-      expect(result).toHaveLength(2)
-      expect(result[0]?.id).toBe(mockTransaction.id)
-      expect(result[0]?.amount).toBe(-45.5)
-      expect(result[0]?.categoryName).toBe('Alimentation')
+      expect(result.data).toHaveLength(2)
+      expect(result.data[0]?.id).toBe(mockTransaction.id)
+      expect(result.data[0]?.amount).toBe(-45.5)
+      expect(result.data[0]?.categoryName).toBe('Alimentation')
+      expect(result.meta.total).toBe(2)
+      expect(result.meta.page).toBe(1)
+      expect(result.meta.limit).toBe(20)
+      expect(result.meta.totalPages).toBe(1)
+      expect(result.meta.hasNextPage).toBe(false)
+      expect(result.meta.hasPreviousPage).toBe(false)
     })
 
     it('should filter by type', async () => {
-      mockTransactionsService.findAllByUser.mockResolvedValue([mockTransaction])
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [mockTransaction],
+        total: 1,
+      })
 
-      await controller.findAll(mockUser, TransactionType.EXPENSE)
+      await controller.findAll(mockUser, 1, 20, TransactionType.EXPENSE)
 
-      expect(mockTransactionsService.findAllByUser).toHaveBeenCalledWith(
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(
         mockUser.id,
+        { page: 1, limit: 20 },
         expect.objectContaining({ type: TransactionType.EXPENSE })
       )
     })
 
     it('should filter by date range', async () => {
-      mockTransactionsService.findAllByUser.mockResolvedValue([])
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
 
-      await controller.findAll(mockUser, undefined, '2024-01-01', '2024-01-31')
+      await controller.findAll(
+        mockUser,
+        1,
+        20,
+        undefined,
+        '2024-01-01',
+        '2024-01-31'
+      )
 
-      expect(mockTransactionsService.findAllByUser).toHaveBeenCalledWith(
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(
         mockUser.id,
+        { page: 1, limit: 20 },
         expect.objectContaining({
           startDate: expect.any(Date),
           endDate: expect.any(Date),
@@ -408,12 +434,48 @@ describe('TransactionsController', () => {
       )
     })
 
-    it('should return empty array when no transactions', async () => {
-      mockTransactionsService.findAllByUser.mockResolvedValue([])
+    it('should return empty data when no transactions', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
 
-      const result = await controller.findAll(mockUser)
+      const result = await controller.findAll(mockUser, 1, 20)
 
-      expect(result).toEqual([])
+      expect(result.data).toEqual([])
+      expect(result.meta.total).toBe(0)
+      expect(result.meta.totalPages).toBe(0)
+    })
+
+    it('should handle pagination correctly', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [mockTransaction],
+        total: 50,
+      })
+
+      const result = await controller.findAll(mockUser, 2, 10)
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(mockUser.id, { page: 2, limit: 10 }, undefined)
+      expect(result.meta.page).toBe(2)
+      expect(result.meta.limit).toBe(10)
+      expect(result.meta.totalPages).toBe(5)
+      expect(result.meta.hasNextPage).toBe(true)
+      expect(result.meta.hasPreviousPage).toBe(true)
+    })
+
+    it('should clamp limit to max 100', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
+
+      await controller.findAll(mockUser, 1, 500)
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(mockUser.id, { page: 1, limit: 100 }, undefined)
     })
   })
 
