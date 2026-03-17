@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { onMounted } from 'vue'
+  import { onMounted, computed } from 'vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import CategoryPieChart from '@/components/charts/CategoryPieChart.vue'
   import AdvancedFiltersPanel from '@/components/filters/AdvancedFiltersPanel.vue'
@@ -25,7 +25,24 @@
     isLoading,
     error,
     fetchData,
+    monthlyData,
   } = useDashboardData()
+
+  // Track if we have initial data loaded (for showing full loader vs subtle refresh indicator)
+  const hasInitialData = computed(
+    () =>
+      monthlyData.value.length > 0 ||
+      totalExpenses.value > 0 ||
+      totalIncome.value > 0
+  )
+
+  // Show full loader only on initial load
+  const showFullLoader = computed(
+    () => isLoading.value && !hasInitialData.value
+  )
+
+  // Show subtle refresh indicator when reloading with existing data
+  const isRefreshing = computed(() => isLoading.value && hasInitialData.value)
 
   onMounted(() => {
     fetchData()
@@ -55,13 +72,37 @@
   <div class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <!-- Header -->
-      <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
-          Dashboard
-        </h1>
-        <p class="mt-2 text-gray-600 dark:text-gray-400">
-          Vue d'ensemble de vos finances
-        </p>
+      <div class="mb-8 flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            Dashboard
+          </h1>
+          <p class="mt-2 text-gray-600 dark:text-gray-400">
+            Vue d'ensemble de vos finances
+          </p>
+        </div>
+        <!-- Subtle refresh indicator -->
+        <div
+          v-if="isRefreshing"
+          class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400"
+        >
+          <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            />
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+          <span>Mise à jour...</span>
+        </div>
       </div>
 
       <!-- Error state -->
@@ -72,8 +113,8 @@
         {{ error }}
       </div>
 
-      <!-- Loading state -->
-      <div v-if="isLoading" class="flex justify-center items-center py-20">
+      <!-- Initial loading state (only shown when no data yet) -->
+      <div v-if="showFullLoader" class="flex justify-center items-center py-20">
         <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
           <svg class="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
             <circle
@@ -94,8 +135,12 @@
         </div>
       </div>
 
-      <!-- Content -->
-      <template v-else-if="!error">
+      <!-- Content (shown when we have data or finished loading) -->
+      <div
+        v-if="!error && !showFullLoader"
+        class="transition-opacity duration-200"
+        :class="isRefreshing ? 'opacity-60' : 'opacity-100'"
+      >
         <!-- Advanced filters panel -->
         <AdvancedFiltersPanel
           :available-accounts="availableAccounts"
@@ -295,7 +340,7 @@
             Importer des transactions
           </RouterLink>
         </div>
-      </template>
+      </div>
     </div>
   </div>
 </template>
