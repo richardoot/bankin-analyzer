@@ -59,9 +59,20 @@ export class DashboardService {
       categoryAssociations.map(a => a.incomeCategory)
     )
 
-    // Fetch all transactions with category for this user
+    // Build date filter if provided
+    const dateFilter =
+      filters.startDate && filters.endDate
+        ? {
+            date: {
+              gte: new Date(filters.startDate),
+              lte: new Date(filters.endDate),
+            },
+          }
+        : {}
+
+    // Fetch transactions with category for this user (filtered by date if provided)
     const transactions = await this.prisma.transaction.findMany({
-      where: { userId },
+      where: { userId, ...dateFilter },
       include: { category: true },
       orderBy: { date: 'desc' },
     })

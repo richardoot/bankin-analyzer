@@ -3,6 +3,7 @@
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import CategoryPieChart from '@/components/charts/CategoryPieChart.vue'
   import AdvancedFiltersPanel from '@/components/filters/AdvancedFiltersPanel.vue'
+  import TimePeriodSelector from '@/components/filters/TimePeriodSelector.vue'
   import { useDashboardData } from '@/composables/useDashboardData'
 
   const {
@@ -126,6 +127,11 @@
               {{ formatCurrency(totalIncome) }}
             </div>
           </div>
+        </div>
+
+        <!-- Time period selector -->
+        <div class="mb-6">
+          <TimePeriodSelector />
         </div>
 
         <!-- Charts grid: Bar charts -->

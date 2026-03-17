@@ -301,6 +301,8 @@ export interface DashboardFiltersDto {
   jointAccounts?: string[]
   hiddenExpenseCategories?: string[]
   hiddenIncomeCategories?: string[]
+  startDate?: string
+  endDate?: string
 }
 
 export interface DashboardSummaryDto {

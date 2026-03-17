@@ -120,6 +120,7 @@ export function useDashboardData() {
 
   // Filtered expenses by month (when category is selected) - requires transactions
   // Deducts reimbursements from associated income category
+  // Shows all months from the selected time period, with zeros for months without data
   const filteredExpensesByMonth = computed<ChartData>(() => {
     if (!selectedCategory.value) {
       return expensesByMonth.value
@@ -166,35 +167,26 @@ export function useDashboardData() {
       }
     }
 
-    // Combine all months (expenses and reimbursements may have different months)
-    const allMonths = new Set([
-      ...expensesByMonthMap.keys(),
-      ...reimbursementsByMonthMap.keys(),
-    ])
-    const sortedMonths = Array.from(allMonths).sort()
+    // Use all months from the global monthlyData to maintain consistency with time period
+    const allMonthsFromPeriod = monthlyData.value.map(d => d.month)
 
-    // Calculate net expenses per month
-    const netExpensesByMonth = sortedMonths
-      .map(month => {
+    // Calculate net expenses per month for all months in the period
+    return {
+      labels: allMonthsFromPeriod.map(month => {
+        const [year, monthNum] = month.split('-')
+        return `${MONTH_LABELS[monthNum]} ${year}`
+      }),
+      values: allMonthsFromPeriod.map(month => {
         const expenses = expensesByMonthMap.get(month) ?? 0
         const reimbursements = reimbursementsByMonthMap.get(month) ?? 0
         const netExpenses = Math.max(0, expenses - reimbursements)
-        return { month, netExpenses }
-      })
-      .filter(d => d.netExpenses > 0) // Only include months with positive net expenses
-
-    return {
-      labels: netExpensesByMonth.map(d => {
-        const [year, monthNum] = d.month.split('-')
-        return `${MONTH_LABELS[monthNum]} ${year}`
+        return Math.round(netExpenses * 100) / 100
       }),
-      values: netExpensesByMonth.map(
-        d => Math.round(d.netExpenses * 100) / 100
-      ),
     }
   })
 
   // Filtered income by month (when category is selected) - requires transactions
+  // Shows all months from the selected time period, with zeros for months without data
   const filteredIncomeByMonth = computed<ChartData>(() => {
     if (!selectedIncomeCategory.value) {
       return incomeByMonth.value
@@ -222,15 +214,15 @@ export function useDashboardData() {
       }
     }
 
-    // Sort by month
-    const sortedMonths = Array.from(dataByMonth.keys()).sort()
+    // Use all months from the global monthlyData to maintain consistency with time period
+    const allMonthsFromPeriod = monthlyData.value.map(d => d.month)
 
     return {
-      labels: sortedMonths.map(month => {
+      labels: allMonthsFromPeriod.map(month => {
         const [year, monthNum] = month.split('-')
         return `${MONTH_LABELS[monthNum]} ${year}`
       }),
-      values: sortedMonths.map(
+      values: allMonthsFromPeriod.map(
         month => Math.round((dataByMonth.get(month) ?? 0) * 100) / 100
       ),
     }
@@ -283,12 +275,19 @@ export function useDashboardData() {
     error.value = null
 
     try {
+      // Calculate date range from selected time period
+      const { startDate, endDate } = filtersStore.getDateRangeFromPeriod(
+        filtersStore.timePeriod
+      )
+
       // Load dashboard summary and category associations in parallel
       const [summary] = await Promise.all([
         api.getDashboardSummary({
           jointAccounts: filtersStore.jointAccounts,
           hiddenExpenseCategories: filtersStore.hiddenExpenseCategories,
           hiddenIncomeCategories: filtersStore.hiddenIncomeCategories,
+          startDate: startDate ?? undefined,
+          endDate: endDate ?? undefined,
         }),
         categoryAssociationsStore.load(),
       ])
@@ -298,6 +297,11 @@ export function useDashboardData() {
       // Reset drill-down state when reloading
       transactionsLoaded.value = false
       transactions.value = []
+
+      // If a category filter is active, reload transactions for drill-down
+      if (selectedCategory.value || selectedIncomeCategory.value) {
+        await loadTransactionsForDrillDown()
+      }
     } catch (err) {
       error.value =
         err instanceof Error
@@ -314,6 +318,7 @@ export function useDashboardData() {
       filtersStore.jointAccounts,
       filtersStore.hiddenExpenseCategories,
       filtersStore.hiddenIncomeCategories,
+      filtersStore.timePeriod,
     ],
     () => {
       if (summaryData.value) {

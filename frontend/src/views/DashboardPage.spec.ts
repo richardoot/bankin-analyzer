@@ -40,6 +40,9 @@ vi.mock('@/stores/filters', () => ({
     saveToBackend: vi.fn(),
     isSyncing: false,
     hasUnsavedChanges: false,
+    timePeriod: 'all',
+    setTimePeriod: vi.fn(),
+    getDateRangeFromPeriod: vi.fn(() => ({ startDate: null, endDate: null })),
   }),
 }))
 

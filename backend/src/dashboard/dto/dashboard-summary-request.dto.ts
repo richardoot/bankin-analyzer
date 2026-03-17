@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
-import { IsString, IsArray, IsOptional } from 'class-validator'
+import { IsString, IsArray, IsOptional, IsDateString } from 'class-validator'
 
 export class DashboardFiltersDto {
   @ApiPropertyOptional({
@@ -28,4 +28,20 @@ export class DashboardFiltersDto {
   @IsArray()
   @IsString({ each: true })
   hiddenIncomeCategories?: string[]
+
+  @ApiPropertyOptional({
+    description: 'Start date for filtering (ISO format: YYYY-MM-DD)',
+    example: '2024-01-01',
+  })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string
+
+  @ApiPropertyOptional({
+    description: 'End date for filtering (ISO format: YYYY-MM-DD)',
+    example: '2024-12-31',
+  })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string
 }

@@ -19,6 +19,9 @@ vi.mock('@/stores/filters', () => ({
     isJointAccount: vi.fn(() => false),
     isExpenseCategoryHidden: vi.fn(() => false),
     isIncomeCategoryHidden: vi.fn(() => false),
+    timePeriod: 'all',
+    setTimePeriod: vi.fn(),
+    getDateRangeFromPeriod: vi.fn(() => ({ startDate: null, endDate: null })),
   }),
 }))
 
@@ -330,12 +333,15 @@ describe('useDashboardData', () => {
 
       await setSelectedCategory('Alimentation')
 
-      // Only Alimentation expenses (45.5 + 120 = 165.5) in January
-      expect(filteredExpensesByMonth.value.labels).toEqual(['Jan 2024'])
-      expect(filteredExpensesByMonth.value.values).toEqual([165.5])
+      // All months from period shown, with Alimentation expenses (45.5 + 120 = 165.5) in January, 0 in February
+      expect(filteredExpensesByMonth.value.labels).toEqual([
+        'Jan 2024',
+        'Fév 2024',
+      ])
+      expect(filteredExpensesByMonth.value.values).toEqual([165.5, 0])
     })
 
-    it('should return empty data when no transactions match selected category', async () => {
+    it('should show all months with zeros when no transactions match selected category', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
       vi.mocked(api.getTransactions).mockResolvedValue({
         data: mockTransactions,
@@ -355,8 +361,12 @@ describe('useDashboardData', () => {
 
       await setSelectedCategory('Catégorie Inexistante')
 
-      expect(filteredExpensesByMonth.value.labels).toEqual([])
-      expect(filteredExpensesByMonth.value.values).toEqual([])
+      // All months from period shown with zero values
+      expect(filteredExpensesByMonth.value.labels).toEqual([
+        'Jan 2024',
+        'Fév 2024',
+      ])
+      expect(filteredExpensesByMonth.value.values).toEqual([0, 0])
     })
 
     it('should not reload transactions if already loaded', async () => {
@@ -580,7 +590,7 @@ describe('useDashboardData', () => {
   })
 
   describe('data reset on refetch', () => {
-    it('should reset transactions when fetchData is called again', async () => {
+    it('should reset transactions when fetchData is called again without category filter', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
       vi.mocked(api.getTransactions).mockResolvedValue({
         data: mockTransactions,
@@ -602,11 +612,45 @@ describe('useDashboardData', () => {
 
       expect(transactions.value).toHaveLength(2)
 
+      // Clear category filter
+      await setSelectedCategory(null)
+
       // Fetch data again
       await fetchData()
 
-      // Transactions should be reset
+      // Transactions should be reset when no category filter is active
       expect(transactions.value).toHaveLength(0)
+    })
+
+    it('should reload transactions when fetchData is called with active category filter', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: mockTransactions,
+        meta: {
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
+
+      const { fetchData, setSelectedCategory, transactions } =
+        useDashboardData()
+
+      await fetchData()
+      await setSelectedCategory('Alimentation')
+
+      expect(transactions.value).toHaveLength(2)
+      expect(api.getTransactions).toHaveBeenCalledTimes(1)
+
+      // Fetch data again with category still selected
+      await fetchData()
+
+      // Transactions should be reloaded to maintain drill-down view
+      expect(transactions.value).toHaveLength(2)
+      expect(api.getTransactions).toHaveBeenCalledTimes(2)
     })
   })
 })

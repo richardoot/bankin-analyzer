@@ -4,12 +4,15 @@ import { api } from '@/lib/api'
 
 const STORAGE_KEY = 'bankin-analyzer-filters'
 
+export type TimePeriod = '3m' | '6m' | '1y' | 'all'
+
 export const useFiltersStore = defineStore('filters', () => {
   // État
   const jointAccounts = ref<string[]>([])
   const hiddenExpenseCategories = ref<string[]>([])
   const hiddenIncomeCategories = ref<string[]>([])
   const isPanelExpanded = ref(true)
+  const timePeriod = ref<TimePeriod>('all')
 
   // État de synchronisation
   const isSyncing = ref(false)
@@ -184,6 +187,40 @@ export const useFiltersStore = defineStore('filters', () => {
       hiddenIncomeCategories.value.length
   )
 
+  // Time period functions
+  function setTimePeriod(period: TimePeriod) {
+    timePeriod.value = period
+  }
+
+  function getDateRangeFromPeriod(period: TimePeriod): {
+    startDate: string | null
+    endDate: string | null
+  } {
+    if (period === 'all') {
+      return { startDate: null, endDate: null }
+    }
+
+    const endDate = new Date()
+    const startDate = new Date()
+
+    switch (period) {
+      case '3m':
+        startDate.setMonth(startDate.getMonth() - 3)
+        break
+      case '6m':
+        startDate.setMonth(startDate.getMonth() - 6)
+        break
+      case '1y':
+        startDate.setFullYear(startDate.getFullYear() - 1)
+        break
+    }
+
+    return {
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+    }
+  }
+
   // Init - charger depuis localStorage au démarrage
   // Le chargement depuis le backend sera fait après l'initialisation de l'auth
   initFromStorage()
@@ -204,6 +241,10 @@ export const useFiltersStore = defineStore('filters', () => {
     isPanelExpanded,
     togglePanelExpanded,
     activeFiltersCount,
+    // Time period
+    timePeriod,
+    setTimePeriod,
+    getDateRangeFromPeriod,
     // Sync functions
     isSyncing,
     lastSyncError,
