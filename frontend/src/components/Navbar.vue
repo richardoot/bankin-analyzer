@@ -3,6 +3,7 @@
   import { useRouter, useRoute } from 'vue-router'
   import { useAuthStore } from '@/stores/auth'
   import { useThemeStore } from '@/stores/theme'
+  import UserDropdown from '@/components/UserDropdown.vue'
 
   const router = useRouter()
   const route = useRoute()
@@ -15,12 +16,18 @@
   const userEmail = computed(() => authStore.user?.email)
   const loading = computed(() => authStore.loading)
 
+  // Navigation principale (réduite - les autres liens sont dans le dropdown profil)
   const navLinks = [
     { to: '/dashboard', label: 'Dashboard' },
     { to: '/import', label: 'Import' },
-    { to: '/import/history', label: 'Historique' },
     { to: '/reimbursements', label: 'Remboursements' },
+  ]
+
+  // Liens supplémentaires pour le menu mobile (inclus dans le dropdown sur desktop)
+  const accountLinks = [
+    { to: '/profile', label: 'Mon profil' },
     { to: '/preferences', label: 'Preferences' },
+    { to: '/import/history', label: 'Historique des imports' },
   ]
 
   const isActiveRoute = (path: string): boolean => {
@@ -138,33 +145,7 @@
           </button>
 
           <template v-if="isAuthenticated">
-            <RouterLink
-              to="/profile"
-              class="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-500 dark:text-slate-400 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200"
-            >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                />
-              </svg>
-              {{ userEmail }}
-            </RouterLink>
-            <button
-              type="button"
-              :disabled="loading"
-              class="rounded-md px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 disabled:opacity-50"
-              @click="handleSignOut"
-            >
-              Deconnexion
-            </button>
+            <UserDropdown />
           </template>
           <template v-else>
             <RouterLink
@@ -265,11 +246,11 @@
       v-if="isMobileMenuOpen"
       class="border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 md:hidden"
     >
-      <div class="space-y-1 px-4 py-3">
+      <div class="px-4 py-3">
         <template v-if="isAuthenticated">
           <!-- User info -->
           <div
-            class="border-b border-slate-100 dark:border-slate-800 px-3 py-3"
+            class="border-b border-slate-100 dark:border-slate-800 px-3 py-3 mb-2"
           >
             <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
               Connecte en tant que
@@ -280,35 +261,55 @@
           </div>
 
           <!-- Navigation links -->
-          <RouterLink
-            v-for="link in navLinks"
-            :key="link.to"
-            :to="link.to"
-            class="block rounded-md px-3 py-2 text-base font-medium transition-colors"
-            :class="
-              isActiveRoute(link.to)
-                ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
-            "
-            @click="closeMobileMenu"
-          >
-            {{ link.label }}
-          </RouterLink>
+          <div class="space-y-1">
+            <RouterLink
+              v-for="link in navLinks"
+              :key="link.to"
+              :to="link.to"
+              class="block rounded-md px-3 py-2 text-base font-medium transition-colors"
+              :class="
+                isActiveRoute(link.to)
+                  ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
+              "
+              @click="closeMobileMenu"
+            >
+              {{ link.label }}
+            </RouterLink>
+          </div>
 
-          <!-- Profile link -->
-          <RouterLink
-            to="/profile"
-            class="block rounded-md px-3 py-2 text-base font-medium text-slate-600 dark:text-slate-400 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
-            @click="closeMobileMenu"
+          <!-- Account section -->
+          <div
+            class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800"
           >
-            Mon profil
-          </RouterLink>
+            <p
+              class="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
+            >
+              Mon compte
+            </p>
+            <div class="space-y-1">
+              <RouterLink
+                v-for="link in accountLinks"
+                :key="link.to"
+                :to="link.to"
+                class="block rounded-md px-3 py-2 text-base font-medium transition-colors"
+                :class="
+                  isActiveRoute(link.to)
+                    ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
+                "
+                @click="closeMobileMenu"
+              >
+                {{ link.label }}
+              </RouterLink>
+            </div>
+          </div>
 
           <!-- Sign out -->
           <button
             type="button"
             :disabled="loading"
-            class="mt-2 w-full rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-base font-medium text-slate-600 dark:text-slate-400 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+            class="mt-4 w-full rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-base font-medium text-red-600 dark:text-red-400 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
             @click="handleSignOut"
           >
             Deconnexion
