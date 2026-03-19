@@ -283,6 +283,15 @@ export interface CreateCategoryAssociationDto {
   incomeCategoryId: string
 }
 
+export interface CategorySuggestionDto {
+  expenseCategoryId: string
+  expenseCategoryName: string
+  suggestedIncomeCategoryId: string
+  suggestedIncomeCategoryName: string
+  confidence: number
+  reasoning: string
+}
+
 // Dashboard DTOs
 export interface MonthlyDataDto {
   month: string
@@ -793,5 +802,24 @@ export const api = {
     if (!response.ok) {
       throw new Error('Failed to delete category association')
     }
+  },
+
+  // AI Suggestions API
+  async getAiCategorySuggestions(
+    expenseCategoryIds: string[]
+  ): Promise<CategorySuggestionDto[]> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/ai-suggestions/category-associations`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ expenseCategoryIds }),
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to get AI category suggestions')
+    }
+
+    return response.json() as Promise<CategorySuggestionDto[]>
   },
 }

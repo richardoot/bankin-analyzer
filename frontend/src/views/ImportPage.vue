@@ -5,12 +5,14 @@
     api,
     type ImportTransactionDto,
     type ImportPreviewResultDto,
+    type CategorySuggestionDto,
   } from '@/lib/api'
   import {
     useChunkedImport,
     PartialImportError,
   } from '@/composables/useChunkedImport'
   import DuplicatesReviewModal from '@/components/DuplicatesReviewModal.vue'
+  import AiSuggestionsModal from '@/components/AiSuggestionsModal.vue'
 
   const router = useRouter()
   const {
@@ -30,6 +32,12 @@
   const showDuplicatesModal = ref(false)
   const previewResult = ref<ImportPreviewResultDto | null>(null)
   const partialImportError = ref<PartialImportError | null>(null)
+
+  // AI Suggestions state
+  const showAiSuggestionsModal = ref(false)
+  const aiSuggestions = ref<CategorySuggestionDto[]>([])
+  const isLoadingAiSuggestions = ref(false)
+  const pendingRecapQuery = ref<Record<string, string> | null>(null)
 
   // Show progress bar during chunking
   const showProgressBar = computed(() => {
@@ -286,15 +294,60 @@
         accounts: uniqueAccounts,
       })
 
+      // Prepare recap query params
+      const recapQuery = {
+        imported: result.imported.toString(),
+        duplicates: result.duplicates.toString(),
+        total: result.total.toString(),
+        categories: uniqueCategories.size.toString(),
+      }
+
+      // Try to get AI suggestions for expense categories
+      const expenseCategoryNames = parsedTransactions.value
+        .filter(t => t.type === 'EXPENSE')
+        .map(t => t.category)
+      const uniqueExpenseCategoryNames = [...new Set(expenseCategoryNames)]
+
+      if (uniqueExpenseCategoryNames.length > 0) {
+        isLoadingAiSuggestions.value = true
+        try {
+          // Get category IDs from the backend
+          const allCategories = await api.getCategories()
+          const expenseCategoryIds = allCategories
+            .filter(
+              c =>
+                c.type === 'EXPENSE' &&
+                uniqueExpenseCategoryNames.includes(c.name)
+            )
+            .map(c => c.id)
+
+          if (expenseCategoryIds.length > 0) {
+            const suggestions =
+              await api.getAiCategorySuggestions(expenseCategoryIds)
+
+            if (suggestions.length > 0) {
+              // Show AI suggestions modal
+              aiSuggestions.value = suggestions
+              pendingRecapQuery.value = recapQuery
+              showAiSuggestionsModal.value = true
+              isLoadingAiSuggestions.value = false
+              isUploading.value = false
+              showDuplicatesModal.value = false
+              return // Wait for modal to close
+            }
+          }
+        } catch (err) {
+          // Silently ignore AI suggestion errors and continue to recap
+          console.error('Failed to get AI suggestions:', err)
+        } finally {
+          isLoadingAiSuggestions.value = false
+        }
+      }
+
       // Navigate to recap page with result
       router.push({
         name: 'import-recap',
-        query: {
-          imported: result.imported.toString(),
-          duplicates: result.duplicates.toString(),
-          total: result.total.toString(),
-          categories: uniqueCategories.size.toString(),
-        },
+        query: recapQuery,
       })
     } catch (err) {
       if (err instanceof PartialImportError) {
@@ -337,6 +390,34 @@
     partialImportError.value = null
     error.value = null
     submitImport()
+  }
+
+  function handleAiSuggestionsApplied(_count: number) {
+    showAiSuggestionsModal.value = false
+    aiSuggestions.value = []
+
+    // Navigate to recap page
+    if (pendingRecapQuery.value) {
+      router.push({
+        name: 'import-recap',
+        query: pendingRecapQuery.value,
+      })
+      pendingRecapQuery.value = null
+    }
+  }
+
+  function handleAiSuggestionsClose() {
+    showAiSuggestionsModal.value = false
+    aiSuggestions.value = []
+
+    // Navigate to recap page even if user skipped
+    if (pendingRecapQuery.value) {
+      router.push({
+        name: 'import-recap',
+        query: pendingRecapQuery.value,
+      })
+      pendingRecapQuery.value = null
+    }
   }
 
   function formatAmount(amount: number): string {
@@ -636,5 +717,35 @@
       @close="handleDuplicatesClose"
       @confirm="handleDuplicatesConfirm"
     />
+
+    <!-- AI Suggestions Modal -->
+    <AiSuggestionsModal
+      :is-open="showAiSuggestionsModal"
+      :suggestions="aiSuggestions"
+      @close="handleAiSuggestionsClose"
+      @applied="handleAiSuggestionsApplied"
+    />
+
+    <!-- Loading AI suggestions indicator -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="isLoadingAiSuggestions"
+          class="fixed inset-0 z-50 flex items-center justify-center"
+        >
+          <div class="fixed inset-0 bg-black/50" />
+          <div
+            class="relative z-10 bg-white dark:bg-slate-900 rounded-xl shadow-xl p-8 flex flex-col items-center gap-4"
+          >
+            <div
+              class="w-12 h-12 border-4 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin"
+            />
+            <p class="text-gray-700 dark:text-gray-300 font-medium">
+              Analyse IA des categories...
+            </p>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>

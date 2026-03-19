@@ -37,7 +37,6 @@
       <button
         v-for="(period, index) in periods"
         :key="period.value"
-        @click="filtersStore.setTimePeriod(period.value)"
         class="relative px-4 py-2 text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-800"
         :class="[
           filtersStore.timePeriod === period.value
@@ -46,6 +45,7 @@
           index === 0 ? 'rounded-l-md' : '',
           index === periods.length - 1 ? 'rounded-r-md' : '',
         ]"
+        @click="filtersStore.setTimePeriod(period.value)"
       >
         <!-- Active background pill -->
         <span
