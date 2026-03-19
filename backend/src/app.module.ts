@@ -14,6 +14,7 @@ import { ImportHistoriesModule } from './import-histories/import-histories.modul
 import { SettlementsModule } from './settlements/settlements.module'
 import { DashboardModule } from './dashboard/dashboard.module'
 import { CategoryAssociationModule } from './category-association/category-association.module'
+import { AiSuggestionsModule } from './ai-suggestions/ai-suggestions.module'
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { CategoryAssociationModule } from './category-association/category-assoc
     SettlementsModule,
     DashboardModule,
     CategoryAssociationModule,
+    AiSuggestionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

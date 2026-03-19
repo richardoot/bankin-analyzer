@@ -149,6 +149,7 @@ services:
       SUPABASE_URL: http://kong:8000
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       FRONTEND_URL: ${FRONTEND_URL}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     networks:
       - bankin-network
 
