@@ -20,6 +20,7 @@
   const navLinks = [
     { to: '/dashboard', label: 'Dashboard' },
     { to: '/import', label: 'Import' },
+    { to: '/transactions', label: 'Transactions' },
     { to: '/reimbursements', label: 'Remboursements' },
   ]
 

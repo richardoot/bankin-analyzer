@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
-import ReimbursementPage from './ReimbursementPage.vue'
+import ReimbursementsPage from './ReimbursementsPage.vue'
 
 // Mock the API
 vi.mock('@/lib/api', () => ({
@@ -28,12 +28,12 @@ const router = createRouter({
     {
       path: '/reimbursements',
       name: 'reimbursements',
-      component: ReimbursementPage,
+      component: ReimbursementsPage,
     },
   ],
 })
 
-describe('ReimbursementPage', () => {
+describe('ReimbursementsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -134,7 +134,7 @@ describe('ReimbursementPage', () => {
 
   const mountComponent = async () => {
     setupDefaultMocks()
-    const wrapper = mount(ReimbursementPage, {
+    const wrapper = mount(ReimbursementsPage, {
       global: {
         plugins: [router],
         stubs: {
@@ -453,7 +453,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
       setupDefaultMocks()
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -478,7 +478,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getTransactions).mockResolvedValue(paginatedResponse([]))
       setupDefaultMocks()
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -512,7 +512,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.deletePerson).mockResolvedValue()
       setupDefaultMocks()
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -546,7 +546,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.deletePerson).mockResolvedValue()
       setupDefaultMocks()
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -967,7 +967,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -989,7 +989,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getReimbursements).mockResolvedValue([])
       vi.mocked(api.getCategories).mockResolvedValue([])
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1021,7 +1021,7 @@ describe('ReimbursementPage', () => {
         mockReimbursements[0]
       )
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1063,7 +1063,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1110,7 +1110,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([partialReimbursement])
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1141,7 +1141,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1174,7 +1174,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1210,7 +1210,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1246,7 +1246,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1282,7 +1282,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1318,7 +1318,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1374,7 +1374,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([partialReimbursement])
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1413,7 +1413,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1445,7 +1445,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([])
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1501,7 +1501,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue([partialReimbursement])
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1569,7 +1569,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1591,7 +1591,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {
@@ -1613,7 +1613,7 @@ describe('ReimbursementPage', () => {
       vi.mocked(api.getCategories).mockResolvedValue([])
       vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
 
-      const wrapper = mount(ReimbursementPage, {
+      const wrapper = mount(ReimbursementsPage, {
         global: {
           plugins: [router],
           stubs: {

@@ -404,7 +404,7 @@ export class TransactionsService {
   async update(
     id: string,
     userId: string,
-    data: { note?: string; categoryId?: string }
+    data: { note?: string; categoryId?: string; isPointed?: boolean }
   ): Promise<Transaction> {
     await this.findOne(id, userId) // Verify ownership
 
@@ -413,6 +413,23 @@ export class TransactionsService {
       data,
       include: { category: true },
     })
+  }
+
+  async bulkUpdate(
+    userId: string,
+    ids: string[],
+    data: { categoryId?: string; isPointed?: boolean }
+  ): Promise<{ updated: number }> {
+    // Filter to only update transactions owned by the user
+    const result = await this.prisma.transaction.updateMany({
+      where: {
+        id: { in: ids },
+        userId,
+      },
+      data,
+    })
+
+    return { updated: result.count }
   }
 
   async delete(id: string, userId: string): Promise<Transaction> {

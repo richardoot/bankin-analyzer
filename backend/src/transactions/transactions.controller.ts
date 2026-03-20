@@ -169,13 +169,26 @@ export class TransactionsController {
     }
   }
 
+  @Patch('bulk')
+  @ApiOperation({ summary: 'Bulk update transactions (category, isPointed)' })
+  @ApiResponse({ status: 200 })
+  async bulkUpdate(
+    @CurrentUser() user: User,
+    @Body() body: { ids: string[]; categoryId?: string; isPointed?: boolean }
+  ): Promise<{ updated: number }> {
+    const data: { categoryId?: string; isPointed?: boolean } = {}
+    if (body.categoryId !== undefined) data.categoryId = body.categoryId
+    if (body.isPointed !== undefined) data.isPointed = body.isPointed
+    return this.transactionsService.bulkUpdate(user.id, body.ids, data)
+  }
+
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a transaction (note, category)' })
+  @ApiOperation({ summary: 'Update a transaction (note, category, isPointed)' })
   @ApiResponse({ status: 200, type: TransactionResponseDto })
   async update(
     @CurrentUser() user: User,
     @Param('id') id: string,
-    @Body() body: { note?: string; categoryId?: string }
+    @Body() body: { note?: string; categoryId?: string; isPointed?: boolean }
   ): Promise<TransactionResponseDto> {
     const tx = await this.transactionsService.update(id, user.id, body)
     const category = (tx as { category?: { name: string } }).category

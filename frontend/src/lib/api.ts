@@ -483,6 +483,38 @@ export const api = {
     return response.json() as Promise<PaginatedResponse<TransactionDto>>
   },
 
+  async updateTransaction(
+    id: string,
+    data: { note?: string; categoryId?: string; isPointed?: boolean }
+  ): Promise<TransactionDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/transactions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to update transaction')
+    }
+
+    return response.json() as Promise<TransactionDto>
+  },
+
+  async bulkUpdateTransactions(
+    ids: string[],
+    data: { categoryId?: string; isPointed?: boolean }
+  ): Promise<{ updated: number }> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/transactions/bulk`, {
+      method: 'PATCH',
+      body: JSON.stringify({ ids, ...data }),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to bulk update transactions')
+    }
+
+    return response.json() as Promise<{ updated: number }>
+  },
+
   async getFilterPreferences(): Promise<FilterPreferencesDto> {
     const response = await fetchWithAuth(`${API_BASE_URL}/filter-preferences`)
 
