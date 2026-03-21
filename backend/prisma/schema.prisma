@@ -15,6 +15,7 @@ model User {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
+  accounts              Account[]
   transactions          Transaction[]
   categories            Category[]
   filterPreferences     FilterPreferences?
@@ -32,6 +33,7 @@ model User {
 model Transaction {
   id              String          @id @default(uuid())
   userId          String          @map("user_id")
+  accountId       String?         @map("account_id")
   categoryId      String?         @map("category_id")
   importHistoryId String?         @map("import_history_id")
   hash            String          @unique
@@ -39,7 +41,7 @@ model Transaction {
   description     String
   amount          Decimal         @db.Decimal(12, 2)
   type            TransactionType
-  account         String
+  account         String          // Kept for backward compatibility, will be populated from Account.name
   subcategory     String?
   note            String?
   isPointed       Boolean         @default(false) @map("is_pointed")
@@ -47,12 +49,14 @@ model Transaction {
   updatedAt       DateTime        @updatedAt @map("updated_at")
 
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountRef            Account?               @relation(fields: [accountId], references: [id])
   category              Category?              @relation(fields: [categoryId], references: [id])
   importHistory         ImportHistory?         @relation(fields: [importHistoryId], references: [id], onDelete: SetNull)
   reimbursementRequests ReimbursementRequest[]
   settlementsAsIncome   Settlement[]           @relation("SettlementIncome")
 
   @@index([userId])
+  @@index([accountId])
   @@index([userId, date])
   @@index([type])
   @@index([importHistoryId])
@@ -86,6 +90,14 @@ enum TransactionType {
   @@schema("app")
 }
 
+enum AccountType {
+  STANDARD   // Compte courant/épargne normal
+  JOINT      // Compte joint (montants ÷2)
+  INVESTMENT // Compte investissement (règles spéciales)
+
+  @@schema("app")
+}
+
 enum ReimbursementStatus {
   PENDING
   PARTIAL
@@ -102,20 +114,52 @@ enum ImportStatus {
   @@schema("app")
 }
 
+model Account {
+  id        String      @id @default(uuid())
+  userId    String      @map("user_id")
+  name      String
+  type      AccountType @default(STANDARD)
+
+  // Configuration selon le type
+  divisor              Int     @default(1)
+  isExcludedFromBudget Boolean @default(false) @map("is_excluded_from_budget")
+  isExcludedFromStats  Boolean @default(false) @map("is_excluded_from_stats")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@index([userId, type])
+  @@map("accounts")
+  @@schema("app")
+}
+
 model FilterPreferences {
-  id                            String   @id @default(uuid())
-  userId                        String   @unique @map("user_id")
-  jointAccounts                 String[] @default([]) @map("joint_accounts")
-  hiddenExpenseCategories       String[] @default([]) @map("hidden_expense_categories")
-  hiddenIncomeCategories        String[] @default([]) @map("hidden_income_categories")
+  id     String @id @default(uuid())
+  userId String @unique @map("user_id")
+
+  // Dashboard filters (temporary, also in localStorage)
+  hiddenExpenseCategories String[] @default([]) @map("hidden_expense_categories")
+  hiddenIncomeCategories  String[] @default([]) @map("hidden_income_categories")
+
+  // Global hidden categories
   globalHiddenExpenseCategories String[] @default([]) @map("global_hidden_expense_categories")
   globalHiddenIncomeCategories  String[] @default([]) @map("global_hidden_income_categories")
-  categoryAssociations          Json     @default("[]") @map("category_associations")
-  isPanelExpanded               Boolean  @default(true) @map("is_panel_expanded")
-  createdAt                     DateTime @default(now()) @map("created_at")
-  updatedAt                     DateTime @updatedAt @map("updated_at")
+
+  // UI state only
+  isPanelExpanded Boolean @default(true) @map("is_panel_expanded")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // REMOVED: jointAccounts (now in Account.type)
+  // REMOVED: categoryAssociations (deprecated, use CategoryAssociation table)
 
   @@map("filter_preferences")
   @@schema("app")

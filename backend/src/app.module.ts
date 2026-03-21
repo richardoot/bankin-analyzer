@@ -16,6 +16,7 @@ import { DashboardModule } from './dashboard/dashboard.module'
 import { CategoryAssociationModule } from './category-association/category-association.module'
 import { AiSuggestionsModule } from './ai-suggestions/ai-suggestions.module'
 import { BudgetsModule } from './budgets/budgets.module'
+import { AccountsModule } from './accounts/accounts.module'
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { BudgetsModule } from './budgets/budgets.module'
     PrismaModule,
     UsersModule,
     AuthModule,
+    AccountsModule,
     CategoriesModule,
     TransactionsModule,
     FilterPreferencesModule,

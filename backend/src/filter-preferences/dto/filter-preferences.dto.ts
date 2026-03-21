@@ -2,12 +2,6 @@ import { ApiProperty } from '@nestjs/swagger'
 
 export class FilterPreferencesDto {
   @ApiProperty({
-    description: 'List of joint account names (amounts will be divided by 2)',
-    type: [String],
-  })
-  jointAccounts!: string[]
-
-  @ApiProperty({
     description:
       'List of hidden expense category names (dashboard filter only)',
     type: [String],

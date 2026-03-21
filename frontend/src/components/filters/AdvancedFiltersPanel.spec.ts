@@ -10,7 +10,6 @@ describe('AdvancedFiltersPanel', () => {
   })
 
   const defaultProps = {
-    availableAccounts: ['Compte Courant', 'Livret A', 'Compte Joint'],
     allExpenseCategories: ['Restaurant', 'Transport', 'Loisirs'],
     allIncomeCategories: ['Salaire', 'Prime'],
   }
@@ -21,82 +20,6 @@ describe('AdvancedFiltersPanel', () => {
     })
 
     expect(wrapper.text()).toContain('Filtres avancés')
-  })
-
-  it('should display joint accounts section when expanded', () => {
-    const wrapper = mount(AdvancedFiltersPanel, {
-      props: defaultProps,
-    })
-
-    expect(wrapper.text()).toContain('Comptes joints')
-    expect(wrapper.text()).toContain('÷2')
-  })
-
-  it('should display all available accounts as buttons', () => {
-    const wrapper = mount(AdvancedFiltersPanel, {
-      props: defaultProps,
-    })
-
-    expect(wrapper.text()).toContain('Compte Courant')
-    expect(wrapper.text()).toContain('Livret A')
-    expect(wrapper.text()).toContain('Compte Joint')
-  })
-
-  it('should display empty message when no accounts', () => {
-    const wrapper = mount(AdvancedFiltersPanel, {
-      props: {
-        availableAccounts: [],
-        allExpenseCategories: [],
-        allIncomeCategories: [],
-      },
-    })
-
-    expect(wrapper.text()).toContain('Aucun compte disponible')
-  })
-
-  it('should toggle account on click', async () => {
-    const wrapper = mount(AdvancedFiltersPanel, {
-      props: defaultProps,
-    })
-
-    const store = useFiltersStore()
-    expect(store.isJointAccount('Compte Courant')).toBe(false)
-
-    // Find account button by text
-    const buttons = wrapper.findAll('button')
-    const accountButton = buttons.find(b => b.text().includes('Compte Courant'))
-    await accountButton?.trigger('click')
-
-    expect(store.isJointAccount('Compte Courant')).toBe(true)
-  })
-
-  it('should highlight joint accounts', async () => {
-    const store = useFiltersStore()
-    store.toggleJointAccount('Livret A')
-
-    const wrapper = mount(AdvancedFiltersPanel, {
-      props: defaultProps,
-    })
-
-    const buttons = wrapper.findAll('button')
-    const livretAButton = buttons.find(b => b.text().includes('Livret A'))
-
-    expect(livretAButton?.classes()).toContain('bg-indigo-600')
-    expect(livretAButton?.text()).toContain('÷2')
-  })
-
-  it('should not highlight non-joint accounts', () => {
-    const wrapper = mount(AdvancedFiltersPanel, {
-      props: defaultProps,
-    })
-
-    const buttons = wrapper.findAll('button')
-    const compteCourantButton = buttons.find(b =>
-      b.text().includes('Compte Courant')
-    )
-
-    expect(compteCourantButton?.classes()).toContain('bg-gray-100')
-    expect(compteCourantButton?.text()).not.toContain('÷2')
   })
 
   it('should toggle panel visibility on header click', async () => {
@@ -112,21 +35,6 @@ describe('AdvancedFiltersPanel', () => {
     await headerButton.trigger('click')
 
     expect(store.isPanelExpanded).toBe(false)
-  })
-
-  it('should show active filters count badge', async () => {
-    const store = useFiltersStore()
-    store.toggleJointAccount('Compte Courant')
-    store.toggleJointAccount('Livret A')
-
-    const wrapper = mount(AdvancedFiltersPanel, {
-      props: defaultProps,
-    })
-
-    // Should show badge with count 2
-    const badge = wrapper.find('.bg-indigo-100.text-indigo-700')
-    expect(badge.exists()).toBe(true)
-    expect(badge.text()).toBe('2')
   })
 
   it('should show chevron rotated when expanded', () => {
@@ -215,5 +123,70 @@ describe('AdvancedFiltersPanel', () => {
     const salaireButton = buttons.find(b => b.text().includes('Salaire'))
 
     expect(salaireButton?.classes()).toContain('bg-red-600')
+  })
+
+  it('should show active filters count badge', async () => {
+    const store = useFiltersStore()
+    store.toggleHiddenExpenseCategory('Restaurant')
+    store.toggleHiddenIncomeCategory('Salaire')
+
+    const wrapper = mount(AdvancedFiltersPanel, {
+      props: defaultProps,
+    })
+
+    // Should show badge with count 2
+    const badge = wrapper.find('.bg-indigo-100.text-indigo-700')
+    expect(badge.exists()).toBe(true)
+    expect(badge.text()).toBe('2')
+  })
+
+  it('should display empty message when no expense categories', () => {
+    const wrapper = mount(AdvancedFiltersPanel, {
+      props: {
+        allExpenseCategories: [],
+        allIncomeCategories: [],
+      },
+    })
+
+    expect(wrapper.text()).toContain('Aucune catégorie de dépenses disponible')
+  })
+
+  it('should display empty message when no income categories', () => {
+    const wrapper = mount(AdvancedFiltersPanel, {
+      props: {
+        allExpenseCategories: ['Restaurant'],
+        allIncomeCategories: [],
+      },
+    })
+
+    expect(wrapper.text()).toContain('Aucune catégorie de revenus disponible')
+  })
+
+  it('should not show globally hidden categories in expense list', () => {
+    const store = useFiltersStore()
+    store.toggleGlobalHiddenExpenseCategory('Restaurant')
+
+    const wrapper = mount(AdvancedFiltersPanel, {
+      props: defaultProps,
+    })
+
+    // Restaurant should not appear in the list since it's globally hidden
+    const buttons = wrapper.findAll('button')
+    const restaurantButton = buttons.find(b => b.text().includes('Restaurant'))
+    expect(restaurantButton).toBeUndefined()
+  })
+
+  it('should not show globally hidden categories in income list', () => {
+    const store = useFiltersStore()
+    store.toggleGlobalHiddenIncomeCategory('Salaire')
+
+    const wrapper = mount(AdvancedFiltersPanel, {
+      props: defaultProps,
+    })
+
+    // Salaire should not appear in the list since it's globally hidden
+    const buttons = wrapper.findAll('button')
+    const salaireButton = buttons.find(b => b.text().includes('Salaire'))
+    expect(salaireButton).toBeUndefined()
   })
 })

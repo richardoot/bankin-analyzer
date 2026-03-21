@@ -8,20 +8,42 @@ vi.mock('@/lib/api', () => ({
     getDashboardSummary: vi.fn(),
     getTransactions: vi.fn(),
     getCategoryAssociations: vi.fn(),
+    getAccounts: vi.fn(),
   },
 }))
 
 vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
-    jointAccounts: [],
     hiddenExpenseCategories: [],
     hiddenIncomeCategories: [],
-    isJointAccount: vi.fn(() => false),
+    globalHiddenExpenseCategories: [],
+    globalHiddenIncomeCategories: [],
     isExpenseCategoryHidden: vi.fn(() => false),
     isIncomeCategoryHidden: vi.fn(() => false),
+    isExpenseCategoryGloballyHidden: vi.fn(() => false),
+    isIncomeCategoryGloballyHidden: vi.fn(() => false),
     timePeriod: 'all',
     setTimePeriod: vi.fn(),
     getDateRangeFromPeriod: vi.fn(() => ({ startDate: null, endDate: null })),
+  }),
+}))
+
+// Configurable mock for accounts store
+let mockAccountDivisors: Record<string, number> = {}
+
+vi.mock('@/stores/accounts', () => ({
+  useAccountsStore: () => ({
+    accounts: [],
+    isLoading: false,
+    error: null,
+    load: vi.fn().mockResolvedValue(undefined),
+    getDivisor: vi.fn(
+      (accountName: string) => mockAccountDivisors[accountName] ?? 1
+    ),
+    isJointAccount: vi.fn(
+      (accountName: string) => (mockAccountDivisors[accountName] ?? 1) > 1
+    ),
+    isInvestmentAccount: vi.fn(() => false),
   }),
 }))
 
@@ -47,6 +69,7 @@ describe('useDashboardData', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockAssociations = []
+    mockAccountDivisors = {}
   })
 
   const mockSummary: DashboardSummaryDto = {
@@ -114,7 +137,6 @@ describe('useDashboardData', () => {
       await fetchData()
 
       expect(api.getDashboardSummary).toHaveBeenCalledWith({
-        jointAccounts: [],
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
       })
@@ -261,15 +283,6 @@ describe('useDashboardData', () => {
       await fetchData()
 
       expect(allIncomeCategories.value).toEqual(['Salaires'])
-    })
-
-    it('should return available accounts from summary', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, availableAccounts } = useDashboardData()
-      await fetchData()
-
-      expect(availableAccounts.value).toEqual(['Compte Courant'])
     })
   })
 
@@ -651,6 +664,395 @@ describe('useDashboardData', () => {
       // Transactions should be reloaded to maintain drill-down view
       expect(transactions.value).toHaveLength(2)
       expect(api.getTransactions).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('Joint accounts with divisors - drill-down', () => {
+    const jointAccountTransactions: TransactionDto[] = [
+      {
+        id: '1',
+        date: '2024-01-15T00:00:00.000Z',
+        description: 'Loyer',
+        amount: -1000,
+        type: 'EXPENSE',
+        account: 'Compte Joint',
+        categoryName: 'Logement',
+        isPointed: false,
+        createdAt: '2024-01-15T00:00:00.000Z',
+      },
+      {
+        id: '2',
+        date: '2024-01-20T00:00:00.000Z',
+        description: 'Electricité',
+        amount: -200,
+        type: 'EXPENSE',
+        account: 'Compte Joint',
+        categoryName: 'Logement',
+        isPointed: false,
+        createdAt: '2024-01-20T00:00:00.000Z',
+      },
+      {
+        id: '3',
+        date: '2024-02-15T00:00:00.000Z',
+        description: 'Loyer',
+        amount: -1000,
+        type: 'EXPENSE',
+        account: 'Compte Joint',
+        categoryName: 'Logement',
+        isPointed: false,
+        createdAt: '2024-02-15T00:00:00.000Z',
+      },
+    ]
+
+    it('should divide expenses by account divisor in drill-down view', async () => {
+      // Configure joint account with divisor 2
+      mockAccountDivisors = {
+        'Compte Joint': 2,
+      }
+
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: jointAccountTransactions,
+        meta: {
+          total: 3,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
+
+      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
+        useDashboardData()
+      await fetchData()
+
+      await setSelectedCategory('Logement')
+
+      // Jan: (1000 + 200) / 2 = 600
+      // Feb: 1000 / 2 = 500
+      expect(filteredExpensesByMonth.value.labels).toEqual([
+        'Jan 2024',
+        'Fév 2024',
+      ])
+      expect(filteredExpensesByMonth.value.values).toEqual([600, 500])
+    })
+
+    it('should handle mixed accounts with different divisors in drill-down', async () => {
+      const mixedAccountTransactions: TransactionDto[] = [
+        {
+          id: '1',
+          date: '2024-01-15T00:00:00.000Z',
+          description: 'Loyer',
+          amount: -1000,
+          type: 'EXPENSE',
+          account: 'Compte Joint',
+          categoryName: 'Logement',
+          isPointed: false,
+          createdAt: '2024-01-15T00:00:00.000Z',
+        },
+        {
+          id: '2',
+          date: '2024-01-20T00:00:00.000Z',
+          description: 'Assurance habitation',
+          amount: -100,
+          type: 'EXPENSE',
+          account: 'Compte Courant',
+          categoryName: 'Logement',
+          isPointed: false,
+          createdAt: '2024-01-20T00:00:00.000Z',
+        },
+      ]
+
+      // Configure different divisors
+      mockAccountDivisors = {
+        'Compte Joint': 2,
+        'Compte Courant': 1,
+      }
+
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: mixedAccountTransactions,
+        meta: {
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
+
+      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
+        useDashboardData()
+      await fetchData()
+
+      await setSelectedCategory('Logement')
+
+      // Jan: 1000/2 + 100/1 = 500 + 100 = 600
+      expect(filteredExpensesByMonth.value.values).toEqual([600, 0])
+    })
+
+    it('should divide income by account divisor in drill-down view', async () => {
+      const jointAccountIncomeTransactions: TransactionDto[] = [
+        {
+          id: '1',
+          date: '2024-01-25T00:00:00.000Z',
+          description: 'Salaire',
+          amount: 4000,
+          type: 'INCOME',
+          account: 'Compte Joint',
+          categoryName: 'Salaires',
+          isPointed: false,
+          createdAt: '2024-01-25T00:00:00.000Z',
+        },
+        {
+          id: '2',
+          date: '2024-02-25T00:00:00.000Z',
+          description: 'Salaire',
+          amount: 4000,
+          type: 'INCOME',
+          account: 'Compte Joint',
+          categoryName: 'Salaires',
+          isPointed: false,
+          createdAt: '2024-02-25T00:00:00.000Z',
+        },
+      ]
+
+      mockAccountDivisors = {
+        'Compte Joint': 2,
+      }
+
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: jointAccountIncomeTransactions,
+        meta: {
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
+
+      const { fetchData, filteredIncomeByMonth, setSelectedIncomeCategory } =
+        useDashboardData()
+      await fetchData()
+
+      await setSelectedIncomeCategory('Salaires')
+
+      // Jan: 4000/2 = 2000, Feb: 4000/2 = 2000
+      expect(filteredIncomeByMonth.value.values).toEqual([2000, 2000])
+    })
+
+    it('should apply divisor to reimbursements and deduct from expenses in drill-down', async () => {
+      const transactionsWithReimbursements: TransactionDto[] = [
+        {
+          id: '1',
+          date: '2024-01-15T00:00:00.000Z',
+          description: 'Frais médicaux',
+          amount: -400,
+          type: 'EXPENSE',
+          account: 'Compte Joint',
+          categoryName: 'Santé',
+          isPointed: false,
+          createdAt: '2024-01-15T00:00:00.000Z',
+        },
+        {
+          id: '2',
+          date: '2024-01-20T00:00:00.000Z',
+          description: 'Remboursement mutuelle',
+          amount: 200,
+          type: 'INCOME',
+          account: 'Compte Joint',
+          categoryName: 'Remboursement Santé',
+          isPointed: false,
+          createdAt: '2024-01-20T00:00:00.000Z',
+        },
+        {
+          id: '3',
+          date: '2024-02-10T00:00:00.000Z',
+          description: 'Frais médicaux',
+          amount: -600,
+          type: 'EXPENSE',
+          account: 'Compte Joint',
+          categoryName: 'Santé',
+          isPointed: false,
+          createdAt: '2024-02-10T00:00:00.000Z',
+        },
+      ]
+
+      mockAccountDivisors = {
+        'Compte Joint': 2,
+      }
+
+      // Configure category association
+      mockAssociations = [
+        {
+          expenseCategoryName: 'Santé',
+          incomeCategoryName: 'Remboursement Santé',
+        },
+      ]
+
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: transactionsWithReimbursements,
+        meta: {
+          total: 3,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
+
+      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
+        useDashboardData()
+      await fetchData()
+
+      await setSelectedCategory('Santé')
+
+      // Jan: expense = 400/2 = 200, reimbursement = 200/2 = 100, net = 100
+      // Feb: expense = 600/2 = 300, reimbursement = 0, net = 300
+      expect(filteredExpensesByMonth.value.values).toEqual([100, 300])
+    })
+
+    it('should handle reimbursements from different accounts with different divisors', async () => {
+      const mixedReimbursementTransactions: TransactionDto[] = [
+        {
+          id: '1',
+          date: '2024-01-15T00:00:00.000Z',
+          description: 'Frais médicaux',
+          amount: -400,
+          type: 'EXPENSE',
+          account: 'Compte Joint',
+          categoryName: 'Santé',
+          isPointed: false,
+          createdAt: '2024-01-15T00:00:00.000Z',
+        },
+        {
+          id: '2',
+          date: '2024-01-20T00:00:00.000Z',
+          description: 'Remboursement mutuelle',
+          amount: 100,
+          type: 'INCOME',
+          account: 'Compte Courant', // Personal account
+          categoryName: 'Remboursement Santé',
+          isPointed: false,
+          createdAt: '2024-01-20T00:00:00.000Z',
+        },
+      ]
+
+      mockAccountDivisors = {
+        'Compte Joint': 2,
+        'Compte Courant': 1,
+      }
+
+      mockAssociations = [
+        {
+          expenseCategoryName: 'Santé',
+          incomeCategoryName: 'Remboursement Santé',
+        },
+      ]
+
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: mixedReimbursementTransactions,
+        meta: {
+          total: 2,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
+
+      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
+        useDashboardData()
+      await fetchData()
+
+      await setSelectedCategory('Santé')
+
+      // Jan: expense = 400/2 = 200, reimbursement = 100/1 = 100, net = 100
+      expect(filteredExpensesByMonth.value.values).toEqual([100, 0])
+    })
+
+    it('should use default divisor 1 for unknown accounts', async () => {
+      const unknownAccountTransactions: TransactionDto[] = [
+        {
+          id: '1',
+          date: '2024-01-15T00:00:00.000Z',
+          description: 'Achat',
+          amount: -100,
+          type: 'EXPENSE',
+          account: 'Compte Inconnu',
+          categoryName: 'Divers',
+          isPointed: false,
+          createdAt: '2024-01-15T00:00:00.000Z',
+        },
+      ]
+
+      // No divisor configured for 'Compte Inconnu' - should default to 1
+      mockAccountDivisors = {}
+
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: unknownAccountTransactions,
+        meta: {
+          total: 1,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
+
+      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
+        useDashboardData()
+      await fetchData()
+
+      await setSelectedCategory('Divers')
+
+      // Should use divisor 1, so amount stays 100
+      expect(filteredExpensesByMonth.value.values).toEqual([100, 0])
+    })
+
+    it('should correctly compute total filtered expenses with divisors', async () => {
+      mockAccountDivisors = {
+        'Compte Joint': 2,
+      }
+
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: jointAccountTransactions,
+        meta: {
+          total: 3,
+          page: 1,
+          limit: 100,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        },
+      })
+
+      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
+        useDashboardData()
+      await fetchData()
+
+      await setSelectedCategory('Logement')
+
+      // Jan: (1000 + 200) / 2 = 600
+      // Feb: 1000 / 2 = 500
+      // Total: 600 + 500 = 1100
+      const total = filteredExpensesByMonth.value.values.reduce(
+        (sum, val) => sum + val,
+        0
+      )
+      expect(total).toBe(1100)
     })
   })
 })

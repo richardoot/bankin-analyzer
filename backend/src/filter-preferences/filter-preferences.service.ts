@@ -21,18 +21,13 @@ export class FilterPreferencesService {
       where: { userId },
       create: {
         userId,
-        jointAccounts: dto.jointAccounts ?? [],
         hiddenExpenseCategories: dto.hiddenExpenseCategories ?? [],
         hiddenIncomeCategories: dto.hiddenIncomeCategories ?? [],
         globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories ?? [],
         globalHiddenIncomeCategories: dto.globalHiddenIncomeCategories ?? [],
-        categoryAssociations: [], // Deprecated: use CategoryAssociation table
         isPanelExpanded: dto.isPanelExpanded ?? true,
       },
       update: {
-        ...(dto.jointAccounts !== undefined && {
-          jointAccounts: dto.jointAccounts,
-        }),
         ...(dto.hiddenExpenseCategories !== undefined && {
           hiddenExpenseCategories: dto.hiddenExpenseCategories,
         }),

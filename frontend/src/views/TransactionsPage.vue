@@ -64,7 +64,6 @@
   const typeFilter = ref<'ALL' | 'EXPENSE' | 'INCOME'>(savedFilters.typeFilter)
   const selectedCategory = ref<string | null>(savedFilters.selectedCategory)
   const showOnlyNotPointed = ref(savedFilters.showOnlyNotPointed)
-  const searchQuery = ref('')
 
   // Save filters to localStorage
   function saveFilters() {
@@ -153,7 +152,9 @@
   // Computed: filtered categories based on type filter
   const filteredCategories = computed(() => {
     if (typeFilter.value === 'ALL') {
-      return allCategories.value.sort((a, b) => a.name.localeCompare(b.name))
+      return [...allCategories.value].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      )
     }
     return allCategories.value
       .filter(c => c.type === typeFilter.value)
@@ -541,13 +542,6 @@
     if (page >= 1 && page <= totalPages.value) {
       currentPage.value = page
     }
-  }
-
-  // Get category name by id
-  function getCategoryNameById(categoryId: string | null): string {
-    if (!categoryId) return ''
-    const cat = allCategories.value.find(c => c.id === categoryId)
-    return cat?.name ?? ''
   }
 
   onMounted(() => {

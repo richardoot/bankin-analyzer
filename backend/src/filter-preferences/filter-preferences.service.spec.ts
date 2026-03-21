@@ -13,10 +13,10 @@ describe('FilterPreferencesService', () => {
   const mockFilterPreferences: FilterPreferences = {
     id: 'pref-1',
     userId: mockUserId,
-    jointAccounts: ['Compte Courant'],
     hiddenExpenseCategories: ['Loisirs'],
     hiddenIncomeCategories: ['Revenus exceptionnels'],
-    categoryAssociations: [], // Deprecated: use CategoryAssociation table
+    globalHiddenExpenseCategories: ['Épargne'],
+    globalHiddenIncomeCategories: ['Cadeaux'],
     isPanelExpanded: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -75,9 +75,10 @@ describe('FilterPreferencesService', () => {
   describe('upsert', () => {
     it('should create new preferences with all fields', async () => {
       const dto = {
-        jointAccounts: ['Compte Joint'],
         hiddenExpenseCategories: ['Shopping'],
         hiddenIncomeCategories: ['Primes'],
+        globalHiddenExpenseCategories: ['Investissement'],
+        globalHiddenIncomeCategories: ['Virement'],
         isPanelExpanded: false,
       }
 
@@ -88,25 +89,28 @@ describe('FilterPreferencesService', () => {
 
       const result = await service.upsert(mockUserId, dto)
 
-      expect(result.jointAccounts).toEqual(dto.jointAccounts)
       expect(result.hiddenExpenseCategories).toEqual(
         dto.hiddenExpenseCategories
+      )
+      expect(result.globalHiddenExpenseCategories).toEqual(
+        dto.globalHiddenExpenseCategories
       )
       expect(result.isPanelExpanded).toBe(false)
       expect(prisma.filterPreferences.upsert).toHaveBeenCalledWith({
         where: { userId: mockUserId },
         create: {
           userId: mockUserId,
-          jointAccounts: dto.jointAccounts,
           hiddenExpenseCategories: dto.hiddenExpenseCategories,
           hiddenIncomeCategories: dto.hiddenIncomeCategories,
-          categoryAssociations: [],
+          globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
+          globalHiddenIncomeCategories: dto.globalHiddenIncomeCategories,
           isPanelExpanded: dto.isPanelExpanded,
         },
         update: {
-          jointAccounts: dto.jointAccounts,
           hiddenExpenseCategories: dto.hiddenExpenseCategories,
           hiddenIncomeCategories: dto.hiddenIncomeCategories,
+          globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
+          globalHiddenIncomeCategories: dto.globalHiddenIncomeCategories,
           isPanelExpanded: dto.isPanelExpanded,
         },
       })
@@ -117,10 +121,10 @@ describe('FilterPreferencesService', () => {
 
       mockPrismaService.filterPreferences.upsert.mockResolvedValue({
         ...mockFilterPreferences,
-        jointAccounts: [],
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
-        categoryAssociations: [],
+        globalHiddenExpenseCategories: [],
+        globalHiddenIncomeCategories: [],
         isPanelExpanded: true,
       })
 
@@ -130,24 +134,24 @@ describe('FilterPreferencesService', () => {
         where: { userId: mockUserId },
         create: {
           userId: mockUserId,
-          jointAccounts: [],
           hiddenExpenseCategories: [],
           hiddenIncomeCategories: [],
-          categoryAssociations: [],
+          globalHiddenExpenseCategories: [],
+          globalHiddenIncomeCategories: [],
           isPanelExpanded: true,
         },
         update: {},
       })
     })
 
-    it('should update only jointAccounts when provided', async () => {
+    it('should update only globalHiddenExpenseCategories when provided', async () => {
       const dto = {
-        jointAccounts: ['Compte épargne'],
+        globalHiddenExpenseCategories: ['Épargne'],
       }
 
       mockPrismaService.filterPreferences.upsert.mockResolvedValue({
         ...mockFilterPreferences,
-        jointAccounts: dto.jointAccounts,
+        globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
       })
 
       await service.upsert(mockUserId, dto)
@@ -156,14 +160,14 @@ describe('FilterPreferencesService', () => {
         where: { userId: mockUserId },
         create: {
           userId: mockUserId,
-          jointAccounts: dto.jointAccounts,
           hiddenExpenseCategories: [],
           hiddenIncomeCategories: [],
-          categoryAssociations: [],
+          globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
+          globalHiddenIncomeCategories: [],
           isPanelExpanded: true,
         },
         update: {
-          jointAccounts: dto.jointAccounts,
+          globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
         },
       })
     })
@@ -184,10 +188,10 @@ describe('FilterPreferencesService', () => {
         where: { userId: mockUserId },
         create: {
           userId: mockUserId,
-          jointAccounts: [],
           hiddenExpenseCategories: [],
           hiddenIncomeCategories: [],
-          categoryAssociations: [],
+          globalHiddenExpenseCategories: [],
+          globalHiddenIncomeCategories: [],
           isPanelExpanded: false,
         },
         update: {

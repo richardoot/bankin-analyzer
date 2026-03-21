@@ -31,7 +31,14 @@ export class DashboardService {
     userId: string,
     filters: DashboardFiltersDto
   ): Promise<DashboardSummaryDto> {
-    const jointAccountsSet = new Set(filters.jointAccounts ?? [])
+    // Fetch user accounts to get divisors
+    const userAccounts = await this.prisma.account.findMany({
+      where: { userId },
+    })
+    const accountDivisors = new Map(userAccounts.map(a => [a.name, a.divisor]))
+    const excludedFromStatsAccounts = new Set(
+      userAccounts.filter(a => a.isExcludedFromStats).map(a => a.name)
+    )
     const hiddenExpenseCategoriesSet = new Set(
       filters.hiddenExpenseCategories ?? []
     )
@@ -92,9 +99,16 @@ export class DashboardService {
     for (const tx of transactions) {
       const categoryName = tx.category?.name ?? 'Autre'
       const amount = Number(tx.amount)
-      const isJointAccount = jointAccountsSet.has(tx.account)
-      const divisor = isJointAccount ? 2 : 1
+      // Get divisor from account settings (defaults to 1 if not found)
+      const divisor = accountDivisors.get(tx.account) ?? 1
       const adjustedAmount = amount / divisor
+
+      // Skip transactions from accounts excluded from stats
+      if (excludedFromStatsAccounts.has(tx.account)) {
+        // Still track all accounts for the filter panel
+        if (tx.account) availableAccounts.add(tx.account)
+        continue
+      }
 
       // Track all accounts
       if (tx.account) availableAccounts.add(tx.account)

@@ -9,6 +9,7 @@
   import { useFiltersStore } from '@/stores/filters'
 
   const filtersStore = useFiltersStore()
+  // Note: Account divisors are now handled by the backend using the accounts table
 
   // Period options
   type PeriodOption = '3m' | '6m' | '12m' | 'custom'
@@ -189,7 +190,6 @@
         api.getBudgetStatistics({
           startDate: dateRange.value.startDate,
           endDate: dateRange.value.endDate,
-          jointAccounts: filtersStore.jointAccounts,
         }),
         api.getBudgets(),
       ])
@@ -238,15 +238,6 @@
       fetchData()
     }
   })
-
-  // Watch for joint accounts changes
-  watch(
-    () => filtersStore.jointAccounts,
-    () => {
-      fetchData()
-    },
-    { deep: true }
-  )
 
   onMounted(() => {
     // Set default custom dates

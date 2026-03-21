@@ -136,12 +136,32 @@ export interface TransactionQueryParams {
 }
 
 export interface FilterPreferencesDto {
-  jointAccounts: string[]
   hiddenExpenseCategories: string[]
   hiddenIncomeCategories: string[]
   globalHiddenExpenseCategories: string[]
   globalHiddenIncomeCategories: string[]
   isPanelExpanded: boolean
+}
+
+// Account types
+export type AccountType = 'STANDARD' | 'JOINT' | 'INVESTMENT'
+
+export interface AccountDto {
+  id: string
+  name: string
+  type: AccountType
+  divisor: number
+  isExcludedFromBudget: boolean
+  isExcludedFromStats: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface UpdateAccountDto {
+  type?: AccountType
+  divisor?: number
+  isExcludedFromBudget?: boolean
+  isExcludedFromStats?: boolean
 }
 
 export interface PersonDto {
@@ -309,7 +329,6 @@ export interface CategoryDataDto {
 }
 
 export interface DashboardFiltersDto {
-  jointAccounts?: string[]
   hiddenExpenseCategories?: string[]
   hiddenIncomeCategories?: string[]
   startDate?: string
@@ -355,7 +374,6 @@ export interface CategoryAverageDto {
 export interface BudgetStatisticsFiltersDto {
   startDate: string
   endDate: string
-  jointAccounts?: string[]
 }
 
 export interface BudgetStatisticsDto {
@@ -581,6 +599,40 @@ export const api = {
     }
 
     return response.json() as Promise<FilterPreferencesDto>
+  },
+
+  // Accounts API
+  async getAccounts(): Promise<AccountDto[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/accounts`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch accounts')
+    }
+
+    return response.json() as Promise<AccountDto[]>
+  },
+
+  async getAccount(id: string): Promise<AccountDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/accounts/${id}`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch account')
+    }
+
+    return response.json() as Promise<AccountDto>
+  },
+
+  async updateAccount(id: string, dto: UpdateAccountDto): Promise<AccountDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/accounts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to update account')
+    }
+
+    return response.json() as Promise<AccountDto>
   },
 
   // Dashboard API

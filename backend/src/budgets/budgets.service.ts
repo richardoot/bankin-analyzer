@@ -98,7 +98,15 @@ export class BudgetsService {
   ): Promise<BudgetStatisticsResponseDto> {
     const startDate = new Date(filters.startDate)
     const endDate = new Date(filters.endDate)
-    const jointAccountsSet = new Set(filters.jointAccounts ?? [])
+
+    // Fetch user accounts to get divisors
+    const userAccounts = await this.prisma.account.findMany({
+      where: { userId },
+    })
+    const accountDivisors = new Map(userAccounts.map(a => [a.name, a.divisor]))
+    const excludedFromBudgetAccounts = new Set(
+      userAccounts.filter(a => a.isExcludedFromBudget).map(a => a.name)
+    )
 
     // Calculate period in months
     const periodMonths = this.calculateMonthsDiff(startDate, endDate)
@@ -138,10 +146,14 @@ export class BudgetsService {
       // Skip transactions without category
       if (!tx.category || !tx.categoryId) continue
 
+      // Skip transactions from accounts excluded from budget
+      if (excludedFromBudgetAccounts.has(tx.account)) continue
+
       const categoryId = tx.categoryId
       const amount = Number(tx.amount)
-      const isJointAccount = jointAccountsSet.has(tx.account)
-      const adjustedAmount = isJointAccount ? amount / 2 : amount
+      // Get divisor from account settings (defaults to 1 if not found)
+      const divisor = accountDivisors.get(tx.account) ?? 1
+      const adjustedAmount = amount / divisor
 
       if (tx.type === TransactionType.EXPENSE) {
         const absAmount = Math.abs(adjustedAmount)

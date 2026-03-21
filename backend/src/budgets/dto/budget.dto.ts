@@ -4,7 +4,6 @@ import {
   IsNumber,
   IsArray,
   ValidateNested,
-  IsOptional,
   IsDateString,
   Min,
 } from 'class-validator'
@@ -98,13 +97,4 @@ export class BudgetStatisticsFiltersDto {
   @ApiProperty({ description: 'End date (ISO format)' })
   @IsDateString()
   endDate!: string
-
-  @ApiProperty({
-    description: 'Accounts to divide by 2 (joint accounts)',
-    required: false,
-  })
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  jointAccounts?: string[]
 }

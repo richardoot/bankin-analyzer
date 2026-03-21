@@ -25,7 +25,6 @@ export class FilterPreferencesController {
 
     if (!prefs) {
       return {
-        jointAccounts: [],
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
         globalHiddenExpenseCategories: [],
@@ -35,7 +34,6 @@ export class FilterPreferencesController {
     }
 
     return {
-      jointAccounts: prefs.jointAccounts,
       hiddenExpenseCategories: prefs.hiddenExpenseCategories,
       hiddenIncomeCategories: prefs.hiddenIncomeCategories,
       globalHiddenExpenseCategories: prefs.globalHiddenExpenseCategories,
@@ -54,7 +52,6 @@ export class FilterPreferencesController {
     const prefs = await this.service.upsert(user.id, dto)
 
     return {
-      jointAccounts: prefs.jointAccounts,
       hiddenExpenseCategories: prefs.hiddenExpenseCategories,
       hiddenIncomeCategories: prefs.hiddenIncomeCategories,
       globalHiddenExpenseCategories: prefs.globalHiddenExpenseCategories,

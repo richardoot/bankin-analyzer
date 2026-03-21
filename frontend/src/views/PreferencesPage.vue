@@ -2,10 +2,12 @@
   import { ref, onMounted, computed } from 'vue'
   import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
   import { useFiltersStore } from '@/stores/filters'
+  import { useAccountsStore } from '@/stores/accounts'
   import { api, type CategoryDto } from '@/lib/api'
 
   const categoryAssociationsStore = useCategoryAssociationsStore()
   const filtersStore = useFiltersStore()
+  const accountsStore = useAccountsStore()
 
   const categories = ref<CategoryDto[]>([])
   const isLoadingCategories = ref(false)
@@ -73,7 +75,11 @@
   )
 
   onMounted(async () => {
-    await Promise.all([loadCategories(), categoryAssociationsStore.load()])
+    await Promise.all([
+      loadCategories(),
+      accountsStore.load(),
+      categoryAssociationsStore.load(),
+    ])
   })
 
   async function loadCategories(): Promise<void> {
@@ -85,6 +91,15 @@
     } finally {
       isLoadingCategories.value = false
     }
+  }
+
+  // Toggle account type between STANDARD and JOINT
+  async function toggleAccountType(accountId: string): Promise<void> {
+    const account = accountsStore.accounts.find(a => a.id === accountId)
+    if (!account) return
+
+    const newType = account.type === 'JOINT' ? 'STANDARD' : 'JOINT'
+    await accountsStore.updateType(accountId, newType)
   }
 
   function openModal(): void {
@@ -364,6 +379,122 @@
                 remboursements des depenses associees dans le Dashboard, et de
                 filtrer les revenus pertinents lors du reglement d'un
                 remboursement.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Joint Accounts Section -->
+      <div
+        class="mt-8 rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
+      >
+        <div class="mb-6">
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            Comptes joints
+          </h2>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Les montants des comptes joints seront divises par 2 dans toute
+            l'application
+          </p>
+        </div>
+
+        <!-- Loading State -->
+        <div v-if="accountsStore.isLoading" class="flex justify-center py-8">
+          <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+            <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              />
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+            <span>Chargement...</span>
+          </div>
+        </div>
+
+        <div v-else>
+          <div
+            v-if="accountsStore.sortedAccounts.length > 0"
+            class="flex flex-wrap gap-2"
+          >
+            <button
+              v-for="account in accountsStore.sortedAccounts"
+              :key="account.id"
+              type="button"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              :class="
+                account.type === 'JOINT'
+                  ? 'bg-indigo-600 dark:bg-indigo-500 text-white shadow-md shadow-indigo-200 dark:shadow-indigo-900/30'
+                  : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+              "
+              @click="toggleAccountType(account.id)"
+            >
+              <svg
+                v-if="account.type === 'JOINT'"
+                class="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                />
+              </svg>
+              {{ account.name }}
+              <span
+                v-if="account.type === 'JOINT'"
+                class="text-indigo-200 dark:text-indigo-300 font-normal"
+                >÷2</span
+              >
+            </button>
+          </div>
+
+          <p
+            v-else
+            class="text-sm text-gray-500 dark:text-gray-400 italic bg-gray-50 dark:bg-slate-800 rounded-lg p-4"
+          >
+            Aucun compte disponible. Importez des transactions pour voir vos
+            comptes.
+          </p>
+        </div>
+
+        <!-- Info box -->
+        <div
+          class="mt-6 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 p-4"
+        >
+          <div class="flex">
+            <div class="flex-shrink-0">
+              <svg
+                class="h-5 w-5 text-indigo-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <p class="text-sm text-indigo-700 dark:text-indigo-300">
+                Les depenses et revenus des comptes joints seront
+                automatiquement divises par 2 dans le Dashboard, Budget et
+                Remboursements.
               </p>
             </div>
           </div>

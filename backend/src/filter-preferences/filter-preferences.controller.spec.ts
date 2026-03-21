@@ -20,10 +20,10 @@ describe('FilterPreferencesController', () => {
   const mockFilterPreferences: FilterPreferences = {
     id: 'pref-1',
     userId: mockUser.id,
-    jointAccounts: ['Compte Courant'],
     hiddenExpenseCategories: ['Loisirs'],
     hiddenIncomeCategories: ['Revenus exceptionnels'],
-    categoryAssociations: [], // Deprecated: use CategoryAssociation table
+    globalHiddenExpenseCategories: ['Épargne'],
+    globalHiddenIncomeCategories: ['Cadeaux'],
     isPanelExpanded: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -63,9 +63,12 @@ describe('FilterPreferencesController', () => {
       const result = await controller.get(mockUser)
 
       expect(result).toEqual({
-        jointAccounts: mockFilterPreferences.jointAccounts,
         hiddenExpenseCategories: mockFilterPreferences.hiddenExpenseCategories,
         hiddenIncomeCategories: mockFilterPreferences.hiddenIncomeCategories,
+        globalHiddenExpenseCategories:
+          mockFilterPreferences.globalHiddenExpenseCategories,
+        globalHiddenIncomeCategories:
+          mockFilterPreferences.globalHiddenIncomeCategories,
         isPanelExpanded: mockFilterPreferences.isPanelExpanded,
       })
       expect(service.findByUser).toHaveBeenCalledWith(mockUser.id)
@@ -77,9 +80,10 @@ describe('FilterPreferencesController', () => {
       const result = await controller.get(mockUser)
 
       expect(result).toEqual({
-        jointAccounts: [],
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
+        globalHiddenExpenseCategories: [],
+        globalHiddenIncomeCategories: [],
         isPanelExpanded: true,
       })
       expect(service.findByUser).toHaveBeenCalledWith(mockUser.id)
@@ -88,25 +92,27 @@ describe('FilterPreferencesController', () => {
     it('should return empty arrays for preferences with no data', async () => {
       const emptyPreferences: FilterPreferences = {
         ...mockFilterPreferences,
-        jointAccounts: [],
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
+        globalHiddenExpenseCategories: [],
+        globalHiddenIncomeCategories: [],
       }
       mockService.findByUser.mockResolvedValue(emptyPreferences)
 
       const result = await controller.get(mockUser)
 
-      expect(result.jointAccounts).toEqual([])
       expect(result.hiddenExpenseCategories).toEqual([])
       expect(result.hiddenIncomeCategories).toEqual([])
+      expect(result.globalHiddenExpenseCategories).toEqual([])
+      expect(result.globalHiddenIncomeCategories).toEqual([])
     })
   })
 
   describe('update', () => {
     it('should update and return filter preferences', async () => {
       const dto = {
-        jointAccounts: ['Compte Joint'],
         hiddenExpenseCategories: ['Shopping'],
+        globalHiddenExpenseCategories: ['Investissement'],
         isPanelExpanded: false,
       }
 
@@ -114,6 +120,7 @@ describe('FilterPreferencesController', () => {
         ...mockFilterPreferences,
         ...dto,
         hiddenIncomeCategories: [],
+        globalHiddenIncomeCategories: [],
       }
 
       mockService.upsert.mockResolvedValue(updatedPreferences)
@@ -121,9 +128,10 @@ describe('FilterPreferencesController', () => {
       const result = await controller.update(mockUser, dto)
 
       expect(result).toEqual({
-        jointAccounts: dto.jointAccounts,
         hiddenExpenseCategories: dto.hiddenExpenseCategories,
         hiddenIncomeCategories: [],
+        globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
+        globalHiddenIncomeCategories: [],
         isPanelExpanded: dto.isPanelExpanded,
       })
       expect(service.upsert).toHaveBeenCalledWith(mockUser.id, dto)
@@ -131,17 +139,19 @@ describe('FilterPreferencesController', () => {
 
     it('should update only specific fields', async () => {
       const dto = {
-        jointAccounts: ['Compte épargne'],
+        globalHiddenExpenseCategories: ['Épargne'],
       }
 
       mockService.upsert.mockResolvedValue({
         ...mockFilterPreferences,
-        jointAccounts: dto.jointAccounts,
+        globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
       })
 
       const result = await controller.update(mockUser, dto)
 
-      expect(result.jointAccounts).toEqual(dto.jointAccounts)
+      expect(result.globalHiddenExpenseCategories).toEqual(
+        dto.globalHiddenExpenseCategories
+      )
       expect(service.upsert).toHaveBeenCalledWith(mockUser.id, dto)
     })
 

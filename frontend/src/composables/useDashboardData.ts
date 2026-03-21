@@ -1,6 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import { api, type DashboardSummaryDto, type TransactionDto } from '@/lib/api'
 import { useFiltersStore } from '@/stores/filters'
+import { useAccountsStore } from '@/stores/accounts'
 import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
 
 export interface MonthlyData {
@@ -33,6 +34,7 @@ const MONTH_LABELS: Record<string, string> = {
 
 export function useDashboardData() {
   const filtersStore = useFiltersStore()
+  const accountsStore = useAccountsStore()
   const categoryAssociationsStore = useCategoryAssociationsStore()
 
   // Pre-aggregated data from backend
@@ -122,14 +124,9 @@ export function useDashboardData() {
     )
   )
 
-  // Available accounts for joint account filter
-  const availableAccounts = computed<string[]>(
-    () => summaryData.value?.availableAccounts ?? []
-  )
-
-  // Helper pour obtenir le montant ajusté (divisé par 2 si compte joint)
+  // Helper pour obtenir le montant ajusté (divisé par le diviseur du compte)
   function getAdjustedAmount(tx: TransactionDto): number {
-    const divisor = filtersStore.isJointAccount(tx.account) ? 2 : 1
+    const divisor = accountsStore.getDivisor(tx.account)
     return tx.amount / divisor
   }
 
@@ -309,15 +306,15 @@ export function useDashboardData() {
         ]),
       ]
 
-      // Load dashboard summary and category associations in parallel
+      // Load dashboard summary, accounts, and category associations in parallel
       const [summary] = await Promise.all([
         api.getDashboardSummary({
-          jointAccounts: filtersStore.jointAccounts,
           hiddenExpenseCategories: combinedHiddenExpenseCategories,
           hiddenIncomeCategories: combinedHiddenIncomeCategories,
           startDate: startDate ?? undefined,
           endDate: endDate ?? undefined,
         }),
+        accountsStore.load(),
         categoryAssociationsStore.load(),
       ])
 
@@ -344,7 +341,6 @@ export function useDashboardData() {
   // Auto-refetch when filters change (dashboard or global)
   watch(
     () => [
-      filtersStore.jointAccounts,
       filtersStore.hiddenExpenseCategories,
       filtersStore.hiddenIncomeCategories,
       filtersStore.globalHiddenExpenseCategories,
@@ -372,7 +368,6 @@ export function useDashboardData() {
     allIncomeCategories,
     availableExpenseCategories,
     availableIncomeCategories,
-    availableAccounts,
     selectedCategory,
     selectedIncomeCategory,
     filteredExpensesByMonth,

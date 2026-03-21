@@ -210,18 +210,6 @@
       reimbursementsError.value = null
       const data = await api.getReimbursements()
       reimbursements.value = data
-
-      // Fetch transaction info for each reimbursement
-      const txIds = [...new Set(data.map(r => r.transactionId))]
-      for (const txId of txIds) {
-        try {
-          const response = await api.getTransactions({ limit: 1 })
-          // We'll load transaction info lazily from the existing data
-          // For now, use the reimbursement's transaction context
-        } catch {
-          // Ignore errors for transaction info
-        }
-      }
     } catch (err) {
       reimbursementsError.value =
         err instanceof Error ? err.message : 'Failed to fetch reimbursements'

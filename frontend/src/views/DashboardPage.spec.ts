@@ -18,23 +18,25 @@ vi.mock('@/lib/api', () => ({
   api: {
     getDashboardSummary: vi.fn(),
     getTransactions: vi.fn(),
+    getAccounts: vi.fn().mockResolvedValue([]),
   },
 }))
 
 // Mock the filters store
 vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
-    jointAccounts: [],
     hiddenExpenseCategories: [],
     hiddenIncomeCategories: [],
-    isJointAccount: vi.fn(() => false),
+    globalHiddenExpenseCategories: [],
+    globalHiddenIncomeCategories: [],
     isExpenseCategoryHidden: vi.fn(() => false),
     isIncomeCategoryHidden: vi.fn(() => false),
+    isExpenseCategoryGloballyHidden: vi.fn(() => false),
+    isIncomeCategoryGloballyHidden: vi.fn(() => false),
     loadFromBackend: vi.fn(),
     isPanelExpanded: true,
     togglePanelExpanded: vi.fn(),
     activeFiltersCount: 0,
-    toggleJointAccount: vi.fn(),
     toggleHiddenExpenseCategory: vi.fn(),
     toggleHiddenIncomeCategory: vi.fn(),
     saveToBackend: vi.fn(),
@@ -43,6 +45,19 @@ vi.mock('@/stores/filters', () => ({
     timePeriod: 'all',
     setTimePeriod: vi.fn(),
     getDateRangeFromPeriod: vi.fn(() => ({ startDate: null, endDate: null })),
+  }),
+}))
+
+// Mock the accounts store
+vi.mock('@/stores/accounts', () => ({
+  useAccountsStore: () => ({
+    accounts: [],
+    isLoading: false,
+    error: null,
+    load: vi.fn().mockResolvedValue(undefined),
+    getDivisor: vi.fn(() => 1),
+    isJointAccount: vi.fn(() => false),
+    isInvestmentAccount: vi.fn(() => false),
   }),
 }))
 

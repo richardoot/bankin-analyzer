@@ -15,7 +15,6 @@
     allIncomeCategories,
     availableExpenseCategories,
     availableIncomeCategories,
-    availableAccounts,
     selectedCategory,
     selectedIncomeCategory,
     filteredExpensesByMonth,
@@ -143,7 +142,6 @@
       >
         <!-- Advanced filters panel -->
         <AdvancedFiltersPanel
-          :available-accounts="availableAccounts"
           :all-expense-categories="allExpenseCategories"
           :all-income-categories="allIncomeCategories"
         />

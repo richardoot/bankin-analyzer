@@ -16,87 +16,6 @@ describe('useFiltersStore', () => {
     vi.mocked(localStorage.setItem).mockClear()
   })
 
-  it('should start with empty joint accounts', () => {
-    const store = useFiltersStore()
-    expect(store.jointAccounts).toEqual([])
-  })
-
-  it('should toggle joint account on', () => {
-    const store = useFiltersStore()
-
-    store.toggleJointAccount('Compte Courant')
-
-    expect(store.jointAccounts).toContain('Compte Courant')
-    expect(store.isJointAccount('Compte Courant')).toBe(true)
-  })
-
-  it('should toggle joint account off', () => {
-    const store = useFiltersStore()
-
-    store.toggleJointAccount('Compte Courant')
-    store.toggleJointAccount('Compte Courant')
-
-    expect(store.jointAccounts).not.toContain('Compte Courant')
-    expect(store.isJointAccount('Compte Courant')).toBe(false)
-  })
-
-  it('should persist to localStorage when toggling joint account', () => {
-    const store = useFiltersStore()
-
-    store.toggleJointAccount('Compte Courant')
-
-    expect(localStorage.setItem).toHaveBeenCalledWith(
-      'bankin-analyzer-filters',
-      JSON.stringify({
-        jointAccounts: ['Compte Courant'],
-        hiddenExpenseCategories: [],
-        hiddenIncomeCategories: [],
-        isPanelExpanded: true,
-      })
-    )
-  })
-
-  it('should mark as having unsaved changes when toggling joint account', () => {
-    const store = useFiltersStore()
-
-    expect(store.hasUnsavedChanges).toBe(false)
-    store.toggleJointAccount('Compte Courant')
-    expect(store.hasUnsavedChanges).toBe(true)
-  })
-
-  it('should restore from localStorage on init', () => {
-    vi.mocked(localStorage.getItem).mockReturnValue(
-      JSON.stringify({ jointAccounts: ['Compte Joint'] })
-    )
-
-    // Create a new pinia to trigger store init
-    setActivePinia(createPinia())
-    const store = useFiltersStore()
-
-    expect(store.jointAccounts).toContain('Compte Joint')
-    expect(store.isJointAccount('Compte Joint')).toBe(true)
-  })
-
-  it('should handle invalid localStorage data gracefully', () => {
-    vi.mocked(localStorage.getItem).mockReturnValue('invalid json')
-
-    setActivePinia(createPinia())
-    const store = useFiltersStore()
-
-    expect(store.jointAccounts).toEqual([])
-  })
-
-  it('should provide jointAccountsSet computed', () => {
-    const store = useFiltersStore()
-
-    store.toggleJointAccount('Compte A')
-    store.toggleJointAccount('Compte B')
-
-    expect(store.jointAccountsSet.has('Compte A')).toBe(true)
-    expect(store.jointAccountsSet.has('Compte B')).toBe(true)
-    expect(store.jointAccountsSet.has('Compte C')).toBe(false)
-  })
-
   it('should start with panel expanded', () => {
     const store = useFiltersStore()
     expect(store.isPanelExpanded).toBe(true)
@@ -120,9 +39,10 @@ describe('useFiltersStore', () => {
     expect(localStorage.setItem).toHaveBeenCalledWith(
       'bankin-analyzer-filters',
       JSON.stringify({
-        jointAccounts: [],
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
+        globalHiddenExpenseCategories: [],
+        globalHiddenIncomeCategories: [],
         isPanelExpanded: false,
       })
     )
@@ -130,7 +50,7 @@ describe('useFiltersStore', () => {
 
   it('should restore panel state from localStorage', () => {
     vi.mocked(localStorage.getItem).mockReturnValue(
-      JSON.stringify({ jointAccounts: [], isPanelExpanded: false })
+      JSON.stringify({ isPanelExpanded: false })
     )
 
     setActivePinia(createPinia())
@@ -139,18 +59,18 @@ describe('useFiltersStore', () => {
     expect(store.isPanelExpanded).toBe(false)
   })
 
-  it('should provide activeFiltersCount computed', () => {
+  it('should provide activeFiltersCount computed (dashboard filters only)', () => {
     const store = useFiltersStore()
 
     expect(store.activeFiltersCount).toBe(0)
 
-    store.toggleJointAccount('Compte A')
+    store.toggleHiddenExpenseCategory('Restaurant')
     expect(store.activeFiltersCount).toBe(1)
 
-    store.toggleJointAccount('Compte B')
+    store.toggleHiddenIncomeCategory('Salaire')
     expect(store.activeFiltersCount).toBe(2)
 
-    store.toggleJointAccount('Compte A')
+    store.toggleHiddenExpenseCategory('Restaurant')
     expect(store.activeFiltersCount).toBe(1)
   })
 
@@ -180,19 +100,6 @@ describe('useFiltersStore', () => {
     expect(store.isIncomeCategoryHidden('Salaire')).toBe(false)
   })
 
-  it('should include hidden categories in activeFiltersCount', () => {
-    const store = useFiltersStore()
-
-    store.toggleHiddenExpenseCategory('Restaurant')
-    expect(store.activeFiltersCount).toBe(1)
-
-    store.toggleHiddenIncomeCategory('Salaire')
-    expect(store.activeFiltersCount).toBe(2)
-
-    store.toggleJointAccount('Compte A')
-    expect(store.activeFiltersCount).toBe(3)
-  })
-
   it('should persist hidden categories to localStorage', () => {
     const store = useFiltersStore()
 
@@ -201,9 +108,10 @@ describe('useFiltersStore', () => {
     expect(localStorage.setItem).toHaveBeenCalledWith(
       'bankin-analyzer-filters',
       JSON.stringify({
-        jointAccounts: [],
         hiddenExpenseCategories: ['Restaurant'],
         hiddenIncomeCategories: [],
+        globalHiddenExpenseCategories: [],
+        globalHiddenIncomeCategories: [],
         isPanelExpanded: true,
       })
     )
@@ -212,7 +120,6 @@ describe('useFiltersStore', () => {
   it('should restore hidden categories from localStorage', () => {
     vi.mocked(localStorage.getItem).mockReturnValue(
       JSON.stringify({
-        jointAccounts: [],
         hiddenExpenseCategories: ['Restaurant'],
         hiddenIncomeCategories: ['Salaire'],
         isPanelExpanded: true,
@@ -224,5 +131,110 @@ describe('useFiltersStore', () => {
 
     expect(store.isExpenseCategoryHidden('Restaurant')).toBe(true)
     expect(store.isIncomeCategoryHidden('Salaire')).toBe(true)
+  })
+
+  it('should handle invalid localStorage data gracefully', () => {
+    vi.mocked(localStorage.getItem).mockReturnValue('invalid json')
+
+    setActivePinia(createPinia())
+    const store = useFiltersStore()
+
+    expect(store.hiddenExpenseCategories).toEqual([])
+    expect(store.hiddenIncomeCategories).toEqual([])
+  })
+
+  describe('global hidden categories', () => {
+    it('should start with empty global hidden categories', () => {
+      const store = useFiltersStore()
+      expect(store.globalHiddenExpenseCategories).toEqual([])
+      expect(store.globalHiddenIncomeCategories).toEqual([])
+    })
+
+    it('should toggle global hidden expense category', () => {
+      const store = useFiltersStore()
+
+      store.toggleGlobalHiddenExpenseCategory('Restaurant')
+      expect(store.isExpenseCategoryGloballyHidden('Restaurant')).toBe(true)
+
+      store.toggleGlobalHiddenExpenseCategory('Restaurant')
+      expect(store.isExpenseCategoryGloballyHidden('Restaurant')).toBe(false)
+    })
+
+    it('should toggle global hidden income category', () => {
+      const store = useFiltersStore()
+
+      store.toggleGlobalHiddenIncomeCategory('Salaire')
+      expect(store.isIncomeCategoryGloballyHidden('Salaire')).toBe(true)
+
+      store.toggleGlobalHiddenIncomeCategory('Salaire')
+      expect(store.isIncomeCategoryGloballyHidden('Salaire')).toBe(false)
+    })
+
+    it('should mark as having unsaved changes when toggling global categories', () => {
+      const store = useFiltersStore()
+
+      expect(store.hasUnsavedChanges).toBe(false)
+      store.toggleGlobalHiddenExpenseCategory('Restaurant')
+      expect(store.hasUnsavedChanges).toBe(true)
+    })
+
+    it('should restore global hidden categories from localStorage', () => {
+      vi.mocked(localStorage.getItem).mockReturnValue(
+        JSON.stringify({
+          globalHiddenExpenseCategories: ['Restaurant'],
+          globalHiddenIncomeCategories: ['Salaire'],
+        })
+      )
+
+      setActivePinia(createPinia())
+      const store = useFiltersStore()
+
+      expect(store.isExpenseCategoryGloballyHidden('Restaurant')).toBe(true)
+      expect(store.isIncomeCategoryGloballyHidden('Salaire')).toBe(true)
+    })
+  })
+
+  describe('computed sets', () => {
+    it('should provide hiddenExpenseCategoriesSet', () => {
+      const store = useFiltersStore()
+
+      store.toggleHiddenExpenseCategory('Restaurant')
+      store.toggleHiddenExpenseCategory('Transport')
+
+      expect(store.hiddenExpenseCategoriesSet.has('Restaurant')).toBe(true)
+      expect(store.hiddenExpenseCategoriesSet.has('Transport')).toBe(true)
+      expect(store.hiddenExpenseCategoriesSet.has('Loisirs')).toBe(false)
+    })
+
+    it('should provide hiddenIncomeCategoriesSet', () => {
+      const store = useFiltersStore()
+
+      store.toggleHiddenIncomeCategory('Salaire')
+
+      expect(store.hiddenIncomeCategoriesSet.has('Salaire')).toBe(true)
+      expect(store.hiddenIncomeCategoriesSet.has('Prime')).toBe(false)
+    })
+
+    it('should provide globalHiddenExpenseCategoriesSet', () => {
+      const store = useFiltersStore()
+
+      store.toggleGlobalHiddenExpenseCategory('Restaurant')
+
+      expect(store.globalHiddenExpenseCategoriesSet.has('Restaurant')).toBe(
+        true
+      )
+      expect(store.globalHiddenExpenseCategoriesSet.has('Transport')).toBe(
+        false
+      )
+    })
+
+    it('should provide globalHiddenIncomeCategoriesSet', () => {
+      const store = useFiltersStore()
+
+      store.toggleGlobalHiddenIncomeCategory('Salaire')
+
+      expect(store.globalHiddenIncomeCategoriesSet.has('Salaire')).toBe(true)
+      expect(store.globalHiddenIncomeCategoriesSet.has('Prime')).toBe(false)
+    })
   })
 })

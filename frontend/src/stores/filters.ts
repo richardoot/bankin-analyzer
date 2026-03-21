@@ -13,7 +13,6 @@ export const useFiltersStore = defineStore('filters', () => {
   const timePeriod = ref<TimePeriod>('all')
 
   // === GLOBAL SETTINGS (synced to DB) ===
-  const jointAccounts = ref<string[]>([])
   const globalHiddenExpenseCategories = ref<string[]>([])
   const globalHiddenIncomeCategories = ref<string[]>([])
   const isPanelExpanded = ref(true)
@@ -33,7 +32,6 @@ export const useFiltersStore = defineStore('filters', () => {
         hiddenExpenseCategories.value = data.hiddenExpenseCategories || []
         hiddenIncomeCategories.value = data.hiddenIncomeCategories || []
         // Global settings (cached)
-        jointAccounts.value = data.jointAccounts || []
         globalHiddenExpenseCategories.value =
           data.globalHiddenExpenseCategories || []
         globalHiddenIncomeCategories.value =
@@ -54,7 +52,6 @@ export const useFiltersStore = defineStore('filters', () => {
         hiddenExpenseCategories: hiddenExpenseCategories.value,
         hiddenIncomeCategories: hiddenIncomeCategories.value,
         // Global settings (cached)
-        jointAccounts: jointAccounts.value,
         globalHiddenExpenseCategories: globalHiddenExpenseCategories.value,
         globalHiddenIncomeCategories: globalHiddenIncomeCategories.value,
         isPanelExpanded: isPanelExpanded.value,
@@ -83,7 +80,6 @@ export const useFiltersStore = defineStore('filters', () => {
 
       // Only sync global settings, NOT dashboard filters
       await api.updateFilterPreferences({
-        jointAccounts: jointAccounts.value,
         globalHiddenExpenseCategories: globalHiddenExpenseCategories.value,
         globalHiddenIncomeCategories: globalHiddenIncomeCategories.value,
         isPanelExpanded: isPanelExpanded.value,
@@ -117,7 +113,6 @@ export const useFiltersStore = defineStore('filters', () => {
       const prefs = await api.getFilterPreferences()
 
       // Load global settings from backend
-      jointAccounts.value = prefs.jointAccounts
       globalHiddenExpenseCategories.value = prefs.globalHiddenExpenseCategories
       globalHiddenIncomeCategories.value = prefs.globalHiddenIncomeCategories
       isPanelExpanded.value = prefs.isPanelExpanded
@@ -149,21 +144,6 @@ export const useFiltersStore = defineStore('filters', () => {
   function togglePanelExpanded() {
     isPanelExpanded.value = !isPanelExpanded.value
     markAsChanged()
-  }
-
-  // === JOINT ACCOUNTS (synced to DB) ===
-  function toggleJointAccount(account: string) {
-    const index = jointAccounts.value.indexOf(account)
-    if (index === -1) {
-      jointAccounts.value.push(account)
-    } else {
-      jointAccounts.value.splice(index, 1)
-    }
-    markAsChanged()
-  }
-
-  function isJointAccount(account: string): boolean {
-    return jointAccounts.value.includes(account)
   }
 
   // === DASHBOARD FILTERS (local only, NOT synced to DB) ===
@@ -227,7 +207,6 @@ export const useFiltersStore = defineStore('filters', () => {
   }
 
   // Computed sets
-  const jointAccountsSet = computed(() => new Set(jointAccounts.value))
   const hiddenExpenseCategoriesSet = computed(
     () => new Set(hiddenExpenseCategories.value)
   )
@@ -241,12 +220,10 @@ export const useFiltersStore = defineStore('filters', () => {
     () => new Set(globalHiddenIncomeCategories.value)
   )
 
-  // Computed pour le nombre de filtres dashboard actifs
+  // Computed pour le nombre de filtres dashboard actifs (local filters only)
   const activeFiltersCount = computed(
     () =>
-      jointAccounts.value.length +
-      hiddenExpenseCategories.value.length +
-      hiddenIncomeCategories.value.length
+      hiddenExpenseCategories.value.length + hiddenIncomeCategories.value.length
   )
 
   // Time period functions
@@ -287,11 +264,6 @@ export const useFiltersStore = defineStore('filters', () => {
   initFromStorage()
 
   return {
-    // Joint accounts (synced to DB)
-    jointAccounts,
-    jointAccountsSet,
-    toggleJointAccount,
-    isJointAccount,
     // Dashboard filters (local only)
     hiddenExpenseCategories,
     hiddenExpenseCategoriesSet,

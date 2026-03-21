@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing'
 import { Decimal } from 'decimal.js'
 import { DashboardService } from './dashboard.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { TransactionType } from '../generated/prisma'
+import { TransactionType, AccountType } from '../generated/prisma'
 
 describe('DashboardService', () => {
   let service: DashboardService
@@ -36,11 +36,34 @@ describe('DashboardService', () => {
     category: { name: overrides.categoryName ?? 'Alimentation' },
   })
 
+  const createMockAccount = (
+    overrides: Partial<{
+      id: string
+      name: string
+      type: AccountType
+      divisor: number
+      isExcludedFromStats: boolean
+    }>
+  ) => ({
+    id: overrides.id ?? 'acc-1',
+    userId: mockUserId,
+    name: overrides.name ?? 'Compte Courant',
+    type: overrides.type ?? AccountType.STANDARD,
+    divisor: overrides.divisor ?? 1,
+    isExcludedFromBudget: false,
+    isExcludedFromStats: overrides.isExcludedFromStats ?? false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+
   const mockPrismaService = {
     transaction: {
       findMany: vi.fn(),
     },
     categoryAssociation: {
+      findMany: vi.fn(),
+    },
+    account: {
       findMany: vi.fn(),
     },
   }
@@ -60,8 +83,9 @@ describe('DashboardService', () => {
 
     vi.clearAllMocks()
 
-    // Default mock: no category associations
+    // Default mocks
     mockPrismaService.categoryAssociation.findMany.mockResolvedValue([])
+    mockPrismaService.account.findMany.mockResolvedValue([])
   })
 
   describe('getSummary', () => {
@@ -155,7 +179,7 @@ describe('DashboardService', () => {
       ])
     })
 
-    it('should divide amounts by 2 for joint accounts', async () => {
+    it('should divide amounts by divisor for joint accounts (using Account model)', async () => {
       const transactions = [
         createMockTransaction({
           id: '1',
@@ -171,11 +195,23 @@ describe('DashboardService', () => {
         }),
       ]
 
-      mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      const accounts = [
+        createMockAccount({
+          name: 'Compte Joint',
+          type: AccountType.JOINT,
+          divisor: 2,
+        }),
+        createMockAccount({
+          name: 'Compte Courant',
+          type: AccountType.STANDARD,
+          divisor: 1,
+        }),
+      ]
 
-      const result = await service.getSummary(mockUserId, {
-        jointAccounts: ['Compte Joint'],
-      })
+      mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.account.findMany.mockResolvedValue(accounts)
+
+      const result = await service.getSummary(mockUserId, {})
 
       // Loyer: 200/2 = 100, Alimentation: 100
       // Both have same amount so order may vary
@@ -480,6 +516,537 @@ describe('DashboardService', () => {
 
       expect(result.totalExpenses).toBe(100)
       expect(result.expensesByCategory[0].amount).toBe(100)
+    })
+
+    it('should exclude transactions from accounts marked as excludedFromStats', async () => {
+      const transactions = [
+        createMockTransaction({
+          id: '1',
+          amount: -200,
+          account: 'Compte Investissement',
+          categoryName: 'Investissement',
+        }),
+        createMockTransaction({
+          id: '2',
+          amount: -100,
+          account: 'Compte Courant',
+          categoryName: 'Alimentation',
+        }),
+      ]
+
+      const accounts = [
+        createMockAccount({
+          name: 'Compte Investissement',
+          isExcludedFromStats: true,
+        }),
+        createMockAccount({
+          name: 'Compte Courant',
+          isExcludedFromStats: false,
+        }),
+      ]
+
+      mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.account.findMany.mockResolvedValue(accounts)
+
+      const result = await service.getSummary(mockUserId, {})
+
+      // Should only include Alimentation, not Investissement
+      expect(result.expensesByCategory).toEqual([
+        { category: 'Alimentation', amount: 100 },
+      ])
+      expect(result.totalExpenses).toBe(100)
+    })
+  })
+
+  describe('Joint accounts with divisors - comprehensive tests', () => {
+    it('should divide income by divisor for joint accounts', async () => {
+      const transactions = [
+        createMockTransaction({
+          id: '1',
+          amount: 3000,
+          type: TransactionType.INCOME,
+          account: 'Compte Joint',
+          categoryName: 'Salaire',
+        }),
+        createMockTransaction({
+          id: '2',
+          amount: 2000,
+          type: TransactionType.INCOME,
+          account: 'Compte Courant',
+          categoryName: 'Prime',
+        }),
+      ]
+
+      const accounts = [
+        createMockAccount({
+          name: 'Compte Joint',
+          type: AccountType.JOINT,
+          divisor: 2,
+        }),
+        createMockAccount({
+          name: 'Compte Courant',
+          type: AccountType.STANDARD,
+          divisor: 1,
+        }),
+      ]
+
+      mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.account.findMany.mockResolvedValue(accounts)
+
+      const result = await service.getSummary(mockUserId, {})
+
+      // Salaire: 3000/2 = 1500, Prime: 2000/1 = 2000
+      expect(result.incomeByCategory).toContainEqual({
+        category: 'Salaire',
+        amount: 1500,
+      })
+      expect(result.incomeByCategory).toContainEqual({
+        category: 'Prime',
+        amount: 2000,
+      })
+      expect(result.totalIncome).toBe(3500)
+    })
+
+    it('should apply divisor to monthly data for expenses and income', async () => {
+      const transactions = [
+        createMockTransaction({
+          id: '1',
+          date: new Date('2024-01-15'),
+          amount: -400,
+          type: TransactionType.EXPENSE,
+          account: 'Compte Joint',
+          categoryName: 'Loyer',
+        }),
+        createMockTransaction({
+          id: '2',
+          date: new Date('2024-01-20'),
+          amount: 4000,
+          type: TransactionType.INCOME,
+          account: 'Compte Joint',
+          categoryName: 'Salaire',
+        }),
+        createMockTransaction({
+          id: '3',
+          date: new Date('2024-01-25'),
+          amount: -100,
+          type: TransactionType.EXPENSE,
+          account: 'Compte Courant',
+          categoryName: 'Alimentation',
+        }),
+      ]
+
+      const accounts = [
+        createMockAccount({
+          name: 'Compte Joint',
+          type: AccountType.JOINT,
+          divisor: 2,
+        }),
+        createMockAccount({
+          name: 'Compte Courant',
+          type: AccountType.STANDARD,
+          divisor: 1,
+        }),
+      ]
+
+      mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.account.findMany.mockResolvedValue(accounts)
+
+      const result = await service.getSummary(mockUserId, {})
+
+      // Jan: expenses = 400/2 + 100 = 300, income = 4000/2 = 2000
+      expect(result.monthlyData).toHaveLength(1)
+      expect(result.monthlyData[0].expenses).toBe(300)
+      expect(result.monthlyData[0].income).toBe(2000)
+    })
+
+    it('should apply different divisors for multiple joint accounts', async () => {
+      const transactions = [
+        createMockTransaction({
+          id: '1',
+          amount: -300,
+          account: 'Compte Joint 50/50',
+          categoryName: 'Loyer',
+        }),
+        createMockTransaction({
+          id: '2',
+          amount: -300,
+          account: 'Compte Joint 70/30',
+          categoryName: 'Electricité',
+        }),
+        createMockTransaction({
+          id: '3',
+          amount: -100,
+          account: 'Compte Courant',
+          categoryName: 'Alimentation',
+        }),
+      ]
+
+      const accounts = [
+        createMockAccount({
+          name: 'Compte Joint 50/50',
+          type: AccountType.JOINT,
+          divisor: 2,
+        }),
+        createMockAccount({
+          name: 'Compte Joint 70/30',
+          type: AccountType.JOINT,
+          divisor: 3, // Custom divisor
+        }),
+        createMockAccount({
+          name: 'Compte Courant',
+          type: AccountType.STANDARD,
+          divisor: 1,
+        }),
+      ]
+
+      mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.account.findMany.mockResolvedValue(accounts)
+
+      const result = await service.getSummary(mockUserId, {})
+
+      // Loyer: 300/2 = 150, Electricité: 300/3 = 100, Alimentation: 100/1 = 100
+      expect(result.expensesByCategory).toContainEqual({
+        category: 'Loyer',
+        amount: 150,
+      })
+      expect(result.expensesByCategory).toContainEqual({
+        category: 'Electricité',
+        amount: 100,
+      })
+      expect(result.expensesByCategory).toContainEqual({
+        category: 'Alimentation',
+        amount: 100,
+      })
+      expect(result.totalExpenses).toBe(350)
+    })
+
+    it('should default to divisor 1 for unknown accounts', async () => {
+      const transactions = [
+        createMockTransaction({
+          id: '1',
+          amount: -200,
+          account: 'Compte Inconnu',
+          categoryName: 'Divers',
+        }),
+      ]
+
+      // No accounts defined - should default to divisor 1
+      mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.account.findMany.mockResolvedValue([])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.expensesByCategory).toEqual([
+        { category: 'Divers', amount: 200 },
+      ])
+      expect(result.totalExpenses).toBe(200)
+    })
+  })
+
+  describe('Category associations with joint accounts', () => {
+    it('should divide reimbursements by account divisor and deduct from expenses', async () => {
+      const transactions = [
+        createMockTransaction({
+          id: '1',
+          amount: -500,
+          type: TransactionType.EXPENSE,
+          account: 'Compte Joint',
+          categoryName: 'Santé',
+        }),
+        createMockTransaction({
+          id: '2',
+          amount: 300,
+          type: TransactionType.INCOME,
+          account: 'Compte Joint',
+          categoryName: 'Remboursement Mutuelle',
+        }),
+      ]
+
+      const accounts = [
+        createMockAccount({
+          name: 'Compte Joint',
+          type: AccountType.JOINT,
+          divisor: 2,
+        }),
+      ]
+
+      mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.account.findMany.mockResolvedValue(accounts)
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-1',
+          incomeCategoryId: 'cat-2',
+          expenseCategory: { name: 'Santé' },
+          incomeCategory: { name: 'Remboursement Mutuelle' },
+        },
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      // Santé expense: 500/2 = 250
+      // Reimbursement: 300/2 = 150
+      // Net expense: 250 - 150 = 100
+      expect(result.expensesByCategory).toEqual([
+        { category: 'Santé', amount: 100 },
+      ])
+      expect(result.totalExpenses).toBe(100)
+      // Reimbursement should not appear in income
+      expect(result.incomeByCategory).toEqual([])
+      expect(result.totalIncome).toBe(0)
+    })
+
+    it('should handle reimbursements from different accounts with different divisors', async () => {
+      const transactions = [
+        createMockTransaction({
+          id: '1',
+          amount: -400,
+          type: TransactionType.EXPENSE,
+          account: 'Compte Joint',
+          categoryName: 'Santé',
+        }),
+        createMockTransaction({
+          id: '2',
+          amount: 100,
+          type: TransactionType.INCOME,
+          account: 'Compte Courant', // Reimbursement on personal account
+          categoryName: 'Remboursement Mutuelle',
+        }),
+      ]
+
+      const accounts = [
+        createMockAccount({
+          name: 'Compte Joint',
+          type: AccountType.JOINT,
+          divisor: 2,
+        }),
+        createMockAccount({
+          name: 'Compte Courant',
+          type: AccountType.STANDARD,
+          divisor: 1,
+        }),
+      ]
+
+      mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.account.findMany.mockResolvedValue(accounts)
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-1',
+          incomeCategoryId: 'cat-2',
+          expenseCategory: { name: 'Santé' },
+          incomeCategory: { name: 'Remboursement Mutuelle' },
+        },
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      // Santé expense: 400/2 = 200
+      // Reimbursement: 100/1 = 100 (from personal account)
+      // Net expense: 200 - 100 = 100
+      expect(result.expensesByCategory).toEqual([
+        { category: 'Santé', amount: 100 },
+      ])
+      expect(result.totalExpenses).toBe(100)
+    })
+
+    it('should apply divisors correctly in monthly net expenses with reimbursements', async () => {
+      const transactions = [
+        createMockTransaction({
+          id: '1',
+          date: new Date('2024-01-10'),
+          amount: -600,
+          type: TransactionType.EXPENSE,
+          account: 'Compte Joint',
+          categoryName: 'Santé',
+        }),
+        createMockTransaction({
+          id: '2',
+          date: new Date('2024-01-15'),
+          amount: 200,
+          type: TransactionType.INCOME,
+          account: 'Compte Joint',
+          categoryName: 'Remboursement Mutuelle',
+        }),
+        createMockTransaction({
+          id: '3',
+          date: new Date('2024-02-10'),
+          amount: -400,
+          type: TransactionType.EXPENSE,
+          account: 'Compte Joint',
+          categoryName: 'Santé',
+        }),
+      ]
+
+      const accounts = [
+        createMockAccount({
+          name: 'Compte Joint',
+          type: AccountType.JOINT,
+          divisor: 2,
+        }),
+      ]
+
+      mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.account.findMany.mockResolvedValue(accounts)
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-1',
+          incomeCategoryId: 'cat-2',
+          expenseCategory: { name: 'Santé' },
+          incomeCategory: { name: 'Remboursement Mutuelle' },
+        },
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      // Jan: expense = 600/2 = 300, reimbursement = 200/2 = 100, netExpense = 200
+      // Feb: expense = 400/2 = 200, reimbursement = 0, netExpense = 200
+      expect(result.monthlyData).toHaveLength(2)
+      expect(result.monthlyData[0].expenses).toBe(300)
+      expect(result.monthlyData[0].netExpenses).toBe(200)
+      expect(result.monthlyData[1].expenses).toBe(200)
+      expect(result.monthlyData[1].netExpenses).toBe(200)
+
+      // Total net expenses = 200 + 200 = 400
+      expect(result.totalExpenses).toBe(400)
+    })
+
+    it('should handle mixed expenses and reimbursements from joint and personal accounts', async () => {
+      const transactions = [
+        // Joint account expense
+        createMockTransaction({
+          id: '1',
+          amount: -1000,
+          type: TransactionType.EXPENSE,
+          account: 'Compte Joint',
+          categoryName: 'Santé',
+        }),
+        // Personal account expense (same category)
+        createMockTransaction({
+          id: '2',
+          amount: -200,
+          type: TransactionType.EXPENSE,
+          account: 'Compte Courant',
+          categoryName: 'Santé',
+        }),
+        // Reimbursement on joint account
+        createMockTransaction({
+          id: '3',
+          amount: 400,
+          type: TransactionType.INCOME,
+          account: 'Compte Joint',
+          categoryName: 'Remboursement Mutuelle',
+        }),
+        // Reimbursement on personal account
+        createMockTransaction({
+          id: '4',
+          amount: 100,
+          type: TransactionType.INCOME,
+          account: 'Compte Courant',
+          categoryName: 'Remboursement Mutuelle',
+        }),
+      ]
+
+      const accounts = [
+        createMockAccount({
+          name: 'Compte Joint',
+          type: AccountType.JOINT,
+          divisor: 2,
+        }),
+        createMockAccount({
+          name: 'Compte Courant',
+          type: AccountType.STANDARD,
+          divisor: 1,
+        }),
+      ]
+
+      mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.account.findMany.mockResolvedValue(accounts)
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-1',
+          incomeCategoryId: 'cat-2',
+          expenseCategory: { name: 'Santé' },
+          incomeCategory: { name: 'Remboursement Mutuelle' },
+        },
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      // Total Santé expenses: 1000/2 + 200/1 = 500 + 200 = 700
+      // Total reimbursements: 400/2 + 100/1 = 200 + 100 = 300
+      // Net Santé expense: 700 - 300 = 400
+      expect(result.expensesByCategory).toEqual([
+        { category: 'Santé', amount: 400 },
+      ])
+      expect(result.totalExpenses).toBe(400)
+    })
+
+    it('should not count associated income as regular income when from joint account', async () => {
+      const transactions = [
+        createMockTransaction({
+          id: '1',
+          amount: -200,
+          type: TransactionType.EXPENSE,
+          account: 'Compte Joint',
+          categoryName: 'Santé',
+        }),
+        createMockTransaction({
+          id: '2',
+          amount: 100,
+          type: TransactionType.INCOME,
+          account: 'Compte Joint',
+          categoryName: 'Remboursement Mutuelle',
+        }),
+        createMockTransaction({
+          id: '3',
+          amount: 3000,
+          type: TransactionType.INCOME,
+          account: 'Compte Joint',
+          categoryName: 'Salaire',
+        }),
+      ]
+
+      const accounts = [
+        createMockAccount({
+          name: 'Compte Joint',
+          type: AccountType.JOINT,
+          divisor: 2,
+        }),
+      ]
+
+      mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.account.findMany.mockResolvedValue(accounts)
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-1',
+          incomeCategoryId: 'cat-2',
+          expenseCategory: { name: 'Santé' },
+          incomeCategory: { name: 'Remboursement Mutuelle' },
+        },
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      // Only Salaire should appear in income (3000/2 = 1500)
+      // Remboursement Mutuelle should NOT appear (it's associated with expense)
+      expect(result.incomeByCategory).toEqual([
+        { category: 'Salaire', amount: 1500 },
+      ])
+      expect(result.totalIncome).toBe(1500)
+
+      // Santé: 200/2 - 100/2 = 100 - 50 = 50
+      expect(result.expensesByCategory).toEqual([
+        { category: 'Santé', amount: 50 },
+      ])
     })
   })
 })
