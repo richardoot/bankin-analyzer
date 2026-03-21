@@ -414,18 +414,24 @@
   <div class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <!-- Header -->
-      <div class="flex items-center justify-between mb-8">
+      <div
+        class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8"
+      >
         <div>
-          <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          <h1
+            class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
+          >
             Remboursements
           </h1>
-          <p class="mt-2 text-gray-600 dark:text-gray-400">
+          <p
+            class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400"
+          >
             Gerez les personnes et suivez les remboursements en cours
           </p>
         </div>
         <RouterLink
           to="/transactions"
-          class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
+          class="inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-medium text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors min-h-[44px] sm:min-h-0 w-full sm:w-auto"
         >
           <svg
             class="h-4 w-4"
@@ -721,14 +727,14 @@
             </div>
 
             <!-- Categories breakdown -->
-            <div class="ml-13 space-y-1">
+            <div class="mt-3 space-y-1">
               <div
                 v-for="cat in person.byCategory"
                 :key="cat.categoryId ?? 'none'"
               >
                 <!-- Category header - clickable -->
                 <button
-                  class="w-full flex items-center justify-between py-1.5 px-2 -ml-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors text-sm"
+                  class="w-full flex items-center justify-between py-2 px-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors text-sm min-h-[44px] sm:min-h-0"
                   @click="
                     toggleCategoryExpanded(
                       person.personId,
@@ -737,10 +743,10 @@
                   "
                 >
                   <span
-                    class="text-gray-600 dark:text-gray-400 flex items-center gap-2"
+                    class="text-gray-600 dark:text-gray-400 flex items-center gap-1.5 sm:gap-2 flex-wrap"
                   >
                     <svg
-                      class="w-3 h-3 text-gray-400 dark:text-gray-500 transition-transform duration-200"
+                      class="w-3 h-3 text-gray-400 dark:text-gray-500 transition-transform duration-200 shrink-0"
                       :class="{
                         'rotate-90': isCategoryExpanded(
                           person.personId,
@@ -758,31 +764,34 @@
                         d="M9 5l7 7-7 7"
                       />
                     </svg>
-                    {{ cat.categoryName }}
-                    <span class="text-xs text-gray-400 dark:text-gray-500"
+                    <span class="truncate">{{ cat.categoryName }}</span>
+                    <span
+                      class="text-xs text-gray-400 dark:text-gray-500 shrink-0"
                       >({{ cat.reimbursements.length }})</span
                     >
                     <!-- Status badge -->
                     <span
                       v-if="cat.status === 'COMPLETED'"
-                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 shrink-0"
                     >
                       Regle
                     </span>
                     <span
                       v-else-if="cat.status === 'PARTIAL'"
-                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 shrink-0"
                     >
                       Partiel
                     </span>
                     <span
                       v-else
-                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 shrink-0"
                     >
                       En attente
                     </span>
                   </span>
-                  <span class="font-medium text-gray-700 dark:text-gray-300">
+                  <span
+                    class="font-medium text-gray-700 dark:text-gray-300 shrink-0 ml-2"
+                  >
                     {{ formatCurrency(cat.amountRemaining) }}
                   </span>
                 </button>
@@ -799,16 +808,18 @@
                       : 'max-h-0 opacity-0'
                   "
                 >
-                  <div class="ml-5 mt-1 mb-2 space-y-1">
+                  <div class="ml-3 sm:ml-5 mt-1 mb-2 space-y-1">
                     <div
                       v-for="r in cat.reimbursements"
                       :key="r.id"
-                      class="flex justify-between text-xs text-gray-500 dark:text-gray-400 py-1 pl-3 border-l-2 border-amber-200 dark:border-amber-700"
+                      class="flex flex-col sm:flex-row sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-amber-200 dark:border-amber-700"
                     >
-                      <span class="truncate mr-2">
+                      <span class="truncate">
                         {{ getTransactionDescription(r.transactionId) }}
                       </span>
-                      <span class="font-medium whitespace-nowrap">
+                      <span
+                        class="font-medium whitespace-nowrap mt-0.5 sm:mt-0 sm:ml-2"
+                      >
                         {{ formatCurrency(r.amountRemaining) }}
                         <span
                           v-if="r.amountReceived > 0"
