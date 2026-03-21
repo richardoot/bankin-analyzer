@@ -28,6 +28,8 @@ export class FilterPreferencesController {
         jointAccounts: [],
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
+        globalHiddenExpenseCategories: [],
+        globalHiddenIncomeCategories: [],
         isPanelExpanded: true,
       }
     }
@@ -36,6 +38,8 @@ export class FilterPreferencesController {
       jointAccounts: prefs.jointAccounts,
       hiddenExpenseCategories: prefs.hiddenExpenseCategories,
       hiddenIncomeCategories: prefs.hiddenIncomeCategories,
+      globalHiddenExpenseCategories: prefs.globalHiddenExpenseCategories,
+      globalHiddenIncomeCategories: prefs.globalHiddenIncomeCategories,
       isPanelExpanded: prefs.isPanelExpanded,
     }
   }
@@ -53,6 +57,8 @@ export class FilterPreferencesController {
       jointAccounts: prefs.jointAccounts,
       hiddenExpenseCategories: prefs.hiddenExpenseCategories,
       hiddenIncomeCategories: prefs.hiddenIncomeCategories,
+      globalHiddenExpenseCategories: prefs.globalHiddenExpenseCategories,
+      globalHiddenIncomeCategories: prefs.globalHiddenIncomeCategories,
       isPanelExpanded: prefs.isPanelExpanded,
     }
   }

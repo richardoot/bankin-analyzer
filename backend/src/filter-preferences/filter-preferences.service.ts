@@ -24,6 +24,8 @@ export class FilterPreferencesService {
         jointAccounts: dto.jointAccounts ?? [],
         hiddenExpenseCategories: dto.hiddenExpenseCategories ?? [],
         hiddenIncomeCategories: dto.hiddenIncomeCategories ?? [],
+        globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories ?? [],
+        globalHiddenIncomeCategories: dto.globalHiddenIncomeCategories ?? [],
         categoryAssociations: [], // Deprecated: use CategoryAssociation table
         isPanelExpanded: dto.isPanelExpanded ?? true,
       },
@@ -36,6 +38,12 @@ export class FilterPreferencesService {
         }),
         ...(dto.hiddenIncomeCategories !== undefined && {
           hiddenIncomeCategories: dto.hiddenIncomeCategories,
+        }),
+        ...(dto.globalHiddenExpenseCategories !== undefined && {
+          globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
+        }),
+        ...(dto.globalHiddenIncomeCategories !== undefined && {
+          globalHiddenIncomeCategories: dto.globalHiddenIncomeCategories,
         }),
         ...(dto.isPanelExpanded !== undefined && {
           isPanelExpanded: dto.isPanelExpanded,

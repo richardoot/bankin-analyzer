@@ -23,6 +23,7 @@ model User {
   importHistories       ImportHistory[]
   settlements           Settlement[]
   categoryAssociations  CategoryAssociation[]
+  budgets               Budget[]
 
   @@map("users")
   @@schema("app")
@@ -71,6 +72,7 @@ model Category {
   reimbursementRequests       ReimbursementRequest[]
   expenseCategoryAssociations CategoryAssociation[]  @relation("ExpenseCategory")
   incomeCategoryAssociations  CategoryAssociation[]  @relation("IncomeCategory")
+  budgets                     Budget[]
 
   @@unique([userId, name, type])
   @@map("categories")
@@ -101,15 +103,17 @@ enum ImportStatus {
 }
 
 model FilterPreferences {
-  id                      String   @id @default(uuid())
-  userId                  String   @unique @map("user_id")
-  jointAccounts           String[] @default([]) @map("joint_accounts")
-  hiddenExpenseCategories String[] @default([]) @map("hidden_expense_categories")
-  hiddenIncomeCategories  String[] @default([]) @map("hidden_income_categories")
-  categoryAssociations    Json     @default("[]") @map("category_associations")
-  isPanelExpanded         Boolean  @default(true) @map("is_panel_expanded")
-  createdAt               DateTime @default(now()) @map("created_at")
-  updatedAt               DateTime @updatedAt @map("updated_at")
+  id                            String   @id @default(uuid())
+  userId                        String   @unique @map("user_id")
+  jointAccounts                 String[] @default([]) @map("joint_accounts")
+  hiddenExpenseCategories       String[] @default([]) @map("hidden_expense_categories")
+  hiddenIncomeCategories        String[] @default([]) @map("hidden_income_categories")
+  globalHiddenExpenseCategories String[] @default([]) @map("global_hidden_expense_categories")
+  globalHiddenIncomeCategories  String[] @default([]) @map("global_hidden_income_categories")
+  categoryAssociations          Json     @default("[]") @map("category_associations")
+  isPanelExpanded               Boolean  @default(true) @map("is_panel_expanded")
+  createdAt                     DateTime @default(now()) @map("created_at")
+  updatedAt                     DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -248,5 +252,22 @@ model CategoryAssociation {
   @@unique([userId, incomeCategoryId])
   @@index([userId])
   @@map("category_associations")
+  @@schema("app")
+}
+
+model Budget {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  categoryId String   @map("category_id")
+  amount     Decimal  @db.Decimal(12, 2)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId])
+  @@index([userId])
+  @@map("budgets")
   @@schema("app")
 }

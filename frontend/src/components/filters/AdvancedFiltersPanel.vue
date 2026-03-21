@@ -27,23 +27,33 @@
     }
   }
 
-  // Catégories de dépenses triées : non-masquées d'abord, masquées à la fin (alphabétique)
+  // Catégories de dépenses triées : exclut les catégories masquées globalement,
+  // puis non-masquées d'abord, masquées (dashboard) à la fin (alphabétique)
   const sortedExpenseCategories = computed(() => {
-    const visible = props.allExpenseCategories
+    // Exclure les catégories masquées globalement (elles ne doivent pas apparaître du tout)
+    const availableCategories = props.allExpenseCategories.filter(
+      cat => !filtersStore.isExpenseCategoryGloballyHidden(cat)
+    )
+    const visible = availableCategories
       .filter(cat => !filtersStore.isExpenseCategoryHidden(cat))
       .sort((a, b) => a.localeCompare(b, 'fr'))
-    const hidden = props.allExpenseCategories
+    const hidden = availableCategories
       .filter(cat => filtersStore.isExpenseCategoryHidden(cat))
       .sort((a, b) => a.localeCompare(b, 'fr'))
     return [...visible, ...hidden]
   })
 
-  // Catégories de revenus triées : non-masquées d'abord, masquées à la fin (alphabétique)
+  // Catégories de revenus triées : exclut les catégories masquées globalement,
+  // puis non-masquées d'abord, masquées (dashboard) à la fin (alphabétique)
   const sortedIncomeCategories = computed(() => {
-    const visible = props.allIncomeCategories
+    // Exclure les catégories masquées globalement (elles ne doivent pas apparaître du tout)
+    const availableCategories = props.allIncomeCategories.filter(
+      cat => !filtersStore.isIncomeCategoryGloballyHidden(cat)
+    )
+    const visible = availableCategories
       .filter(cat => !filtersStore.isIncomeCategoryHidden(cat))
       .sort((a, b) => a.localeCompare(b, 'fr'))
-    const hidden = props.allIncomeCategories
+    const hidden = availableCategories
       .filter(cat => filtersStore.isIncomeCategoryHidden(cat))
       .sort((a, b) => a.localeCompare(b, 'fr'))
     return [...visible, ...hidden]

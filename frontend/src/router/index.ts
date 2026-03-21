@@ -63,6 +63,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/budget',
+    name: 'budget',
+    component: () => import('@/views/BudgetPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/preferences',
     name: 'preferences',
     component: () => import('@/views/PreferencesPage.vue'),

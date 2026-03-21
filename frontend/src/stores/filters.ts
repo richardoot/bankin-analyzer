@@ -7,27 +7,37 @@ const STORAGE_KEY = 'bankin-analyzer-filters'
 export type TimePeriod = '3m' | '6m' | '1y' | 'all'
 
 export const useFiltersStore = defineStore('filters', () => {
-  // État
-  const jointAccounts = ref<string[]>([])
+  // === DASHBOARD FILTERS (localStorage only, NOT synced to DB) ===
   const hiddenExpenseCategories = ref<string[]>([])
   const hiddenIncomeCategories = ref<string[]>([])
-  const isPanelExpanded = ref(true)
   const timePeriod = ref<TimePeriod>('all')
 
-  // État de synchronisation
+  // === GLOBAL SETTINGS (synced to DB) ===
+  const jointAccounts = ref<string[]>([])
+  const globalHiddenExpenseCategories = ref<string[]>([])
+  const globalHiddenIncomeCategories = ref<string[]>([])
+  const isPanelExpanded = ref(true)
+
+  // État de synchronisation (for global settings)
   const isSyncing = ref(false)
   const lastSyncError = ref<string | null>(null)
   const hasUnsavedChanges = ref(false)
 
-  // Initialiser depuis localStorage
+  // Initialiser depuis localStorage (dashboard filters + cache of global)
   function initFromStorage() {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
       try {
         const data = JSON.parse(stored)
-        jointAccounts.value = data.jointAccounts || []
+        // Dashboard filters (local only)
         hiddenExpenseCategories.value = data.hiddenExpenseCategories || []
         hiddenIncomeCategories.value = data.hiddenIncomeCategories || []
+        // Global settings (cached)
+        jointAccounts.value = data.jointAccounts || []
+        globalHiddenExpenseCategories.value =
+          data.globalHiddenExpenseCategories || []
+        globalHiddenIncomeCategories.value =
+          data.globalHiddenIncomeCategories || []
         isPanelExpanded.value = data.isPanelExpanded ?? true
       } catch {
         // Ignore parsing errors
@@ -40,24 +50,27 @@ export const useFiltersStore = defineStore('filters', () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        jointAccounts: jointAccounts.value,
+        // Dashboard filters (local only)
         hiddenExpenseCategories: hiddenExpenseCategories.value,
         hiddenIncomeCategories: hiddenIncomeCategories.value,
+        // Global settings (cached)
+        jointAccounts: jointAccounts.value,
+        globalHiddenExpenseCategories: globalHiddenExpenseCategories.value,
+        globalHiddenIncomeCategories: globalHiddenIncomeCategories.value,
         isPanelExpanded: isPanelExpanded.value,
       })
     )
   }
 
-  // Marquer comme modifié et sauvegarder en localStorage
+  // Marquer les settings globaux comme modifiés
   function markAsChanged() {
     hasUnsavedChanges.value = true
     saveToStorage()
   }
 
-  // Sauvegarder vers le backend (appelé manuellement via bouton)
+  // Sauvegarder vers le backend (global settings only)
   async function saveToBackend(): Promise<boolean> {
     try {
-      // Import dynamique pour éviter la dépendance circulaire
       const { useAuthStore } = await import('./auth')
       const authStore = useAuthStore()
 
@@ -68,14 +81,14 @@ export const useFiltersStore = defineStore('filters', () => {
       isSyncing.value = true
       lastSyncError.value = null
 
+      // Only sync global settings, NOT dashboard filters
       await api.updateFilterPreferences({
         jointAccounts: jointAccounts.value,
-        hiddenExpenseCategories: hiddenExpenseCategories.value,
-        hiddenIncomeCategories: hiddenIncomeCategories.value,
+        globalHiddenExpenseCategories: globalHiddenExpenseCategories.value,
+        globalHiddenIncomeCategories: globalHiddenIncomeCategories.value,
         isPanelExpanded: isPanelExpanded.value,
       })
 
-      // Sync localStorage avec les données sauvegardées
       saveToStorage()
       hasUnsavedChanges.value = false
       return true
@@ -89,9 +102,8 @@ export const useFiltersStore = defineStore('filters', () => {
     }
   }
 
-  // Charger depuis le backend (priorité DB > localStorage)
+  // Charger depuis le backend (global settings)
   async function loadFromBackend() {
-    // Import dynamique pour éviter la dépendance circulaire
     const { useAuthStore } = await import('./auth')
     const authStore = useAuthStore()
     if (!authStore.isAuthenticated) {
@@ -103,17 +115,30 @@ export const useFiltersStore = defineStore('filters', () => {
       isSyncing.value = true
       lastSyncError.value = null
       const prefs = await api.getFilterPreferences()
+
+      // Load global settings from backend
       jointAccounts.value = prefs.jointAccounts
-      hiddenExpenseCategories.value = prefs.hiddenExpenseCategories
-      hiddenIncomeCategories.value = prefs.hiddenIncomeCategories
+      globalHiddenExpenseCategories.value = prefs.globalHiddenExpenseCategories
+      globalHiddenIncomeCategories.value = prefs.globalHiddenIncomeCategories
       isPanelExpanded.value = prefs.isPanelExpanded
-      // Sync localStorage avec les données backend
+
+      // Dashboard filters stay local (from localStorage)
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        try {
+          const data = JSON.parse(stored)
+          hiddenExpenseCategories.value = data.hiddenExpenseCategories || []
+          hiddenIncomeCategories.value = data.hiddenIncomeCategories || []
+        } catch {
+          // Ignore
+        }
+      }
+
       saveToStorage()
       hasUnsavedChanges.value = false
     } catch (error) {
       lastSyncError.value =
         error instanceof Error ? error.message : 'Load failed'
-      // Fallback localStorage
       initFromStorage()
     } finally {
       isSyncing.value = false
@@ -126,7 +151,7 @@ export const useFiltersStore = defineStore('filters', () => {
     markAsChanged()
   }
 
-  // Actions
+  // === JOINT ACCOUNTS (synced to DB) ===
   function toggleJointAccount(account: string) {
     const index = jointAccounts.value.indexOf(account)
     if (index === -1) {
@@ -141,7 +166,7 @@ export const useFiltersStore = defineStore('filters', () => {
     return jointAccounts.value.includes(account)
   }
 
-  // Actions pour catégories masquées
+  // === DASHBOARD FILTERS (local only, NOT synced to DB) ===
   function toggleHiddenExpenseCategory(category: string) {
     const index = hiddenExpenseCategories.value.indexOf(category)
     if (index === -1) {
@@ -149,7 +174,8 @@ export const useFiltersStore = defineStore('filters', () => {
     } else {
       hiddenExpenseCategories.value.splice(index, 1)
     }
-    markAsChanged()
+    // Only save to localStorage, NOT mark as changed for DB sync
+    saveToStorage()
   }
 
   function toggleHiddenIncomeCategory(category: string) {
@@ -159,7 +185,8 @@ export const useFiltersStore = defineStore('filters', () => {
     } else {
       hiddenIncomeCategories.value.splice(index, 1)
     }
-    markAsChanged()
+    // Only save to localStorage, NOT mark as changed for DB sync
+    saveToStorage()
   }
 
   function isExpenseCategoryHidden(category: string): boolean {
@@ -170,7 +197,36 @@ export const useFiltersStore = defineStore('filters', () => {
     return hiddenIncomeCategories.value.includes(category)
   }
 
-  // Computed
+  // === GLOBAL HIDDEN CATEGORIES (synced to DB) ===
+  function toggleGlobalHiddenExpenseCategory(category: string) {
+    const index = globalHiddenExpenseCategories.value.indexOf(category)
+    if (index === -1) {
+      globalHiddenExpenseCategories.value.push(category)
+    } else {
+      globalHiddenExpenseCategories.value.splice(index, 1)
+    }
+    markAsChanged()
+  }
+
+  function toggleGlobalHiddenIncomeCategory(category: string) {
+    const index = globalHiddenIncomeCategories.value.indexOf(category)
+    if (index === -1) {
+      globalHiddenIncomeCategories.value.push(category)
+    } else {
+      globalHiddenIncomeCategories.value.splice(index, 1)
+    }
+    markAsChanged()
+  }
+
+  function isExpenseCategoryGloballyHidden(category: string): boolean {
+    return globalHiddenExpenseCategories.value.includes(category)
+  }
+
+  function isIncomeCategoryGloballyHidden(category: string): boolean {
+    return globalHiddenIncomeCategories.value.includes(category)
+  }
+
+  // Computed sets
   const jointAccountsSet = computed(() => new Set(jointAccounts.value))
   const hiddenExpenseCategoriesSet = computed(
     () => new Set(hiddenExpenseCategories.value)
@@ -178,8 +234,14 @@ export const useFiltersStore = defineStore('filters', () => {
   const hiddenIncomeCategoriesSet = computed(
     () => new Set(hiddenIncomeCategories.value)
   )
+  const globalHiddenExpenseCategoriesSet = computed(
+    () => new Set(globalHiddenExpenseCategories.value)
+  )
+  const globalHiddenIncomeCategoriesSet = computed(
+    () => new Set(globalHiddenIncomeCategories.value)
+  )
 
-  // Computed pour le nombre de filtres actifs
+  // Computed pour le nombre de filtres dashboard actifs
   const activeFiltersCount = computed(
     () =>
       jointAccounts.value.length +
@@ -221,15 +283,16 @@ export const useFiltersStore = defineStore('filters', () => {
     }
   }
 
-  // Init - charger depuis localStorage au démarrage
-  // Le chargement depuis le backend sera fait après l'initialisation de l'auth
+  // Init from localStorage at startup
   initFromStorage()
 
   return {
+    // Joint accounts (synced to DB)
     jointAccounts,
     jointAccountsSet,
     toggleJointAccount,
     isJointAccount,
+    // Dashboard filters (local only)
     hiddenExpenseCategories,
     hiddenExpenseCategoriesSet,
     toggleHiddenExpenseCategory,
@@ -238,6 +301,16 @@ export const useFiltersStore = defineStore('filters', () => {
     hiddenIncomeCategoriesSet,
     toggleHiddenIncomeCategory,
     isIncomeCategoryHidden,
+    // Global hidden categories (synced to DB)
+    globalHiddenExpenseCategories,
+    globalHiddenExpenseCategoriesSet,
+    toggleGlobalHiddenExpenseCategory,
+    isExpenseCategoryGloballyHidden,
+    globalHiddenIncomeCategories,
+    globalHiddenIncomeCategoriesSet,
+    toggleGlobalHiddenIncomeCategory,
+    isIncomeCategoryGloballyHidden,
+    // Panel state
     isPanelExpanded,
     togglePanelExpanded,
     activeFiltersCount,

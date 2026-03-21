@@ -139,6 +139,8 @@ export interface FilterPreferencesDto {
   jointAccounts: string[]
   hiddenExpenseCategories: string[]
   hiddenIncomeCategories: string[]
+  globalHiddenExpenseCategories: string[]
+  globalHiddenIncomeCategories: string[]
   isPanelExpanded: boolean
 }
 
@@ -323,6 +325,47 @@ export interface DashboardSummaryDto {
   allExpenseCategories: string[]
   allIncomeCategories: string[]
   availableAccounts: string[]
+}
+
+// Budget DTOs
+export interface BudgetDto {
+  id: string
+  categoryId: string
+  categoryName: string
+  amount: number
+}
+
+export interface CreateBudgetDto {
+  categoryId: string
+  amount: number
+}
+
+export interface UpsertBudgetsDto {
+  budgets: CreateBudgetDto[]
+}
+
+export interface CategoryAverageDto {
+  categoryId: string
+  categoryName: string
+  totalAmount: number
+  transactionCount: number
+  averagePerMonth: number
+}
+
+export interface BudgetStatisticsFiltersDto {
+  startDate: string
+  endDate: string
+  jointAccounts?: string[]
+}
+
+export interface BudgetStatisticsDto {
+  periodMonths: number
+  expensesByCategory: CategoryAverageDto[]
+  incomeByCategory: CategoryAverageDto[]
+  totalExpenses: number
+  totalIncome: number
+  averageMonthlyExpenses: number
+  averageMonthlyIncome: number
 }
 
 /**
@@ -853,5 +896,57 @@ export const api = {
     }
 
     return response.json() as Promise<CategorySuggestionDto[]>
+  },
+
+  // Budgets API
+  async getBudgets(): Promise<BudgetDto[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/budgets`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch budgets')
+    }
+
+    return response.json() as Promise<BudgetDto[]>
+  },
+
+  async upsertBudgets(dto: UpsertBudgetsDto): Promise<BudgetDto[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/budgets`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to save budgets')
+    }
+
+    return response.json() as Promise<BudgetDto[]>
+  },
+
+  async deleteBudget(categoryId: string): Promise<void> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/budgets/${categoryId}`,
+      {
+        method: 'DELETE',
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to delete budget')
+    }
+  },
+
+  async getBudgetStatistics(
+    filters: BudgetStatisticsFiltersDto
+  ): Promise<BudgetStatisticsDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/budgets/statistics`, {
+      method: 'POST',
+      body: JSON.stringify(filters),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch budget statistics')
+    }
+
+    return response.json() as Promise<BudgetStatisticsDto>
   },
 }

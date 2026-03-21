@@ -2,6 +2,7 @@
   import { ref, computed, onMounted } from 'vue'
   import { RouterLink } from 'vue-router'
   import { usePersonsStore } from '@/stores/persons'
+  import { useFiltersStore } from '@/stores/filters'
   import { api } from '@/lib/api'
   import type { ReimbursementDto, SettlementDto } from '@/lib/api'
   import { usePdfExport } from '@/composables/usePdfExport'
@@ -12,6 +13,7 @@
   const { exportReimbursementsToPdf } = usePdfExport()
 
   const personsStore = usePersonsStore()
+  const filtersStore = useFiltersStore()
 
   // Form state for adding person
   const newPersonName = ref('')
@@ -119,8 +121,15 @@
     >()
 
     // Only include reimbursements with remaining amount (not fully settled)
+    // and exclude hidden expense categories
     reimbursements.value
       .filter(r => r.amountRemaining > 0)
+      .filter(
+        r =>
+          !filtersStore.isExpenseCategoryGloballyHidden(
+            r.categoryName || 'Sans categorie'
+          )
+      )
       .forEach(r => {
         if (!map.has(r.personId)) {
           map.set(r.personId, {
@@ -182,9 +191,16 @@
     }))
   })
 
-  // Total due
+  // Total due (excluding hidden categories)
   const totalDue = computed(() =>
-    reimbursements.value.reduce((sum, r) => sum + r.amountRemaining, 0)
+    reimbursements.value
+      .filter(
+        r =>
+          !filtersStore.isExpenseCategoryGloballyHidden(
+            r.categoryName || 'Sans categorie'
+          )
+      )
+      .reduce((sum, r) => sum + r.amountRemaining, 0)
   )
 
   // Fetch reimbursements (with transaction info)
@@ -248,9 +264,15 @@
       }
     >()
 
-    // Only include reimbursements with remaining amount
+    // Only include reimbursements with remaining amount and exclude hidden categories
     reimbursements.value
       .filter(r => r.personId === personId && r.amountRemaining > 0)
+      .filter(
+        r =>
+          !filtersStore.isExpenseCategoryGloballyHidden(
+            r.categoryName || 'Sans categorie'
+          )
+      )
       .forEach(r => {
         const catKey = r.categoryId
         const catName = r.categoryName || 'Sans categorie'

@@ -1,9 +1,11 @@
 <script setup lang="ts">
   import { ref, onMounted, computed } from 'vue'
   import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
+  import { useFiltersStore } from '@/stores/filters'
   import { api, type CategoryDto } from '@/lib/api'
 
   const categoryAssociationsStore = useCategoryAssociationsStore()
+  const filtersStore = useFiltersStore()
 
   const categories = ref<CategoryDto[]>([])
   const isLoadingCategories = ref(false)
@@ -38,6 +40,31 @@
     )
     return incomeCategories.value.filter(c => !usedIncomeIds.has(c.id))
   })
+
+  // Sorted expense categories (visible first, then hidden)
+  const sortedExpenseCategories = computed(() => {
+    return [...expenseCategories.value].sort((a, b) => {
+      const aHidden = filtersStore.isExpenseCategoryGloballyHidden(a.name)
+      const bHidden = filtersStore.isExpenseCategoryGloballyHidden(b.name)
+      if (aHidden !== bHidden) return aHidden ? 1 : -1
+      return a.name.localeCompare(b.name)
+    })
+  })
+
+  // Sorted income categories (visible first, then hidden)
+  const sortedIncomeCategories = computed(() => {
+    return [...incomeCategories.value].sort((a, b) => {
+      const aHidden = filtersStore.isIncomeCategoryGloballyHidden(a.name)
+      const bHidden = filtersStore.isIncomeCategoryGloballyHidden(b.name)
+      if (aHidden !== bHidden) return aHidden ? 1 : -1
+      return a.name.localeCompare(b.name)
+    })
+  })
+
+  // Save hidden categories to backend
+  async function saveHiddenCategories(): Promise<void> {
+    await filtersStore.saveToBackend()
+  }
 
   const canCreate = computed(
     () =>
@@ -337,6 +364,227 @@
                 remboursements des depenses associees dans le Dashboard, et de
                 filtrer les revenus pertinents lors du reglement d'un
                 remboursement.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hidden Categories Section -->
+      <div
+        class="mt-8 rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
+      >
+        <div class="mb-6">
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            Categories masquees
+          </h2>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Ces categories seront masquees dans le Dashboard, Budget et
+            Remboursements
+          </p>
+        </div>
+
+        <!-- Loading State -->
+        <div v-if="isLoadingCategories" class="flex justify-center py-8">
+          <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+            <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              />
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+            <span>Chargement...</span>
+          </div>
+        </div>
+
+        <div v-else class="space-y-6">
+          <!-- Expense Categories -->
+          <div v-if="sortedExpenseCategories.length > 0">
+            <h3
+              class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3"
+            >
+              Categories de depenses
+            </h3>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="category in sortedExpenseCategories"
+                :key="category.id"
+                type="button"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
+                :class="
+                  filtersStore.isExpenseCategoryGloballyHidden(category.name)
+                    ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
+                    : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                "
+                @click="
+                  filtersStore.toggleGlobalHiddenExpenseCategory(category.name)
+                "
+              >
+                <svg
+                  v-if="
+                    filtersStore.isExpenseCategoryGloballyHidden(category.name)
+                  "
+                  class="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                  />
+                </svg>
+                {{ category.name }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Income Categories -->
+          <div v-if="sortedIncomeCategories.length > 0">
+            <h3
+              class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3"
+            >
+              Categories de revenus
+            </h3>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="category in sortedIncomeCategories"
+                :key="category.id"
+                type="button"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
+                :class="
+                  filtersStore.isIncomeCategoryGloballyHidden(category.name)
+                    ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
+                    : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                "
+                @click="
+                  filtersStore.toggleGlobalHiddenIncomeCategory(category.name)
+                "
+              >
+                <svg
+                  v-if="
+                    filtersStore.isIncomeCategoryGloballyHidden(category.name)
+                  "
+                  class="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                  />
+                </svg>
+                {{ category.name }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div
+            v-if="
+              sortedExpenseCategories.length === 0 &&
+              sortedIncomeCategories.length === 0
+            "
+            class="py-8 text-center text-gray-500 dark:text-gray-400"
+          >
+            Aucune categorie disponible. Importez des transactions pour creer
+            des categories.
+          </div>
+
+          <!-- Save button -->
+          <div
+            v-if="filtersStore.hasUnsavedChanges"
+            class="pt-4 border-t border-gray-200 dark:border-slate-700"
+          >
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white font-medium transition-colors"
+              :class="
+                filtersStore.isSyncing
+                  ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
+                  : 'bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600'
+              "
+              :disabled="filtersStore.isSyncing"
+              @click="saveHiddenCategories"
+            >
+              <svg
+                v-if="filtersStore.isSyncing"
+                class="animate-spin h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                />
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              <svg
+                v-else
+                class="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              {{ filtersStore.isSyncing ? 'Enregistrement...' : 'Enregistrer' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Info box -->
+        <div
+          class="mt-6 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4"
+        >
+          <div class="flex">
+            <div class="flex-shrink-0">
+              <svg
+                class="h-5 w-5 text-amber-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <p class="text-sm text-amber-700 dark:text-amber-300">
+                Les categories masquees ne seront plus affichees dans les
+                statistiques du Dashboard, dans la page Budget, ni dans les
+                remboursements.
               </p>
             </div>
           </div>

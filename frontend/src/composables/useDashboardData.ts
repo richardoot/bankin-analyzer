@@ -93,17 +93,32 @@ export function useDashboardData() {
     )
   )
 
-  // Available categories (excludes hidden)
+  // Helper: Check if category is hidden (dashboard filter OR globally hidden)
+  function isExpenseCategoryHiddenOrGlobal(category: string): boolean {
+    return (
+      filtersStore.isExpenseCategoryHidden(category) ||
+      filtersStore.isExpenseCategoryGloballyHidden(category)
+    )
+  }
+
+  function isIncomeCategoryHiddenOrGlobal(category: string): boolean {
+    return (
+      filtersStore.isIncomeCategoryHidden(category) ||
+      filtersStore.isIncomeCategoryGloballyHidden(category)
+    )
+  }
+
+  // Available categories (excludes dashboard hidden AND globally hidden)
   const availableExpenseCategories = computed<string[]>(() =>
     allExpenseCategories.value.filter(
-      cat => !filtersStore.isExpenseCategoryHidden(cat)
+      cat => !isExpenseCategoryHiddenOrGlobal(cat)
     )
   )
 
-  // Available income categories (excludes hidden and associated)
+  // Available income categories (excludes hidden, globally hidden, and associated)
   const availableIncomeCategories = computed<string[]>(() =>
     allIncomeCategories.value.filter(
-      cat => !filtersStore.isIncomeCategoryHidden(cat)
+      cat => !isIncomeCategoryHiddenOrGlobal(cat)
     )
   )
 
@@ -147,7 +162,7 @@ export function useDashboardData() {
       // Sum expenses for selected category
       if (tx.type === 'EXPENSE' && tx.categoryName === selectedCategory.value) {
         const category = tx.categoryName || 'Autre'
-        if (filtersStore.isExpenseCategoryHidden(category)) continue
+        if (isExpenseCategoryHiddenOrGlobal(category)) continue
 
         const current = expensesByMonthMap.get(monthKey) ?? 0
         expensesByMonthMap.set(
@@ -204,7 +219,7 @@ export function useDashboardData() {
         tx.categoryName === selectedIncomeCategory.value
       ) {
         const category = tx.categoryName || 'Autre'
-        if (filtersStore.isIncomeCategoryHidden(category)) continue
+        if (isIncomeCategoryHiddenOrGlobal(category)) continue
 
         const date = new Date(tx.date)
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
@@ -280,12 +295,26 @@ export function useDashboardData() {
         filtersStore.timePeriod
       )
 
+      // Combine dashboard filters with global hidden categories
+      const combinedHiddenExpenseCategories = [
+        ...new Set([
+          ...filtersStore.hiddenExpenseCategories,
+          ...filtersStore.globalHiddenExpenseCategories,
+        ]),
+      ]
+      const combinedHiddenIncomeCategories = [
+        ...new Set([
+          ...filtersStore.hiddenIncomeCategories,
+          ...filtersStore.globalHiddenIncomeCategories,
+        ]),
+      ]
+
       // Load dashboard summary and category associations in parallel
       const [summary] = await Promise.all([
         api.getDashboardSummary({
           jointAccounts: filtersStore.jointAccounts,
-          hiddenExpenseCategories: filtersStore.hiddenExpenseCategories,
-          hiddenIncomeCategories: filtersStore.hiddenIncomeCategories,
+          hiddenExpenseCategories: combinedHiddenExpenseCategories,
+          hiddenIncomeCategories: combinedHiddenIncomeCategories,
           startDate: startDate ?? undefined,
           endDate: endDate ?? undefined,
         }),
@@ -312,12 +341,14 @@ export function useDashboardData() {
     }
   }
 
-  // Auto-refetch when filters change
+  // Auto-refetch when filters change (dashboard or global)
   watch(
     () => [
       filtersStore.jointAccounts,
       filtersStore.hiddenExpenseCategories,
       filtersStore.hiddenIncomeCategories,
+      filtersStore.globalHiddenExpenseCategories,
+      filtersStore.globalHiddenIncomeCategories,
       filtersStore.timePeriod,
     ],
     () => {

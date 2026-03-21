@@ -15,6 +15,7 @@ import { SettlementsModule } from './settlements/settlements.module'
 import { DashboardModule } from './dashboard/dashboard.module'
 import { CategoryAssociationModule } from './category-association/category-association.module'
 import { AiSuggestionsModule } from './ai-suggestions/ai-suggestions.module'
+import { BudgetsModule } from './budgets/budgets.module'
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { AiSuggestionsModule } from './ai-suggestions/ai-suggestions.module'
     DashboardModule,
     CategoryAssociationModule,
     AiSuggestionsModule,
+    BudgetsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

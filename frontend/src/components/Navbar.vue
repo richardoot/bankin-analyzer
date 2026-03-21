@@ -22,6 +22,7 @@
     { to: '/import', label: 'Import' },
     { to: '/transactions', label: 'Transactions' },
     { to: '/reimbursements', label: 'Remboursements' },
+    { to: '/budget', label: 'Budget' },
   ]
 
   // Liens supplémentaires pour le menu mobile (inclus dans le dropdown sur desktop)
