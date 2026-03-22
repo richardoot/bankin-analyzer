@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common'
 import { createHash, randomUUID } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
 import { CategoriesService } from '../categories/categories.service'
+import { AccountsService } from '../accounts/accounts.service'
 import type { Transaction, TransactionType } from '../generated/prisma'
 import type {
   CreateTransactionDto,
@@ -25,7 +26,8 @@ interface HashData {
 export class TransactionsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly categoriesService: CategoriesService
+    private readonly categoriesService: CategoriesService,
+    private readonly accountsService: AccountsService
   ) {}
 
   private computeHash(
@@ -356,6 +358,16 @@ export class TransactionsService {
       categoryInputs
     )
     const categoryByName = new Map(categories.map(c => [c.name, c]))
+
+    // 5b. Create/fetch all accounts
+    const uniqueAccountNames = [
+      ...new Set(allTxsToImport.map(tx => tx.account)),
+    ]
+    await Promise.all(
+      uniqueAccountNames.map(name =>
+        this.accountsService.upsertByName(userId, name)
+      )
+    )
 
     // 6. Bulk insert with createMany
     const dataToCreate = [

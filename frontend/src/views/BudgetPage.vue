@@ -9,7 +9,6 @@
   import { useFiltersStore } from '@/stores/filters'
 
   const filtersStore = useFiltersStore()
-  // Note: Account divisors are now handled by the backend using the accounts table
 
   // Period options
   type PeriodOption = '3m' | '6m' | '12m' | 'custom'
@@ -20,8 +19,18 @@
     { value: 'custom', label: 'Personnalise' },
   ]
 
+  // Sort options
+  type SortOrder = 'amount-desc' | 'amount-asc' | 'difference-desc' | 'alpha'
+  const sortOptions: { value: SortOrder; label: string }[] = [
+    { value: 'amount-desc', label: 'Depense (decroissant)' },
+    { value: 'amount-asc', label: 'Depense (croissant)' },
+    { value: 'difference-desc', label: 'Economie potentielle' },
+    { value: 'alpha', label: 'Alphabetique' },
+  ]
+
   // State
   const selectedPeriod = ref<PeriodOption>('12m')
+  const sortOrder = ref<SortOrder>('amount-desc')
   const customStartDate = ref<string>('')
   const customEndDate = ref<string>('')
   const statistics = ref<BudgetStatisticsDto | null>(null)
@@ -49,13 +58,16 @@
 
     switch (selectedPeriod.value) {
       case '3m':
-        startDate.setMonth(startDate.getMonth() - 3)
+        startDate.setMonth(startDate.getMonth() - 2)
+        startDate.setDate(1)
         break
       case '6m':
-        startDate.setMonth(startDate.getMonth() - 6)
+        startDate.setMonth(startDate.getMonth() - 5)
+        startDate.setDate(1)
         break
       case '12m':
-        startDate.setFullYear(startDate.getFullYear() - 1)
+        startDate.setMonth(startDate.getMonth() - 11)
+        startDate.setDate(1)
         break
     }
 
@@ -78,6 +90,25 @@
         cat => !filtersStore.isExpenseCategoryGloballyHidden(cat.categoryName)
       ) ?? []
   )
+
+  // Computed: Sorted expense categories
+  const sortedExpenseCategories = computed(() => {
+    const categories = [...visibleExpenseCategories.value]
+    switch (sortOrder.value) {
+      case 'amount-desc':
+        return categories.sort((a, b) => b.averagePerMonth - a.averagePerMonth)
+      case 'amount-asc':
+        return categories.sort((a, b) => a.averagePerMonth - b.averagePerMonth)
+      case 'difference-desc':
+        return categories.sort((a, b) => getDifference(b) - getDifference(a))
+      case 'alpha':
+        return categories.sort((a, b) =>
+          a.categoryName.localeCompare(b.categoryName, 'fr')
+        )
+      default:
+        return categories
+    }
+  })
 
   // Computed: Visible income categories (excludes globally hidden)
   const visibleIncomeCategories = computed(
@@ -132,6 +163,12 @@
     return targetSavings.value - currentSavings.value
   })
 
+  // Computed: Savings progress percentage
+  const savingsProgressPercent = computed(() => {
+    if (targetSavings.value <= 0) return 0
+    return Math.max(0, (currentSavings.value / targetSavings.value) * 100)
+  })
+
   // Format currency
   function formatCurrency(value: number): string {
     return new Intl.NumberFormat('fr-FR', {
@@ -145,22 +182,52 @@
     return budgetInputs.value.get(categoryId) ?? 0
   }
 
-  // Get difference (budget - actual)
+  // Get difference (average - budget = potential savings)
   function getDifference(category: CategoryAverageDto): number {
     const budget = getBudgetForCategory(category.categoryId)
-    return budget - category.averagePerMonth
+    return category.averagePerMonth - budget
+  }
+
+  // Get utilization percentage (budget as % of average)
+  function getUtilizationPercent(category: CategoryAverageDto): number {
+    const average = category.averagePerMonth
+    if (average === 0) return 0
+    const budget = getBudgetForCategory(category.categoryId)
+    return (budget / average) * 100
+  }
+
+  // Get progress bar class based on utilization (budget as % of average)
+  // < 100% = saving money (green), 100-110% = neutral (amber), > 110% = overspending (red)
+  function getProgressBarClass(category: CategoryAverageDto): string {
+    const percent = getUtilizationPercent(category)
+    if (percent > 110) return 'bg-red-500 dark:bg-red-400'
+    if (percent > 100) return 'bg-amber-500 dark:bg-amber-400'
+    return 'bg-emerald-500 dark:bg-emerald-400'
+  }
+
+  // Get utilization badge class
+  function getUtilizationBadgeClass(category: CategoryAverageDto): string {
+    const percent = getUtilizationPercent(category)
+    if (percent > 110)
+      return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+    if (percent > 100)
+      return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+    return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+  }
+
+  // Trigger auto-save with debounce
+  function triggerAutoSave() {
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => {
+      saveBudgets()
+    }, 500)
   }
 
   // Update budget input
   function updateBudgetInput(categoryId: string, value: string) {
     const numValue = parseFloat(value) || 0
     budgetInputs.value.set(categoryId, numValue)
-
-    // Trigger auto-save with debounce
-    if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
-      saveBudgets()
-    }, 1000)
+    triggerAutoSave()
   }
 
   // Set budget from average
@@ -169,12 +236,43 @@
       category.categoryId,
       Math.round(category.averagePerMonth)
     )
+    triggerAutoSave()
+  }
 
-    // Trigger auto-save
-    if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
-      saveBudgets()
-    }, 500)
+  // Adjust budget by percentage
+  function adjustBudgetByPercent(categoryId: string, percent: number) {
+    const current = budgetInputs.value.get(categoryId) ?? 0
+    const newValue = Math.round(current * (1 + percent / 100))
+    budgetInputs.value.set(categoryId, Math.max(0, newValue))
+    triggerAutoSave()
+  }
+
+  // Apply average to all categories
+  function applyAverageToAll() {
+    for (const cat of visibleExpenseCategories.value) {
+      budgetInputs.value.set(cat.categoryId, Math.round(cat.averagePerMonth))
+    }
+    triggerAutoSave()
+  }
+
+  // Adjust all budgets by percentage
+  function adjustAllByPercent(percent: number) {
+    for (const cat of visibleExpenseCategories.value) {
+      const current = budgetInputs.value.get(cat.categoryId) ?? 0
+      if (current > 0) {
+        budgetInputs.value.set(
+          cat.categoryId,
+          Math.round(current * (1 + percent / 100))
+        )
+      }
+    }
+    triggerAutoSave()
+  }
+
+  // Reset all budgets
+  function resetAllBudgets() {
+    budgetInputs.value.clear()
+    triggerAutoSave()
   }
 
   // Fetch data
@@ -240,10 +338,11 @@
   })
 
   onMounted(() => {
-    // Set default custom dates
+    // Set default custom dates (12 months by default)
     const endDate = new Date()
     const startDate = new Date()
-    startDate.setFullYear(startDate.getFullYear() - 1)
+    startDate.setMonth(startDate.getMonth() - 11)
+    startDate.setDate(1)
     customEndDate.value = endDate.toISOString().split('T')[0] ?? ''
     customStartDate.value = startDate.toISOString().split('T')[0] ?? ''
 
@@ -414,11 +513,113 @@
         <div
           class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6 mb-6"
         >
-          <h2
-            class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
+          <!-- Header with title and sort -->
+          <div
+            class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4"
           >
-            Depenses par categorie
-          </h2>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Depenses par categorie
+            </h2>
+            <div class="flex items-center gap-2">
+              <label class="text-sm text-gray-500 dark:text-gray-400 shrink-0"
+                >Trier par:</label
+              >
+              <select
+                v-model="sortOrder"
+                class="text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 min-h-[36px]"
+              >
+                <option
+                  v-for="option in sortOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Quick Actions Bar -->
+          <div
+            class="flex flex-wrap items-center gap-2 mb-4 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg"
+          >
+            <span class="text-sm text-gray-500 dark:text-gray-400 mr-1"
+              >Actions rapides:</span
+            >
+
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/30 border border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors min-h-[36px]"
+              @click="applyAverageToAll"
+            >
+              <svg
+                class="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
+                />
+              </svg>
+              Appliquer les moyennes
+            </button>
+
+            <div class="flex items-center gap-1">
+              <button
+                type="button"
+                class="px-2.5 py-1.5 text-sm font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors min-h-[36px]"
+                @click="adjustAllByPercent(-10)"
+              >
+                -10%
+              </button>
+              <button
+                type="button"
+                class="px-2.5 py-1.5 text-sm font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors min-h-[36px]"
+                @click="adjustAllByPercent(-5)"
+              >
+                -5%
+              </button>
+              <button
+                type="button"
+                class="px-2.5 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-300 dark:border-emerald-700 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors min-h-[36px]"
+                @click="adjustAllByPercent(5)"
+              >
+                +5%
+              </button>
+              <button
+                type="button"
+                class="px-2.5 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-300 dark:border-emerald-700 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors min-h-[36px]"
+                @click="adjustAllByPercent(10)"
+              >
+                +10%
+              </button>
+            </div>
+
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors min-h-[36px]"
+              @click="resetAllBudgets"
+            >
+              <svg
+                class="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              Reinitialiser
+            </button>
+          </div>
 
           <!-- Desktop table -->
           <div class="hidden sm:block overflow-x-auto">
@@ -430,61 +631,114 @@
                   <th class="pb-3 font-medium">Categorie</th>
                   <th class="pb-3 font-medium text-right">Moyenne actuelle</th>
                   <th class="pb-3 font-medium text-center">Budget cible</th>
+                  <th class="pb-3 font-medium text-center w-24">Utilisation</th>
                   <th class="pb-3 font-medium text-right">Difference</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
                 <tr
-                  v-for="cat in visibleExpenseCategories"
+                  v-for="cat in sortedExpenseCategories"
                   :key="cat.categoryId"
-                  class="group"
                 >
-                  <td class="py-3 text-gray-900 dark:text-gray-100">
-                    {{ cat.categoryName }}
-                    <span class="text-xs text-gray-400 dark:text-gray-500 ml-2">
-                      ({{ cat.transactionCount }} tx)
-                    </span>
+                  <td class="py-3">
+                    <div class="text-gray-900 dark:text-gray-100">
+                      {{ cat.categoryName }}
+                      <span
+                        class="text-xs text-gray-400 dark:text-gray-500 ml-2"
+                      >
+                        ({{ cat.transactionCount }} tx)
+                      </span>
+                    </div>
+                    <!-- Progress bar -->
+                    <div
+                      v-if="getBudgetForCategory(cat.categoryId) > 0"
+                      class="w-full max-w-[200px] bg-gray-200 dark:bg-slate-700 rounded-full h-1.5 mt-2"
+                    >
+                      <div
+                        class="h-1.5 rounded-full transition-all duration-300"
+                        :class="getProgressBarClass(cat)"
+                        :style="{
+                          width: `${Math.min(getUtilizationPercent(cat), 100)}%`,
+                        }"
+                      />
+                    </div>
                   </td>
                   <td class="py-3 text-right text-gray-700 dark:text-gray-300">
                     {{ formatCurrency(cat.averagePerMonth) }}
                   </td>
                   <td class="py-3">
-                    <div class="flex items-center justify-center gap-2">
-                      <input
-                        type="number"
-                        :value="getBudgetForCategory(cat.categoryId)"
-                        min="0"
-                        step="10"
-                        class="w-28 px-3 py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 text-right focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400"
-                        @input="
-                          e =>
-                            updateBudgetInput(
-                              cat.categoryId,
-                              (e.target as HTMLInputElement).value
-                            )
-                        "
-                      />
-                      <button
-                        type="button"
-                        class="p-1.5 text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Utiliser la moyenne"
-                        @click="setBudgetFromAverage(cat)"
-                      >
-                        <svg
-                          class="h-4 w-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+                    <div class="flex flex-col items-center gap-1">
+                      <div class="flex items-center gap-2">
+                        <input
+                          type="number"
+                          :value="getBudgetForCategory(cat.categoryId)"
+                          min="0"
+                          step="10"
+                          class="w-28 px-3 py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 text-right focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400"
+                          @input="
+                            e =>
+                              updateBudgetInput(
+                                cat.categoryId,
+                                (e.target as HTMLInputElement).value
+                              )
+                          "
+                        />
+                        <button
+                          type="button"
+                          class="p-1.5 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                          title="Utiliser la moyenne"
+                          @click="setBudgetFromAverage(cat)"
                         >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                          />
-                        </svg>
-                      </button>
+                          <svg
+                            class="h-4 w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                      <!-- Percentage adjustment buttons -->
+                      <div
+                        v-if="getBudgetForCategory(cat.categoryId) > 0"
+                        class="flex items-center gap-1"
+                      >
+                        <button
+                          v-for="adjust in [-10, -5, 5, 10]"
+                          :key="adjust"
+                          type="button"
+                          class="px-1.5 py-0.5 text-xs font-medium rounded border transition-colors"
+                          :class="
+                            adjust > 0
+                              ? 'border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
+                              : 'border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
+                          "
+                          @click="adjustBudgetByPercent(cat.categoryId, adjust)"
+                        >
+                          {{ adjust > 0 ? '+' : '' }}{{ adjust }}%
+                        </button>
+                      </div>
                     </div>
+                  </td>
+                  <td class="py-3 text-center">
+                    <span
+                      v-if="getBudgetForCategory(cat.categoryId) > 0"
+                      class="text-xs font-medium px-2 py-1 rounded"
+                      :class="getUtilizationBadgeClass(cat)"
+                    >
+                      {{ Math.round(getUtilizationPercent(cat)) }}%
+                    </span>
+                    <span
+                      v-else
+                      class="text-xs text-gray-400 dark:text-gray-500"
+                      >-</span
+                    >
                   </td>
                   <td
                     class="py-3 text-right font-medium"
@@ -505,18 +759,44 @@
           <!-- Mobile cards -->
           <div class="sm:hidden space-y-4">
             <div
-              v-for="cat in visibleExpenseCategories"
+              v-for="cat in sortedExpenseCategories"
               :key="cat.categoryId"
               class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4"
             >
-              <div class="flex items-center justify-between mb-2">
-                <span class="font-medium text-gray-900 dark:text-gray-100">{{
-                  cat.categoryName
-                }}</span>
+              <!-- Header with category name and utilization badge -->
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-gray-900 dark:text-gray-100">{{
+                    cat.categoryName
+                  }}</span>
+                  <span
+                    v-if="getBudgetForCategory(cat.categoryId) > 0"
+                    class="text-xs font-medium px-1.5 py-0.5 rounded"
+                    :class="getUtilizationBadgeClass(cat)"
+                  >
+                    {{ Math.round(getUtilizationPercent(cat)) }}%
+                  </span>
+                </div>
                 <span class="text-xs text-gray-400 dark:text-gray-500"
                   >({{ cat.transactionCount }} tx)</span
                 >
               </div>
+
+              <!-- Progress bar -->
+              <div
+                v-if="getBudgetForCategory(cat.categoryId) > 0"
+                class="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 mb-3"
+              >
+                <div
+                  class="h-2 rounded-full transition-all duration-300"
+                  :class="getProgressBarClass(cat)"
+                  :style="{
+                    width: `${Math.min(getUtilizationPercent(cat), 100)}%`,
+                  }"
+                />
+              </div>
+
+              <!-- Average display -->
               <div class="flex items-center justify-between mb-3">
                 <span class="text-sm text-gray-500 dark:text-gray-400"
                   >Moyenne:</span
@@ -525,7 +805,9 @@
                   formatCurrency(cat.averagePerMonth)
                 }}</span>
               </div>
-              <div class="flex items-center gap-2">
+
+              <!-- Budget input -->
+              <div class="flex items-center gap-2 mb-2">
                 <span class="text-sm text-gray-500 dark:text-gray-400 shrink-0"
                   >Budget:</span
                 >
@@ -564,7 +846,32 @@
                   </svg>
                 </button>
               </div>
-              <div class="mt-2 text-right">
+
+              <!-- Percentage adjustment buttons -->
+              <div
+                v-if="getBudgetForCategory(cat.categoryId) > 0"
+                class="flex flex-wrap gap-1 mb-3"
+              >
+                <button
+                  v-for="adjust in [-10, -5, 5, 10]"
+                  :key="adjust"
+                  type="button"
+                  class="px-2.5 py-1.5 text-xs font-medium rounded min-h-[36px]"
+                  :class="
+                    adjust > 0
+                      ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700'
+                      : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-700'
+                  "
+                  @click="adjustBudgetByPercent(cat.categoryId, adjust)"
+                >
+                  {{ adjust > 0 ? '+' : '' }}{{ adjust }}%
+                </button>
+              </div>
+
+              <!-- Difference -->
+              <div
+                class="text-right pt-2 border-t border-gray-200 dark:border-slate-700"
+              >
                 <span
                   class="text-sm font-medium"
                   :class="
@@ -643,44 +950,131 @@
           </div>
         </div>
 
-        <!-- Savings Summary -->
+        <!-- Savings Summary (Redesigned) -->
         <div
-          class="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl shadow-lg p-6 text-white"
+          class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
         >
-          <h2 class="text-lg font-semibold mb-6">Resume Epargne</h2>
+          <h2
+            class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6"
+          >
+            Resume Epargne
+          </h2>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <!-- Current savings -->
-            <div class="text-center">
-              <p class="text-indigo-100 text-sm mb-1">Epargne actuelle</p>
-              <p class="text-2xl sm:text-3xl font-bold">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <!-- Current savings card -->
+            <div
+              class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 border-l-4 border-gray-400 dark:border-gray-600"
+            >
+              <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                Epargne actuelle
+              </p>
+              <p
+                class="text-2xl font-bold"
+                :class="
+                  currentSavings >= 0
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-red-600 dark:text-red-400'
+                "
+              >
                 {{ formatCurrency(currentSavings) }}
               </p>
-              <p class="text-indigo-200 text-xs mt-1">(revenus - depenses)</p>
+              <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                revenus - depenses
+              </p>
             </div>
 
-            <!-- Target savings -->
-            <div class="text-center">
-              <p class="text-indigo-100 text-sm mb-1">Epargne cible</p>
-              <p class="text-2xl sm:text-3xl font-bold">
+            <!-- Target savings card -->
+            <div
+              class="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4 border-l-4 border-indigo-500"
+            >
+              <p class="text-sm text-indigo-600 dark:text-indigo-400 mb-1">
+                Epargne cible
+              </p>
+              <p
+                class="text-2xl font-bold text-indigo-700 dark:text-indigo-300"
+              >
                 {{ formatCurrency(targetSavings) }}
               </p>
-              <p class="text-indigo-200 text-xs mt-1">(revenus - budget)</p>
+              <p class="text-xs text-indigo-400 dark:text-indigo-500 mt-1">
+                revenus - budget
+              </p>
             </div>
 
-            <!-- Potential gain -->
-            <div class="text-center">
-              <p class="text-indigo-100 text-sm mb-1">Gain potentiel</p>
+            <!-- Potential gain card -->
+            <div
+              class="rounded-lg p-4 border-l-4"
+              :class="
+                potentialGain >= 0
+                  ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500'
+                  : 'bg-red-50 dark:bg-red-900/20 border-red-500'
+              "
+            >
               <p
-                class="text-2xl sm:text-3xl font-bold"
+                class="text-sm mb-1"
                 :class="
-                  potentialGain >= 0 ? 'text-emerald-300' : 'text-red-300'
+                  potentialGain >= 0
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-red-600 dark:text-red-400'
+                "
+              >
+                Gain potentiel
+              </p>
+              <p
+                class="text-2xl font-bold"
+                :class="
+                  potentialGain >= 0
+                    ? 'text-emerald-700 dark:text-emerald-300'
+                    : 'text-red-700 dark:text-red-300'
                 "
               >
                 {{ potentialGain >= 0 ? '+' : ''
                 }}{{ formatCurrency(potentialGain) }}
               </p>
-              <p class="text-indigo-200 text-xs mt-1">(cible - actuelle)</p>
+              <p
+                class="text-xs mt-1"
+                :class="
+                  potentialGain >= 0
+                    ? 'text-emerald-400 dark:text-emerald-500'
+                    : 'text-red-400 dark:text-red-500'
+                "
+              >
+                cible - actuelle
+              </p>
+            </div>
+          </div>
+
+          <!-- Progress bar toward target -->
+          <div
+            v-if="targetSavings > 0"
+            class="mt-6 pt-4 border-t border-gray-200 dark:border-slate-700"
+          >
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-sm text-gray-600 dark:text-gray-400"
+                >Progression vers objectif</span
+              >
+              <span
+                class="text-sm font-medium"
+                :class="
+                  savingsProgressPercent >= 100
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-indigo-600 dark:text-indigo-400'
+                "
+              >
+                {{ Math.round(savingsProgressPercent) }}%
+              </span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-3">
+              <div
+                class="h-3 rounded-full transition-all duration-500"
+                :class="
+                  savingsProgressPercent >= 100
+                    ? 'bg-emerald-500'
+                    : 'bg-indigo-500'
+                "
+                :style="{
+                  width: `${Math.min(savingsProgressPercent, 100)}%`,
+                }"
+              />
             </div>
           </div>
         </div>

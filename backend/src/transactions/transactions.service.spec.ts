@@ -5,6 +5,7 @@ import { NotFoundException } from '@nestjs/common'
 import { TransactionsService } from './transactions.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { CategoriesService } from '../categories/categories.service'
+import { AccountsService } from '../accounts/accounts.service'
 import { TransactionType } from '../generated/prisma'
 import { Decimal } from 'decimal.js'
 
@@ -61,6 +62,15 @@ const mockCategoriesService = {
   findOrCreateMany: vi.fn(),
 }
 
+const mockAccountsService = {
+  upsertByName: vi.fn().mockResolvedValue({
+    id: 'account-id',
+    name: 'Compte Courant',
+    type: 'STANDARD',
+    divisor: 1,
+  }),
+}
+
 describe('TransactionsService', () => {
   let service: TransactionsService
 
@@ -75,6 +85,10 @@ describe('TransactionsService', () => {
         {
           provide: CategoriesService,
           useValue: mockCategoriesService,
+        },
+        {
+          provide: AccountsService,
+          useValue: mockAccountsService,
         },
       ],
     }).compile()
