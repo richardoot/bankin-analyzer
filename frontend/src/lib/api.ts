@@ -182,6 +182,13 @@ export interface UpdatePersonDto {
   email?: string
 }
 
+export interface TransactionSummaryDto {
+  id: string
+  date: string
+  description: string
+  amount: number
+}
+
 export interface ReimbursementDto {
   id: string
   transactionId: string
@@ -196,6 +203,7 @@ export interface ReimbursementDto {
   note: string | null
   createdAt: string
   updatedAt: string
+  transaction?: TransactionSummaryDto
 }
 
 export interface CreateReimbursementDto {
@@ -700,7 +708,9 @@ export const api = {
 
   // Reimbursements API
   async getReimbursements(): Promise<ReimbursementDto[]> {
-    const response = await fetchWithAuth(`${API_BASE_URL}/reimbursements`)
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/reimbursements?includeTransaction=true`
+    )
 
     if (!response.ok) {
       throw new Error('Failed to fetch reimbursements')

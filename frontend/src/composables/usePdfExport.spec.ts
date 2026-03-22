@@ -33,12 +33,7 @@ describe('usePdfExport', () => {
     it('should create PDF with title and date', () => {
       const { exportReimbursementsToPdf } = usePdfExport()
 
-      exportReimbursementsToPdf(
-        [],
-        0,
-        () => '',
-        () => ''
-      )
+      exportReimbursementsToPdf([], 0)
 
       // Verify title
       expect(mockSetFontSize).toHaveBeenCalledWith(18)
@@ -69,12 +64,7 @@ describe('usePdfExport', () => {
         },
       ]
 
-      exportReimbursementsToPdf(
-        summaryByPerson,
-        150.5,
-        () => '',
-        () => ''
-      )
+      exportReimbursementsToPdf(summaryByPerson, 150.5)
 
       expect(mockSetFontSize).toHaveBeenCalledWith(14)
       expect(mockSetFont).toHaveBeenCalledWith('helvetica', 'bold')
@@ -117,12 +107,7 @@ describe('usePdfExport', () => {
         },
       ]
 
-      exportReimbursementsToPdf(
-        summaryByPerson,
-        100,
-        () => '',
-        () => ''
-      )
+      exportReimbursementsToPdf(summaryByPerson, 100)
 
       expect(mockText).toHaveBeenCalledWith(
         '  Alimentation',
@@ -167,6 +152,12 @@ describe('usePdfExport', () => {
                   transactionId: 'tx-1',
                   amountRemaining: 50,
                   note: null,
+                  transaction: {
+                    id: 'tx-1',
+                    date: '2024-01-15T10:00:00.000Z',
+                    description: 'Restaurant Le Petit Bistro',
+                    amount: 50,
+                  },
                 },
               ],
             },
@@ -174,15 +165,8 @@ describe('usePdfExport', () => {
         },
       ]
 
-      const getDescription = vi
-        .fn()
-        .mockReturnValue('Restaurant Le Petit Bistro')
-      const getDate = vi.fn().mockReturnValue('15/01/2024')
+      exportReimbursementsToPdf(summaryByPerson, 50)
 
-      exportReimbursementsToPdf(summaryByPerson, 50, getDescription, getDate)
-
-      expect(getDescription).toHaveBeenCalledWith('tx-1')
-      expect(getDate).toHaveBeenCalledWith('tx-1')
       expect(mockText).toHaveBeenCalledWith(
         '      - [15/01/2024] Restaurant Le Petit Bistro',
         30,
@@ -192,6 +176,9 @@ describe('usePdfExport', () => {
 
     it('should truncate long descriptions', () => {
       const { exportReimbursementsToPdf } = usePdfExport()
+
+      const longDescription =
+        'This is a very long description that exceeds the maximum length of fifty characters and should be truncated'
 
       const summaryByPerson = [
         {
@@ -209,6 +196,12 @@ describe('usePdfExport', () => {
                   transactionId: 'tx-1',
                   amountRemaining: 50,
                   note: null,
+                  transaction: {
+                    id: 'tx-1',
+                    date: '2024-01-15T10:00:00.000Z',
+                    description: longDescription,
+                    amount: 50,
+                  },
                 },
               ],
             },
@@ -216,12 +209,7 @@ describe('usePdfExport', () => {
         },
       ]
 
-      const longDescription =
-        'This is a very long description that exceeds the maximum length of fifty characters and should be truncated'
-      const getDescription = vi.fn().mockReturnValue(longDescription)
-      const getDate = vi.fn().mockReturnValue('15/01/2024')
-
-      exportReimbursementsToPdf(summaryByPerson, 50, getDescription, getDate)
+      exportReimbursementsToPdf(summaryByPerson, 50)
 
       // Check that description is truncated to 50 chars + "..."
       expect(mockText).toHaveBeenCalledWith(
@@ -250,6 +238,12 @@ describe('usePdfExport', () => {
                   transactionId: 'tx-1',
                   amountRemaining: 50,
                   note: 'Repas equipe',
+                  transaction: {
+                    id: 'tx-1',
+                    date: '2024-01-15T10:00:00.000Z',
+                    description: 'Restaurant',
+                    amount: 50,
+                  },
                 },
               ],
             },
@@ -257,12 +251,7 @@ describe('usePdfExport', () => {
         },
       ]
 
-      exportReimbursementsToPdf(
-        summaryByPerson,
-        50,
-        () => 'Restaurant',
-        () => '15/01/2024'
-      )
+      exportReimbursementsToPdf(summaryByPerson, 50)
 
       expect(mockSetFont).toHaveBeenCalledWith('helvetica', 'italic')
       expect(mockText).toHaveBeenCalledWith(
@@ -294,6 +283,12 @@ describe('usePdfExport', () => {
                   transactionId: 'tx-1',
                   amountRemaining: 50,
                   note: longNote,
+                  transaction: {
+                    id: 'tx-1',
+                    date: '2024-01-15T10:00:00.000Z',
+                    description: 'Restaurant',
+                    amount: 50,
+                  },
                 },
               ],
             },
@@ -301,12 +296,7 @@ describe('usePdfExport', () => {
         },
       ]
 
-      exportReimbursementsToPdf(
-        summaryByPerson,
-        50,
-        () => 'Restaurant',
-        () => '15/01/2024'
-      )
+      exportReimbursementsToPdf(summaryByPerson, 50)
 
       // Note should be truncated to 70 chars + "..."
       expect(mockText).toHaveBeenCalledWith(
@@ -328,12 +318,7 @@ describe('usePdfExport', () => {
         },
       ]
 
-      exportReimbursementsToPdf(
-        summaryByPerson,
-        250.75,
-        () => '',
-        () => ''
-      )
+      exportReimbursementsToPdf(summaryByPerson, 250.75)
 
       expect(mockLine).toHaveBeenCalledWith(
         20,
@@ -357,12 +342,7 @@ describe('usePdfExport', () => {
     it('should save PDF with correct filename', () => {
       const { exportReimbursementsToPdf } = usePdfExport()
 
-      exportReimbursementsToPdf(
-        [],
-        0,
-        () => '',
-        () => ''
-      )
+      exportReimbursementsToPdf([], 0)
 
       expect(mockSave).toHaveBeenCalledWith('remboursements.pdf')
     })
@@ -385,12 +365,7 @@ describe('usePdfExport', () => {
         },
       ]
 
-      exportReimbursementsToPdf(
-        summaryByPerson,
-        300,
-        () => '',
-        () => ''
-      )
+      exportReimbursementsToPdf(summaryByPerson, 300)
 
       expect(mockText).toHaveBeenCalledWith(
         'Jean Dupont',
@@ -429,6 +404,12 @@ describe('usePdfExport', () => {
                   transactionId: 'tx-1',
                   amountRemaining: 50,
                   note: null,
+                  transaction: {
+                    id: 'tx-1',
+                    date: '2024-01-15T10:00:00.000Z',
+                    description: 'Restaurant',
+                    amount: 50,
+                  },
                 },
               ],
             },
@@ -436,12 +417,7 @@ describe('usePdfExport', () => {
         },
       ]
 
-      exportReimbursementsToPdf(
-        summaryByPerson,
-        50,
-        () => 'Restaurant',
-        () => '15/01/2024'
-      )
+      exportReimbursementsToPdf(summaryByPerson, 50)
 
       // Should not have called text with "Note:" prefix
       const noteCallFound = mockText.mock.calls.some(
@@ -462,12 +438,7 @@ describe('usePdfExport', () => {
         },
       ]
 
-      exportReimbursementsToPdf(
-        summaryByPerson,
-        1234.56,
-        () => '',
-        () => ''
-      )
+      exportReimbursementsToPdf(summaryByPerson, 1234.56)
 
       // French format: spaces as thousand separators, comma as decimal
       expect(mockText).toHaveBeenCalledWith(
@@ -475,6 +446,43 @@ describe('usePdfExport', () => {
         190,
         expect.any(Number),
         { align: 'right' }
+      )
+    })
+
+    it('should fallback to default values when transaction is missing', () => {
+      const { exportReimbursementsToPdf } = usePdfExport()
+
+      const summaryByPerson = [
+        {
+          personId: 'person-1',
+          personName: 'Jean Dupont',
+          total: 50,
+          byCategory: [
+            {
+              categoryId: 'cat-1',
+              categoryName: 'Alimentation',
+              amount: 50,
+              reimbursements: [
+                {
+                  id: 'reimb-1',
+                  transactionId: 'tx-1',
+                  amountRemaining: 50,
+                  note: null,
+                  // No transaction object
+                },
+              ],
+            },
+          ],
+        },
+      ]
+
+      exportReimbursementsToPdf(summaryByPerson, 50)
+
+      // Should use default values
+      expect(mockText).toHaveBeenCalledWith(
+        '      - [--/--/----] Transaction',
+        30,
+        expect.any(Number)
       )
     })
   })

@@ -1,10 +1,18 @@
 import jsPDF from 'jspdf'
 
+interface TransactionInfo {
+  id: string
+  date: string
+  description: string
+  amount: number
+}
+
 interface ReimbursementDetail {
   id: string
   transactionId: string
   amountRemaining: number
   note: string | null
+  transaction?: TransactionInfo
 }
 
 interface CategorySummary {
@@ -29,11 +37,18 @@ export function usePdfExport() {
     }).format(value)
   }
 
+  function formatDate(dateString: string | undefined): string {
+    if (!dateString) return '--/--/----'
+    try {
+      return new Date(dateString).toLocaleDateString('fr-FR')
+    } catch {
+      return '--/--/----'
+    }
+  }
+
   function exportReimbursementsToPdf(
     summaryByPerson: PersonSummary[],
-    totalDue: number,
-    getTransactionDescription: (transactionId: string) => string,
-    getTransactionDate: (transactionId: string) => string
+    totalDue: number
   ): void {
     const doc = new jsPDF()
     let y = 20
@@ -88,8 +103,8 @@ export function usePdfExport() {
             y = 20
           }
 
-          const description = getTransactionDescription(r.transactionId)
-          const date = getTransactionDate(r.transactionId)
+          const description = r.transaction?.description || 'Transaction'
+          const date = formatDate(r.transaction?.date)
           // Tronquer la description si trop longue
           const maxLength = 50
           const truncatedDesc =

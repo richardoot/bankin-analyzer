@@ -85,16 +85,14 @@
     return expandedCategories.value.has(`${personId}:${categoryId}`)
   }
 
-  // Transaction info cache (loaded from reimbursements)
-  const transactionDescriptions = ref<Map<string, string>>(new Map())
-  const transactionDates = ref<Map<string, string>>(new Map())
-
-  function getTransactionDescription(transactionId: string): string {
-    return transactionDescriptions.value.get(transactionId) || 'Transaction'
-  }
-
-  function getTransactionDate(transactionId: string): string {
-    return transactionDates.value.get(transactionId) || '--/--/----'
+  // Format transaction date
+  function formatTransactionDate(dateString: string | undefined): string {
+    if (!dateString) return '--/--/----'
+    try {
+      return new Date(dateString).toLocaleDateString('fr-FR')
+    } catch {
+      return '--/--/----'
+    }
   }
 
   const summaryByPerson = computed((): PersonSummary[] => {
@@ -677,14 +675,7 @@
           </h2>
           <button
             class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-            @click="
-              exportReimbursementsToPdf(
-                summaryByPerson,
-                totalDue,
-                getTransactionDescription,
-                getTransactionDate
-              )
-            "
+            @click="exportReimbursementsToPdf(summaryByPerson, totalDue)"
           >
             <svg
               class="h-4 w-4"
@@ -825,7 +816,12 @@
                       class="flex flex-col sm:flex-row sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-amber-200 dark:border-amber-700"
                     >
                       <span class="truncate">
-                        {{ getTransactionDescription(r.transactionId) }}
+                        <span class="text-gray-400 dark:text-gray-500"
+                          >[{{
+                            formatTransactionDate(r.transaction?.date)
+                          }}]</span
+                        >
+                        {{ r.transaction?.description || 'Transaction' }}
                       </span>
                       <span
                         class="font-medium whitespace-nowrap mt-0.5 sm:mt-0 sm:ml-2"
