@@ -45,6 +45,8 @@ export function useDashboardData() {
   const transactionsLoaded = ref(false)
 
   const isLoading = ref(false)
+  const isLoadingExpenseChart = ref(false)
+  const isLoadingIncomeChart = ref(false)
   const error = ref<string | null>(null)
   const selectedCategory = ref<string | null>(null)
   const selectedIncomeCategory = ref<string | null>(null)
@@ -271,14 +273,24 @@ export function useDashboardData() {
   async function setSelectedCategory(category: string | null) {
     selectedCategory.value = category
     if (category && !transactionsLoaded.value) {
-      await loadTransactionsForDrillDown()
+      isLoadingExpenseChart.value = true
+      try {
+        await loadTransactionsForDrillDown()
+      } finally {
+        isLoadingExpenseChart.value = false
+      }
     }
   }
 
   async function setSelectedIncomeCategory(category: string | null) {
     selectedIncomeCategory.value = category
     if (category && !transactionsLoaded.value) {
-      await loadTransactionsForDrillDown()
+      isLoadingIncomeChart.value = true
+      try {
+        await loadTransactionsForDrillDown()
+      } finally {
+        isLoadingIncomeChart.value = false
+      }
     }
   }
 
@@ -375,6 +387,8 @@ export function useDashboardData() {
     setSelectedCategory,
     setSelectedIncomeCategory,
     isLoading,
+    isLoadingExpenseChart,
+    isLoadingIncomeChart,
     error,
     fetchData,
   }
