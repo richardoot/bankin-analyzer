@@ -371,12 +371,20 @@ export interface UpsertBudgetsDto {
   budgets: CreateBudgetDto[]
 }
 
+export interface SubcategoryAverageDto {
+  subcategory: string
+  totalAmount: number
+  transactionCount: number
+  averagePerMonth: number
+}
+
 export interface CategoryAverageDto {
   categoryId: string
   categoryName: string
   totalAmount: number
   transactionCount: number
   averagePerMonth: number
+  subcategories?: SubcategoryAverageDto[]
 }
 
 export interface BudgetStatisticsFiltersDto {

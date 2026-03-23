@@ -25,6 +25,20 @@ export class BudgetResponseDto {
   amount!: number
 }
 
+export class SubcategoryAverageDto {
+  @ApiProperty({ description: 'Subcategory name' })
+  subcategory!: string
+
+  @ApiProperty({ description: 'Total amount over the period' })
+  totalAmount!: number
+
+  @ApiProperty({ description: 'Number of transactions' })
+  transactionCount!: number
+
+  @ApiProperty({ description: 'Average per month' })
+  averagePerMonth!: number
+}
+
 export class CategoryAverageDto {
   @ApiProperty()
   categoryId!: string
@@ -40,6 +54,13 @@ export class CategoryAverageDto {
 
   @ApiProperty({ description: 'Average per month' })
   averagePerMonth!: number
+
+  @ApiProperty({
+    description: 'Breakdown by subcategory',
+    type: [SubcategoryAverageDto],
+    required: false,
+  })
+  subcategories?: SubcategoryAverageDto[]
 }
 
 export class BudgetStatisticsResponseDto {

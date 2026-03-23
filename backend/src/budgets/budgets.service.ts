@@ -6,6 +6,7 @@ import type {
   BudgetStatisticsResponseDto,
   BudgetStatisticsFiltersDto,
   CategoryAverageDto,
+  SubcategoryAverageDto,
   CreateBudgetDto,
 } from './dto'
 
@@ -114,10 +115,17 @@ export class BudgetsService {
     // Fetch category associations to identify reimbursement income categories
     const associations = await this.prisma.categoryAssociation.findMany({
       where: { userId },
-      select: { incomeCategoryId: true },
+      include: {
+        expenseCategory: true,
+        incomeCategory: true,
+      },
     })
     const reimbursementCategoryIds = new Set(
       associations.map(a => a.incomeCategoryId)
+    )
+    // Map income category ID to expense category ID for reimbursement tracking
+    const incomeCategoryToExpenseCategory = new Map(
+      associations.map(a => [a.incomeCategoryId, a.expenseCategoryId])
     )
 
     // Fetch transactions within the date range
@@ -129,18 +137,33 @@ export class BudgetsService {
       include: { category: true },
     })
 
-    // Aggregate expenses by category
+    // Aggregate expenses by category and subcategory
     const expenseMap = new Map<
       string,
-      { categoryId: string; categoryName: string; total: number; count: number }
+      {
+        categoryId: string
+        categoryName: string
+        total: number
+        count: number
+        subcategories: Map<string, { total: number; count: number }>
+      }
     >()
     const incomeMap = new Map<
       string,
-      { categoryId: string; categoryName: string; total: number; count: number }
+      {
+        categoryId: string
+        categoryName: string
+        total: number
+        count: number
+        subcategories: Map<string, { total: number; count: number }>
+      }
     >()
 
     let totalExpenses = 0
     let totalIncome = 0
+
+    // Track reimbursements by expense category
+    const reimbursementsByExpenseCategory = new Map<string, number>()
 
     for (const tx of transactions) {
       // Skip transactions without category
@@ -150,6 +173,7 @@ export class BudgetsService {
       if (excludedFromBudgetAccounts.has(tx.account)) continue
 
       const categoryId = tx.categoryId
+      const subcategory = tx.subcategory ?? ''
       const amount = Number(tx.amount)
       // Get divisor from account settings (defaults to 1 if not found)
       const divisor = accountDivisors.get(tx.account) ?? 1
@@ -163,17 +187,44 @@ export class BudgetsService {
         if (existing) {
           existing.total += absAmount
           existing.count += 1
+          // Track subcategory
+          const subExisting = existing.subcategories.get(subcategory)
+          if (subExisting) {
+            subExisting.total += absAmount
+            subExisting.count += 1
+          } else {
+            existing.subcategories.set(subcategory, {
+              total: absAmount,
+              count: 1,
+            })
+          }
         } else {
+          const subcategories = new Map<
+            string,
+            { total: number; count: number }
+          >()
+          subcategories.set(subcategory, { total: absAmount, count: 1 })
           expenseMap.set(categoryId, {
             categoryId,
             categoryName: tx.category.name,
             total: absAmount,
             count: 1,
+            subcategories,
           })
         }
       } else {
-        // Exclude reimbursement income categories
+        // Track reimbursements by expense category before excluding
         if (reimbursementCategoryIds.has(categoryId)) {
+          const expenseCategoryId =
+            incomeCategoryToExpenseCategory.get(categoryId)
+          if (expenseCategoryId) {
+            const current =
+              reimbursementsByExpenseCategory.get(expenseCategoryId) ?? 0
+            reimbursementsByExpenseCategory.set(
+              expenseCategoryId,
+              current + adjustedAmount
+            )
+          }
           continue
         }
 
@@ -183,40 +234,125 @@ export class BudgetsService {
         if (existing) {
           existing.total += adjustedAmount
           existing.count += 1
+          // Track subcategory
+          const subExisting = existing.subcategories.get(subcategory)
+          if (subExisting) {
+            subExisting.total += adjustedAmount
+            subExisting.count += 1
+          } else {
+            existing.subcategories.set(subcategory, {
+              total: adjustedAmount,
+              count: 1,
+            })
+          }
         } else {
+          const subcategories = new Map<
+            string,
+            { total: number; count: number }
+          >()
+          subcategories.set(subcategory, { total: adjustedAmount, count: 1 })
           incomeMap.set(categoryId, {
             categoryId,
             categoryName: tx.category.name,
             total: adjustedAmount,
             count: 1,
+            subcategories,
           })
         }
       }
     }
 
-    // Convert to response format with averages
+    // Deduct reimbursements from expense categories and update totalExpenses
+    // Store gross totals for proportional subcategory deduction
+    const categoryGrossTotals = new Map<string, number>()
+    for (const [categoryId, data] of expenseMap) {
+      categoryGrossTotals.set(categoryId, data.total)
+    }
+
+    for (const [
+      expenseCategoryId,
+      reimbursement,
+    ] of reimbursementsByExpenseCategory) {
+      const expenseData = expenseMap.get(expenseCategoryId)
+      if (expenseData) {
+        const deduction = Math.min(expenseData.total, reimbursement)
+        expenseData.total = Math.max(0, expenseData.total - reimbursement)
+        totalExpenses -= deduction
+      }
+    }
+
+    // Convert to response format with averages and subcategories
     const expensesByCategory: CategoryAverageDto[] = Array.from(
       expenseMap.values()
     )
-      .map(e => ({
-        categoryId: e.categoryId,
-        categoryName: e.categoryName,
-        totalAmount: this.round(e.total),
-        transactionCount: e.count,
-        averagePerMonth: this.round(e.total / periodMonths),
-      }))
+      .map(e => {
+        // Get gross total and reimbursement for proportional distribution
+        const grossTotal = categoryGrossTotals.get(e.categoryId) ?? e.total
+        const reimbursement =
+          reimbursementsByExpenseCategory.get(e.categoryId) ?? 0
+
+        // Convert subcategories map to array with proportional reimbursement deduction
+        const subcategories: SubcategoryAverageDto[] = Array.from(
+          e.subcategories.entries()
+        )
+          .map(([subcategory, data]) => {
+            // Calculate proportion of this subcategory relative to gross total
+            const proportion = grossTotal > 0 ? data.total / grossTotal : 0
+            // Apply proportional reimbursement deduction
+            const proportionalReimbursement = reimbursement * proportion
+            const netTotal = Math.max(0, data.total - proportionalReimbursement)
+
+            return {
+              subcategory,
+              totalAmount: this.round(netTotal),
+              transactionCount: data.count,
+              averagePerMonth: this.round(netTotal / periodMonths),
+            }
+          })
+          .sort((a, b) => b.totalAmount - a.totalAmount)
+
+        const result: CategoryAverageDto = {
+          categoryId: e.categoryId,
+          categoryName: e.categoryName,
+          totalAmount: this.round(e.total),
+          transactionCount: e.count,
+          averagePerMonth: this.round(e.total / periodMonths),
+        }
+        if (subcategories.length > 0) {
+          result.subcategories = subcategories
+        }
+        return result
+      })
       .sort((a, b) => b.totalAmount - a.totalAmount)
 
     const incomeByCategory: CategoryAverageDto[] = Array.from(
       incomeMap.values()
     )
-      .map(i => ({
-        categoryId: i.categoryId,
-        categoryName: i.categoryName,
-        totalAmount: this.round(i.total),
-        transactionCount: i.count,
-        averagePerMonth: this.round(i.total / periodMonths),
-      }))
+      .map(i => {
+        // Convert subcategories map to array, sorted by amount descending
+        const subcategories: SubcategoryAverageDto[] = Array.from(
+          i.subcategories.entries()
+        )
+          .map(([subcategory, data]) => ({
+            subcategory,
+            totalAmount: this.round(data.total),
+            transactionCount: data.count,
+            averagePerMonth: this.round(data.total / periodMonths),
+          }))
+          .sort((a, b) => b.totalAmount - a.totalAmount)
+
+        const result: CategoryAverageDto = {
+          categoryId: i.categoryId,
+          categoryName: i.categoryName,
+          totalAmount: this.round(i.total),
+          transactionCount: i.count,
+          averagePerMonth: this.round(i.total / periodMonths),
+        }
+        if (subcategories.length > 0) {
+          result.subcategories = subcategories
+        }
+        return result
+      })
       .sort((a, b) => b.totalAmount - a.totalAmount)
 
     return {
