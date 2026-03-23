@@ -224,7 +224,8 @@ export class DashboardService {
       }
 
       // Net expenses = gross expenses - reimbursements for this month
-      const netExpenses = Math.max(0, data.expenses - data.reimbursements)
+      // Can be negative if reimbursements exceed expenses (e.g., reimbursement in different month than expense)
+      const netExpenses = data.expenses - data.reimbursements
 
       return {
         month,
@@ -254,12 +255,16 @@ export class DashboardService {
         amount: Math.round(amount * 100) / 100,
       }))
 
-    // Calculate totals (use netExpenses for total)
+    // Calculate totals from category data (more accurate than monthly sums)
+    // This ensures consistency between pie chart and total display
     const totalExpenses =
-      Math.round(monthlyData.reduce((sum, d) => sum + d.netExpenses, 0) * 100) /
-      100
+      Math.round(
+        expensesByCategory.reduce((sum, cat) => sum + cat.amount, 0) * 100
+      ) / 100
     const totalIncome =
-      Math.round(monthlyData.reduce((sum, d) => sum + d.income, 0) * 100) / 100
+      Math.round(
+        incomeByCategory.reduce((sum, cat) => sum + cat.amount, 0) * 100
+      ) / 100
 
     return {
       monthlyData,

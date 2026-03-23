@@ -9,13 +9,26 @@
     values: number[]
   }
 
-  const props = defineProps<{
-    data: ChartData
-    title: string
-    color: string
-  }>()
+  const props = withDefaults(
+    defineProps<{
+      data: ChartData
+      title: string
+      color: string
+      negativeColor?: string
+    }>(),
+    {
+      negativeColor: '#22c55e', // green for reimbursements/credits
+    }
+  )
 
   const { isDark, labelColor, chartTheme } = useChartTheme()
+
+  // Compute colors array based on positive/negative values
+  const barColors = computed(() =>
+    props.data.values.map(value =>
+      value < 0 ? props.negativeColor : props.color
+    )
+  )
 
   const chartOptions = computed<ApexOptions>(() => ({
     chart: {
@@ -30,10 +43,14 @@
       bar: {
         borderRadius: 4,
         columnWidth: '60%',
+        distributed: true, // Enable per-bar coloring
       },
     },
     dataLabels: {
       enabled: false,
+    },
+    legend: {
+      show: false, // Hide legend when using distributed colors
     },
     xaxis: {
       categories: props.data.labels,
@@ -69,7 +86,7 @@
       borderColor: chartTheme.value.grid?.borderColor || '#e5e7eb',
       strokeDashArray: 4,
     },
-    colors: [props.color],
+    colors: barColors.value,
     tooltip: {
       theme: isDark.value ? 'dark' : 'light',
       y: {

@@ -193,7 +193,8 @@ export function useDashboardData() {
       values: allMonthsFromPeriod.map(month => {
         const expenses = expensesByMonthMap.get(month) ?? 0
         const reimbursements = reimbursementsByMonthMap.get(month) ?? 0
-        const netExpenses = Math.max(0, expenses - reimbursements)
+        // Allow negative values (when reimbursements > expenses)
+        const netExpenses = expenses - reimbursements
         return Math.round(netExpenses * 100) / 100
       }),
     }

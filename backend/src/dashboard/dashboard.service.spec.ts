@@ -355,10 +355,12 @@ describe('DashboardService', () => {
 
       const result = await service.getSummary(mockUserId, {})
 
-      // Should not go negative
+      // Category stays at 0 (capped) but monthly netExpenses can be negative
       expect(result.expensesByCategory).toEqual([
         { category: 'Santé', amount: 0 },
       ])
+      // Monthly data shows negative netExpenses (reimbursement > expense)
+      expect(result.monthlyData[0].netExpenses).toBe(-100)
     })
 
     it('should return all available accounts', async () => {
@@ -494,6 +496,55 @@ describe('DashboardService', () => {
 
       // Total should be sum of netExpenses
       expect(result.totalExpenses).toBe(300)
+    })
+
+    it('should have consistent totals between monthly and category data when reimbursement is in different month', async () => {
+      const transactions = [
+        createMockTransaction({
+          id: '1',
+          date: new Date('2024-01-15'),
+          amount: -100,
+          type: TransactionType.EXPENSE,
+          categoryName: 'Santé',
+        }),
+        createMockTransaction({
+          id: '2',
+          date: new Date('2024-02-15'),
+          amount: 50,
+          type: TransactionType.INCOME,
+          categoryName: 'Remboursement',
+        }),
+      ]
+
+      mockPrismaService.transaction.findMany.mockResolvedValue(transactions)
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-1',
+          incomeCategoryId: 'cat-2',
+          expenseCategory: { name: 'Santé' },
+          incomeCategory: { name: 'Remboursement' },
+        },
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      // Jan: expense = 100, no reimbursement -> netExpenses = 100
+      // Feb: no expense, reimbursement = 50 -> netExpenses = -50
+      // Monthly sum: 100 + (-50) = 50
+
+      // Category total should match totalExpenses
+      const categoryTotal = result.expensesByCategory.reduce(
+        (sum, cat) => sum + cat.amount,
+        0
+      )
+      expect(categoryTotal).toBe(result.totalExpenses)
+      expect(result.totalExpenses).toBe(50)
+
+      // Monthly data now shows negative values when reimbursements exceed expenses
+      expect(result.monthlyData[0].netExpenses).toBe(100) // Jan: expense only
+      expect(result.monthlyData[1].netExpenses).toBe(-50) // Feb: reimbursement only
     })
 
     it('should round amounts to 2 decimal places', async () => {
