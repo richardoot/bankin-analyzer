@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common'
 import { createHash, randomUUID } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
 import { CategoriesService } from '../categories/categories.service'
+import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { AccountsService } from '../accounts/accounts.service'
 import type { Transaction, TransactionType } from '../generated/prisma'
 import type {
@@ -27,6 +28,7 @@ export class TransactionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly categoriesService: CategoriesService,
+    private readonly subcategoriesService: SubcategoriesService,
     private readonly accountsService: AccountsService
   ) {}
 
@@ -127,7 +129,7 @@ export class TransactionsService {
             },
           }),
       },
-      include: { category: true },
+      include: { category: true, subcategoryRef: true },
       orderBy: { date: 'desc' },
     })
   }
@@ -160,7 +162,7 @@ export class TransactionsService {
     const [data, total] = await Promise.all([
       this.prisma.transaction.findMany({
         where,
-        include: { category: true },
+        include: { category: true, subcategoryRef: true },
         orderBy: { date: 'desc' },
         skip: (pagination.page - 1) * pagination.limit,
         take: pagination.limit,
@@ -174,7 +176,7 @@ export class TransactionsService {
   async findOne(id: string, userId: string): Promise<Transaction> {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, userId },
-      include: { category: true },
+      include: { category: true, subcategoryRef: true },
     })
 
     if (!transaction) {
@@ -359,7 +361,23 @@ export class TransactionsService {
     )
     const categoryByName = new Map(categories.map(c => [c.name, c]))
 
-    // 5b. Create/fetch all accounts
+    // 5b. Batch create/fetch subcategories
+    const subcategoryInputs = allTxsToImport
+      .filter(tx => tx.subcategory && tx.subcategory.trim())
+      .map(tx => ({
+        categoryId: categoryByName.get(tx.category)!.id,
+        name: tx.subcategory!,
+      }))
+
+    const { subcategories } = await this.subcategoriesService.findOrCreateMany(
+      userId,
+      subcategoryInputs
+    )
+    const subcategoryMap = new Map(
+      subcategories.map(s => [`${s.categoryId}|${s.name}`, s])
+    )
+
+    // 5c. Create/fetch all accounts
     const uniqueAccountNames = [
       ...new Set(allTxsToImport.map(tx => tx.account)),
     ]
@@ -371,34 +389,52 @@ export class TransactionsService {
 
     // 6. Bulk insert with createMany
     const dataToCreate = [
-      ...toImport.map(({ hash, date, tx }) => ({
-        userId,
-        categoryId: categoryByName.get(tx.category)!.id,
-        importHistoryId: importHistoryId ?? null,
-        hash,
-        date,
-        description: tx.description,
-        amount: tx.amount,
-        type: tx.type,
-        account: tx.account,
-        subcategory: tx.subcategory ?? null,
-        note: tx.note ?? null,
-        isPointed: tx.isPointed ?? false,
-      })),
-      ...forcedData.map(({ hash, date, tx }) => ({
-        userId,
-        categoryId: categoryByName.get(tx.category)!.id,
-        importHistoryId: importHistoryId ?? null,
-        hash,
-        date,
-        description: tx.description,
-        amount: tx.amount,
-        type: tx.type,
-        account: tx.account,
-        subcategory: tx.subcategory ?? null,
-        note: tx.note ?? null,
-        isPointed: tx.isPointed ?? false,
-      })),
+      ...toImport.map(({ hash, date, tx }) => {
+        const categoryId = categoryByName.get(tx.category)!.id
+        const subcategoryId =
+          tx.subcategory && tx.subcategory.trim()
+            ? (subcategoryMap.get(`${categoryId}|${tx.subcategory}`)?.id ??
+              null)
+            : null
+        return {
+          userId,
+          categoryId,
+          subcategoryId,
+          importHistoryId: importHistoryId ?? null,
+          hash,
+          date,
+          description: tx.description,
+          amount: tx.amount,
+          type: tx.type,
+          account: tx.account,
+          subcategory: tx.subcategory ?? null,
+          note: tx.note ?? null,
+          isPointed: tx.isPointed ?? false,
+        }
+      }),
+      ...forcedData.map(({ hash, date, tx }) => {
+        const categoryId = categoryByName.get(tx.category)!.id
+        const subcategoryId =
+          tx.subcategory && tx.subcategory.trim()
+            ? (subcategoryMap.get(`${categoryId}|${tx.subcategory}`)?.id ??
+              null)
+            : null
+        return {
+          userId,
+          categoryId,
+          subcategoryId,
+          importHistoryId: importHistoryId ?? null,
+          hash,
+          date,
+          description: tx.description,
+          amount: tx.amount,
+          type: tx.type,
+          account: tx.account,
+          subcategory: tx.subcategory ?? null,
+          note: tx.note ?? null,
+          isPointed: tx.isPointed ?? false,
+        }
+      }),
     ]
 
     await this.prisma.transaction.createMany({
@@ -416,14 +452,47 @@ export class TransactionsService {
   async update(
     id: string,
     userId: string,
-    data: { note?: string; categoryId?: string; isPointed?: boolean }
+    data: {
+      note?: string
+      categoryId?: string
+      subcategoryId?: string | null
+      isPointed?: boolean
+    }
   ): Promise<Transaction> {
     await this.findOne(id, userId) // Verify ownership
 
+    // Build update data, handling subcategoryId explicitly
+    const updateData: {
+      note?: string
+      categoryId?: string
+      subcategoryId?: string | null
+      subcategory?: string | null
+      isPointed?: boolean
+    } = {}
+
+    if (data.note !== undefined) updateData.note = data.note
+    if (data.categoryId !== undefined) updateData.categoryId = data.categoryId
+    if (data.isPointed !== undefined) updateData.isPointed = data.isPointed
+
+    // Handle subcategoryId - update both the FK and the string field
+    if (data.subcategoryId !== undefined) {
+      updateData.subcategoryId = data.subcategoryId
+
+      // Also update the subcategory string for backward compatibility
+      if (data.subcategoryId) {
+        const subcategory = await this.prisma.subcategory.findUnique({
+          where: { id: data.subcategoryId },
+        })
+        updateData.subcategory = subcategory?.name ?? null
+      } else {
+        updateData.subcategory = null
+      }
+    }
+
     return this.prisma.transaction.update({
       where: { id },
-      data,
-      include: { category: true },
+      data: updateData,
+      include: { category: true, subcategoryRef: true },
     })
   }
 

@@ -95,6 +95,13 @@ export interface CategoryDto {
   createdAt: string
 }
 
+export interface SubcategoryDto {
+  id: string
+  categoryId: string
+  name: string
+  createdAt: string
+}
+
 export interface TransactionDto {
   id: string
   date: string
@@ -107,6 +114,8 @@ export interface TransactionDto {
   isPointed: boolean
   categoryId?: string | null
   categoryName?: string
+  subcategoryId?: string | null
+  subcategoryName?: string | null
   createdAt: string
 }
 
@@ -532,6 +541,37 @@ export const api = {
     return response.json() as Promise<CategoryDto[]>
   },
 
+  // Subcategories API
+  async getSubcategoriesByCategory(
+    categoryId: string
+  ): Promise<SubcategoryDto[]> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/subcategories/by-category/${categoryId}`
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch subcategories')
+    }
+
+    return response.json() as Promise<SubcategoryDto[]>
+  },
+
+  async createSubcategory(dto: {
+    categoryId: string
+    name: string
+  }): Promise<SubcategoryDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/subcategories`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to create subcategory')
+    }
+
+    return response.json() as Promise<SubcategoryDto>
+  },
+
   async getTransactions(
     params?: TransactionQueryParams
   ): Promise<PaginatedResponse<TransactionDto>> {
@@ -562,7 +602,12 @@ export const api = {
 
   async updateTransaction(
     id: string,
-    data: { note?: string; categoryId?: string; isPointed?: boolean }
+    data: {
+      note?: string
+      categoryId?: string
+      subcategoryId?: string | null
+      isPointed?: boolean
+    }
   ): Promise<TransactionDto> {
     const response = await fetchWithAuth(`${API_BASE_URL}/transactions/${id}`, {
       method: 'PATCH',

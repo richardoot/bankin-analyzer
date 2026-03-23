@@ -18,6 +18,7 @@ model User {
   accounts              Account[]
   transactions          Transaction[]
   categories            Category[]
+  subcategories         Subcategory[]
   filterPreferences     FilterPreferences?
   persons               Person[]
   reimbursementRequests ReimbursementRequest[]
@@ -35,6 +36,7 @@ model Transaction {
   userId          String          @map("user_id")
   accountId       String?         @map("account_id")
   categoryId      String?         @map("category_id")
+  subcategoryId   String?         @map("subcategory_id")
   importHistoryId String?         @map("import_history_id")
   hash            String          @unique
   date            DateTime
@@ -42,7 +44,7 @@ model Transaction {
   amount          Decimal         @db.Decimal(12, 2)
   type            TransactionType
   account         String          // Kept for backward compatibility, will be populated from Account.name
-  subcategory     String?
+  subcategory     String?         // Kept for backward compatibility
   note            String?
   isPointed       Boolean         @default(false) @map("is_pointed")
   createdAt       DateTime        @default(now()) @map("created_at")
@@ -51,12 +53,14 @@ model Transaction {
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   accountRef            Account?               @relation(fields: [accountId], references: [id])
   category              Category?              @relation(fields: [categoryId], references: [id])
+  subcategoryRef        Subcategory?           @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
   importHistory         ImportHistory?         @relation(fields: [importHistoryId], references: [id], onDelete: SetNull)
   reimbursementRequests ReimbursementRequest[]
   settlementsAsIncome   Settlement[]           @relation("SettlementIncome")
 
   @@index([userId])
   @@index([accountId])
+  @@index([subcategoryId])
   @@index([userId, date])
   @@index([type])
   @@index([importHistoryId])
@@ -73,6 +77,7 @@ model Category {
 
   user                        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions                Transaction[]
+  subcategories               Subcategory[]
   reimbursementRequests       ReimbursementRequest[]
   expenseCategoryAssociations CategoryAssociation[]  @relation("ExpenseCategory")
   incomeCategoryAssociations  CategoryAssociation[]  @relation("IncomeCategory")
@@ -80,6 +85,24 @@ model Category {
 
   @@unique([userId, name, type])
   @@map("categories")
+  @@schema("app")
+}
+
+model Subcategory {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  categoryId String   @map("category_id")
+  name       String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     Category      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([categoryId, name])
+  @@index([userId])
+  @@index([categoryId])
+  @@map("subcategories")
   @@schema("app")
 }
 

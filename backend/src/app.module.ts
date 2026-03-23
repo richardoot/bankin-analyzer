@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma/prisma.module'
 import { UsersModule } from './users/users.module'
 import { AuthModule } from './auth/auth.module'
 import { CategoriesModule } from './categories/categories.module'
+import { SubcategoriesModule } from './subcategories/subcategories.module'
 import { TransactionsModule } from './transactions/transactions.module'
 import { FilterPreferencesModule } from './filter-preferences/filter-preferences.module'
 import { PersonsModule } from './persons/persons.module'
@@ -28,6 +29,7 @@ import { AccountsModule } from './accounts/accounts.module'
     AuthModule,
     AccountsModule,
     CategoriesModule,
+    SubcategoriesModule,
     TransactionsModule,
     FilterPreferencesModule,
     PersonsModule,

@@ -35,6 +35,12 @@ export class TransactionResponseDto {
   @ApiPropertyOptional({ description: 'Category name (when included)' })
   categoryName?: string | undefined
 
+  @ApiPropertyOptional({ description: 'Subcategory ID' })
+  subcategoryId?: string | null
+
+  @ApiPropertyOptional({ description: 'Subcategory name (from relation)' })
+  subcategoryName?: string | null
+
   @ApiProperty({ description: 'Creation date' })
   createdAt!: Date
 }

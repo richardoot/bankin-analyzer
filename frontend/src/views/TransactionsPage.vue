@@ -9,6 +9,7 @@
     CategoryDto,
     PaginationMeta,
   } from '@/lib/api'
+  import CategorySubcategoryModal from '@/components/CategorySubcategoryModal.vue'
 
   const personsStore = usePersonsStore()
   const categoryAssociationsStore = useCategoryAssociationsStore()
@@ -101,12 +102,15 @@
   // Inline editing state
   const editingNoteId = ref<string | null>(null)
   const editingNoteValue = ref('')
-  const editingCategoryId = ref<string | null>(null)
 
   // Bulk category change modal
   const showBulkCategoryModal = ref(false)
   const bulkCategoryId = ref<string | null>(null)
   const isBulkUpdating = ref(false)
+
+  // Category/Subcategory selection modal state
+  const showCategoryModal = ref(false)
+  const editingTransaction = ref<TransactionDto | null>(null)
 
   // Modal state for adding reimbursement
   const showReimbursementModal = ref(false)
@@ -300,32 +304,45 @@
     }
   }
 
-  // Inline category editing
-  function startEditCategory(tx: TransactionDto) {
-    editingCategoryId.value = tx.id
+  // Category/Subcategory editing via modal
+  function openCategoryModal(tx: TransactionDto) {
+    editingTransaction.value = tx
+    showCategoryModal.value = true
   }
 
-  function cancelEditCategory() {
-    editingCategoryId.value = null
+  function closeCategoryModal() {
+    showCategoryModal.value = false
+    editingTransaction.value = null
   }
 
-  async function saveCategory(tx: TransactionDto, newCategoryId: string) {
-    if (newCategoryId === tx.categoryId) {
-      cancelEditCategory()
+  // Handle category and subcategory selection from modal
+  async function handleCategorySubcategorySelect(
+    categoryId: string | null,
+    subcategoryId: string | null
+  ) {
+    if (!editingTransaction.value) return
+
+    const tx = editingTransaction.value
+
+    // Check if anything changed
+    if (categoryId === tx.categoryId && subcategoryId === tx.subcategoryId) {
+      closeCategoryModal()
       return
     }
 
     try {
       const updated = await api.updateTransaction(tx.id, {
-        categoryId: newCategoryId || undefined,
+        categoryId: categoryId || undefined,
+        subcategoryId,
       })
       const index = transactions.value.findIndex(t => t.id === tx.id)
       if (index !== -1) {
         transactions.value[index] = updated
       }
-      cancelEditCategory()
     } catch (err) {
-      console.error('Failed to update category:', err)
+      console.error('Failed to update transaction:', err)
+    } finally {
+      closeCategoryModal()
     }
   }
 
@@ -982,7 +999,7 @@
                   <!-- Row 3: Category + Pointed + Actions -->
                   <div class="flex items-center justify-between gap-2">
                     <div class="flex items-center gap-2 flex-wrap">
-                      <!-- Category badge (clickable) -->
+                      <!-- Category badge (clickable to open modal) -->
                       <button
                         class="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full transition-colors"
                         :class="
@@ -992,7 +1009,7 @@
                               : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                             : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
                         "
-                        @click="startEditCategory(tx)"
+                        @click="openCategoryModal(tx)"
                       >
                         {{ tx.categoryName || 'Sans categorie' }}
                         <svg
@@ -1005,7 +1022,7 @@
                             stroke-linecap="round"
                             stroke-linejoin="round"
                             stroke-width="2"
-                            d="M19 9l-7 7-7-7"
+                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
                           />
                         </svg>
                       </button>
@@ -1143,32 +1160,6 @@
                   >
                     + Ajouter une note
                   </button>
-
-                  <!-- Category edit dropdown (mobile) -->
-                  <div v-if="editingCategoryId === tx.id" class="mt-2">
-                    <select
-                      :value="tx.categoryId ?? ''"
-                      class="w-full px-3 py-2 text-sm border border-indigo-300 dark:border-indigo-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-indigo-500"
-                      @change="
-                        saveCategory(
-                          tx,
-                          ($event.target as HTMLSelectElement).value
-                        )
-                      "
-                      @blur="cancelEditCategory"
-                    >
-                      <option value="">Sans categorie</option>
-                      <option
-                        v-for="cat in allCategories.filter(
-                          c => c.type === tx.type
-                        )"
-                        :key="cat.id"
-                        :value="cat.id"
-                      >
-                        {{ cat.name }}
-                      </option>
-                    </select>
-                  </div>
 
                   <!-- Reimbursements (mobile) - Compact version -->
                   <div
@@ -1413,60 +1404,34 @@
                     </span>
                   </div>
 
-                  <!-- Category (editable) -->
+                  <!-- Category (clickable to open modal) -->
                   <div class="col-span-2">
-                    <template v-if="editingCategoryId === tx.id">
-                      <select
-                        :value="tx.categoryId ?? ''"
-                        class="w-full px-2 py-1 text-sm border border-indigo-300 dark:border-indigo-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-indigo-500"
-                        @change="
-                          saveCategory(
-                            tx,
-                            ($event.target as HTMLSelectElement).value
-                          )
-                        "
-                        @blur="cancelEditCategory"
+                    <button
+                      class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full transition-colors"
+                      :class="
+                        tx.categoryName
+                          ? tx.type === 'EXPENSE'
+                            ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
+                            : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
+                          : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
+                      "
+                      @click="openCategoryModal(tx)"
+                    >
+                      {{ tx.categoryName || 'Sans categorie' }}
+                      <svg
+                        class="h-3 w-3 opacity-50"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                       >
-                        <option value="">Sans categorie</option>
-                        <option
-                          v-for="cat in allCategories.filter(
-                            c => c.type === tx.type
-                          )"
-                          :key="cat.id"
-                          :value="cat.id"
-                        >
-                          {{ cat.name }}
-                        </option>
-                      </select>
-                    </template>
-                    <template v-else>
-                      <button
-                        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full transition-colors"
-                        :class="
-                          tx.categoryName
-                            ? tx.type === 'EXPENSE'
-                              ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
-                              : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
-                            : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
-                        "
-                        @click="startEditCategory(tx)"
-                      >
-                        {{ tx.categoryName || 'Sans categorie' }}
-                        <svg
-                          class="h-3 w-3 opacity-50"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M19 9l-7 7-7-7"
-                          />
-                        </svg>
-                      </button>
-                    </template>
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                        />
+                      </svg>
+                    </button>
                   </div>
 
                   <!-- Pointed status (toggle) -->
@@ -2009,5 +1974,15 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- Category/Subcategory Selection Modal -->
+    <CategorySubcategoryModal
+      :is-open="showCategoryModal"
+      :transaction-type="editingTransaction?.type ?? 'EXPENSE'"
+      :current-category-id="editingTransaction?.categoryId ?? null"
+      :current-subcategory-id="editingTransaction?.subcategoryId ?? null"
+      @close="closeCategoryModal"
+      @select="handleCategorySubcategorySelect"
+    />
   </div>
 </template>

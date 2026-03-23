@@ -121,6 +121,9 @@ export class TransactionsController {
 
     const data = transactions.map(tx => {
       const category = (tx as { category?: { name: string } }).category
+      const subcategoryRef = (
+        tx as { subcategoryRef?: { id: string; name: string } }
+      ).subcategoryRef
       return {
         id: tx.id,
         date: tx.date,
@@ -133,6 +136,8 @@ export class TransactionsController {
         isPointed: tx.isPointed,
         categoryId: tx.categoryId,
         categoryName: category?.name,
+        subcategoryId: tx.subcategoryId,
+        subcategoryName: subcategoryRef?.name ?? null,
         createdAt: tx.createdAt,
       }
     })
@@ -152,6 +157,9 @@ export class TransactionsController {
   ): Promise<TransactionResponseDto> {
     const tx = await this.transactionsService.findOne(id, user.id)
     const category = (tx as { category?: { name: string } }).category
+    const subcategoryRef = (
+      tx as { subcategoryRef?: { id: string; name: string } }
+    ).subcategoryRef
 
     return {
       id: tx.id,
@@ -165,6 +173,8 @@ export class TransactionsController {
       isPointed: tx.isPointed,
       categoryId: tx.categoryId,
       categoryName: category?.name,
+      subcategoryId: tx.subcategoryId,
+      subcategoryName: subcategoryRef?.name ?? null,
       createdAt: tx.createdAt,
     }
   }
@@ -183,15 +193,26 @@ export class TransactionsController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a transaction (note, category, isPointed)' })
+  @ApiOperation({
+    summary: 'Update a transaction (note, category, subcategory, isPointed)',
+  })
   @ApiResponse({ status: 200, type: TransactionResponseDto })
   async update(
     @CurrentUser() user: User,
     @Param('id') id: string,
-    @Body() body: { note?: string; categoryId?: string; isPointed?: boolean }
+    @Body()
+    body: {
+      note?: string
+      categoryId?: string
+      subcategoryId?: string | null
+      isPointed?: boolean
+    }
   ): Promise<TransactionResponseDto> {
     const tx = await this.transactionsService.update(id, user.id, body)
     const category = (tx as { category?: { name: string } }).category
+    const subcategoryRef = (
+      tx as { subcategoryRef?: { id: string; name: string } }
+    ).subcategoryRef
 
     return {
       id: tx.id,
@@ -205,6 +226,8 @@ export class TransactionsController {
       isPointed: tx.isPointed,
       categoryId: tx.categoryId,
       categoryName: category?.name,
+      subcategoryId: tx.subcategoryId,
+      subcategoryName: subcategoryRef?.name ?? null,
       createdAt: tx.createdAt,
     }
   }

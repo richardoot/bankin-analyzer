@@ -5,6 +5,7 @@ import { NotFoundException } from '@nestjs/common'
 import { TransactionsService } from './transactions.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { CategoriesService } from '../categories/categories.service'
+import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { AccountsService } from '../accounts/accounts.service'
 import { TransactionType } from '../generated/prisma'
 import { Decimal } from 'decimal.js'
@@ -62,6 +63,13 @@ const mockCategoriesService = {
   findOrCreateMany: vi.fn(),
 }
 
+const mockSubcategoriesService = {
+  findOrCreate: vi.fn(),
+  findOrCreateMany: vi
+    .fn()
+    .mockResolvedValue({ subcategories: [], newCount: 0 }),
+}
+
 const mockAccountsService = {
   upsertByName: vi.fn().mockResolvedValue({
     id: 'account-id',
@@ -87,6 +95,10 @@ describe('TransactionsService', () => {
           useValue: mockCategoriesService,
         },
         {
+          provide: SubcategoriesService,
+          useValue: mockSubcategoriesService,
+        },
+        {
           provide: AccountsService,
           useValue: mockAccountsService,
         },
@@ -110,7 +122,7 @@ describe('TransactionsService', () => {
       expect(result).toEqual([mockTransaction, mockTransaction2])
       expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith({
         where: { userId: mockUserId },
-        include: { category: true },
+        include: { category: true, subcategoryRef: true },
         orderBy: { date: 'desc' },
       })
     })
@@ -127,7 +139,7 @@ describe('TransactionsService', () => {
           userId: mockUserId,
           type: TransactionType.EXPENSE,
         },
-        include: { category: true },
+        include: { category: true, subcategoryRef: true },
         orderBy: { date: 'desc' },
       })
     })
@@ -144,7 +156,7 @@ describe('TransactionsService', () => {
           userId: mockUserId,
           date: { gte: startDate, lte: endDate },
         },
-        include: { category: true },
+        include: { category: true, subcategoryRef: true },
         orderBy: { date: 'desc' },
       })
     })
@@ -159,7 +171,7 @@ describe('TransactionsService', () => {
           userId: mockUserId,
           categoryId: mockCategory.id,
         },
-        include: { category: true },
+        include: { category: true, subcategoryRef: true },
         orderBy: { date: 'desc' },
       })
     })
@@ -174,7 +186,7 @@ describe('TransactionsService', () => {
       expect(result).toEqual(mockTransaction)
       expect(mockPrismaService.transaction.findFirst).toHaveBeenCalledWith({
         where: { id: mockTransaction.id, userId: mockUserId },
-        include: { category: true },
+        include: { category: true, subcategoryRef: true },
       })
     })
 
@@ -357,7 +369,7 @@ describe('TransactionsService', () => {
       expect(mockPrismaService.transaction.update).toHaveBeenCalledWith({
         where: { id: mockTransaction.id },
         data: { note: 'New note' },
-        include: { category: true },
+        include: { category: true, subcategoryRef: true },
       })
     })
 
