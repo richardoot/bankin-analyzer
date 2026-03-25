@@ -1,4 +1,3 @@
-import { ApiProperty } from '@nestjs/swagger'
 import {
   IsNumber,
   IsOptional,
@@ -8,26 +7,23 @@ import {
 } from 'class-validator'
 
 export class UpdateReimbursementDto {
-  @ApiProperty({ description: 'Person ID', required: false })
+  /** Person ID */
   @IsOptional()
   @IsUUID()
   personId?: string
 
-  @ApiProperty({ description: 'Amount to be reimbursed', required: false })
+  /** Amount to be reimbursed */
   @IsOptional()
   @IsNumber()
   @IsPositive()
   amount?: number
 
-  @ApiProperty({
-    description: 'Target category ID for income',
-    required: false,
-  })
+  /** Target category ID for income */
   @IsOptional()
   @IsUUID()
   categoryId?: string
 
-  @ApiProperty({ description: 'Note', required: false })
+  /** Note */
   @IsOptional()
   @IsString()
   note?: string

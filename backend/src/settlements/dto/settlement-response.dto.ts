@@ -1,79 +1,77 @@
 import { ApiProperty } from '@nestjs/swagger'
 
 export class SettlementReimbursementResponseDto {
-  @ApiProperty({ description: 'Reimbursement request ID' })
+  /** Reimbursement request ID */
   reimbursementId!: string
 
-  @ApiProperty({ description: 'Original transaction ID (expense)' })
+  /** Original transaction ID (expense) */
   transactionId!: string
 
-  @ApiProperty({ description: 'Original transaction description' })
+  /** Original transaction description */
   transactionDescription!: string
 
-  @ApiProperty({ description: 'Original transaction date' })
+  /** Original transaction date */
   transactionDate!: Date
 
-  @ApiProperty({ description: 'Category ID', nullable: true })
+  /** Category ID */
   categoryId!: string | null
 
-  @ApiProperty({ description: 'Category name', nullable: true })
+  /** Category name */
   categoryName!: string | null
 
-  @ApiProperty({ description: 'Original reimbursement amount' })
+  /** Original reimbursement amount */
   originalAmount!: number
 
-  @ApiProperty({ description: 'Amount settled in this settlement' })
+  /** Amount settled in this settlement */
   amountSettled!: number
 }
 
 export class SettlementResponseDto {
-  @ApiProperty({ description: 'Settlement ID' })
+  /** Settlement ID */
   id!: string
 
-  @ApiProperty({ description: 'Person ID' })
+  /** Person ID */
   personId!: string
 
-  @ApiProperty({ description: 'Person name' })
+  /** Person name */
   personName!: string
 
-  @ApiProperty({ description: 'Income transaction ID used as payment' })
+  /** Income transaction ID used as payment */
   incomeTransactionId!: string
 
-  @ApiProperty({ description: 'Income transaction description' })
+  /** Income transaction description */
   incomeTransactionDescription!: string
 
-  @ApiProperty({ description: 'Income transaction date' })
+  /** Income transaction date */
   incomeTransactionDate!: Date
 
-  @ApiProperty({ description: 'Income transaction total amount' })
+  /** Income transaction total amount */
   incomeTransactionAmount!: number
 
-  @ApiProperty({ description: 'Amount used from this transaction' })
+  /** Amount used from this transaction */
   amountUsed!: number
 
-  @ApiProperty({ description: 'Note', nullable: true })
+  /** Note */
   note!: string | null
 
-  @ApiProperty({ description: 'Settlement creation date' })
+  /** Settlement creation date */
   createdAt!: Date
 
-  @ApiProperty({
-    description: 'Reimbursements included in this settlement',
-    type: [SettlementReimbursementResponseDto],
-  })
+  /** Reimbursements included in this settlement */
+  @ApiProperty({ type: [SettlementReimbursementResponseDto] })
   reimbursements!: SettlementReimbursementResponseDto[]
 }
 
 export class TransactionAvailableAmountDto {
-  @ApiProperty({ description: 'Transaction ID' })
+  /** Transaction ID */
   transactionId!: string
 
-  @ApiProperty({ description: 'Total transaction amount' })
+  /** Total transaction amount */
   totalAmount!: number
 
-  @ApiProperty({ description: 'Amount already used in settlements' })
+  /** Amount already used in settlements */
   usedAmount!: number
 
-  @ApiProperty({ description: 'Amount still available for settlements' })
+  /** Amount still available for settlements */
   availableAmount!: number
 }

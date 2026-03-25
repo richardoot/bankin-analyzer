@@ -1,46 +1,46 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { ApiProperty } from '@nestjs/swagger'
 import { TransactionType } from '../../generated/prisma'
 
 export class TransactionResponseDto {
-  @ApiProperty({ description: 'Transaction ID' })
+  /** Transaction ID */
   id!: string
 
-  @ApiProperty({ description: 'Transaction date' })
+  /** Transaction date */
   date!: Date
 
-  @ApiProperty({ description: 'Transaction description' })
+  /** Transaction description */
   description!: string
 
-  @ApiProperty({ description: 'Transaction amount' })
+  /** Transaction amount */
   amount!: number
 
   @ApiProperty({ enum: TransactionType, description: 'Transaction type' })
   type!: TransactionType
 
-  @ApiProperty({ description: 'Bank account name' })
+  /** Bank account name */
   account!: string
 
-  @ApiPropertyOptional({ description: 'Subcategory name' })
+  /** Subcategory name */
   subcategory?: string | null
 
-  @ApiPropertyOptional({ description: 'Optional note' })
+  /** Optional note */
   note?: string | null
 
-  @ApiProperty({ description: 'Is transaction reconciled' })
+  /** Is transaction reconciled */
   isPointed!: boolean
 
-  @ApiPropertyOptional({ description: 'Category ID' })
+  /** Category ID */
   categoryId?: string | null
 
-  @ApiPropertyOptional({ description: 'Category name (when included)' })
+  /** Category name (when included) */
   categoryName?: string | undefined
 
-  @ApiPropertyOptional({ description: 'Subcategory ID' })
+  /** Subcategory ID */
   subcategoryId?: string | null
 
-  @ApiPropertyOptional({ description: 'Subcategory name (from relation)' })
+  /** Subcategory name (from relation) */
   subcategoryName?: string | null
 
-  @ApiProperty({ description: 'Creation date' })
+  /** Creation date */
   createdAt!: Date
 }

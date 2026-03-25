@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { ApiProperty } from '@nestjs/swagger'
 import {
   IsString,
   IsNumber,
@@ -10,23 +10,23 @@ import {
 import { TransactionType } from '../../generated/prisma'
 
 export class CreateTransactionDto {
-  @ApiProperty({ description: 'Transaction date (ISO format)' })
+  /** Transaction date (ISO format) */
   @IsDateString()
   date!: string
 
-  @ApiProperty({ description: 'Transaction description' })
+  /** Transaction description */
   @IsString()
   description!: string
 
-  @ApiProperty({ description: 'Transaction amount' })
+  /** Transaction amount */
   @IsNumber()
   amount!: number
 
-  @ApiProperty({ description: 'Category name' })
+  /** Category name */
   @IsString()
   category!: string
 
-  @ApiProperty({ description: 'Bank account name' })
+  /** Bank account name */
   @IsString()
   account!: string
 
@@ -34,25 +34,22 @@ export class CreateTransactionDto {
   @IsEnum(TransactionType)
   type!: TransactionType
 
-  @ApiPropertyOptional({ description: 'Subcategory name' })
+  /** Subcategory name */
   @IsOptional()
   @IsString()
   subcategory?: string
 
-  @ApiPropertyOptional({ description: 'Optional note' })
+  /** Optional note */
   @IsOptional()
   @IsString()
   note?: string
 
-  @ApiPropertyOptional({ description: 'Is transaction reconciled' })
+  /** Is transaction reconciled */
   @IsOptional()
   @IsBoolean()
   isPointed?: boolean
 
-  @ApiPropertyOptional({
-    description:
-      'Force import even if duplicate detected (backend generates unique key)',
-  })
+  /** Force import even if duplicate detected (backend generates unique key) */
   @IsOptional()
   @IsBoolean()
   forceImport?: boolean

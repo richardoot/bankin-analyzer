@@ -14,48 +14,42 @@ import {
 } from 'class-validator'
 
 export class SettlementReimbursementItemDto {
-  @ApiProperty({ description: 'Reimbursement request ID' })
+  /** Reimbursement request ID */
   @IsUUID()
   @IsNotEmpty()
   reimbursementId!: string
 
-  @ApiProperty({ description: 'Amount to settle for this reimbursement' })
+  /** Amount to settle for this reimbursement */
   @IsNumber()
   @IsPositive()
   amountSettled!: number
 }
 
 export class CreateSettlementDto {
-  @ApiProperty({ description: 'Person ID receiving the settlement' })
+  /** Person ID receiving the settlement */
   @IsUUID()
   @IsNotEmpty()
   personId!: string
 
-  @ApiProperty({ description: 'Income transaction ID used as payment proof' })
+  /** Income transaction ID used as payment proof */
   @IsUUID()
   @IsNotEmpty()
   incomeTransactionId!: string
 
-  @ApiProperty({
-    description: 'List of reimbursements to settle',
-    type: [SettlementReimbursementItemDto],
-  })
+  /** List of reimbursements to settle */
+  @ApiProperty({ type: [SettlementReimbursementItemDto] })
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => SettlementReimbursementItemDto)
   reimbursements!: SettlementReimbursementItemDto[]
 
-  @ApiProperty({ description: 'Optional note', required: false })
+  /** Optional note */
   @IsOptional()
   @IsString()
   note?: string
 
-  @ApiProperty({
-    description:
-      'Force mark reimbursements as completed even if amount is partial',
-    required: false,
-  })
+  /** Force mark reimbursements as completed even if amount is partial */
   @IsOptional()
   @IsBoolean()
   forceComplete?: boolean

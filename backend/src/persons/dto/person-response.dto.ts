@@ -1,18 +1,16 @@
-import { ApiProperty } from '@nestjs/swagger'
-
 export class PersonResponseDto {
-  @ApiProperty({ description: 'Person ID' })
+  /** Person ID */
   id!: string
 
-  @ApiProperty({ description: 'Person name' })
+  /** Person name */
   name!: string
 
-  @ApiProperty({ description: 'Person email', nullable: true })
+  /** Person email */
   email!: string | null
 
-  @ApiProperty({ description: 'Creation date' })
+  /** Creation date */
   createdAt!: Date
 
-  @ApiProperty({ description: 'Last update date' })
+  /** Last update date */
   updatedAt!: Date
 }

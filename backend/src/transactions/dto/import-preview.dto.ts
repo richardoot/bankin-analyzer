@@ -1,35 +1,35 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { ApiProperty } from '@nestjs/swagger'
 import { TransactionType } from '../../generated/prisma'
 
 /**
  * Transaction from the uploaded import (for comparison)
  */
 export class UploadedTransactionDto {
-  @ApiProperty({ description: 'Index in the uploaded array' })
+  /** Index in the uploaded array */
   index!: number
 
-  @ApiProperty({ description: 'Transaction date (ISO format)' })
+  /** Transaction date (ISO format) */
   date!: string
 
-  @ApiProperty({ description: 'Transaction description' })
+  /** Transaction description */
   description!: string
 
-  @ApiProperty({ description: 'Transaction amount' })
+  /** Transaction amount */
   amount!: number
 
-  @ApiProperty({ description: 'Bank account name' })
+  /** Bank account name */
   account!: string
 
-  @ApiProperty({ description: 'Category name' })
+  /** Category name */
   category!: string
 
   @ApiProperty({ enum: TransactionType, description: 'Transaction type' })
   type!: TransactionType
 
-  @ApiPropertyOptional({ description: 'Subcategory name' })
+  /** Subcategory name */
   subcategory?: string
 
-  @ApiPropertyOptional({ description: 'Optional note' })
+  /** Optional note */
   note?: string
 }
 
@@ -37,34 +37,34 @@ export class UploadedTransactionDto {
  * Existing transaction in DB (for comparison)
  */
 export class ExistingTransactionDto {
-  @ApiProperty({ description: 'Transaction ID' })
+  /** Transaction ID */
   id!: string
 
-  @ApiProperty({ description: 'Transaction date (ISO format)' })
+  /** Transaction date (ISO format) */
   date!: string
 
-  @ApiProperty({ description: 'Transaction description' })
+  /** Transaction description */
   description!: string
 
-  @ApiProperty({ description: 'Transaction amount' })
+  /** Transaction amount */
   amount!: number
 
-  @ApiProperty({ description: 'Bank account name' })
+  /** Bank account name */
   account!: string
 
-  @ApiPropertyOptional({ description: 'Category name' })
+  /** Category name */
   categoryName?: string
 
   @ApiProperty({ enum: TransactionType, description: 'Transaction type' })
   type!: TransactionType
 
-  @ApiPropertyOptional({ description: 'Subcategory name' })
+  /** Subcategory name */
   subcategory?: string
 
-  @ApiPropertyOptional({ description: 'Optional note' })
+  /** Optional note */
   note?: string
 
-  @ApiProperty({ description: 'Creation date (ISO format)' })
+  /** Creation date (ISO format) */
   createdAt!: string
 }
 
@@ -72,7 +72,7 @@ export class ExistingTransactionDto {
  * Internal duplicate: 2+ identical transactions within the SAME import
  */
 export class InternalDuplicateDto {
-  @ApiProperty({ description: 'Hash of the duplicate transactions' })
+  /** Hash of the duplicate transactions */
   hash!: string
 
   @ApiProperty({
@@ -92,7 +92,7 @@ export class InternalDuplicateDto {
  * External duplicate: transaction from import already exists in DB
  */
 export class ExternalDuplicateDto {
-  @ApiProperty({ description: 'Hash of the duplicate transaction' })
+  /** Hash of the duplicate transaction */
   hash!: string
 
   @ApiProperty({
@@ -112,20 +112,16 @@ export class ExternalDuplicateDto {
  * Result of the import preview analysis
  */
 export class ImportPreviewResultDto {
-  @ApiProperty({ description: 'Number of new transactions (no duplicates)' })
+  /** Number of new transactions (no duplicates) */
   newCount!: number
 
-  @ApiProperty({
-    description: 'Number of internal duplicate groups (within import)',
-  })
+  /** Number of internal duplicate groups (within import) */
   internalDuplicateCount!: number
 
-  @ApiProperty({
-    description: 'Number of external duplicates (existing in DB)',
-  })
+  /** Number of external duplicates (existing in DB) */
   externalDuplicateCount!: number
 
-  @ApiProperty({ description: 'Total transactions analyzed' })
+  /** Total transactions analyzed */
   total!: number
 
   @ApiProperty({

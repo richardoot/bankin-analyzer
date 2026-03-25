@@ -2,11 +2,8 @@ import { IsArray, IsString } from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
 
 export class SuggestAssociationsDto {
-  @ApiProperty({
-    type: [String],
-    description: 'Liste des IDs de catégories de dépenses à analyser',
-    example: ['uuid-1', 'uuid-2'],
-  })
+  /** Liste des IDs de catégories de dépenses à analyser */
+  @ApiProperty({ type: [String] })
   @IsArray()
   @IsString({ each: true })
   expenseCategoryIds!: string[]

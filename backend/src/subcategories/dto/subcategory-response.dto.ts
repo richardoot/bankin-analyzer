@@ -1,15 +1,13 @@
-import { ApiProperty } from '@nestjs/swagger'
-
 export class SubcategoryResponseDto {
-  @ApiProperty({ description: 'Subcategory ID' })
+  /** Subcategory ID */
   id!: string
 
-  @ApiProperty({ description: 'Parent category ID' })
+  /** Parent category ID */
   categoryId!: string
 
-  @ApiProperty({ description: 'Subcategory name' })
+  /** Subcategory name */
   name!: string
 
-  @ApiProperty({ description: 'Creation date' })
+  /** Creation date */
   createdAt!: Date
 }

@@ -2,66 +2,60 @@ import { ApiProperty } from '@nestjs/swagger'
 import { ReimbursementStatus } from '../../generated/prisma'
 
 export class TransactionSummaryDto {
-  @ApiProperty({ description: 'Transaction ID' })
+  /** Transaction ID */
   id!: string
 
-  @ApiProperty({ description: 'Transaction date' })
+  /** Transaction date */
   date!: Date
 
-  @ApiProperty({ description: 'Transaction description' })
+  /** Transaction description */
   description!: string
 
-  @ApiProperty({ description: 'Transaction amount' })
+  /** Transaction amount */
   amount!: number
 }
 
 export class ReimbursementResponseDto {
-  @ApiProperty({ description: 'Reimbursement request ID' })
+  /** Reimbursement request ID */
   id!: string
 
-  @ApiProperty({ description: 'Transaction ID' })
+  /** Transaction ID */
   transactionId!: string
 
-  @ApiProperty({ description: 'Person ID' })
+  /** Person ID */
   personId!: string
 
-  @ApiProperty({ description: 'Person name' })
+  /** Person name */
   personName!: string
 
-  @ApiProperty({ description: 'Target category ID', nullable: true })
+  /** Target category ID */
   categoryId!: string | null
 
-  @ApiProperty({ description: 'Target category name', nullable: true })
+  /** Target category name */
   categoryName!: string | null
 
-  @ApiProperty({ description: 'Amount to be reimbursed' })
+  /** Amount to be reimbursed */
   amount!: number
 
-  @ApiProperty({ description: 'Amount already received' })
+  /** Amount already received */
   amountReceived!: number
 
-  @ApiProperty({ description: 'Amount remaining to be received' })
+  /** Amount remaining to be received */
   amountRemaining!: number
 
-  @ApiProperty({
-    enum: ReimbursementStatus,
-    description: 'Reimbursement status',
-  })
+  /** Reimbursement status */
+  @ApiProperty({ enum: ReimbursementStatus })
   status!: ReimbursementStatus
 
-  @ApiProperty({ description: 'Note', nullable: true })
+  /** Note */
   note!: string | null
 
-  @ApiProperty({ description: 'Creation date' })
+  /** Creation date */
   createdAt!: Date
 
-  @ApiProperty({ description: 'Last update date' })
+  /** Last update date */
   updatedAt!: Date
 
-  @ApiProperty({
-    description: 'Transaction details',
-    required: false,
-    type: TransactionSummaryDto,
-  })
+  /** Transaction details */
   transaction?: TransactionSummaryDto
 }

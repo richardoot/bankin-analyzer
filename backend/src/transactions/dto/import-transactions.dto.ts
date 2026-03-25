@@ -13,22 +13,19 @@ export class ImportTransactionsDto {
   @Type(() => CreateTransactionDto)
   transactions!: CreateTransactionDto[]
 
-  @ApiProperty({
-    required: false,
-    description: 'Import history ID to link transactions to',
-  })
+  /** Import history ID to link transactions to */
   @IsOptional()
   @IsString()
   importHistoryId?: string
 }
 
 export class ImportResultDto {
-  @ApiProperty({ description: 'Number of new transactions imported' })
+  /** Number of new transactions imported */
   imported!: number
 
-  @ApiProperty({ description: 'Number of duplicate transactions ignored' })
+  /** Number of duplicate transactions ignored */
   duplicates!: number
 
-  @ApiProperty({ description: 'Total transactions sent' })
+  /** Total transactions sent */
   total!: number
 }

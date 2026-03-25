@@ -1,65 +1,58 @@
 import { ApiProperty } from '@nestjs/swagger'
 
 export class MonthlyDataDto {
-  @ApiProperty({ description: 'Month key in format YYYY-MM' })
+  /** Month key in format YYYY-MM */
   month!: string
 
-  @ApiProperty({ description: 'Display label (e.g., "Jan 2024")' })
+  /** Display label (e.g., "Jan 2024") */
   label!: string
 
-  @ApiProperty({ description: 'Total expenses for the month (absolute value)' })
+  /** Total expenses for the month (absolute value) */
   expenses!: number
 
-  @ApiProperty({
-    description:
-      'Net expenses for the month (expenses minus reimbursements from associated income categories)',
-  })
+  /** Net expenses for the month (expenses minus reimbursements from associated income categories) */
   netExpenses!: number
 
-  @ApiProperty({ description: 'Total income for the month' })
+  /** Total income for the month */
   income!: number
 }
 
 export class CategoryDataDto {
-  @ApiProperty({ description: 'Category name' })
+  /** Category name */
   category!: string
 
-  @ApiProperty({ description: 'Total amount for this category' })
+  /** Total amount for this category */
   amount!: number
 }
 
 export class DashboardSummaryDto {
-  @ApiProperty({ type: [MonthlyDataDto], description: 'Monthly breakdown' })
+  /** Monthly breakdown */
+  @ApiProperty({ type: [MonthlyDataDto] })
   monthlyData!: MonthlyDataDto[]
 
-  @ApiProperty({ type: [CategoryDataDto], description: 'Expenses by category' })
+  /** Expenses by category */
+  @ApiProperty({ type: [CategoryDataDto] })
   expensesByCategory!: CategoryDataDto[]
 
-  @ApiProperty({ type: [CategoryDataDto], description: 'Income by category' })
+  /** Income by category */
+  @ApiProperty({ type: [CategoryDataDto] })
   incomeByCategory!: CategoryDataDto[]
 
-  @ApiProperty({
-    description: 'Total expenses (after reimbursement deductions)',
-  })
+  /** Total expenses (after reimbursement deductions) */
   totalExpenses!: number
 
-  @ApiProperty({
-    description: 'Total income (excluding reimbursement categories)',
-  })
+  /** Total income (excluding reimbursement categories) */
   totalIncome!: number
 
-  @ApiProperty({
-    type: [String],
-    description: 'All available expense categories',
-  })
+  /** All available expense categories */
+  @ApiProperty({ type: [String] })
   allExpenseCategories!: string[]
 
-  @ApiProperty({
-    type: [String],
-    description: 'All available income categories',
-  })
+  /** All available income categories */
+  @ApiProperty({ type: [String] })
   allIncomeCategories!: string[]
 
-  @ApiProperty({ type: [String], description: 'All available account names' })
+  /** All available account names */
+  @ApiProperty({ type: [String] })
   availableAccounts!: string[]
 }

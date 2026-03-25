@@ -12,91 +12,78 @@ import { Type } from 'class-transformer'
 // Response DTOs
 
 export class BudgetResponseDto {
-  @ApiProperty()
   id!: string
 
-  @ApiProperty()
   categoryId!: string
 
-  @ApiProperty()
   categoryName!: string
 
-  @ApiProperty()
   amount!: number
 }
 
 export class SubcategoryAverageDto {
-  @ApiProperty({ description: 'Subcategory name' })
+  /** Subcategory name */
   subcategory!: string
 
-  @ApiProperty({ description: 'Total amount over the period' })
+  /** Total amount over the period */
   totalAmount!: number
 
-  @ApiProperty({ description: 'Number of transactions' })
+  /** Number of transactions */
   transactionCount!: number
 
-  @ApiProperty({ description: 'Average per month' })
+  /** Average per month */
   averagePerMonth!: number
 }
 
 export class CategoryAverageDto {
-  @ApiProperty()
   categoryId!: string
 
-  @ApiProperty()
   categoryName!: string
 
-  @ApiProperty({ description: 'Total amount over the period' })
+  /** Total amount over the period */
   totalAmount!: number
 
-  @ApiProperty({ description: 'Number of transactions' })
+  /** Number of transactions */
   transactionCount!: number
 
-  @ApiProperty({ description: 'Average per month' })
+  /** Average per month */
   averagePerMonth!: number
 
-  @ApiProperty({
-    description: 'Breakdown by subcategory',
-    type: [SubcategoryAverageDto],
-    required: false,
-  })
+  /** Breakdown by subcategory */
+  @ApiProperty({ type: [SubcategoryAverageDto] })
   subcategories?: SubcategoryAverageDto[]
 }
 
 export class BudgetStatisticsResponseDto {
-  @ApiProperty({ description: 'Number of months in the period' })
+  /** Number of months in the period */
   periodMonths!: number
 
   @ApiProperty({ type: [CategoryAverageDto] })
   expensesByCategory!: CategoryAverageDto[]
 
-  @ApiProperty({
-    type: [CategoryAverageDto],
-    description: 'Excludes reimbursement income categories',
-  })
+  /** Excludes reimbursement income categories */
+  @ApiProperty({ type: [CategoryAverageDto] })
   incomeByCategory!: CategoryAverageDto[]
 
-  @ApiProperty({ description: 'Total expenses over the period' })
+  /** Total expenses over the period */
   totalExpenses!: number
 
-  @ApiProperty({ description: 'Total income over the period' })
+  /** Total income over the period */
   totalIncome!: number
 
-  @ApiProperty({ description: 'Average monthly expenses' })
+  /** Average monthly expenses */
   averageMonthlyExpenses!: number
 
-  @ApiProperty({ description: 'Average monthly income' })
+  /** Average monthly income */
   averageMonthlyIncome!: number
 }
 
 // Request DTOs
 
 export class CreateBudgetDto {
-  @ApiProperty()
   @IsString()
   categoryId!: string
 
-  @ApiProperty()
   @IsNumber()
   @Min(0)
   amount!: number
@@ -111,11 +98,11 @@ export class UpsertBudgetsDto {
 }
 
 export class BudgetStatisticsFiltersDto {
-  @ApiProperty({ description: 'Start date (ISO format)' })
+  /** Start date (ISO format) */
   @IsDateString()
   startDate!: string
 
-  @ApiProperty({ description: 'End date (ISO format)' })
+  /** End date (ISO format) */
   @IsDateString()
   endDate!: string
 }

@@ -2,15 +2,16 @@ import { ApiProperty } from '@nestjs/swagger'
 import { TransactionType } from '../../generated/prisma'
 
 export class CategoryResponseDto {
-  @ApiProperty({ description: 'Category ID' })
+  /** Category ID */
   id!: string
 
-  @ApiProperty({ description: 'Category name' })
+  /** Category name */
   name!: string
 
-  @ApiProperty({ enum: TransactionType, description: 'Category type' })
+  /** Category type */
+  @ApiProperty({ enum: TransactionType })
   type!: TransactionType
 
-  @ApiProperty({ description: 'Creation date' })
+  /** Creation date */
   createdAt!: Date
 }
