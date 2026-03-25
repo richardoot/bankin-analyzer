@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { TransactionType } from '../generated/prisma'
+import { Prisma } from '../generated/prisma'
 import type {
   BudgetResponseDto,
   BudgetStatisticsResponseDto,
@@ -9,6 +9,15 @@ import type {
   SubcategoryAverageDto,
   CreateBudgetDto,
 } from './dto'
+
+interface AggregatedTransactionRow {
+  category_id: string
+  category_name: string
+  type: string
+  subcategory: string
+  transaction_count: number
+  total_amount: number
+}
 
 @Injectable()
 export class BudgetsService {
@@ -100,44 +109,52 @@ export class BudgetsService {
     const startDate = new Date(filters.startDate)
     const endDate = new Date(filters.endDate)
 
-    // Fetch user accounts to get divisors
-    const userAccounts = await this.prisma.account.findMany({
-      where: { userId },
-    })
-    const accountDivisors = new Map(userAccounts.map(a => [a.name, a.divisor]))
-    const excludedFromBudgetAccounts = new Set(
-      userAccounts.filter(a => a.isExcludedFromBudget).map(a => a.name)
-    )
-
     // Calculate period in months
     const periodMonths = this.calculateMonthsDiff(startDate, endDate)
 
-    // Fetch category associations to identify reimbursement income categories
-    const associations = await this.prisma.categoryAssociation.findMany({
-      where: { userId },
-      include: {
-        expenseCategory: true,
-        incomeCategory: true,
-      },
-    })
+    // Fetch aggregated transactions and category associations in parallel
+    const [rows, associations] = await Promise.all([
+      this.prisma.$queryRaw<AggregatedTransactionRow[]>(Prisma.sql`
+        SELECT
+          t.category_id,
+          c.name AS category_name,
+          t.type::text AS type,
+          COALESCE(t.subcategory, '') AS subcategory,
+          COUNT(*)::int AS transaction_count,
+          SUM(
+            CASE WHEN t.type = 'EXPENSE'
+              THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
+              ELSE t.amount::numeric / COALESCE(a.divisor, 1)
+            END
+          )::float AS total_amount
+        FROM app.transactions t
+        JOIN app.categories c ON c.id = t.category_id
+        LEFT JOIN app.accounts a ON a.name = t.account AND a.user_id = t.user_id
+        WHERE t.user_id = ${userId}
+          AND t.date >= ${startDate}
+          AND t.date <= ${endDate}
+          AND t.category_id IS NOT NULL
+          AND COALESCE(a.is_excluded_from_budget, false) = false
+        GROUP BY t.category_id, c.name, t.type, COALESCE(t.subcategory, '')
+      `),
+      this.prisma.categoryAssociation.findMany({
+        where: { userId },
+        include: {
+          expenseCategory: true,
+          incomeCategory: true,
+        },
+      }),
+    ])
+
+    // Build reimbursement lookup maps
     const reimbursementCategoryIds = new Set(
       associations.map(a => a.incomeCategoryId)
     )
-    // Map income category ID to expense category ID for reimbursement tracking
     const incomeCategoryToExpenseCategory = new Map(
       associations.map(a => [a.incomeCategoryId, a.expenseCategoryId])
     )
 
-    // Fetch transactions within the date range
-    const transactions = await this.prisma.transaction.findMany({
-      where: {
-        userId,
-        date: { gte: startDate, lte: endDate },
-      },
-      include: { category: true },
-    })
-
-    // Aggregate expenses by category and subcategory
+    // Process aggregated rows into maps
     const expenseMap = new Map<
       string,
       {
@@ -165,50 +182,31 @@ export class BudgetsService {
     // Track reimbursements by expense category
     const reimbursementsByExpenseCategory = new Map<string, number>()
 
-    for (const tx of transactions) {
-      // Skip transactions without category
-      if (!tx.category || !tx.categoryId) continue
+    for (const row of rows) {
+      const categoryId = row.category_id
+      const subcategory = row.subcategory
+      const amount = row.total_amount
+      const count = row.transaction_count
 
-      // Skip transactions from accounts excluded from budget
-      if (excludedFromBudgetAccounts.has(tx.account)) continue
-
-      const categoryId = tx.categoryId
-      const subcategory = tx.subcategory ?? ''
-      const amount = Number(tx.amount)
-      // Get divisor from account settings (defaults to 1 if not found)
-      const divisor = accountDivisors.get(tx.account) ?? 1
-      const adjustedAmount = amount / divisor
-
-      if (tx.type === TransactionType.EXPENSE) {
-        const absAmount = Math.abs(adjustedAmount)
-        totalExpenses += absAmount
+      if (row.type === 'EXPENSE') {
+        totalExpenses += amount
 
         const existing = expenseMap.get(categoryId)
         if (existing) {
-          existing.total += absAmount
-          existing.count += 1
-          // Track subcategory
-          const subExisting = existing.subcategories.get(subcategory)
-          if (subExisting) {
-            subExisting.total += absAmount
-            subExisting.count += 1
-          } else {
-            existing.subcategories.set(subcategory, {
-              total: absAmount,
-              count: 1,
-            })
-          }
+          existing.total += amount
+          existing.count += count
+          existing.subcategories.set(subcategory, { total: amount, count })
         } else {
           const subcategories = new Map<
             string,
             { total: number; count: number }
           >()
-          subcategories.set(subcategory, { total: absAmount, count: 1 })
+          subcategories.set(subcategory, { total: amount, count })
           expenseMap.set(categoryId, {
             categoryId,
-            categoryName: tx.category.name,
-            total: absAmount,
-            count: 1,
+            categoryName: row.category_name,
+            total: amount,
+            count,
             subcategories,
           })
         }
@@ -222,40 +220,30 @@ export class BudgetsService {
               reimbursementsByExpenseCategory.get(expenseCategoryId) ?? 0
             reimbursementsByExpenseCategory.set(
               expenseCategoryId,
-              current + adjustedAmount
+              current + amount
             )
           }
           continue
         }
 
-        totalIncome += adjustedAmount
+        totalIncome += amount
 
         const existing = incomeMap.get(categoryId)
         if (existing) {
-          existing.total += adjustedAmount
-          existing.count += 1
-          // Track subcategory
-          const subExisting = existing.subcategories.get(subcategory)
-          if (subExisting) {
-            subExisting.total += adjustedAmount
-            subExisting.count += 1
-          } else {
-            existing.subcategories.set(subcategory, {
-              total: adjustedAmount,
-              count: 1,
-            })
-          }
+          existing.total += amount
+          existing.count += count
+          existing.subcategories.set(subcategory, { total: amount, count })
         } else {
           const subcategories = new Map<
             string,
             { total: number; count: number }
           >()
-          subcategories.set(subcategory, { total: adjustedAmount, count: 1 })
+          subcategories.set(subcategory, { total: amount, count })
           incomeMap.set(categoryId, {
             categoryId,
-            categoryName: tx.category.name,
-            total: adjustedAmount,
-            count: 1,
+            categoryName: row.category_name,
+            total: amount,
+            count,
             subcategories,
           })
         }
