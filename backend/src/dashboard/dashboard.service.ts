@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { TransactionType } from '../generated/prisma'
+import { Prisma } from '../generated/prisma'
 import type {
   DashboardFiltersDto,
   DashboardSummaryDto,
@@ -23,6 +23,17 @@ const MONTH_LABELS: Record<string, string> = {
   '12': 'Déc',
 }
 
+interface DashboardAggregatedRow {
+  month_key: string
+  category_name: string
+  type: string
+  total_amount: number
+}
+
+interface AccountRow {
+  account: string
+}
+
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
@@ -31,14 +42,14 @@ export class DashboardService {
     userId: string,
     filters: DashboardFiltersDto
   ): Promise<DashboardSummaryDto> {
-    // Fetch user accounts to get divisors
-    const userAccounts = await this.prisma.account.findMany({
-      where: { userId },
-    })
-    const accountDivisors = new Map(userAccounts.map(a => [a.name, a.divisor]))
-    const excludedFromStatsAccounts = new Set(
-      userAccounts.filter(a => a.isExcludedFromStats).map(a => a.name)
-    )
+    // Use sentinel dates when no filter is provided
+    const startDate = filters.startDate
+      ? new Date(filters.startDate)
+      : new Date('1970-01-01')
+    const endDate = filters.endDate
+      ? new Date(filters.endDate)
+      : new Date('2099-12-31')
+
     const hiddenExpenseCategoriesSet = new Set(
       filters.hiddenExpenseCategories ?? []
     )
@@ -46,14 +57,48 @@ export class DashboardService {
       filters.hiddenIncomeCategories ?? []
     )
 
-    // Fetch category associations from database
-    const dbAssociations = await this.prisma.categoryAssociation.findMany({
-      where: { userId },
-      include: {
-        expenseCategory: true,
-        incomeCategory: true,
-      },
-    })
+    // Fetch aggregated data, accounts list, and category associations in parallel
+    const [rows, accountRows, dbAssociations] = await Promise.all([
+      // Query 1: Aggregation by month + category + type (excludes stats-excluded accounts)
+      this.prisma.$queryRaw<DashboardAggregatedRow[]>(Prisma.sql`
+        SELECT
+          TO_CHAR(t.date, 'YYYY-MM') AS month_key,
+          COALESCE(c.name, 'Autre') AS category_name,
+          t.type::text AS type,
+          SUM(
+            CASE WHEN t.type = 'EXPENSE'
+              THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
+              ELSE t.amount::numeric / COALESCE(a.divisor, 1)
+            END
+          )::float AS total_amount
+        FROM app.transactions t
+        LEFT JOIN app.categories c ON c.id = t.category_id
+        LEFT JOIN app.accounts a ON a.name = t.account AND a.user_id = t.user_id
+        WHERE t.user_id = ${userId}
+          AND t.date >= ${startDate}
+          AND t.date <= ${endDate}
+          AND COALESCE(a.is_excluded_from_stats, false) = false
+        GROUP BY TO_CHAR(t.date, 'YYYY-MM'), COALESCE(c.name, 'Autre'), t.type
+      `),
+      // Query 2: Distinct accounts (including excluded from stats, for filter panel)
+      this.prisma.$queryRaw<AccountRow[]>(Prisma.sql`
+        SELECT DISTINCT t.account
+        FROM app.transactions t
+        WHERE t.user_id = ${userId}
+          AND t.date >= ${startDate}
+          AND t.date <= ${endDate}
+          AND t.account IS NOT NULL
+        ORDER BY t.account
+      `),
+      // Query 3: Category associations (unchanged)
+      this.prisma.categoryAssociation.findMany({
+        where: { userId },
+        include: {
+          expenseCategory: true,
+          incomeCategory: true,
+        },
+      }),
+    ])
 
     // Convert DB associations to name-based associations
     const categoryAssociations = dbAssociations.map(a => ({
@@ -66,23 +111,17 @@ export class DashboardService {
       categoryAssociations.map(a => a.incomeCategory)
     )
 
-    // Build date filter if provided
-    const dateFilter =
-      filters.startDate && filters.endDate
-        ? {
-            date: {
-              gte: new Date(filters.startDate),
-              lte: new Date(filters.endDate),
-            },
-          }
-        : {}
+    // Extract all categories from aggregated rows (before filtering hidden ones)
+    const allExpenseCategories = new Set<string>()
+    const allIncomeCategories = new Set<string>()
 
-    // Fetch transactions with category for this user (filtered by date if provided)
-    const transactions = await this.prisma.transaction.findMany({
-      where: { userId, ...dateFilter },
-      include: { category: true },
-      orderBy: { date: 'desc' },
-    })
+    for (const row of rows) {
+      if (row.type === 'EXPENSE') {
+        allExpenseCategories.add(row.category_name)
+      } else {
+        allIncomeCategories.add(row.category_name)
+      }
+    }
 
     // Build aggregation data structures
     const monthlyMap = new Map<
@@ -92,37 +131,13 @@ export class DashboardService {
     const expenseByCategoryMap = new Map<string, number>()
     const incomeByCategoryMap = new Map<string, number>()
     const reimbursementsByExpenseCategory = new Map<string, number>()
-    const allExpenseCategories = new Set<string>()
-    const allIncomeCategories = new Set<string>()
-    const availableAccounts = new Set<string>()
 
-    for (const tx of transactions) {
-      const categoryName = tx.category?.name ?? 'Autre'
-      const amount = Number(tx.amount)
-      // Get divisor from account settings (defaults to 1 if not found)
-      const divisor = accountDivisors.get(tx.account) ?? 1
-      const adjustedAmount = amount / divisor
+    for (const row of rows) {
+      const categoryName = row.category_name
+      const amount = row.total_amount
 
-      // Skip transactions from accounts excluded from stats
-      if (excludedFromStatsAccounts.has(tx.account)) {
-        // Still track all accounts for the filter panel
-        if (tx.account) availableAccounts.add(tx.account)
-        continue
-      }
-
-      // Track all accounts
-      if (tx.account) availableAccounts.add(tx.account)
-
-      // Track all categories (even hidden ones for filter panel)
-      if (tx.type === TransactionType.EXPENSE) {
-        allExpenseCategories.add(categoryName)
-      } else {
-        allIncomeCategories.add(categoryName)
-      }
-
-      // Calculate reimbursements (income categories associated with expense categories)
-      // Track by expense category for category chart, and by month for monthly chart
-      if (tx.type === TransactionType.INCOME) {
+      // Handle reimbursement income: track by expense category and by month
+      if (row.type === 'INCOME') {
         const assoc = categoryAssociations.find(
           a => a.incomeCategory === categoryName
         )
@@ -132,69 +147,63 @@ export class DashboardService {
             reimbursementsByExpenseCategory.get(assoc.expenseCategory) ?? 0
           reimbursementsByExpenseCategory.set(
             assoc.expenseCategory,
-            current + adjustedAmount
+            current + amount
           )
 
           // Track reimbursements by month
-          const date = new Date(tx.date)
-          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-          const monthData = monthlyMap.get(monthKey) ?? {
+          const monthData = monthlyMap.get(row.month_key) ?? {
             expenses: 0,
             income: 0,
             reimbursements: 0,
           }
-          monthData.reimbursements += adjustedAmount
-          monthlyMap.set(monthKey, monthData)
+          monthData.reimbursements += amount
+          monthlyMap.set(row.month_key, monthData)
+          continue
         }
       }
 
       // Skip hidden categories for aggregations
       if (
-        tx.type === TransactionType.EXPENSE &&
+        row.type === 'EXPENSE' &&
         hiddenExpenseCategoriesSet.has(categoryName)
       ) {
         continue
       }
       if (
-        tx.type === TransactionType.INCOME &&
+        row.type === 'INCOME' &&
         hiddenIncomeCategoriesSet.has(categoryName)
       ) {
         continue
       }
       // Skip income categories used as reimbursements from income totals
       if (
-        tx.type === TransactionType.INCOME &&
+        row.type === 'INCOME' &&
         reimbursementIncomeCategories.has(categoryName)
       ) {
         continue
       }
 
       // Monthly aggregation
-      const date = new Date(tx.date)
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      const monthData = monthlyMap.get(monthKey) ?? {
+      const monthData = monthlyMap.get(row.month_key) ?? {
         expenses: 0,
         income: 0,
         reimbursements: 0,
       }
 
-      if (tx.type === TransactionType.EXPENSE) {
-        monthData.expenses += Math.abs(adjustedAmount)
+      if (row.type === 'EXPENSE') {
+        monthData.expenses += amount
       } else {
-        monthData.income += adjustedAmount
+        monthData.income += amount
       }
-      monthlyMap.set(monthKey, monthData)
+      monthlyMap.set(row.month_key, monthData)
 
       // Category aggregation
-      if (tx.type === TransactionType.EXPENSE) {
+      if (row.type === 'EXPENSE') {
         const current = expenseByCategoryMap.get(categoryName) ?? 0
-        expenseByCategoryMap.set(
-          categoryName,
-          current + Math.abs(adjustedAmount)
-        )
+        expenseByCategoryMap.set(categoryName, current + amount)
       } else {
         const current = incomeByCategoryMap.get(categoryName) ?? 0
-        incomeByCategoryMap.set(categoryName, current + adjustedAmount)
+        incomeByCategoryMap.set(categoryName, current + amount)
       }
     }
 
@@ -224,7 +233,6 @@ export class DashboardService {
       }
 
       // Net expenses = gross expenses - reimbursements for this month
-      // Can be negative if reimbursements exceed expenses (e.g., reimbursement in different month than expense)
       const netExpenses = data.expenses - data.reimbursements
 
       return {
@@ -255,8 +263,7 @@ export class DashboardService {
         amount: Math.round(amount * 100) / 100,
       }))
 
-    // Calculate totals from category data (more accurate than monthly sums)
-    // This ensures consistency between pie chart and total display
+    // Calculate totals from category data
     const totalExpenses =
       Math.round(
         expensesByCategory.reduce((sum, cat) => sum + cat.amount, 0) * 100
@@ -274,7 +281,7 @@ export class DashboardService {
       totalIncome,
       allExpenseCategories: Array.from(allExpenseCategories).sort(),
       allIncomeCategories: Array.from(allIncomeCategories).sort(),
-      availableAccounts: Array.from(availableAccounts).sort(),
+      availableAccounts: accountRows.map(r => r.account),
     }
   }
 }
