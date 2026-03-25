@@ -28,7 +28,12 @@ import {
 import { PaginatedTransactionsResponseDto } from './dto/paginated-transactions-response.dto'
 import { createPaginationMeta } from '../common/dto/pagination.dto'
 import { SupabaseGuard, CurrentUser } from '../auth'
-import type { User, TransactionType } from '../generated/prisma'
+import type { User, TransactionType, Transaction } from '../generated/prisma'
+
+type TransactionWithRelations = Transaction & {
+  category?: { name: string }
+  subcategoryRef?: { id: string; name: string }
+}
 
 @ApiTags('transactions')
 @ApiBearerAuth()
@@ -36,6 +41,27 @@ import type { User, TransactionType } from '../generated/prisma'
 @Controller('transactions')
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
+
+  private mapToResponseDto(
+    tx: TransactionWithRelations
+  ): TransactionResponseDto {
+    return {
+      id: tx.id,
+      date: tx.date,
+      description: tx.description,
+      amount: Number(tx.amount),
+      type: tx.type,
+      account: tx.account,
+      subcategory: tx.subcategory,
+      note: tx.note,
+      isPointed: tx.isPointed,
+      categoryId: tx.categoryId,
+      categoryName: tx.category?.name,
+      subcategoryId: tx.subcategoryId,
+      subcategoryName: tx.subcategoryRef?.name ?? null,
+      createdAt: tx.createdAt,
+    }
+  }
 
   @Post('import/preview')
   @ApiOperation({
@@ -119,28 +145,9 @@ export class TransactionsController {
         Object.keys(filters).length > 0 ? filters : undefined
       )
 
-    const data = transactions.map(tx => {
-      const category = (tx as { category?: { name: string } }).category
-      const subcategoryRef = (
-        tx as { subcategoryRef?: { id: string; name: string } }
-      ).subcategoryRef
-      return {
-        id: tx.id,
-        date: tx.date,
-        description: tx.description,
-        amount: Number(tx.amount),
-        type: tx.type,
-        account: tx.account,
-        subcategory: tx.subcategory,
-        note: tx.note,
-        isPointed: tx.isPointed,
-        categoryId: tx.categoryId,
-        categoryName: category?.name,
-        subcategoryId: tx.subcategoryId,
-        subcategoryName: subcategoryRef?.name ?? null,
-        createdAt: tx.createdAt,
-      }
-    })
+    const data = transactions.map(tx =>
+      this.mapToResponseDto(tx as TransactionWithRelations)
+    )
 
     return {
       data,
@@ -156,27 +163,7 @@ export class TransactionsController {
     @Param('id') id: string
   ): Promise<TransactionResponseDto> {
     const tx = await this.transactionsService.findOne(id, user.id)
-    const category = (tx as { category?: { name: string } }).category
-    const subcategoryRef = (
-      tx as { subcategoryRef?: { id: string; name: string } }
-    ).subcategoryRef
-
-    return {
-      id: tx.id,
-      date: tx.date,
-      description: tx.description,
-      amount: Number(tx.amount),
-      type: tx.type,
-      account: tx.account,
-      subcategory: tx.subcategory,
-      note: tx.note,
-      isPointed: tx.isPointed,
-      categoryId: tx.categoryId,
-      categoryName: category?.name,
-      subcategoryId: tx.subcategoryId,
-      subcategoryName: subcategoryRef?.name ?? null,
-      createdAt: tx.createdAt,
-    }
+    return this.mapToResponseDto(tx as TransactionWithRelations)
   }
 
   @Patch('bulk')
@@ -209,27 +196,7 @@ export class TransactionsController {
     }
   ): Promise<TransactionResponseDto> {
     const tx = await this.transactionsService.update(id, user.id, body)
-    const category = (tx as { category?: { name: string } }).category
-    const subcategoryRef = (
-      tx as { subcategoryRef?: { id: string; name: string } }
-    ).subcategoryRef
-
-    return {
-      id: tx.id,
-      date: tx.date,
-      description: tx.description,
-      amount: Number(tx.amount),
-      type: tx.type,
-      account: tx.account,
-      subcategory: tx.subcategory,
-      note: tx.note,
-      isPointed: tx.isPointed,
-      categoryId: tx.categoryId,
-      categoryName: category?.name,
-      subcategoryId: tx.subcategoryId,
-      subcategoryName: subcategoryRef?.name ?? null,
-      createdAt: tx.createdAt,
-    }
+    return this.mapToResponseDto(tx as TransactionWithRelations)
   }
 
   @Delete(':id')

@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common'
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common'
 import { ChatAnthropic } from '@langchain/anthropic'
 import { z } from 'zod'
 import { PrismaService } from '../prisma/prisma.service'
@@ -36,7 +40,9 @@ export class AiSuggestionsService {
     const apiKey = process.env.ANTHROPIC_API_KEY
 
     if (!apiKey) {
-      throw new Error('ANTHROPIC_API_KEY must be defined')
+      throw new InternalServerErrorException(
+        'ANTHROPIC_API_KEY must be defined'
+      )
     }
 
     this.llm = new ChatAnthropic({

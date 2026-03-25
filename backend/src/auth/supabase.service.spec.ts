@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
-import { UnauthorizedException } from '@nestjs/common'
+import {
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common'
 import { SupabaseService } from './supabase.service'
 
 // Mock createClient
@@ -50,19 +53,17 @@ describe('SupabaseService', () => {
   })
 
   describe('constructor', () => {
-    it('should throw error if SUPABASE_URL is not defined', async () => {
+    it('should throw InternalServerErrorException if SUPABASE_URL is not defined', async () => {
       delete process.env.SUPABASE_URL
 
       await expect(
         Test.createTestingModule({
           providers: [SupabaseService],
         }).compile()
-      ).rejects.toThrow(
-        'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be defined'
-      )
+      ).rejects.toThrow(InternalServerErrorException)
     })
 
-    it('should throw error if SUPABASE_SERVICE_ROLE_KEY is not defined', async () => {
+    it('should throw InternalServerErrorException if SUPABASE_SERVICE_ROLE_KEY is not defined', async () => {
       process.env.SUPABASE_URL = 'https://test.supabase.co'
       delete process.env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -70,9 +71,7 @@ describe('SupabaseService', () => {
         Test.createTestingModule({
           providers: [SupabaseService],
         }).compile()
-      ).rejects.toThrow(
-        'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be defined'
-      )
+      ).rejects.toThrow(InternalServerErrorException)
     })
   })
 

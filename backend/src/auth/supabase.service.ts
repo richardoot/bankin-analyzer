@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common'
+import {
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common'
 import { createClient } from '@supabase/supabase-js'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 
@@ -11,7 +15,7 @@ export class SupabaseService {
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error(
+      throw new InternalServerErrorException(
         'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be defined'
       )
     }
@@ -41,7 +45,9 @@ export class SupabaseService {
     const { error } = await this.supabase.auth.admin.deleteUser(supabaseId)
 
     if (error) {
-      throw new Error(`Failed to delete user from Supabase: ${error.message}`)
+      throw new InternalServerErrorException(
+        `Failed to delete user from Supabase: ${error.message}`
+      )
     }
   }
 }

@@ -1,5 +1,6 @@
 import type { TestingModule } from '@nestjs/testing'
 import { Test } from '@nestjs/testing'
+import { InternalServerErrorException } from '@nestjs/common'
 import { AiSuggestionsService } from './ai-suggestions.service'
 import { PrismaService } from '../prisma/prisma.service'
 
@@ -92,6 +93,21 @@ describe('AiSuggestionsService', () => {
     service = module.get<AiSuggestionsService>(AiSuggestionsService)
 
     vi.clearAllMocks()
+  })
+
+  describe('constructor', () => {
+    it('should throw InternalServerErrorException if ANTHROPIC_API_KEY is not defined', async () => {
+      delete process.env.ANTHROPIC_API_KEY
+
+      await expect(
+        Test.createTestingModule({
+          providers: [
+            AiSuggestionsService,
+            { provide: PrismaService, useValue: mockPrismaService },
+          ],
+        }).compile()
+      ).rejects.toThrow(InternalServerErrorException)
+    })
   })
 
   describe('suggestAssociations', () => {
