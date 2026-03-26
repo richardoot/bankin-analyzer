@@ -8,6 +8,7 @@
     SubcategoryAverageDto,
   } from '@/lib/api'
   import { useFiltersStore } from '@/stores/filters'
+  import { formatCurrency } from '@/lib/formatters'
 
   const filtersStore = useFiltersStore()
 
@@ -188,14 +189,6 @@
     if (targetSavings.value <= 0) return 0
     return Math.max(0, (currentSavings.value / targetSavings.value) * 100)
   })
-
-  // Format currency
-  function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(value)
-  }
 
   // Get budget for a category
   function getBudgetForCategory(categoryId: string): number {

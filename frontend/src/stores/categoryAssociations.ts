@@ -5,13 +5,13 @@ import {
   type DbCategoryAssociationDto,
   type CreateCategoryAssociationDto,
 } from '@/lib/api'
+import { useAsyncAction } from '@/composables/useAsyncAction'
 
 export const useCategoryAssociationsStore = defineStore(
   'categoryAssociations',
   () => {
     const associations = ref<DbCategoryAssociationDto[]>([])
-    const isLoading = ref(false)
-    const error = ref<string | null>(null)
+    const { isLoading, error, run } = useAsyncAction()
 
     // Computed helpers for quick lookups
     const associationByExpenseCategoryId = computed(() => {
@@ -40,53 +40,28 @@ export const useCategoryAssociationsStore = defineStore(
     })
 
     async function load(): Promise<void> {
-      try {
-        isLoading.value = true
-        error.value = null
+      await run(async () => {
         associations.value = await api.getCategoryAssociations()
-      } catch (err) {
-        error.value =
-          err instanceof Error ? err.message : 'Failed to load associations'
-        console.error('Failed to load category associations:', err)
-      } finally {
-        isLoading.value = false
-      }
+      }, 'Failed to load associations')
     }
 
     async function create(
       dto: CreateCategoryAssociationDto
     ): Promise<DbCategoryAssociationDto | null> {
-      try {
-        isLoading.value = true
-        error.value = null
+      return await run(async () => {
         const newAssociation = await api.createCategoryAssociation(dto)
         associations.value = [...associations.value, newAssociation]
         return newAssociation
-      } catch (err) {
-        error.value =
-          err instanceof Error ? err.message : 'Failed to create association'
-        console.error('Failed to create category association:', err)
-        return null
-      } finally {
-        isLoading.value = false
-      }
+      }, 'Failed to create association')
     }
 
     async function remove(id: string): Promise<boolean> {
-      try {
-        isLoading.value = true
-        error.value = null
+      const result = await run(async () => {
         await api.deleteCategoryAssociation(id)
         associations.value = associations.value.filter(a => a.id !== id)
         return true
-      } catch (err) {
-        error.value =
-          err instanceof Error ? err.message : 'Failed to delete association'
-        console.error('Failed to delete category association:', err)
-        return false
-      } finally {
-        isLoading.value = false
-      }
+      }, 'Failed to delete association')
+      return result ?? false
     }
 
     function getIncomeCategoryForExpense(

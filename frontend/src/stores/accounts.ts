@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api, type AccountDto, type AccountType } from '@/lib/api'
+import { useAsyncAction } from '@/composables/useAsyncAction'
 
 export const useAccountsStore = defineStore('accounts', () => {
   const accounts = ref<AccountDto[]>([])
-  const isLoading = ref(false)
-  const error = ref<string | null>(null)
+  const { isLoading, error, run } = useAsyncAction()
 
   // Computed: accounts sorted by name
   const sortedAccounts = computed(() =>
@@ -58,17 +58,9 @@ export const useAccountsStore = defineStore('accounts', () => {
 
   // Load accounts from backend
   async function load(): Promise<void> {
-    try {
-      isLoading.value = true
-      error.value = null
+    await run(async () => {
       accounts.value = await api.getAccounts()
-    } catch (err) {
-      error.value =
-        err instanceof Error ? err.message : 'Failed to load accounts'
-      console.error('Failed to load accounts:', err)
-    } finally {
-      isLoading.value = false
-    }
+    }, 'Failed to load accounts')
   }
 
   // Update account type
@@ -76,23 +68,15 @@ export const useAccountsStore = defineStore('accounts', () => {
     accountId: string,
     type: AccountType
   ): Promise<boolean> {
-    try {
-      error.value = null
+    const result = await run(async () => {
       const updated = await api.updateAccount(accountId, { type })
-
-      // Update local state
       const index = accounts.value.findIndex(a => a.id === accountId)
       if (index !== -1) {
         accounts.value[index] = updated
       }
-
       return true
-    } catch (err) {
-      error.value =
-        err instanceof Error ? err.message : 'Failed to update account'
-      console.error('Failed to update account:', err)
-      return false
-    }
+    }, 'Failed to update account')
+    return result ?? false
   }
 
   // Update account settings
@@ -104,23 +88,15 @@ export const useAccountsStore = defineStore('accounts', () => {
       divisor?: number
     }
   ): Promise<boolean> {
-    try {
-      error.value = null
+    const result = await run(async () => {
       const updated = await api.updateAccount(accountId, settings)
-
-      // Update local state
       const index = accounts.value.findIndex(a => a.id === accountId)
       if (index !== -1) {
         accounts.value[index] = updated
       }
-
       return true
-    } catch (err) {
-      error.value =
-        err instanceof Error ? err.message : 'Failed to update account'
-      console.error('Failed to update account:', err)
-      return false
-    }
+    }, 'Failed to update account')
+    return result ?? false
   }
 
   return {

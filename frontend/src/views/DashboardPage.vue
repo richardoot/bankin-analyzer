@@ -5,6 +5,7 @@
   import AdvancedFiltersPanel from '@/components/filters/AdvancedFiltersPanel.vue'
   import TimePeriodSelector from '@/components/filters/TimePeriodSelector.vue'
   import { useDashboardData } from '@/composables/useDashboardData'
+  import { formatCurrency } from '@/lib/formatters'
 
   const {
     totalExpenses,
@@ -48,13 +49,6 @@
   onMounted(() => {
     fetchData()
   })
-
-  function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(value)
-  }
 
   function handleCategoryChange(event: Event) {
     const target = event.target as HTMLSelectElement

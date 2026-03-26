@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { ref, computed } from 'vue'
   import type { SettlementDto } from '@/lib/api'
+  import { formatCurrency } from '@/lib/formatters'
 
   const props = defineProps<{
     settlements: SettlementDto[]
@@ -29,13 +30,6 @@
     if (!selectedPersonId.value) return props.settlements
     return props.settlements.filter(s => s.personId === selectedPersonId.value)
   })
-
-  function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(amount)
-  }
 
   function formatDate(dateStr: string): string {
     return new Date(dateStr).toLocaleDateString('fr-FR', {

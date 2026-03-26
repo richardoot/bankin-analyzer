@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf'
+import { formatCurrency } from '@/lib/formatters'
 
 interface TransactionInfo {
   id: string
@@ -30,13 +31,6 @@ interface PersonSummary {
 }
 
 export function usePdfExport() {
-  function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(value)
-  }
-
   function formatDate(dateString: string | undefined): string {
     if (!dateString) return '--/--/----'
     try {

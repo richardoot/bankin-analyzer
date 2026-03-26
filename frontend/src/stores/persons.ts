@@ -2,43 +2,26 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '@/lib/api'
 import type { PersonDto } from '@/lib/api'
+import { useAsyncAction } from '@/composables/useAsyncAction'
 
 export const usePersonsStore = defineStore('persons', () => {
   const persons = ref<PersonDto[]>([])
-  const isLoading = ref(false)
-  const error = ref<string | null>(null)
+  const { isLoading, error, run, clearError } = useAsyncAction()
 
   async function fetchPersons(): Promise<void> {
-    try {
-      isLoading.value = true
-      error.value = null
+    await run(async () => {
       persons.value = await api.getPersons()
-    } catch (err) {
-      error.value =
-        err instanceof Error ? err.message : 'Failed to fetch persons'
-      console.error('Failed to fetch persons:', err)
-    } finally {
-      isLoading.value = false
-    }
+    }, 'Failed to fetch persons')
   }
 
   async function addPerson(name: string, email?: string): Promise<boolean> {
-    try {
-      isLoading.value = true
-      error.value = null
+    const result = await run(async () => {
       const newPerson = await api.createPerson({ name, email })
       persons.value.push(newPerson)
-      // Sort by name
       persons.value.sort((a, b) => a.name.localeCompare(b.name))
       return true
-    } catch (err) {
-      error.value =
-        err instanceof Error ? err.message : 'Failed to create person'
-      console.error('Failed to create person:', err)
-      return false
-    } finally {
-      isLoading.value = false
-    }
+    }, 'Failed to create person')
+    return result ?? false
   }
 
   async function updatePerson(
@@ -46,46 +29,25 @@ export const usePersonsStore = defineStore('persons', () => {
     name: string,
     email?: string
   ): Promise<boolean> {
-    try {
-      isLoading.value = true
-      error.value = null
+    const result = await run(async () => {
       const updated = await api.updatePerson(id, { name, email })
       const index = persons.value.findIndex(p => p.id === id)
       if (index !== -1) {
         persons.value[index] = updated
-        // Re-sort by name
         persons.value.sort((a, b) => a.name.localeCompare(b.name))
       }
       return true
-    } catch (err) {
-      error.value =
-        err instanceof Error ? err.message : 'Failed to update person'
-      console.error('Failed to update person:', err)
-      return false
-    } finally {
-      isLoading.value = false
-    }
+    }, 'Failed to update person')
+    return result ?? false
   }
 
   async function removePerson(id: string): Promise<boolean> {
-    try {
-      isLoading.value = true
-      error.value = null
+    const result = await run(async () => {
       await api.deletePerson(id)
       persons.value = persons.value.filter(p => p.id !== id)
       return true
-    } catch (err) {
-      error.value =
-        err instanceof Error ? err.message : 'Failed to delete person'
-      console.error('Failed to delete person:', err)
-      return false
-    } finally {
-      isLoading.value = false
-    }
-  }
-
-  function clearError(): void {
-    error.value = null
+    }, 'Failed to delete person')
+    return result ?? false
   }
 
   return {

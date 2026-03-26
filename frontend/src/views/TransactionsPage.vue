@@ -10,6 +10,7 @@
     PaginationMeta,
   } from '@/lib/api'
   import CategorySubcategoryModal from '@/components/CategorySubcategoryModal.vue'
+  import { formatCurrency } from '@/lib/formatters'
 
   const personsStore = usePersonsStore()
   const categoryAssociationsStore = useCategoryAssociationsStore()
@@ -534,14 +535,6 @@
     } catch (err) {
       console.error('Failed to delete reimbursement:', err)
     }
-  }
-
-  // Format currency
-  function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(value)
   }
 
   // Format date

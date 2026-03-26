@@ -9,8 +9,8 @@
 
 ## Moyenne priorite
 
-- [ ] **[Frontend] Creer un composable useAsyncAction()** - Le pattern try/catch/finally avec isLoading+error est duplique dans tous les stores
-- [ ] **[Frontend] Extraire formatCurrency() dans un utilitaire** - Intl.NumberFormat duplique dans 3 fichiers
+- [x] **[Frontend] Creer un composable useAsyncAction()** - Le pattern try/catch/finally avec isLoading+error est duplique dans tous les stores
+- [x] **[Frontend] Extraire formatCurrency() dans un utilitaire** - Intl.NumberFormat duplique dans 8 fichiers
 - [ ] **[Backend] Ajouter des tests pour TransactionsService** - Service critique (~520 lignes) sans couverture de tests
 - [ ] **[Frontend] Ameliorer l'accessibilite (ARIA)** - Ajouter aria-label sur les elements interactifs et formulaires
 - [ ] **[Backend] Ajouter rate limiting** - Pas de protection contre les abus (express-rate-limit ou @nestjs/throttler)

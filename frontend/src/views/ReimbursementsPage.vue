@@ -9,6 +9,7 @@
   import SettlementModal from '@/components/settlements/SettlementModal.vue'
   import SettlementHistorySection from '@/components/settlements/SettlementHistorySection.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
+  import { formatCurrency } from '@/lib/formatters'
 
   const { exportReimbursementsToPdf } = usePdfExport()
 
@@ -401,14 +402,6 @@
       editingPersonId.value = null
       editingPersonName.value = ''
     }
-  }
-
-  // Format currency
-  function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(value)
   }
 
   onMounted(() => {
