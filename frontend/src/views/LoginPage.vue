@@ -122,6 +122,7 @@
               v-model="email"
               type="email"
               required
+              data-testid="login-email-input"
               class="mt-1 block w-full rounded-lg border border-gray-300 dark:border-slate-600 px-4 py-3 text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:border-emerald-500 dark:focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:focus:ring-emerald-400/20"
               placeholder="vous@exemple.com"
             />
@@ -139,6 +140,7 @@
               v-model="password"
               type="password"
               required
+              data-testid="login-password-input"
               class="mt-1 block w-full rounded-lg border border-gray-300 dark:border-slate-600 px-4 py-3 text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:border-emerald-500 dark:focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:focus:ring-emerald-400/20"
               placeholder="••••••••"
             />
@@ -164,6 +166,7 @@
           <button
             type="submit"
             :disabled="loading"
+            data-testid="login-submit-button"
             class="w-full rounded-lg bg-emerald-500 px-4 py-3 text-base font-medium text-white transition-colors hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span v-if="loading">Chargement...</span>
@@ -191,6 +194,7 @@
           type="button"
           :disabled="loading"
           aria-label="Se connecter avec Google"
+          data-testid="login-google-button"
           class="mt-6 flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-base font-medium text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
           @click="handleGoogleLogin"
         >
@@ -219,6 +223,7 @@
         <div class="mt-6 text-center">
           <button
             type="button"
+            data-testid="login-toggle-mode-button"
             :aria-label="
               isSignUp
                 ? 'Passer au mode connexion'

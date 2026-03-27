@@ -10,6 +10,8 @@
     PaginationMeta,
   } from '@/lib/api'
   import CategorySubcategoryModal from '@/components/CategorySubcategoryModal.vue'
+  import TransactionReimbursementModal from '@/components/transactions/TransactionReimbursementModal.vue'
+  import BulkCategoryModal from '@/components/transactions/BulkCategoryModal.vue'
   import { formatCurrency } from '@/lib/formatters'
 
   const personsStore = usePersonsStore()
@@ -116,14 +118,7 @@
   // Modal state for adding reimbursement
   const showReimbursementModal = ref(false)
   const selectedTransaction = ref<TransactionDto | null>(null)
-  const reimbursementForm = ref({
-    personId: '',
-    amount: 0,
-    categoryId: '',
-    note: '',
-  })
-  const isCreatingReimbursement = ref(false)
-  const customDivisor = ref(2)
+  const reimbursementModalRef = ref<{ resetForm: () => void } | null>(null)
 
   // Mobile: expanded reimbursements state
   const expandedReimbursementsTxId = ref<string | null>(null)
@@ -467,12 +462,7 @@
   // Open reimbursement modal
   function openReimbursementModal(tx: TransactionDto) {
     selectedTransaction.value = tx
-    reimbursementForm.value = {
-      personId: '',
-      amount: getRemainingAmount(tx),
-      categoryId: '',
-      note: '',
-    }
+    reimbursementModalRef.value?.resetForm()
     showReimbursementModal.value = true
   }
 
@@ -480,51 +470,6 @@
   function closeReimbursementModal() {
     showReimbursementModal.value = false
     selectedTransaction.value = null
-    reimbursementForm.value = {
-      personId: '',
-      amount: 0,
-      categoryId: '',
-      note: '',
-    }
-    customDivisor.value = 2
-  }
-
-  // Set amount from divisor
-  function setAmountFromDivisor(divisor: number) {
-    if (!selectedTransaction.value || divisor <= 0) return
-    const baseAmount = Math.abs(selectedTransaction.value.amount)
-    const calculatedAmount = Math.round((baseAmount / divisor) * 100) / 100
-    const remaining = getRemainingAmount(selectedTransaction.value)
-    reimbursementForm.value.amount = Math.min(calculatedAmount, remaining)
-  }
-
-  // Apply custom divisor
-  function applyCustomDivisor() {
-    if (customDivisor.value > 0) {
-      setAmountFromDivisor(customDivisor.value)
-    }
-  }
-
-  // Create reimbursement
-  async function handleCreateReimbursement() {
-    if (!selectedTransaction.value || !reimbursementForm.value.personId) return
-
-    try {
-      isCreatingReimbursement.value = true
-      const newReimbursement = await api.createReimbursement({
-        transactionId: selectedTransaction.value.id,
-        personId: reimbursementForm.value.personId,
-        amount: reimbursementForm.value.amount,
-        categoryId: reimbursementForm.value.categoryId || undefined,
-        note: reimbursementForm.value.note || undefined,
-      })
-      reimbursements.value.push(newReimbursement)
-      closeReimbursementModal()
-    } catch (err) {
-      console.error('Failed to create reimbursement:', err)
-    } finally {
-      isCreatingReimbursement.value = false
-    }
   }
 
   // Delete reimbursement
@@ -579,6 +524,7 @@
 
       <!-- Filters -->
       <div
+        data-testid="transactions-filter-area"
         class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 mb-6"
       >
         <div
@@ -595,6 +541,7 @@
               >
               <select
                 v-model="typeFilter"
+                data-testid="transactions-type-filter"
                 class="w-full md:w-auto px-3 py-2 md:py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
               >
                 <option value="ALL">Toutes</option>
@@ -612,6 +559,7 @@
               >
               <select
                 v-model="selectedCategory"
+                data-testid="transactions-category-filter"
                 class="w-full md:w-auto px-3 py-2 md:py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
               >
                 <option :value="null">Toutes</option>
@@ -1671,302 +1619,34 @@
     </div>
 
     <!-- Reimbursement Modal -->
-    <Teleport to="body">
-      <div
-        v-if="showReimbursementModal && selectedTransaction"
-        class="fixed inset-0 z-50 flex items-center justify-center"
-      >
-        <!-- Backdrop -->
-        <div
-          class="absolute inset-0 bg-black/50"
-          @click="closeReimbursementModal"
-        />
-
-        <!-- Modal -->
-        <div
-          class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
-        >
-          <!-- Header -->
-          <h3
-            class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
-          >
-            Assigner un remboursement
-          </h3>
-
-          <!-- Transaction info -->
-          <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 mb-4">
-            <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">
-              {{ formatDate(selectedTransaction.date) }} -
-              {{ selectedTransaction.description }}
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <div
-                class="bg-white dark:bg-slate-700 rounded-lg p-2 border border-gray-200 dark:border-slate-600"
-              >
-                <div class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">
-                  Montant total
-                </div>
-                <div
-                  class="text-lg font-semibold text-red-600 dark:text-red-500"
-                >
-                  {{ formatCurrency(selectedTransaction.amount) }}
-                </div>
-              </div>
-              <div
-                class="bg-white dark:bg-slate-700 rounded-lg p-2 border border-gray-200 dark:border-slate-600"
-              >
-                <div class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">
-                  Restant a assigner
-                </div>
-                <div
-                  class="text-lg font-semibold"
-                  :class="
-                    getRemainingAmount(selectedTransaction) > 0
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-green-600 dark:text-green-400'
-                  "
-                >
-                  {{ formatCurrency(getRemainingAmount(selectedTransaction)) }}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Form -->
-          <div class="space-y-4">
-            <!-- Person select -->
-            <div>
-              <label
-                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-              >
-                Personne *
-              </label>
-              <select
-                v-model="reimbursementForm.personId"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
-              >
-                <option value="">Selectionnez une personne</option>
-                <option
-                  v-for="person in personsStore.persons"
-                  :key="person.id"
-                  :value="person.id"
-                >
-                  {{ person.name }}
-                </option>
-              </select>
-            </div>
-
-            <!-- Amount input -->
-            <div>
-              <label
-                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-              >
-                Montant *
-              </label>
-              <input
-                v-model.number="reimbursementForm.amount"
-                type="number"
-                step="0.01"
-                min="0.01"
-                :max="getRemainingAmount(selectedTransaction)"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
-              />
-
-              <!-- Amount shortcuts -->
-              <div class="mt-2">
-                <div class="text-xs text-gray-500 dark:text-gray-400 mb-1.5">
-                  Raccourcis (base:
-                  {{ formatCurrency(Math.abs(selectedTransaction.amount)) }})
-                </div>
-                <div class="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    class="px-2 py-1 text-xs font-medium rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30"
-                    @click="setAmountFromDivisor(1)"
-                  >
-                    100%
-                  </button>
-                  <button
-                    type="button"
-                    class="px-2 py-1 text-xs font-medium rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30"
-                    @click="setAmountFromDivisor(2)"
-                  >
-                    / 2
-                  </button>
-                  <button
-                    type="button"
-                    class="px-2 py-1 text-xs font-medium rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30"
-                    @click="setAmountFromDivisor(3)"
-                  >
-                    / 3
-                  </button>
-                  <button
-                    type="button"
-                    class="px-2 py-1 text-xs font-medium rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30"
-                    @click="setAmountFromDivisor(4)"
-                  >
-                    / 4
-                  </button>
-                  <div class="flex items-center gap-1">
-                    <span class="text-xs text-gray-500 dark:text-gray-400"
-                      >/</span
-                    >
-                    <input
-                      v-model.number="customDivisor"
-                      type="number"
-                      min="1"
-                      max="100"
-                      class="w-12 px-1.5 py-1 text-xs border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                      @keyup.enter="applyCustomDivisor"
-                    />
-                    <button
-                      type="button"
-                      class="px-2 py-1 text-xs font-medium rounded border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30"
-                      @click="applyCustomDivisor"
-                    >
-                      Appliquer
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Category select -->
-            <div>
-              <label
-                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-              >
-                Categorie (optionnel)
-              </label>
-              <select
-                v-model="reimbursementForm.categoryId"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
-              >
-                <option value="">Sans categorie</option>
-                <option
-                  v-for="cat in incomeCategories"
-                  :key="cat.id"
-                  :value="cat.id"
-                >
-                  {{ cat.name }}
-                </option>
-              </select>
-            </div>
-
-            <!-- Note input -->
-            <div>
-              <label
-                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-              >
-                Note (optionnel)
-              </label>
-              <input
-                v-model="reimbursementForm.note"
-                type="text"
-                placeholder="Ajouter une note..."
-                class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
-              />
-            </div>
-          </div>
-
-          <!-- Buttons -->
-          <div class="flex gap-3 mt-6">
-            <button
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
-              @click="closeReimbursementModal"
-            >
-              Annuler
-            </button>
-            <button
-              :disabled="
-                !reimbursementForm.personId ||
-                reimbursementForm.amount <= 0 ||
-                reimbursementForm.amount >
-                  getRemainingAmount(selectedTransaction) ||
-                isCreatingReimbursement
-              "
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-white rounded-lg transition-colors"
-              :class="
-                reimbursementForm.personId &&
-                reimbursementForm.amount > 0 &&
-                reimbursementForm.amount <=
-                  getRemainingAmount(selectedTransaction) &&
-                !isCreatingReimbursement
-                  ? 'bg-amber-600 dark:bg-amber-500 hover:bg-amber-700 dark:hover:bg-amber-600'
-                  : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
-              "
-              @click="handleCreateReimbursement"
-            >
-              <span v-if="isCreatingReimbursement">Creation...</span>
-              <span v-else>Confirmer</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <TransactionReimbursementModal
+      ref="reimbursementModalRef"
+      :is-open="showReimbursementModal"
+      :transaction="selectedTransaction"
+      :persons="personsStore.persons"
+      :income-categories="incomeCategories"
+      :remaining-amount="
+        selectedTransaction ? getRemainingAmount(selectedTransaction) : 0
+      "
+      @close="closeReimbursementModal"
+      @created="
+        r => {
+          reimbursements.push(r)
+          closeReimbursementModal()
+        }
+      "
+    />
 
     <!-- Bulk Category Change Modal -->
-    <Teleport to="body">
-      <div
-        v-if="showBulkCategoryModal"
-        class="fixed inset-0 z-50 flex items-center justify-center"
-      >
-        <!-- Backdrop -->
-        <div
-          class="absolute inset-0 bg-black/50"
-          @click="showBulkCategoryModal = false"
-        />
-
-        <!-- Modal -->
-        <div
-          class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
-        >
-          <h3
-            class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
-          >
-            Changer la categorie
-          </h3>
-          <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Choisissez la nouvelle categorie pour les {{ selectedCount }}
-            transaction(s) selectionnee(s).
-          </p>
-
-          <select
-            v-model="bulkCategoryId"
-            class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 mb-4"
-          >
-            <option :value="null" disabled>Selectionnez une categorie</option>
-            <option v-for="cat in allCategories" :key="cat.id" :value="cat.id">
-              {{ cat.name }} ({{
-                cat.type === 'EXPENSE' ? 'Depense' : 'Revenu'
-              }})
-            </option>
-          </select>
-
-          <div class="flex gap-3">
-            <button
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
-              @click="showBulkCategoryModal = false"
-            >
-              Annuler
-            </button>
-            <button
-              :disabled="!bulkCategoryId || isBulkUpdating"
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-white rounded-lg transition-colors"
-              :class="
-                bulkCategoryId && !isBulkUpdating
-                  ? 'bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600'
-                  : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
-              "
-              @click="applyBulkCategory"
-            >
-              <span v-if="isBulkUpdating">Application...</span>
-              <span v-else>Appliquer</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <BulkCategoryModal
+      v-model:category-id="bulkCategoryId"
+      :is-open="showBulkCategoryModal"
+      :categories="allCategories"
+      :selected-count="selectedCount"
+      :is-updating="isBulkUpdating"
+      @close="showBulkCategoryModal = false"
+      @apply="applyBulkCategory"
+    />
 
     <!-- Category/Subcategory Selection Modal -->
     <CategorySubcategoryModal

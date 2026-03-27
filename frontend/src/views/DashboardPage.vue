@@ -64,7 +64,10 @@
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors">
+  <div
+    data-testid="dashboard-container"
+    class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors"
+  >
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <!-- Header -->
       <div class="mb-8 flex items-center justify-between">
@@ -174,7 +177,10 @@
         </div>
 
         <!-- Charts grid: Bar charts -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div
+          data-testid="dashboard-charts-section"
+          class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8"
+        >
           <!-- Left column: Expenses with filter -->
           <div
             class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"

@@ -18,8 +18,8 @@
 
 ## Basse priorite
 
-- [ ] **[Frontend] Systeme de toast/notifications** - Pas de feedback visuel coherent pour les erreurs/succes API
-- [ ] **[Frontend] Decouper les vues longues** - TransactionsPage (1988 lignes), BudgetPage (1248 lignes) en sous-composants
-- [ ] **[Frontend] Ajouter data-testid** - Seulement 2 attributs data-testid dans toute la codebase
-- [ ] **[Frontend] Augmenter la couverture de tests** - ~40% couverture, viser 70%+
+- [x] **[Frontend] Systeme de toast/notifications** - Composable useToast + ToastContainer avec animations, integre dans useAsyncAction
+- [x] **[Frontend] Decouper les vues longues** - 3 composants extraits : TransactionReimbursementModal, BulkCategoryModal, BudgetSavingsSummary
+- [x] **[Frontend] Ajouter data-testid** - LoginPage, Navbar, TransactionsPage, DashboardPage
+- [x] **[Frontend] Augmenter la couverture de tests** - 34 tests ajoutes (formatters, useToast, useAsyncAction, persons store, accounts store)
 - [x] **[Backend] Gestion des erreurs Prisma** - P2002 (conflict 409), P2025 (not found 404), P2003 (bad request 400)

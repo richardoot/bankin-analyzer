@@ -18,11 +18,19 @@
 
   // Navigation principale (réduite - les autres liens sont dans le dropdown profil)
   const navLinks = [
-    { to: '/dashboard', label: 'Dashboard' },
-    { to: '/import', label: 'Import' },
-    { to: '/transactions', label: 'Transactions' },
-    { to: '/reimbursements', label: 'Remboursements' },
-    { to: '/budget', label: 'Budget' },
+    { to: '/dashboard', label: 'Dashboard', testId: 'nav-dashboard-link' },
+    { to: '/import', label: 'Import', testId: 'nav-import-link' },
+    {
+      to: '/transactions',
+      label: 'Transactions',
+      testId: 'nav-transactions-link',
+    },
+    {
+      to: '/reimbursements',
+      label: 'Remboursements',
+      testId: 'nav-reimbursements-link',
+    },
+    { to: '/budget', label: 'Budget', testId: 'nav-budget-link' },
   ]
 
   // Liens supplémentaires pour le menu mobile (inclus dans le dropdown sur desktop)
@@ -93,6 +101,7 @@
               v-for="link in navLinks"
               :key="link.to"
               :to="link.to"
+              :data-testid="link.testId"
               class="rounded-md px-3 py-2 text-sm font-medium transition-colors"
               :class="
                 isActiveRoute(link.to)
@@ -152,12 +161,14 @@
           <template v-else>
             <RouterLink
               to="/login"
+              data-testid="nav-sign-in-link"
               class="rounded-md px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
             >
               Se connecter
             </RouterLink>
             <RouterLink
               to="/login?signup=true"
+              data-testid="nav-sign-up-link"
               class="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
             >
               S'inscrire
@@ -206,6 +217,7 @@
 
           <button
             type="button"
+            data-testid="nav-mobile-menu-button"
             class="inline-flex items-center justify-center rounded-md p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
             @click="toggleMobileMenu"
           >
