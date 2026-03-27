@@ -140,7 +140,8 @@
             byCategory: new Map(),
           })
         }
-        const person = map.get(r.personId)!
+        const person = map.get(r.personId)
+        if (!person) return
         person.total += r.amount
         person.totalReceived += r.amountReceived
         person.totalRemaining += r.amountRemaining
@@ -157,7 +158,8 @@
             reimbursements: [],
           })
         }
-        const category = person.byCategory.get(catKey)!
+        const category = person.byCategory.get(catKey)
+        if (!category) return
         category.amount += r.amount
         category.amountReceived += r.amountReceived
         category.amountRemaining += r.amountRemaining
@@ -273,7 +275,8 @@
           })
         }
 
-        const category = result.get(catKey)!
+        const category = result.get(catKey)
+        if (!category) return
         category.amount += r.amountRemaining
         category.reimbursements.push(r)
       })

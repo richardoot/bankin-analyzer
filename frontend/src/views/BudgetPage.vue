@@ -5,7 +5,6 @@
     BudgetDto,
     BudgetStatisticsDto,
     CategoryAverageDto,
-    SubcategoryAverageDto,
   } from '@/lib/api'
   import { useFiltersStore } from '@/stores/filters'
   import { formatCurrency } from '@/lib/formatters'

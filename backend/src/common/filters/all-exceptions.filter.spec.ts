@@ -7,6 +7,7 @@ import {
   InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common'
+import { Prisma } from '../../generated/prisma'
 import { AllExceptionsFilter } from './all-exceptions.filter'
 
 describe('AllExceptionsFilter', () => {
@@ -183,6 +184,68 @@ describe('AllExceptionsFilter', () => {
       filter.catch(exception, mockHost as never)
 
       // The response should NOT contain the detailed error message
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        statusCode: 500,
+        message: 'Internal server error',
+      })
+    })
+  })
+
+  describe('Prisma error handling', () => {
+    it('should handle P2002 (unique constraint) with 409 Conflict', () => {
+      const exception = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed',
+        { code: 'P2002', clientVersion: '5.0.0' }
+      )
+
+      filter.catch(exception, mockHost as never)
+
+      expect(mockResponse.status).toHaveBeenCalledWith(409)
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        statusCode: 409,
+        message: 'A record with this value already exists',
+      })
+    })
+
+    it('should handle P2025 (record not found) with 404 Not Found', () => {
+      const exception = new Prisma.PrismaClientKnownRequestError(
+        'Record not found',
+        { code: 'P2025', clientVersion: '5.0.0' }
+      )
+
+      filter.catch(exception, mockHost as never)
+
+      expect(mockResponse.status).toHaveBeenCalledWith(404)
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        statusCode: 404,
+        message: 'Record not found',
+      })
+    })
+
+    it('should handle P2003 (foreign key constraint) with 400 Bad Request', () => {
+      const exception = new Prisma.PrismaClientKnownRequestError(
+        'Foreign key constraint failed',
+        { code: 'P2003', clientVersion: '5.0.0' }
+      )
+
+      filter.catch(exception, mockHost as never)
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400)
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        statusCode: 400,
+        message: 'Related record not found',
+      })
+    })
+
+    it('should handle unknown Prisma error code with 500', () => {
+      const exception = new Prisma.PrismaClientKnownRequestError(
+        'Unknown error',
+        { code: 'P9999', clientVersion: '5.0.0' }
+      )
+
+      filter.catch(exception, mockHost as never)
+
+      expect(mockResponse.status).toHaveBeenCalledWith(500)
       expect(mockResponse.json).toHaveBeenCalledWith({
         statusCode: 500,
         message: 'Internal server error',

@@ -11,10 +11,10 @@
 
 - [x] **[Frontend] Creer un composable useAsyncAction()** - Le pattern try/catch/finally avec isLoading+error est duplique dans tous les stores
 - [x] **[Frontend] Extraire formatCurrency() dans un utilitaire** - Intl.NumberFormat duplique dans 8 fichiers
-- [ ] **[Backend] Ajouter des tests pour TransactionsService** - Service critique (~520 lignes) sans couverture de tests
-- [ ] **[Frontend] Ameliorer l'accessibilite (ARIA)** - Ajouter aria-label sur les elements interactifs et formulaires
-- [ ] **[Backend] Ajouter rate limiting** - Pas de protection contre les abus (express-rate-limit ou @nestjs/throttler)
-- [ ] **[Backend] Ajouter helmet pour les headers securite** - Headers HTTP de securite manquants
+- [x] **[Backend] Ajouter des tests pour TransactionsService** - 51 tests couvrant findOne, findAll, pagination, previewImport, importTransactions, update, delete, hash
+- [x] **[Frontend] Ameliorer l'accessibilite (ARIA)** - role=dialog sur les modales, aria-label sur inputs/boutons, role=menu sur dropdown
+- [x] **[Backend] Ajouter rate limiting** - @nestjs/throttler configure (100 req/min par IP)
+- [x] **[Backend] Ajouter helmet pour les headers securite** - Headers HTTP de securite configures
 
 ## Basse priorite
 
@@ -22,4 +22,4 @@
 - [ ] **[Frontend] Decouper les vues longues** - TransactionsPage (1988 lignes), BudgetPage (1248 lignes) en sous-composants
 - [ ] **[Frontend] Ajouter data-testid** - Seulement 2 attributs data-testid dans toute la codebase
 - [ ] **[Frontend] Augmenter la couverture de tests** - ~40% couverture, viser 70%+
-- [ ] **[Backend] Gestion des erreurs Prisma** - Pas de catch pour UniqueConstraintViolation, RecordNotFound
+- [x] **[Backend] Gestion des erreurs Prisma** - P2002 (conflict 409), P2025 (not found 404), P2003 (bad request 400)

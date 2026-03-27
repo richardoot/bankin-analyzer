@@ -40,6 +40,8 @@
         <div class="fixed inset-0 bg-black/50" @click="handleClose" />
 
         <div
+          role="dialog"
+          aria-labelledby="delete-account-modal-title"
           class="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-xl dark:shadow-slate-900/30"
         >
           <div class="mb-4 flex items-center gap-3">
@@ -60,7 +62,10 @@
                 />
               </svg>
             </div>
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            <h2
+              id="delete-account-modal-title"
+              class="text-xl font-semibold text-gray-900 dark:text-gray-100"
+            >
               Supprimer mon compte
             </h2>
           </div>

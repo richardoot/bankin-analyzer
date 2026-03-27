@@ -125,7 +125,7 @@ async function preDeduplicateTransactions(
 
   for (let i = 0; i < transactions.length; i++) {
     const hash = hashes[i]
-    const indices = hashToIndices.get(hash)!
+    const indices = hashToIndices.get(hash) ?? []
 
     if (indices.length > 1 && !seenHashes.has(hash)) {
       // First occurrence of a duplicate group -> keep it
@@ -373,7 +373,7 @@ export function useChunkedImport() {
           failedAtChunk: i,
           chunksCompleted: i,
           chunksTotal: chunks.length,
-          lastError: lastError!,
+          lastError: lastError ?? 'Unknown error',
         })
       }
     }

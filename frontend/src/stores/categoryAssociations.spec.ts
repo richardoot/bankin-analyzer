@@ -83,7 +83,9 @@ describe('categoryAssociations store', () => {
     })
 
     it('should set loading state during load', async () => {
-      let resolvePromise: (value: DbCategoryAssociationDto[]) => void
+      let resolvePromise:
+        | ((value: DbCategoryAssociationDto[]) => void)
+        | undefined
       mockApi.getCategoryAssociations.mockReturnValue(
         new Promise(resolve => {
           resolvePromise = resolve
@@ -93,7 +95,7 @@ describe('categoryAssociations store', () => {
       const loadPromise = store.load()
       expect(store.isLoading).toBe(true)
 
-      resolvePromise!([])
+      resolvePromise?.([])
       await loadPromise
 
       expect(store.isLoading).toBe(false)

@@ -1,11 +1,21 @@
 import { NestFactory } from '@nestjs/core'
 import { ValidationPipe } from '@nestjs/common'
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
+import helmet from 'helmet'
 import { AppModule } from './app.module'
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter'
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule)
+
+  // Security headers (configured to allow Swagger UI and OAuth popups)
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginOpenerPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    })
+  )
 
   // Global validation pipe
   app.useGlobalPipes(

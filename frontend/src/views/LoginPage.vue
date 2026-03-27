@@ -190,6 +190,7 @@
         <button
           type="button"
           :disabled="loading"
+          aria-label="Se connecter avec Google"
           class="mt-6 flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-base font-medium text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
           @click="handleGoogleLogin"
         >
@@ -218,6 +219,11 @@
         <div class="mt-6 text-center">
           <button
             type="button"
+            :aria-label="
+              isSignUp
+                ? 'Passer au mode connexion'
+                : 'Passer au mode inscription'
+            "
             class="text-sm text-emerald-600 dark:text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400"
             @click="toggleMode"
           >

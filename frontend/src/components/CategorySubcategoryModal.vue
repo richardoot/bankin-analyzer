@@ -175,6 +175,8 @@
         <!-- Modal -->
         <Transition name="modal-content" appear>
           <div
+            role="dialog"
+            aria-labelledby="category-modal-title"
             class="relative z-10 w-full max-w-md max-h-[85vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-2xl dark:shadow-black/40 flex flex-col"
           >
             <!-- Header -->
@@ -182,6 +184,7 @@
               <div class="flex items-start justify-between">
                 <div>
                   <h2
+                    id="category-modal-title"
                     class="text-lg font-semibold text-gray-900 dark:text-white"
                   >
                     Modifier la categorie
@@ -191,6 +194,7 @@
                   </p>
                 </div>
                 <button
+                  aria-label="Fermer"
                   class="p-2 -m-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
                   @click="handleClose"
                 >
@@ -228,6 +232,7 @@
                 <input
                   v-model="searchQuery"
                   type="text"
+                  aria-label="Rechercher une categorie"
                   placeholder="Rechercher une categorie..."
                   class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow"
                 />
