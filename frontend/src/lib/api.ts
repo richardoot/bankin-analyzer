@@ -142,6 +142,7 @@ export interface TransactionQueryParams {
   endDate?: string
   categoryId?: string
   isPointed?: boolean
+  account?: string
 }
 
 export interface FilterPreferencesDto {
@@ -585,6 +586,7 @@ export const api = {
     if (params?.categoryId) searchParams.set('categoryId', params.categoryId)
     if (params?.isPointed !== undefined)
       searchParams.set('isPointed', params.isPointed.toString())
+    if (params?.account) searchParams.set('account', params.account)
 
     const queryString = searchParams.toString()
     const url = queryString

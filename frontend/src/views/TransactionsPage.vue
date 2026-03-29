@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { ref, computed, onMounted, watch } from 'vue'
   import { usePersonsStore } from '@/stores/persons'
+  import { useAccountsStore } from '@/stores/accounts'
   import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
   import { api } from '@/lib/api'
   import type {
@@ -15,6 +16,7 @@
   import { formatCurrency } from '@/lib/formatters'
 
   const personsStore = usePersonsStore()
+  const accountsStore = useAccountsStore()
   const categoryAssociationsStore = useCategoryAssociationsStore()
 
   // Transactions state
@@ -40,6 +42,7 @@
   function loadSavedFilters(): {
     typeFilter: 'ALL' | 'EXPENSE' | 'INCOME'
     selectedCategory: string | null
+    selectedAccount: string | null
     showOnlyNotPointed: boolean
   } {
     try {
@@ -49,6 +52,7 @@
         return {
           typeFilter: parsed.typeFilter ?? 'ALL',
           selectedCategory: parsed.selectedCategory ?? null,
+          selectedAccount: parsed.selectedAccount ?? null,
           showOnlyNotPointed: parsed.showOnlyNotPointed ?? false,
         }
       }
@@ -58,6 +62,7 @@
     return {
       typeFilter: 'ALL',
       selectedCategory: null,
+      selectedAccount: null,
       showOnlyNotPointed: false,
     }
   }
@@ -67,6 +72,7 @@
   // Filters
   const typeFilter = ref<'ALL' | 'EXPENSE' | 'INCOME'>(savedFilters.typeFilter)
   const selectedCategory = ref<string | null>(savedFilters.selectedCategory)
+  const selectedAccount = ref<string | null>(savedFilters.selectedAccount)
   const showOnlyNotPointed = ref(savedFilters.showOnlyNotPointed)
 
   // Save filters to localStorage
@@ -76,6 +82,7 @@
       JSON.stringify({
         typeFilter: typeFilter.value,
         selectedCategory: selectedCategory.value,
+        selectedAccount: selectedAccount.value,
         showOnlyNotPointed: showOnlyNotPointed.value,
       })
     )
@@ -85,6 +92,7 @@
   function resetFilters() {
     typeFilter.value = 'ALL'
     selectedCategory.value = null
+    selectedAccount.value = null
     showOnlyNotPointed.value = false
     localStorage.removeItem(FILTERS_STORAGE_KEY)
   }
@@ -94,6 +102,7 @@
     return (
       typeFilter.value !== 'ALL' ||
       selectedCategory.value !== null ||
+      selectedAccount.value !== null ||
       showOnlyNotPointed.value
     )
   })
@@ -400,14 +409,17 @@
   }
 
   // Refetch when filters change (reset to page 1)
-  watch([typeFilter, selectedCategory, showOnlyNotPointed], () => {
-    saveFilters()
-    const wasOnPage1 = currentPage.value === 1
-    currentPage.value = 1
-    if (wasOnPage1) {
-      fetchTransactions()
+  watch(
+    [typeFilter, selectedCategory, selectedAccount, showOnlyNotPointed],
+    () => {
+      saveFilters()
+      const wasOnPage1 = currentPage.value === 1
+      currentPage.value = 1
+      if (wasOnPage1) {
+        fetchTransactions()
+      }
     }
-  })
+  )
 
   // Refetch when page changes
   watch(currentPage, (newPage, oldPage) => {
@@ -427,6 +439,7 @@
         limit: pageSize,
         type: typeFilter.value === 'ALL' ? undefined : typeFilter.value,
         categoryId: selectedCategory.value || undefined,
+        account: selectedAccount.value || undefined,
         isPointed: showOnlyNotPointed.value ? false : undefined,
       })
       transactions.value = response.data
@@ -501,6 +514,7 @@
 
   onMounted(() => {
     personsStore.fetchPersons()
+    accountsStore.load()
     categoryAssociationsStore.load()
     fetchTransactions()
     fetchCategories()
@@ -530,7 +544,7 @@
         <div
           class="flex flex-col gap-3 md:flex-row md:flex-wrap md:gap-4 md:items-center"
         >
-          <!-- Filters row 1: Type + Category (side by side on mobile) -->
+          <!-- Filters row: Type + Category + Account -->
           <div class="grid grid-cols-2 gap-3 md:contents">
             <!-- Type filter -->
             <div
@@ -569,6 +583,29 @@
                   :value="cat.id"
                 >
                   {{ cat.name }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Account filter -->
+            <div
+              class="col-span-2 md:col-span-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-2"
+            >
+              <label class="text-xs md:text-sm text-gray-600 dark:text-gray-400"
+                >Compte:</label
+              >
+              <select
+                v-model="selectedAccount"
+                data-testid="transactions-account-filter"
+                class="w-full md:w-auto px-3 py-2 md:py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              >
+                <option :value="null">Tous</option>
+                <option
+                  v-for="account in accountsStore.sortedAccounts"
+                  :key="account.id"
+                  :value="account.name"
+                >
+                  {{ account.name }}
                 </option>
               </select>
             </div>

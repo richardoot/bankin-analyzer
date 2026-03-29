@@ -143,6 +143,7 @@ export class TransactionsService {
       endDate?: Date
       categoryId?: string
       isPointed?: boolean
+      account?: string
     }
   ): Promise<{ data: Transaction[]; total: number }> {
     const where = {
@@ -150,6 +151,7 @@ export class TransactionsService {
       ...(filters?.type && { type: filters.type }),
       ...(filters?.categoryId && { categoryId: filters.categoryId }),
       ...(filters?.isPointed !== undefined && { isPointed: filters.isPointed }),
+      ...(filters?.account && { account: filters.account }),
       ...(filters?.startDate &&
         filters?.endDate && {
           date: {
