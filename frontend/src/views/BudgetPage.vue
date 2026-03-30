@@ -66,6 +66,7 @@
   }
 
   // Computed: Date range based on selected period
+  // Uses only completed months (excludes the current month)
   const dateRange = computed(() => {
     if (selectedPeriod.value === 'custom') {
       return {
@@ -74,29 +75,52 @@
       }
     }
 
-    const endDate = new Date()
-    const startDate = new Date()
+    const now = new Date()
 
-    switch (selectedPeriod.value) {
-      case '3m':
-        startDate.setMonth(startDate.getMonth() - 2)
-        startDate.setDate(1)
-        break
-      case '6m':
-        startDate.setMonth(startDate.getMonth() - 5)
-        startDate.setDate(1)
-        break
-      case '12m':
-        startDate.setMonth(startDate.getMonth() - 11)
-        startDate.setDate(1)
-        break
-    }
+    // End date = last day of previous month
+    const endDate = new Date(now.getFullYear(), now.getMonth(), 0)
+
+    // Start date = 1st of month, N months before the end month
+    const monthsBack =
+      selectedPeriod.value === '3m' ? 3 : selectedPeriod.value === '6m' ? 6 : 12
+    const startDate = new Date(
+      endDate.getFullYear(),
+      endDate.getMonth() - (monthsBack - 1),
+      1
+    )
 
     return {
-      startDate: startDate.toISOString().split('T')[0] ?? '',
-      endDate: endDate.toISOString().split('T')[0] ?? '',
+      startDate: toLocalDateString(startDate),
+      endDate: toLocalDateString(endDate),
     }
   })
+
+  function toLocalDateString(date: Date): string {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
+  // Computed: Human-readable period label
+  const periodLabel = computed(() => {
+    if (selectedPeriod.value === 'custom') {
+      if (!customStartDate.value || !customEndDate.value) return ''
+      return `Du ${formatDateLabel(customStartDate.value)} au ${formatDateLabel(customEndDate.value)}`
+    }
+    const range = dateRange.value
+    if (!range.startDate || !range.endDate) return ''
+    return `Du ${formatDateLabel(range.startDate)} au ${formatDateLabel(range.endDate)}`
+  })
+
+  function formatDateLabel(dateStr: string): string {
+    const date = new Date(dateStr + 'T00:00:00')
+    return date.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+  }
 
   // Computed: Is custom period valid
   const isCustomPeriodValid = computed(() => {
@@ -483,10 +507,10 @@
 
         <!-- Period info -->
         <p
-          v-if="statistics"
+          v-if="statistics && periodLabel"
           class="mt-4 text-sm text-gray-500 dark:text-gray-400"
         >
-          Analyse sur {{ statistics.periodMonths }} mois
+          {{ periodLabel }} ({{ statistics.periodMonths }} mois complets)
         </p>
       </div>
 
