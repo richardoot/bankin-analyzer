@@ -13,6 +13,7 @@ import type {
 interface AggregatedTransactionRow {
   category_id: string
   category_name: string
+  category_icon: string | null
   type: string
   subcategory: string
   transaction_count: number
@@ -38,6 +39,7 @@ export class BudgetsService {
       categoryId: b.categoryId,
       categoryName: b.category.name,
       amount: Number(b.amount),
+      categoryIcon: b.category.icon ?? null,
     }))
   }
 
@@ -68,6 +70,7 @@ export class BudgetsService {
       categoryId: budget.categoryId,
       categoryName: budget.category.name,
       amount: Number(budget.amount),
+      categoryIcon: budget.category.icon ?? null,
     }
   }
 
@@ -118,6 +121,7 @@ export class BudgetsService {
         SELECT
           t.category_id,
           c.name AS category_name,
+          c.icon AS category_icon,
           t.type::text AS type,
           COALESCE(t.subcategory, '') AS subcategory,
           COUNT(*)::int AS transaction_count,
@@ -135,7 +139,7 @@ export class BudgetsService {
           AND t.date <= ${endDate}
           AND t.category_id IS NOT NULL
           AND COALESCE(a.is_excluded_from_budget, false) = false
-        GROUP BY t.category_id, c.name, t.type, COALESCE(t.subcategory, '')
+        GROUP BY t.category_id, c.name, c.icon, t.type, COALESCE(t.subcategory, '')
       `),
       this.prisma.categoryAssociation.findMany({
         where: { userId },
@@ -160,6 +164,7 @@ export class BudgetsService {
       {
         categoryId: string
         categoryName: string
+        categoryIcon: string | null
         total: number
         count: number
         subcategories: Map<string, { total: number; count: number }>
@@ -170,6 +175,7 @@ export class BudgetsService {
       {
         categoryId: string
         categoryName: string
+        categoryIcon: string | null
         total: number
         count: number
         subcategories: Map<string, { total: number; count: number }>
@@ -205,6 +211,7 @@ export class BudgetsService {
           expenseMap.set(categoryId, {
             categoryId,
             categoryName: row.category_name,
+            categoryIcon: row.category_icon,
             total: amount,
             count,
             subcategories,
@@ -242,6 +249,7 @@ export class BudgetsService {
           incomeMap.set(categoryId, {
             categoryId,
             categoryName: row.category_name,
+            categoryIcon: row.category_icon,
             total: amount,
             count,
             subcategories,
@@ -302,6 +310,7 @@ export class BudgetsService {
         const result: CategoryAverageDto = {
           categoryId: e.categoryId,
           categoryName: e.categoryName,
+          categoryIcon: e.categoryIcon,
           totalAmount: this.round(e.total),
           transactionCount: e.count,
           averagePerMonth: this.round(e.total / periodMonths),
@@ -332,6 +341,7 @@ export class BudgetsService {
         const result: CategoryAverageDto = {
           categoryId: i.categoryId,
           categoryName: i.categoryName,
+          categoryIcon: i.categoryIcon,
           totalAmount: this.round(i.total),
           transactionCount: i.count,
           averagePerMonth: this.round(i.total / periodMonths),

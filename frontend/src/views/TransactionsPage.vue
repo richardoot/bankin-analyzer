@@ -989,6 +989,9 @@
                         "
                         @click="openCategoryModal(tx)"
                       >
+                        <span v-if="tx.categoryIcon" class="text-sm">{{
+                          tx.categoryIcon
+                        }}</span>
                         {{ tx.categoryName || 'Sans categorie' }}
                         <svg
                           class="h-3 w-3 opacity-50"
@@ -1395,7 +1398,8 @@
                       "
                       @click="openCategoryModal(tx)"
                     >
-                      {{ tx.categoryName || 'Sans categorie' }}
+                      {{ tx.categoryIcon ? tx.categoryIcon + ' ' : ''
+                      }}{{ tx.categoryName || 'Sans categorie' }}
                       <svg
                         class="h-3 w-3 opacity-50"
                         fill="none"

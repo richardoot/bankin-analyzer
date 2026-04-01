@@ -12,6 +12,7 @@ describe('BudgetsService', () => {
     overrides: Partial<{
       category_id: string
       category_name: string
+      category_icon: string | null
       type: string
       subcategory: string
       transaction_count: number
@@ -20,6 +21,7 @@ describe('BudgetsService', () => {
   ) => ({
     category_id: overrides.category_id ?? 'cat-1',
     category_name: overrides.category_name ?? 'Santé',
+    category_icon: overrides.category_icon ?? null,
     type: overrides.type ?? 'EXPENSE',
     subcategory: overrides.subcategory ?? '',
     transaction_count: overrides.transaction_count ?? 1,

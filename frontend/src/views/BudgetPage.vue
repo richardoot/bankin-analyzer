@@ -706,7 +706,8 @@
                           </svg>
                         </button>
                         <span v-else class="w-5 mr-2"></span>
-                        {{ cat.categoryName }}
+                        {{ cat.categoryIcon ? cat.categoryIcon + ' ' : ''
+                        }}{{ cat.categoryName }}
                         <span
                           class="text-xs text-gray-400 dark:text-gray-500 ml-2"
                         >
@@ -888,9 +889,10 @@
                       />
                     </svg>
                   </button>
-                  <span class="font-medium text-gray-900 dark:text-gray-100">{{
-                    cat.categoryName
-                  }}</span>
+                  <span class="font-medium text-gray-900 dark:text-gray-100"
+                    >{{ cat.categoryIcon ? cat.categoryIcon + ' ' : ''
+                    }}{{ cat.categoryName }}</span
+                  >
                   <span
                     v-if="getBudgetForCategory(cat.categoryId) > 0"
                     class="text-xs font-medium px-1.5 py-0.5 rounded"
@@ -1074,9 +1076,10 @@
               class="flex items-center justify-between py-2"
             >
               <div>
-                <span class="text-gray-900 dark:text-gray-100">{{
-                  cat.categoryName
-                }}</span>
+                <span class="text-gray-900 dark:text-gray-100"
+                  >{{ cat.categoryIcon ? cat.categoryIcon + ' ' : ''
+                  }}{{ cat.categoryName }}</span
+                >
                 <span class="text-xs text-gray-400 dark:text-gray-500 ml-2"
                   >({{ cat.transactionCount }} tx)</span
                 >

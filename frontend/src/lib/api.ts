@@ -92,6 +92,7 @@ export interface CategoryDto {
   id: string
   name: string
   type: 'EXPENSE' | 'INCOME'
+  icon?: string | null
   createdAt: string
 }
 
@@ -99,6 +100,7 @@ export interface SubcategoryDto {
   id: string
   categoryId: string
   name: string
+  icon?: string | null
   createdAt: string
 }
 
@@ -116,6 +118,7 @@ export interface TransactionDto {
   categoryName?: string
   subcategoryId?: string | null
   subcategoryName?: string | null
+  categoryIcon?: string | null
   createdAt: string
 }
 
@@ -344,6 +347,7 @@ export interface MonthlyDataDto {
 export interface CategoryDataDto {
   category: string
   amount: number
+  icon?: string | null
 }
 
 export interface DashboardFiltersDto {
@@ -369,6 +373,7 @@ export interface BudgetDto {
   id: string
   categoryId: string
   categoryName: string
+  categoryIcon?: string | null
   amount: number
 }
 
@@ -391,6 +396,7 @@ export interface SubcategoryAverageDto {
 export interface CategoryAverageDto {
   categoryId: string
   categoryName: string
+  categoryIcon?: string | null
   totalAmount: number
   transactionCount: number
   averagePerMonth: number
@@ -1065,5 +1071,18 @@ export const api = {
     }
 
     return response.json() as Promise<BudgetStatisticsDto>
+  },
+
+  async generateCategoryIcons(): Promise<{ updated: number }> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/categories/generate-icons`,
+      {
+        method: 'POST',
+      }
+    )
+    if (!response.ok) {
+      throw new Error('Failed to generate category icons')
+    }
+    return response.json() as Promise<{ updated: number }>
   },
 }

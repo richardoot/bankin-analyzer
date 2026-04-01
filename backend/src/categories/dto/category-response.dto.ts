@@ -14,4 +14,7 @@ export class CategoryResponseDto {
 
   /** Creation date */
   createdAt!: Date
+
+  /** Category icon emoji */
+  icon?: string | null
 }

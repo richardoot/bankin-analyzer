@@ -26,6 +26,7 @@ const MONTH_LABELS: Record<string, string> = {
 interface DashboardAggregatedRow {
   month_key: string
   category_name: string
+  category_icon: string | null
   type: string
   total_amount: number
 }
@@ -64,6 +65,7 @@ export class DashboardService {
         SELECT
           TO_CHAR(t.date, 'YYYY-MM') AS month_key,
           COALESCE(c.name, 'Autre') AS category_name,
+          c.icon AS category_icon,
           t.type::text AS type,
           SUM(
             CASE WHEN t.type = 'EXPENSE'
@@ -78,7 +80,7 @@ export class DashboardService {
           AND t.date >= ${startDate}
           AND t.date <= ${endDate}
           AND COALESCE(a.is_excluded_from_stats, false) = false
-        GROUP BY TO_CHAR(t.date, 'YYYY-MM'), COALESCE(c.name, 'Autre'), t.type
+        GROUP BY TO_CHAR(t.date, 'YYYY-MM'), COALESCE(c.name, 'Autre'), c.icon, t.type
       `),
       // Query 2: Distinct accounts (including excluded from stats, for filter panel)
       this.prisma.$queryRaw<AccountRow[]>(Prisma.sql`
@@ -128,8 +130,14 @@ export class DashboardService {
       string,
       { expenses: number; income: number; reimbursements: number }
     >()
-    const expenseByCategoryMap = new Map<string, number>()
-    const incomeByCategoryMap = new Map<string, number>()
+    const expenseByCategoryMap = new Map<
+      string,
+      { amount: number; icon: string | null }
+    >()
+    const incomeByCategoryMap = new Map<
+      string,
+      { amount: number; icon: string | null }
+    >()
     const reimbursementsByExpenseCategory = new Map<string, number>()
 
     for (const row of rows) {
@@ -199,11 +207,17 @@ export class DashboardService {
 
       // Category aggregation
       if (row.type === 'EXPENSE') {
-        const current = expenseByCategoryMap.get(categoryName) ?? 0
-        expenseByCategoryMap.set(categoryName, current + amount)
+        const current = expenseByCategoryMap.get(categoryName)
+        expenseByCategoryMap.set(categoryName, {
+          amount: (current?.amount ?? 0) + amount,
+          icon: current?.icon ?? row.category_icon,
+        })
       } else {
-        const current = incomeByCategoryMap.get(categoryName) ?? 0
-        incomeByCategoryMap.set(categoryName, current + amount)
+        const current = incomeByCategoryMap.get(categoryName)
+        incomeByCategoryMap.set(categoryName, {
+          amount: (current?.amount ?? 0) + amount,
+          icon: current?.icon ?? row.category_icon,
+        })
       }
     }
 
@@ -212,11 +226,11 @@ export class DashboardService {
       expenseCategory,
       reimbursement,
     ] of reimbursementsByExpenseCategory) {
-      const current = expenseByCategoryMap.get(expenseCategory) ?? 0
-      expenseByCategoryMap.set(
-        expenseCategory,
-        Math.max(0, current - reimbursement)
-      )
+      const current = expenseByCategoryMap.get(expenseCategory)
+      expenseByCategoryMap.set(expenseCategory, {
+        amount: Math.max(0, (current?.amount ?? 0) - reimbursement),
+        icon: current?.icon ?? null,
+      })
     }
 
     // Sort months and build monthly data with reimbursement deductions
@@ -248,19 +262,21 @@ export class DashboardService {
     const expensesByCategory: CategoryDataDto[] = Array.from(
       expenseByCategoryMap.entries()
     )
-      .sort((a, b) => b[1] - a[1])
-      .map(([category, amount]) => ({
+      .sort((a, b) => b[1].amount - a[1].amount)
+      .map(([category, data]) => ({
         category,
-        amount: Math.round(amount * 100) / 100,
+        amount: Math.round(data.amount * 100) / 100,
+        icon: data.icon,
       }))
 
     const incomeByCategory: CategoryDataDto[] = Array.from(
       incomeByCategoryMap.entries()
     )
-      .sort((a, b) => b[1] - a[1])
-      .map(([category, amount]) => ({
+      .sort((a, b) => b[1].amount - a[1].amount)
+      .map(([category, data]) => ({
         category,
-        amount: Math.round(amount * 100) / 100,
+        amount: Math.round(data.amount * 100) / 100,
+        icon: data.icon,
       }))
 
     // Calculate totals from category data

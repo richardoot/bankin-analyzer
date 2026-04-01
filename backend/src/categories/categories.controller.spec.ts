@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
 import { CategoriesController } from './categories.controller'
 import { CategoriesService } from './categories.service'
+import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import { SupabaseGuard } from '../auth/guards/supabase.guard'
 import { TransactionType } from '../generated/prisma'
 
@@ -33,6 +34,12 @@ const mockCategory2 = {
 const mockCategoriesService = {
   findAllByUser: vi.fn(),
   create: vi.fn(),
+  findWithoutIcons: vi.fn(),
+  findSubcategoriesWithoutIcons: vi.fn(),
+}
+
+const mockAiSuggestionsService = {
+  generateAndSaveIcons: vi.fn(),
 }
 
 describe('CategoriesController', () => {
@@ -47,6 +54,10 @@ describe('CategoriesController', () => {
         {
           provide: CategoriesService,
           useValue: mockCategoriesService,
+        },
+        {
+          provide: AiSuggestionsService,
+          useValue: mockAiSuggestionsService,
         },
       ],
     })

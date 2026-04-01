@@ -336,16 +336,17 @@
                       @click="selectCategory(cat.id)"
                     >
                       <span
-                        class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-semibold"
-                        :class="
+                        class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-semibold"
+                        :class="[
+                          cat.icon ? 'text-lg' : 'text-sm',
                           selectedCategoryId === cat.id
                             ? transactionType === 'EXPENSE'
                               ? 'bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400'
                               : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                            : 'bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
-                        "
+                            : 'bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400',
+                        ]"
                       >
-                        {{ cat.name.charAt(0).toUpperCase() }}
+                        {{ cat.icon || cat.name.charAt(0).toUpperCase() }}
                       </span>
                       <span
                         class="text-sm font-medium truncate"
@@ -396,6 +397,9 @@
                               : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                           "
                         >
+                          <span v-if="selectedCategory?.icon" class="mr-0.5">{{
+                            selectedCategory.icon
+                          }}</span>
                           {{ selectedCategory?.name }}
                         </span>
                       </div>
@@ -454,6 +458,9 @@
                           "
                           @click="selectSubcategory(sub.id)"
                         >
+                          <span v-if="sub.icon" class="mr-0.5">{{
+                            sub.icon
+                          }}</span>
                           {{ sub.name }}
                         </button>
                       </div>
@@ -553,6 +560,9 @@
                 <div class="flex-1 min-w-0">
                   <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
                     <template v-if="selectedCategory">
+                      <span v-if="selectedCategory.icon" class="mr-0.5">{{
+                        selectedCategory.icon
+                      }}</span>
                       {{ selectedCategory.name }}
                       <template v-if="selectedSubcategoryId">
                         <span class="mx-1">/</span>

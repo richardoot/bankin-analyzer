@@ -19,6 +19,8 @@ export class BudgetResponseDto {
   categoryName!: string
 
   amount!: number
+
+  categoryIcon?: string | null
 }
 
 export class SubcategoryAverageDto {
@@ -39,6 +41,8 @@ export class CategoryAverageDto {
   categoryId!: string
 
   categoryName!: string
+
+  categoryIcon?: string | null
 
   /** Total amount over the period */
   totalAmount!: number

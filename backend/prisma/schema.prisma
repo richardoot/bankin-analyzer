@@ -73,6 +73,7 @@ model Category {
   userId    String          @map("user_id")
   name      String
   type      TransactionType
+  icon      String?
   createdAt DateTime        @default(now()) @map("created_at")
 
   user                        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -93,6 +94,7 @@ model Subcategory {
   userId     String   @map("user_id")
   categoryId String   @map("category_id")
   name       String
+  icon       String?
   createdAt  DateTime @default(now()) @map("created_at")
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -23,6 +23,9 @@ export class CategoryDataDto {
 
   /** Total amount for this category */
   amount!: number
+
+  /** Category icon emoji */
+  icon?: string | null
 }
 
 export class DashboardSummaryDto {

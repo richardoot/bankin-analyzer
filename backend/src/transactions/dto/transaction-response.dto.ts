@@ -41,6 +41,9 @@ export class TransactionResponseDto {
   /** Subcategory name (from relation) */
   subcategoryName?: string | null
 
+  /** Category icon emoji */
+  categoryIcon?: string | null
+
   /** Creation date */
   createdAt!: Date
 }

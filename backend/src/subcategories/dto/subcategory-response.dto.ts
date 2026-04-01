@@ -10,4 +10,7 @@ export class SubcategoryResponseDto {
 
   /** Creation date */
   createdAt!: Date
+
+  /** Subcategory icon emoji */
+  icon?: string | null
 }

@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { CategoriesService } from '../categories/categories.service'
 import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { AccountsService } from '../accounts/accounts.service'
+import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import { TransactionType } from '../generated/prisma'
 import { Decimal } from 'decimal.js'
 
@@ -80,6 +81,10 @@ const mockAccountsService = {
   upsertByName: vi.fn(),
 }
 
+const mockAiSuggestionsService = {
+  generateAndSaveIcons: vi.fn(),
+}
+
 describe('TransactionsService', () => {
   let service: TransactionsService
 
@@ -93,6 +98,7 @@ describe('TransactionsService', () => {
         { provide: CategoriesService, useValue: mockCategoriesService },
         { provide: SubcategoriesService, useValue: mockSubcategoriesService },
         { provide: AccountsService, useValue: mockAccountsService },
+        { provide: AiSuggestionsService, useValue: mockAiSuggestionsService },
       ],
     }).compile()
 

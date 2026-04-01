@@ -4,10 +4,12 @@
   import { useFiltersStore } from '@/stores/filters'
   import { useAccountsStore } from '@/stores/accounts'
   import { api, type CategoryDto } from '@/lib/api'
+  import { useToast } from '@/composables/useToast'
 
   const categoryAssociationsStore = useCategoryAssociationsStore()
   const filtersStore = useFiltersStore()
   const accountsStore = useAccountsStore()
+  const toast = useToast()
 
   const categories = ref<CategoryDto[]>([])
   const isLoadingCategories = ref(false)
@@ -141,6 +143,22 @@
 
   async function handleDelete(id: string): Promise<void> {
     await categoryAssociationsStore.remove(id)
+  }
+
+  const isGeneratingIcons = ref(false)
+
+  async function generateIcons(): Promise<void> {
+    try {
+      isGeneratingIcons.value = true
+      const result = await api.generateCategoryIcons()
+      toast.success(`${result.updated} icone(s) generee(s) avec succes`)
+      await loadCategories()
+    } catch (err) {
+      console.error('Failed to generate icons:', err)
+      toast.error('Erreur lors de la generation des icones')
+    } finally {
+      isGeneratingIcons.value = false
+    }
   }
 </script>
 
@@ -383,6 +401,72 @@
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Category Icons Section -->
+      <div
+        class="mt-8 rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
+      >
+        <div class="mb-6">
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            Icones de categories
+          </h2>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Generez automatiquement des icones emoji pour les categories qui
+            n'en ont pas encore
+          </p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-white font-medium transition-colors"
+          :class="
+            isGeneratingIcons
+              ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
+              : 'bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600'
+          "
+          :disabled="isGeneratingIcons"
+          @click="generateIcons"
+        >
+          <svg
+            v-if="isGeneratingIcons"
+            class="animate-spin h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            />
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+          <svg
+            v-else
+            class="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          {{
+            isGeneratingIcons
+              ? 'Generation en cours...'
+              : 'Generer les icones manquantes'
+          }}
+        </button>
       </div>
 
       <!-- Joint Accounts Section -->

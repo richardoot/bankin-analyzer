@@ -12,12 +12,14 @@ describe('DashboardService', () => {
     overrides: Partial<{
       month_key: string
       category_name: string
+      category_icon: string | null
       type: string
       total_amount: number
     }> = {}
   ) => ({
     month_key: overrides.month_key ?? '2024-01',
     category_name: overrides.category_name ?? 'Alimentation',
+    category_icon: overrides.category_icon ?? null,
     type: overrides.type ?? 'EXPENSE',
     total_amount: overrides.total_amount ?? 100,
   })
@@ -135,9 +137,9 @@ describe('DashboardService', () => {
       const result = await service.getSummary(mockUserId, {})
 
       expect(result.expensesByCategory).toEqual([
-        { category: 'Loyer', amount: 500 },
-        { category: 'Alimentation', amount: 100 },
-        { category: 'Transport', amount: 50 },
+        { category: 'Loyer', amount: 500, icon: null },
+        { category: 'Alimentation', amount: 100, icon: null },
+        { category: 'Transport', amount: 50, icon: null },
       ])
     })
 
@@ -165,10 +167,12 @@ describe('DashboardService', () => {
       expect(result.expensesByCategory).toContainEqual({
         category: 'Alimentation',
         amount: 100,
+        icon: null,
       })
       expect(result.expensesByCategory).toContainEqual({
         category: 'Loyer',
         amount: 100,
+        icon: null,
       })
       expect(result.totalExpenses).toBe(200)
     })
@@ -192,7 +196,7 @@ describe('DashboardService', () => {
       })
 
       expect(result.expensesByCategory).toEqual([
-        { category: 'Alimentation', amount: 100 },
+        { category: 'Alimentation', amount: 100, icon: null },
       ])
       expect(result.totalExpenses).toBe(100)
       // But allExpenseCategories should still include hidden categories
@@ -219,7 +223,7 @@ describe('DashboardService', () => {
       })
 
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 2500 },
+        { category: 'Salaire', amount: 2500, icon: null },
       ])
       expect(result.totalIncome).toBe(2500)
       // But allIncomeCategories should still include hidden categories
@@ -255,7 +259,7 @@ describe('DashboardService', () => {
 
       // Santé: 500 - 200 = 300
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 300 },
+        { category: 'Santé', amount: 300, icon: null },
       ])
       // Remboursement should not appear in income
       expect(result.incomeByCategory).toEqual([])
@@ -291,7 +295,7 @@ describe('DashboardService', () => {
 
       // Category stays at 0 (capped) but monthly netExpenses can be negative
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 0 },
+        { category: 'Santé', amount: 0, icon: null },
       ])
       // Monthly data shows negative netExpenses (reimbursement > expense)
       expect(result.monthlyData[0].netExpenses).toBe(-100)
@@ -321,7 +325,7 @@ describe('DashboardService', () => {
       const result = await service.getSummary(mockUserId, {})
 
       expect(result.expensesByCategory).toEqual([
-        { category: 'Autre', amount: 100 },
+        { category: 'Autre', amount: 100, icon: null },
       ])
       expect(result.allExpenseCategories).toContain('Autre')
     })
@@ -485,7 +489,7 @@ describe('DashboardService', () => {
 
       // Should only include Alimentation, not Investissement
       expect(result.expensesByCategory).toEqual([
-        { category: 'Alimentation', amount: 100 },
+        { category: 'Alimentation', amount: 100, icon: null },
       ])
       expect(result.totalExpenses).toBe(100)
     })
@@ -515,10 +519,12 @@ describe('DashboardService', () => {
       expect(result.incomeByCategory).toContainEqual({
         category: 'Salaire',
         amount: 1500,
+        icon: null,
       })
       expect(result.incomeByCategory).toContainEqual({
         category: 'Prime',
         amount: 2000,
+        icon: null,
       })
       expect(result.totalIncome).toBe(3500)
     })
@@ -587,14 +593,17 @@ describe('DashboardService', () => {
       expect(result.expensesByCategory).toContainEqual({
         category: 'Loyer',
         amount: 150,
+        icon: null,
       })
       expect(result.expensesByCategory).toContainEqual({
         category: 'Electricité',
         amount: 100,
+        icon: null,
       })
       expect(result.expensesByCategory).toContainEqual({
         category: 'Alimentation',
         amount: 100,
+        icon: null,
       })
       expect(result.totalExpenses).toBe(350)
     })
@@ -615,7 +624,7 @@ describe('DashboardService', () => {
       const result = await service.getSummary(mockUserId, {})
 
       expect(result.expensesByCategory).toEqual([
-        { category: 'Divers', amount: 200 },
+        { category: 'Divers', amount: 200, icon: null },
       ])
       expect(result.totalExpenses).toBe(200)
     })
@@ -655,7 +664,7 @@ describe('DashboardService', () => {
 
       // Santé: 250 - 150 = 100
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 100 },
+        { category: 'Santé', amount: 100, icon: null },
       ])
       expect(result.totalExpenses).toBe(100)
       expect(result.incomeByCategory).toEqual([])
@@ -695,7 +704,7 @@ describe('DashboardService', () => {
 
       // Santé: 200 - 100 = 100
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 100 },
+        { category: 'Santé', amount: 100, icon: null },
       ])
       expect(result.totalExpenses).toBe(100)
     })
@@ -788,7 +797,7 @@ describe('DashboardService', () => {
 
       // Santé: 700 - 300 = 400
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 400 },
+        { category: 'Santé', amount: 400, icon: null },
       ])
       expect(result.totalExpenses).toBe(400)
     })
@@ -832,13 +841,13 @@ describe('DashboardService', () => {
 
       // Only Salaire should appear in income
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 1500 },
+        { category: 'Salaire', amount: 1500, icon: null },
       ])
       expect(result.totalIncome).toBe(1500)
 
       // Santé: 100 - 50 = 50
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 50 },
+        { category: 'Santé', amount: 50, icon: null },
       ])
     })
   })
@@ -917,6 +926,7 @@ describe('DashboardService', () => {
       expect(result.expensesByCategory[0]).toEqual({
         category: 'Alimentation',
         amount: 1250,
+        icon: null,
       })
       expect(result.totalExpenses).toBe(1700)
       expect(result.totalIncome).toBe(9200)
@@ -960,8 +970,8 @@ describe('DashboardService', () => {
 
       // Only non-hidden categories in aggregations
       expect(result.expensesByCategory).toEqual([
-        { category: 'Loyer', amount: 800 },
-        { category: 'Alimentation', amount: 300 },
+        { category: 'Loyer', amount: 800, icon: null },
+        { category: 'Alimentation', amount: 300, icon: null },
       ])
       expect(result.totalExpenses).toBe(1100)
 
@@ -1006,10 +1016,10 @@ describe('DashboardService', () => {
       })
 
       expect(result.expensesByCategory).toEqual([
-        { category: 'Alimentation', amount: 300 },
+        { category: 'Alimentation', amount: 300, icon: null },
       ])
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 3000 },
+        { category: 'Salaire', amount: 3000, icon: null },
       ])
       expect(result.totalExpenses).toBe(300)
       expect(result.totalIncome).toBe(3000)
@@ -1056,7 +1066,7 @@ describe('DashboardService', () => {
       expect(result.allIncomeCategories).toContain('Remboursement')
       expect(result.allIncomeCategories).toContain('Salaire')
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 3000 },
+        { category: 'Salaire', amount: 3000, icon: null },
       ])
     })
 
@@ -1079,8 +1089,8 @@ describe('DashboardService', () => {
       expect(result.expensesByCategory).toEqual([])
       expect(result.totalExpenses).toBe(0)
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 3000 },
-        { category: 'Freelance', amount: 1000 },
+        { category: 'Salaire', amount: 3000, icon: null },
+        { category: 'Freelance', amount: 1000, icon: null },
       ])
       expect(result.totalIncome).toBe(4000)
       expect(result.monthlyData[0].expenses).toBe(0)
@@ -1101,7 +1111,7 @@ describe('DashboardService', () => {
       expect(result.incomeByCategory).toEqual([])
       expect(result.totalIncome).toBe(0)
       expect(result.expensesByCategory).toEqual([
-        { category: 'Alimentation', amount: 300 },
+        { category: 'Alimentation', amount: 300, icon: null },
       ])
       expect(result.totalExpenses).toBe(300)
     })
@@ -1158,14 +1168,14 @@ describe('DashboardService', () => {
 
       // Santé: 800 - 200 = 600, Transport: 300 - 50 = 250
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 600 },
-        { category: 'Transport', amount: 250 },
+        { category: 'Santé', amount: 600, icon: null },
+        { category: 'Transport', amount: 250, icon: null },
       ])
       expect(result.totalExpenses).toBe(850)
 
       // Only Salaire in income (reimbursements excluded)
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 3000 },
+        { category: 'Salaire', amount: 3000, icon: null },
       ])
       expect(result.totalIncome).toBe(3000)
     })
@@ -1200,12 +1210,12 @@ describe('DashboardService', () => {
 
       // Santé appears with 0 amount (reimbursement deduction creates the entry)
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 0 },
+        { category: 'Santé', amount: 0, icon: null },
       ])
       expect(result.totalExpenses).toBe(0)
       // Reimbursement still excluded from income
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 3000 },
+        { category: 'Salaire', amount: 3000, icon: null },
       ])
     })
 
@@ -1235,7 +1245,7 @@ describe('DashboardService', () => {
 
       // Category total should sum across months
       expect(result.expensesByCategory).toEqual([
-        { category: 'Alimentation', amount: 1050 },
+        { category: 'Alimentation', amount: 1050, icon: null },
       ])
       // Each month should have its own value
       expect(result.monthlyData[0].expenses).toBe(300)
@@ -1291,7 +1301,7 @@ describe('DashboardService', () => {
       ])
       // But only non-excluded data in aggregations
       expect(result.expensesByCategory).toEqual([
-        { category: 'Alimentation', amount: 100 },
+        { category: 'Alimentation', amount: 100, icon: null },
       ])
     })
 

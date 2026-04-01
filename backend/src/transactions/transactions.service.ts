@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { CategoriesService } from '../categories/categories.service'
 import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { AccountsService } from '../accounts/accounts.service'
+import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import type { Transaction, TransactionType } from '../generated/prisma'
 import type {
   CreateTransactionDto,
@@ -29,7 +30,8 @@ export class TransactionsService {
     private readonly prisma: PrismaService,
     private readonly categoriesService: CategoriesService,
     private readonly subcategoriesService: SubcategoriesService,
-    private readonly accountsService: AccountsService
+    private readonly accountsService: AccountsService,
+    private readonly aiSuggestionsService: AiSuggestionsService
   ) {}
 
   private computeHash(
@@ -378,6 +380,17 @@ export class TransactionsService {
     const subcategoryMap = new Map(
       subcategories.map(s => [`${s.categoryId}|${s.name}`, s])
     )
+
+    // 5b2. Fire-and-forget: generate icons for categories/subcategories without icons
+    const catsWithoutIcons = categories.filter(c => !c.icon)
+    const subsWithoutIcons = subcategories.filter(s => !s.icon)
+    if (catsWithoutIcons.length > 0 || subsWithoutIcons.length > 0) {
+      void this.aiSuggestionsService.generateAndSaveIcons(
+        userId,
+        catsWithoutIcons.map(c => ({ id: c.id, name: c.name })),
+        subsWithoutIcons.map(s => ({ id: s.id, name: s.name }))
+      )
+    }
 
     // 5c. Create/fetch all accounts
     const uniqueAccountNames = [

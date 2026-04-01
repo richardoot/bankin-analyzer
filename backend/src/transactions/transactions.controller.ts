@@ -31,7 +31,7 @@ import { SupabaseGuard, CurrentUser } from '../auth'
 import type { User, TransactionType, Transaction } from '../generated/prisma'
 
 type TransactionWithRelations = Transaction & {
-  category?: { name: string }
+  category?: { name: string; icon?: string | null }
   subcategoryRef?: { id: string; name: string }
 }
 
@@ -59,6 +59,7 @@ export class TransactionsController {
       categoryName: tx.category?.name,
       subcategoryId: tx.subcategoryId,
       subcategoryName: tx.subcategoryRef?.name ?? null,
+      categoryIcon: tx.category?.icon ?? null,
       createdAt: tx.createdAt,
     }
   }

@@ -87,4 +87,18 @@ export class CategoriesService {
 
     return { categories: allCategories, newCount: toCreate.length }
   }
+
+  async findWithoutIcons(userId: string) {
+    return this.prisma.category.findMany({
+      where: { userId, icon: null },
+      select: { id: true, name: true },
+    })
+  }
+
+  async findSubcategoriesWithoutIcons(userId: string) {
+    return this.prisma.subcategory.findMany({
+      where: { userId, icon: null },
+      select: { id: true, name: true },
+    })
+  }
 }
