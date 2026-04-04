@@ -177,7 +177,7 @@
           <div
             role="dialog"
             aria-labelledby="category-modal-title"
-            class="relative z-10 w-full max-w-md max-h-[85vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-2xl dark:shadow-black/40 flex flex-col"
+            class="relative z-10 w-full max-w-md h-[85vh] sm:h-[75vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-2xl dark:shadow-black/40 flex flex-col"
           >
             <!-- Header -->
             <div class="relative px-6 pt-6 pb-4">
@@ -239,12 +239,12 @@
               </div>
             </div>
 
-            <!-- Content -->
-            <div class="flex-1 overflow-y-auto px-6 pb-4">
+            <!-- Content: two scrollable halves -->
+            <div class="flex-1 flex flex-col overflow-hidden">
               <!-- Loading state -->
               <div
                 v-if="isLoadingCategories"
-                class="flex flex-col items-center justify-center py-12"
+                class="flex-1 flex flex-col items-center justify-center py-12"
               >
                 <div
                   class="w-10 h-10 border-3 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin"
@@ -254,25 +254,27 @@
                 </p>
               </div>
 
-              <div v-else class="space-y-4">
-                <!-- Categories Section -->
-                <div>
-                  <div class="flex items-center justify-between mb-2">
-                    <span
-                      class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                    >
-                      Categorie
-                    </span>
-                    <span class="text-xs text-gray-400 dark:text-gray-500">
-                      {{ filteredCategories.length }} option{{
-                        filteredCategories.length > 1 ? 's' : ''
-                      }}
-                    </span>
-                  </div>
-
-                  <div
-                    class="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1 -mr-1"
+              <!-- ========== TOP 2/3: Categories (scrollable) ========== -->
+              <div
+                v-if="!isLoadingCategories"
+                class="flex-[2] min-h-0 flex flex-col pt-2"
+              >
+                <div
+                  class="flex items-center justify-between mb-2 shrink-0 px-6"
+                >
+                  <span
+                    class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
                   >
+                    Categorie
+                  </span>
+                  <span class="text-xs text-gray-400 dark:text-gray-500">
+                    {{ filteredCategories.length }} option{{
+                      filteredCategories.length > 1 ? 's' : ''
+                    }}
+                  </span>
+                </div>
+                <div class="flex-1 overflow-y-auto min-h-0 px-6">
+                  <div class="grid grid-cols-2 gap-2 py-1">
                     <!-- No category option -->
                     <button
                       type="button"
@@ -363,192 +365,167 @@
                         class="absolute top-2 right-2 w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400"
                       />
                     </button>
-                  </div>
-
-                  <!-- Empty search state -->
-                  <div
-                    v-if="filteredCategories.length === 0 && searchQuery"
-                    class="text-center py-6"
-                  >
-                    <p class="text-sm text-gray-500 dark:text-gray-400">
-                      Aucune categorie trouvee pour "{{ searchQuery }}"
-                    </p>
+                    <div
+                      v-if="filteredCategories.length === 0 && searchQuery"
+                      class="col-span-2 text-center py-6"
+                    >
+                      <p class="text-sm text-gray-500 dark:text-gray-400">
+                        Aucune categorie trouvee pour "{{ searchQuery }}"
+                      </p>
+                    </div>
                   </div>
                 </div>
-
-                <!-- Subcategories Section -->
-                <Transition name="subcategory-section">
-                  <div
-                    v-if="selectedCategoryId"
-                    class="pt-4 border-t border-gray-100 dark:border-slate-800"
-                  >
-                    <div class="flex items-center justify-between mb-2">
-                      <div class="flex items-center gap-2">
-                        <span
-                          class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                        >
-                          Sous-categorie
-                        </span>
-                        <span
-                          class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-                          :class="
-                            transactionType === 'EXPENSE'
-                              ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400'
-                              : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                          "
-                        >
-                          <span v-if="selectedCategory?.icon" class="mr-0.5">{{
-                            selectedCategory.icon
-                          }}</span>
-                          {{ selectedCategory?.name }}
-                        </span>
-                      </div>
-                    </div>
-
-                    <!-- Loading subcategories -->
-                    <div
-                      v-if="isLoadingSubcategories"
-                      class="flex justify-center py-6"
-                    >
-                      <div
-                        class="w-6 h-6 border-2 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin"
-                      />
-                    </div>
-
-                    <div v-else class="space-y-2">
-                      <!-- Subcategory chips -->
-                      <div class="flex flex-wrap gap-2">
-                        <!-- No subcategory option -->
-                        <button
-                          type="button"
-                          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150"
-                          :class="
-                            selectedSubcategoryId === null
-                              ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-1 dark:ring-offset-slate-900'
-                              : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700'
-                          "
-                          @click="selectSubcategory(null)"
-                        >
-                          <svg
-                            class="w-3.5 h-3.5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                            />
-                          </svg>
-                          Aucune
-                        </button>
-
-                        <!-- Existing subcategories -->
-                        <button
-                          v-for="sub in subcategories"
-                          :key="sub.id"
-                          type="button"
-                          class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150"
-                          :class="
-                            selectedSubcategoryId === sub.id
-                              ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-1 dark:ring-offset-slate-900'
-                              : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700'
-                          "
-                          @click="selectSubcategory(sub.id)"
-                        >
-                          <span v-if="sub.icon" class="mr-0.5">{{
-                            sub.icon
-                          }}</span>
-                          {{ sub.name }}
-                        </button>
-                      </div>
-
-                      <!-- Create new subcategory -->
-                      <div class="flex gap-2 mt-3">
-                        <div class="relative flex-1">
-                          <svg
-                            class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M12 4v16m8-8H4"
-                            />
-                          </svg>
-                          <input
-                            v-model="newSubcategoryName"
-                            type="text"
-                            placeholder="Nouvelle sous-categorie..."
-                            class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow"
-                            @keyup.enter="createSubcategory"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          class="px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                          :disabled="
-                            isCreatingSubcategory || !newSubcategoryName.trim()
-                          "
-                          @click="createSubcategory"
-                        >
-                          <svg
-                            v-if="isCreatingSubcategory"
-                            class="w-4 h-4 animate-spin"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              class="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              stroke-width="4"
-                            />
-                            <path
-                              class="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            />
-                          </svg>
-                          <span>Creer</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </Transition>
               </div>
 
-              <!-- Error message -->
-              <Transition name="error">
-                <div
-                  v-if="error"
-                  class="mt-4 p-3 bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 rounded-xl flex items-center gap-2"
-                >
-                  <svg
-                    class="w-5 h-5 text-red-500 dark:text-red-400 flex-shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+              <!-- ========== BOTTOM 1/3: Subcategories (scrollable) ========== -->
+              <div
+                v-if="!isLoadingCategories"
+                class="flex-1 min-h-0 flex flex-col pb-2 border-t border-gray-100 dark:border-slate-800"
+              >
+                <template v-if="selectedCategoryId">
+                  <div
+                    class="flex items-center justify-between mb-2 pt-2 shrink-0 px-6"
                   >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    <div class="flex items-center gap-2">
+                      <span
+                        class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                        >Sous-categorie</span
+                      >
+                      <span
+                        class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                        :class="
+                          transactionType === 'EXPENSE'
+                            ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400'
+                            : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        "
+                      >
+                        <span v-if="selectedCategory?.icon" class="mr-0.5">{{
+                          selectedCategory.icon
+                        }}</span>
+                        {{ selectedCategory?.name }}
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    v-if="isLoadingSubcategories"
+                    class="flex-1 flex justify-center items-center"
+                  >
+                    <div
+                      class="w-6 h-6 border-2 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin"
                     />
-                  </svg>
-                  <p class="text-sm text-red-600 dark:text-red-400">
-                    {{ error }}
+                  </div>
+                  <div
+                    v-else
+                    class="flex-1 overflow-y-auto min-h-0 space-y-2 px-6 py-1"
+                  >
+                    <div class="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150"
+                        :class="
+                          selectedSubcategoryId === null
+                            ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-1 dark:ring-offset-slate-900'
+                            : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700'
+                        "
+                        @click="selectSubcategory(null)"
+                      >
+                        <svg
+                          class="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                          />
+                        </svg>
+                        Aucune
+                      </button>
+                      <button
+                        v-for="sub in subcategories"
+                        :key="sub.id"
+                        type="button"
+                        class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150"
+                        :class="
+                          selectedSubcategoryId === sub.id
+                            ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-1 dark:ring-offset-slate-900'
+                            : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700'
+                        "
+                        @click="selectSubcategory(sub.id)"
+                      >
+                        <span v-if="sub.icon" class="mr-0.5">{{
+                          sub.icon
+                        }}</span>
+                        {{ sub.name }}
+                      </button>
+                    </div>
+                    <div class="flex gap-2 mt-3">
+                      <div class="relative flex-1">
+                        <svg
+                          class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M12 4v16m8-8H4"
+                          />
+                        </svg>
+                        <input
+                          v-model="newSubcategoryName"
+                          type="text"
+                          placeholder="Nouvelle sous-categorie..."
+                          class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow"
+                          @keyup.enter="createSubcategory"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        class="px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        :disabled="
+                          isCreatingSubcategory || !newSubcategoryName.trim()
+                        "
+                        @click="createSubcategory"
+                      >
+                        <svg
+                          v-if="isCreatingSubcategory"
+                          class="w-4 h-4 animate-spin"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            class="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            stroke-width="4"
+                          />
+                          <path
+                            class="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          />
+                        </svg>
+                        <span>Creer</span>
+                      </button>
+                    </div>
+                  </div>
+                </template>
+                <div v-else class="flex-1 flex items-center justify-center">
+                  <p
+                    class="text-sm text-gray-400 dark:text-gray-500 text-center"
+                  >
+                    Selectionnez une categorie pour voir les sous-categories
                   </p>
                 </div>
-              </Transition>
+              </div>
             </div>
 
             <!-- Footer -->
