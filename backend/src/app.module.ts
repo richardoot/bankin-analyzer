@@ -20,6 +20,7 @@ import { CategoryAssociationModule } from './category-association/category-assoc
 import { AiSuggestionsModule } from './ai-suggestions/ai-suggestions.module'
 import { BudgetsModule } from './budgets/budgets.module'
 import { AccountsModule } from './accounts/accounts.module'
+import { McpModule } from './mcp/mcp.module'
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { AccountsModule } from './accounts/accounts.module'
     CategoryAssociationModule,
     AiSuggestionsModule,
     BudgetsModule,
+    McpModule,
   ],
   controllers: [AppController],
   providers: [

@@ -27,6 +27,12 @@ const routes: RouteRecordRaw[] = [
     meta: { guestOnly: true },
   },
   {
+    path: '/oauth/consent',
+    name: 'oauth-consent',
+    component: () => import('@/views/OAuthConsentPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/import',
     name: 'import',
     component: () => import('@/views/ImportPage.vue'),

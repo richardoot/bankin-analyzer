@@ -1,12 +1,18 @@
 import { NestFactory } from '@nestjs/core'
 import { ValidationPipe } from '@nestjs/common'
+import type { NestExpressApplication } from '@nestjs/platform-express'
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
 import helmet from 'helmet'
 import { AppModule } from './app.module'
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter'
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule)
+  const app = await NestFactory.create<NestExpressApplication>(AppModule)
+
+  // Trust the reverse proxy (Vercel, Railway, etc.) so that `req.protocol`
+  // reflects the client-facing scheme from `X-Forwarded-Proto` and the MCP
+  // discovery endpoints advertise https:// URLs instead of http://.
+  app.set('trust proxy', 1)
 
   // Security headers (configured to allow Swagger UI and OAuth popups)
   app.use(
@@ -29,9 +35,12 @@ async function bootstrap(): Promise<void> {
   // Global exception filter
   app.useGlobalFilters(new AllExceptionsFilter())
 
-  // Enable CORS for frontend
+  // Enable CORS for frontend and MCP clients
+  const allowedOrigins = (
+    process.env.FRONTEND_URL ?? 'http://localhost:5173'
+  ).split(',')
   app.enableCors({
-    origin: process.env.FRONTEND_URL ?? 'http://localhost:5173',
+    origin: allowedOrigins,
     credentials: true,
   })
 

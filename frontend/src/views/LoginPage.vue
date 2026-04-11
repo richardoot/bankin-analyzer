@@ -34,7 +34,11 @@
     localError.value = null
     authStore.clearError()
     try {
-      await authStore.signInWithGoogle()
+      const redirectPath =
+        typeof route.query.redirect === 'string'
+          ? route.query.redirect
+          : undefined
+      await authStore.signInWithGoogle(redirectPath)
     } catch {
       // Error is handled by the store
     }

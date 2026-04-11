@@ -27,7 +27,7 @@ services:
       - bankin-network
 
   gotrue:
-    image: supabase/gotrue:v2.158.1
+    image: supabase/gotrue:v2.186.0
     container_name: bankin-auth
     depends_on:
       db:
@@ -47,9 +47,16 @@ services:
       GOTRUE_DISABLE_SIGNUP: 'false'
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: 3600
-      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ISSUER: ${API_EXTERNAL_URL}/auth/v1
+      # RSA signing key for OIDC ID tokens (required for OAuth 2.1 server)
+      GOTRUE_JWT_KEY_ID: ${GOTRUE_JWT_KEY_ID}
+      GOTRUE_JWT_KEYS: ${GOTRUE_JWT_KEYS}
       GOTRUE_EXTERNAL_EMAIL_ENABLED: 'false'
       GOTRUE_MAILER_AUTOCONFIRM: 'true'
+      # OAuth 2.1 Server (for MCP authentication)
+      GOTRUE_OAUTH_SERVER_ENABLED: 'true'
+      GOTRUE_OAUTH_SERVER_ALLOW_DYNAMIC_REGISTRATION: 'true'
+      GOTRUE_OAUTH_SERVER_AUTHORIZATION_PATH: '/oauth/consent'
       # Google OAuth
       GOTRUE_EXTERNAL_GOOGLE_ENABLED: 'true'
       GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
