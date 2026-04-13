@@ -1,8 +1,10 @@
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import {
   IsString,
   IsNumber,
   IsArray,
+  IsBoolean,
+  IsOptional,
   ValidateNested,
   IsDateString,
   Min,
@@ -53,6 +55,12 @@ export class CategoryAverageDto {
   /** Average per month */
   averagePerMonth!: number
 
+  /** Amount deducted via received reimbursements (income transactions in reimbursement categories) */
+  reimbursement?: number
+
+  /** Amount deducted via pending/partial reimbursement requests not yet received */
+  pendingReimbursement?: number
+
   /** Breakdown by subcategory */
   @ApiProperty({ type: [SubcategoryAverageDto] })
   subcategories?: SubcategoryAverageDto[]
@@ -80,6 +88,12 @@ export class BudgetStatisticsResponseDto {
 
   /** Average monthly income */
   averageMonthlyIncome!: number
+
+  /** Total received reimbursements deducted from expenses */
+  totalReimbursements?: number
+
+  /** Total pending reimbursements deducted from expenses */
+  totalPendingReimbursements?: number
 }
 
 // Request DTOs
@@ -109,4 +123,29 @@ export class BudgetStatisticsFiltersDto {
   /** End date (ISO format) */
   @IsDateString()
   endDate!: string
+
+  /**
+   * Whether to deduct received reimbursements (income transactions in
+   * reimbursement categories linked via CategoryAssociation) from expense
+   * category totals. The deduction is computed server-side.
+   * @default true
+   */
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  deductReimbursements?: boolean
+
+  /**
+   * Whether to deduct pending/partial reimbursement requests (from the
+   * ReimbursementRequest table) from expense category totals. Only the
+   * remaining amount (amount − amountReceived) of PENDING/PARTIAL requests
+   * whose linked transaction falls within the date range is deducted.
+   * @default false
+   */
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  deductPendingReimbursements?: boolean
 }

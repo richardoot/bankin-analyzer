@@ -120,16 +120,48 @@ export class McpController {
     // ── Tool: get_budget_statistics ──
     server.tool(
       'get_budget_statistics',
-      'Recupere les statistiques de budget avec moyennes par categorie sur une periode donnee',
+      'Recupere les statistiques de budget avec moyennes de depenses et revenus par categorie ' +
+        'sur une periode donnee. Le serveur deduit automatiquement les remboursements recus des ' +
+        'depenses (controlable via deductReimbursements). Les remboursements en attente ' +
+        '(PENDING/PARTIAL) peuvent aussi etre deduits via deductPendingReimbursements. ' +
+        'Les montants retournes sont donc des montants nets apres deductions.',
       {
         startDate: z.string().describe('Date de debut (ISO format YYYY-MM-DD)'),
         endDate: z.string().describe('Date de fin (ISO format YYYY-MM-DD)'),
+        deductReimbursements: z
+          .boolean()
+          .optional()
+          .describe(
+            'Deduire les remboursements recus des depenses (defaut: true)'
+          ),
+        deductPendingReimbursements: z
+          .boolean()
+          .optional()
+          .describe(
+            'Deduire les remboursements en attente (PENDING/PARTIAL) des depenses (defaut: false)'
+          ),
       },
       async params => {
-        const result = await this.budgetsService.getStatistics(userId, {
+        const statsFilters: {
+          startDate: string
+          endDate: string
+          deductReimbursements?: boolean
+          deductPendingReimbursements?: boolean
+        } = {
           startDate: params.startDate,
           endDate: params.endDate,
-        })
+        }
+        if (params.deductReimbursements !== undefined) {
+          statsFilters.deductReimbursements = params.deductReimbursements
+        }
+        if (params.deductPendingReimbursements !== undefined) {
+          statsFilters.deductPendingReimbursements =
+            params.deductPendingReimbursements
+        }
+        const result = await this.budgetsService.getStatistics(
+          userId,
+          statsFilters
+        )
         return {
           content: [
             {

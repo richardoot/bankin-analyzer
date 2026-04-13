@@ -400,12 +400,16 @@ export interface CategoryAverageDto {
   totalAmount: number
   transactionCount: number
   averagePerMonth: number
+  reimbursement?: number
+  pendingReimbursement?: number
   subcategories?: SubcategoryAverageDto[]
 }
 
 export interface BudgetStatisticsFiltersDto {
   startDate: string
   endDate: string
+  deductReimbursements?: boolean
+  deductPendingReimbursements?: boolean
 }
 
 export interface BudgetStatisticsDto {
@@ -416,6 +420,8 @@ export interface BudgetStatisticsDto {
   totalIncome: number
   averageMonthlyExpenses: number
   averageMonthlyIncome: number
+  totalReimbursements?: number
+  totalPendingReimbursements?: number
 }
 
 /**

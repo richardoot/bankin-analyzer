@@ -816,5 +816,242 @@ describe('BudgetsService', () => {
       expect(result.expensesByCategory[0].averagePerMonth).toBe(200)
       expect(result.expensesByCategory[0].transactionCount).toBe(10)
     })
+
+    it('should skip reimbursement deduction when deductReimbursements is false', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({
+          category_id: 'cat-expense',
+          category_name: 'Santé',
+          type: 'EXPENSE',
+          total_amount: 800,
+        }),
+        createRow({
+          category_id: 'cat-reimb',
+          category_name: 'Remboursement',
+          type: 'INCOME',
+          total_amount: 200,
+        }),
+      ])
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-expense',
+          incomeCategoryId: 'cat-reimb',
+          expenseCategory: { id: 'cat-expense', name: 'Santé' },
+          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
+        },
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        deductReimbursements: false,
+      })
+
+      // No deduction — gross expenses preserved
+      expect(result.expensesByCategory[0].totalAmount).toBe(800)
+      expect(result.totalExpenses).toBe(800)
+      // reimbursement field should not be set
+      expect(result.expensesByCategory[0].reimbursement).toBeUndefined()
+      // Reimbursement income is still excluded from incomeByCategory
+      expect(result.incomeByCategory).toHaveLength(0)
+    })
+
+    it('should expose reimbursement amount on each category when deducting', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({
+          category_id: 'cat-expense',
+          category_name: 'Santé',
+          type: 'EXPENSE',
+          total_amount: 1000,
+        }),
+        createRow({
+          category_id: 'cat-reimb',
+          category_name: 'Remboursement',
+          type: 'INCOME',
+          total_amount: 300,
+        }),
+      ])
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-expense',
+          incomeCategoryId: 'cat-reimb',
+          expenseCategory: { id: 'cat-expense', name: 'Santé' },
+          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
+        },
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+      })
+
+      expect(result.expensesByCategory[0].totalAmount).toBe(700)
+      expect(result.expensesByCategory[0].reimbursement).toBe(300)
+      expect(result.totalReimbursements).toBe(300)
+    })
+
+    it('should deduct pending reimbursements when deductPendingReimbursements is true', async () => {
+      // First call: aggregated transactions
+      // Second call: pending reimbursements
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-expense',
+            category_name: 'Santé',
+            type: 'EXPENSE',
+            total_amount: 1000,
+          }),
+        ])
+        .mockResolvedValueOnce([
+          { category_id: 'cat-reimb', pending_amount: 400 },
+        ])
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-expense',
+          incomeCategoryId: 'cat-reimb',
+          expenseCategory: { id: 'cat-expense', name: 'Santé' },
+          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
+        },
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        deductPendingReimbursements: true,
+      })
+
+      // Expense 1000, no received reimbursement, pending 400 → net 600
+      expect(result.expensesByCategory[0].totalAmount).toBe(600)
+      expect(result.expensesByCategory[0].pendingReimbursement).toBe(400)
+      expect(result.totalExpenses).toBe(600)
+      expect(result.totalPendingReimbursements).toBe(400)
+    })
+
+    it('should deduct both received and pending reimbursements', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-expense',
+            category_name: 'Santé',
+            type: 'EXPENSE',
+            total_amount: 1000,
+          }),
+          createRow({
+            category_id: 'cat-reimb',
+            category_name: 'Remboursement',
+            type: 'INCOME',
+            total_amount: 200,
+          }),
+        ])
+        .mockResolvedValueOnce([
+          { category_id: 'cat-reimb', pending_amount: 300 },
+        ])
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-expense',
+          incomeCategoryId: 'cat-reimb',
+          expenseCategory: { id: 'cat-expense', name: 'Santé' },
+          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
+        },
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        deductPendingReimbursements: true,
+      })
+
+      // Expense 1000, received 200, pending 300 → net 500
+      expect(result.expensesByCategory[0].totalAmount).toBe(500)
+      expect(result.expensesByCategory[0].reimbursement).toBe(200)
+      expect(result.expensesByCategory[0].pendingReimbursement).toBe(300)
+      expect(result.totalExpenses).toBe(500)
+      expect(result.totalReimbursements).toBe(200)
+      expect(result.totalPendingReimbursements).toBe(300)
+    })
+
+    it('should cap pending reimbursement deduction at remaining expense total', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-expense',
+            category_name: 'Santé',
+            type: 'EXPENSE',
+            total_amount: 100,
+          }),
+          createRow({
+            category_id: 'cat-reimb',
+            category_name: 'Remboursement',
+            type: 'INCOME',
+            total_amount: 80,
+          }),
+        ])
+        .mockResolvedValueOnce([
+          { category_id: 'cat-reimb', pending_amount: 50 },
+        ])
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-expense',
+          incomeCategoryId: 'cat-reimb',
+          expenseCategory: { id: 'cat-expense', name: 'Santé' },
+          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
+        },
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        deductPendingReimbursements: true,
+      })
+
+      // Expense 100, received 80 → remaining 20, pending 50 → capped at 20 → net 0
+      expect(result.expensesByCategory[0].totalAmount).toBe(0)
+      expect(result.totalExpenses).toBe(0)
+      // totalPendingReimbursements reflects what was actually deducted (20, not 50)
+      expect(result.totalPendingReimbursements).toBe(20)
+    })
+
+    it('should not run pending query when deductPendingReimbursements is not set', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({ total_amount: 500 }),
+      ])
+
+      await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+      })
+
+      // $queryRaw should be called only once (aggregated transactions)
+      expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(1)
+    })
+
+    it('should not include totalReimbursements/totalPendingReimbursements when zero', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({ total_amount: 500 }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+      })
+
+      expect(result.totalReimbursements).toBeUndefined()
+      expect(result.totalPendingReimbursements).toBeUndefined()
+    })
   })
 })

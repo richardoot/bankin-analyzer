@@ -35,6 +35,8 @@
   const sortOrder = ref<SortOrder>('amount-desc')
   const customStartDate = ref<string>('')
   const customEndDate = ref<string>('')
+  const deductReimbursements = ref(true)
+  const deductPendingReimbursements = ref(false)
   const statistics = ref<BudgetStatisticsDto | null>(null)
   const budgets = ref<BudgetDto[]>([])
   const budgetInputs = ref<Map<string, number>>(new Map())
@@ -325,6 +327,8 @@
         api.getBudgetStatistics({
           startDate: dateRange.value.startDate,
           endDate: dateRange.value.endDate,
+          deductReimbursements: deductReimbursements.value,
+          deductPendingReimbursements: deductPendingReimbursements.value,
         }),
         api.getBudgets(),
       ])
@@ -368,11 +372,20 @@
   }
 
   // Watch for period changes
-  watch([selectedPeriod, customStartDate, customEndDate], () => {
-    if (isCustomPeriodValid.value) {
-      fetchData()
+  watch(
+    [
+      selectedPeriod,
+      customStartDate,
+      customEndDate,
+      deductReimbursements,
+      deductPendingReimbursements,
+    ],
+    () => {
+      if (isCustomPeriodValid.value) {
+        fetchData()
+      }
     }
-  })
+  )
 
   onMounted(() => {
     // Set default custom dates (12 months by default)
@@ -512,6 +525,64 @@
         >
           {{ periodLabel }} ({{ statistics.periodMonths }} mois complets)
         </p>
+
+        <!-- Reimbursement toggles -->
+        <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="deductReimbursements"
+            class="group flex items-center gap-2.5 cursor-pointer select-none"
+            @click="deductReimbursements = !deductReimbursements"
+          >
+            <span
+              class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
+              :class="
+                deductReimbursements
+                  ? 'bg-emerald-500'
+                  : 'bg-gray-300 dark:bg-slate-600'
+              "
+            >
+              <span
+                class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
+                :class="
+                  deductReimbursements ? 'translate-x-4' : 'translate-x-0.5'
+                "
+              />
+            </span>
+            <span class="text-sm text-gray-700 dark:text-gray-300"
+              >Deduire les remboursements recus</span
+            >
+          </button>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="deductPendingReimbursements"
+            class="group flex items-center gap-2.5 cursor-pointer select-none"
+            @click="deductPendingReimbursements = !deductPendingReimbursements"
+          >
+            <span
+              class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
+              :class="
+                deductPendingReimbursements
+                  ? 'bg-emerald-500'
+                  : 'bg-gray-300 dark:bg-slate-600'
+              "
+            >
+              <span
+                class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
+                :class="
+                  deductPendingReimbursements
+                    ? 'translate-x-4'
+                    : 'translate-x-0.5'
+                "
+              />
+            </span>
+            <span class="text-sm text-gray-700 dark:text-gray-300"
+              >Deduire les remboursements en attente</span
+            >
+          </button>
+        </div>
       </div>
 
       <!-- Error state -->

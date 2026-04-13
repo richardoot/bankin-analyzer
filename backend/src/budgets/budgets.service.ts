@@ -20,6 +20,11 @@ interface AggregatedTransactionRow {
   total_amount: number
 }
 
+interface PendingReimbursementRow {
+  category_id: string
+  pending_amount: number
+}
+
 @Injectable()
 export class BudgetsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -111,12 +116,15 @@ export class BudgetsService {
   ): Promise<BudgetStatisticsResponseDto> {
     const startDate = new Date(filters.startDate)
     const endDate = new Date(filters.endDate)
+    const shouldDeductReimbursements = filters.deductReimbursements !== false
+    const shouldDeductPending = filters.deductPendingReimbursements === true
 
     // Calculate period in months
     const periodMonths = this.calculateMonthsDiff(startDate, endDate)
 
-    // Fetch aggregated transactions and category associations in parallel
-    const [rows, associations] = await Promise.all([
+    // Fetch aggregated transactions, category associations, and optionally
+    // pending reimbursements — all in parallel.
+    const [rows, associations, pendingRows] = await Promise.all([
       this.prisma.$queryRaw<AggregatedTransactionRow[]>(Prisma.sql`
         SELECT
           t.category_id,
@@ -148,6 +156,24 @@ export class BudgetsService {
           incomeCategory: true,
         },
       }),
+      shouldDeductPending
+        ? this.prisma.$queryRaw<PendingReimbursementRow[]>(Prisma.sql`
+            SELECT
+              rr.category_id,
+              SUM(
+                (rr.amount::numeric - rr.amount_received::numeric) / COALESCE(a.divisor, 1)
+              )::float AS pending_amount
+            FROM app.reimbursement_requests rr
+            JOIN app.transactions t ON t.id = rr.transaction_id
+            LEFT JOIN app.accounts a ON a.name = t.account AND a.user_id = t.user_id
+            WHERE rr.user_id = ${userId}
+              AND rr.status IN ('PENDING', 'PARTIAL')
+              AND t.date >= ${startDate}
+              AND t.date <= ${endDate}
+              AND COALESCE(a.is_excluded_from_budget, false) = false
+            GROUP BY rr.category_id
+          `)
+        : Promise.resolve([]),
     ])
 
     // Build reimbursement lookup maps
@@ -185,7 +211,7 @@ export class BudgetsService {
     let totalExpenses = 0
     let totalIncome = 0
 
-    // Track reimbursements by expense category
+    // Track received reimbursements by expense category
     const reimbursementsByExpenseCategory = new Map<string, number>()
 
     for (const row of rows) {
@@ -258,23 +284,71 @@ export class BudgetsService {
       }
     }
 
-    // Deduct reimbursements from expense categories and update totalExpenses
+    // Build pending reimbursements map (keyed by expense category)
+    const pendingByExpenseCategory = new Map<string, number>()
+    for (const row of pendingRows) {
+      const expenseCategoryId = incomeCategoryToExpenseCategory.get(
+        row.category_id
+      )
+      if (expenseCategoryId) {
+        const current = pendingByExpenseCategory.get(expenseCategoryId) ?? 0
+        pendingByExpenseCategory.set(
+          expenseCategoryId,
+          current + row.pending_amount
+        )
+      }
+    }
+
     // Store gross totals for proportional subcategory deduction
     const categoryGrossTotals = new Map<string, number>()
     for (const [categoryId, data] of expenseMap) {
       categoryGrossTotals.set(categoryId, data.total)
     }
 
-    for (const [
-      expenseCategoryId,
-      reimbursement,
-    ] of reimbursementsByExpenseCategory) {
-      const expenseData = expenseMap.get(expenseCategoryId)
-      if (expenseData) {
-        const deduction = Math.min(expenseData.total, reimbursement)
-        expenseData.total = Math.max(0, expenseData.total - reimbursement)
-        totalExpenses -= deduction
+    // Deduct received reimbursements from expense categories
+    let totalReimbursements = 0
+    if (shouldDeductReimbursements) {
+      for (const [
+        expenseCategoryId,
+        reimbursement,
+      ] of reimbursementsByExpenseCategory) {
+        const expenseData = expenseMap.get(expenseCategoryId)
+        if (expenseData) {
+          const deduction = Math.min(expenseData.total, reimbursement)
+          expenseData.total = Math.max(0, expenseData.total - reimbursement)
+          totalExpenses -= deduction
+          totalReimbursements += deduction
+        }
       }
+    }
+
+    // Deduct pending reimbursements from expense categories
+    let totalPendingReimbursements = 0
+    if (shouldDeductPending) {
+      for (const [
+        expenseCategoryId,
+        pendingAmount,
+      ] of pendingByExpenseCategory) {
+        const expenseData = expenseMap.get(expenseCategoryId)
+        if (expenseData) {
+          const deduction = Math.min(expenseData.total, pendingAmount)
+          expenseData.total = Math.max(0, expenseData.total - pendingAmount)
+          totalExpenses -= deduction
+          totalPendingReimbursements += deduction
+        }
+      }
+    }
+
+    // Total deduction per category (received + pending) for proportional subcategory split
+    const totalDeductionByCategory = new Map<string, number>()
+    for (const [catId] of expenseMap) {
+      const received = shouldDeductReimbursements
+        ? (reimbursementsByExpenseCategory.get(catId) ?? 0)
+        : 0
+      const pending = shouldDeductPending
+        ? (pendingByExpenseCategory.get(catId) ?? 0)
+        : 0
+      totalDeductionByCategory.set(catId, received + pending)
     }
 
     // Convert to response format with averages and subcategories
@@ -282,21 +356,17 @@ export class BudgetsService {
       expenseMap.values()
     )
       .map(e => {
-        // Get gross total and reimbursement for proportional distribution
         const grossTotal = categoryGrossTotals.get(e.categoryId) ?? e.total
-        const reimbursement =
-          reimbursementsByExpenseCategory.get(e.categoryId) ?? 0
+        const deduction = totalDeductionByCategory.get(e.categoryId) ?? 0
 
-        // Convert subcategories map to array with proportional reimbursement deduction
+        // Convert subcategories map to array with proportional deduction
         const subcategories: SubcategoryAverageDto[] = Array.from(
           e.subcategories.entries()
         )
           .map(([subcategory, data]) => {
-            // Calculate proportion of this subcategory relative to gross total
             const proportion = grossTotal > 0 ? data.total / grossTotal : 0
-            // Apply proportional reimbursement deduction
-            const proportionalReimbursement = reimbursement * proportion
-            const netTotal = Math.max(0, data.total - proportionalReimbursement)
+            const proportionalDeduction = deduction * proportion
+            const netTotal = Math.max(0, data.total - proportionalDeduction)
 
             return {
               subcategory,
@@ -315,6 +385,20 @@ export class BudgetsService {
           transactionCount: e.count,
           averagePerMonth: this.round(e.total / periodMonths),
         }
+
+        const receivedReimb = shouldDeductReimbursements
+          ? (reimbursementsByExpenseCategory.get(e.categoryId) ?? 0)
+          : 0
+        const pendingReimb = shouldDeductPending
+          ? (pendingByExpenseCategory.get(e.categoryId) ?? 0)
+          : 0
+        if (receivedReimb > 0) {
+          result.reimbursement = this.round(receivedReimb)
+        }
+        if (pendingReimb > 0) {
+          result.pendingReimbursement = this.round(pendingReimb)
+        }
+
         if (subcategories.length > 0) {
           result.subcategories = subcategories
         }
@@ -326,7 +410,6 @@ export class BudgetsService {
       incomeMap.values()
     )
       .map(i => {
-        // Convert subcategories map to array, sorted by amount descending
         const subcategories: SubcategoryAverageDto[] = Array.from(
           i.subcategories.entries()
         )
@@ -353,7 +436,7 @@ export class BudgetsService {
       })
       .sort((a, b) => b.totalAmount - a.totalAmount)
 
-    return {
+    const response: BudgetStatisticsResponseDto = {
       periodMonths,
       expensesByCategory,
       incomeByCategory,
@@ -362,6 +445,17 @@ export class BudgetsService {
       averageMonthlyExpenses: this.round(totalExpenses / periodMonths),
       averageMonthlyIncome: this.round(totalIncome / periodMonths),
     }
+
+    if (totalReimbursements > 0) {
+      response.totalReimbursements = this.round(totalReimbursements)
+    }
+    if (totalPendingReimbursements > 0) {
+      response.totalPendingReimbursements = this.round(
+        totalPendingReimbursements
+      )
+    }
+
+    return response
   }
 
   /**
