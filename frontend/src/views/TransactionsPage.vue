@@ -14,6 +14,9 @@
   import TransactionReimbursementModal from '@/components/transactions/TransactionReimbursementModal.vue'
   import BulkCategoryModal from '@/components/transactions/BulkCategoryModal.vue'
   import { formatCurrency } from '@/lib/formatters'
+  import { useToast } from '@/composables/useToast'
+
+  const toast = useToast()
 
   const personsStore = usePersonsStore()
   const accountsStore = useAccountsStore()
@@ -290,22 +293,36 @@
   }
 
   async function saveNote(tx: TransactionDto) {
-    if (editingNoteValue.value === (tx.note ?? '')) {
+    const newNote = editingNoteValue.value
+    if (newNote === (tx.note ?? '')) {
       cancelEditNote()
       return
     }
 
+    // Optimistic update
+    const index = transactions.value.findIndex(t => t.id === tx.id)
+    const previousNote = tx.note
+    if (index !== -1) {
+      transactions.value[index] = { ...tx, note: newNote || null }
+    }
+    cancelEditNote()
+
     try {
       const updated = await api.updateTransaction(tx.id, {
-        note: editingNoteValue.value || undefined,
+        note: newNote || undefined,
       })
-      const index = transactions.value.findIndex(t => t.id === tx.id)
       if (index !== -1) {
         transactions.value[index] = updated
       }
-      cancelEditNote()
-    } catch (err) {
-      console.error('Failed to update note:', err)
+    } catch {
+      // Rollback
+      if (index !== -1) {
+        transactions.value[index] = {
+          ...transactions.value[index],
+          note: previousNote,
+        }
+      }
+      toast.error('Echec de la mise a jour de la note')
     }
   }
 
@@ -335,34 +352,65 @@
       return
     }
 
+    // Optimistic update — resolve category name for immediate display
+    const index = transactions.value.findIndex(t => t.id === tx.id)
+    const previousTx = { ...tx }
+    if (index !== -1) {
+      const newCategory = categoryId
+        ? allCategories.value.find(c => c.id === categoryId)
+        : null
+      transactions.value[index] = {
+        ...tx,
+        categoryId: categoryId ?? tx.categoryId,
+        categoryName: newCategory?.name ?? tx.categoryName,
+        categoryIcon: newCategory?.icon ?? tx.categoryIcon,
+        subcategoryId: subcategoryId ?? null,
+      }
+    }
+    closeCategoryModal()
+
     try {
       const updated = await api.updateTransaction(tx.id, {
         categoryId: categoryId || undefined,
         subcategoryId,
       })
-      const index = transactions.value.findIndex(t => t.id === tx.id)
       if (index !== -1) {
         transactions.value[index] = updated
       }
-    } catch (err) {
-      console.error('Failed to update transaction:', err)
-    } finally {
-      closeCategoryModal()
+    } catch {
+      // Rollback
+      if (index !== -1) {
+        transactions.value[index] = previousTx
+      }
+      toast.error('Echec de la mise a jour de la categorie')
     }
   }
 
   // Toggle pointed status
   async function togglePointed(tx: TransactionDto) {
+    // Optimistic update
+    const index = transactions.value.findIndex(t => t.id === tx.id)
+    const previousPointed = tx.isPointed
+    if (index !== -1) {
+      transactions.value[index] = { ...tx, isPointed: !tx.isPointed }
+    }
+
     try {
       const updated = await api.updateTransaction(tx.id, {
-        isPointed: !tx.isPointed,
+        isPointed: !previousPointed,
       })
-      const index = transactions.value.findIndex(t => t.id === tx.id)
       if (index !== -1) {
         transactions.value[index] = updated
       }
-    } catch (err) {
-      console.error('Failed to toggle pointed:', err)
+    } catch {
+      // Rollback
+      if (index !== -1) {
+        transactions.value[index] = {
+          ...transactions.value[index],
+          isPointed: previousPointed,
+        }
+      }
+      toast.error('Echec de la mise a jour du pointage')
     }
   }
 
