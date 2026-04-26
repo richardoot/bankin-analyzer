@@ -1053,5 +1053,580 @@ describe('BudgetsService', () => {
       expect(result.totalReimbursements).toBeUndefined()
       expect(result.totalPendingReimbursements).toBeUndefined()
     })
+
+    it('should include monthlyAmounts when includeMonthlyBreakdown is true', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-1',
+            category_name: 'Alimentation',
+            type: 'EXPENSE',
+            total_amount: 300,
+          }),
+        ])
+        // monthly breakdown query
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-1',
+            type: 'EXPENSE',
+            year_month: '2024-01',
+            monthly_amount: 100,
+          },
+          {
+            category_id: 'cat-1',
+            type: 'EXPENSE',
+            year_month: '2024-02',
+            monthly_amount: 80,
+          },
+          {
+            category_id: 'cat-1',
+            type: 'EXPENSE',
+            year_month: '2024-03',
+            monthly_amount: 120,
+          },
+        ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+        includeMonthlyBreakdown: true,
+      })
+
+      expect(result.expensesByCategory[0].monthlyAmounts).toEqual([
+        100, 80, 120,
+      ])
+    })
+
+    it('should fill missing months with 0 in monthlyAmounts', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-1',
+            type: 'EXPENSE',
+            total_amount: 200,
+          }),
+        ])
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-1',
+            type: 'EXPENSE',
+            year_month: '2024-01',
+            monthly_amount: 200,
+          },
+          // February missing — should be 0
+          // March missing — should be 0
+        ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+        includeMonthlyBreakdown: true,
+      })
+
+      expect(result.expensesByCategory[0].monthlyAmounts).toEqual([200, 0, 0])
+    })
+
+    it('should deduct received reimbursements from monthlyAmounts per month', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-expense',
+            category_name: 'Sante',
+            type: 'EXPENSE',
+            total_amount: 600,
+          }),
+          createRow({
+            category_id: 'cat-reimb',
+            category_name: 'Remboursement',
+            type: 'INCOME',
+            total_amount: 150,
+          }),
+        ])
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            year_month: '2024-01',
+            monthly_amount: 200,
+          },
+          {
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            year_month: '2024-02',
+            monthly_amount: 200,
+          },
+          {
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            year_month: '2024-03',
+            monthly_amount: 200,
+          },
+          {
+            category_id: 'cat-reimb',
+            type: 'INCOME',
+            year_month: '2024-01',
+            monthly_amount: 50,
+          },
+          {
+            category_id: 'cat-reimb',
+            type: 'INCOME',
+            year_month: '2024-03',
+            monthly_amount: 100,
+          },
+        ])
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-expense',
+          incomeCategoryId: 'cat-reimb',
+          expenseCategory: { id: 'cat-expense', name: 'Sante' },
+          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
+        },
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+        includeMonthlyBreakdown: true,
+      })
+
+      // Jan: 200-50=150, Feb: 200-0=200, Mar: 200-100=100
+      expect(result.expensesByCategory[0].monthlyAmounts).toEqual([
+        150, 200, 100,
+      ])
+    })
+
+    it('should not deduct reimbursements from monthlyAmounts when deductReimbursements is false', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            total_amount: 400,
+          }),
+          createRow({
+            category_id: 'cat-reimb',
+            type: 'INCOME',
+            total_amount: 100,
+          }),
+        ])
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            year_month: '2024-01',
+            monthly_amount: 200,
+          },
+          {
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            year_month: '2024-02',
+            monthly_amount: 200,
+          },
+          {
+            category_id: 'cat-reimb',
+            type: 'INCOME',
+            year_month: '2024-01',
+            monthly_amount: 100,
+          },
+        ])
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-expense',
+          incomeCategoryId: 'cat-reimb',
+          expenseCategory: { id: 'cat-expense', name: 'Sante' },
+          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
+        },
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-02-29',
+        includeMonthlyBreakdown: true,
+        deductReimbursements: false,
+      })
+
+      // No deduction: Jan: 200, Feb: 200
+      expect(result.expensesByCategory[0].monthlyAmounts).toEqual([200, 200])
+    })
+
+    it('should deduct pending reimbursements from monthlyAmounts per month', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            total_amount: 500,
+          }),
+        ])
+        // pending query (total)
+        .mockResolvedValueOnce([
+          { category_id: 'cat-reimb', pending_amount: 150 },
+        ])
+        // monthly breakdown
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            year_month: '2024-01',
+            monthly_amount: 250,
+          },
+          {
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            year_month: '2024-02',
+            monthly_amount: 250,
+          },
+        ])
+        // monthly pending
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-reimb',
+            year_month: '2024-01',
+            pending_amount: 80,
+          },
+          {
+            category_id: 'cat-reimb',
+            year_month: '2024-02',
+            pending_amount: 70,
+          },
+        ])
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-expense',
+          incomeCategoryId: 'cat-reimb',
+          expenseCategory: { id: 'cat-expense', name: 'Sante' },
+          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
+        },
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-02-29',
+        deductPendingReimbursements: true,
+        includeMonthlyBreakdown: true,
+      })
+
+      // Jan: 250-80=170, Feb: 250-70=180
+      expect(result.expensesByCategory[0].monthlyAmounts).toEqual([170, 180])
+    })
+
+    it('should deduct both received and pending from monthlyAmounts', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            total_amount: 600,
+          }),
+          createRow({
+            category_id: 'cat-reimb',
+            type: 'INCOME',
+            total_amount: 100,
+          }),
+        ])
+        // pending total
+        .mockResolvedValueOnce([
+          { category_id: 'cat-reimb', pending_amount: 80 },
+        ])
+        // monthly breakdown
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            year_month: '2024-01',
+            monthly_amount: 300,
+          },
+          {
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            year_month: '2024-02',
+            monthly_amount: 300,
+          },
+          {
+            category_id: 'cat-reimb',
+            type: 'INCOME',
+            year_month: '2024-01',
+            monthly_amount: 60,
+          },
+          {
+            category_id: 'cat-reimb',
+            type: 'INCOME',
+            year_month: '2024-02',
+            monthly_amount: 40,
+          },
+        ])
+        // monthly pending
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-reimb',
+            year_month: '2024-01',
+            pending_amount: 30,
+          },
+          {
+            category_id: 'cat-reimb',
+            year_month: '2024-02',
+            pending_amount: 50,
+          },
+        ])
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-expense',
+          incomeCategoryId: 'cat-reimb',
+          expenseCategory: { id: 'cat-expense', name: 'Sante' },
+          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
+        },
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-02-29',
+        deductPendingReimbursements: true,
+        includeMonthlyBreakdown: true,
+      })
+
+      // Jan: 300 - 60 (received) - 30 (pending) = 210
+      // Feb: 300 - 40 (received) - 50 (pending) = 210
+      expect(result.expensesByCategory[0].monthlyAmounts).toEqual([210, 210])
+    })
+
+    it('should cap monthly deduction at 0 (never negative)', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            total_amount: 100,
+          }),
+          createRow({
+            category_id: 'cat-reimb',
+            type: 'INCOME',
+            total_amount: 200,
+          }),
+        ])
+        // monthly breakdown
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            year_month: '2024-01',
+            monthly_amount: 50,
+          },
+          {
+            category_id: 'cat-expense',
+            type: 'EXPENSE',
+            year_month: '2024-02',
+            monthly_amount: 50,
+          },
+          {
+            category_id: 'cat-reimb',
+            type: 'INCOME',
+            year_month: '2024-01',
+            monthly_amount: 120,
+          },
+          {
+            category_id: 'cat-reimb',
+            type: 'INCOME',
+            year_month: '2024-02',
+            monthly_amount: 80,
+          },
+        ])
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-expense',
+          incomeCategoryId: 'cat-reimb',
+          expenseCategory: { id: 'cat-expense', name: 'Sante' },
+          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
+        },
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-02-29',
+        includeMonthlyBreakdown: true,
+      })
+
+      // Jan: max(0, 50-120) = 0, Feb: max(0, 50-80) = 0
+      expect(result.expensesByCategory[0].monthlyAmounts).toEqual([0, 0])
+    })
+
+    it('should handle multiple expense categories with independent reimbursements in monthly', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-sante',
+            category_name: 'Sante',
+            type: 'EXPENSE',
+            total_amount: 400,
+          }),
+          createRow({
+            category_id: 'cat-transport',
+            category_name: 'Transport',
+            type: 'EXPENSE',
+            total_amount: 200,
+          }),
+          createRow({
+            category_id: 'cat-reimb-sante',
+            category_name: 'Remb Sante',
+            type: 'INCOME',
+            total_amount: 100,
+          }),
+          createRow({
+            category_id: 'cat-reimb-transport',
+            category_name: 'Remb Transport',
+            type: 'INCOME',
+            total_amount: 50,
+          }),
+        ])
+        // monthly breakdown
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-sante',
+            type: 'EXPENSE',
+            year_month: '2024-01',
+            monthly_amount: 200,
+          },
+          {
+            category_id: 'cat-sante',
+            type: 'EXPENSE',
+            year_month: '2024-02',
+            monthly_amount: 200,
+          },
+          {
+            category_id: 'cat-transport',
+            type: 'EXPENSE',
+            year_month: '2024-01',
+            monthly_amount: 100,
+          },
+          {
+            category_id: 'cat-transport',
+            type: 'EXPENSE',
+            year_month: '2024-02',
+            monthly_amount: 100,
+          },
+          {
+            category_id: 'cat-reimb-sante',
+            type: 'INCOME',
+            year_month: '2024-01',
+            monthly_amount: 80,
+          },
+          {
+            category_id: 'cat-reimb-sante',
+            type: 'INCOME',
+            year_month: '2024-02',
+            monthly_amount: 20,
+          },
+          {
+            category_id: 'cat-reimb-transport',
+            type: 'INCOME',
+            year_month: '2024-02',
+            monthly_amount: 50,
+          },
+        ])
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'a1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-sante',
+          incomeCategoryId: 'cat-reimb-sante',
+          expenseCategory: { id: 'cat-sante', name: 'Sante' },
+          incomeCategory: { id: 'cat-reimb-sante', name: 'Remb Sante' },
+        },
+        {
+          id: 'a2',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-transport',
+          incomeCategoryId: 'cat-reimb-transport',
+          expenseCategory: { id: 'cat-transport', name: 'Transport' },
+          incomeCategory: { id: 'cat-reimb-transport', name: 'Remb Transport' },
+        },
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-02-29',
+        includeMonthlyBreakdown: true,
+      })
+
+      const sante = result.expensesByCategory.find(
+        c => c.categoryName === 'Sante'
+      )
+      const transport = result.expensesByCategory.find(
+        c => c.categoryName === 'Transport'
+      )
+
+      // Sante: Jan 200-80=120, Feb 200-20=180
+      expect(sante?.monthlyAmounts).toEqual([120, 180])
+      // Transport: Jan 100-0=100, Feb 100-50=50
+      expect(transport?.monthlyAmounts).toEqual([100, 50])
+    })
+
+    it('should not run monthly queries when includeMonthlyBreakdown is false', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({ total_amount: 500 }),
+      ])
+
+      await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        deductPendingReimbursements: true,
+        includeMonthlyBreakdown: false,
+      })
+
+      // 1 = aggregated, 2 = pending total. No monthly queries.
+      expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(2)
+    })
+
+    it('should run 3 queries when monthly + pending both enabled', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([createRow({ total_amount: 100 })])
+        .mockResolvedValueOnce([]) // pending total
+        .mockResolvedValueOnce([]) // monthly breakdown
+        .mockResolvedValueOnce([]) // monthly pending
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([])
+
+      await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        deductPendingReimbursements: true,
+        includeMonthlyBreakdown: true,
+      })
+
+      // 4 $queryRaw calls: aggregated + pending total + monthly + monthly pending
+      expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(4)
+    })
+
+    it('should run 2 queries when monthly enabled without pending', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([createRow({ total_amount: 100 })])
+        .mockResolvedValueOnce([]) // monthly breakdown
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([])
+
+      await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        includeMonthlyBreakdown: true,
+      })
+
+      // 2 $queryRaw calls: aggregated + monthly. No pending queries.
+      expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(2)
+    })
   })
 })

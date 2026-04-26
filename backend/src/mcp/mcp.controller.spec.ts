@@ -294,6 +294,49 @@ describe('McpController', () => {
       )
       expect(result.content[0].text).toContain('"EXPENSE": 1200')
     })
+
+    it('forwards all optional flags to the budgets service', async () => {
+      mockBudgetsService.getStatistics.mockResolvedValue({ categories: [] })
+      const tools = await registerTools()
+
+      await tools.get('get_budget_statistics')!({
+        startDate: '2026-01-01',
+        endDate: '2026-12-31',
+        deductReimbursements: false,
+        deductPendingReimbursements: true,
+        includeMonthlyBreakdown: true,
+      })
+
+      expect(mockBudgetsService.getStatistics).toHaveBeenCalledWith(
+        mockUser.id,
+        {
+          startDate: '2026-01-01',
+          endDate: '2026-12-31',
+          deductReimbursements: false,
+          deductPendingReimbursements: true,
+          includeMonthlyBreakdown: true,
+        }
+      )
+    })
+
+    it('omits undefined optional flags from the filters object', async () => {
+      mockBudgetsService.getStatistics.mockResolvedValue({ categories: [] })
+      const tools = await registerTools()
+
+      await tools.get('get_budget_statistics')!({
+        startDate: '2026-06-01',
+        endDate: '2026-06-30',
+      })
+
+      const call = mockBudgetsService.getStatistics.mock.calls[0][1]
+      expect(call).toEqual({
+        startDate: '2026-06-01',
+        endDate: '2026-06-30',
+      })
+      expect('deductReimbursements' in call).toBe(false)
+      expect('deductPendingReimbursements' in call).toBe(false)
+      expect('includeMonthlyBreakdown' in call).toBe(false)
+    })
   })
 
   describe('get_dashboard_summary tool', () => {

@@ -25,6 +25,19 @@ interface PendingReimbursementRow {
   pending_amount: number
 }
 
+interface MonthlyBreakdownRow {
+  category_id: string
+  type: string
+  year_month: string
+  monthly_amount: number
+}
+
+interface MonthlyPendingRow {
+  category_id: string
+  year_month: string
+  pending_amount: number
+}
+
 @Injectable()
 export class BudgetsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -118,14 +131,16 @@ export class BudgetsService {
     const endDate = new Date(filters.endDate)
     const shouldDeductReimbursements = filters.deductReimbursements !== false
     const shouldDeductPending = filters.deductPendingReimbursements === true
+    const shouldIncludeMonthly = filters.includeMonthlyBreakdown === true
 
     // Calculate period in months
     const periodMonths = this.calculateMonthsDiff(startDate, endDate)
 
     // Fetch aggregated transactions, category associations, and optionally
-    // pending reimbursements — all in parallel.
-    const [rows, associations, pendingRows] = await Promise.all([
-      this.prisma.$queryRaw<AggregatedTransactionRow[]>(Prisma.sql`
+    // pending reimbursements + monthly breakdown — all in parallel.
+    const [rows, associations, pendingRows, monthlyRows, monthlyPendingRows] =
+      await Promise.all([
+        this.prisma.$queryRaw<AggregatedTransactionRow[]>(Prisma.sql`
         SELECT
           t.category_id,
           c.name AS category_name,
@@ -149,15 +164,15 @@ export class BudgetsService {
           AND COALESCE(a.is_excluded_from_budget, false) = false
         GROUP BY t.category_id, c.name, c.icon, t.type, COALESCE(t.subcategory, '')
       `),
-      this.prisma.categoryAssociation.findMany({
-        where: { userId },
-        include: {
-          expenseCategory: true,
-          incomeCategory: true,
-        },
-      }),
-      shouldDeductPending
-        ? this.prisma.$queryRaw<PendingReimbursementRow[]>(Prisma.sql`
+        this.prisma.categoryAssociation.findMany({
+          where: { userId },
+          include: {
+            expenseCategory: true,
+            incomeCategory: true,
+          },
+        }),
+        shouldDeductPending
+          ? this.prisma.$queryRaw<PendingReimbursementRow[]>(Prisma.sql`
             SELECT
               rr.category_id,
               SUM(
@@ -173,8 +188,51 @@ export class BudgetsService {
               AND COALESCE(a.is_excluded_from_budget, false) = false
             GROUP BY rr.category_id
           `)
-        : Promise.resolve([]),
-    ])
+          : Promise.resolve([]),
+        shouldIncludeMonthly
+          ? this.prisma.$queryRaw<MonthlyBreakdownRow[]>(Prisma.sql`
+            SELECT
+              t.category_id,
+              t.type::text AS type,
+              TO_CHAR(t.date, 'YYYY-MM') AS year_month,
+              SUM(
+                CASE WHEN t.type = 'EXPENSE'
+                  THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
+                  ELSE t.amount::numeric / COALESCE(a.divisor, 1)
+                END
+              )::float AS monthly_amount
+            FROM app.transactions t
+            JOIN app.categories c ON c.id = t.category_id
+            LEFT JOIN app.accounts a ON a.name = t.account AND a.user_id = t.user_id
+            WHERE t.user_id = ${userId}
+              AND t.date >= ${startDate}
+              AND t.date <= ${endDate}
+              AND t.category_id IS NOT NULL
+              AND COALESCE(a.is_excluded_from_budget, false) = false
+            GROUP BY t.category_id, t.type, TO_CHAR(t.date, 'YYYY-MM')
+            ORDER BY t.category_id, TO_CHAR(t.date, 'YYYY-MM')
+          `)
+          : Promise.resolve([]),
+        shouldIncludeMonthly && shouldDeductPending
+          ? this.prisma.$queryRaw<MonthlyPendingRow[]>(Prisma.sql`
+            SELECT
+              rr.category_id,
+              TO_CHAR(t.date, 'YYYY-MM') AS year_month,
+              SUM(
+                (rr.amount::numeric - rr.amount_received::numeric) / COALESCE(a.divisor, 1)
+              )::float AS pending_amount
+            FROM app.reimbursement_requests rr
+            JOIN app.transactions t ON t.id = rr.transaction_id
+            LEFT JOIN app.accounts a ON a.name = t.account AND a.user_id = t.user_id
+            WHERE rr.user_id = ${userId}
+              AND rr.status IN ('PENDING', 'PARTIAL')
+              AND t.date >= ${startDate}
+              AND t.date <= ${endDate}
+              AND COALESCE(a.is_excluded_from_budget, false) = false
+            GROUP BY rr.category_id, TO_CHAR(t.date, 'YYYY-MM')
+          `)
+          : Promise.resolve([]),
+      ])
 
     // Build reimbursement lookup maps
     const reimbursementCategoryIds = new Set(
@@ -299,6 +357,95 @@ export class BudgetsService {
       }
     }
 
+    // Build monthly breakdown maps (keyed by category_id → sorted monthly amounts)
+    // Deductions from reimbursements and pending are applied per-month to match the toggles.
+    const monthlyByCategory = new Map<string, number[]>()
+    if (shouldIncludeMonthly) {
+      // Generate all year-month keys in the period
+      const allMonths: string[] = []
+      const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1)
+      while (cursor <= endDate) {
+        const ym = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`
+        allMonths.push(ym)
+        cursor.setMonth(cursor.getMonth() + 1)
+      }
+
+      // Group monthly rows by type:category_id → month → amount
+      const rawMap = new Map<string, Map<string, number>>()
+      for (const row of monthlyRows) {
+        const key = `${row.type}:${row.category_id}`
+        if (!rawMap.has(key)) {
+          rawMap.set(key, new Map())
+        }
+        rawMap.get(key)!.set(row.year_month, row.monthly_amount)
+      }
+
+      // Build monthly reimbursement deductions per expense category per month
+      // reimbursementCategoryIds is the set of income category IDs that are reimbursement categories
+      // incomeCategoryToExpenseCategory maps income cat → expense cat
+      const monthlyReimbByExpenseCat = new Map<string, Map<string, number>>()
+      if (shouldDeductReimbursements) {
+        for (const [key, monthMap] of rawMap) {
+          if (!key.startsWith('INCOME:')) continue
+          const incomeCatId = key.split(':')[1] ?? key
+          if (!reimbursementCategoryIds.has(incomeCatId)) continue
+          const expCatId = incomeCategoryToExpenseCategory.get(incomeCatId)
+          if (!expCatId) continue
+          if (!monthlyReimbByExpenseCat.has(expCatId)) {
+            monthlyReimbByExpenseCat.set(expCatId, new Map())
+          }
+          const target = monthlyReimbByExpenseCat.get(expCatId)!
+          for (const [month, amount] of monthMap) {
+            target.set(month, (target.get(month) ?? 0) + amount)
+          }
+        }
+      }
+
+      // Build monthly pending deductions per expense category per month
+      const monthlyPendingByExpenseCat = new Map<string, Map<string, number>>()
+      if (shouldDeductPending) {
+        for (const row of monthlyPendingRows) {
+          const expCatId = incomeCategoryToExpenseCategory.get(row.category_id)
+          if (!expCatId) continue
+          if (!monthlyPendingByExpenseCat.has(expCatId)) {
+            monthlyPendingByExpenseCat.set(expCatId, new Map())
+          }
+          const target = monthlyPendingByExpenseCat.get(expCatId)!
+          target.set(
+            row.year_month,
+            (target.get(row.year_month) ?? 0) + row.pending_amount
+          )
+        }
+      }
+
+      // Build final expense monthly arrays with deductions applied
+      for (const [key, monthMap] of rawMap) {
+        if (!key.startsWith('EXPENSE:')) continue
+        const catId = key.split(':')[1] ?? key
+        const reimbMonths = monthlyReimbByExpenseCat.get(catId)
+        const pendingMonths = monthlyPendingByExpenseCat.get(catId)
+
+        const amounts = allMonths.map(m => {
+          let val = monthMap.get(m) ?? 0
+          if (reimbMonths) {
+            val = Math.max(0, val - (reimbMonths.get(m) ?? 0))
+          }
+          if (pendingMonths) {
+            val = Math.max(0, val - (pendingMonths.get(m) ?? 0))
+          }
+          return this.round(val)
+        })
+        monthlyByCategory.set(catId, amounts)
+      }
+
+      // Income monthly arrays (no deduction applied)
+      for (const [key, monthMap] of rawMap) {
+        if (!key.startsWith('INCOME:')) continue
+        const amounts = allMonths.map(m => this.round(monthMap.get(m) ?? 0))
+        monthlyByCategory.set(key, amounts)
+      }
+    }
+
     // Store gross totals for proportional subcategory deduction
     const categoryGrossTotals = new Map<string, number>()
     for (const [categoryId, data] of expenseMap) {
@@ -399,6 +546,13 @@ export class BudgetsService {
           result.pendingReimbursement = this.round(pendingReimb)
         }
 
+        if (shouldIncludeMonthly) {
+          const monthly = monthlyByCategory.get(e.categoryId)
+          if (monthly) {
+            result.monthlyAmounts = monthly
+          }
+        }
+
         if (subcategories.length > 0) {
           result.subcategories = subcategories
         }
@@ -428,6 +582,12 @@ export class BudgetsService {
           totalAmount: this.round(i.total),
           transactionCount: i.count,
           averagePerMonth: this.round(i.total / periodMonths),
+        }
+        if (shouldIncludeMonthly) {
+          const monthly = monthlyByCategory.get(`INCOME:${i.categoryId}`)
+          if (monthly) {
+            result.monthlyAmounts = monthly
+          }
         }
         if (subcategories.length > 0) {
           result.subcategories = subcategories

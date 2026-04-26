@@ -9,6 +9,7 @@
   import { useFiltersStore } from '@/stores/filters'
   import { formatCurrency } from '@/lib/formatters'
   import BudgetSavingsSummary from '@/components/budget/BudgetSavingsSummary.vue'
+  import SparklineChart from '@/components/budget/SparklineChart.vue'
 
   const filtersStore = useFiltersStore()
 
@@ -329,6 +330,7 @@
           endDate: dateRange.value.endDate,
           deductReimbursements: deductReimbursements.value,
           deductPendingReimbursements: deductPendingReimbursements.value,
+          includeMonthlyBreakdown: true,
         }),
         api.getBudgets(),
       ])
@@ -729,383 +731,340 @@
             </button>
           </div>
 
-          <!-- Desktop table -->
-          <div class="hidden sm:block overflow-x-auto">
-            <table class="w-full">
-              <thead>
-                <tr
-                  class="text-left text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-slate-700"
-                >
-                  <th class="pb-3 font-medium">Categorie</th>
-                  <th class="pb-3 font-medium text-right">Moyenne actuelle</th>
-                  <th class="pb-3 font-medium text-center">Budget cible</th>
-                  <th class="pb-3 font-medium text-center w-24">Utilisation</th>
-                  <th class="pb-3 font-medium text-right">Difference</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
-                <template
-                  v-for="cat in sortedExpenseCategories"
-                  :key="cat.categoryId"
-                >
-                  <tr>
-                    <td class="py-3">
-                      <div
-                        class="flex items-center text-gray-900 dark:text-gray-100"
-                      >
-                        <button
-                          v-if="hasSubcategories(cat)"
-                          type="button"
-                          class="mr-2 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                          @click="toggleCategoryExpanded(cat.categoryId)"
-                        >
-                          <svg
-                            class="h-4 w-4 transition-transform duration-200"
-                            :class="{
-                              'rotate-90': isCategoryExpanded(cat.categoryId),
-                            }"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M9 5l7 7-7 7"
-                            />
-                          </svg>
-                        </button>
-                        <span v-else class="w-5 mr-2"></span>
-                        {{ cat.categoryIcon ? cat.categoryIcon + ' ' : ''
-                        }}{{ cat.categoryName }}
-                        <span
-                          class="text-xs text-gray-400 dark:text-gray-500 ml-2"
-                        >
-                          ({{ cat.transactionCount }} tx)
-                        </span>
-                      </div>
-                      <!-- Progress bar -->
-                      <div
-                        v-if="getBudgetForCategory(cat.categoryId) > 0"
-                        class="w-full max-w-[200px] bg-gray-200 dark:bg-slate-700 rounded-full h-1.5 mt-2 ml-7"
-                      >
-                        <div
-                          class="h-1.5 rounded-full transition-all duration-300"
-                          :class="getProgressBarClass(cat)"
-                          :style="{
-                            width: `${Math.min(getUtilizationPercent(cat), 100)}%`,
-                          }"
-                        />
-                      </div>
-                    </td>
-                    <td
-                      class="py-3 text-right text-gray-700 dark:text-gray-300"
-                    >
-                      {{ formatCurrency(cat.averagePerMonth) }}
-                    </td>
-                    <td class="py-3">
-                      <div class="flex flex-col items-center gap-1">
-                        <div class="flex items-center gap-2">
-                          <input
-                            type="number"
-                            :value="getBudgetForCategory(cat.categoryId)"
-                            min="0"
-                            step="10"
-                            class="w-28 px-3 py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 text-right focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400"
-                            @input="
-                              e =>
-                                updateBudgetInput(
-                                  cat.categoryId,
-                                  (e.target as HTMLInputElement).value
-                                )
-                            "
-                          />
-                          <button
-                            type="button"
-                            class="p-1.5 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
-                            title="Utiliser la moyenne"
-                            @click="setBudgetFromAverage(cat)"
-                          >
-                            <svg
-                              class="h-4 w-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                              />
-                            </svg>
-                          </button>
-                        </div>
-                        <!-- Percentage adjustment buttons -->
-                        <div
-                          v-if="getBudgetForCategory(cat.categoryId) > 0"
-                          class="flex items-center gap-1"
-                        >
-                          <button
-                            v-for="adjust in [-10, -5, 5, 10]"
-                            :key="adjust"
-                            type="button"
-                            class="px-1.5 py-0.5 text-xs font-medium rounded border transition-colors"
-                            :class="
-                              adjust > 0
-                                ? 'border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
-                                : 'border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
-                            "
-                            @click="
-                              adjustBudgetByPercent(cat.categoryId, adjust)
-                            "
-                          >
-                            {{ adjust > 0 ? '+' : '' }}{{ adjust }}%
-                          </button>
-                        </div>
-                      </div>
-                    </td>
-                    <td class="py-3 text-center">
-                      <span
-                        v-if="getBudgetForCategory(cat.categoryId) > 0"
-                        class="text-xs font-medium px-2 py-1 rounded"
-                        :class="getUtilizationBadgeClass(cat)"
-                      >
-                        {{ Math.round(getUtilizationPercent(cat)) }}%
-                      </span>
-                      <span
-                        v-else
-                        class="text-xs text-gray-400 dark:text-gray-500"
-                        >-</span
-                      >
-                    </td>
-                    <td
-                      class="py-3 text-right font-medium"
-                      :class="
-                        getDifference(cat) >= 0
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : 'text-red-600 dark:text-red-400'
-                      "
-                    >
-                      {{ getDifference(cat) >= 0 ? '+' : ''
-                      }}{{ formatCurrency(getDifference(cat)) }}
-                    </td>
-                  </tr>
-                  <!-- Subcategory rows -->
-                  <template
-                    v-if="
-                      isCategoryExpanded(cat.categoryId) &&
-                      hasSubcategories(cat)
-                    "
-                  >
-                    <tr
-                      v-for="sub in cat.subcategories"
-                      :key="`${cat.categoryId}-${sub.subcategory}`"
-                      class="bg-gray-50 dark:bg-slate-800/50"
-                    >
-                      <td class="py-2 pl-10">
-                        <span class="text-sm text-gray-500 dark:text-gray-400">
-                          {{ sub.subcategory || 'Sans sous-categorie' }}
-                        </span>
-                        <span
-                          class="text-xs text-gray-400 dark:text-gray-500 ml-2"
-                        >
-                          ({{ sub.transactionCount }} tx)
-                        </span>
-                      </td>
-                      <td
-                        class="py-2 text-right text-sm text-gray-500 dark:text-gray-400"
-                      >
-                        {{ formatCurrency(sub.averagePerMonth) }}
-                      </td>
-                      <td colspan="3"></td>
-                    </tr>
-                  </template>
-                </template>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Mobile cards -->
-          <div class="sm:hidden space-y-4">
+          <!-- Category cards grid -->
+          <div
+            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3"
+          >
             <div
               v-for="cat in sortedExpenseCategories"
               :key="cat.categoryId"
-              class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4"
+              class="rounded-xl border transition-colors cursor-pointer"
+              :class="
+                isCategoryExpanded(cat.categoryId)
+                  ? 'border-indigo-500/60 dark:border-indigo-500/60 ring-1 ring-indigo-500/20 bg-white dark:bg-slate-900'
+                  : 'border-gray-200 dark:border-slate-800 hover:border-gray-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900'
+              "
+              @click="toggleCategoryExpanded(cat.categoryId)"
             >
-              <!-- Header with category name and utilization badge -->
-              <div class="flex items-center justify-between mb-3">
-                <div class="flex items-center gap-2">
-                  <button
-                    v-if="hasSubcategories(cat)"
-                    type="button"
-                    class="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    @click="toggleCategoryExpanded(cat.categoryId)"
+              <!-- ═══ MOBILE compact layout (< md) ═══ -->
+              <div class="block md:hidden px-3 py-2.5">
+                <!-- Line 1: icon + name + amount + badge -->
+                <div class="flex items-center gap-2 min-h-[28px]">
+                  <span class="text-base leading-none shrink-0">{{
+                    cat.categoryIcon || '📁'
+                  }}</span>
+                  <span
+                    class="text-[13px] font-medium text-gray-900 dark:text-gray-100 truncate"
                   >
-                    <svg
-                      class="h-4 w-4 transition-transform duration-200"
-                      :class="{
-                        'rotate-90': isCategoryExpanded(cat.categoryId),
-                      }"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </button>
-                  <span class="font-medium text-gray-900 dark:text-gray-100"
-                    >{{ cat.categoryIcon ? cat.categoryIcon + ' ' : ''
-                    }}{{ cat.categoryName }}</span
+                    {{ cat.categoryName }}
+                  </span>
+                  <span
+                    class="ml-auto text-sm font-semibold text-gray-900 dark:text-gray-100 shrink-0"
+                    style="font-variant-numeric: tabular-nums"
                   >
+                    {{ formatCurrency(cat.averagePerMonth) }}
+                  </span>
                   <span
                     v-if="getBudgetForCategory(cat.categoryId) > 0"
-                    class="text-xs font-medium px-1.5 py-0.5 rounded"
+                    class="text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0"
                     :class="getUtilizationBadgeClass(cat)"
                   >
                     {{ Math.round(getUtilizationPercent(cat)) }}%
                   </span>
                 </div>
-                <span class="text-xs text-gray-400 dark:text-gray-500"
-                  >({{ cat.transactionCount }} tx)</span
-                >
-              </div>
 
-              <!-- Progress bar -->
-              <div
-                v-if="getBudgetForCategory(cat.categoryId) > 0"
-                class="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 mb-3"
-              >
-                <div
-                  class="h-2 rounded-full transition-all duration-300"
-                  :class="getProgressBarClass(cat)"
-                  :style="{
-                    width: `${Math.min(getUtilizationPercent(cat), 100)}%`,
-                  }"
-                />
-              </div>
-
-              <!-- Average display -->
-              <div class="flex items-center justify-between mb-3">
-                <span class="text-sm text-gray-500 dark:text-gray-400"
-                  >Moyenne:</span
-                >
-                <span class="text-gray-700 dark:text-gray-300">{{
-                  formatCurrency(cat.averagePerMonth)
-                }}</span>
-              </div>
-
-              <!-- Budget input -->
-              <div class="flex items-center gap-2 mb-2">
-                <span class="text-sm text-gray-500 dark:text-gray-400 shrink-0"
-                  >Budget:</span
-                >
-                <input
-                  type="number"
-                  :value="getBudgetForCategory(cat.categoryId)"
-                  min="0"
-                  step="10"
-                  class="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-right min-h-[44px]"
-                  @input="
-                    e =>
-                      updateBudgetInput(
-                        cat.categoryId,
-                        (e.target as HTMLInputElement).value
-                      )
-                  "
-                />
-                <button
-                  type="button"
-                  class="p-2 min-h-[44px] min-w-[44px] text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg"
-                  title="Utiliser la moyenne"
-                  @click="setBudgetFromAverage(cat)"
-                >
-                  <svg
-                    class="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                <!-- Line 2: meta (truncated) + sparkline (fixed) -->
+                <div class="flex items-center gap-2 mt-1">
+                  <div
+                    class="flex-1 min-w-0 overflow-hidden text-[11px] text-gray-400 dark:text-gray-500 truncate"
+                    style="font-variant-numeric: tabular-nums"
                   >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-                    />
-                  </svg>
-                </button>
-              </div>
-
-              <!-- Percentage adjustment buttons -->
-              <div
-                v-if="getBudgetForCategory(cat.categoryId) > 0"
-                class="flex flex-wrap gap-1 mb-3"
-              >
-                <button
-                  v-for="adjust in [-10, -5, 5, 10]"
-                  :key="adjust"
-                  type="button"
-                  class="px-2.5 py-1.5 text-xs font-medium rounded min-h-[36px]"
-                  :class="
-                    adjust > 0
-                      ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700'
-                      : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-700'
-                  "
-                  @click="adjustBudgetByPercent(cat.categoryId, adjust)"
-                >
-                  {{ adjust > 0 ? '+' : '' }}{{ adjust }}%
-                </button>
-              </div>
-
-              <!-- Difference -->
-              <div
-                class="text-right pt-2 border-t border-gray-200 dark:border-slate-700"
-              >
-                <span
-                  class="text-sm font-medium"
-                  :class="
-                    getDifference(cat) >= 0
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-red-600 dark:text-red-400'
-                  "
-                >
-                  {{ getDifference(cat) >= 0 ? '+' : ''
-                  }}{{ formatCurrency(getDifference(cat)) }}
-                </span>
-              </div>
-
-              <!-- Subcategories section (mobile) -->
-              <div
-                v-if="
-                  isCategoryExpanded(cat.categoryId) && hasSubcategories(cat)
-                "
-                class="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700 space-y-2"
-              >
-                <div
-                  class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2"
-                >
-                  Sous-categories
+                    <span>{{ cat.transactionCount }} tx</span>
+                    <template v-if="getBudgetForCategory(cat.categoryId) > 0">
+                      <span class="text-gray-300 dark:text-gray-600">
+                        &middot;
+                      </span>
+                      <span
+                        >Bud.
+                        {{
+                          formatCurrency(getBudgetForCategory(cat.categoryId))
+                        }}</span
+                      >
+                      <span
+                        class="font-medium"
+                        :class="
+                          getDifference(cat) >= 0
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-red-500 dark:text-red-400'
+                        "
+                      >
+                        {{ ' ' }}({{ getDifference(cat) >= 0 ? '+' : ''
+                        }}{{ formatCurrency(getDifference(cat)) }})
+                      </span>
+                    </template>
+                    <template
+                      v-if="cat.reimbursement || cat.pendingReimbursement"
+                    >
+                      <span class="text-gray-300 dark:text-gray-600">
+                        &middot;
+                      </span>
+                      <span
+                        v-if="cat.reimbursement"
+                        class="text-emerald-600 dark:text-emerald-400"
+                        >-{{ formatCurrency(cat.reimbursement) }}</span
+                      >
+                      <span
+                        v-if="cat.reimbursement && cat.pendingReimbursement"
+                      >
+                      </span>
+                      <span
+                        v-if="cat.pendingReimbursement"
+                        class="text-amber-600 dark:text-amber-400"
+                        >~{{ formatCurrency(cat.pendingReimbursement) }}</span
+                      >
+                    </template>
+                  </div>
+                  <!-- Sparkline (fixed width, never compressed) -->
+                  <SparklineChart
+                    v-if="cat.monthlyAmounts && cat.monthlyAmounts.length >= 2"
+                    :data="cat.monthlyAmounts"
+                    :width="64"
+                    :height="22"
+                    :color="
+                      getBudgetForCategory(cat.categoryId) > 0 &&
+                      cat.averagePerMonth > getBudgetForCategory(cat.categoryId)
+                        ? '#f87171'
+                        : '#818cf8'
+                    "
+                    class="shrink-0"
+                  />
                 </div>
+              </div>
+
+              <!-- ═══ DESKTOP card layout (>= md) ═══ -->
+              <div class="hidden md:block p-4">
+                <!-- Row 1: Icon + Name + Badge -->
+                <div class="flex items-start justify-between gap-2 mb-2">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-xl leading-none shrink-0">{{
+                      cat.categoryIcon || '📁'
+                    }}</span>
+                    <div class="min-w-0">
+                      <div
+                        class="text-[13px] font-medium text-gray-900 dark:text-gray-100 leading-tight truncate"
+                      >
+                        {{ cat.categoryName }}
+                      </div>
+                      <div class="text-[11px] text-gray-400 dark:text-gray-500">
+                        {{ cat.transactionCount }} transactions
+                      </div>
+                    </div>
+                  </div>
+                  <span
+                    v-if="getBudgetForCategory(cat.categoryId) > 0"
+                    class="text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0"
+                    :class="getUtilizationBadgeClass(cat)"
+                  >
+                    {{ Math.round(getUtilizationPercent(cat)) }}%
+                  </span>
+                </div>
+
+                <!-- Row 2: Average amount + sparkline -->
+                <div class="flex items-end justify-between gap-2 mb-1">
+                  <div>
+                    <div
+                      class="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-0.5"
+                    >
+                      Moyenne / mois
+                    </div>
+                    <div
+                      class="text-xl font-semibold text-gray-900 dark:text-gray-100 leading-none"
+                      style="font-variant-numeric: tabular-nums"
+                    >
+                      {{ formatCurrency(cat.averagePerMonth) }}
+                    </div>
+                    <!-- Reimbursement indicators -->
+                    <div
+                      v-if="cat.reimbursement || cat.pendingReimbursement"
+                      class="mt-1"
+                    >
+                      <span
+                        v-if="cat.reimbursement"
+                        class="text-[10px] text-emerald-600 dark:text-emerald-400 mr-2"
+                        style="font-variant-numeric: tabular-nums"
+                      >
+                        -{{ formatCurrency(cat.reimbursement) }} remb.
+                      </span>
+                      <span
+                        v-if="cat.pendingReimbursement"
+                        class="text-[10px] text-amber-600 dark:text-amber-400"
+                        style="font-variant-numeric: tabular-nums"
+                      >
+                        -{{ formatCurrency(cat.pendingReimbursement) }} en att.
+                      </span>
+                    </div>
+                  </div>
+                  <!-- Sparkline chart -->
+                  <SparklineChart
+                    v-if="cat.monthlyAmounts && cat.monthlyAmounts.length >= 2"
+                    :data="cat.monthlyAmounts"
+                    :width="96"
+                    :height="32"
+                    :color="
+                      getBudgetForCategory(cat.categoryId) > 0 &&
+                      cat.averagePerMonth > getBudgetForCategory(cat.categoryId)
+                        ? '#f87171'
+                        : '#818cf8'
+                    "
+                  />
+                </div>
+
+                <!-- Row 3: Context line -->
                 <div
-                  v-for="sub in cat.subcategories"
-                  :key="`${cat.categoryId}-${sub.subcategory}-mobile`"
-                  class="flex justify-between items-center text-sm pl-2"
+                  class="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-gray-100 dark:border-slate-800"
                 >
-                  <span class="text-gray-600 dark:text-gray-400">
-                    {{ sub.subcategory || 'Sans sous-categorie' }}
-                    <span class="text-xs text-gray-400 dark:text-gray-500">
-                      ({{ sub.transactionCount }} tx)
+                  <span class="text-gray-400 dark:text-gray-500">
+                    {{ cat.transactionCount }} tx sur la periode
+                  </span>
+                  <div
+                    class="flex items-center gap-1.5"
+                    style="font-variant-numeric: tabular-nums"
+                  >
+                    <span class="text-gray-400 dark:text-gray-500">Budget</span>
+                    <span
+                      v-if="getBudgetForCategory(cat.categoryId) > 0"
+                      class="text-gray-600 dark:text-gray-300"
+                    >
+                      {{ formatCurrency(getBudgetForCategory(cat.categoryId)) }}
                     </span>
-                  </span>
-                  <span class="text-gray-500 dark:text-gray-400">
-                    {{ formatCurrency(sub.averagePerMonth) }}/mois
-                  </span>
+                    <span
+                      v-else
+                      class="text-gray-400 dark:text-gray-500 italic"
+                    >
+                      non defini
+                    </span>
+                    <span
+                      v-if="getBudgetForCategory(cat.categoryId) > 0"
+                      class="font-medium"
+                      :class="
+                        getDifference(cat) >= 0
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-red-500 dark:text-red-400'
+                      "
+                    >
+                      ({{ getDifference(cat) >= 0 ? '+' : ''
+                      }}{{ formatCurrency(getDifference(cat)) }})
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Expanded section (click to reveal) -->
+              <div
+                v-if="isCategoryExpanded(cat.categoryId)"
+                class="mx-3 md:mx-4 mb-3 md:mb-4 mt-3 pt-3 border-t border-gray-200 dark:border-slate-800"
+                @click.stop
+              >
+                <!-- Budget input -->
+                <div class="flex items-center gap-2 mb-2">
+                  <label
+                    class="text-[11px] text-gray-400 dark:text-gray-500 shrink-0"
+                    >Budget cible</label
+                  >
+                  <div class="relative flex-1">
+                    <input
+                      type="number"
+                      :value="getBudgetForCategory(cat.categoryId)"
+                      min="0"
+                      step="10"
+                      class="w-full pl-2 pr-6 py-1.5 border border-gray-300 dark:border-slate-700 rounded-md bg-gray-50 dark:bg-slate-950 text-right text-[13px] text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                      style="font-variant-numeric: tabular-nums"
+                      @input="
+                        e =>
+                          updateBudgetInput(
+                            cat.categoryId,
+                            (e.target as HTMLInputElement).value
+                          )
+                      "
+                    />
+                    <span
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 dark:text-gray-500"
+                      >€</span
+                    >
+                  </div>
+                </div>
+
+                <!-- Quick set buttons -->
+                <div class="flex items-center gap-1 mb-2">
+                  <button
+                    type="button"
+                    class="flex-1 px-2 py-1.5 text-[11px] font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/30 rounded-md transition-colors"
+                    title="Utiliser la moyenne comme budget"
+                    @click="setBudgetFromAverage(cat)"
+                  >
+                    ⌀ Moyenne
+                  </button>
+                </div>
+
+                <!-- Percentage adjustment -->
+                <div class="flex items-center gap-1">
+                  <button
+                    v-for="adjust in [-10, -5, 5, 10]"
+                    :key="adjust"
+                    type="button"
+                    class="flex-1 px-1 py-1 text-[11px] font-medium rounded border transition-colors"
+                    :class="
+                      adjust > 0
+                        ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 hover:bg-emerald-100 dark:hover:bg-emerald-500/20'
+                        : 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30 hover:bg-red-100 dark:hover:bg-red-500/20'
+                    "
+                    @click="adjustBudgetByPercent(cat.categoryId, adjust)"
+                  >
+                    {{ adjust > 0 ? '+' : '' }}{{ adjust }}%
+                  </button>
+                </div>
+
+                <!-- Auto-save indicator -->
+                <div
+                  v-if="saveSuccess"
+                  class="flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 mt-2"
+                >
+                  <span
+                    class="h-1 w-1 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse"
+                  ></span>
+                  <span>Sauvegarde automatique</span>
+                </div>
+
+                <!-- Subcategories -->
+                <div
+                  v-if="hasSubcategories(cat)"
+                  class="mt-3 pt-3 border-t border-gray-100 dark:border-slate-800 space-y-1.5"
+                >
+                  <div
+                    class="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 font-medium mb-1"
+                  >
+                    Sous-categories
+                  </div>
+                  <div
+                    v-for="sub in cat.subcategories"
+                    :key="`${cat.categoryId}-${sub.subcategory}`"
+                    class="flex justify-between items-center text-[12px]"
+                  >
+                    <span class="text-gray-600 dark:text-gray-400 truncate">
+                      {{ sub.subcategory || 'Sans sous-categorie' }}
+                      <span
+                        class="text-[10px] text-gray-400 dark:text-gray-500"
+                      >
+                        ({{ sub.transactionCount }})
+                      </span>
+                    </span>
+                    <span
+                      class="text-gray-500 dark:text-gray-400 shrink-0 ml-2"
+                      style="font-variant-numeric: tabular-nums"
+                    >
+                      {{ formatCurrency(sub.averagePerMonth) }}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

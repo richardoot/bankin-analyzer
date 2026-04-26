@@ -61,6 +61,9 @@ export class CategoryAverageDto {
   /** Amount deducted via pending/partial reimbursement requests not yet received */
   pendingReimbursement?: number
 
+  /** Monthly amounts over the period (chronological order). Only included when includeMonthlyBreakdown is true. */
+  monthlyAmounts?: number[]
+
   /** Breakdown by subcategory */
   @ApiProperty({ type: [SubcategoryAverageDto] })
   subcategories?: SubcategoryAverageDto[]
@@ -148,4 +151,16 @@ export class BudgetStatisticsFiltersDto {
   @IsBoolean()
   @Type(() => Boolean)
   deductPendingReimbursements?: boolean
+
+  /**
+   * Whether to include monthly amount breakdown per category.
+   * When true, each CategoryAverageDto includes a `monthlyAmounts` array
+   * with one value per month in the period (chronological order).
+   * @default false
+   */
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  includeMonthlyBreakdown?: boolean
 }

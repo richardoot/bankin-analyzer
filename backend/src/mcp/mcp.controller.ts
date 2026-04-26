@@ -140,6 +140,13 @@ export class McpController {
           .describe(
             'Deduire les remboursements en attente (PENDING/PARTIAL) des depenses (defaut: false)'
           ),
+        includeMonthlyBreakdown: z
+          .boolean()
+          .optional()
+          .describe(
+            'Inclure le detail des montants mois par mois dans monthlyAmounts pour chaque categorie, ' +
+              'utile pour analyser les tendances et la saisonnalite (defaut: false)'
+          ),
       },
       async params => {
         const statsFilters: {
@@ -147,6 +154,7 @@ export class McpController {
           endDate: string
           deductReimbursements?: boolean
           deductPendingReimbursements?: boolean
+          includeMonthlyBreakdown?: boolean
         } = {
           startDate: params.startDate,
           endDate: params.endDate,
@@ -157,6 +165,9 @@ export class McpController {
         if (params.deductPendingReimbursements !== undefined) {
           statsFilters.deductPendingReimbursements =
             params.deductPendingReimbursements
+        }
+        if (params.includeMonthlyBreakdown !== undefined) {
+          statsFilters.includeMonthlyBreakdown = params.includeMonthlyBreakdown
         }
         const result = await this.budgetsService.getStatistics(
           userId,
