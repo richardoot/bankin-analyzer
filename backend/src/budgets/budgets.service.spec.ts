@@ -1095,6 +1095,48 @@ describe('BudgetsService', () => {
       expect(result.expensesByCategory[0].monthlyAmounts).toEqual([
         100, 80, 120,
       ])
+      expect(result.monthLabels).toEqual(['2024-01', '2024-02', '2024-03'])
+    })
+
+    it('should not include monthLabels when includeMonthlyBreakdown is false', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({ total_amount: 500 }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+      })
+
+      expect(result.monthLabels).toBeUndefined()
+    })
+
+    it('should return monthLabels covering all months in range including gaps', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([createRow({ total_amount: 100 })])
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-1',
+            type: 'EXPENSE',
+            year_month: '2024-01',
+            monthly_amount: 100,
+          },
+        ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-06-30',
+        includeMonthlyBreakdown: true,
+      })
+
+      expect(result.monthLabels).toEqual([
+        '2024-01',
+        '2024-02',
+        '2024-03',
+        '2024-04',
+        '2024-05',
+        '2024-06',
+      ])
     })
 
     it('should fill missing months with 0 in monthlyAmounts', async () => {

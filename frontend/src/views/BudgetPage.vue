@@ -10,6 +10,7 @@
   import { formatCurrency } from '@/lib/formatters'
   import BudgetSavingsSummary from '@/components/budget/BudgetSavingsSummary.vue'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
+  import MonthlyExpensesChart from '@/components/budget/MonthlyExpensesChart.vue'
 
   const filtersStore = useFiltersStore()
 
@@ -217,6 +218,23 @@
     return Math.max(0, (currentSavings.value / targetSavings.value) * 100)
   })
 
+  // Computed: Monthly total expenses (sum of all visible categories per month index)
+  const monthlyTotalExpenses = computed(() => {
+    const cats = visibleExpenseCategories.value
+    if (cats.length === 0) return []
+    // Find the max monthlyAmounts length
+    const len = Math.max(...cats.map(c => c.monthlyAmounts?.length ?? 0))
+    if (len === 0) return []
+    const totals: number[] = new Array(len).fill(0)
+    for (const cat of cats) {
+      if (!cat.monthlyAmounts) continue
+      for (let i = 0; i < cat.monthlyAmounts.length; i++) {
+        totals[i] += cat.monthlyAmounts[i]
+      }
+    }
+    return totals.map(v => Math.round(v * 100) / 100)
+  })
+
   // Get budget for a category
   function getBudgetForCategory(categoryId: string): number {
     return budgetInputs.value.get(categoryId) ?? 0
@@ -234,15 +252,6 @@
     if (average === 0) return 0
     const budget = getBudgetForCategory(category.categoryId)
     return (budget / average) * 100
-  }
-
-  // Get progress bar class based on utilization (budget as % of average)
-  // < 100% = saving money (green), 100-110% = neutral (amber), > 110% = overspending (red)
-  function getProgressBarClass(category: CategoryAverageDto): string {
-    const percent = getUtilizationPercent(category)
-    if (percent > 110) return 'bg-red-500 dark:bg-red-400'
-    if (percent > 100) return 'bg-amber-500 dark:bg-amber-400'
-    return 'bg-emerald-500 dark:bg-emerald-400'
   }
 
   // Get utilization badge class
@@ -619,6 +628,28 @@
 
       <!-- Content -->
       <div v-else-if="statistics && !error">
+        <!-- Monthly expenses chart -->
+        <div
+          v-if="monthlyTotalExpenses.length >= 2 && statistics.monthLabels"
+          class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6 mb-6"
+        >
+          <h2
+            class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1"
+          >
+            Evolution des depenses mensuelles
+          </h2>
+          <p class="text-xs text-gray-400 dark:text-gray-500 mb-3">
+            {{ statistics.periodMonths }} mois — lignes de reference : revenus
+            moyens et budget total alloue
+          </p>
+          <MonthlyExpensesChart
+            :monthly-totals="monthlyTotalExpenses"
+            :month-labels="statistics.monthLabels"
+            :average-income="visibleAverageMonthlyIncome"
+            :total-budget="totalBudget"
+          />
+        </div>
+
         <!-- Expenses Section -->
         <div
           class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6 mb-6"

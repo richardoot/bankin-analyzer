@@ -424,6 +424,7 @@ export interface BudgetStatisticsDto {
   averageMonthlyIncome: number
   totalReimbursements?: number
   totalPendingReimbursements?: number
+  monthLabels?: string[]
 }
 
 /**

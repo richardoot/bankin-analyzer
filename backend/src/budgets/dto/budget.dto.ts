@@ -97,6 +97,9 @@ export class BudgetStatisticsResponseDto {
 
   /** Total pending reimbursements deducted from expenses */
   totalPendingReimbursements?: number
+
+  /** Month labels corresponding to monthlyAmounts indexes (e.g. ['2025-04', '2025-05', ...]). Only included when includeMonthlyBreakdown is true. */
+  monthLabels?: string[]
 }
 
 // Request DTOs

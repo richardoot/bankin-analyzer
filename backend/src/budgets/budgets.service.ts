@@ -360,9 +360,9 @@ export class BudgetsService {
     // Build monthly breakdown maps (keyed by category_id → sorted monthly amounts)
     // Deductions from reimbursements and pending are applied per-month to match the toggles.
     const monthlyByCategory = new Map<string, number[]>()
+    const allMonths: string[] = []
     if (shouldIncludeMonthly) {
       // Generate all year-month keys in the period
-      const allMonths: string[] = []
       const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1)
       while (cursor <= endDate) {
         const ym = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`
@@ -613,6 +613,9 @@ export class BudgetsService {
       response.totalPendingReimbursements = this.round(
         totalPendingReimbursements
       )
+    }
+    if (shouldIncludeMonthly && allMonths.length > 0) {
+      response.monthLabels = allMonths
     }
 
     return response
