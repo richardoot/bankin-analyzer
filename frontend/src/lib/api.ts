@@ -557,6 +557,22 @@ export const api = {
     return response.json() as Promise<CategoryDto[]>
   },
 
+  async createCategory(dto: {
+    name: string
+    type: 'EXPENSE' | 'INCOME'
+  }): Promise<CategoryDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/categories`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to create category')
+    }
+
+    return response.json() as Promise<CategoryDto>
+  },
+
   // Subcategories API
   async getSubcategoriesByCategory(
     categoryId: string
