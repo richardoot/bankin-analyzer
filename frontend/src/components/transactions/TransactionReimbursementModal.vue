@@ -1,8 +1,9 @@
 <script setup lang="ts">
-  import { ref } from 'vue'
+  import { ref, watch } from 'vue'
   import { api } from '@/lib/api'
   import type { TransactionDto, PersonDto, CategoryDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
+  import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
 
   const props = defineProps<{
     isOpen: boolean
@@ -19,6 +20,25 @@
     ]
   }>()
 
+  const categoryAssociationsStore = useCategoryAssociationsStore()
+
+  /**
+   * Returns the income category ID associated with the given expense category,
+   * but only if it's actually present in the available `incomeCategories` list
+   * (it may have been filtered out at the page level — e.g. globally hidden).
+   */
+  function getDefaultCategoryId(): string {
+    const expenseCategoryId = props.transaction?.categoryId
+    if (!expenseCategoryId) return ''
+    const association =
+      categoryAssociationsStore.getIncomeCategoryForExpense(expenseCategoryId)
+    if (!association) return ''
+    const isAvailable = props.incomeCategories.some(
+      c => c.id === association.incomeCategoryId
+    )
+    return isAvailable ? association.incomeCategoryId : ''
+  }
+
   const form = ref({
     personId: '',
     amount: 0,
@@ -32,7 +52,7 @@
     form.value = {
       personId: '',
       amount: props.remainingAmount,
-      categoryId: '',
+      categoryId: getDefaultCategoryId(),
       note: '',
     }
     customDivisor.value = 2
@@ -79,6 +99,17 @@
       year: 'numeric',
     })
   }
+
+  // Reset the form whenever the modal transitions from closed to open.
+  // This runs after Vue has propagated the latest `transaction` and
+  // `remainingAmount` props, so the default category lookup uses the
+  // freshly-selected transaction.
+  watch(
+    () => props.isOpen,
+    isOpen => {
+      if (isOpen) resetForm()
+    }
+  )
 
   defineExpose({ resetForm })
 </script>
