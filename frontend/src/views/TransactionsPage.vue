@@ -13,6 +13,7 @@
   import CategorySubcategoryModal from '@/components/CategorySubcategoryModal.vue'
   import TransactionReimbursementModal from '@/components/transactions/TransactionReimbursementModal.vue'
   import BulkCategoryModal from '@/components/transactions/BulkCategoryModal.vue'
+  import ReimbursementCategoryConfirmModal from '@/components/transactions/ReimbursementCategoryConfirmModal.vue'
   import { formatCurrency } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
 
@@ -131,6 +132,17 @@
   const showReimbursementModal = ref(false)
   const selectedTransaction = ref<TransactionDto | null>(null)
   const reimbursementModalRef = ref<{ resetForm: () => void } | null>(null)
+
+  // Modal state for reimbursement category confirmation after a transaction
+  // category change.
+  const showReimbursementCategoryConfirm = ref(false)
+  const reimbursementCategoryConfirmData = ref<{
+    transactionId: string
+    reimbursements: ReimbursementDto[]
+    newExpenseCategoryName: string
+    suggestedIncomeCategory: CategoryDto | null
+  } | null>(null)
+  const isUpdatingReimbursementCategories = ref(false)
 
   // Mobile: expanded reimbursements state
   const expandedReimbursementsTxId = ref<string | null>(null)
@@ -369,6 +381,8 @@
     }
     closeCategoryModal()
 
+    const previousCategoryId = previousTx.categoryId
+
     try {
       const updated = await api.updateTransaction(tx.id, {
         categoryId: categoryId || undefined,
@@ -377,12 +391,111 @@
       if (index !== -1) {
         transactions.value[index] = updated
       }
+
+      // If the category actually changed and the transaction has reimbursements,
+      // ask the user whether to update the reimbursements' category as well.
+      if (
+        categoryId &&
+        categoryId !== previousCategoryId &&
+        updated.type === 'EXPENSE'
+      ) {
+        const linkedReimbursements = getReimbursementsForTransaction(tx.id)
+        if (linkedReimbursements.length > 0) {
+          const association =
+            categoryAssociationsStore.getIncomeCategoryForExpense(categoryId)
+          const suggested = association
+            ? (allCategories.value.find(
+                c => c.id === association.incomeCategoryId
+              ) ?? null)
+            : null
+
+          reimbursementCategoryConfirmData.value = {
+            transactionId: tx.id,
+            reimbursements: [...linkedReimbursements],
+            newExpenseCategoryName:
+              updated.categoryName ?? 'la nouvelle categorie',
+            suggestedIncomeCategory: suggested,
+          }
+          showReimbursementCategoryConfirm.value = true
+        }
+      }
     } catch {
       // Rollback
       if (index !== -1) {
         transactions.value[index] = previousTx
       }
       toast.error('Echec de la mise a jour de la categorie')
+    }
+  }
+
+  function closeReimbursementCategoryConfirm(): void {
+    showReimbursementCategoryConfirm.value = false
+    reimbursementCategoryConfirmData.value = null
+  }
+
+  async function applyReimbursementCategoryUpdate(
+    newCategoryId: string | null
+  ): Promise<void> {
+    const data = reimbursementCategoryConfirmData.value
+    if (!data || !newCategoryId) {
+      closeReimbursementCategoryConfirm()
+      return
+    }
+
+    const toUpdate = data.reimbursements.filter(
+      r => r.categoryId !== newCategoryId
+    )
+    if (toUpdate.length === 0) {
+      closeReimbursementCategoryConfirm()
+      return
+    }
+
+    try {
+      isUpdatingReimbursementCategories.value = true
+      const updates = await Promise.all(
+        toUpdate.map(r =>
+          api.updateReimbursement(r.id, { categoryId: newCategoryId })
+        )
+      )
+      // Replace updated reimbursements in the list
+      const updatesById = new Map(updates.map(r => [r.id, r]))
+      reimbursements.value = reimbursements.value.map(
+        r => updatesById.get(r.id) ?? r
+      )
+      toast.success(
+        `${updates.length} remboursement${updates.length > 1 ? 's' : ''} mis a jour`
+      )
+    } catch {
+      toast.error('Echec de la mise a jour des remboursements')
+    } finally {
+      isUpdatingReimbursementCategories.value = false
+      closeReimbursementCategoryConfirm()
+    }
+  }
+
+  async function deleteReimbursementsFromConfirm(): Promise<void> {
+    const data = reimbursementCategoryConfirmData.value
+    if (!data || data.reimbursements.length === 0) {
+      closeReimbursementCategoryConfirm()
+      return
+    }
+
+    const idsToDelete = data.reimbursements.map(r => r.id)
+
+    try {
+      isUpdatingReimbursementCategories.value = true
+      await Promise.all(idsToDelete.map(id => api.deleteReimbursement(id)))
+      // Remove deleted reimbursements from the local list
+      const idSet = new Set(idsToDelete)
+      reimbursements.value = reimbursements.value.filter(r => !idSet.has(r.id))
+      toast.success(
+        `${idsToDelete.length} remboursement${idsToDelete.length > 1 ? 's' : ''} supprime${idsToDelete.length > 1 ? 's' : ''}`
+      )
+    } catch {
+      toast.error('Echec de la suppression des remboursements')
+    } finally {
+      isUpdatingReimbursementCategories.value = false
+      closeReimbursementCategoryConfirm()
     }
   }
 
@@ -1717,6 +1830,23 @@
       :current-subcategory-id="editingTransaction?.subcategoryId ?? null"
       @close="closeCategoryModal"
       @select="handleCategorySubcategorySelect"
+    />
+
+    <!-- Reimbursement category confirmation after a transaction category change -->
+    <ReimbursementCategoryConfirmModal
+      v-if="reimbursementCategoryConfirmData"
+      :is-open="showReimbursementCategoryConfirm"
+      :reimbursements="reimbursementCategoryConfirmData.reimbursements"
+      :new-expense-category-name="
+        reimbursementCategoryConfirmData.newExpenseCategoryName
+      "
+      :suggested-income-category="
+        reimbursementCategoryConfirmData.suggestedIncomeCategory
+      "
+      :is-updating="isUpdatingReimbursementCategories"
+      @update="applyReimbursementCategoryUpdate"
+      @keep="closeReimbursementCategoryConfirm"
+      @delete="deleteReimbursementsFromConfirm"
     />
   </div>
 </template>

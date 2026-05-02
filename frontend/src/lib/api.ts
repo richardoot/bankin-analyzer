@@ -820,6 +820,30 @@ export const api = {
     return response.json() as Promise<ReimbursementDto>
   },
 
+  async updateReimbursement(
+    id: string,
+    dto: {
+      personId?: string
+      amount?: number
+      categoryId?: string | null
+      note?: string
+    }
+  ): Promise<ReimbursementDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/reimbursements/${id}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(dto),
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to update reimbursement')
+    }
+
+    return response.json() as Promise<ReimbursementDto>
+  },
+
   async deleteReimbursement(id: string): Promise<void> {
     const response = await fetchWithAuth(
       `${API_BASE_URL}/reimbursements/${id}`,
