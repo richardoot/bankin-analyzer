@@ -139,6 +139,11 @@ describe('useDashboardData', () => {
       expect(api.getDashboardSummary).toHaveBeenCalledWith({
         hiddenExpenseCategories: [],
         hiddenIncomeCategories: [],
+        startDate: undefined,
+        endDate: undefined,
+        deductReimbursements: true,
+        deductPendingReimbursements: false,
+        includeCategoryBreakdown: true,
       })
       expect(isLoading.value).toBe(false)
       expect(error.value).toBeNull()

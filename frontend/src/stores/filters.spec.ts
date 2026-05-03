@@ -16,46 +16,30 @@ describe('useFiltersStore', () => {
     vi.mocked(localStorage.setItem).mockClear()
   })
 
-  it('should start with panel expanded', () => {
+  it('should start with panel collapsed on load', () => {
     const store = useFiltersStore()
-    expect(store.isPanelExpanded).toBe(true)
+    expect(store.isPanelExpanded).toBe(false)
   })
 
   it('should toggle panel expansion', () => {
     const store = useFiltersStore()
 
     store.togglePanelExpanded()
-    expect(store.isPanelExpanded).toBe(false)
-
-    store.togglePanelExpanded()
     expect(store.isPanelExpanded).toBe(true)
-  })
-
-  it('should persist panel state to localStorage', () => {
-    const store = useFiltersStore()
 
     store.togglePanelExpanded()
-
-    expect(localStorage.setItem).toHaveBeenCalledWith(
-      'bankin-analyzer-filters',
-      JSON.stringify({
-        hiddenExpenseCategories: [],
-        hiddenIncomeCategories: [],
-        globalHiddenExpenseCategories: [],
-        globalHiddenIncomeCategories: [],
-        isPanelExpanded: false,
-      })
-    )
+    expect(store.isPanelExpanded).toBe(false)
   })
 
-  it('should restore panel state from localStorage', () => {
+  it('should always start collapsed even when localStorage stored expanded=true', () => {
     vi.mocked(localStorage.getItem).mockReturnValue(
-      JSON.stringify({ isPanelExpanded: false })
+      JSON.stringify({ isPanelExpanded: true })
     )
 
     setActivePinia(createPinia())
     const store = useFiltersStore()
 
+    // The persisted panel state is intentionally ignored on load.
     expect(store.isPanelExpanded).toBe(false)
   })
 
@@ -110,9 +94,12 @@ describe('useFiltersStore', () => {
       JSON.stringify({
         hiddenExpenseCategories: ['Restaurant'],
         hiddenIncomeCategories: [],
+        timePeriod: 'all',
+        customStartDate: null,
+        customEndDate: null,
         globalHiddenExpenseCategories: [],
         globalHiddenIncomeCategories: [],
-        isPanelExpanded: true,
+        isPanelExpanded: false,
       })
     )
   })
@@ -235,6 +222,46 @@ describe('useFiltersStore', () => {
 
       expect(store.globalHiddenIncomeCategoriesSet.has('Salaire')).toBe(true)
       expect(store.globalHiddenIncomeCategoriesSet.has('Prime')).toBe(false)
+    })
+  })
+
+  describe('time period — custom range', () => {
+    it('should default to a 12-month range when switching to custom for the first time', () => {
+      const store = useFiltersStore()
+      expect(store.customStartDate).toBeNull()
+      expect(store.customEndDate).toBeNull()
+
+      store.setTimePeriod('custom')
+
+      expect(store.timePeriod).toBe('custom')
+      expect(store.customStartDate).toBeTruthy()
+      expect(store.customEndDate).toBeTruthy()
+    })
+
+    it('should return the custom range from getDateRangeFromPeriod', () => {
+      const store = useFiltersStore()
+      store.setTimePeriod('custom')
+      store.setCustomDateRange('2024-01-01', '2024-06-30')
+
+      const range = store.getDateRangeFromPeriod('custom')
+      expect(range.startDate).toBe('2024-01-01')
+      expect(range.endDate).toBe('2024-06-30')
+    })
+
+    it('should restore timePeriod and custom dates from localStorage', () => {
+      vi.mocked(localStorage.getItem).mockReturnValue(
+        JSON.stringify({
+          timePeriod: 'custom',
+          customStartDate: '2025-01-01',
+          customEndDate: '2025-03-31',
+        })
+      )
+      setActivePinia(createPinia())
+      const store = useFiltersStore()
+
+      expect(store.timePeriod).toBe('custom')
+      expect(store.customStartDate).toBe('2025-01-01')
+      expect(store.customEndDate).toBe('2025-03-31')
     })
   })
 })

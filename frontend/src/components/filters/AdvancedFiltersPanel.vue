@@ -61,67 +61,57 @@
 
 <template>
   <div
-    class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 mb-8 overflow-hidden"
+    class="bg-white dark:bg-slate-900 rounded-xl mb-6 overflow-hidden transition-shadow"
+    :class="
+      filtersStore.isPanelExpanded
+        ? 'shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700'
+        : 'border border-gray-200 dark:border-slate-700'
+    "
   >
     <!-- Header cliquable -->
     <button
-      class="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+      class="w-full flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors"
+      :class="filtersStore.isPanelExpanded ? 'px-5 py-3.5' : 'px-4 py-2.5'"
       @click="filtersStore.togglePanelExpanded()"
     >
-      <div class="flex items-center gap-3">
-        <div class="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-          <svg
-            class="w-5 h-5 text-indigo-600 dark:text-indigo-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
-            />
-          </svg>
-        </div>
-        <div class="text-left">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Filtres avancés
-          </h2>
-          <p
-            v-if="
-              !filtersStore.isPanelExpanded &&
-              filtersStore.activeFiltersCount > 0
-            "
-            class="text-sm text-indigo-600 dark:text-indigo-400"
-          >
-            {{ filtersStore.activeFiltersCount }} filtre{{
-              filtersStore.activeFiltersCount > 1 ? 's' : ''
-            }}
-            actif{{ filtersStore.activeFiltersCount > 1 ? 's' : '' }}
-          </p>
-        </div>
-      </div>
-
-      <div class="flex items-center gap-3">
-        <!-- Badge filtres actifs -->
+      <div class="flex items-center gap-2.5 min-w-0">
+        <svg
+          class="w-4 h-4 shrink-0 text-gray-500 dark:text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+          />
+        </svg>
+        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+          Filtres avancés
+        </span>
         <span
           v-if="filtersStore.activeFiltersCount > 0"
-          class="px-2.5 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-sm font-medium rounded-full"
+          class="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-xs font-medium rounded-full tabular-nums"
         >
-          {{ filtersStore.activeFiltersCount }}
+          {{ filtersStore.activeFiltersCount }} actif{{
+            filtersStore.activeFiltersCount > 1 ? 's' : ''
+          }}
         </span>
+      </div>
 
+      <div class="flex items-center gap-2">
         <!-- Bouton Enregistrer (visible si authentifié et modifications non sauvegardées) -->
         <button
           v-if="authStore.isAuthenticated && filtersStore.hasUnsavedChanges"
-          class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-150"
+          class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150"
           :class="
             filtersStore.isSyncing
               ? 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-wait'
               : saveSuccess
                 ? 'bg-green-500 text-white'
-                : 'bg-indigo-600 dark:bg-indigo-500 text-white hover:bg-indigo-700 dark:hover:bg-indigo-600 shadow-sm'
+                : 'bg-indigo-600 dark:bg-indigo-500 text-white hover:bg-indigo-700 dark:hover:bg-indigo-600'
           "
           :disabled="filtersStore.isSyncing"
           @click="handleSave"
@@ -129,7 +119,7 @@
           <!-- Icône loading -->
           <svg
             v-if="filtersStore.isSyncing"
-            class="w-4 h-4 animate-spin"
+            class="w-3.5 h-3.5 animate-spin"
             fill="none"
             viewBox="0 0 24 24"
           >
@@ -150,7 +140,7 @@
           <!-- Icône succès -->
           <svg
             v-else-if="saveSuccess"
-            class="w-4 h-4"
+            class="w-3.5 h-3.5"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -165,7 +155,7 @@
           <!-- Icône sauvegarde -->
           <svg
             v-else
-            class="w-4 h-4"
+            class="w-3.5 h-3.5"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -183,7 +173,7 @@
 
         <!-- Chevron -->
         <svg
-          class="w-5 h-5 text-gray-400 dark:text-gray-500 transition-transform duration-200"
+          class="w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200"
           :class="{ 'rotate-180': filtersStore.isPanelExpanded }"
           fill="none"
           stroke="currentColor"
@@ -209,7 +199,7 @@
       "
     >
       <div
-        class="px-6 pb-6 border-t border-gray-100 dark:border-slate-700 space-y-6"
+        class="px-5 pt-4 pb-5 border-t border-gray-100 dark:border-slate-700 space-y-5"
       >
         <!-- Section catégories de dépenses masquées -->
         <div>

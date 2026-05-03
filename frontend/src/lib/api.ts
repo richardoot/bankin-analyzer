@@ -344,10 +344,25 @@ export interface MonthlyDataDto {
   income: number
 }
 
+export interface SubcategoryDataDto {
+  subcategory: string
+  icon?: string | null
+  amount: number
+  transactionCount: number
+  averagePerMonth: number
+}
+
 export interface CategoryDataDto {
+  categoryId?: string
   category: string
   amount: number
   icon?: string | null
+  transactionCount?: number
+  averagePerMonth?: number
+  monthlyAmounts?: number[]
+  subcategories?: SubcategoryDataDto[]
+  reimbursement?: number
+  pendingReimbursement?: number
 }
 
 export interface DashboardFiltersDto {
@@ -355,6 +370,9 @@ export interface DashboardFiltersDto {
   hiddenIncomeCategories?: string[]
   startDate?: string
   endDate?: string
+  deductReimbursements?: boolean
+  deductPendingReimbursements?: boolean
+  includeCategoryBreakdown?: boolean
 }
 
 export interface DashboardSummaryDto {
@@ -366,6 +384,8 @@ export interface DashboardSummaryDto {
   allExpenseCategories: string[]
   allIncomeCategories: string[]
   availableAccounts: string[]
+  periodMonths?: number
+  monthLabels?: string[]
 }
 
 // Budget DTOs

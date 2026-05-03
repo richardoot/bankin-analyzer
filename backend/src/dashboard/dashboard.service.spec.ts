@@ -11,16 +11,22 @@ describe('DashboardService', () => {
   const createRow = (
     overrides: Partial<{
       month_key: string
+      category_id: string | null
       category_name: string
       category_icon: string | null
       type: string
+      subcategory: string
+      transaction_count: number
       total_amount: number
     }> = {}
   ) => ({
     month_key: overrides.month_key ?? '2024-01',
+    category_id: overrides.category_id ?? null,
     category_name: overrides.category_name ?? 'Alimentation',
     category_icon: overrides.category_icon ?? null,
     type: overrides.type ?? 'EXPENSE',
+    subcategory: overrides.subcategory ?? '',
+    transaction_count: overrides.transaction_count ?? 1,
     total_amount: overrides.total_amount ?? 100,
   })
 
@@ -1350,6 +1356,110 @@ describe('DashboardService', () => {
         'Freelance',
         'Prime',
         'Salaire',
+      ])
+    })
+  })
+
+  describe('includeCategoryBreakdown', () => {
+    it('should not include monthlyAmounts/subcategories by default', async () => {
+      setupMocks([createRow({ total_amount: 100 })])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.expensesByCategory[0]?.monthlyAmounts).toBeUndefined()
+      expect(result.expensesByCategory[0]?.subcategories).toBeUndefined()
+      expect(result.monthLabels).toBeUndefined()
+      expect(result.periodMonths).toBeUndefined()
+    })
+
+    it('should include per-category monthlyAmounts and subcategories when toggle is on', async () => {
+      setupMocks([
+        createRow({
+          month_key: '2024-01',
+          category_id: 'cat-1',
+          category_name: 'Alimentation',
+          type: 'EXPENSE',
+          subcategory: 'Courses',
+          transaction_count: 3,
+          total_amount: 200,
+        }),
+        createRow({
+          month_key: '2024-02',
+          category_id: 'cat-1',
+          category_name: 'Alimentation',
+          type: 'EXPENSE',
+          subcategory: 'Restaurant',
+          transaction_count: 2,
+          total_amount: 100,
+        }),
+        createRow({
+          month_key: '2024-02',
+          category_id: 'cat-1',
+          category_name: 'Alimentation',
+          type: 'EXPENSE',
+          subcategory: 'Courses',
+          transaction_count: 1,
+          total_amount: 50,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-02-29',
+        includeCategoryBreakdown: true,
+      })
+
+      expect(result.periodMonths).toBe(2)
+      expect(result.monthLabels).toEqual(['2024-01', '2024-02'])
+
+      const cat = result.expensesByCategory[0]
+      expect(cat?.categoryId).toBe('cat-1')
+      expect(cat?.amount).toBe(350)
+      expect(cat?.averagePerMonth).toBe(175)
+      expect(cat?.transactionCount).toBe(6)
+      expect(cat?.monthlyAmounts).toEqual([200, 150])
+      expect(cat?.subcategories).toEqual([
+        {
+          subcategory: 'Courses',
+          amount: 250,
+          transactionCount: 4,
+          averagePerMonth: 125,
+        },
+        {
+          subcategory: 'Restaurant',
+          amount: 100,
+          transactionCount: 2,
+          averagePerMonth: 50,
+        },
+      ])
+    })
+
+    it('should fill zero months between start and end dates', async () => {
+      setupMocks([
+        createRow({
+          month_key: '2024-03',
+          category_id: 'cat-1',
+          category_name: 'Alimentation',
+          type: 'EXPENSE',
+          subcategory: '',
+          total_amount: 90,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-04-30',
+        includeCategoryBreakdown: true,
+      })
+
+      expect(result.monthLabels).toEqual([
+        '2024-01',
+        '2024-02',
+        '2024-03',
+        '2024-04',
+      ])
+      expect(result.expensesByCategory[0]?.monthlyAmounts).toEqual([
+        0, 0, 90, 0,
       ])
     })
   })

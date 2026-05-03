@@ -51,6 +51,10 @@ export function useDashboardData() {
   const selectedCategory = ref<string | null>(null)
   const selectedIncomeCategory = ref<string | null>(null)
 
+  // Reimbursement toggles (mirror BudgetPage defaults)
+  const deductReimbursements = ref(true)
+  const deductPendingReimbursements = ref(false)
+
   // Transform backend data to component format
   const monthlyData = computed<MonthlyData[]>(
     () => summaryData.value?.monthlyData ?? []
@@ -69,6 +73,33 @@ export function useDashboardData() {
   const totalExpenses = computed(() => summaryData.value?.totalExpenses ?? 0)
   const totalIncome = computed(() => summaryData.value?.totalIncome ?? 0)
 
+  // Number of months in the period (used for averages)
+  const periodMonths = computed(() => monthlyData.value.length || 1)
+
+  const averageMonthlyExpenses = computed(
+    () => Math.round((totalExpenses.value / periodMonths.value) * 100) / 100
+  )
+  const averageMonthlyIncome = computed(
+    () => Math.round((totalIncome.value / periodMonths.value) * 100) / 100
+  )
+  const averageMonthlySavings = computed(
+    () =>
+      Math.round(
+        (averageMonthlyIncome.value - averageMonthlyExpenses.value) * 100
+      ) / 100
+  )
+
+  // Per-month series for sparklines
+  const expensesSparkline = computed(() =>
+    monthlyData.value.map(d => d.netExpenses)
+  )
+  const incomeSparkline = computed(() => monthlyData.value.map(d => d.income))
+  const savingsSparkline = computed(() =>
+    monthlyData.value.map(
+      d => Math.round((d.income - d.netExpenses) * 100) / 100
+    )
+  )
+
   const expensesByCategory = computed<ChartData>(() => {
     const data = summaryData.value?.expensesByCategory ?? []
     return {
@@ -84,6 +115,15 @@ export function useDashboardData() {
       values: data.map(d => d.amount),
     }
   })
+
+  // Detailed category breakdown (with monthlyAmounts, subcategories, etc.)
+  const expenseCategoriesDetailed = computed(
+    () => summaryData.value?.expensesByCategory ?? []
+  )
+  const incomeCategoriesDetailed = computed(
+    () => summaryData.value?.incomeByCategory ?? []
+  )
+  const monthLabels = computed(() => summaryData.value?.monthLabels ?? [])
 
   // All categories (for filter panel)
   const allExpenseCategories = computed<string[]>(
@@ -326,6 +366,9 @@ export function useDashboardData() {
           hiddenIncomeCategories: combinedHiddenIncomeCategories,
           startDate: startDate ?? undefined,
           endDate: endDate ?? undefined,
+          deductReimbursements: deductReimbursements.value,
+          deductPendingReimbursements: deductPendingReimbursements.value,
+          includeCategoryBreakdown: true,
         }),
         accountsStore.load(),
         categoryAssociationsStore.load(),
@@ -359,9 +402,20 @@ export function useDashboardData() {
       filtersStore.globalHiddenExpenseCategories,
       filtersStore.globalHiddenIncomeCategories,
       filtersStore.timePeriod,
+      filtersStore.customStartDate,
+      filtersStore.customEndDate,
+      deductReimbursements.value,
+      deductPendingReimbursements.value,
     ],
     () => {
       if (summaryData.value) {
+        // Skip refetch if 'custom' is selected but the range is incomplete
+        if (
+          filtersStore.timePeriod === 'custom' &&
+          (!filtersStore.customStartDate || !filtersStore.customEndDate)
+        ) {
+          return
+        }
         fetchData()
       }
     },
@@ -375,8 +429,18 @@ export function useDashboardData() {
     incomeByMonth,
     totalExpenses,
     totalIncome,
+    periodMonths,
+    averageMonthlyExpenses,
+    averageMonthlyIncome,
+    averageMonthlySavings,
+    expensesSparkline,
+    incomeSparkline,
+    savingsSparkline,
     expensesByCategory,
     incomeByCategory,
+    expenseCategoriesDetailed,
+    incomeCategoriesDetailed,
+    monthLabels,
     allExpenseCategories,
     allIncomeCategories,
     availableExpenseCategories,
@@ -387,6 +451,8 @@ export function useDashboardData() {
     filteredIncomeByMonth,
     setSelectedCategory,
     setSelectedIncomeCategory,
+    deductReimbursements,
+    deductPendingReimbursements,
     isLoading,
     isLoadingExpenseChart,
     isLoadingIncomeChart,

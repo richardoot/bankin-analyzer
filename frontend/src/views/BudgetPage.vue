@@ -246,12 +246,12 @@
     return category.averagePerMonth - budget
   }
 
-  // Get utilization percentage (budget as % of average)
+  // Get utilization percentage (actual spending as % of budget)
+  // < 100% = under budget, > 100% = over budget
   function getUtilizationPercent(category: CategoryAverageDto): number {
-    const average = category.averagePerMonth
-    if (average === 0) return 0
     const budget = getBudgetForCategory(category.categoryId)
-    return (budget / average) * 100
+    if (budget === 0) return 0
+    return (category.averagePerMonth / budget) * 100
   }
 
   // Get utilization badge class

@@ -179,7 +179,7 @@ describe('DashboardPage', () => {
     expect(wrapper.text()).toContain('Network error')
   })
 
-  it('should display total expenses and income', async () => {
+  it('should display monthly average KPI cards (expenses, income, savings)', async () => {
     vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
     const wrapper = mount(DashboardPage, {
@@ -190,8 +190,14 @@ describe('DashboardPage', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Total des dépenses')
-    expect(wrapper.text()).toContain('Total des revenus')
+    expect(wrapper.text()).toContain('Dépenses moyennes / mois')
+    expect(wrapper.text()).toContain('Revenus moyens / mois')
+    expect(wrapper.text()).toContain('Épargne moyenne / mois')
+    expect(wrapper.find('[data-testid="kpi-card-expenses"]').exists()).toBe(
+      true
+    )
+    expect(wrapper.find('[data-testid="kpi-card-income"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="kpi-card-savings"]').exists()).toBe(true)
   })
 
   it('should display chart sections', async () => {

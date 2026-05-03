@@ -243,8 +243,13 @@ export class McpController {
     >[0]
     const transport = new StreamableHTTPServerTransport(statelessOptions)
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await server.connect(transport as any)
+    // SDK declares onclose as required on the Transport interface, but the
+    // implementation marks it optional. Cast through unknown to bridge the
+    // exactOptionalPropertyTypes mismatch without losing type safety on the
+    // server.connect signature.
+    await server.connect(
+      transport as unknown as Parameters<typeof server.connect>[0]
+    )
 
     await transport.handleRequest(req, res, req.body as Record<string, unknown>)
 
@@ -273,8 +278,13 @@ export class McpController {
     >[0]
     const transport = new StreamableHTTPServerTransport(statelessOptions)
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await server.connect(transport as any)
+    // SDK declares onclose as required on the Transport interface, but the
+    // implementation marks it optional. Cast through unknown to bridge the
+    // exactOptionalPropertyTypes mismatch without losing type safety on the
+    // server.connect signature.
+    await server.connect(
+      transport as unknown as Parameters<typeof server.connect>[0]
+    )
 
     await transport.handleRequest(req, res)
 

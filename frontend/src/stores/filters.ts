@@ -4,18 +4,22 @@ import { api } from '@/lib/api'
 
 const STORAGE_KEY = 'bankin-analyzer-filters'
 
-export type TimePeriod = '3m' | '6m' | '1y' | 'all'
+export type TimePeriod = '3m' | '6m' | '1y' | 'all' | 'custom'
 
 export const useFiltersStore = defineStore('filters', () => {
   // === DASHBOARD FILTERS (localStorage only, NOT synced to DB) ===
   const hiddenExpenseCategories = ref<string[]>([])
   const hiddenIncomeCategories = ref<string[]>([])
   const timePeriod = ref<TimePeriod>('all')
+  // Custom range — only used when timePeriod === 'custom'
+  const customStartDate = ref<string | null>(null)
+  const customEndDate = ref<string | null>(null)
 
   // === GLOBAL SETTINGS (synced to DB) ===
   const globalHiddenExpenseCategories = ref<string[]>([])
   const globalHiddenIncomeCategories = ref<string[]>([])
-  const isPanelExpanded = ref(true)
+  // Always start collapsed on page load — the user can expand it on demand.
+  const isPanelExpanded = ref(false)
 
   // État de synchronisation (for global settings)
   const isSyncing = ref(false)
@@ -31,12 +35,18 @@ export const useFiltersStore = defineStore('filters', () => {
         // Dashboard filters (local only)
         hiddenExpenseCategories.value = data.hiddenExpenseCategories || []
         hiddenIncomeCategories.value = data.hiddenIncomeCategories || []
+        if (data.timePeriod) {
+          timePeriod.value = data.timePeriod as TimePeriod
+        }
+        customStartDate.value = data.customStartDate ?? null
+        customEndDate.value = data.customEndDate ?? null
         // Global settings (cached)
         globalHiddenExpenseCategories.value =
           data.globalHiddenExpenseCategories || []
         globalHiddenIncomeCategories.value =
           data.globalHiddenIncomeCategories || []
-        isPanelExpanded.value = data.isPanelExpanded ?? true
+        // isPanelExpanded is intentionally NOT restored — the panel always
+        // starts collapsed on each page load.
       } catch {
         // Ignore parsing errors
       }
@@ -51,6 +61,9 @@ export const useFiltersStore = defineStore('filters', () => {
         // Dashboard filters (local only)
         hiddenExpenseCategories: hiddenExpenseCategories.value,
         hiddenIncomeCategories: hiddenIncomeCategories.value,
+        timePeriod: timePeriod.value,
+        customStartDate: customStartDate.value,
+        customEndDate: customEndDate.value,
         // Global settings (cached)
         globalHiddenExpenseCategories: globalHiddenExpenseCategories.value,
         globalHiddenIncomeCategories: globalHiddenIncomeCategories.value,
@@ -115,7 +128,8 @@ export const useFiltersStore = defineStore('filters', () => {
       // Load global settings from backend
       globalHiddenExpenseCategories.value = prefs.globalHiddenExpenseCategories
       globalHiddenIncomeCategories.value = prefs.globalHiddenIncomeCategories
-      isPanelExpanded.value = prefs.isPanelExpanded
+      // isPanelExpanded is intentionally NOT restored — the panel always
+      // starts collapsed on each page load.
 
       // Dashboard filters stay local (from localStorage)
       const stored = localStorage.getItem(STORAGE_KEY)
@@ -140,10 +154,9 @@ export const useFiltersStore = defineStore('filters', () => {
     }
   }
 
-  // Toggle panel expansion
+  // Toggle panel expansion (ephemeral — not persisted)
   function togglePanelExpanded() {
     isPanelExpanded.value = !isPanelExpanded.value
-    markAsChanged()
   }
 
   // === DASHBOARD FILTERS (local only, NOT synced to DB) ===
@@ -229,6 +242,25 @@ export const useFiltersStore = defineStore('filters', () => {
   // Time period functions
   function setTimePeriod(period: TimePeriod) {
     timePeriod.value = period
+    // Initialize default custom dates the first time the user picks 'custom'
+    if (
+      period === 'custom' &&
+      (!customStartDate.value || !customEndDate.value)
+    ) {
+      const end = new Date()
+      const start = new Date()
+      start.setMonth(start.getMonth() - 11)
+      start.setDate(1)
+      customStartDate.value = start.toISOString().split('T')[0] ?? null
+      customEndDate.value = end.toISOString().split('T')[0] ?? null
+    }
+    saveToStorage()
+  }
+
+  function setCustomDateRange(start: string | null, end: string | null) {
+    customStartDate.value = start
+    customEndDate.value = end
+    saveToStorage()
   }
 
   function getDateRangeFromPeriod(period: TimePeriod): {
@@ -237,6 +269,13 @@ export const useFiltersStore = defineStore('filters', () => {
   } {
     if (period === 'all') {
       return { startDate: null, endDate: null }
+    }
+
+    if (period === 'custom') {
+      return {
+        startDate: customStartDate.value,
+        endDate: customEndDate.value,
+      }
     }
 
     const endDate = new Date()
@@ -288,7 +327,10 @@ export const useFiltersStore = defineStore('filters', () => {
     activeFiltersCount,
     // Time period
     timePeriod,
+    customStartDate,
+    customEndDate,
     setTimePeriod,
+    setCustomDateRange,
     getDateRangeFromPeriod,
     // Sync functions
     isSyncing,

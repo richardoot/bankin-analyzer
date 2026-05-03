@@ -28,22 +28,32 @@ describe('AdvancedFiltersPanel', () => {
     })
 
     const store = useFiltersStore()
-    expect(store.isPanelExpanded).toBe(true)
+    // Panel starts collapsed
+    expect(store.isPanelExpanded).toBe(false)
 
     // Click header button (first button)
     const headerButton = wrapper.findAll('button')[0]
     await headerButton.trigger('click')
 
+    expect(store.isPanelExpanded).toBe(true)
+
+    // Click again to collapse
+    await headerButton.trigger('click')
     expect(store.isPanelExpanded).toBe(false)
   })
 
-  it('should show chevron rotated when expanded', () => {
+  it('should show chevron rotated when expanded', async () => {
     const wrapper = mount(AdvancedFiltersPanel, {
       props: defaultProps,
     })
 
-    const chevron = wrapper.find('svg.rotate-180')
-    expect(chevron.exists()).toBe(true)
+    // Initially collapsed → chevron not rotated
+    expect(wrapper.find('svg.rotate-180').exists()).toBe(false)
+
+    // Expand the panel
+    await wrapper.findAll('button')[0]?.trigger('click')
+
+    expect(wrapper.find('svg.rotate-180').exists()).toBe(true)
   })
 
   it('should display expense categories section', () => {
@@ -134,10 +144,10 @@ describe('AdvancedFiltersPanel', () => {
       props: defaultProps,
     })
 
-    // Should show badge with count 2
+    // Badge shows count + plural suffix (e.g. "2 actifs")
     const badge = wrapper.find('.bg-indigo-100.text-indigo-700')
     expect(badge.exists()).toBe(true)
-    expect(badge.text()).toBe('2')
+    expect(badge.text()).toBe('2 actifs')
   })
 
   it('should display empty message when no expense categories', () => {

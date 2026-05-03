@@ -9,13 +9,84 @@
     values: number[]
   }
 
-  const props = defineProps<{
-    data: ChartData
-    title: string
-  }>()
+  const props = withDefaults(
+    defineProps<{
+      data: ChartData
+      title: string
+      /** Top N categories to display individually; the rest are merged into "Autres". 0 disables grouping. */
+      topN?: number
+    }>(),
+    {
+      topN: 7,
+    }
+  )
 
   const { isDark, strokeColor, donutNameColor, donutValueColor } =
     useChartTheme()
+
+  const PALETTE = [
+    '#f97316', // orange-500
+    '#8b5cf6', // violet-500
+    '#06b6d4', // cyan-500
+    '#eab308', // yellow-500
+    '#ec4899', // pink-500
+    '#14b8a6', // teal-500
+    '#6366f1', // indigo-500
+    '#f59e0b', // amber-500
+    '#a855f7', // purple-500
+    '#0ea5e9', // sky-500
+  ]
+  const OTHERS_COLOR_LIGHT = '#9ca3af' // gray-400
+  const OTHERS_COLOR_DARK = '#64748b' // slate-500
+
+  /**
+   * Build the displayed data: keep the top N categories by value
+   * and merge the remainder into a single "Autres" slice.
+   */
+  const processedData = computed<{
+    labels: string[]
+    values: number[]
+    othersCount: number
+  }>(() => {
+    const pairs = props.data.labels.map((label, i) => ({
+      label,
+      value: props.data.values[i] ?? 0,
+    }))
+    pairs.sort((a, b) => b.value - a.value)
+
+    const cap = props.topN > 0 ? props.topN : pairs.length
+    if (pairs.length <= cap) {
+      return {
+        labels: pairs.map(p => p.label),
+        values: pairs.map(p => p.value),
+        othersCount: 0,
+      }
+    }
+
+    const top = pairs.slice(0, cap)
+    const rest = pairs.slice(cap)
+    const othersValue = rest.reduce((sum, p) => sum + p.value, 0)
+    return {
+      labels: [...top.map(p => p.label), `Autres (${rest.length})`],
+      values: [...top.map(p => p.value), othersValue],
+      othersCount: rest.length,
+    }
+  })
+
+  const sliceColors = computed(() => {
+    const baseCount =
+      processedData.value.othersCount > 0
+        ? processedData.value.labels.length - 1
+        : processedData.value.labels.length
+    const colors = Array.from(
+      { length: baseCount },
+      (_, i) => PALETTE[i % PALETTE.length] ?? '#888'
+    )
+    if (processedData.value.othersCount > 0) {
+      colors.push(isDark.value ? OTHERS_COLOR_DARK : OTHERS_COLOR_LIGHT)
+    }
+    return colors
+  })
 
   const chartOptions = computed<ApexOptions>(() => ({
     chart: {
@@ -43,7 +114,7 @@
         },
       },
     },
-    labels: props.data.labels,
+    labels: processedData.value.labels,
     legend: {
       show: false,
     },
@@ -112,7 +183,7 @@
               fontWeight: 500,
               color: donutNameColor.value,
               formatter: () => {
-                const total = props.data.values.reduce(
+                const total = processedData.value.values.reduce(
                   (sum, val) => sum + val,
                   0
                 )
@@ -140,22 +211,11 @@
         },
       },
     },
-    colors: [
-      '#f97316', // orange-500
-      '#8b5cf6', // violet-500
-      '#06b6d4', // cyan-500
-      '#eab308', // yellow-500
-      '#ec4899', // pink-500
-      '#14b8a6', // teal-500
-      '#6366f1', // indigo-500
-      '#f59e0b', // amber-500
-      '#a855f7', // purple-500
-      '#0ea5e9', // sky-500
-    ],
+    colors: sliceColors.value,
     responsive: [],
   }))
 
-  const series = computed(() => props.data.values)
+  const series = computed(() => processedData.value.values)
 </script>
 
 <template>
