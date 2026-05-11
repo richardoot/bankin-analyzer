@@ -2,12 +2,10 @@ import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { Prisma } from '../generated/prisma'
 import type {
-  BudgetResponseDto,
   BudgetStatisticsResponseDto,
   BudgetStatisticsFiltersDto,
   CategoryAverageDto,
   SubcategoryAverageDto,
-  CreateBudgetDto,
 } from './dto'
 
 interface AggregatedTransactionRow {
@@ -43,82 +41,6 @@ export class BudgetsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Get all budgets for a user
-   */
-  async findAllByUser(userId: string): Promise<BudgetResponseDto[]> {
-    const budgets = await this.prisma.budget.findMany({
-      where: { userId },
-      include: { category: true },
-      orderBy: { category: { name: 'asc' } },
-    })
-
-    return budgets.map(b => ({
-      id: b.id,
-      categoryId: b.categoryId,
-      categoryName: b.category.name,
-      amount: Number(b.amount),
-      categoryIcon: b.category.icon ?? null,
-    }))
-  }
-
-  /**
-   * Upsert a single budget (create or update)
-   */
-  async upsert(
-    userId: string,
-    dto: CreateBudgetDto
-  ): Promise<BudgetResponseDto> {
-    const budget = await this.prisma.budget.upsert({
-      where: {
-        userId_categoryId: { userId, categoryId: dto.categoryId },
-      },
-      create: {
-        userId,
-        categoryId: dto.categoryId,
-        amount: dto.amount,
-      },
-      update: {
-        amount: dto.amount,
-      },
-      include: { category: true },
-    })
-
-    return {
-      id: budget.id,
-      categoryId: budget.categoryId,
-      categoryName: budget.category.name,
-      amount: Number(budget.amount),
-      categoryIcon: budget.category.icon ?? null,
-    }
-  }
-
-  /**
-   * Upsert multiple budgets at once
-   */
-  async upsertMany(
-    userId: string,
-    dtos: CreateBudgetDto[]
-  ): Promise<BudgetResponseDto[]> {
-    const results: BudgetResponseDto[] = []
-
-    for (const dto of dtos) {
-      const result = await this.upsert(userId, dto)
-      results.push(result)
-    }
-
-    return results
-  }
-
-  /**
-   * Delete a budget by category ID
-   */
-  async delete(userId: string, categoryId: string): Promise<void> {
-    await this.prisma.budget.deleteMany({
-      where: { userId, categoryId },
-    })
-  }
-
-  /**
    * Get statistics for budget planning:
    * - Average expenses by category
    * - Average income by category (excluding reimbursement income)
@@ -132,6 +54,7 @@ export class BudgetsService {
     const shouldDeductReimbursements = filters.deductReimbursements !== false
     const shouldDeductPending = filters.deductPendingReimbursements === true
     const shouldIncludeMonthly = filters.includeMonthlyBreakdown === true
+    const includeAllPending = filters.includeAllPendingReimbursements === true
 
     // Calculate period in months
     const periodMonths = this.calculateMonthsDiff(startDate, endDate)
@@ -183,8 +106,11 @@ export class BudgetsService {
             LEFT JOIN app.accounts a ON a.name = t.account AND a.user_id = t.user_id
             WHERE rr.user_id = ${userId}
               AND rr.status IN ('PENDING', 'PARTIAL')
-              AND t.date >= ${startDate}
-              AND t.date <= ${endDate}
+              ${
+                includeAllPending
+                  ? Prisma.empty
+                  : Prisma.sql`AND t.date >= ${startDate} AND t.date <= ${endDate}`
+              }
               AND COALESCE(a.is_excluded_from_budget, false) = false
             GROUP BY rr.category_id
           `)
@@ -226,8 +152,11 @@ export class BudgetsService {
             LEFT JOIN app.accounts a ON a.name = t.account AND a.user_id = t.user_id
             WHERE rr.user_id = ${userId}
               AND rr.status IN ('PENDING', 'PARTIAL')
-              AND t.date >= ${startDate}
-              AND t.date <= ${endDate}
+              ${
+                includeAllPending
+                  ? Prisma.empty
+                  : Prisma.sql`AND t.date >= ${startDate} AND t.date <= ${endDate}`
+              }
               AND COALESCE(a.is_excluded_from_budget, false) = false
             GROUP BY rr.category_id, TO_CHAR(t.date, 'YYYY-MM')
           `)

@@ -388,8 +388,8 @@ export interface DashboardSummaryDto {
   monthLabels?: string[]
 }
 
-// Budget DTOs
-export interface BudgetDto {
+// Budget plan DTOs
+export interface BudgetPlanEntryDto {
   id: string
   categoryId: string
   categoryName: string
@@ -397,13 +397,48 @@ export interface BudgetDto {
   amount: number
 }
 
-export interface CreateBudgetDto {
+export interface BudgetPlanDto {
+  id: string
+  name: string
+  /** ISO date YYYY-MM-DD, 1st of a month */
+  startDate: string
+  /** ISO date YYYY-MM-DD, last day of a month */
+  endDate: string
+  monthCount: number
+  totalAmount: number
+  entries: BudgetPlanEntryDto[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BudgetPlanSummaryDto {
+  id: string
+  name: string
+  startDate: string
+  endDate: string
+  monthCount: number
+  totalAmount: number
+  entryCount: number
+  createdAt: string
+}
+
+export interface CreateBudgetPlanEntryDto {
   categoryId: string
   amount: number
 }
 
-export interface UpsertBudgetsDto {
-  budgets: CreateBudgetDto[]
+export interface CreateBudgetPlanDto {
+  name: string
+  startDate: string
+  endDate: string
+  entries: CreateBudgetPlanEntryDto[]
+}
+
+export interface UpdateBudgetPlanDto {
+  name?: string
+  startDate?: string
+  endDate?: string
+  entries?: CreateBudgetPlanEntryDto[]
 }
 
 export interface SubcategoryAverageDto {
@@ -432,6 +467,13 @@ export interface BudgetStatisticsFiltersDto {
   deductReimbursements?: boolean
   deductPendingReimbursements?: boolean
   includeMonthlyBreakdown?: boolean
+  /**
+   * When true, all currently active pending reimbursement requests are
+   * deducted, regardless of when the linked expense was made. Useful for
+   * forward-looking budget planning where the stats window is in the past
+   * but the user wants every outstanding pending to be subtracted.
+   */
+  includeAllPendingReimbursements?: boolean
 }
 
 export interface BudgetStatisticsDto {
@@ -507,6 +549,24 @@ async function fetchWithAuth(
   }
 
   return response
+}
+
+/**
+ * Try to extract a NestJS error message from a non-OK response. Falls back
+ * to a generic message if the body is empty or not JSON.
+ */
+async function readErrorMessage(
+  response: Response,
+  fallbackAction: string
+): Promise<string> {
+  try {
+    const body = (await response.json()) as { message?: string | string[] }
+    if (Array.isArray(body.message)) return body.message.join(', ')
+    if (typeof body.message === 'string') return body.message
+  } catch {
+    // body wasn't JSON; ignore
+  }
+  return `Failed to ${fallbackAction}`
 }
 
 export const api = {
@@ -1090,40 +1150,69 @@ export const api = {
     return response.json() as Promise<CategorySuggestionDto[]>
   },
 
-  // Budgets API
-  async getBudgets(): Promise<BudgetDto[]> {
-    const response = await fetchWithAuth(`${API_BASE_URL}/budgets`)
-
+  // Budget plans API
+  async getBudgetPlans(): Promise<BudgetPlanSummaryDto[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/budget-plans`)
     if (!response.ok) {
-      throw new Error('Failed to fetch budgets')
+      throw new Error('Failed to fetch budget plans')
     }
-
-    return response.json() as Promise<BudgetDto[]>
+    return response.json() as Promise<BudgetPlanSummaryDto[]>
   },
 
-  async upsertBudgets(dto: UpsertBudgetsDto): Promise<BudgetDto[]> {
-    const response = await fetchWithAuth(`${API_BASE_URL}/budgets`, {
+  async getCurrentBudgetPlan(): Promise<BudgetPlanDto | null> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/budget-plans/current`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch current budget plan')
+    }
+    // The backend returns an empty body when no plan covers today (Express
+    // serializes `null` as Content-Length: 0, not the JSON string "null").
+    // Handle that case explicitly before attempting to parse.
+    const text = await response.text()
+    if (!text || text === 'null') return null
+    return JSON.parse(text) as BudgetPlanDto
+  },
+
+  async getBudgetPlan(id: string): Promise<BudgetPlanDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/budget-plans/${id}`)
+    if (!response.ok) {
+      throw new Error('Failed to fetch budget plan')
+    }
+    return response.json() as Promise<BudgetPlanDto>
+  },
+
+  async createBudgetPlan(dto: CreateBudgetPlanDto): Promise<BudgetPlanDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/budget-plans`, {
       method: 'POST',
       body: JSON.stringify(dto),
     })
-
     if (!response.ok) {
-      throw new Error('Failed to save budgets')
+      const message = await readErrorMessage(response, 'create budget plan')
+      throw new Error(message)
     }
-
-    return response.json() as Promise<BudgetDto[]>
+    return response.json() as Promise<BudgetPlanDto>
   },
 
-  async deleteBudget(categoryId: string): Promise<void> {
-    const response = await fetchWithAuth(
-      `${API_BASE_URL}/budgets/${categoryId}`,
-      {
-        method: 'DELETE',
-      }
-    )
-
+  async updateBudgetPlan(
+    id: string,
+    dto: UpdateBudgetPlanDto
+  ): Promise<BudgetPlanDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/budget-plans/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    })
     if (!response.ok) {
-      throw new Error('Failed to delete budget')
+      const message = await readErrorMessage(response, 'update budget plan')
+      throw new Error(message)
+    }
+    return response.json() as Promise<BudgetPlanDto>
+  },
+
+  async deleteBudgetPlan(id: string): Promise<void> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/budget-plans/${id}`, {
+      method: 'DELETE',
+    })
+    if (!response.ok) {
+      throw new Error('Failed to delete budget plan')
     }
   },
 

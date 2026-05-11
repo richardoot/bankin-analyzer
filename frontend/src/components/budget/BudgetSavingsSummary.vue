@@ -1,133 +1,309 @@
 <script setup lang="ts">
+  import { computed } from 'vue'
   import { formatCurrency } from '@/lib/formatters'
 
-  defineProps<{
-    currentSavings: number
-    targetSavings: number
-    potentialGain: number
-    savingsProgressPercent: number
+  const props = defineProps<{
+    /** Label describing the plan's date range, e.g. "Mai 2026" */
+    planLabel: string
+    /** Average monthly income projected for the plan */
+    planIncomeAvg: number
+    /** Total budget allocated by the user across all categories */
+    planBudgetTotal: number
+    /** Actual avg expenses on COMPLETE plan months. */
+    planActualExpenseAvg: number
+    /** Actual avg income on COMPLETE plan months. */
+    planActualIncomeAvg: number
+    /** Number of plan months fully elapsed. */
+    completePlanMonthsCount: number
+    /** True when every plan month is in the past — drives "Bilan du plan" wording. */
+    isPlanFinished: boolean
+
+    /** Optional comparison block. */
+    comparison: {
+      label: string
+      incomeAvg: number
+      expenseAvg: number
+    } | null
   }>()
+
+  // ── Planification: budget allocation vs historical reality ─────────────
+  // The "projected savings" in this context assumes the user's income stays
+  // similar to the comparison period — that is the only sensible reference
+  // before the plan has any real data. Using `planIncomeAvg` here would be
+  // wrong because future plan months have no income yet.
+  const comparisonSavings = computed(() =>
+    props.comparison
+      ? props.comparison.incomeAvg - props.comparison.expenseAvg
+      : 0
+  )
+  const planningProjectedSavings = computed(() =>
+    props.comparison ? props.comparison.incomeAvg - props.planBudgetTotal : 0
+  )
+  /** Plan − comparison: positive = plan more economical than the past. */
+  const planningDelta = computed(
+    () => planningProjectedSavings.value - comparisonSavings.value
+  )
+
+  // ── Suivi: actual reality vs the plan's allocation ─────────────────────
+  // Both sides use the *actual* income observed across complete plan months
+  // — that way "Écart d'épargne" simplifies to `budget − actualExpense`,
+  // which is what the user expects to see.
+  const followupProjectedSavings = computed(
+    () => props.planActualIncomeAvg - props.planBudgetTotal
+  )
+  const planActualSavings = computed(
+    () => props.planActualIncomeAvg - props.planActualExpenseAvg
+  )
+  /** Actual − projected: positive = saving more than budgeted. */
+  const trackingDelta = computed(
+    () => planActualSavings.value - followupProjectedSavings.value
+  )
+
+  /** Generic projected savings shown only in the minimal fallback block. */
+  const minimalProjectedSavings = computed(
+    () => props.planIncomeAvg - props.planBudgetTotal
+  )
+
+  const showFollowupBlock = computed(() => props.completePlanMonthsCount > 0)
+  const showPlanningBlock = computed(() => props.comparison !== null)
+
+  const followupTitle = computed(() =>
+    props.isPlanFinished ? 'Bilan du plan' : 'Suivi'
+  )
+  const followupHint = computed(() =>
+    props.isPlanFinished
+      ? `Plan terminé · ${props.completePlanMonthsCount} mois`
+      : `Plan en cours · ${props.completePlanMonthsCount} mois écoulé${props.completePlanMonthsCount > 1 ? 's' : ''}`
+  )
+
+  function colorClass(value: number): string {
+    if (value > 0) return 'text-emerald-600 dark:text-emerald-400'
+    if (value < 0) return 'text-red-600 dark:text-red-400'
+    return 'text-gray-500 dark:text-gray-400'
+  }
+
+  /** Returns the relative gap as a "+12 %" / "−8 %" label. */
+  function relative(value: number, reference: number): string {
+    if (!reference) return ''
+    const pct = (value / Math.abs(reference)) * 100
+    if (Math.abs(pct) < 1) return ''
+    const sign = pct > 0 ? '+' : ''
+    return `${sign}${Math.round(pct)} %`
+  }
 </script>
 
 <template>
-  <div
-    class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
-  >
-    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">
-      Resume Epargne
-    </h2>
-
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <!-- Current savings card -->
-      <div
-        class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 border-l-4 border-gray-400 dark:border-gray-600"
-      >
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">
-          Epargne actuelle
-        </p>
-        <p
-          class="text-2xl font-bold"
-          :class="
-            currentSavings >= 0
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : 'text-red-600 dark:text-red-400'
-          "
-        >
-          {{ formatCurrency(currentSavings) }}
-        </p>
-        <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
-          revenus - depenses
-        </p>
-      </div>
-
-      <!-- Target savings card -->
-      <div
-        class="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4 border-l-4 border-indigo-500"
-      >
-        <p class="text-sm text-indigo-600 dark:text-indigo-400 mb-1">
-          Epargne cible
-        </p>
-        <p class="text-2xl font-bold text-indigo-700 dark:text-indigo-300">
-          {{ formatCurrency(targetSavings) }}
-        </p>
-        <p class="text-xs text-indigo-400 dark:text-indigo-500 mt-1">
-          revenus - budget
-        </p>
-      </div>
-
-      <!-- Potential gain card -->
-      <div
-        class="rounded-lg p-4 border-l-4"
-        :class="
-          potentialGain >= 0
-            ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500'
-            : 'bg-red-50 dark:bg-red-900/20 border-red-500'
-        "
-      >
-        <p
-          class="text-sm mb-1"
-          :class="
-            potentialGain >= 0
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : 'text-red-600 dark:text-red-400'
-          "
-        >
-          Gain potentiel
-        </p>
-        <p
-          class="text-2xl font-bold"
-          :class="
-            potentialGain >= 0
-              ? 'text-emerald-700 dark:text-emerald-300'
-              : 'text-red-700 dark:text-red-300'
-          "
-        >
-          {{ potentialGain >= 0 ? '+' : '' }}{{ formatCurrency(potentialGain) }}
-        </p>
-        <p
-          class="text-xs mt-1"
-          :class="
-            potentialGain >= 0
-              ? 'text-emerald-400 dark:text-emerald-500'
-              : 'text-red-400 dark:text-red-500'
-          "
-        >
-          cible - actuelle
-        </p>
-      </div>
-    </div>
-
-    <!-- Progress bar toward target -->
-    <div
-      v-if="targetSavings > 0"
-      class="mt-6 pt-4 border-t border-gray-200 dark:border-slate-700"
+  <div class="space-y-4" data-testid="savings-summary">
+    <!-- ── Suivi (priorité visuelle quand des mois sont complétés) ── -->
+    <section
+      v-if="showFollowupBlock"
+      data-testid="summary-followup"
+      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-5"
     >
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-sm text-gray-600 dark:text-gray-400"
-          >Progression vers objectif</span
+      <header class="flex items-baseline justify-between gap-3 mb-4">
+        <div>
+          <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+            🎯 {{ followupTitle }}
+            <span
+              class="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400"
+            >
+              Suis-je dans les clous&nbsp;?
+            </span>
+          </h3>
+          <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+            {{ followupHint }} · {{ planLabel }}
+          </p>
+        </div>
+      </header>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+        <div class="flex flex-col gap-0.5">
+          <span
+            class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400"
+          >
+            Budget alloué
+          </span>
+          <span
+            class="text-lg font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums"
+          >
+            {{ formatCurrency(planBudgetTotal) }}
+          </span>
+          <span class="text-[11px] text-gray-400 dark:text-gray-500">
+            Épargne prévue
+            <span :class="colorClass(followupProjectedSavings)">
+              {{ formatCurrency(followupProjectedSavings) }}
+            </span>
+          </span>
+        </div>
+
+        <div class="flex flex-col gap-0.5">
+          <span
+            class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400"
+          >
+            Réel à date
+          </span>
+          <span
+            class="text-lg font-semibold text-red-600 dark:text-red-400 tabular-nums"
+          >
+            {{ formatCurrency(planActualExpenseAvg) }}
+          </span>
+          <span class="text-[11px] text-gray-400 dark:text-gray-500">
+            Épargne réelle
+            <span :class="colorClass(planActualSavings)">
+              {{ formatCurrency(planActualSavings) }}
+            </span>
+          </span>
+        </div>
+
+        <div
+          class="flex flex-col gap-0.5 sm:border-l sm:pl-4 border-gray-200 dark:border-slate-700"
         >
+          <span
+            class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400"
+          >
+            Écart d'épargne
+          </span>
+          <span
+            class="text-lg font-bold tabular-nums"
+            :class="colorClass(trackingDelta)"
+          >
+            {{ trackingDelta > 0 ? '+' : ''
+            }}{{ formatCurrency(trackingDelta) }}
+          </span>
+          <span class="text-[11px] text-gray-400 dark:text-gray-500">
+            <template v-if="trackingDelta > 0">
+              ✓ Tu épargnes plus que prévu
+            </template>
+            <template v-else-if="trackingDelta < 0">
+              ⚠ Dépassement par rapport au plan
+            </template>
+            <template v-else>Pile dans le budget</template>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Planification (toujours quand comparaison active) ── -->
+    <section
+      v-if="showPlanningBlock"
+      data-testid="summary-planning"
+      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-5"
+    >
+      <header class="flex items-baseline justify-between gap-3 mb-4">
+        <div>
+          <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+            📊 Planification
+            <span
+              class="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400"
+            >
+              Mon plan est-il réaliste&nbsp;?
+            </span>
+          </h3>
+          <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+            {{ comparison?.label }} → {{ planLabel }}
+          </p>
+        </div>
+      </header>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+        <div class="flex flex-col gap-0.5">
+          <span
+            class="text-[11px] uppercase tracking-wide text-indigo-600 dark:text-indigo-400"
+          >
+            Historique
+          </span>
+          <span
+            class="text-lg font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums"
+          >
+            {{ formatCurrency(comparison?.expenseAvg ?? 0) }}
+          </span>
+          <span class="text-[11px] text-gray-400 dark:text-gray-500">
+            Épargne moyenne
+            <span :class="colorClass(comparisonSavings)">
+              {{ formatCurrency(comparisonSavings) }}
+            </span>
+          </span>
+        </div>
+
+        <div class="flex flex-col gap-0.5">
+          <span
+            class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400"
+          >
+            Budget alloué
+          </span>
+          <span
+            class="text-lg font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums"
+          >
+            {{ formatCurrency(planBudgetTotal) }}
+          </span>
+          <span class="text-[11px] text-gray-400 dark:text-gray-500">
+            Épargne prévue
+            <span :class="colorClass(planningProjectedSavings)">
+              {{ formatCurrency(planningProjectedSavings) }}
+            </span>
+          </span>
+        </div>
+
+        <div
+          class="flex flex-col gap-0.5 sm:border-l sm:pl-4 border-gray-200 dark:border-slate-700"
+        >
+          <span
+            class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400"
+          >
+            Marge dégagée
+          </span>
+          <span
+            class="text-lg font-bold tabular-nums"
+            :class="colorClass(planningDelta)"
+          >
+            {{ planningDelta > 0 ? '+' : ''
+            }}{{ formatCurrency(planningDelta) }}
+            <span
+              v-if="relative(planningDelta, comparisonSavings)"
+              class="text-xs font-normal"
+            >
+              ({{ relative(planningDelta, comparisonSavings) }})
+            </span>
+          </span>
+          <span class="text-[11px] text-gray-400 dark:text-gray-500">
+            <template v-if="planningDelta > 0">
+              ✓ Plan plus économe que le passé
+            </template>
+            <template v-else-if="planningDelta < 0">
+              ⚠ Plan moins économe que le passé
+            </template>
+            <template v-else>À l'équilibre</template>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Fallback minimal: aucun bloc activé ── -->
+    <section
+      v-if="!showFollowupBlock && !showPlanningBlock"
+      data-testid="summary-plan-only"
+      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-5"
+    >
+      <header class="mb-3">
+        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+          Épargne projetée
+        </h3>
+        <p class="text-xs text-gray-400 dark:text-gray-500">
+          {{ planLabel }}
+        </p>
+      </header>
+      <div class="flex items-baseline gap-3">
         <span
-          class="text-sm font-medium"
-          :class="
-            savingsProgressPercent >= 100
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : 'text-indigo-600 dark:text-indigo-400'
-          "
+          class="text-2xl font-bold tabular-nums"
+          :class="colorClass(minimalProjectedSavings)"
         >
-          {{ Math.round(savingsProgressPercent) }}%
+          {{ formatCurrency(minimalProjectedSavings) }}
+        </span>
+        <span class="text-xs text-gray-500 dark:text-gray-400">
+          Revenus {{ formatCurrency(planIncomeAvg) }} − Budget
+          {{ formatCurrency(planBudgetTotal) }}
         </span>
       </div>
-      <div class="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-3">
-        <div
-          class="h-3 rounded-full transition-all duration-500"
-          :class="
-            savingsProgressPercent >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'
-          "
-          :style="{
-            width: `${Math.min(savingsProgressPercent, 100)}%`,
-          }"
-        />
-      </div>
-    </div>
+    </section>
   </div>
 </template>

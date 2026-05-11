@@ -25,7 +25,7 @@ model User {
   importHistories       ImportHistory[]
   settlements           Settlement[]
   categoryAssociations  CategoryAssociation[]
-  budgets               Budget[]
+  budgetPlans           BudgetPlan[]
 
   @@map("users")
   @@schema("app")
@@ -82,7 +82,7 @@ model Category {
   reimbursementRequests       ReimbursementRequest[]
   expenseCategoryAssociations CategoryAssociation[]  @relation("ExpenseCategory")
   incomeCategoryAssociations  CategoryAssociation[]  @relation("IncomeCategory")
-  budgets                     Budget[]
+  budgetPlanEntries           BudgetPlanEntry[]
 
   @@unique([userId, name, type])
   @@map("categories")
@@ -324,19 +324,41 @@ model CategoryAssociation {
   @@schema("app")
 }
 
-model Budget {
-  id         String   @id @default(uuid())
-  userId     String   @map("user_id")
-  categoryId String   @map("category_id")
-  amount     Decimal  @db.Decimal(12, 2)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+/// A budget plan: a named, time-bounded budget covering one or more
+/// categories. Plans for a single user must not overlap (enforced in service).
+/// Both startDate and endDate must align with month boundaries (the 1st of a
+/// month and the last day of a month) — also enforced in service.
+model BudgetPlan {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries BudgetPlanEntry[]
 
-  @@unique([userId, categoryId])
   @@index([userId])
-  @@map("budgets")
+  @@index([userId, startDate, endDate])
+  @@map("budget_plans")
+  @@schema("app")
+}
+
+/// One amount per category inside a budget plan.
+model BudgetPlanEntry {
+  id           String  @id @default(uuid())
+  budgetPlanId String  @map("budget_plan_id")
+  categoryId   String  @map("category_id")
+  amount       Decimal @db.Decimal(12, 2)
+
+  budgetPlan BudgetPlan @relation(fields: [budgetPlanId], references: [id], onDelete: Cascade)
+  category   Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetPlanId, categoryId])
+  @@index([budgetPlanId])
+  @@index([categoryId])
+  @@map("budget_plan_entries")
   @@schema("app")
 }

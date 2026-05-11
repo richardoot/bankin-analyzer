@@ -207,7 +207,8 @@ describe('MonthlyExpensesChart', () => {
   it('should display the legend with all items', () => {
     const wrapper = mount(MonthlyExpensesChart, { props: defaultProps })
 
-    expect(wrapper.text()).toContain('Depenses')
+    // Without a plan range the chart falls back to the original legend.
+    expect(wrapper.text()).toContain('Dépenses')
     expect(wrapper.text()).toContain('Mois en cours')
     expect(wrapper.text()).toContain('Revenus')
     expect(wrapper.text()).toContain('Budget')
@@ -227,5 +228,54 @@ describe('MonthlyExpensesChart', () => {
     })
 
     expect(wrapper.text()).not.toContain('Budget')
+  })
+
+  describe('plan range highlighting', () => {
+    function getColors(wrapper: ReturnType<typeof mount>): string[] {
+      const cmp = wrapper.findComponent({ name: 'VueApexCharts' })
+      return cmp.props('options').colors as string[]
+    }
+
+    it('uses red for months inside the plan range and gray for the comparison months', () => {
+      const wrapper = mount(MonthlyExpensesChart, {
+        props: {
+          ...defaultProps,
+          // 6 months: Nov 2025 → Apr 2026. Plan = Mar/Apr 2026.
+          planStartMonth: '2026-03',
+          planEndMonth: '2026-04',
+        },
+      })
+
+      const colors = getColors(wrapper)
+      // Comparison months (Nov, Dec, Jan, Feb)
+      expect(colors[0]).toBe('#9ca3af') // gray (light theme default)
+      expect(colors[3]).toBe('#9ca3af')
+      // Plan months — but the test mocks "today" as 2026-04 in beforeEach,
+      // so April keeps the amber "current month" highlight, March is red.
+      expect(colors[4]).toBe('#ef4444') // March: in plan, not current
+      expect(colors[5]).toBe('#f59e0b') // April: current month wins
+    })
+
+    it('shows the plan-range legend item only when the props are provided', () => {
+      const without = mount(MonthlyExpensesChart, { props: defaultProps })
+      expect(without.text()).not.toContain('Plan budgétaire')
+
+      const withPlan = mount(MonthlyExpensesChart, {
+        props: {
+          ...defaultProps,
+          planStartMonth: '2026-03',
+          planEndMonth: '2026-04',
+        },
+      })
+      expect(withPlan.text()).toContain('Plan budgétaire')
+      expect(withPlan.text()).toContain('Mois précédents')
+    })
+
+    it('falls back to the original gray-only coloring when no plan range is supplied', () => {
+      const wrapper = mount(MonthlyExpensesChart, { props: defaultProps })
+      const colors = getColors(wrapper)
+      // Only the current month differs; all others are gray.
+      expect(new Set(colors)).toEqual(new Set(['#9ca3af', '#f59e0b']))
+    })
   })
 })

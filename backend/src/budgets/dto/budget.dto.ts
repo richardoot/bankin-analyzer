@@ -166,4 +166,20 @@ export class BudgetStatisticsFiltersDto {
   @IsBoolean()
   @Type(() => Boolean)
   includeMonthlyBreakdown?: boolean
+
+  /**
+   * When true, deductPendingReimbursements considers ALL active pending
+   * reimbursement requests for the user (regardless of when the linked
+   * expense transaction was made). Useful for budget planning where the
+   * statistics window is in the past but pending reimbursements are
+   * "current" and should always be subtracted from a future budget plan.
+   *
+   * Has no effect unless deductPendingReimbursements is also true.
+   * @default false
+   */
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  includeAllPendingReimbursements?: boolean
 }

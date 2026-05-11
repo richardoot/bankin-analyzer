@@ -14,6 +14,16 @@
     averageIncome: number
     /** Total budget — shown as a reference line */
     totalBudget: number
+    /** First month covered by the budget plan (YYYY-MM). When set, months
+     *  inside the plan range are highlighted in a different color than the
+     *  comparison ("before") months. */
+    planStartMonth?: string
+    /** Last month covered by the budget plan (YYYY-MM). */
+    planEndMonth?: string
+    /** First month of the comparison range (YYYY-MM). Optional. */
+    comparisonStartMonth?: string
+    /** Last month of the comparison range (YYYY-MM). Optional. */
+    comparisonEndMonth?: string
   }>()
 
   const { isDark, labelColor, chartTheme } = useChartTheme()
@@ -52,17 +62,45 @@
     props.monthLabels.indexOf(currentYearMonth)
   )
 
-  // Bar colors: amber for current month, gray for others
-  const barColors = computed(() =>
-    props.monthLabels.map(
-      ym =>
-        ym === currentYearMonth
-          ? '#f59e0b' // amber-500
-          : isDark.value
-            ? '#64748b' // slate-500
-            : '#9ca3af' // gray-400
-    )
+  /** Whether the chart is annotated against a budget plan range. */
+  const hasPlanRange = computed(
+    () => !!props.planStartMonth && !!props.planEndMonth
   )
+  const hasComparisonRange = computed(
+    () => !!props.comparisonStartMonth && !!props.comparisonEndMonth
+  )
+
+  function isPlanMonth(ym: string): boolean {
+    if (!props.planStartMonth || !props.planEndMonth) return false
+    return ym >= props.planStartMonth && ym <= props.planEndMonth
+  }
+
+  function isComparisonMonth(ym: string): boolean {
+    if (!props.comparisonStartMonth || !props.comparisonEndMonth) return false
+    return ym >= props.comparisonStartMonth && ym <= props.comparisonEndMonth
+  }
+
+  // Bar colors:
+  //  - Current calendar month → amber (always wins, signals "where we are")
+  //  - Inside the plan range  → red (the months covered by the budget)
+  //  - Inside the comparison  → indigo (the reference period)
+  //  - Anywhere else (gap)    → gray
+  //  - No plan range provided → original behaviour (gray for everything,
+  //    amber accent on the current month)
+  const COMPARISON_LIGHT = '#9ca3af' // gray-400
+  const COMPARISON_DARK = '#64748b' // slate-500
+  const PLAN_COLOR = '#ef4444' // red-500
+  const COMP_COLOR = '#6366f1' // indigo-500
+  const CURRENT_COLOR = '#f59e0b' // amber-500
+
+  function colorForMonth(ym: string): string {
+    if (ym === currentYearMonth) return CURRENT_COLOR
+    if (hasPlanRange.value && isPlanMonth(ym)) return PLAN_COLOR
+    if (hasComparisonRange.value && isComparisonMonth(ym)) return COMP_COLOR
+    return isDark.value ? COMPARISON_DARK : COMPARISON_LIGHT
+  }
+
+  const barColors = computed(() => props.monthLabels.map(colorForMonth))
 
   // Annotations: horizontal lines for income and budget
   const yAnnotations = computed(() => {
@@ -154,12 +192,20 @@
       categories: displayLabels.value,
       labels: {
         style: {
-          colors: props.monthLabels.map(ym =>
-            ym === currentYearMonth ? '#f59e0b' : labelColor.value
-          ),
+          colors: props.monthLabels.map(ym => {
+            if (ym === currentYearMonth) return CURRENT_COLOR
+            if (hasPlanRange.value && isPlanMonth(ym)) return PLAN_COLOR
+            if (hasComparisonRange.value && isComparisonMonth(ym))
+              return COMP_COLOR
+            return labelColor.value
+          }),
           fontSize: '11px',
           fontWeight: props.monthLabels.map(ym =>
-            ym === currentYearMonth ? '700' : '400'
+            ym === currentYearMonth ||
+            (hasPlanRange.value && isPlanMonth(ym)) ||
+            (hasComparisonRange.value && isComparisonMonth(ym))
+              ? '700'
+              : '400'
           ),
         },
       },
@@ -195,6 +241,8 @@
         const val = props.monthlyTotals[dataPointIndex] ?? 0
         const ym = props.monthLabels[dataPointIndex] ?? ''
         const isCurrent = ym === currentYearMonth
+        const isPlan = hasPlanRange.value && isPlanMonth(ym)
+        const isComp = hasComparisonRange.value && isComparisonMonth(ym)
 
         // Full month name
         const fullMonths = [
@@ -224,6 +272,12 @@
         html += `<div style="font-weight:600;margin-bottom:2px">${fullLabel}`
         if (isCurrent)
           html += ` <span style="color:#f59e0b;font-weight:400">(en cours)</span>`
+        else if (isPlan)
+          html += ` <span style="color:#ef4444;font-weight:400">(plan)</span>`
+        else if (isComp)
+          html += ` <span style="color:#6366f1;font-weight:400">(comparaison)</span>`
+        else if (hasPlanRange.value && hasComparisonRange.value)
+          html += ` <span style="opacity:0.5;font-weight:400">(intermédiaire)</span>`
         html += `</div>`
         html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">Depenses</span><strong>${formatCurrency(val)}</strong></div>`
         if (diffBudget !== null) {
@@ -254,12 +308,26 @@
     <div
       class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-400 dark:text-gray-500 mb-1"
     >
+      <span v-if="hasPlanRange" class="flex items-center gap-1.5">
+        <span class="inline-block w-3 h-2 rounded-sm bg-red-500"></span>
+        Plan budgétaire
+      </span>
+      <span v-if="hasComparisonRange" class="flex items-center gap-1.5">
+        <span class="inline-block w-3 h-2 rounded-sm bg-indigo-500"></span>
+        Comparaison
+      </span>
       <span class="flex items-center gap-1.5">
         <span
           class="inline-block w-3 h-2 rounded-sm"
           :class="isDark ? 'bg-slate-500' : 'bg-gray-400'"
         ></span>
-        Depenses
+        {{
+          hasComparisonRange
+            ? 'Hors plages'
+            : hasPlanRange
+              ? 'Mois précédents'
+              : 'Dépenses'
+        }}
       </span>
       <span class="flex items-center gap-1.5">
         <span class="inline-block w-3 h-2 rounded-sm bg-amber-500"></span>

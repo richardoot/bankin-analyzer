@@ -29,11 +29,6 @@ describe('BudgetsService', () => {
   })
 
   const mockPrismaService = {
-    budget: {
-      findMany: vi.fn(),
-      upsert: vi.fn(),
-      deleteMany: vi.fn(),
-    },
     $queryRaw: vi.fn(),
     categoryAssociation: {
       findMany: vi.fn(),
@@ -1024,6 +1019,101 @@ describe('BudgetsService', () => {
       expect(result.totalExpenses).toBe(0)
       // totalPendingReimbursements reflects what was actually deducted (20, not 50)
       expect(result.totalPendingReimbursements).toBe(20)
+    })
+
+    it('passes the includeAllPendingReimbursements flag through to the SQL', async () => {
+      // First call: aggregated transactions (empty for simplicity)
+      // Second call: pending query — we capture its strings to assert the
+      //              date filter has been removed.
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { category_id: 'cat-reimb', pending_amount: 50 },
+        ])
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-expense',
+          incomeCategoryId: 'cat-reimb',
+          expenseCategory: { id: 'cat-expense', name: 'Restaurant' },
+          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
+        },
+      ])
+
+      await service.getStatistics(mockUserId, {
+        startDate: '2026-01-01',
+        endDate: '2026-04-30',
+        deductPendingReimbursements: true,
+        includeAllPendingReimbursements: true,
+      })
+
+      // Inspect the second $queryRaw call (the pending query).
+      const pendingCall = mockPrismaService.$queryRaw.mock.calls[1]
+      const sqlString = pendingCall?.[0]?.strings?.join('') ?? ''
+      // When includeAllPending is true, the t.date filter must NOT be added.
+      expect(sqlString).not.toMatch(/AND\s+t\.date\s*>=/)
+      expect(sqlString).not.toMatch(/AND\s+t\.date\s*<=/)
+    })
+
+    it('keeps the date filter on the pending query by default (back-compat)', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([])
+
+      await service.getStatistics(mockUserId, {
+        startDate: '2026-01-01',
+        endDate: '2026-04-30',
+        deductPendingReimbursements: true,
+        // includeAllPendingReimbursements not set
+      })
+
+      const pendingCall = mockPrismaService.$queryRaw.mock.calls[1]
+      const sqlString = pendingCall?.[0]?.strings?.join('') ?? ''
+      expect(sqlString).toMatch(/AND\s+t\.date\s*>=/)
+      expect(sqlString).toMatch(/AND\s+t\.date\s*<=/)
+    })
+
+    it('does NOT deduct anything from "received" when there are only pending requests and no income transactions', async () => {
+      // The user reported: with only pending reimbursement requests (no income)
+      // the "déduire les remboursements reçus" toggle wrongly deducted amounts.
+      // This guards against that regression.
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-expense',
+            category_name: 'Restaurant',
+            type: 'EXPENSE',
+            total_amount: 200,
+          }),
+          // NO income row at all
+        ])
+        // Pending query won't run since deductPendingReimbursements is false
+        .mockResolvedValueOnce([])
+
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-expense',
+          incomeCategoryId: 'cat-reimb',
+          expenseCategory: { id: 'cat-expense', name: 'Restaurant' },
+          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
+        },
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        deductReimbursements: true,
+        deductPendingReimbursements: false,
+      })
+
+      expect(result.expensesByCategory[0].totalAmount).toBe(200)
+      expect(result.expensesByCategory[0].reimbursement).toBeUndefined()
+      expect(result.totalReimbursements).toBeUndefined()
     })
 
     it('should not run pending query when deductPendingReimbursements is not set', async () => {
