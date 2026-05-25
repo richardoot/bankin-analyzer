@@ -34,7 +34,7 @@ model User {
 model Transaction {
   id              String          @id @default(uuid())
   userId          String          @map("user_id")
-  accountId       String?         @map("account_id")
+  accountId       String          @map("account_id")
   categoryId      String?         @map("category_id")
   subcategoryId   String?         @map("subcategory_id")
   importHistoryId String?         @map("import_history_id")
@@ -51,7 +51,7 @@ model Transaction {
   updatedAt       DateTime        @updatedAt @map("updated_at")
 
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accountRef            Account?               @relation(fields: [accountId], references: [id])
+  accountRef            Account                @relation(fields: [accountId], references: [id], onDelete: Restrict)
   category              Category?              @relation(fields: [categoryId], references: [id])
   subcategoryRef        Subcategory?           @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
   importHistory         ImportHistory?         @relation(fields: [importHistoryId], references: [id], onDelete: SetNull)

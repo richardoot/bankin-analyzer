@@ -303,20 +303,7 @@ describe('ImportHistoriesService', () => {
       })
     })
 
-    it('should delete orphan accounts (accounts with no transactions)', async () => {
-      const orphanAccount = {
-        id: 'acc-1',
-        name: 'Compte Epargne',
-        userId: mockUserId,
-        _count: { transactions: 0 },
-      }
-      const accountWithTx = {
-        id: 'acc-2',
-        name: 'Compte Courant',
-        userId: mockUserId,
-        _count: { transactions: 5 },
-      }
-
+    it('should never delete accounts on import deletion (preserved as user-configured entities)', async () => {
       mockPrismaService.importHistory.findFirst.mockResolvedValue(
         mockImportHistory
       )
@@ -325,17 +312,14 @@ describe('ImportHistoriesService', () => {
         mockImportHistory
       )
       mockPrismaService.category.findMany.mockResolvedValue([])
-      mockPrismaService.account.findMany.mockResolvedValue([
-        orphanAccount,
-        accountWithTx,
-      ])
-      mockPrismaService.account.deleteMany.mockResolvedValue({ count: 1 })
 
       await service.deleteImport(mockImportId, mockUserId)
 
-      expect(mockPrismaService.account.deleteMany).toHaveBeenCalledWith({
-        where: { id: { in: ['acc-1'] } },
-      })
+      // Account deletion was the source of a P0 data-loss bug.
+      // Accounts carry user-configured state (JOINT/STANDARD, divisor, exclusion
+      // flags) and must never be deleted as a side effect.
+      expect(mockPrismaService.account.findMany).not.toHaveBeenCalled()
+      expect(mockPrismaService.account.deleteMany).not.toHaveBeenCalled()
     })
 
     it('should clean up FilterPreferences when deleting orphan categories', async () => {
@@ -451,18 +435,12 @@ describe('ImportHistoriesService', () => {
       expect(mockPrismaService.filterPreferences.update).not.toHaveBeenCalled()
     })
 
-    it('should not delete categories or accounts if none are orphans', async () => {
+    it('should not delete categories if none are orphans', async () => {
       const categoryWithTx = {
         id: 'cat-1',
         name: 'Alimentation',
         userId: mockUserId,
         type: TransactionType.EXPENSE,
-        _count: { transactions: 5 },
-      }
-      const accountWithTx = {
-        id: 'acc-1',
-        name: 'Compte Courant',
-        userId: mockUserId,
         _count: { transactions: 5 },
       }
 
@@ -474,7 +452,6 @@ describe('ImportHistoriesService', () => {
         mockImportHistory
       )
       mockPrismaService.category.findMany.mockResolvedValue([categoryWithTx])
-      mockPrismaService.account.findMany.mockResolvedValue([accountWithTx])
 
       await service.deleteImport(mockImportId, mockUserId)
 
@@ -482,7 +459,7 @@ describe('ImportHistoriesService', () => {
       expect(mockPrismaService.account.deleteMany).not.toHaveBeenCalled()
     })
 
-    it('should delete multiple orphan categories and accounts', async () => {
+    it('should delete multiple orphan categories at once (accounts untouched)', async () => {
       const orphanCategories = [
         {
           id: 'cat-1',
@@ -499,20 +476,6 @@ describe('ImportHistoriesService', () => {
           _count: { transactions: 0 },
         },
       ]
-      const orphanAccounts = [
-        {
-          id: 'acc-1',
-          name: 'Compte Epargne',
-          userId: mockUserId,
-          _count: { transactions: 0 },
-        },
-        {
-          id: 'acc-2',
-          name: 'Livret A',
-          userId: mockUserId,
-          _count: { transactions: 0 },
-        },
-      ]
 
       mockPrismaService.importHistory.findFirst.mockResolvedValue(
         mockImportHistory
@@ -524,17 +487,13 @@ describe('ImportHistoriesService', () => {
       mockPrismaService.category.findMany.mockResolvedValue(orphanCategories)
       mockPrismaService.filterPreferences.findUnique.mockResolvedValue(null)
       mockPrismaService.category.deleteMany.mockResolvedValue({ count: 2 })
-      mockPrismaService.account.findMany.mockResolvedValue(orphanAccounts)
-      mockPrismaService.account.deleteMany.mockResolvedValue({ count: 2 })
 
       await service.deleteImport(mockImportId, mockUserId)
 
       expect(mockPrismaService.category.deleteMany).toHaveBeenCalledWith({
         where: { id: { in: ['cat-1', 'cat-2'] } },
       })
-      expect(mockPrismaService.account.deleteMany).toHaveBeenCalledWith({
-        where: { id: { in: ['acc-1', 'acc-2'] } },
-      })
+      expect(mockPrismaService.account.deleteMany).not.toHaveBeenCalled()
     })
   })
 

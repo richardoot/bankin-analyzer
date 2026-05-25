@@ -392,15 +392,27 @@ export class TransactionsService {
       )
     }
 
-    // 5c. Create/fetch all accounts
+    // 5c. Create/fetch all accounts and build a name→id map
     const uniqueAccountNames = [
       ...new Set(allTxsToImport.map(tx => tx.account)),
     ]
-    await Promise.all(
+    const accounts = await Promise.all(
       uniqueAccountNames.map(name =>
         this.accountsService.upsertByName(userId, name)
       )
     )
+    const accountIdByName = new Map(accounts.map(a => [a.name, a.id]))
+    const resolveAccountId = (name: string): string => {
+      const id = accountIdByName.get(name)
+      if (!id) {
+        throw new Error(
+          `Account upsert did not return an id for "${name}". ` +
+            'This indicates a critical inconsistency between the upserted ' +
+            'accounts and the imported transactions.'
+        )
+      }
+      return id
+    }
 
     // 6. Bulk insert with createMany
     const dataToCreate = [
@@ -413,6 +425,7 @@ export class TransactionsService {
             : null
         return {
           userId,
+          accountId: resolveAccountId(tx.account),
           categoryId,
           subcategoryId,
           importHistoryId: importHistoryId ?? null,
@@ -436,6 +449,7 @@ export class TransactionsService {
             : null
         return {
           userId,
+          accountId: resolveAccountId(tx.account),
           categoryId,
           subcategoryId,
           importHistoryId: importHistoryId ?? null,

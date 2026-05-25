@@ -746,6 +746,9 @@ describe('TransactionsService', () => {
         categories: [mockCategory],
         newCount: 0,
       })
+      mockAccountsService.upsertByName.mockImplementation(
+        async (_userId: string, name: string) => ({ id: `id-${name}`, name })
+      )
 
       const dto1 = { ...createTransactionDto, account: 'Account A' }
       const dto2 = {
@@ -838,6 +841,99 @@ describe('TransactionsService', () => {
       expect(result.imported).toBe(1)
       expect(result.duplicates).toBe(1)
       expect(mockPrismaService.transaction.createMany).toHaveBeenCalledTimes(1)
+    })
+
+    it('should set accountId on imported transactions (linked to upserted Account.id)', async () => {
+      setupImportMocks()
+      mockAccountsService.upsertByName.mockResolvedValue({
+        id: 'account-abc-123',
+        name: 'Compte Courant',
+      })
+
+      await service.importTransactions(mockUserId, [createTransactionDto])
+
+      const createdData =
+        mockPrismaService.transaction.createMany.mock.calls[0]?.[0].data
+      expect(createdData[0].accountId).toBe('account-abc-123')
+    })
+
+    it('should map each transaction to the correct accountId when importing several accounts', async () => {
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue({
+        categories: [mockCategory],
+        newCount: 0,
+      })
+      mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
+        subcategories: [],
+        newCount: 0,
+      })
+      mockAccountsService.upsertByName.mockImplementation(
+        async (_userId: string, name: string) => ({
+          id: `id-${name}`,
+          name,
+        })
+      )
+      mockPrismaService.transaction.createMany.mockResolvedValue({ count: 2 })
+
+      await service.importTransactions(mockUserId, [
+        { ...createTransactionDto, account: 'Compte A' },
+        {
+          ...createTransactionDto,
+          account: 'Compte B',
+          description: 'Autre',
+        },
+      ])
+
+      const createdData = mockPrismaService.transaction.createMany.mock
+        .calls[0]?.[0].data as Array<{
+        account: string
+        accountId: string | null
+      }>
+      const byAccount = new Map(createdData.map(t => [t.account, t.accountId]))
+      expect(byAccount.get('Compte A')).toBe('id-Compte A')
+      expect(byAccount.get('Compte B')).toBe('id-Compte B')
+    })
+
+    it('should throw if account upsert did not return an id for an imported transaction', async () => {
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockCategoriesService.findOrCreateMany.mockResolvedValue({
+        categories: [mockCategory],
+        newCount: 0,
+      })
+      mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
+        subcategories: [],
+        newCount: 0,
+      })
+      // Simulate a critical inconsistency: upsert returns a different name
+      // than what was requested, so the Map lookup fails.
+      mockAccountsService.upsertByName.mockResolvedValue({
+        id: 'irrelevant-id',
+        name: 'Unexpected Name',
+      })
+
+      await expect(
+        service.importTransactions(mockUserId, [createTransactionDto])
+      ).rejects.toThrow(
+        /Account upsert did not return an id for "Compte Courant"/
+      )
+
+      expect(mockPrismaService.transaction.createMany).not.toHaveBeenCalled()
+    })
+
+    it('should set accountId on forceImport transactions as well', async () => {
+      setupImportMocks()
+      mockAccountsService.upsertByName.mockResolvedValue({
+        id: 'forced-account-id',
+        name: 'Compte Courant',
+      })
+
+      await service.importTransactions(mockUserId, [
+        { ...createTransactionDto, forceImport: true },
+      ])
+
+      const createdData =
+        mockPrismaService.transaction.createMany.mock.calls[0]?.[0].data
+      expect(createdData[0].accountId).toBe('forced-account-id')
     })
 
     it('should link transactions to importHistoryId when provided', async () => {

@@ -120,16 +120,21 @@ export class ImportHistoriesService {
       where: { id },
     })
 
-    // Clean up orphan categories and accounts
+    // Clean up orphan categories (accounts are preserved on purpose)
     await this.cleanupOrphans(userId)
   }
 
   /**
-   * Clean up categories and accounts that no longer have any transactions.
+   * Clean up categories that no longer have any transactions.
    * Also cleans up related data:
    * - CategoryAssociations (handled by DB cascade)
    * - Budgets (handled by DB cascade)
    * - FilterPreferences hidden category arrays (manual cleanup)
+   *
+   * NOTE: Accounts are intentionally NOT cleaned up here. An Account is a
+   * user-configured entity (type JOINT/STANDARD, divisor, exclusion flags) and
+   * must not be deleted as a side effect of removing an import. Account
+   * deletion must be an explicit user action.
    */
   private async cleanupOrphans(userId: string): Promise<void> {
     // Find and clean up orphan categories
@@ -146,17 +151,6 @@ export class ImportHistoriesService {
       await this.prisma.category.deleteMany({
         where: {
           id: { in: orphanCategories.map(c => c.id) },
-        },
-      })
-    }
-
-    // Find and delete orphan accounts
-    const orphanAccounts = await this.findOrphanAccounts(userId)
-
-    if (orphanAccounts.length > 0) {
-      await this.prisma.account.deleteMany({
-        where: {
-          id: { in: orphanAccounts.map(a => a.id) },
         },
       })
     }
@@ -180,26 +174,6 @@ export class ImportHistoriesService {
     return categories
       .filter(c => c._count.transactions === 0)
       .map(c => ({ id: c.id, name: c.name }))
-  }
-
-  /**
-   * Find accounts that have no transactions
-   */
-  private async findOrphanAccounts(
-    userId: string
-  ): Promise<Array<{ id: string; name: string }>> {
-    const accounts = await this.prisma.account.findMany({
-      where: { userId },
-      include: {
-        _count: {
-          select: { transactions: true },
-        },
-      },
-    })
-
-    return accounts
-      .filter(a => a._count.transactions === 0)
-      .map(a => ({ id: a.id, name: a.name }))
   }
 
   /**
