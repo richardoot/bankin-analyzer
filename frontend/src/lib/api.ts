@@ -110,6 +110,7 @@ export interface TransactionDto {
   description: string
   amount: number
   type: 'EXPENSE' | 'INCOME'
+  accountId: string
   account: string
   subcategory?: string | null
   note?: string | null

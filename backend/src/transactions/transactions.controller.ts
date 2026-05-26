@@ -51,6 +51,7 @@ export class TransactionsController {
       description: tx.description,
       amount: Number(tx.amount),
       type: tx.type,
+      accountId: tx.accountId,
       account: tx.account,
       subcategory: tx.subcategory,
       note: tx.note,

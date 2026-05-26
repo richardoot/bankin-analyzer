@@ -98,7 +98,7 @@ export class DashboardService {
         FROM app.transactions t
         LEFT JOIN app.categories c ON c.id = t.category_id
         LEFT JOIN app.subcategories sc ON sc.id = t.subcategory_id
-        LEFT JOIN app.accounts a ON a.name = t.account AND a.user_id = t.user_id
+        LEFT JOIN app.accounts a ON a.id = t.account_id
         WHERE t.user_id = ${userId}
           AND t.date >= ${startDate}
           AND t.date <= ${endDate}
@@ -136,7 +136,7 @@ export class DashboardService {
             FROM app.reimbursement_requests rr
             JOIN app.transactions t ON t.id = rr.transaction_id
             JOIN app.categories c ON c.id = rr.category_id
-            LEFT JOIN app.accounts a ON a.name = t.account AND a.user_id = t.user_id
+            LEFT JOIN app.accounts a ON a.id = t.account_id
             WHERE rr.user_id = ${userId}
               AND rr.status IN ('PENDING', 'PARTIAL')
               AND t.date >= ${startDate}

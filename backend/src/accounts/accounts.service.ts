@@ -33,17 +33,6 @@ export class AccountsService {
   }
 
   /**
-   * Get an account by name
-   */
-  async findByName(userId: string, name: string): Promise<Account | null> {
-    return this.prisma.account.findUnique({
-      where: {
-        userId_name: { userId, name },
-      },
-    })
-  }
-
-  /**
    * Update an account
    */
   async update(
@@ -104,45 +93,5 @@ export class AccountsService {
       },
       update: {},
     })
-  }
-
-  /**
-   * Get the divisor for a specific account
-   * Returns 1 if account not found (default behavior)
-   */
-  async getDivisor(userId: string, accountName: string): Promise<number> {
-    const account = await this.findByName(userId, accountName)
-    return account?.divisor ?? 1
-  }
-
-  /**
-   * Check if account is excluded from budget
-   */
-  async isExcludedFromBudget(
-    userId: string,
-    accountName: string
-  ): Promise<boolean> {
-    const account = await this.findByName(userId, accountName)
-    return account?.isExcludedFromBudget ?? false
-  }
-
-  /**
-   * Check if account is excluded from stats
-   */
-  async isExcludedFromStats(
-    userId: string,
-    accountName: string
-  ): Promise<boolean> {
-    const account = await this.findByName(userId, accountName)
-    return account?.isExcludedFromStats ?? false
-  }
-
-  /**
-   * Get all accounts with their divisors as a map
-   * Useful for batch processing
-   */
-  async getAccountDivisorsMap(userId: string): Promise<Map<string, number>> {
-    const accounts = await this.findAllByUser(userId)
-    return new Map(accounts.map(a => [a.name, a.divisor]))
   }
 }

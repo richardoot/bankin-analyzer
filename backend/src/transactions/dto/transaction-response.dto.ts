@@ -17,7 +17,10 @@ export class TransactionResponseDto {
   @ApiProperty({ enum: TransactionType, description: 'Transaction type' })
   type!: TransactionType
 
-  /** Bank account name */
+  /** Bank account ID (FK to Account.id) */
+  accountId!: string
+
+  /** Bank account name (kept for backward compatibility, mirrors Account.name) */
   account!: string
 
   /** Subcategory name */
