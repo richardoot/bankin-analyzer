@@ -74,18 +74,18 @@ describe('useAccountsStore', () => {
     expect(store.error).toBe('API down')
   })
 
-  it('getDivisor() returns divisor for known account', () => {
+  it('getDivisor() returns divisor for known account id', () => {
     const store = useAccountsStore()
-    store.accounts = [makeAccount({ name: 'Joint', divisor: 2 })]
+    store.accounts = [makeAccount({ id: 'joint-id', divisor: 2 })]
 
-    expect(store.getDivisor('Joint')).toBe(2)
+    expect(store.getDivisor('joint-id')).toBe(2)
   })
 
-  it('getDivisor() returns 1 for unknown account', () => {
+  it('getDivisor() returns 1 for unknown account id', () => {
     const store = useAccountsStore()
-    store.accounts = [makeAccount({ name: 'Known' })]
+    store.accounts = [makeAccount({ id: 'known-id' })]
 
-    expect(store.getDivisor('Unknown')).toBe(1)
+    expect(store.getDivisor('unknown-id')).toBe(1)
   })
 
   it('updateType() updates account type in list', async () => {

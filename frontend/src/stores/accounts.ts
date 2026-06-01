@@ -22,38 +22,14 @@ export const useAccountsStore = defineStore('accounts', () => {
     accounts.value.filter(a => a.type === 'INVESTMENT')
   )
 
-  // Computed: map of account name -> divisor
-  const divisorsByName = computed(
-    () => new Map(accounts.value.map(a => [a.name, a.divisor]))
+  // Computed: map of account id -> divisor
+  const divisorsById = computed(
+    () => new Map(accounts.value.map(a => [a.id, a.divisor]))
   )
 
-  // Get divisor for an account name
-  function getDivisor(accountName: string): number {
-    return divisorsByName.value.get(accountName) ?? 1
-  }
-
-  // Check if account is joint
-  function isJointAccount(accountName: string): boolean {
-    const account = accounts.value.find(a => a.name === accountName)
-    return account?.type === 'JOINT'
-  }
-
-  // Check if account is investment
-  function isInvestmentAccount(accountName: string): boolean {
-    const account = accounts.value.find(a => a.name === accountName)
-    return account?.type === 'INVESTMENT'
-  }
-
-  // Check if account is excluded from budget
-  function isExcludedFromBudget(accountName: string): boolean {
-    const account = accounts.value.find(a => a.name === accountName)
-    return account?.isExcludedFromBudget ?? false
-  }
-
-  // Check if account is excluded from stats
-  function isExcludedFromStats(accountName: string): boolean {
-    const account = accounts.value.find(a => a.name === accountName)
-    return account?.isExcludedFromStats ?? false
+  // Get divisor for an account id (defaults to 1 if unknown)
+  function getDivisor(accountId: string): number {
+    return divisorsById.value.get(accountId) ?? 1
   }
 
   // Load accounts from backend
@@ -104,14 +80,10 @@ export const useAccountsStore = defineStore('accounts', () => {
     sortedAccounts,
     jointAccounts,
     investmentAccounts,
-    divisorsByName,
+    divisorsById,
     isLoading,
     error,
     getDivisor,
-    isJointAccount,
-    isInvestmentAccount,
-    isExcludedFromBudget,
-    isExcludedFromStats,
     load,
     updateType,
     updateSettings,

@@ -56,8 +56,6 @@ vi.mock('@/stores/accounts', () => ({
     error: null,
     load: vi.fn().mockResolvedValue(undefined),
     getDivisor: vi.fn(() => 1),
-    isJointAccount: vi.fn(() => false),
-    isInvestmentAccount: vi.fn(() => false),
   }),
 }))
 

@@ -168,7 +168,7 @@ export function useDashboardData() {
 
   // Helper pour obtenir le montant ajusté (divisé par le diviseur du compte)
   function getAdjustedAmount(tx: TransactionDto): number {
-    const divisor = accountsStore.getDivisor(tx.account)
+    const divisor = accountsStore.getDivisor(tx.accountId)
     return tx.amount / divisor
   }
 
