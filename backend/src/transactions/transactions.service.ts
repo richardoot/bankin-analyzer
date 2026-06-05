@@ -34,15 +34,25 @@ export class TransactionsService {
     private readonly aiSuggestionsService: AiSuggestionsService
   ) {}
 
+  /**
+   * Compute the v2 hash for a transaction. Uses the Account FK (`accountId`)
+   * rather than the legacy `account` string. Matches the formula used by the
+   * rehash migration script (`backend/src/scripts/rehash-transactions.ts`).
+   *
+   * The optional `uniqueKey` is appended after `description` and serves two
+   * purposes:
+   *   - `force-...` random nonce for `forceImport` mode (caller-generated).
+   *   - `:N` deterministic suffix backfilled into existing duplicate rows.
+   */
   private computeHash(
     userId: string,
     date: Date,
     amount: number,
-    account: string,
+    accountId: string,
     description: string,
     uniqueKey?: string
   ): string {
-    const base = `${userId}|${date.toISOString()}|${amount}|${account}|${description}`
+    const base = `${userId}|${date.toISOString()}|${amount}|${accountId}|${description}`
     const data = uniqueKey ? `${base}|${uniqueKey}` : base
     return createHash('sha256').update(data).digest('hex')
   }
@@ -52,24 +62,56 @@ export class TransactionsService {
   }
 
   /**
-   * Compute hashes for all transactions in memory (no DB queries)
+   * Upsert every Account referenced by `transactions` and return a name→id
+   * map. Called early in both previewImport and importTransactions because
+   * the hash formula requires the accountId.
+   */
+  private async buildAccountIdMap(
+    userId: string,
+    transactions: CreateTransactionDto[]
+  ): Promise<Map<string, string>> {
+    const uniqueAccountNames = [...new Set(transactions.map(tx => tx.account))]
+    const accounts = await Promise.all(
+      uniqueAccountNames.map(name =>
+        this.accountsService.upsertByName(userId, name)
+      )
+    )
+    return new Map(accounts.map(a => [a.name, a.id]))
+  }
+
+  /**
+   * Compute hashes for all transactions in memory (no DB queries).
+   *
+   * Requires `accountIdByName` to be pre-populated by the caller — the caller
+   * MUST upsert every unique account name before calling this so that every
+   * `tx.account` resolves to an id. Missing ids throw.
    */
   private computeHashesWithData(
     userId: string,
-    transactions: CreateTransactionDto[]
+    transactions: CreateTransactionDto[],
+    accountIdByName: Map<string, string>
   ): HashData[] {
-    return transactions.map((tx, index) => ({
-      index,
-      hash: this.computeHash(
-        userId,
-        new Date(tx.date),
-        tx.amount,
-        tx.account,
-        tx.description
-      ),
-      tx,
-      date: new Date(tx.date),
-    }))
+    return transactions.map((tx, index) => {
+      const accountId = accountIdByName.get(tx.account)
+      if (!accountId) {
+        throw new Error(
+          `Account upsert did not return an id for "${tx.account}". ` +
+            'Caller must upsert all accounts before computing hashes.'
+        )
+      }
+      return {
+        index,
+        hash: this.computeHash(
+          userId,
+          new Date(tx.date),
+          tx.amount,
+          accountId,
+          tx.description
+        ),
+        tx,
+        date: new Date(tx.date),
+      }
+    })
   }
 
   /**
@@ -90,17 +132,21 @@ export class TransactionsService {
   }
 
   /**
-   * Convert DB Transaction to ExistingTransactionDto for API response
+   * Convert DB Transaction to ExistingTransactionDto for API response.
+   * Requires `accountRef` to be included in the originating query.
    */
   private toExistingDto(
-    tx: Transaction & { category?: { name: string } | null }
+    tx: Transaction & {
+      category?: { name: string } | null
+      accountRef: { name: string }
+    }
   ): ExistingTransactionDto {
     return {
       id: tx.id,
       date: tx.date.toISOString(),
       description: tx.description,
       amount: Number(tx.amount),
-      account: tx.account,
+      account: tx.accountRef.name,
       type: tx.type,
       createdAt: tx.createdAt.toISOString(),
       ...(tx.category?.name && { categoryName: tx.category.name }),
@@ -131,7 +177,11 @@ export class TransactionsService {
             },
           }),
       },
-      include: { category: true, subcategoryRef: true },
+      include: {
+        category: true,
+        subcategoryRef: true,
+        accountRef: { select: { name: true } },
+      },
       orderBy: { date: 'desc' },
     })
   }
@@ -153,7 +203,9 @@ export class TransactionsService {
       ...(filters?.type && { type: filters.type }),
       ...(filters?.categoryId && { categoryId: filters.categoryId }),
       ...(filters?.isPointed !== undefined && { isPointed: filters.isPointed }),
-      ...(filters?.account && { account: filters.account }),
+      ...(filters?.account && {
+        accountRef: { name: filters.account },
+      }),
       ...(filters?.startDate &&
         filters?.endDate && {
           date: {
@@ -166,7 +218,11 @@ export class TransactionsService {
     const [data, total] = await Promise.all([
       this.prisma.transaction.findMany({
         where,
-        include: { category: true, subcategoryRef: true },
+        include: {
+          category: true,
+          subcategoryRef: true,
+          accountRef: { select: { name: true } },
+        },
         orderBy: { date: 'desc' },
         skip: (pagination.page - 1) * pagination.limit,
         take: pagination.limit,
@@ -180,7 +236,11 @@ export class TransactionsService {
   async findOne(id: string, userId: string): Promise<Transaction> {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, userId },
-      include: { category: true, subcategoryRef: true },
+      include: {
+        category: true,
+        subcategoryRef: true,
+        accountRef: { select: { name: true } },
+      },
     })
 
     if (!transaction) {
@@ -209,8 +269,18 @@ export class TransactionsService {
       }
     }
 
-    // 1. Compute all hashes in memory (no DB queries)
-    const hashesData = this.computeHashesWithData(userId, transactions)
+    // 1. Upsert accounts so we can resolve account names to ids for hashing.
+    //    The hash formula depends on accountId, not on the legacy `account`
+    //    string. Side effect: previewing an import with a new account name
+    //    creates the Account row (same behaviour as a confirmed import).
+    const accountIdByName = await this.buildAccountIdMap(userId, transactions)
+
+    // 2. Compute all hashes in memory (no DB queries)
+    const hashesData = this.computeHashesWithData(
+      userId,
+      transactions,
+      accountIdByName
+    )
 
     // 2. Detect INTERNAL duplicates (same hash in this batch)
     const hashToIndices = new Map<string, number[]>()
@@ -229,7 +299,7 @@ export class TransactionsService {
         hash: { in: uniqueHashes },
         userId,
       },
-      include: { category: true },
+      include: { category: true, accountRef: { select: { name: true } } },
     })
     const existingHashSet = new Set(existingInDb.map(t => t.hash))
     const existingByHash = new Map(existingInDb.map(t => [t.hash, t]))
@@ -307,8 +377,17 @@ export class TransactionsService {
       }
     }
 
-    // 2. Batch lookup for normal transactions
-    const hashesData = this.computeHashesWithData(userId, normalTxs)
+    // 2. Upsert accounts upfront so we can resolve account names to ids for
+    //    hashing. The hash formula depends on accountId, not the legacy
+    //    `account` string, so the Account rows must exist before hashing.
+    const accountIdByName = await this.buildAccountIdMap(userId, transactions)
+
+    // 3. Compute hashes and batch lookup duplicates for normal transactions
+    const hashesData = this.computeHashesWithData(
+      userId,
+      normalTxs,
+      accountIdByName
+    )
     const uniqueHashes = [...new Set(hashesData.map(h => h.hash))]
 
     const existingHashes = new Set(
@@ -320,7 +399,7 @@ export class TransactionsService {
       ).map(t => t.hash)
     )
 
-    // 3. Filter non-duplicates (keep only first occurrence of each hash)
+    // 4. Filter non-duplicates (keep only first occurrence of each hash)
     const seenHashes = new Set<string>()
     const toImport: HashData[] = []
 
@@ -333,19 +412,27 @@ export class TransactionsService {
 
     const duplicates = hashesData.length - toImport.length
 
-    // 4. Prepare forced transactions (with uniqueKey for unique hash)
-    const forcedData = forcedTxs.map(tx => ({
-      tx,
-      date: new Date(tx.date),
-      hash: this.computeHash(
-        userId,
-        new Date(tx.date),
-        tx.amount,
-        tx.account,
-        tx.description,
-        this.generateUniqueKey()
-      ),
-    }))
+    // 5. Prepare forced transactions (with uniqueKey for unique hash)
+    const forcedData = forcedTxs.map(tx => {
+      const accountId = accountIdByName.get(tx.account)
+      if (!accountId) {
+        throw new Error(
+          `Account upsert did not return an id for "${tx.account}".`
+        )
+      }
+      return {
+        tx,
+        date: new Date(tx.date),
+        hash: this.computeHash(
+          userId,
+          new Date(tx.date),
+          tx.amount,
+          accountId,
+          tx.description,
+          this.generateUniqueKey()
+        ),
+      }
+    })
 
     // 5. Batch create/fetch all categories
     const allTxsToImport = [...toImport.map(t => t.tx), ...forcedTxs]
@@ -392,16 +479,8 @@ export class TransactionsService {
       )
     }
 
-    // 5c. Create/fetch all accounts and build a name→id map
-    const uniqueAccountNames = [
-      ...new Set(allTxsToImport.map(tx => tx.account)),
-    ]
-    const accounts = await Promise.all(
-      uniqueAccountNames.map(name =>
-        this.accountsService.upsertByName(userId, name)
-      )
-    )
-    const accountIdByName = new Map(accounts.map(a => [a.name, a.id]))
+    // Note: accountIdByName was already built upfront (step 2). Reuse the
+    // resolver here for the createMany payload.
     const resolveAccountId = (name: string): string => {
       const id = accountIdByName.get(name)
       if (!id) {
@@ -434,7 +513,6 @@ export class TransactionsService {
           description: tx.description,
           amount: tx.amount,
           type: tx.type,
-          account: tx.account,
           subcategory: tx.subcategory ?? null,
           note: tx.note ?? null,
           isPointed: tx.isPointed ?? false,
@@ -458,7 +536,6 @@ export class TransactionsService {
           description: tx.description,
           amount: tx.amount,
           type: tx.type,
-          account: tx.account,
           subcategory: tx.subcategory ?? null,
           note: tx.note ?? null,
           isPointed: tx.isPointed ?? false,
@@ -521,7 +598,11 @@ export class TransactionsService {
     return this.prisma.transaction.update({
       where: { id },
       data: updateData,
-      include: { category: true, subcategoryRef: true },
+      include: {
+        category: true,
+        subcategoryRef: true,
+        accountRef: { select: { name: true } },
+      },
     })
   }
 

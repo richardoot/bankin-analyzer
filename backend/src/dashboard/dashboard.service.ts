@@ -105,15 +105,17 @@ export class DashboardService {
           AND COALESCE(a.is_excluded_from_stats, false) = false
         GROUP BY TO_CHAR(t.date, 'YYYY-MM'), c.id, COALESCE(c.name, 'Autre'), c.icon, t.type, COALESCE(t.subcategory, ''), sc.icon
       `),
-      // Query 2: Distinct accounts (including excluded from stats, for filter panel)
+      // Query 2: Distinct account names (including excluded from stats, for
+      // filter panel). Sourced from the Account relation since the legacy
+      // string column on transactions has been dropped.
       this.prisma.$queryRaw<AccountRow[]>(Prisma.sql`
-        SELECT DISTINCT t.account
+        SELECT DISTINCT a.name AS account
         FROM app.transactions t
+        JOIN app.accounts a ON a.id = t.account_id
         WHERE t.user_id = ${userId}
           AND t.date >= ${startDate}
           AND t.date <= ${endDate}
-          AND t.account IS NOT NULL
-        ORDER BY t.account
+        ORDER BY a.name
       `),
       // Query 3: Category associations (unchanged)
       this.prisma.categoryAssociation.findMany({

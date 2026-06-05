@@ -33,6 +33,7 @@ import type { User, TransactionType, Transaction } from '../generated/prisma'
 type TransactionWithRelations = Transaction & {
   category?: { name: string; icon?: string | null }
   subcategoryRef?: { id: string; name: string }
+  accountRef: { name: string }
 }
 
 @ApiTags('transactions')
@@ -52,7 +53,7 @@ export class TransactionsController {
       amount: Number(tx.amount),
       type: tx.type,
       accountId: tx.accountId,
-      account: tx.account,
+      account: tx.accountRef.name,
       subcategory: tx.subcategory,
       note: tx.note,
       isPointed: tx.isPointed,

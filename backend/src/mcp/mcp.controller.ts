@@ -77,17 +77,22 @@ export class McpController {
               type: 'text' as const,
               text: `<user_financial_data>\n${JSON.stringify(
                 {
-                  transactions: result.data.map(tx => ({
-                    date: tx.date,
-                    description: tx.description,
-                    amount: Number(tx.amount),
-                    type: tx.type,
-                    account: tx.account,
-                    category: (tx as { category?: { name: string } }).category
-                      ?.name,
-                    subcategory: tx.subcategory,
-                    isPointed: tx.isPointed,
-                  })),
+                  transactions: result.data.map(tx => {
+                    const t = tx as typeof tx & {
+                      category?: { name: string }
+                      accountRef?: { name: string }
+                    }
+                    return {
+                      date: tx.date,
+                      description: tx.description,
+                      amount: Number(tx.amount),
+                      type: tx.type,
+                      account: t.accountRef?.name,
+                      category: t.category?.name,
+                      subcategory: tx.subcategory,
+                      isPointed: tx.isPointed,
+                    }
+                  }),
                   total: result.total,
                 },
                 null,

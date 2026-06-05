@@ -23,19 +23,20 @@ const mockCategory = {
 const mockTransaction = {
   id: '550e8400-e29b-41d4-a716-446655440000',
   userId: mockUser.id,
+  accountId: 'acc-1',
   categoryId: mockCategory.id,
   hash: 'abc123hash',
   date: new Date('2024-01-15T10:30:00.000Z'),
   description: 'Restaurant',
   amount: new Decimal(-45.5),
   type: TransactionType.EXPENSE,
-  account: 'Compte Courant',
   subcategory: 'Restaurant - Autres',
   note: null,
   isPointed: false,
   createdAt: new Date('2024-01-15T10:30:00.000Z'),
   updatedAt: new Date('2024-01-15T10:30:00.000Z'),
   category: mockCategory,
+  accountRef: { name: 'Compte Courant' },
 }
 
 const mockTransaction2 = {

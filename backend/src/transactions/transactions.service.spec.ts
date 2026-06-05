@@ -28,6 +28,7 @@ const mockCategory = {
 const mockTransaction = {
   id: '550e8400-e29b-41d4-a716-446655440000',
   userId: mockUserId,
+  accountId: 'acc-1',
   categoryId: mockCategory.id,
   subcategoryId: null,
   hash: 'abc123hash',
@@ -35,7 +36,6 @@ const mockTransaction = {
   description: 'Restaurant',
   amount: new Decimal(-45.5),
   type: TransactionType.EXPENSE,
-  account: 'Compte Courant',
   subcategory: 'Restaurant - Autres',
   note: null,
   isPointed: false,
@@ -44,6 +44,7 @@ const mockTransaction = {
   updatedAt: new Date('2024-01-15T10:30:00.000Z'),
   category: mockCategory,
   subcategoryRef: null,
+  accountRef: { name: 'Compte Courant' },
 }
 
 const mockTransaction2 = {
@@ -117,7 +118,11 @@ describe('TransactionsService', () => {
       expect(result).toEqual(mockTransaction)
       expect(mockPrismaService.transaction.findFirst).toHaveBeenCalledWith({
         where: { id: mockTransaction.id, userId: mockUserId },
-        include: { category: true, subcategoryRef: true },
+        include: {
+          category: true,
+          subcategoryRef: true,
+          accountRef: { select: { name: true } },
+        },
       })
     })
 
@@ -145,7 +150,11 @@ describe('TransactionsService', () => {
       expect(result).toEqual([mockTransaction, mockTransaction2])
       expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith({
         where: { userId: mockUserId },
-        include: { category: true, subcategoryRef: true },
+        include: {
+          category: true,
+          subcategoryRef: true,
+          accountRef: { select: { name: true } },
+        },
         orderBy: { date: 'desc' },
       })
     })
@@ -162,7 +171,11 @@ describe('TransactionsService', () => {
           userId: mockUserId,
           type: TransactionType.EXPENSE,
         },
-        include: { category: true, subcategoryRef: true },
+        include: {
+          category: true,
+          subcategoryRef: true,
+          accountRef: { select: { name: true } },
+        },
         orderBy: { date: 'desc' },
       })
     })
@@ -179,7 +192,11 @@ describe('TransactionsService', () => {
           userId: mockUserId,
           date: { gte: startDate, lte: endDate },
         },
-        include: { category: true, subcategoryRef: true },
+        include: {
+          category: true,
+          subcategoryRef: true,
+          accountRef: { select: { name: true } },
+        },
         orderBy: { date: 'desc' },
       })
     })
@@ -194,7 +211,11 @@ describe('TransactionsService', () => {
           userId: mockUserId,
           categoryId: mockCategory.id,
         },
-        include: { category: true, subcategoryRef: true },
+        include: {
+          category: true,
+          subcategoryRef: true,
+          accountRef: { select: { name: true } },
+        },
         orderBy: { date: 'desc' },
       })
     })
@@ -307,6 +328,14 @@ describe('TransactionsService', () => {
       account: 'Compte Courant',
       type: TransactionType.EXPENSE,
     }
+
+    beforeEach(() => {
+      // previewImport now upserts accounts upfront so it can hash by accountId.
+      // Default mock: every name resolves to a synthetic id derived from it.
+      mockAccountsService.upsertByName.mockImplementation(
+        async (_userId: string, name: string) => ({ id: `id-${name}`, name })
+      )
+    })
 
     it('should return empty result for empty array', async () => {
       const result = await service.previewImport(mockUserId, [])
@@ -625,7 +654,7 @@ describe('TransactionsService', () => {
             userId: mockUserId,
             description: 'Restaurant',
             amount: -45.5,
-            account: 'Compte Courant',
+            accountId: 'account-id',
             categoryId: mockCategory.id,
             type: TransactionType.EXPENSE,
           }),
@@ -886,12 +915,10 @@ describe('TransactionsService', () => {
 
       const createdData = mockPrismaService.transaction.createMany.mock
         .calls[0]?.[0].data as Array<{
-        account: string
-        accountId: string | null
+        accountId: string
       }>
-      const byAccount = new Map(createdData.map(t => [t.account, t.accountId]))
-      expect(byAccount.get('Compte A')).toBe('id-Compte A')
-      expect(byAccount.get('Compte B')).toBe('id-Compte B')
+      const accountIds = createdData.map(t => t.accountId).sort()
+      expect(accountIds).toEqual(['id-Compte A', 'id-Compte B'])
     })
 
     it('should throw if account upsert did not return an id for an imported transaction', async () => {
@@ -996,7 +1023,11 @@ describe('TransactionsService', () => {
       expect(mockPrismaService.transaction.update).toHaveBeenCalledWith({
         where: { id: mockTransaction.id },
         data: { note: 'New note' },
-        include: { category: true, subcategoryRef: true },
+        include: {
+          category: true,
+          subcategoryRef: true,
+          accountRef: { select: { name: true } },
+        },
       })
     })
 
@@ -1027,7 +1058,11 @@ describe('TransactionsService', () => {
       expect(mockPrismaService.transaction.update).toHaveBeenCalledWith({
         where: { id: mockTransaction.id },
         data: { categoryId: newCategoryId },
-        include: { category: true, subcategoryRef: true },
+        include: {
+          category: true,
+          subcategoryRef: true,
+          accountRef: { select: { name: true } },
+        },
       })
     })
 
@@ -1044,7 +1079,11 @@ describe('TransactionsService', () => {
       expect(mockPrismaService.transaction.update).toHaveBeenCalledWith({
         where: { id: mockTransaction.id },
         data: { isPointed: true },
-        include: { category: true, subcategoryRef: true },
+        include: {
+          category: true,
+          subcategoryRef: true,
+          accountRef: { select: { name: true } },
+        },
       })
     })
 
@@ -1075,7 +1114,11 @@ describe('TransactionsService', () => {
           subcategoryId: 'sub-1',
           subcategory: 'Vegetables',
         },
-        include: { category: true, subcategoryRef: true },
+        include: {
+          category: true,
+          subcategoryRef: true,
+          accountRef: { select: { name: true } },
+        },
       })
     })
 
@@ -1099,7 +1142,11 @@ describe('TransactionsService', () => {
           subcategoryId: null,
           subcategory: null,
         },
-        include: { category: true, subcategoryRef: true },
+        include: {
+          category: true,
+          subcategoryRef: true,
+          accountRef: { select: { name: true } },
+        },
       })
     })
   })
@@ -1168,7 +1215,11 @@ describe('TransactionsService', () => {
       expect(result).toEqual(mockTransaction)
       expect(mockPrismaService.transaction.findFirst).toHaveBeenCalledWith({
         where: { id: mockTransaction.id, userId: mockUserId },
-        include: { category: true, subcategoryRef: true },
+        include: {
+          category: true,
+          subcategoryRef: true,
+          accountRef: { select: { name: true } },
+        },
       })
       expect(mockPrismaService.transaction.delete).toHaveBeenCalledWith({
         where: { id: mockTransaction.id },
