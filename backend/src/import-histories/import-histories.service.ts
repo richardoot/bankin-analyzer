@@ -115,115 +115,14 @@ export class ImportHistoriesService {
       where: { importHistoryId: id, userId },
     })
 
-    // Then delete the import history
+    // Then delete the import history. Categories and accounts are NOT cleaned
+    // up: both are user-configured entities (icons, subcategories, budgets,
+    // category associations on one side; account type/divisor/exclusion flags
+    // on the other) and must never disappear as a side effect of removing an
+    // import. Cleanup, if ever needed, must be an explicit user action.
     await this.prisma.importHistory.delete({
       where: { id },
     })
-
-    // Clean up orphan categories (accounts are preserved on purpose)
-    await this.cleanupOrphans(userId)
-  }
-
-  /**
-   * Clean up categories that no longer have any transactions.
-   * Also cleans up related data:
-   * - CategoryAssociations (handled by DB cascade)
-   * - Budgets (handled by DB cascade)
-   * - FilterPreferences hidden category arrays (manual cleanup)
-   *
-   * NOTE: Accounts are intentionally NOT cleaned up here. An Account is a
-   * user-configured entity (type JOINT/STANDARD, divisor, exclusion flags) and
-   * must not be deleted as a side effect of removing an import. Account
-   * deletion must be an explicit user action.
-   */
-  private async cleanupOrphans(userId: string): Promise<void> {
-    // Find and clean up orphan categories
-    const orphanCategories = await this.findOrphanCategories(userId)
-
-    if (orphanCategories.length > 0) {
-      // Clean up FilterPreferences before deleting categories
-      await this.removeFromFilterPreferences(
-        userId,
-        orphanCategories.map(c => c.name)
-      )
-
-      // Delete orphan categories (cascades to CategoryAssociations and Budgets)
-      await this.prisma.category.deleteMany({
-        where: {
-          id: { in: orphanCategories.map(c => c.id) },
-        },
-      })
-    }
-  }
-
-  /**
-   * Find categories that have no transactions
-   */
-  private async findOrphanCategories(
-    userId: string
-  ): Promise<Array<{ id: string; name: string }>> {
-    const categories = await this.prisma.category.findMany({
-      where: { userId },
-      include: {
-        _count: {
-          select: { transactions: true },
-        },
-      },
-    })
-
-    return categories
-      .filter(c => c._count.transactions === 0)
-      .map(c => ({ id: c.id, name: c.name }))
-  }
-
-  /**
-   * Remove category names from FilterPreferences hidden arrays
-   */
-  private async removeFromFilterPreferences(
-    userId: string,
-    categoryNames: string[]
-  ): Promise<void> {
-    const prefs = await this.prisma.filterPreferences.findUnique({
-      where: { userId },
-    })
-
-    if (!prefs) return
-
-    const namesToRemove = new Set(categoryNames)
-
-    const updatedHiddenExpense = prefs.hiddenExpenseCategories.filter(
-      name => !namesToRemove.has(name)
-    )
-    const updatedHiddenIncome = prefs.hiddenIncomeCategories.filter(
-      name => !namesToRemove.has(name)
-    )
-    const updatedGlobalHiddenExpense =
-      prefs.globalHiddenExpenseCategories.filter(
-        name => !namesToRemove.has(name)
-      )
-    const updatedGlobalHiddenIncome = prefs.globalHiddenIncomeCategories.filter(
-      name => !namesToRemove.has(name)
-    )
-
-    // Only update if something changed
-    if (
-      updatedHiddenExpense.length !== prefs.hiddenExpenseCategories.length ||
-      updatedHiddenIncome.length !== prefs.hiddenIncomeCategories.length ||
-      updatedGlobalHiddenExpense.length !==
-        prefs.globalHiddenExpenseCategories.length ||
-      updatedGlobalHiddenIncome.length !==
-        prefs.globalHiddenIncomeCategories.length
-    ) {
-      await this.prisma.filterPreferences.update({
-        where: { userId },
-        data: {
-          hiddenExpenseCategories: updatedHiddenExpense,
-          hiddenIncomeCategories: updatedHiddenIncome,
-          globalHiddenExpenseCategories: updatedGlobalHiddenExpense,
-          globalHiddenIncomeCategories: updatedGlobalHiddenIncome,
-        },
-      })
-    }
   }
 
   async create(

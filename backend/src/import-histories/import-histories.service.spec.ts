@@ -4,7 +4,7 @@ import type { TestingModule } from '@nestjs/testing'
 import { NotFoundException } from '@nestjs/common'
 import { ImportHistoriesService } from './import-histories.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { ImportStatus, TransactionType } from '../generated/prisma'
+import { ImportStatus } from '../generated/prisma'
 
 const mockUserId = '550e8400-e29b-41d4-a716-446655440001'
 const mockImportId = '550e8400-e29b-41d4-a716-446655440100'
@@ -221,6 +221,16 @@ describe('ImportHistoriesService', () => {
   })
 
   describe('deleteImport', () => {
+    const setupDeleteMocks = (): void => {
+      mockPrismaService.importHistory.findFirst.mockResolvedValue(
+        mockImportHistory
+      )
+      mockPrismaService.transaction.deleteMany.mockResolvedValue({ count: 10 })
+      mockPrismaService.importHistory.delete.mockResolvedValue(
+        mockImportHistory
+      )
+    }
+
     it('should throw NotFoundException if import not found', async () => {
       mockPrismaService.importHistory.findFirst.mockResolvedValue(null)
 
@@ -230,15 +240,7 @@ describe('ImportHistoriesService', () => {
     })
 
     it('should delete transactions linked to the import', async () => {
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.transaction.deleteMany.mockResolvedValue({ count: 10 })
-      mockPrismaService.importHistory.delete.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.category.findMany.mockResolvedValue([])
-      mockPrismaService.account.findMany.mockResolvedValue([])
+      setupDeleteMocks()
 
       await service.deleteImport(mockImportId, mockUserId)
 
@@ -248,15 +250,7 @@ describe('ImportHistoriesService', () => {
     })
 
     it('should delete the import history record', async () => {
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.transaction.deleteMany.mockResolvedValue({ count: 10 })
-      mockPrismaService.importHistory.delete.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.category.findMany.mockResolvedValue([])
-      mockPrismaService.account.findMany.mockResolvedValue([])
+      setupDeleteMocks()
 
       await service.deleteImport(mockImportId, mockUserId)
 
@@ -265,234 +259,40 @@ describe('ImportHistoriesService', () => {
       })
     })
 
-    it('should delete orphan categories (categories with no transactions)', async () => {
-      const orphanCategory = {
-        id: 'cat-1',
-        name: 'Alimentation',
-        userId: mockUserId,
-        type: TransactionType.EXPENSE,
-        _count: { transactions: 0 },
-      }
-      const categoryWithTx = {
-        id: 'cat-2',
-        name: 'Transport',
-        userId: mockUserId,
-        type: TransactionType.EXPENSE,
-        _count: { transactions: 5 },
-      }
-
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.transaction.deleteMany.mockResolvedValue({ count: 10 })
-      mockPrismaService.importHistory.delete.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.category.findMany.mockResolvedValue([
-        orphanCategory,
-        categoryWithTx,
-      ])
-      mockPrismaService.filterPreferences.findUnique.mockResolvedValue(null)
-      mockPrismaService.category.deleteMany.mockResolvedValue({ count: 1 })
-      mockPrismaService.account.findMany.mockResolvedValue([])
+    it('should never delete categories on import deletion (preserved as user-configured entities)', async () => {
+      setupDeleteMocks()
 
       await service.deleteImport(mockImportId, mockUserId)
 
-      expect(mockPrismaService.category.deleteMany).toHaveBeenCalledWith({
-        where: { id: { in: ['cat-1'] } },
-      })
+      // Category deletion was the source of cascading data loss: deleting a
+      // Category cascades to its Subcategories, CategoryAssociations and
+      // BudgetPlanEntries. These carry user-configured state (icons,
+      // associations between reimbursement categories, budget plans) and must
+      // never be deleted as a side effect of removing an import.
+      expect(mockPrismaService.category.findMany).not.toHaveBeenCalled()
+      expect(mockPrismaService.category.deleteMany).not.toHaveBeenCalled()
+    })
+
+    it('should never touch FilterPreferences on import deletion', async () => {
+      setupDeleteMocks()
+
+      await service.deleteImport(mockImportId, mockUserId)
+
+      expect(
+        mockPrismaService.filterPreferences.findUnique
+      ).not.toHaveBeenCalled()
+      expect(mockPrismaService.filterPreferences.update).not.toHaveBeenCalled()
     })
 
     it('should never delete accounts on import deletion (preserved as user-configured entities)', async () => {
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.transaction.deleteMany.mockResolvedValue({ count: 10 })
-      mockPrismaService.importHistory.delete.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.category.findMany.mockResolvedValue([])
+      setupDeleteMocks()
 
       await service.deleteImport(mockImportId, mockUserId)
 
-      // Account deletion was the source of a P0 data-loss bug.
-      // Accounts carry user-configured state (JOINT/STANDARD, divisor, exclusion
-      // flags) and must never be deleted as a side effect.
+      // Same rationale as categories — Accounts carry user-configured state
+      // (JOINT/STANDARD, divisor, exclusion flags) and must never disappear
+      // as a side effect.
       expect(mockPrismaService.account.findMany).not.toHaveBeenCalled()
-      expect(mockPrismaService.account.deleteMany).not.toHaveBeenCalled()
-    })
-
-    it('should clean up FilterPreferences when deleting orphan categories', async () => {
-      const orphanCategory = {
-        id: 'cat-1',
-        name: 'Alimentation',
-        userId: mockUserId,
-        type: TransactionType.EXPENSE,
-        _count: { transactions: 0 },
-      }
-
-      const filterPrefs = {
-        userId: mockUserId,
-        hiddenExpenseCategories: ['Alimentation', 'Transport'],
-        hiddenIncomeCategories: ['Salaire'],
-        globalHiddenExpenseCategories: ['Alimentation'],
-        globalHiddenIncomeCategories: [],
-      }
-
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.transaction.deleteMany.mockResolvedValue({ count: 10 })
-      mockPrismaService.importHistory.delete.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.category.findMany.mockResolvedValue([orphanCategory])
-      mockPrismaService.filterPreferences.findUnique.mockResolvedValue(
-        filterPrefs
-      )
-      mockPrismaService.filterPreferences.update.mockResolvedValue({
-        ...filterPrefs,
-        hiddenExpenseCategories: ['Transport'],
-        globalHiddenExpenseCategories: [],
-      })
-      mockPrismaService.category.deleteMany.mockResolvedValue({ count: 1 })
-      mockPrismaService.account.findMany.mockResolvedValue([])
-
-      await service.deleteImport(mockImportId, mockUserId)
-
-      expect(mockPrismaService.filterPreferences.update).toHaveBeenCalledWith({
-        where: { userId: mockUserId },
-        data: {
-          hiddenExpenseCategories: ['Transport'],
-          hiddenIncomeCategories: ['Salaire'],
-          globalHiddenExpenseCategories: [],
-          globalHiddenIncomeCategories: [],
-        },
-      })
-    })
-
-    it('should not update FilterPreferences if no categories to remove', async () => {
-      const filterPrefs = {
-        userId: mockUserId,
-        hiddenExpenseCategories: ['Transport'],
-        hiddenIncomeCategories: [],
-        globalHiddenExpenseCategories: [],
-        globalHiddenIncomeCategories: [],
-      }
-
-      const orphanCategory = {
-        id: 'cat-1',
-        name: 'Alimentation', // Not in filter prefs
-        userId: mockUserId,
-        type: TransactionType.EXPENSE,
-        _count: { transactions: 0 },
-      }
-
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.transaction.deleteMany.mockResolvedValue({ count: 10 })
-      mockPrismaService.importHistory.delete.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.category.findMany.mockResolvedValue([orphanCategory])
-      mockPrismaService.filterPreferences.findUnique.mockResolvedValue(
-        filterPrefs
-      )
-      mockPrismaService.category.deleteMany.mockResolvedValue({ count: 1 })
-      mockPrismaService.account.findMany.mockResolvedValue([])
-
-      await service.deleteImport(mockImportId, mockUserId)
-
-      // Should not call update since 'Alimentation' is not in the filter prefs
-      expect(mockPrismaService.filterPreferences.update).not.toHaveBeenCalled()
-    })
-
-    it('should handle case when user has no FilterPreferences', async () => {
-      const orphanCategory = {
-        id: 'cat-1',
-        name: 'Alimentation',
-        userId: mockUserId,
-        type: TransactionType.EXPENSE,
-        _count: { transactions: 0 },
-      }
-
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.transaction.deleteMany.mockResolvedValue({ count: 10 })
-      mockPrismaService.importHistory.delete.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.category.findMany.mockResolvedValue([orphanCategory])
-      mockPrismaService.filterPreferences.findUnique.mockResolvedValue(null)
-      mockPrismaService.category.deleteMany.mockResolvedValue({ count: 1 })
-      mockPrismaService.account.findMany.mockResolvedValue([])
-
-      // Should not throw
-      await service.deleteImport(mockImportId, mockUserId)
-
-      expect(mockPrismaService.filterPreferences.update).not.toHaveBeenCalled()
-    })
-
-    it('should not delete categories if none are orphans', async () => {
-      const categoryWithTx = {
-        id: 'cat-1',
-        name: 'Alimentation',
-        userId: mockUserId,
-        type: TransactionType.EXPENSE,
-        _count: { transactions: 5 },
-      }
-
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.transaction.deleteMany.mockResolvedValue({ count: 10 })
-      mockPrismaService.importHistory.delete.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.category.findMany.mockResolvedValue([categoryWithTx])
-
-      await service.deleteImport(mockImportId, mockUserId)
-
-      expect(mockPrismaService.category.deleteMany).not.toHaveBeenCalled()
-      expect(mockPrismaService.account.deleteMany).not.toHaveBeenCalled()
-    })
-
-    it('should delete multiple orphan categories at once (accounts untouched)', async () => {
-      const orphanCategories = [
-        {
-          id: 'cat-1',
-          name: 'Alimentation',
-          userId: mockUserId,
-          type: TransactionType.EXPENSE,
-          _count: { transactions: 0 },
-        },
-        {
-          id: 'cat-2',
-          name: 'Loisirs',
-          userId: mockUserId,
-          type: TransactionType.EXPENSE,
-          _count: { transactions: 0 },
-        },
-      ]
-
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.transaction.deleteMany.mockResolvedValue({ count: 10 })
-      mockPrismaService.importHistory.delete.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.category.findMany.mockResolvedValue(orphanCategories)
-      mockPrismaService.filterPreferences.findUnique.mockResolvedValue(null)
-      mockPrismaService.category.deleteMany.mockResolvedValue({ count: 2 })
-
-      await service.deleteImport(mockImportId, mockUserId)
-
-      expect(mockPrismaService.category.deleteMany).toHaveBeenCalledWith({
-        where: { id: { in: ['cat-1', 'cat-2'] } },
-      })
       expect(mockPrismaService.account.deleteMany).not.toHaveBeenCalled()
     })
   })
