@@ -143,4 +143,48 @@ describe('useAccountsStore', () => {
     expect(store.jointAccounts).toHaveLength(2)
     expect(store.jointAccounts.every(a => a.type === 'JOINT')).toBe(true)
   })
+
+  describe('rename()', () => {
+    it('updates the local cache with the renamed account', async () => {
+      const store = useAccountsStore()
+      store.accounts = [makeAccount({ id: '1', name: 'Old name' })]
+      mockedApi.updateAccount.mockResolvedValue(
+        makeAccount({ id: '1', name: 'New name' })
+      )
+
+      await store.rename('1', 'New name')
+
+      expect(mockedApi.updateAccount).toHaveBeenCalledWith('1', {
+        name: 'New name',
+      })
+      expect(store.accounts[0].name).toBe('New name')
+    })
+
+    it('does not toast or set shared error state; lets the caller catch', async () => {
+      const store = useAccountsStore()
+      store.accounts = [makeAccount({ id: '1', name: 'Old name' })]
+      const apiError = new Error('An account named "Existing" already exists.')
+      mockedApi.updateAccount.mockRejectedValue(apiError)
+
+      await expect(store.rename('1', 'Existing')).rejects.toBe(apiError)
+
+      // Shared store error state stays clean — UI handles inline.
+      expect(store.error).toBeNull()
+      // Local cache untouched on failure.
+      expect(store.accounts[0].name).toBe('Old name')
+    })
+
+    it('leaves the local cache unchanged when the renamed id is unknown', async () => {
+      const store = useAccountsStore()
+      store.accounts = [makeAccount({ id: '1', name: 'A' })]
+      mockedApi.updateAccount.mockResolvedValue(
+        makeAccount({ id: 'unknown', name: 'B' })
+      )
+
+      await store.rename('unknown', 'B')
+
+      expect(store.accounts).toHaveLength(1)
+      expect(store.accounts[0].name).toBe('A')
+    })
+  })
 })

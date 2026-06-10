@@ -1,6 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { Account, AccountType } from '../generated/prisma'
+import { Account, AccountType, Prisma } from '../generated/prisma'
 import { UpdateAccountDto } from './dto'
 
 @Injectable()
@@ -33,7 +37,8 @@ export class AccountsService {
   }
 
   /**
-   * Update an account
+   * Update an account. When renaming, the new name is enforced unique per
+   * user by the DB constraint; conflicts surface as ConflictException.
    */
   async update(
     userId: string,
@@ -63,17 +68,31 @@ export class AccountsService {
       isExcludedFromBudget = true
     }
 
-    return this.prisma.account.update({
-      where: { id: accountId },
-      data: {
-        ...(dto.type !== undefined && { type: dto.type }),
-        ...(divisor !== undefined && { divisor }),
-        ...(isExcludedFromBudget !== undefined && { isExcludedFromBudget }),
-        ...(dto.isExcludedFromStats !== undefined && {
-          isExcludedFromStats: dto.isExcludedFromStats,
-        }),
-      },
-    })
+    try {
+      return await this.prisma.account.update({
+        where: { id: accountId },
+        data: {
+          ...(dto.name !== undefined && { name: dto.name }),
+          ...(dto.type !== undefined && { type: dto.type }),
+          ...(divisor !== undefined && { divisor }),
+          ...(isExcludedFromBudget !== undefined && { isExcludedFromBudget }),
+          ...(dto.isExcludedFromStats !== undefined && {
+            isExcludedFromStats: dto.isExcludedFromStats,
+          }),
+        },
+      })
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002' &&
+        dto.name !== undefined
+      ) {
+        throw new ConflictException(
+          `An account named "${dto.name}" already exists.`
+        )
+      }
+      throw err
+    }
   }
 
   /**

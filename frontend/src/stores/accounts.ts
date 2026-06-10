@@ -75,6 +75,19 @@ export const useAccountsStore = defineStore('accounts', () => {
     return result ?? false
   }
 
+  /**
+   * Rename an account. Lets the caller handle errors inline (no toast, no
+   * shared store error state) so that the UI can surface the conflict
+   * message next to the input being edited.
+   */
+  async function rename(accountId: string, name: string): Promise<void> {
+    const updated = await api.updateAccount(accountId, { name })
+    const index = accounts.value.findIndex(a => a.id === accountId)
+    if (index !== -1) {
+      accounts.value[index] = updated
+    }
+  }
+
   return {
     accounts,
     sortedAccounts,
@@ -87,5 +100,6 @@ export const useAccountsStore = defineStore('accounts', () => {
     load,
     updateType,
     updateSettings,
+    rename,
   }
 })

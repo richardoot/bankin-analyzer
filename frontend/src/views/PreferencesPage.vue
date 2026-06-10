@@ -104,6 +104,53 @@
     await accountsStore.updateType(accountId, newType)
   }
 
+  // ── Rename accounts ─────────────────────────────────────────────────────
+  // Local UI state for inline editing of account names. Keyed by account id.
+  const renameDrafts = ref<Record<string, string>>({})
+  const renameErrors = ref<Record<string, string | null>>({})
+  const renameSaving = ref<Record<string, boolean>>({})
+
+  function draftFor(accountId: string, currentName: string): string {
+    return renameDrafts.value[accountId] ?? currentName
+  }
+
+  function onDraftChange(accountId: string, value: string): void {
+    renameDrafts.value[accountId] = value
+    renameErrors.value[accountId] = null
+  }
+
+  function isDraftDirty(accountId: string, currentName: string): boolean {
+    const draft = renameDrafts.value[accountId]
+    if (draft === undefined) return false
+    return draft.trim() !== currentName && draft.trim().length > 0
+  }
+
+  async function submitRename(
+    accountId: string,
+    currentName: string
+  ): Promise<void> {
+    const draft = renameDrafts.value[accountId]?.trim() ?? ''
+    if (draft.length === 0 || draft === currentName) return
+
+    renameSaving.value[accountId] = true
+    renameErrors.value[accountId] = null
+    try {
+      await accountsStore.rename(accountId, draft)
+      delete renameDrafts.value[accountId]
+      toast.success(`Compte renommé en « ${draft} »`)
+    } catch (err) {
+      renameErrors.value[accountId] =
+        err instanceof Error ? err.message : 'Erreur lors du renommage'
+    } finally {
+      renameSaving.value[accountId] = false
+    }
+  }
+
+  function cancelRename(accountId: string): void {
+    delete renameDrafts.value[accountId]
+    renameErrors.value[accountId] = null
+  }
+
   function openModal(): void {
     selectedExpenseCategoryId.value = ''
     selectedIncomeCategoryId.value = ''
@@ -582,6 +629,105 @@
               </p>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Rename Accounts Section -->
+      <div
+        class="mt-8 rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
+      >
+        <div class="mb-6">
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            Renommer les comptes bancaires
+          </h2>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Utile pour corriger un nom, harmoniser la casse ou fusionner deux
+            comptes en doublon (typo, orthographe). Le renommage s'applique
+            partout dans l'application.
+          </p>
+        </div>
+
+        <div v-if="accountsStore.isLoading" class="py-4 text-sm text-gray-500">
+          Chargement...
+        </div>
+
+        <div v-else-if="accountsStore.sortedAccounts.length === 0">
+          <p
+            class="text-sm text-gray-500 dark:text-gray-400 italic bg-gray-50 dark:bg-slate-800 rounded-lg p-4"
+          >
+            Aucun compte disponible. Importez des transactions pour voir vos
+            comptes.
+          </p>
+        </div>
+
+        <ul v-else class="space-y-3">
+          <li
+            v-for="account in accountsStore.sortedAccounts"
+            :key="account.id"
+            class="rounded-lg border border-gray-200 dark:border-slate-700 p-3"
+          >
+            <form
+              class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3"
+              @submit.prevent="submitRename(account.id, account.name)"
+            >
+              <label class="sr-only" :for="`account-name-${account.id}`">
+                Nom du compte {{ account.name }}
+              </label>
+              <input
+                :id="`account-name-${account.id}`"
+                type="text"
+                :value="draftFor(account.id, account.name)"
+                :disabled="renameSaving[account.id]"
+                maxlength="100"
+                class="flex-1 rounded-md border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                @input="
+                  onDraftChange(
+                    account.id,
+                    ($event.target as HTMLInputElement).value
+                  )
+                "
+              />
+              <div class="flex gap-2">
+                <button
+                  type="submit"
+                  :disabled="
+                    !isDraftDirty(account.id, account.name) ||
+                    renameSaving[account.id]
+                  "
+                  class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {{
+                    renameSaving[account.id] ? 'Enregistrement…' : 'Renommer'
+                  }}
+                </button>
+                <button
+                  v-if="isDraftDirty(account.id, account.name)"
+                  type="button"
+                  :disabled="renameSaving[account.id]"
+                  class="rounded-md bg-gray-100 dark:bg-slate-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600 disabled:opacity-50"
+                  @click="cancelRename(account.id)"
+                >
+                  Annuler
+                </button>
+              </div>
+            </form>
+            <p
+              v-if="renameErrors[account.id]"
+              class="mt-2 text-sm text-red-600 dark:text-red-400"
+            >
+              {{ renameErrors[account.id] }}
+            </p>
+          </li>
+        </ul>
+
+        <div
+          class="mt-6 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4 text-sm text-amber-800 dark:text-amber-200"
+        >
+          <strong>Fusion :</strong> pour fusionner deux comptes en doublon,
+          renommez l'un avec le nom <em>exact</em> de l'autre — un message
+          d'erreur s'affichera car le nom existe déjà. Dans ce cas, il faudra
+          d'abord supprimer manuellement le compte cible (pas encore possible
+          via l'UI), ou renommer ce compte vers un troisième nom unique.
         </div>
       </div>
 

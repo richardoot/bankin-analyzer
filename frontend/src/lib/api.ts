@@ -172,6 +172,7 @@ export interface AccountDto {
 }
 
 export interface UpdateAccountDto {
+  name?: string
   type?: AccountType
   divisor?: number
   isExcludedFromBudget?: boolean
@@ -804,7 +805,14 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to update account')
+      let message = 'Failed to update account'
+      try {
+        const payload = (await response.json()) as { message?: string }
+        if (payload?.message) message = payload.message
+      } catch {
+        // Body wasn't JSON — fall back to the generic message.
+      }
+      throw new Error(message)
     }
 
     return response.json() as Promise<AccountDto>
