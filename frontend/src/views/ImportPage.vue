@@ -269,13 +269,10 @@
         importHistory.id
       )
 
-      // Get unique categories and accounts
+      // Get unique categories for the recap screen.
       const uniqueCategories = new Set(
         parsedTransactions.value.map(t => t.category)
       )
-      const uniqueAccounts = [
-        ...new Set(parsedTransactions.value.map(t => t.account)),
-      ]
 
       // Calculate date range from transactions
       const dates = parsedTransactions.value.map(t =>
@@ -284,14 +281,15 @@
       const dateRangeStart = new Date(Math.min(...dates)).toISOString()
       const dateRangeEnd = new Date(Math.max(...dates)).toISOString()
 
-      // Finalize import history with final stats
+      // Finalize import history with final stats. The list of accounts touched
+      // is computed server-side from the imported transactions, no need to send
+      // it explicitly.
       await api.finalizeImport(importHistory.id, {
         transactionsImported: result.imported,
         categoriesCreated: 0, // Categories are created on backend, we don't track new ones here
         duplicatesSkipped: result.duplicates,
         dateRangeStart,
         dateRangeEnd,
-        accounts: uniqueAccounts,
       })
 
       // Prepare recap query params

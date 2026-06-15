@@ -1,5 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger'
-import { IsInt, IsDateString, IsArray, IsString, Min } from 'class-validator'
+import { IsInt, IsDateString, Min } from 'class-validator'
 
 export class FinalizeImportDto {
   /** Number of transactions imported */
@@ -24,10 +23,4 @@ export class FinalizeImportDto {
   /** End date of imported transactions range */
   @IsDateString()
   dateRangeEnd!: string
-
-  /** List of accounts concerned */
-  @ApiProperty({ type: [String] })
-  @IsArray()
-  @IsString({ each: true })
-  accounts!: string[]
 }

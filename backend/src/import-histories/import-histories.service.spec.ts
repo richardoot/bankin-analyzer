@@ -9,7 +9,7 @@ import { ImportStatus } from '../generated/prisma'
 const mockUserId = '550e8400-e29b-41d4-a716-446655440001'
 const mockImportId = '550e8400-e29b-41d4-a716-446655440100'
 
-const mockImportHistory = {
+const mockImportHistoryBase = {
   id: mockImportId,
   userId: mockUserId,
   status: ImportStatus.COMPLETED,
@@ -19,12 +19,17 @@ const mockImportHistory = {
   totalInFile: 11,
   dateRangeStart: new Date('2024-01-01'),
   dateRangeEnd: new Date('2024-01-31'),
-  accounts: ['Compte Courant'],
   fileName: 'export.csv',
   createdAt: new Date('2024-02-01'),
 }
 
+const mockImportHistoryRow = {
+  ...mockImportHistoryBase,
+  accounts: ['Compte Courant'],
+}
+
 const mockPrismaService = {
+  $queryRaw: vi.fn(),
   importHistory: {
     findMany: vi.fn(),
     findFirst: vi.fn(),
@@ -69,37 +74,37 @@ describe('ImportHistoriesService', () => {
   })
 
   describe('findAllByUser', () => {
-    it('should return all imports for a user', async () => {
-      mockPrismaService.importHistory.findMany.mockResolvedValue([
-        mockImportHistory,
-      ])
+    it('returns rows computed via $queryRaw with accounts joined from transactions', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([mockImportHistoryRow])
 
       const result = await service.findAllByUser(mockUserId)
 
-      expect(result).toEqual([mockImportHistory])
-      expect(mockPrismaService.importHistory.findMany).toHaveBeenCalledWith({
-        where: { userId: mockUserId },
-        orderBy: { createdAt: 'desc' },
-      })
+      expect(result).toEqual([mockImportHistoryRow])
+      // The legacy ORM read must no longer be used.
+      expect(mockPrismaService.importHistory.findMany).not.toHaveBeenCalled()
+      expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(1)
+    })
+
+    it('returns empty array when the user has no imports', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([])
+
+      const result = await service.findAllByUser(mockUserId)
+
+      expect(result).toEqual([])
     })
   })
 
   describe('findById', () => {
-    it('should return an import by id', async () => {
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(
-        mockImportHistory
-      )
+    it('returns the row with computed accounts when found', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([mockImportHistoryRow])
 
       const result = await service.findById(mockImportId, mockUserId)
 
-      expect(result).toEqual(mockImportHistory)
-      expect(mockPrismaService.importHistory.findFirst).toHaveBeenCalledWith({
-        where: { id: mockImportId, userId: mockUserId },
-      })
+      expect(result).toEqual(mockImportHistoryRow)
     })
 
-    it('should return null if not found', async () => {
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(null)
+    it('returns null when no row matches', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([])
 
       const result = await service.findById('non-existent', mockUserId)
 
@@ -108,7 +113,7 @@ describe('ImportHistoriesService', () => {
   })
 
   describe('getLatestImportDate', () => {
-    it('should return the latest import date', async () => {
+    it('returns the latest import date', async () => {
       const latestDate = new Date('2024-01-31')
       mockPrismaService.importHistory.findFirst.mockResolvedValue({
         dateRangeEnd: latestDate,
@@ -119,7 +124,7 @@ describe('ImportHistoriesService', () => {
       expect(result).toEqual(latestDate)
     })
 
-    it('should return null if no imports', async () => {
+    it('returns null when the user has no imports', async () => {
       mockPrismaService.importHistory.findFirst.mockResolvedValue(null)
 
       const result = await service.getLatestImportDate(mockUserId)
@@ -129,9 +134,9 @@ describe('ImportHistoriesService', () => {
   })
 
   describe('startImport', () => {
-    it('should create an import with IN_PROGRESS status', async () => {
+    it('creates an IN_PROGRESS row and returns it with an empty accounts array', async () => {
       const newImport = {
-        ...mockImportHistory,
+        ...mockImportHistoryBase,
         status: ImportStatus.IN_PROGRESS,
         transactionsImported: 0,
       }
@@ -142,7 +147,10 @@ describe('ImportHistoriesService', () => {
         fileName: 'export.csv',
       })
 
-      expect(result).toEqual(newImport)
+      expect(result.id).toBe(newImport.id)
+      expect(result.status).toBe(ImportStatus.IN_PROGRESS)
+      // No transactions are linked yet, so accounts is empty by construction.
+      expect(result.accounts).toEqual([])
       expect(mockPrismaService.importHistory.create).toHaveBeenCalledWith({
         data: {
           userId: mockUserId,
@@ -155,12 +163,15 @@ describe('ImportHistoriesService', () => {
   })
 
   describe('finalizeImport', () => {
-    it('should update import with final statistics', async () => {
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(
-        mockImportHistory
-      )
+    it('updates the row and re-reads the computed accounts', async () => {
+      // First call: existence check (findById). Second call: re-read after update.
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([mockImportHistoryRow])
+        .mockResolvedValueOnce([
+          { ...mockImportHistoryRow, accounts: ['Compte Joint'] },
+        ])
       mockPrismaService.importHistory.update.mockResolvedValue(
-        mockImportHistory
+        mockImportHistoryBase
       )
 
       const result = await service.finalizeImport(mockImportId, mockUserId, {
@@ -169,10 +180,9 @@ describe('ImportHistoriesService', () => {
         duplicatesSkipped: 1,
         dateRangeStart: new Date('2024-01-01'),
         dateRangeEnd: new Date('2024-01-31'),
-        accounts: ['Compte Courant'],
       })
 
-      expect(result).toEqual(mockImportHistory)
+      expect(result.accounts).toEqual(['Compte Joint'])
       expect(mockPrismaService.importHistory.update).toHaveBeenCalledWith({
         where: { id: mockImportId },
         data: expect.objectContaining({
@@ -180,10 +190,14 @@ describe('ImportHistoriesService', () => {
           transactionsImported: 10,
         }),
       })
+      // The `accounts` payload field must NOT be written anymore.
+      const updatePayload = mockPrismaService.importHistory.update.mock
+        .calls[0]?.[0] as { data: Record<string, unknown> }
+      expect(updatePayload.data).not.toHaveProperty('accounts')
     })
 
-    it('should throw NotFoundException if import not found', async () => {
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(null)
+    it('throws NotFoundException when the import does not exist', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([])
 
       await expect(
         service.finalizeImport(mockImportId, mockUserId, {
@@ -192,27 +206,30 @@ describe('ImportHistoriesService', () => {
           duplicatesSkipped: 1,
           dateRangeStart: new Date('2024-01-01'),
           dateRangeEnd: new Date('2024-01-31'),
-          accounts: ['Compte Courant'],
         })
       ).rejects.toThrow(NotFoundException)
+      expect(mockPrismaService.importHistory.update).not.toHaveBeenCalled()
     })
   })
 
   describe('markAsFailed', () => {
-    it('should mark import as failed', async () => {
-      const failedImport = { ...mockImportHistory, status: ImportStatus.FAILED }
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(
-        mockImportHistory
-      )
-      mockPrismaService.importHistory.update.mockResolvedValue(failedImport)
+    it('flips the status to FAILED and preserves the existing accounts list', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        { ...mockImportHistoryRow, accounts: ['A', 'B'] },
+      ])
+      mockPrismaService.importHistory.update.mockResolvedValue({
+        ...mockImportHistoryBase,
+        status: ImportStatus.FAILED,
+      })
 
       const result = await service.markAsFailed(mockImportId, mockUserId)
 
       expect(result.status).toBe(ImportStatus.FAILED)
+      expect(result.accounts).toEqual(['A', 'B'])
     })
 
-    it('should throw NotFoundException if import not found', async () => {
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(null)
+    it('throws NotFoundException when the import does not exist', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([])
 
       await expect(
         service.markAsFailed(mockImportId, mockUserId)
@@ -222,24 +239,22 @@ describe('ImportHistoriesService', () => {
 
   describe('deleteImport', () => {
     const setupDeleteMocks = (): void => {
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(
-        mockImportHistory
-      )
+      mockPrismaService.$queryRaw.mockResolvedValue([mockImportHistoryRow])
       mockPrismaService.transaction.deleteMany.mockResolvedValue({ count: 10 })
       mockPrismaService.importHistory.delete.mockResolvedValue(
-        mockImportHistory
+        mockImportHistoryBase
       )
     }
 
-    it('should throw NotFoundException if import not found', async () => {
-      mockPrismaService.importHistory.findFirst.mockResolvedValue(null)
+    it('throws NotFoundException when the import does not exist', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([])
 
       await expect(
         service.deleteImport(mockImportId, mockUserId)
       ).rejects.toThrow(NotFoundException)
     })
 
-    it('should delete transactions linked to the import', async () => {
+    it('deletes the transactions linked to the import', async () => {
       setupDeleteMocks()
 
       await service.deleteImport(mockImportId, mockUserId)
@@ -249,7 +264,7 @@ describe('ImportHistoriesService', () => {
       })
     })
 
-    it('should delete the import history record', async () => {
+    it('deletes the import history record', async () => {
       setupDeleteMocks()
 
       await service.deleteImport(mockImportId, mockUserId)
@@ -259,21 +274,16 @@ describe('ImportHistoriesService', () => {
       })
     })
 
-    it('should never delete categories on import deletion (preserved as user-configured entities)', async () => {
+    it('never deletes categories on import deletion (preserved as user-configured entities)', async () => {
       setupDeleteMocks()
 
       await service.deleteImport(mockImportId, mockUserId)
 
-      // Category deletion was the source of cascading data loss: deleting a
-      // Category cascades to its Subcategories, CategoryAssociations and
-      // BudgetPlanEntries. These carry user-configured state (icons,
-      // associations between reimbursement categories, budget plans) and must
-      // never be deleted as a side effect of removing an import.
       expect(mockPrismaService.category.findMany).not.toHaveBeenCalled()
       expect(mockPrismaService.category.deleteMany).not.toHaveBeenCalled()
     })
 
-    it('should never touch FilterPreferences on import deletion', async () => {
+    it('never touches FilterPreferences on import deletion', async () => {
       setupDeleteMocks()
 
       await service.deleteImport(mockImportId, mockUserId)
@@ -284,24 +294,22 @@ describe('ImportHistoriesService', () => {
       expect(mockPrismaService.filterPreferences.update).not.toHaveBeenCalled()
     })
 
-    it('should never delete accounts on import deletion (preserved as user-configured entities)', async () => {
+    it('never deletes accounts on import deletion (preserved as user-configured entities)', async () => {
       setupDeleteMocks()
 
       await service.deleteImport(mockImportId, mockUserId)
 
-      // Same rationale as categories — Accounts carry user-configured state
-      // (JOINT/STANDARD, divisor, exclusion flags) and must never disappear
-      // as a side effect.
       expect(mockPrismaService.account.findMany).not.toHaveBeenCalled()
       expect(mockPrismaService.account.deleteMany).not.toHaveBeenCalled()
     })
   })
 
   describe('create', () => {
-    it('should create a completed import history', async () => {
+    it('creates a COMPLETED row and re-reads it with computed accounts', async () => {
       mockPrismaService.importHistory.create.mockResolvedValue(
-        mockImportHistory
+        mockImportHistoryBase
       )
+      mockPrismaService.$queryRaw.mockResolvedValue([mockImportHistoryRow])
 
       const result = await service.create(mockUserId, {
         transactionsImported: 10,
@@ -310,18 +318,19 @@ describe('ImportHistoriesService', () => {
         totalInFile: 11,
         dateRangeStart: new Date('2024-01-01'),
         dateRangeEnd: new Date('2024-01-31'),
-        accounts: ['Compte Courant'],
         fileName: 'export.csv',
       })
 
-      expect(result).toEqual(mockImportHistory)
-      expect(mockPrismaService.importHistory.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          userId: mockUserId,
-          status: ImportStatus.COMPLETED,
-          transactionsImported: 10,
-        }),
+      expect(result).toEqual(mockImportHistoryRow)
+      const createPayload = mockPrismaService.importHistory.create.mock
+        .calls[0]?.[0] as { data: Record<string, unknown> }
+      expect(createPayload.data).toMatchObject({
+        userId: mockUserId,
+        status: ImportStatus.COMPLETED,
+        transactionsImported: 10,
       })
+      // The legacy `accounts` write is gone.
+      expect(createPayload.data).not.toHaveProperty('accounts')
     })
   })
 })

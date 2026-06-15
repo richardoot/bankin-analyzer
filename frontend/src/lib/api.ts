@@ -300,7 +300,6 @@ export interface FinalizeImportDto {
   duplicatesSkipped: number
   dateRangeStart: string
   dateRangeEnd: string
-  accounts: string[]
 }
 
 export interface CreateImportHistoryDto {
@@ -310,7 +309,6 @@ export interface CreateImportHistoryDto {
   totalInFile: number
   dateRangeStart: string
   dateRangeEnd: string
-  accounts: string[]
   fileName?: string
 }
 

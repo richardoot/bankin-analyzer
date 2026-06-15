@@ -253,8 +253,7 @@ model ImportHistory {
   dateRangeEnd   DateTime? @map("date_range_end")
 
   // Métadonnées
-  accounts String[] @default([])
-  fileName String?  @map("file_name")
+  fileName String? @map("file_name")
 
   createdAt DateTime @default(now()) @map("created_at")
 

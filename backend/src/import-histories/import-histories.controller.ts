@@ -91,7 +91,6 @@ export class ImportHistoriesController {
       duplicatesSkipped: dto.duplicatesSkipped,
       dateRangeStart: new Date(dto.dateRangeStart),
       dateRangeEnd: new Date(dto.dateRangeEnd),
-      accounts: dto.accounts,
     })
   }
 
@@ -126,7 +125,6 @@ export class ImportHistoriesController {
       totalInFile: dto.totalInFile,
       dateRangeStart: new Date(dto.dateRangeStart),
       dateRangeEnd: new Date(dto.dateRangeEnd),
-      accounts: dto.accounts,
       fileName: dto.fileName,
     })
   }
