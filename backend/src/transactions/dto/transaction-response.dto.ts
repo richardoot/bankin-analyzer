@@ -1,6 +1,20 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { TransactionType } from '../../generated/prisma'
 
+export class TransactionSettlementSummaryDto {
+  /** Settlement ID */
+  id!: string
+
+  /** Person ID who is settling their reimbursements with this income */
+  personId!: string
+
+  /** Person name */
+  personName!: string
+
+  /** Amount of this income used to settle the person's reimbursements */
+  amountUsed!: number
+}
+
 export class TransactionResponseDto {
   /** Transaction ID */
   id!: string
@@ -46,6 +60,14 @@ export class TransactionResponseDto {
 
   /** Category icon emoji */
   categoryIcon?: string | null
+
+  /**
+   * Settlements that use this income transaction to settle a person's
+   * reimbursement requests. Only populated for INCOME transactions that have
+   * at least one settlement.
+   */
+  @ApiProperty({ type: [TransactionSettlementSummaryDto], required: false })
+  settlements?: TransactionSettlementSummaryDto[]
 
   /** Creation date */
   createdAt!: Date

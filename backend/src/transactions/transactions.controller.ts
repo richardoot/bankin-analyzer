@@ -34,6 +34,12 @@ type TransactionWithRelations = Transaction & {
   category?: { name: string; icon?: string | null }
   subcategoryRef?: { id: string; name: string }
   accountRef: { name: string }
+  settlementsAsIncome?: {
+    id: string
+    amountUsed: unknown
+    personId: string
+    person: { name: string }
+  }[]
 }
 
 @ApiTags('transactions')
@@ -62,6 +68,16 @@ export class TransactionsController {
       subcategoryId: tx.subcategoryId,
       subcategoryName: tx.subcategoryRef?.name ?? null,
       categoryIcon: tx.category?.icon ?? null,
+      ...(tx.settlementsAsIncome?.length
+        ? {
+            settlements: tx.settlementsAsIncome.map(s => ({
+              id: s.id,
+              personId: s.personId,
+              personName: s.person.name,
+              amountUsed: Number(s.amountUsed),
+            })),
+          }
+        : {}),
       createdAt: tx.createdAt,
     }
   }

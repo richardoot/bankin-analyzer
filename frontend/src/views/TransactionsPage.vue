@@ -6,7 +6,9 @@
   import { api } from '@/lib/api'
   import type {
     TransactionDto,
+    TransactionSettlementSummaryDto,
     ReimbursementDto,
+    SettlementDto,
     CategoryDto,
     PaginationMeta,
   } from '@/lib/api'
@@ -14,6 +16,7 @@
   import TransactionReimbursementModal from '@/components/transactions/TransactionReimbursementModal.vue'
   import BulkCategoryModal from '@/components/transactions/BulkCategoryModal.vue'
   import ReimbursementCategoryConfirmModal from '@/components/transactions/ReimbursementCategoryConfirmModal.vue'
+  import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
   import { formatCurrency } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
 
@@ -143,6 +146,31 @@
     suggestedIncomeCategory: CategoryDto | null
   } | null>(null)
   const isUpdatingReimbursementCategories = ref(false)
+
+  // Modal state for viewing a settlement linked to an income transaction
+  const showSettlementDetailModal = ref(false)
+  const selectedSettlement = ref<SettlementDto | null>(null)
+  const isLoadingSettlement = ref(false)
+
+  async function openSettlementDetail(
+    summary: TransactionSettlementSummaryDto
+  ): Promise<void> {
+    if (isLoadingSettlement.value) return
+    isLoadingSettlement.value = true
+    try {
+      selectedSettlement.value = await api.getSettlement(summary.id)
+      showSettlementDetailModal.value = true
+    } catch {
+      toast.error('Impossible de charger le detail du reglement')
+    } finally {
+      isLoadingSettlement.value = false
+    }
+  }
+
+  function closeSettlementDetail(): void {
+    showSettlementDetailModal.value = false
+    selectedSettlement.value = null
+  }
 
   // Mobile: expanded reimbursements state
   const expandedReimbursementsTxId = ref<string | null>(null)
@@ -1344,6 +1372,33 @@
                     >
                       Assigne
                     </span>
+                    <!-- Settlement links (one per person settled by this income) -->
+                    <template v-if="tx.type === 'INCOME' && tx.settlements">
+                      <button
+                        v-for="settlement in tx.settlements"
+                        :key="settlement.id"
+                        type="button"
+                        class="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-emerald-600 dark:text-emerald-400 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors disabled:opacity-50"
+                        :disabled="isLoadingSettlement"
+                        :title="`Voir le reglement de ${settlement.personName}`"
+                        @click="openSettlementDetail(settlement)"
+                      >
+                        <svg
+                          class="h-3 w-3"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.828-6.828l3-3a4 4 0 015.656 5.656l-1.5 1.5m-9.9 4.244a4 4 0 010-5.656"
+                          />
+                        </svg>
+                        {{ settlement.personName }}
+                      </button>
+                    </template>
                   </div>
 
                   <!-- ── Expanded reimbursements ── -->
@@ -1616,6 +1671,36 @@
                     >
                       Assigne
                     </span>
+                    <!-- Settlement links (one per person settled by this income) -->
+                    <div
+                      v-else-if="tx.type === 'INCOME' && tx.settlements"
+                      class="flex flex-wrap justify-center gap-1"
+                    >
+                      <button
+                        v-for="settlement in tx.settlements"
+                        :key="settlement.id"
+                        type="button"
+                        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-50"
+                        :disabled="isLoadingSettlement"
+                        :title="`Voir le reglement de ${settlement.personName}`"
+                        @click="openSettlementDetail(settlement)"
+                      >
+                        <svg
+                          class="h-3.5 w-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.828-6.828l3-3a4 4 0 015.656 5.656l-1.5 1.5m-9.9 4.244a4 4 0 010-5.656"
+                          />
+                        </svg>
+                        {{ settlement.personName }}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1847,6 +1932,14 @@
       @update="applyReimbursementCategoryUpdate"
       @keep="closeReimbursementCategoryConfirm"
       @delete="deleteReimbursementsFromConfirm"
+    />
+
+    <!-- Settlement detail (read-only) for income transactions -->
+    <SettlementDetailModal
+      :is-open="showSettlementDetailModal"
+      :settlement="selectedSettlement"
+      hide-delete
+      @close="closeSettlementDetail"
     />
   </div>
 </template>

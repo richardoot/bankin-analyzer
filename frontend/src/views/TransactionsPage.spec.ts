@@ -15,6 +15,7 @@ vi.mock('@/lib/api', () => ({
     updateTransaction: vi.fn(),
     bulkUpdateTransactions: vi.fn(),
     getCategoryAssociations: vi.fn(),
+    getSettlement: vi.fn(),
   },
 }))
 
@@ -112,6 +113,7 @@ describe('TransactionsPage — optimistic updates', () => {
           CategorySubcategoryModal: true,
           TransactionReimbursementModal: true,
           BulkCategoryModal: true,
+          SettlementDetailModal: true,
         },
       },
     })
@@ -290,6 +292,84 @@ describe('TransactionsPage — optimistic updates', () => {
       await flushPromises()
 
       expect(api.updateTransaction).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('settlement links on income transactions', () => {
+    const mountWith = async (txList: TransactionDto[]) => {
+      setupDefaultMocks(txList)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: txList,
+        meta: { ...defaultPaginationMeta, total: txList.length },
+      })
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+      return wrapper
+    }
+
+    const incomeWithSettlements = makeTx({
+      id: 'inc-1',
+      type: 'INCOME',
+      amount: 50,
+      description: 'Virement Marie',
+      settlements: [
+        { id: 'stl-1', personId: 'p-1', personName: 'Marie', amountUsed: 30 },
+        { id: 'stl-2', personId: 'p-2', personName: 'Paul', amountUsed: 20 },
+      ],
+    })
+
+    it('renders one link per settlement for an income transaction', async () => {
+      const wrapper = await mountWith([incomeWithSettlements])
+
+      const links = wrapper.findAll('button[title^="Voir le reglement de"]')
+      // One button per settlement, rendered in both mobile and desktop layouts
+      expect(links.length).toBeGreaterThanOrEqual(2)
+      const titles = links.map(l => l.attributes('title'))
+      expect(titles).toContain('Voir le reglement de Marie')
+      expect(titles).toContain('Voir le reglement de Paul')
+    })
+
+    it('fetches the settlement detail when a link is clicked', async () => {
+      vi.mocked(api.getSettlement).mockResolvedValue({
+        id: 'stl-1',
+        personId: 'p-1',
+        personName: 'Marie',
+        incomeTransactionId: 'inc-1',
+        incomeTransactionDescription: 'Virement Marie',
+        incomeTransactionDate: '2026-01-15',
+        incomeTransactionAmount: 50,
+        amountUsed: 30,
+        note: null,
+        createdAt: '2026-01-15T10:00:00.000Z',
+        reimbursements: [],
+      })
+
+      const wrapper = await mountWith([incomeWithSettlements])
+      const marieLink = wrapper.findAll(
+        'button[title="Voir le reglement de Marie"]'
+      )[0]
+      await marieLink.trigger('click')
+      await flushPromises()
+
+      expect(api.getSettlement).toHaveBeenCalledWith('stl-1')
+    })
+
+    it('does not render settlement links for expense transactions', async () => {
+      const wrapper = await mountWith([makeTx()])
+      expect(
+        wrapper.findAll('button[title^="Voir le reglement de"]').length
+      ).toBe(0)
     })
   })
 })

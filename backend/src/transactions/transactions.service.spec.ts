@@ -55,6 +55,21 @@ const mockTransaction2 = {
   amount: new Decimal(-85.0),
 }
 
+// Relations included on every read path (mirrors TRANSACTION_READ_INCLUDE)
+const readInclude = {
+  category: true,
+  subcategoryRef: true,
+  accountRef: { select: { name: true } },
+  settlementsAsIncome: {
+    select: {
+      id: true,
+      amountUsed: true,
+      personId: true,
+      person: { select: { name: true } },
+    },
+  },
+}
+
 const mockPrismaService = {
   transaction: {
     findMany: vi.fn(),
@@ -118,11 +133,7 @@ describe('TransactionsService', () => {
       expect(result).toEqual(mockTransaction)
       expect(mockPrismaService.transaction.findFirst).toHaveBeenCalledWith({
         where: { id: mockTransaction.id, userId: mockUserId },
-        include: {
-          category: true,
-          subcategoryRef: true,
-          accountRef: { select: { name: true } },
-        },
+        include: readInclude,
       })
     })
 
@@ -150,11 +161,7 @@ describe('TransactionsService', () => {
       expect(result).toEqual([mockTransaction, mockTransaction2])
       expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith({
         where: { userId: mockUserId },
-        include: {
-          category: true,
-          subcategoryRef: true,
-          accountRef: { select: { name: true } },
-        },
+        include: readInclude,
         orderBy: { date: 'desc' },
       })
     })
@@ -171,11 +178,7 @@ describe('TransactionsService', () => {
           userId: mockUserId,
           type: TransactionType.EXPENSE,
         },
-        include: {
-          category: true,
-          subcategoryRef: true,
-          accountRef: { select: { name: true } },
-        },
+        include: readInclude,
         orderBy: { date: 'desc' },
       })
     })
@@ -192,11 +195,7 @@ describe('TransactionsService', () => {
           userId: mockUserId,
           date: { gte: startDate, lte: endDate },
         },
-        include: {
-          category: true,
-          subcategoryRef: true,
-          accountRef: { select: { name: true } },
-        },
+        include: readInclude,
         orderBy: { date: 'desc' },
       })
     })
@@ -211,11 +210,7 @@ describe('TransactionsService', () => {
           userId: mockUserId,
           categoryId: mockCategory.id,
         },
-        include: {
-          category: true,
-          subcategoryRef: true,
-          accountRef: { select: { name: true } },
-        },
+        include: readInclude,
         orderBy: { date: 'desc' },
       })
     })
@@ -1215,11 +1210,7 @@ describe('TransactionsService', () => {
       expect(result).toEqual(mockTransaction)
       expect(mockPrismaService.transaction.findFirst).toHaveBeenCalledWith({
         where: { id: mockTransaction.id, userId: mockUserId },
-        include: {
-          category: true,
-          subcategoryRef: true,
-          accountRef: { select: { name: true } },
-        },
+        include: readInclude,
       })
       expect(mockPrismaService.transaction.delete).toHaveBeenCalledWith({
         where: { id: mockTransaction.id },

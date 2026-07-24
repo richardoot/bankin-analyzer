@@ -391,6 +391,51 @@ describe('TransactionsController', () => {
       expect(result.meta.hasPreviousPage).toBe(false)
     })
 
+    it('should map settlements summary for income transactions', async () => {
+      const incomeWithSettlement = {
+        ...mockTransaction,
+        id: '550e8400-e29b-41d4-a716-446655440009',
+        hash: 'income-hash',
+        description: 'Virement Marie',
+        amount: new Decimal(50),
+        type: TransactionType.INCOME,
+        settlementsAsIncome: [
+          {
+            id: 'stl-1',
+            amountUsed: new Decimal(30),
+            personId: 'p-1',
+            person: { name: 'Marie' },
+          },
+        ],
+      }
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [incomeWithSettlement],
+        total: 1,
+      })
+
+      const result = await controller.findAll(mockUser, 1, 20)
+
+      expect(result.data[0]?.settlements).toEqual([
+        {
+          id: 'stl-1',
+          personId: 'p-1',
+          personName: 'Marie',
+          amountUsed: 30,
+        },
+      ])
+    })
+
+    it('should omit settlements when the transaction has none', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [mockTransaction],
+        total: 1,
+      })
+
+      const result = await controller.findAll(mockUser, 1, 20)
+
+      expect(result.data[0]?.settlements).toBeUndefined()
+    })
+
     it('should filter by type', async () => {
       mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
         data: [mockTransaction],
