@@ -3,10 +3,14 @@
   import type { SettlementDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
 
-  const props = defineProps<{
-    isOpen: boolean
-    settlement: SettlementDto | null
-  }>()
+  const props = withDefaults(
+    defineProps<{
+      isOpen: boolean
+      settlement: SettlementDto | null
+      hideDelete?: boolean
+    }>(),
+    { hideDelete: false }
+  )
 
   const emit = defineEmits<{
     close: []
@@ -256,9 +260,11 @@
 
           <!-- Footer -->
           <div
-            class="flex justify-between items-center border-t border-gray-200 dark:border-slate-700 p-6"
+            class="flex items-center border-t border-gray-200 dark:border-slate-700 p-6"
+            :class="hideDelete ? 'justify-end' : 'justify-between'"
           >
             <button
+              v-if="!hideDelete"
               type="button"
               class="px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex items-center gap-2"
               @click="emit('delete')"

@@ -104,6 +104,13 @@ export interface SubcategoryDto {
   createdAt: string
 }
 
+export interface TransactionSettlementSummaryDto {
+  id: string
+  personId: string
+  personName: string
+  amountUsed: number
+}
+
 export interface TransactionDto {
   id: string
   date: string
@@ -120,6 +127,8 @@ export interface TransactionDto {
   subcategoryId?: string | null
   subcategoryName?: string | null
   categoryIcon?: string | null
+  /** Settlements using this income to settle a person's reimbursements (INCOME only) */
+  settlements?: TransactionSettlementSummaryDto[]
   createdAt: string
 }
 

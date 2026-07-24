@@ -24,6 +24,23 @@ interface HashData {
   date: Date
 }
 
+// Relations included whenever transactions are read for the API. Settlements are
+// only meaningful for INCOME transactions; the reimbursement details are fetched
+// on demand via the settlements endpoint, so a lightweight summary is enough here.
+const TRANSACTION_READ_INCLUDE = {
+  category: true,
+  subcategoryRef: true,
+  accountRef: { select: { name: true } },
+  settlementsAsIncome: {
+    select: {
+      id: true,
+      amountUsed: true,
+      personId: true,
+      person: { select: { name: true } },
+    },
+  },
+} as const
+
 @Injectable()
 export class TransactionsService {
   constructor(
@@ -177,11 +194,7 @@ export class TransactionsService {
             },
           }),
       },
-      include: {
-        category: true,
-        subcategoryRef: true,
-        accountRef: { select: { name: true } },
-      },
+      include: TRANSACTION_READ_INCLUDE,
       orderBy: { date: 'desc' },
     })
   }
@@ -218,11 +231,7 @@ export class TransactionsService {
     const [data, total] = await Promise.all([
       this.prisma.transaction.findMany({
         where,
-        include: {
-          category: true,
-          subcategoryRef: true,
-          accountRef: { select: { name: true } },
-        },
+        include: TRANSACTION_READ_INCLUDE,
         orderBy: { date: 'desc' },
         skip: (pagination.page - 1) * pagination.limit,
         take: pagination.limit,
@@ -236,11 +245,7 @@ export class TransactionsService {
   async findOne(id: string, userId: string): Promise<Transaction> {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, userId },
-      include: {
-        category: true,
-        subcategoryRef: true,
-        accountRef: { select: { name: true } },
-      },
+      include: TRANSACTION_READ_INCLUDE,
     })
 
     if (!transaction) {
