@@ -93,6 +93,7 @@ export interface CategoryDto {
   name: string
   type: 'EXPENSE' | 'INCOME'
   icon?: string | null
+  isExcludedFromBudget: boolean
   createdAt: string
 }
 
@@ -657,6 +658,22 @@ export const api = {
 
     if (!response.ok) {
       throw new Error('Failed to create category')
+    }
+
+    return response.json() as Promise<CategoryDto>
+  },
+
+  async updateCategory(
+    id: string,
+    dto: { isExcludedFromBudget?: boolean }
+  ): Promise<CategoryDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/categories/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to update category')
     }
 
     return response.json() as Promise<CategoryDto>

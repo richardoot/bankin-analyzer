@@ -125,6 +125,31 @@ describe('BudgetsService', () => {
       expect(result.expensesByCategory[0].averagePerMonth).toBe(300)
     })
 
+    it('should exclude budget-excluded categories at the SQL level', async () => {
+      // The exclusion is a WHERE clause, so we assert the generated aggregate
+      // query carries it (the mock cannot execute the filter itself).
+      mockPrismaService.$queryRaw.mockResolvedValue([])
+
+      await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+        includeMonthlyBreakdown: true,
+      })
+
+      const queries = mockPrismaService.$queryRaw.mock.calls.map(
+        ([sql]: [{ strings: string[] }]) => sql.strings.join('')
+      )
+      // Both the aggregate and the monthly-breakdown queries join categories
+      // and must filter out excluded ones.
+      const categoryJoinQueries = queries.filter((q: string) =>
+        q.includes('JOIN app.categories c')
+      )
+      expect(categoryJoinQueries.length).toBeGreaterThanOrEqual(2)
+      for (const q of categoryJoinQueries) {
+        expect(q).toContain('c.is_excluded_from_budget = false')
+      }
+    })
+
     it('should apply account divisor to expenses and reimbursements', async () => {
       // SQL already applies divisor: expense 400/2=200, reimbursement 200/2=100
       mockPrismaService.$queryRaw.mockResolvedValue([

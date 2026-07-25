@@ -17,4 +17,7 @@ export class CategoryResponseDto {
 
   /** Category icon emoji */
   icon?: string | null
+
+  /** Whether this category is excluded from budget statistics and plans */
+  isExcludedFromBudget!: boolean
 }

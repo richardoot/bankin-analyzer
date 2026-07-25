@@ -68,12 +68,13 @@ model Transaction {
 }
 
 model Category {
-  id        String          @id @default(uuid())
-  userId    String          @map("user_id")
-  name      String
-  type      TransactionType
-  icon      String?
-  createdAt DateTime        @default(now()) @map("created_at")
+  id                   String          @id @default(uuid())
+  userId               String          @map("user_id")
+  name                 String
+  type                 TransactionType
+  icon                 String?
+  isExcludedFromBudget Boolean         @default(false) @map("is_excluded_from_budget")
+  createdAt            DateTime        @default(now()) @map("created_at")
 
   user                        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions                Transaction[]

@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common'
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Body,
+  UseGuards,
+} from '@nestjs/common'
 import {
   ApiTags,
   ApiOperation,
@@ -7,7 +15,11 @@ import {
 } from '@nestjs/swagger'
 import { CategoriesService } from './categories.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
-import { CategoryResponseDto, CreateCategoryDto } from './dto'
+import {
+  CategoryResponseDto,
+  CreateCategoryDto,
+  UpdateCategoryDto,
+} from './dto'
 import { SupabaseGuard, CurrentUser } from '../auth'
 import type { User } from '../generated/prisma'
 
@@ -36,6 +48,17 @@ export class CategoriesController {
     @Body() dto: CreateCategoryDto
   ): Promise<CategoryResponseDto> {
     return this.categoriesService.create(user.id, dto)
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update a category' })
+  @ApiResponse({ status: 200, type: CategoryResponseDto })
+  async update(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() dto: UpdateCategoryDto
+  ): Promise<CategoryResponseDto> {
+    return this.categoriesService.update(user.id, id, dto)
   }
 
   @Post('generate-icons')

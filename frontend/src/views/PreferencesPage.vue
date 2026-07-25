@@ -5,6 +5,8 @@
   import { useAccountsStore } from '@/stores/accounts'
   import { api, type CategoryDto } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
+  import CategoryIcon from '@/components/CategoryIcon.vue'
+  import ToggleSwitch from '@/components/ToggleSwitch.vue'
 
   const categoryAssociationsStore = useCategoryAssociationsStore()
   const filtersStore = useFiltersStore()
@@ -68,6 +70,120 @@
   // Save hidden categories to backend
   async function saveHiddenCategories(): Promise<void> {
     await filtersStore.saveToBackend()
+  }
+
+  // Track in-flight budget-exclusion toggles to disable the control per category
+  const togglingBudgetExclusion = ref<Set<string>>(new Set())
+
+  // Toggle whether a category is excluded from budget statistics and plans.
+  // Unlike global hiding, the category stays visible in the dashboard.
+  async function toggleBudgetExclusion(category: CategoryDto): Promise<void> {
+    if (togglingBudgetExclusion.value.has(category.id)) return
+    const next = !category.isExcludedFromBudget
+    togglingBudgetExclusion.value.add(category.id)
+    try {
+      const updated = await api.updateCategory(category.id, {
+        isExcludedFromBudget: next,
+      })
+      category.isExcludedFromBudget = updated.isExcludedFromBudget
+      toast.success(
+        next
+          ? `« ${category.name} » exclue du budget`
+          : `« ${category.name} » réintégrée au budget`
+      )
+    } catch (err) {
+      console.error('Failed to update category budget exclusion:', err)
+      toast.error('Erreur lors de la mise à jour de la catégorie')
+    } finally {
+      togglingBudgetExclusion.value.delete(category.id)
+    }
+  }
+
+  // ── Per-category visibility axes ──────────────────────────────────────────
+  // Two independent switches per category, dispatched on the category type so
+  // the template stays free of expense/income branching:
+  //   • Dashboard  → global hiding (removes it from every view)
+  //   • Budget     → excludes it from budgets/plans/averages only
+  // A globally hidden category is necessarily out of the budget too, so its
+  // Budget switch reads as off and is disabled.
+  function isGloballyHidden(category: CategoryDto): boolean {
+    return category.type === 'EXPENSE'
+      ? filtersStore.isExpenseCategoryGloballyHidden(category.name)
+      : filtersStore.isIncomeCategoryGloballyHidden(category.name)
+  }
+
+  function isDashboardVisible(category: CategoryDto): boolean {
+    return !isGloballyHidden(category)
+  }
+
+  function toggleDashboardVisible(category: CategoryDto): void {
+    if (category.type === 'EXPENSE') {
+      filtersStore.toggleGlobalHiddenExpenseCategory(category.name)
+    } else {
+      filtersStore.toggleGlobalHiddenIncomeCategory(category.name)
+    }
+  }
+
+  function isBudgetIncluded(category: CategoryDto): boolean {
+    return isDashboardVisible(category) && !category.isExcludedFromBudget
+  }
+
+  // ── Search & quick filters ────────────────────────────────────────────────
+  // Keep long category lists navigable: a name search plus state filters that
+  // narrow to the categories the user actually needs to touch.
+  type CategoryStateFilter = 'all' | 'hidden' | 'excluded'
+  const categorySearch = ref('')
+  const categoryStateFilter = ref<CategoryStateFilter>('all')
+  const categoryStateOptions: { key: CategoryStateFilter; label: string }[] = [
+    { key: 'all', label: 'Toutes' },
+    { key: 'hidden', label: 'Masquées' },
+    { key: 'excluded', label: 'Hors budget' },
+  ]
+
+  /** Lower-case and strip diacritics so "energie" matches "Énergie". */
+  function normalize(value: string): string {
+    return value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+  }
+
+  function matchesFilters(category: CategoryDto): boolean {
+    const term = normalize(categorySearch.value.trim())
+    if (term && !normalize(category.name).includes(term)) return false
+    if (categoryStateFilter.value === 'hidden')
+      return isGloballyHidden(category)
+    if (categoryStateFilter.value === 'excluded') {
+      return category.isExcludedFromBudget || isGloballyHidden(category)
+    }
+    return true
+  }
+
+  // The two grouped, sortable lists rendered by a single template loop, after
+  // search + state filtering.
+  const categorySections = computed(() => [
+    {
+      key: 'expense' as const,
+      title: 'Catégories de dépenses',
+      items: sortedExpenseCategories.value.filter(matchesFilters),
+    },
+    {
+      key: 'income' as const,
+      title: 'Catégories de revenus',
+      items: sortedIncomeCategories.value.filter(matchesFilters),
+    },
+  ])
+
+  /** Total categories owned (before filtering) — to distinguish "none" from "no match". */
+  const totalCategoryCount = computed(() => categories.value.length)
+  /** Categories currently shown after filters. */
+  const filteredCategoryCount = computed(() =>
+    categorySections.value.reduce((sum, s) => sum + s.items.length, 0)
+  )
+
+  function clearCategoryFilters(): void {
+    categorySearch.value = ''
+    categoryStateFilter.value = 'all'
   }
 
   const canCreate = computed(
@@ -768,32 +884,53 @@
         </div>
 
         <div v-else class="space-y-6">
-          <!-- Expense Categories -->
-          <div v-if="sortedExpenseCategories.length > 0">
-            <h3
-              class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3"
+          <!-- Intro explaining the two per-category visibility axes -->
+          <p class="text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+            Choisissez où apparaît chaque catégorie.
+            <strong class="text-gray-700 dark:text-gray-300"
+              >Tableau de bord</strong
             >
-              Categories de depenses
-            </h3>
-            <div class="flex flex-wrap gap-2">
+            la retire de toutes les vues ;
+            <strong class="text-gray-700 dark:text-gray-300">Budget</strong>
+            la retire uniquement des budgets, plans et moyennes (utile pour les
+            dépenses exceptionnelles ou les prêts). Une catégorie masquée du
+            tableau de bord est aussi exclue du budget.
+          </p>
+
+          <!-- Search + quick state filters -->
+          <div
+            v-if="totalCategoryCount > 0"
+            class="flex flex-col gap-3 sm:flex-row sm:items-center"
+          >
+            <div class="relative flex-1">
+              <svg
+                class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+              <input
+                v-model="categorySearch"
+                type="text"
+                placeholder="Rechercher une catégorie…"
+                aria-label="Rechercher une catégorie"
+                class="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-9 text-sm text-gray-800 placeholder-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:placeholder-gray-500"
+              />
               <button
-                v-for="category in sortedExpenseCategories"
-                :key="category.id"
+                v-if="categorySearch"
                 type="button"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
-                :class="
-                  filtersStore.isExpenseCategoryGloballyHidden(category.name)
-                    ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
-                    : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
-                "
-                @click="
-                  filtersStore.toggleGlobalHiddenExpenseCategory(category.name)
-                "
+                aria-label="Effacer la recherche"
+                class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                @click="categorySearch = ''"
               >
                 <svg
-                  v-if="
-                    filtersStore.isExpenseCategoryGloballyHidden(category.name)
-                  "
                   class="h-4 w-4"
                   fill="none"
                   stroke="currentColor"
@@ -803,55 +940,139 @@
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     stroke-width="2"
-                    d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                    d="M6 18L18 6M6 6l12 12"
                   />
                 </svg>
-                {{ category.name }}
+              </button>
+            </div>
+
+            <div
+              class="inline-flex shrink-0 rounded-lg border border-gray-200 p-0.5 dark:border-slate-700"
+              role="group"
+              aria-label="Filtrer les catégories par état"
+            >
+              <button
+                v-for="opt in categoryStateOptions"
+                :key="opt.key"
+                type="button"
+                :aria-pressed="categoryStateFilter === opt.key"
+                class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                :class="
+                  categoryStateFilter === opt.key
+                    ? 'bg-emerald-500 text-white dark:bg-emerald-600'
+                    : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
+                "
+                @click="categoryStateFilter = opt.key"
+              >
+                {{ opt.label }}
               </button>
             </div>
           </div>
 
-          <!-- Income Categories -->
-          <div v-if="sortedIncomeCategories.length > 0">
-            <h3
-              class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3"
+          <!-- No-match state (categories exist but filters hide them all) -->
+          <div
+            v-if="totalCategoryCount > 0 && filteredCategoryCount === 0"
+            class="rounded-lg border border-dashed border-gray-200 py-8 text-center text-sm text-gray-500 dark:border-slate-700 dark:text-gray-400"
+          >
+            Aucune catégorie ne correspond.
+            <button
+              type="button"
+              class="ml-1 font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+              @click="clearCategoryFilters"
             >
-              Categories de revenus
-            </h3>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="category in sortedIncomeCategories"
-                :key="category.id"
-                type="button"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
-                :class="
-                  filtersStore.isIncomeCategoryGloballyHidden(category.name)
-                    ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
-                    : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
-                "
-                @click="
-                  filtersStore.toggleGlobalHiddenIncomeCategory(category.name)
-                "
+              Réinitialiser les filtres
+            </button>
+          </div>
+
+          <div
+            v-for="section in categorySections"
+            v-show="section.items.length > 0"
+            :key="section.key"
+          >
+            <!-- Section header with column labels aligned to the switches -->
+            <div
+              class="mb-1 grid grid-cols-[1fr_5.5rem_5.5rem] items-end gap-3 px-3"
+            >
+              <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ section.title }}
+              </h3>
+              <span
+                class="text-center text-[11px] font-medium leading-tight text-gray-500 dark:text-gray-400"
               >
-                <svg
-                  v-if="
-                    filtersStore.isIncomeCategoryGloballyHidden(category.name)
-                  "
-                  class="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
-                  />
-                </svg>
-                {{ category.name }}
-              </button>
+                Tableau de bord
+              </span>
+              <span
+                class="text-center text-[11px] font-medium leading-tight text-gray-500 dark:text-gray-400"
+              >
+                Budget
+              </span>
             </div>
+
+            <ul
+              class="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-100 dark:divide-slate-700/60 dark:border-slate-700/60"
+            >
+              <li
+                v-for="category in section.items"
+                :key="category.id"
+                class="grid grid-cols-[1fr_5.5rem_5.5rem] items-center gap-3 px-3 py-2 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/50"
+              >
+                <!-- Name + status tag -->
+                <div class="flex min-w-0 items-center gap-2">
+                  <CategoryIcon :icon="category.icon" :name="category.name">
+                    <span
+                      class="text-sm"
+                      :class="
+                        isDashboardVisible(category)
+                          ? 'text-gray-800 dark:text-gray-200'
+                          : 'text-gray-400 line-through dark:text-gray-500'
+                      "
+                    >
+                      {{ category.name }}
+                    </span>
+                  </CategoryIcon>
+                  <span
+                    v-if="!isDashboardVisible(category)"
+                    class="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                  >
+                    Masquée
+                  </span>
+                  <span
+                    v-else-if="category.isExcludedFromBudget"
+                    class="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                  >
+                    Hors budget
+                  </span>
+                </div>
+
+                <!-- Dashboard visibility switch -->
+                <div class="flex justify-center">
+                  <ToggleSwitch
+                    :checked="isDashboardVisible(category)"
+                    :aria-label="
+                      isDashboardVisible(category)
+                        ? `Masquer ${category.name} du tableau de bord`
+                        : `Afficher ${category.name} dans le tableau de bord`
+                    "
+                    @change="toggleDashboardVisible(category)"
+                  />
+                </div>
+
+                <!-- Budget inclusion switch (disabled when globally hidden) -->
+                <div class="flex justify-center">
+                  <ToggleSwitch
+                    :checked="isBudgetIncluded(category)"
+                    :disabled="!isDashboardVisible(category)"
+                    :loading="togglingBudgetExclusion.has(category.id)"
+                    :aria-label="
+                      isBudgetIncluded(category)
+                        ? `Exclure ${category.name} du budget`
+                        : `Inclure ${category.name} dans le budget`
+                    "
+                    @change="toggleBudgetExclusion(category)"
+                  />
+                </div>
+              </li>
+            </ul>
           </div>
 
           <!-- Empty State -->

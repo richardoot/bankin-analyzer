@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
+import { NotFoundException } from '@nestjs/common'
 import { CategoriesService } from './categories.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { TransactionType } from '../generated/prisma'
@@ -25,7 +26,9 @@ const mockPrismaService = {
   category: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
     create: vi.fn(),
+    update: vi.fn(),
   },
 }
 
@@ -140,6 +143,56 @@ describe('CategoriesService', () => {
 
       expect(result).toEqual(mockCategory)
       expect(mockPrismaService.category.create).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('update', () => {
+    it('should update isExcludedFromBudget for an owned category', async () => {
+      mockPrismaService.category.findFirst.mockResolvedValue(mockCategory)
+      mockPrismaService.category.update.mockResolvedValue({
+        ...mockCategory,
+        isExcludedFromBudget: true,
+      })
+
+      const result = await service.update(
+        mockCategory.userId,
+        mockCategory.id,
+        {
+          isExcludedFromBudget: true,
+        }
+      )
+
+      expect(result.isExcludedFromBudget).toBe(true)
+      expect(mockPrismaService.category.findFirst).toHaveBeenCalledWith({
+        where: { id: mockCategory.id, userId: mockCategory.userId },
+      })
+      expect(mockPrismaService.category.update).toHaveBeenCalledWith({
+        where: { id: mockCategory.id },
+        data: { isExcludedFromBudget: true },
+      })
+    })
+
+    it('should throw NotFoundException when the category is not owned', async () => {
+      mockPrismaService.category.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.update('other-user', mockCategory.id, {
+          isExcludedFromBudget: true,
+        })
+      ).rejects.toThrow(NotFoundException)
+      expect(mockPrismaService.category.update).not.toHaveBeenCalled()
+    })
+
+    it('should not set fields left undefined in the DTO', async () => {
+      mockPrismaService.category.findFirst.mockResolvedValue(mockCategory)
+      mockPrismaService.category.update.mockResolvedValue(mockCategory)
+
+      await service.update(mockCategory.userId, mockCategory.id, {})
+
+      expect(mockPrismaService.category.update).toHaveBeenCalledWith({
+        where: { id: mockCategory.id },
+        data: {},
+      })
     })
   })
 })
