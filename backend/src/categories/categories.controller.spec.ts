@@ -34,6 +34,7 @@ const mockCategory2 = {
 const mockCategoriesService = {
   findAllByUser: vi.fn(),
   create: vi.fn(),
+  update: vi.fn(),
   findWithoutIcons: vi.fn(),
   findSubcategoriesWithoutIcons: vi.fn(),
 }
@@ -112,6 +113,23 @@ describe('CategoriesController', () => {
       expect(mockCategoriesService.create).toHaveBeenCalledWith(
         mockUser.id,
         createDto
+      )
+    })
+  })
+
+  describe('update', () => {
+    it('should forward the update to the service', async () => {
+      const dto = { isExcludedFromBudget: true }
+      const updated = { ...mockCategory, isExcludedFromBudget: true }
+      mockCategoriesService.update.mockResolvedValue(updated)
+
+      const result = await controller.update(mockUser, mockCategory.id, dto)
+
+      expect(result).toEqual(updated)
+      expect(mockCategoriesService.update).toHaveBeenCalledWith(
+        mockUser.id,
+        mockCategory.id,
+        dto
       )
     })
   })

@@ -85,6 +85,7 @@ export class BudgetsService {
           AND t.date <= ${endDate}
           AND t.category_id IS NOT NULL
           AND COALESCE(a.is_excluded_from_budget, false) = false
+          AND c.is_excluded_from_budget = false
         GROUP BY t.category_id, c.name, c.icon, t.type, COALESCE(t.subcategory, '')
       `),
         this.prisma.categoryAssociation.findMany({
@@ -135,6 +136,7 @@ export class BudgetsService {
               AND t.date <= ${endDate}
               AND t.category_id IS NOT NULL
               AND COALESCE(a.is_excluded_from_budget, false) = false
+              AND c.is_excluded_from_budget = false
             GROUP BY t.category_id, t.type, TO_CHAR(t.date, 'YYYY-MM')
             ORDER BY t.category_id, TO_CHAR(t.date, 'YYYY-MM')
           `)

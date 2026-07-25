@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import type { Category, TransactionType } from '../generated/prisma'
-import type { CreateCategoryDto } from './dto'
+import type { CreateCategoryDto, UpdateCategoryDto } from './dto'
 
 @Injectable()
 export class CategoriesService {
@@ -36,6 +36,28 @@ export class CategoriesService {
 
   async create(userId: string, dto: CreateCategoryDto): Promise<Category> {
     return this.findOrCreate(userId, dto.name, dto.type)
+  }
+
+  async update(
+    userId: string,
+    id: string,
+    dto: UpdateCategoryDto
+  ): Promise<Category> {
+    const category = await this.prisma.category.findFirst({
+      where: { id, userId },
+    })
+    if (!category) {
+      throw new NotFoundException(`Category ${id} not found`)
+    }
+
+    return this.prisma.category.update({
+      where: { id },
+      data: {
+        ...(dto.isExcludedFromBudget !== undefined && {
+          isExcludedFromBudget: dto.isExcludedFromBudget,
+        }),
+      },
+    })
   }
 
   /**
