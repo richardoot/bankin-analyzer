@@ -367,5 +367,42 @@ describe('useBudgetComparison', () => {
       // (1000 + 1100) / 2 = 1050 (June dropped — incomplete)
       expect(inc.planActualIncomeAvg).toBe(1050)
     })
+
+    it('planToDateIncomeAvg averages started months only, not future ones', () => {
+      // Plan June→Dec 2026, today mid-July: June elapsed, July in progress,
+      // Aug→Dec empty. planIncomeAvg dilutes over 7 months; planToDate must
+      // divide by the 2 started months only.
+      const fakeNow = () => new Date('2026-07-15T12:00:00Z')
+      const stats = ref(
+        makeStats(
+          [
+            '2026-06',
+            '2026-07',
+            '2026-08',
+            '2026-09',
+            '2026-10',
+            '2026-11',
+            '2026-12',
+          ],
+          [cat('a', 'A', [1709, 1709, 0, 0, 0, 0, 0])],
+          [cat('inc', 'Salaire', [1232, 1232, 0, 0, 0, 0, 0])]
+        )
+      )
+
+      const { incomeAggregates } = useBudgetComparison({
+        plan: ref(makePlan('2026-06-01', '2026-12-31')),
+        comparison: ref(null),
+        statistics: stats,
+        now: fakeNow,
+      })
+
+      const inc = incomeAggregates(stats.value!.incomeByCategory)
+      // Diluted over 7 months: 2464 / 7 ≈ 352
+      expect(inc.planIncomeAvg).toBeCloseTo(2464 / 7, 2)
+      // Started months (June + July): 2464 / 2 = 1232
+      expect(inc.planToDateIncomeAvg).toBe(1232)
+      // Complete months (June only): 1232
+      expect(inc.planActualIncomeAvg).toBe(1232)
+    })
   })
 })

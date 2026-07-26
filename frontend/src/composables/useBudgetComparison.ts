@@ -170,6 +170,27 @@ export function useBudgetComparison({
     return out
   })
 
+  /**
+   * Indices of plan months that have already STARTED (elapsed months plus the
+   * current, still-running month). Unlike `planIndices`, this excludes future
+   * months that carry no data yet — so an average taken over these indices is
+   * not diluted by empty future months. Used as an income reference for plans
+   * whose complete-month average is not yet available.
+   */
+  const startedPlanIndices = computed<number[]>(() => {
+    if (!planMonthRange.value) return []
+    const today = now()
+    const currentYm = `${today.getUTCFullYear()}-${String(
+      today.getUTCMonth() + 1
+    ).padStart(2, '0')}`
+    const out: number[] = []
+    monthLabels.value.forEach((ym, i) => {
+      if (classifyMonth(ym) !== 'plan') return
+      if (ym <= currentYm) out.push(i)
+    })
+    return out
+  })
+
   /** Average of a per-category `monthlyAmounts` array over given indices. */
   function avgOverIndices(
     monthlyAmounts: number[] | undefined,
@@ -251,6 +272,11 @@ export function useBudgetComparison({
       planActualIncomeAvg: totalAvgOver(
         visibleIncomeCategories,
         completePlanIndices.value
+      ),
+      /** Avg over started plan months (elapsed + current) — not future-diluted. */
+      planToDateIncomeAvg: totalAvgOver(
+        visibleIncomeCategories,
+        startedPlanIndices.value
       ),
       comparisonIncomeAvg: totalAvgOver(
         visibleIncomeCategories,

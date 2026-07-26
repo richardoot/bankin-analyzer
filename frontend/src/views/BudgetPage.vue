@@ -275,6 +275,27 @@
   const comparisonIncomeAvg = computed(
     () => planIncomeAggregates.value.comparisonIncomeAvg
   )
+  const planToDateIncomeAvg = computed(
+    () => planIncomeAggregates.value.planToDateIncomeAvg
+  )
+
+  /**
+   * Monthly income reference for the chart's "Revenus" line, its tooltip
+   * savings, and the savings summary's fallback block. Must NOT default to
+   * `planIncomeAvg`: that divides observed income by the plan's FULL month
+   * count (incl. future, income-less months), so a 7-month plan with 2 elapsed
+   * months understates income ~3.5×. Preference order:
+   *   1. average over fully-elapsed plan months (most accurate),
+   *   2. the comparison average when a comparison is selected,
+   *   3. average over started plan months (elapsed + current) — de-diluted,
+   *   4. the raw plan average as a last resort.
+   */
+  const chartAverageIncome = computed(() => {
+    if (planActualIncomeAvg.value > 0) return planActualIncomeAvg.value
+    if (comparisonIncomeAvg.value > 0) return comparisonIncomeAvg.value
+    if (planToDateIncomeAvg.value > 0) return planToDateIncomeAvg.value
+    return planIncomeAvg.value
+  })
 
   const totalBudget = computed(() => {
     let total = 0
@@ -880,7 +901,7 @@
           <MonthlyExpensesChart
             :monthly-totals="monthlyTotalExpenses"
             :month-labels="statistics.monthLabels"
-            :average-income="planIncomeAvg"
+            :average-income="chartAverageIncome"
             :total-budget="totalBudget"
             :plan-start-month="plan.startDate.slice(0, 7)"
             :plan-end-month="plan.endDate.slice(0, 7)"
@@ -893,7 +914,7 @@
         <div class="mb-6">
           <BudgetSavingsSummary
             :plan-label="plan.name"
-            :plan-income-avg="planIncomeAvg"
+            :plan-income-avg="chartAverageIncome"
             :plan-budget-total="totalBudget"
             :plan-actual-expense-avg="planActualExpenseAvg"
             :plan-actual-income-avg="planActualIncomeAvg"
