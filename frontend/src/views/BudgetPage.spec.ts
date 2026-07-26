@@ -446,4 +446,72 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
   })
+
+  describe("chart income reference (no dilution by the plan's future months)", () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('passes income averaged over elapsed plan months, not the full plan span', async () => {
+      // Plan June→Dec 2026 (7 months). Only June has fully elapsed and July is
+      // in progress; Aug→Dec are empty. Income = 1232.28 in June and July.
+      // planIncomeAvg would dilute to 2464.56 / 7 ≈ 352.08 — the bug. The
+      // "Revenus" reference must instead reflect ~1232.28 (elapsed months).
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-07-15T12:00:00Z'))
+
+      const months = [
+        '2026-06',
+        '2026-07',
+        '2026-08',
+        '2026-09',
+        '2026-10',
+        '2026-11',
+        '2026-12',
+      ]
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue({
+        ...samplePlan,
+        id: 'plan-jun-dec',
+        name: 'Juin–Déc 2026',
+        startDate: '2026-06-01',
+        endDate: '2026-12-31',
+        monthCount: 7,
+      })
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...sampleStatistics,
+        periodMonths: 7,
+        monthLabels: months,
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            categoryIcon: '🍽️',
+            totalAmount: 3418,
+            transactionCount: 10,
+            averagePerMonth: 488,
+            monthlyAmounts: [1709, 1709, 0, 0, 0, 0, 0],
+          },
+        ],
+        incomeByCategory: [
+          {
+            categoryId: 'cat-salary',
+            categoryName: 'Salaire',
+            totalAmount: 2464.56,
+            transactionCount: 2,
+            averagePerMonth: 1232.28,
+            monthlyAmounts: [1232.28, 1232.28, 0, 0, 0, 0, 0],
+          },
+        ],
+      })
+
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+
+      const chart = wrapper.findComponent({ name: 'MonthlyExpensesChart' })
+      expect(chart.exists()).toBe(true)
+      // Elapsed-month average (June only), not the diluted 352.08.
+      expect(chart.props('averageIncome')).toBeCloseTo(1232.28, 2)
+      wrapper.unmount()
+    })
+  })
 })
