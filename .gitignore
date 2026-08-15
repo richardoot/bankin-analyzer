@@ -48,6 +48,13 @@ web_modules/
 # TypeScript cache
 *.tsbuildinfo
 
+# Emitted output of the composite vite.config (tsconfig.node.json) — the source
+# is vite.config.ts; these are build artifacts, never commit them.
+frontend/vite.config.js
+frontend/vite.config.js.map
+frontend/vite.config.d.ts
+frontend/vite.config.d.ts.map
+
 # Optional npm cache directory
 .npm
 

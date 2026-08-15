@@ -30,6 +30,20 @@ echo "✅ Database is ready!"
 echo "🔧 Running database migrations..."
 podman exec bankin-backend npx prisma migrate deploy || echo "⚠️  Migrations may have already been applied"
 
+# Seed de données de démo (opt-in via SEED_ON_START=true dans .env.docker).
+# ⚠️  Destructif : efface puis régénère les données de l'utilisateur de démo.
+if [ "${SEED_ON_START:-false}" = "true" ]; then
+    echo "🌱 Seeding demo data..."
+    podman exec \
+        -e SEED_DATABASE_URL="postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres" \
+        -e SEED_CREATE_USER="true" \
+        -e SEED_SUPABASE_URL="http://kong:8000" \
+        -e SEED_ANON_KEY="${ANON_KEY}" \
+        -e SEED_EMAIL="${SEED_EMAIL:-demo@bankin.local}" \
+        -e SEED_PASSWORD="${SEED_PASSWORD:-Password123!}" \
+        bankin-backend node prisma/seed.mjs || echo "⚠️  Seed failed (see logs above)"
+fi
+
 echo ""
 echo "============================================"
 echo "✅ All services started!"

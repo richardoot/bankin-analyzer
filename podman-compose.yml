@@ -51,7 +51,9 @@ services:
       # RSA signing key for OIDC ID tokens (required for OAuth 2.1 server)
       GOTRUE_JWT_KEY_ID: ${GOTRUE_JWT_KEY_ID}
       GOTRUE_JWT_KEYS: ${GOTRUE_JWT_KEYS}
-      GOTRUE_EXTERNAL_EMAIL_ENABLED: 'false'
+      # Email/password auth — enabled locally so the demo seed account can log
+      # in without Google OAuth. (Google remains enabled below.)
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: 'true'
       GOTRUE_MAILER_AUTOCONFIRM: 'true'
       # OAuth 2.1 Server (for MCP authentication)
       GOTRUE_OAUTH_SERVER_ENABLED: 'true'
