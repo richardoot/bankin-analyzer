@@ -39,6 +39,13 @@ const TRANSACTION_READ_INCLUDE = {
       person: { select: { name: true } },
     },
   },
+  tags: {
+    select: {
+      tag: {
+        select: { id: true, name: true, color: true, icon: true },
+      },
+    },
+  },
 } as const
 
 @Injectable()
@@ -209,6 +216,7 @@ export class TransactionsService {
       categoryId?: string
       isPointed?: boolean
       account?: string
+      tagId?: string
     }
   ): Promise<{ data: Transaction[]; total: number }> {
     const where = {
@@ -218,6 +226,9 @@ export class TransactionsService {
       ...(filters?.isPointed !== undefined && { isPointed: filters.isPointed }),
       ...(filters?.account && {
         accountRef: { name: filters.account },
+      }),
+      ...(filters?.tagId && {
+        tags: { some: { tagId: filters.tagId } },
       }),
       ...(filters?.startDate &&
         filters?.endDate && {

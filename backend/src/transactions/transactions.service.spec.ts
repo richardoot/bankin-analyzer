@@ -68,6 +68,13 @@ const readInclude = {
       person: { select: { name: true } },
     },
   },
+  tags: {
+    select: {
+      tag: {
+        select: { id: true, name: true, color: true, icon: true },
+      },
+    },
+  },
 }
 
 const mockPrismaService = {

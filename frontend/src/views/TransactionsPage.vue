@@ -3,6 +3,7 @@
   import { usePersonsStore } from '@/stores/persons'
   import { useAccountsStore } from '@/stores/accounts'
   import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
+  import { useTagsStore } from '@/stores/tags'
   import { api } from '@/lib/api'
   import type {
     TransactionDto,
@@ -13,6 +14,8 @@
     PaginationMeta,
   } from '@/lib/api'
   import CategorySubcategoryModal from '@/components/CategorySubcategoryModal.vue'
+  import TagChip from '@/components/tags/TagChip.vue'
+  import TagSelector from '@/components/tags/TagSelector.vue'
   import TransactionReimbursementModal from '@/components/transactions/TransactionReimbursementModal.vue'
   import BulkCategoryModal from '@/components/transactions/BulkCategoryModal.vue'
   import ReimbursementCategoryConfirmModal from '@/components/transactions/ReimbursementCategoryConfirmModal.vue'
@@ -25,6 +28,7 @@
   const personsStore = usePersonsStore()
   const accountsStore = useAccountsStore()
   const categoryAssociationsStore = useCategoryAssociationsStore()
+  const tagsStore = useTagsStore()
 
   // Transactions state
   const transactions = ref<TransactionDto[]>([])
@@ -50,6 +54,7 @@
     typeFilter: 'ALL' | 'EXPENSE' | 'INCOME'
     selectedCategory: string | null
     selectedAccount: string | null
+    selectedTag: string | null
     showOnlyNotPointed: boolean
   } {
     try {
@@ -60,6 +65,7 @@
           typeFilter: parsed.typeFilter ?? 'ALL',
           selectedCategory: parsed.selectedCategory ?? null,
           selectedAccount: parsed.selectedAccount ?? null,
+          selectedTag: parsed.selectedTag ?? null,
           showOnlyNotPointed: parsed.showOnlyNotPointed ?? false,
         }
       }
@@ -70,6 +76,7 @@
       typeFilter: 'ALL',
       selectedCategory: null,
       selectedAccount: null,
+      selectedTag: null,
       showOnlyNotPointed: false,
     }
   }
@@ -80,6 +87,7 @@
   const typeFilter = ref<'ALL' | 'EXPENSE' | 'INCOME'>(savedFilters.typeFilter)
   const selectedCategory = ref<string | null>(savedFilters.selectedCategory)
   const selectedAccount = ref<string | null>(savedFilters.selectedAccount)
+  const selectedTag = ref<string | null>(savedFilters.selectedTag)
   const showOnlyNotPointed = ref(savedFilters.showOnlyNotPointed)
 
   // Save filters to localStorage
@@ -90,6 +98,7 @@
         typeFilter: typeFilter.value,
         selectedCategory: selectedCategory.value,
         selectedAccount: selectedAccount.value,
+        selectedTag: selectedTag.value,
         showOnlyNotPointed: showOnlyNotPointed.value,
       })
     )
@@ -100,6 +109,7 @@
     typeFilter.value = 'ALL'
     selectedCategory.value = null
     selectedAccount.value = null
+    selectedTag.value = null
     showOnlyNotPointed.value = false
     localStorage.removeItem(FILTERS_STORAGE_KEY)
   }
@@ -110,6 +120,7 @@
       typeFilter.value !== 'ALL' ||
       selectedCategory.value !== null ||
       selectedAccount.value !== null ||
+      selectedTag.value !== null ||
       showOnlyNotPointed.value
     )
   })
@@ -599,7 +610,13 @@
 
   // Refetch when filters change (reset to page 1)
   watch(
-    [typeFilter, selectedCategory, selectedAccount, showOnlyNotPointed],
+    [
+      typeFilter,
+      selectedCategory,
+      selectedAccount,
+      selectedTag,
+      showOnlyNotPointed,
+    ],
     () => {
       saveFilters()
       const wasOnPage1 = currentPage.value === 1
@@ -629,6 +646,7 @@
         type: typeFilter.value === 'ALL' ? undefined : typeFilter.value,
         categoryId: selectedCategory.value || undefined,
         account: selectedAccount.value || undefined,
+        tagId: selectedTag.value || undefined,
         isPointed: showOnlyNotPointed.value ? false : undefined,
       })
       transactions.value = response.data
@@ -701,10 +719,85 @@
     }
   }
 
+  // ── Tag attach/detach on a single transaction (optimistic) ──
+  function txTagIds(tx: TransactionDto): string[] {
+    return (tx.tags ?? []).map(t => t.id)
+  }
+
+  async function handleAttachTag(
+    tx: TransactionDto,
+    tagId: string
+  ): Promise<void> {
+    const tag = tagsStore.tags.find(t => t.id === tagId)
+    const index = transactions.value.findIndex(t => t.id === tx.id)
+    if (!tag || index === -1) return
+
+    const current = transactions.value[index]
+    if ((current.tags ?? []).some(t => t.id === tagId)) return
+
+    // Optimistic add
+    transactions.value[index] = {
+      ...current,
+      tags: [
+        ...(current.tags ?? []),
+        { id: tag.id, name: tag.name, color: tag.color, icon: tag.icon },
+      ],
+    }
+
+    const attached = await tagsStore.attachToTransactions(tagId, [tx.id])
+    if (attached === 0) {
+      // Rollback
+      const idx = transactions.value.findIndex(t => t.id === tx.id)
+      if (idx !== -1) {
+        transactions.value[idx] = {
+          ...transactions.value[idx],
+          tags: (transactions.value[idx].tags ?? []).filter(
+            t => t.id !== tagId
+          ),
+        }
+      }
+    }
+  }
+
+  async function handleDetachTag(
+    tx: TransactionDto,
+    tagId: string
+  ): Promise<void> {
+    const index = transactions.value.findIndex(t => t.id === tx.id)
+    if (index === -1) return
+
+    const previous = transactions.value[index].tags ?? []
+    // Optimistic remove
+    transactions.value[index] = {
+      ...transactions.value[index],
+      tags: previous.filter(t => t.id !== tagId),
+    }
+
+    const ok = await tagsStore.detachFromTransaction(tagId, tx.id)
+    if (!ok) {
+      const idx = transactions.value.findIndex(t => t.id === tx.id)
+      if (idx !== -1) {
+        transactions.value[idx] = {
+          ...transactions.value[idx],
+          tags: previous,
+        }
+      }
+    }
+  }
+
+  async function handleCreateTag(
+    tx: TransactionDto,
+    name: string
+  ): Promise<void> {
+    const created = await tagsStore.addTag({ name })
+    if (created) await handleAttachTag(tx, created.id)
+  }
+
   onMounted(() => {
     personsStore.fetchPersons()
     accountsStore.load()
     categoryAssociationsStore.load()
+    tagsStore.fetchTags()
     fetchTransactions()
     fetchCategories()
     fetchReimbursements()
@@ -795,6 +888,29 @@
                   :value="account.name"
                 >
                   {{ account.name }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Tag filter -->
+            <div
+              class="col-span-2 md:col-span-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-2"
+            >
+              <label class="text-xs md:text-sm text-gray-600 dark:text-gray-400"
+                >Etiquette:</label
+              >
+              <select
+                v-model="selectedTag"
+                data-testid="transactions-tag-filter"
+                class="w-full md:w-auto px-3 py-2 md:py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              >
+                <option :value="null">Toutes</option>
+                <option
+                  v-for="tag in tagsStore.tags"
+                  :key="tag.id"
+                  :value="tag.id"
+                >
+                  {{ tag.name }}
                 </option>
               </select>
             </div>
@@ -1702,6 +1818,30 @@
                       </button>
                     </div>
                   </div>
+                </div>
+
+                <!-- Tags line (both layouts) -->
+                <div
+                  class="flex flex-wrap items-center gap-1.5 mt-2 ml-12 md:ml-2"
+                >
+                  <TagChip
+                    v-for="t in tx.tags ?? []"
+                    :key="t.id"
+                    :name="t.name"
+                    :color="t.color"
+                    :icon="t.icon"
+                    dense
+                    removable
+                    @remove="handleDetachTag(tx, t.id)"
+                  />
+                  <TagSelector
+                    v-if="!isSelectionMode"
+                    :selected-tag-ids="txTagIds(tx)"
+                    :tags="tagsStore.tags"
+                    @attach="id => handleAttachTag(tx, id)"
+                    @detach="id => handleDetachTag(tx, id)"
+                    @create="name => handleCreateTag(tx, name)"
+                  />
                 </div>
 
                 <!-- Reimbursements for this transaction (DESKTOP ONLY) -->

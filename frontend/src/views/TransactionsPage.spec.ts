@@ -16,6 +16,9 @@ vi.mock('@/lib/api', () => ({
     bulkUpdateTransactions: vi.fn(),
     getCategoryAssociations: vi.fn(),
     getSettlement: vi.fn(),
+    getTags: vi.fn(),
+    attachTagToTransactions: vi.fn(),
+    detachTagFromTransaction: vi.fn(),
   },
 }))
 
@@ -101,6 +104,7 @@ describe('TransactionsPage — optimistic updates', () => {
     vi.mocked(api.getAccounts).mockResolvedValue([])
     vi.mocked(api.getPersons).mockResolvedValue([])
     vi.mocked(api.getCategoryAssociations).mockResolvedValue([])
+    vi.mocked(api.getTags).mockResolvedValue([])
   }
 
   const mountPage = async () => {

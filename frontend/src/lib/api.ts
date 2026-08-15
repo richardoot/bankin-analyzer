@@ -112,6 +112,13 @@ export interface TransactionSettlementSummaryDto {
   amountUsed: number
 }
 
+export interface TransactionTagSummaryDto {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+}
+
 export interface TransactionDto {
   id: string
   date: string
@@ -130,6 +137,8 @@ export interface TransactionDto {
   categoryIcon?: string | null
   /** Settlements using this income to settle a person's reimbursements (INCOME only) */
   settlements?: TransactionSettlementSummaryDto[]
+  /** Tags attached to this transaction */
+  tags?: TransactionTagSummaryDto[]
   createdAt: string
 }
 
@@ -157,6 +166,7 @@ export interface TransactionQueryParams {
   categoryId?: string
   isPointed?: boolean
   account?: string
+  tagId?: string
 }
 
 export interface FilterPreferencesDto {
@@ -205,6 +215,116 @@ export interface CreatePersonDto {
 export interface UpdatePersonDto {
   name?: string
   email?: string
+}
+
+export interface TagDto {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+  transactionCount: number
+  /** Excluded from the dashboard's everyday averages */
+  isExceptional: boolean
+  /** Period during which everyday life is suspended (YYYY-MM-DD) */
+  eventStartDate: string | null
+  eventEndDate: string | null
+  /** Total envelope allocated to the event (never a monthly amount) */
+  budgetAmount: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateTagDto {
+  name: string
+  color?: string
+  icon?: string
+  isExceptional?: boolean
+  eventStartDate?: string
+  eventEndDate?: string
+  budgetAmount?: number
+}
+
+export interface UpdateTagDto {
+  name?: string
+  color?: string
+  icon?: string
+  isExceptional?: boolean
+  /** null clears the date */
+  eventStartDate?: string | null
+  eventEndDate?: string | null
+  /** null clears the envelope */
+  budgetAmount?: number | null
+}
+
+/** One project (exceptional tag) weighed against its envelope. */
+export interface TagBudgetSummaryItemDto {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+  eventStartDate: string | null
+  eventEndDate: string | null
+  budgetAmount: number | null
+  /** Tagged expenses inside the window, net of tagged income */
+  spent: number
+}
+
+export interface TagBudgetSummaryDto {
+  items: TagBudgetSummaryItemDto[]
+  /** Sum of declared envelopes; projects without one contribute 0 */
+  totalBudget: number
+  totalSpent: number
+}
+
+export interface TagAnalysisCategoryDto {
+  categoryId: string | null
+  categoryName: string
+  categoryIcon: string | null
+  type: 'EXPENSE' | 'INCOME'
+  amount: number
+  transactionCount: number
+  /** Everyday reference projected onto the event duration (expenses only) */
+  baselineAmount?: number
+  /** amount - baselineAmount */
+  surplusAmount?: number
+}
+
+export interface TagAnalysisBaselineDto {
+  startDate: string
+  endDate: string
+  everydayDays: number
+  eventDays: number
+}
+
+export interface TagAnalysisMonthDto {
+  month: string
+  expenses: number
+  income: number
+}
+
+export interface TagAnalysisDto {
+  tag: {
+    id: string
+    name: string
+    color: string | null
+    icon: string | null
+    isExceptional: boolean
+    eventStartDate: string | null
+    eventEndDate: string | null
+    budgetAmount: number | null
+  }
+  totalExpenses: number
+  totalIncome: number
+  net: number
+  transactionCount: number
+  firstDate: string | null
+  lastDate: string | null
+  byCategory: TagAnalysisCategoryDto[]
+  byMonth: TagAnalysisMonthDto[]
+  /** null when the tag declares no event period (additive event) */
+  baseline: TagAnalysisBaselineDto | null
+  /** Sum of the per-category surplus; null when no baseline applies */
+  totalSurplus: number | null
 }
 
 export interface TransactionSummaryDto {
@@ -352,6 +472,10 @@ export interface MonthlyDataDto {
   expenses: number
   netExpenses: number
   income: number
+  /** Share of the month's expenses tagged as exceptional */
+  exceptionalExpenses: number
+  /** netExpenses minus the exceptional share */
+  everydayNetExpenses: number
 }
 
 export interface SubcategoryDataDto {
@@ -373,6 +497,22 @@ export interface CategoryDataDto {
   subcategories?: SubcategoryDataDto[]
   reimbursement?: number
   pendingReimbursement?: number
+  /** Share of `amount` carried by exceptional events */
+  exceptionalAmount?: number
+  /** amount - exceptionalAmount: the recurring part */
+  everydayAmount?: number
+  /** Everyday amount over the same months as averagePerMonth */
+  everydayAveragePerMonth?: number
+  /** Per-month everyday amounts, matching monthLabels */
+  everydayMonthlyAmounts?: number[]
+}
+
+export interface ExceptionalEventDto {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+  amount: number
 }
 
 export interface DashboardFiltersDto {
@@ -396,6 +536,8 @@ export interface DashboardSummaryDto {
   availableAccounts: string[]
   periodMonths?: number
   monthLabels?: string[]
+  totalExceptionalExpenses: number
+  exceptionalEvents: ExceptionalEventDto[]
 }
 
 // Budget plan DTOs
@@ -416,6 +558,15 @@ export interface BudgetPlanDto {
   endDate: string
   monthCount: number
   totalAmount: number
+  /** Monthly amount decided for savings / investment. */
+  savingsTarget?: number | null
+  /** Monthly income assumed when the plan was drawn up. */
+  referenceIncome?: number | null
+  /**
+   * Budget left for one-off projects over the whole plan. Null when the
+   * equation is incomplete; negative when the plan is not financeable.
+   */
+  projectReserve?: number | null
   entries: BudgetPlanEntryDto[]
   createdAt: string
   updatedAt: string
@@ -441,6 +592,8 @@ export interface CreateBudgetPlanDto {
   name: string
   startDate: string
   endDate: string
+  savingsTarget?: number
+  referenceIncome?: number
   entries: CreateBudgetPlanEntryDto[]
 }
 
@@ -448,6 +601,10 @@ export interface UpdateBudgetPlanDto {
   name?: string
   startDate?: string
   endDate?: string
+  /** null clears the target. */
+  savingsTarget?: number | null
+  /** null clears the reference. */
+  referenceIncome?: number | null
   entries?: CreateBudgetPlanEntryDto[]
 }
 
@@ -468,6 +625,14 @@ export interface CategoryAverageDto {
   reimbursement?: number
   pendingReimbursement?: number
   monthlyAmounts?: number[]
+  /** Share of `totalAmount` carried by exceptional events. Expenses only. */
+  exceptionalAmount?: number
+  /** `totalAmount` minus `exceptionalAmount` — the recurring lifestyle. */
+  everydayAmount?: number
+  /** Same divisor as `averagePerMonth`; equal to it when no event applies. */
+  everydayAveragePerMonth?: number
+  /** Everyday counterpart of `monthlyAmounts`, same indexes. */
+  everydayMonthlyAmounts?: number[]
   subcategories?: SubcategoryAverageDto[]
 }
 
@@ -496,6 +661,8 @@ export interface BudgetStatisticsDto {
   averageMonthlyIncome: number
   totalReimbursements?: number
   totalPendingReimbursements?: number
+  /** Expense carried by exceptional events over the period, net. */
+  totalExceptionalExpenses?: number
   monthLabels?: string[]
 }
 
@@ -724,6 +891,7 @@ export const api = {
     if (params?.isPointed !== undefined)
       searchParams.set('isPointed', params.isPointed.toString())
     if (params?.account) searchParams.set('account', params.account)
+    if (params?.tagId) searchParams.set('tagId', params.tagId)
 
     const queryString = searchParams.toString()
     const url = queryString
@@ -903,6 +1071,120 @@ export const api = {
     if (!response.ok) {
       throw new Error('Failed to delete person')
     }
+  },
+
+  // Tags API
+  async getTags(): Promise<TagDto[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tags`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch tags')
+    }
+
+    return response.json() as Promise<TagDto[]>
+  },
+
+  async getTagBudgetSummary(params: {
+    startDate: string
+    endDate: string
+  }): Promise<TagBudgetSummaryDto> {
+    const query = new URLSearchParams(params).toString()
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/tags/budget-summary?${query}`
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch tag budget summary')
+    }
+
+    return response.json() as Promise<TagBudgetSummaryDto>
+  },
+
+  async createTag(dto: CreateTagDto): Promise<TagDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tags`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      const message =
+        response.status === 409
+          ? 'Une étiquette porte déjà ce nom'
+          : 'Failed to create tag'
+      throw new Error(message)
+    }
+
+    return response.json() as Promise<TagDto>
+  },
+
+  async updateTag(id: string, dto: UpdateTagDto): Promise<TagDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tags/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      const message =
+        response.status === 409
+          ? 'Une étiquette porte déjà ce nom'
+          : 'Failed to update tag'
+      throw new Error(message)
+    }
+
+    return response.json() as Promise<TagDto>
+  },
+
+  async deleteTag(id: string): Promise<void> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tags/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to delete tag')
+    }
+  },
+
+  async attachTagToTransactions(
+    tagId: string,
+    transactionIds: string[]
+  ): Promise<{ attached: number }> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/tags/${tagId}/transactions`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ transactionIds }),
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to attach tag')
+    }
+
+    return response.json() as Promise<{ attached: number }>
+  },
+
+  async detachTagFromTransaction(
+    tagId: string,
+    transactionId: string
+  ): Promise<void> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/tags/${tagId}/transactions/${transactionId}`,
+      { method: 'DELETE' }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to detach tag')
+    }
+  },
+
+  async getTagAnalysis(id: string): Promise<TagAnalysisDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tags/${id}/analysis`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch tag analysis')
+    }
+
+    return response.json() as Promise<TagAnalysisDto>
   },
 
   // Reimbursements API
