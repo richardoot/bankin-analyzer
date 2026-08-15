@@ -16,6 +16,7 @@ describe('DashboardService', () => {
       category_icon: string | null
       type: string
       subcategory: string
+      is_exceptional: boolean
       transaction_count: number
       total_amount: number
     }> = {}
@@ -26,6 +27,7 @@ describe('DashboardService', () => {
     category_icon: overrides.category_icon ?? null,
     type: overrides.type ?? 'EXPENSE',
     subcategory: overrides.subcategory ?? '',
+    is_exceptional: overrides.is_exceptional ?? false,
     transaction_count: overrides.transaction_count ?? 1,
     total_amount: overrides.total_amount ?? 100,
   })
@@ -35,16 +37,31 @@ describe('DashboardService', () => {
     categoryAssociation: {
       findMany: vi.fn(),
     },
+    tag: {
+      findMany: vi.fn(),
+    },
   }
 
-  /** Setup mocks for the two $queryRaw calls: aggregation rows + account rows */
+  /**
+   * Setup the $queryRaw calls in order: aggregation rows, account rows and the
+   * exceptional-events rows. The pending-reimbursement query is toggle-gated
+   * and resolves without touching the mock when disabled.
+   */
   function setupMocks(
     rows: ReturnType<typeof createRow>[],
-    accounts: string[] = ['Compte Courant']
+    accounts: string[] = ['Compte Courant'],
+    events: {
+      id: string
+      name: string
+      color: string | null
+      icon: string | null
+      amount: number
+    }[] = []
   ) {
     mockPrismaService.$queryRaw
       .mockResolvedValueOnce(rows)
       .mockResolvedValueOnce(accounts.map(account => ({ account })))
+      .mockResolvedValueOnce(events)
   }
 
   beforeEach(async () => {
@@ -64,6 +81,7 @@ describe('DashboardService', () => {
 
     // Default mocks
     mockPrismaService.categoryAssociation.findMany.mockResolvedValue([])
+    mockPrismaService.tag.findMany.mockResolvedValue([])
   })
 
   describe('getSummary', () => {
@@ -1461,6 +1479,431 @@ describe('DashboardService', () => {
       expect(result.expensesByCategory[0]?.monthlyAmounts).toEqual([
         0, 0, 90, 0,
       ])
+    })
+  })
+  describe('everyday vs exceptional split', () => {
+    it('leaves categories untouched by any event identical in both modes', async () => {
+      setupMocks([
+        // Rent: fully everyday, and still debited while its owner is away.
+        createRow({
+          month_key: '2024-01',
+          category_id: 'cat-rent',
+          category_name: 'Logement',
+          type: 'EXPENSE',
+          total_amount: 800,
+        }),
+        createRow({
+          month_key: '2024-02',
+          category_id: 'cat-rent',
+          category_name: 'Logement',
+          type: 'EXPENSE',
+          total_amount: 800,
+        }),
+        // Travel: entirely carried by an exceptional event.
+        createRow({
+          month_key: '2024-02',
+          category_id: 'cat-travel',
+          category_name: 'Voyages',
+          type: 'EXPENSE',
+          is_exceptional: true,
+          total_amount: 600,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-02-29',
+        includeCategoryBreakdown: true,
+      })
+
+      const rent = result.expensesByCategory.find(
+        c => c.category === 'Logement'
+      )
+      const travel = result.expensesByCategory.find(
+        c => c.category === 'Voyages'
+      )
+
+      // The untouched category must read the same in both modes.
+      expect(rent?.exceptionalAmount).toBe(0)
+      expect(rent?.everydayAmount).toBe(1600)
+      expect(rent?.averagePerMonth).toBe(800)
+      expect(rent?.everydayAveragePerMonth).toBe(800)
+
+      // Only the category carrying the event moves.
+      expect(travel?.exceptionalAmount).toBe(600)
+      expect(travel?.everydayAmount).toBe(0)
+      expect(travel?.averagePerMonth).toBe(300)
+      expect(travel?.everydayAveragePerMonth).toBe(0)
+    })
+
+    it('splits a category that mixes everyday and exceptional spending', async () => {
+      setupMocks([
+        createRow({
+          month_key: '2024-01',
+          category_id: 'cat-food',
+          category_name: 'Alimentation',
+          type: 'EXPENSE',
+          total_amount: 400,
+        }),
+        createRow({
+          month_key: '2024-02',
+          category_id: 'cat-food',
+          category_name: 'Alimentation',
+          type: 'EXPENSE',
+          is_exceptional: true,
+          total_amount: 200,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-02-29',
+        includeCategoryBreakdown: true,
+      })
+
+      const food = result.expensesByCategory[0]
+      expect(food?.amount).toBe(600)
+      expect(food?.exceptionalAmount).toBe(200)
+      expect(food?.everydayAmount).toBe(400)
+      expect(food?.averagePerMonth).toBe(300)
+      expect(food?.everydayAveragePerMonth).toBe(200)
+      expect(food?.monthlyAmounts).toEqual([400, 200])
+      expect(food?.everydayMonthlyAmounts).toEqual([400, 0])
+    })
+
+    it('reports the exceptional total and the monthly everyday split', async () => {
+      setupMocks(
+        [
+          createRow({
+            month_key: '2024-01',
+            category_name: 'Voyages',
+            type: 'EXPENSE',
+            is_exceptional: true,
+            total_amount: 500,
+          }),
+          createRow({
+            month_key: '2024-01',
+            category_name: 'Logement',
+            type: 'EXPENSE',
+            total_amount: 800,
+          }),
+        ],
+        ['Compte Courant'],
+        [
+          {
+            id: 'tag-1',
+            name: 'Vacances Italie',
+            color: '#06b6d4',
+            icon: null,
+            amount: 500,
+          },
+        ]
+      )
+
+      const result = await service.getSummary(mockUserId, {
+        includeCategoryBreakdown: true,
+      })
+
+      expect(result.totalExceptionalExpenses).toBe(500)
+      expect(result.exceptionalEvents).toEqual([
+        {
+          id: 'tag-1',
+          name: 'Vacances Italie',
+          color: '#06b6d4',
+          icon: null,
+          amount: 500,
+        },
+      ])
+      expect(result.monthlyData[0]?.expenses).toBe(1300)
+      expect(result.monthlyData[0]?.exceptionalExpenses).toBe(500)
+      expect(result.monthlyData[0]?.everydayNetExpenses).toBe(800)
+    })
+  })
+  describe('everyday vs exceptional — deductions and invariants', () => {
+    /** Two rows for one category: an exceptional share and an everyday one. */
+    function mixedCategory(
+      category: string,
+      month: string,
+      everyday: number,
+      exceptional: number
+    ) {
+      return [
+        createRow({
+          month_key: month,
+          category_name: category,
+          type: 'EXPENSE',
+          total_amount: everyday,
+        }),
+        createRow({
+          month_key: month,
+          category_name: category,
+          type: 'EXPENSE',
+          is_exceptional: true,
+          total_amount: exceptional,
+        }),
+      ]
+    }
+
+    it('splits received reimbursements pro rata, not off the everyday share', async () => {
+      // 1000 € gross, 600 € of which is a holiday refunded 200 € by friends.
+      // Charging the whole refund to the everyday share would shrink the very
+      // baseline the user budgets on.
+      setupMocks([
+        ...mixedCategory('Voyages', '2024-01', 400, 600),
+        createRow({
+          month_key: '2024-01',
+          category_name: 'Remb Voyages',
+          type: 'INCOME',
+          total_amount: 200,
+        }),
+      ])
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-1',
+          incomeCategoryId: 'cat-2',
+          expenseCategory: { name: 'Voyages' },
+          incomeCategory: { name: 'Remb Voyages' },
+        },
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        includeCategoryBreakdown: true,
+      })
+
+      const travel = result.expensesByCategory[0]
+      expect(travel?.amount).toBe(800) // 1000 - 200
+      expect(travel?.exceptionalAmount).toBe(480) // 800 * 0.6
+      expect(travel?.everydayAmount).toBe(320) // 800 * 0.4
+      expect(travel?.everydayAveragePerMonth).toBe(320)
+      expect(travel?.everydayMonthlyAmounts).toEqual([320])
+    })
+
+    it('splits pending reimbursements pro rata too', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce(mixedCategory('Loisirs', '2024-01', 700, 300))
+        .mockResolvedValueOnce([{ account: 'Compte Courant' }])
+        // Query 4 only runs when the pending toggle is on.
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-l',
+            category_name: 'Loisirs',
+            month_key: '2024-01',
+            pending_amount: 100,
+          },
+        ])
+        .mockResolvedValueOnce([])
+
+      const result = await service.getSummary(mockUserId, {
+        includeCategoryBreakdown: true,
+        deductPendingReimbursements: true,
+      })
+
+      const leisure = result.expensesByCategory[0]
+      expect(leisure?.amount).toBe(900) // 1000 - 100
+      expect(leisure?.pendingReimbursement).toBe(100)
+      expect(leisure?.exceptionalAmount).toBe(270) // 900 * 0.3
+      expect(leisure?.everydayAmount).toBe(630)
+      expect(leisure?.everydayMonthlyAmounts).toEqual([630])
+    })
+
+    it('keeps everyday + exceptional equal to the total on a messy dataset', async () => {
+      setupMocks([
+        ...mixedCategory('Alimentation', '2024-01', 380, 0),
+        ...mixedCategory('Alimentation', '2024-02', 210, 175.5),
+        ...mixedCategory('Alimentation', '2024-03', 402.33, 0),
+        ...mixedCategory('Transport', '2024-01', 120, 0),
+        ...mixedCategory('Transport', '2024-02', 65.75, 428),
+        ...mixedCategory('Logement', '2024-03', 800, 0),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+        includeCategoryBreakdown: true,
+      })
+
+      expect(result.expensesByCategory.length).toBeGreaterThan(0)
+      for (const cat of result.expensesByCategory) {
+        // The two shares must always reconstitute the displayed total.
+        expect(
+          Math.round(
+            ((cat.everydayAmount ?? 0) + (cat.exceptionalAmount ?? 0)) * 100
+          ) / 100
+        ).toBeCloseTo(cat.amount, 2)
+
+        // …and the monthly series must sum back to its own share.
+        const monthlySum = (cat.everydayMonthlyAmounts ?? []).reduce(
+          (a, b) => a + b,
+          0
+        )
+        expect(monthlySum).toBeCloseTo(cat.everydayAmount ?? 0, 1)
+
+        const realSum = (cat.monthlyAmounts ?? []).reduce((a, b) => a + b, 0)
+        expect(realSum).toBeCloseTo(cat.amount, 1)
+
+        // The everyday share can never exceed the total.
+        expect(cat.everydayAmount ?? 0).toBeLessThanOrEqual(cat.amount + 0.01)
+      }
+    })
+
+    it('matches the sum of the exceptional shares with the reported total', async () => {
+      setupMocks([
+        ...mixedCategory('Alimentation', '2024-01', 300, 100),
+        ...mixedCategory('Transport', '2024-01', 200, 50.5),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        includeCategoryBreakdown: true,
+      })
+
+      const sum = result.expensesByCategory.reduce(
+        (acc, c) => acc + (c.exceptionalAmount ?? 0),
+        0
+      )
+      expect(result.totalExceptionalExpenses).toBeCloseTo(sum, 2)
+      expect(result.totalExceptionalExpenses).toBe(150.5)
+    })
+
+    it('excludes hidden categories from the exceptional total', async () => {
+      setupMocks([
+        createRow({
+          category_name: 'Voyages',
+          type: 'EXPENSE',
+          is_exceptional: true,
+          total_amount: 500,
+        }),
+        createRow({
+          category_name: 'Logement',
+          type: 'EXPENSE',
+          total_amount: 800,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        includeCategoryBreakdown: true,
+        hiddenExpenseCategories: ['Voyages'],
+      })
+
+      expect(result.totalExceptionalExpenses).toBe(0)
+      expect(result.expensesByCategory).toHaveLength(1)
+      expect(result.expensesByCategory[0]?.category).toBe('Logement')
+    })
+
+    it('never sets the everyday fields on income categories', async () => {
+      setupMocks([
+        createRow({
+          category_name: 'Salaire',
+          type: 'INCOME',
+          total_amount: 2500,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        includeCategoryBreakdown: true,
+      })
+
+      const salary = result.incomeByCategory[0]
+      expect(salary?.amount).toBe(2500)
+      expect(salary?.everydayAmount).toBeUndefined()
+      expect(salary?.exceptionalAmount).toBeUndefined()
+      expect(salary?.everydayAveragePerMonth).toBeUndefined()
+    })
+
+    it('omits the everyday fields when no breakdown is requested', async () => {
+      setupMocks(mixedCategory('Voyages', '2024-01', 400, 600))
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.expensesByCategory[0]?.amount).toBe(1000)
+      expect(result.expensesByCategory[0]?.everydayAmount).toBeUndefined()
+      expect(result.periodMonths).toBeUndefined()
+    })
+
+    it('zeroes the everyday share of a fully exceptional month', async () => {
+      setupMocks([
+        createRow({
+          month_key: '2024-01',
+          category_name: 'Voyages',
+          type: 'EXPENSE',
+          is_exceptional: true,
+          total_amount: 1200,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        includeCategoryBreakdown: true,
+      })
+
+      const month = result.monthlyData[0]
+      expect(month?.expenses).toBe(1200)
+      expect(month?.exceptionalExpenses).toBe(1200)
+      expect(month?.everydayNetExpenses).toBe(0)
+    })
+
+    it('reports the everyday share of a month mixing both', async () => {
+      setupMocks([
+        ...mixedCategory('Alimentation', '2024-01', 450, 0),
+        ...mixedCategory('Voyages', '2024-01', 0, 550),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        includeCategoryBreakdown: true,
+      })
+
+      const month = result.monthlyData[0]
+      expect(month?.expenses).toBe(1000)
+      expect(month?.exceptionalExpenses).toBe(550)
+      expect(month?.everydayNetExpenses).toBe(450)
+    })
+
+    it('never produces a negative everyday share when refunds exceed spending', async () => {
+      setupMocks([
+        ...mixedCategory('Voyages', '2024-01', 400, 600),
+        createRow({
+          month_key: '2024-01',
+          category_name: 'Remb Voyages',
+          type: 'INCOME',
+          total_amount: 1500,
+        }),
+      ])
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-1',
+          incomeCategoryId: 'cat-2',
+          expenseCategory: { name: 'Voyages' },
+          incomeCategory: { name: 'Remb Voyages' },
+        },
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        includeCategoryBreakdown: true,
+      })
+
+      const travel = result.expensesByCategory[0]
+      // The category total is clamped at 0, so both shares are too.
+      expect(travel?.amount).toBe(0)
+      expect(travel?.everydayAmount).toBe(0)
+      expect(travel?.exceptionalAmount).toBe(0)
+      expect(travel?.everydayAveragePerMonth).toBe(0)
+    })
+
+    it('preserves the split through the joint-account divisor', async () => {
+      // The SQL already divides by the divisor; the split must ride on top of
+      // the halved amounts without reintroducing the full ones.
+      setupMocks(mixedCategory('Voyages', '2024-01', 200, 300))
+
+      const result = await service.getSummary(mockUserId, {
+        includeCategoryBreakdown: true,
+      })
+
+      const travel = result.expensesByCategory[0]
+      expect(travel?.amount).toBe(500)
+      expect(travel?.exceptionalAmount).toBe(300)
+      expect(travel?.everydayAmount).toBe(200)
     })
   })
 })

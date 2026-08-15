@@ -12,9 +12,15 @@
       total: number
       /** Color for sparklines + drill-down chart */
       color?: string
+      /**
+       * 'everyday' strips the share carried by exceptional events (holidays,
+       * birthdays) from the headline figures, leaving the recurring lifestyle.
+       */
+      mode?: 'real' | 'everyday'
     }>(),
     {
       color: '#ef4444',
+      mode: 'real',
     }
   )
 
@@ -59,20 +65,41 @@
     return cat.categoryId ?? cat.category
   }
 
+  const isEveryday = computed(() => props.mode === 'everyday')
+
+  /** Amount over the period, in the active mode. */
+  function displayedAmount(cat: CategoryDataDto): number {
+    if (isEveryday.value && cat.everydayAmount !== undefined) {
+      return cat.everydayAmount
+    }
+    return cat.amount
+  }
+
+  /** Monthly average, in the active mode. Undefined without a breakdown. */
+  function displayedAverage(cat: CategoryDataDto): number | undefined {
+    if (isEveryday.value && cat.everydayAveragePerMonth !== undefined) {
+      return cat.everydayAveragePerMonth
+    }
+    return cat.averagePerMonth
+  }
+
   function getPercent(cat: CategoryDataDto): number {
     if (props.total <= 0) return 0
-    return (cat.amount / props.total) * 100
+    return (displayedAmount(cat) / props.total) * 100
   }
 
   // Each category may not have monthlyAmounts (legacy/empty); guard.
   function getSparklineData(cat: CategoryDataDto): number[] {
+    if (isEveryday.value && cat.everydayMonthlyAmounts) {
+      return cat.everydayMonthlyAmounts
+    }
     return cat.monthlyAmounts ?? []
   }
 
   function chartDataFor(cat: CategoryDataDto) {
     return {
       labels: displayLabels.value,
-      values: cat.monthlyAmounts ?? [],
+      values: getSparklineData(cat),
     }
   }
 </script>
@@ -142,16 +169,28 @@
           <div
             class="font-semibold text-gray-900 dark:text-gray-100 tabular-nums"
           >
-            {{ formatCurrency(cat.averagePerMonth ?? cat.amount)
+            {{ formatCurrency(displayedAverage(cat) ?? displayedAmount(cat))
             }}<span
-              v-if="cat.averagePerMonth !== undefined"
+              v-if="displayedAverage(cat) !== undefined"
               class="text-xs font-normal text-gray-500 dark:text-gray-400"
             >
               /mois</span
             >
           </div>
           <div class="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-            Total : {{ formatCurrency(cat.amount) }}
+            Total : {{ formatCurrency(displayedAmount(cat)) }}
+          </div>
+          <div
+            v-if="cat.exceptionalAmount && cat.exceptionalAmount > 0"
+            class="text-xs text-amber-600 dark:text-amber-500 tabular-nums"
+            :title="
+              isEveryday
+                ? 'Montant exclu de cette moyenne'
+                : 'Part incluse dans cette moyenne'
+            "
+          >
+            {{ isEveryday ? 'hors' : 'dont' }}
+            {{ formatCurrency(cat.exceptionalAmount) }} exceptionnel
           </div>
         </div>
       </button>

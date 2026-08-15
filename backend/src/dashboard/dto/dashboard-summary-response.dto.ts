@@ -15,6 +15,12 @@ export class MonthlyDataDto {
 
   /** Total income for the month */
   income!: number
+
+  /** Share of `expenses` carried by transactions tagged as exceptional */
+  exceptionalExpenses!: number
+
+  /** `netExpenses` minus the exceptional share — the everyday lifestyle */
+  everydayNetExpenses!: number
 }
 
 export class SubcategoryDataDto {
@@ -65,6 +71,38 @@ export class CategoryDataDto {
 
   /** Amount deducted via pending reimbursements (only when includeCategoryBreakdown is true) */
   pendingReimbursement?: number
+
+  /**
+   * Share of `amount` carried by transactions tagged as exceptional (holidays,
+   * birthdays…). Reimbursement deductions are split pro rata between the
+   * everyday and exceptional shares so that a holiday refunded by friends does
+   * not shrink the everyday baseline.
+   */
+  exceptionalAmount?: number
+
+  /** `amount - exceptionalAmount`: the recurring, predictable part */
+  everydayAmount?: number
+
+  /**
+   * Everyday amount over the same number of months as `averagePerMonth`, so a
+   * category untouched by any event reads identically in both modes. This is
+   * the figure to budget on.
+   */
+  everydayAveragePerMonth?: number
+
+  /** Per-month everyday amounts, matching monthLabels indexes */
+  everydayMonthlyAmounts?: number[]
+}
+
+/** One exceptional event overlapping the dashboard period. */
+export class ExceptionalEventDto {
+  id!: string
+  name!: string
+  color!: string | null
+  icon!: string | null
+
+  /** Expenses tagged with this event inside the period */
+  amount!: number
 }
 
 export class DashboardSummaryDto {
@@ -104,4 +142,11 @@ export class DashboardSummaryDto {
   /** Month labels matching CategoryDataDto.monthlyAmounts indexes (only when includeCategoryBreakdown is true) */
   @ApiProperty({ type: [String], required: false })
   monthLabels?: string[]
+
+  /** Total expenses tagged as exceptional over the period */
+  totalExceptionalExpenses!: number
+
+  /** Events overlapping the period, biggest first */
+  @ApiProperty({ type: [ExceptionalEventDto] })
+  exceptionalEvents!: ExceptionalEventDto[]
 }
