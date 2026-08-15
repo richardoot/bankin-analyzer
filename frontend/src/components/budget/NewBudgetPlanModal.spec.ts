@@ -917,4 +917,267 @@ describe('NewBudgetPlanModal', () => {
     expect(wrapper.emitted('created')).toBeUndefined()
     wrapper.unmount()
   })
+
+  describe('seeding on everyday life', () => {
+    /** Alimentation carries a holiday; Transport is untouched by any event. */
+    const statsWithExceptional: BudgetStatisticsDto = {
+      ...sampleStats,
+      totalExceptionalExpenses: 600,
+      expensesByCategory: [
+        {
+          categoryId: 'cat-food',
+          categoryName: 'Alimentation',
+          categoryIcon: '🍽️',
+          totalAmount: 1500,
+          transactionCount: 30,
+          averagePerMonth: 250,
+          exceptionalAmount: 600,
+          everydayAmount: 900,
+          everydayAveragePerMonth: 150,
+        },
+        {
+          categoryId: 'cat-transport',
+          categoryName: 'Transport',
+          totalAmount: 300,
+          transactionCount: 6,
+          averagePerMonth: 50,
+          exceptionalAmount: 0,
+          everydayAmount: 300,
+          everydayAveragePerMonth: 50,
+        },
+      ],
+    }
+
+    async function openStep2() {
+      const wrapper = mountModal()
+      await flushPromises()
+      const next = document.body.querySelector(
+        '[data-testid="next-step-button"]'
+      ) as HTMLButtonElement
+      next.click()
+      await flushPromises()
+      return wrapper
+    }
+
+    function amountFor(categoryName: string): number {
+      const row = document.body.querySelector(
+        `[data-testid="preview-row-${categoryName}"]`
+      )
+      const input = row?.querySelector('input') as HTMLInputElement
+      return Number(input.value)
+    }
+
+    it('seeds envelopes with the everyday average, not the raw one', async () => {
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(statsWithExceptional)
+      const wrapper = await openStep2()
+
+      // 150 (everyday), not 250 — the holiday is not budgeted every month.
+      expect(amountFor('Alimentation')).toBe(150)
+      // Untouched category is unchanged.
+      expect(amountFor('Transport')).toBe(50)
+
+      wrapper.unmount()
+    })
+
+    it('shows how much was excluded from the envelope', async () => {
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(statsWithExceptional)
+      const wrapper = await openStep2()
+
+      const chip = document.body.querySelector(
+        '[data-testid="preview-exceptional-Alimentation"]'
+      )
+      expect(chip?.textContent).toMatch(/100/)
+      // Nothing excluded on Transport → no chip.
+      expect(
+        document.body.querySelector(
+          '[data-testid="preview-exceptional-Transport"]'
+        )
+      ).toBeNull()
+
+      wrapper.unmount()
+    })
+
+    it('re-seeds on the raw average when switching to "Tout"', async () => {
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(statsWithExceptional)
+      const wrapper = await openStep2()
+
+      const all = document.body.querySelector(
+        '[data-testid="seed-basis-all"]'
+      ) as HTMLButtonElement
+      all.click()
+      await flushPromises()
+
+      expect(amountFor('Alimentation')).toBe(250)
+      // Switching the basis reuses the loaded stats, no extra request.
+      expect(api.getBudgetStatistics).toHaveBeenCalledOnce()
+
+      wrapper.unmount()
+    })
+
+    it('falls back to the raw average when the backend sends no split', async () => {
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStats)
+      const wrapper = await openStep2()
+
+      expect(amountFor('Alimentation')).toBe(250)
+      expect(
+        document.body.querySelector('[data-testid="seed-basis-hint"]')
+      ).toBeNull()
+
+      wrapper.unmount()
+    })
+  })
+
+  describe('savings equation', () => {
+    /**
+     * 2000 of income, 300 of envelopes (250 + 50), and 200/month of events
+     * observed over the 6-month lookback.
+     */
+    const statsWithEvents: BudgetStatisticsDto = {
+      ...sampleStats,
+      totalExceptionalExpenses: 1200,
+    }
+
+    async function openStep2() {
+      const wrapper = mountModal()
+      await flushPromises()
+      const next = document.body.querySelector(
+        '[data-testid="next-step-button"]'
+      ) as HTMLButtonElement
+      next.click()
+      await flushPromises()
+      return wrapper
+    }
+
+    async function setSavings(value: string) {
+      const input = document.body.querySelector(
+        '[data-testid="savings-target-input"]'
+      ) as HTMLInputElement
+      input.value = value
+      input.dispatchEvent(new Event('input'))
+      await flushPromises()
+    }
+
+    const norm = (text: string | null | undefined) =>
+      (text ?? '').replace(/\s+/g, ' ')
+
+    beforeEach(() => {
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(statsWithEvents)
+    })
+
+    it('shows no reserve until savings are actually decided', async () => {
+      const wrapper = await openStep2()
+
+      expect(
+        document.body.querySelector('[data-testid="project-reserve"]')
+      ).toBeNull()
+
+      wrapper.unmount()
+    })
+
+    it('derives the project reserve from income − savings − envelopes', async () => {
+      const wrapper = await openStep2()
+      await setSavings('1200')
+
+      // 2000 − 1200 − 300 = 500 / month, over a 1-month plan.
+      const reserve = norm(
+        document.body.querySelector('[data-testid="project-reserve"]')
+          ?.textContent
+      )
+      expect(reserve).toMatch(/500/)
+
+      wrapper.unmount()
+    })
+
+    it('shows a negative reserve instead of clamping it to zero', async () => {
+      const wrapper = await openStep2()
+      await setSavings('1900')
+
+      // 2000 − 1900 − 300 = −200.
+      const reserve = norm(
+        document.body.querySelector('[data-testid="project-reserve"]')
+          ?.textContent
+      )
+      expect(reserve).toMatch(/-200|−200/)
+
+      wrapper.unmount()
+    })
+
+    it('confronts the reserve with what events actually cost', async () => {
+      const wrapper = await openStep2()
+      await setSavings('1700')
+
+      // Reserve 0/month vs 200/month of observed events → 200 missing.
+      const gap = norm(
+        document.body.querySelector('[data-testid="reserve-gap"]')?.textContent
+      )
+      expect(gap).toContain('Il manque')
+      expect(gap).toMatch(/200/)
+
+      wrapper.unmount()
+    })
+
+    it('reports a margin when the reserve covers the observed events', async () => {
+      const wrapper = await openStep2()
+      await setSavings('1200')
+
+      // Reserve 500/month vs 200/month observed → 300 of margin.
+      const gap = norm(
+        document.body.querySelector('[data-testid="reserve-gap"]')?.textContent
+      )
+      expect(gap).toContain('marge')
+      expect(gap).toMatch(/300/)
+
+      wrapper.unmount()
+    })
+
+    it('stays silent about the gap when no event was observed', async () => {
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStats)
+      const wrapper = await openStep2()
+      await setSavings('1200')
+
+      expect(
+        document.body.querySelector('[data-testid="project-reserve"]')
+      ).not.toBeNull()
+      expect(
+        document.body.querySelector('[data-testid="reserve-gap"]')
+      ).toBeNull()
+
+      wrapper.unmount()
+    })
+
+    it('persists both halves of the equation on create', async () => {
+      vi.mocked(api.createBudgetPlan).mockResolvedValue(samplePlan)
+      const wrapper = await openStep2()
+      await setSavings('1200')
+
+      const create = document.body.querySelector(
+        '[data-testid="create-plan-button"]'
+      ) as HTMLButtonElement
+      create.click()
+      await flushPromises()
+
+      const payload = vi.mocked(api.createBudgetPlan).mock.calls[0]![0]
+      expect(payload.savingsTarget).toBe(1200)
+      expect(payload.referenceIncome).toBe(2000)
+
+      wrapper.unmount()
+    })
+
+    it('omits the equation entirely when no target was set', async () => {
+      vi.mocked(api.createBudgetPlan).mockResolvedValue(samplePlan)
+      const wrapper = await openStep2()
+
+      const create = document.body.querySelector(
+        '[data-testid="create-plan-button"]'
+      ) as HTMLButtonElement
+      create.click()
+      await flushPromises()
+
+      const payload = vi.mocked(api.createBudgetPlan).mock.calls[0]![0]
+      expect(payload.savingsTarget).toBeUndefined()
+      expect(payload.referenceIncome).toBeUndefined()
+
+      wrapper.unmount()
+    })
+  })
 })

@@ -14,6 +14,8 @@ interface AggregatedTransactionRow {
   category_icon: string | null
   type: string
   subcategory: string
+  /** True when the transaction carries at least one tag flagged exceptional. */
+  is_exceptional: boolean
   transaction_count: number
   total_amount: number
 }
@@ -27,6 +29,7 @@ interface MonthlyBreakdownRow {
   category_id: string
   type: string
   year_month: string
+  is_exceptional: boolean
   monthly_amount: number
 }
 
@@ -64,12 +67,19 @@ export class BudgetsService {
     const [rows, associations, pendingRows, monthlyRows, monthlyPendingRows] =
       await Promise.all([
         this.prisma.$queryRaw<AggregatedTransactionRow[]>(Prisma.sql`
+        WITH exceptional_tx AS (
+          SELECT DISTINCT tt.transaction_id
+          FROM app.transaction_tags tt
+          JOIN app.tags tg ON tg.id = tt.tag_id
+          WHERE tg.user_id = ${userId} AND tg.is_exceptional = true
+        )
         SELECT
           t.category_id,
           c.name AS category_name,
           c.icon AS category_icon,
           t.type::text AS type,
           COALESCE(t.subcategory, '') AS subcategory,
+          (et.transaction_id IS NOT NULL) AS is_exceptional,
           COUNT(*)::int AS transaction_count,
           SUM(
             CASE WHEN t.type = 'EXPENSE'
@@ -80,13 +90,14 @@ export class BudgetsService {
         FROM app.transactions t
         JOIN app.categories c ON c.id = t.category_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
+        LEFT JOIN exceptional_tx et ON et.transaction_id = t.id
         WHERE t.user_id = ${userId}
           AND t.date >= ${startDate}
           AND t.date <= ${endDate}
           AND t.category_id IS NOT NULL
           AND COALESCE(a.is_excluded_from_budget, false) = false
           AND c.is_excluded_from_budget = false
-        GROUP BY t.category_id, c.name, c.icon, t.type, COALESCE(t.subcategory, '')
+        GROUP BY t.category_id, c.name, c.icon, t.type, COALESCE(t.subcategory, ''), (et.transaction_id IS NOT NULL)
       `),
         this.prisma.categoryAssociation.findMany({
           where: { userId },
@@ -118,10 +129,17 @@ export class BudgetsService {
           : Promise.resolve([]),
         shouldIncludeMonthly
           ? this.prisma.$queryRaw<MonthlyBreakdownRow[]>(Prisma.sql`
+            WITH exceptional_tx AS (
+              SELECT DISTINCT tt.transaction_id
+              FROM app.transaction_tags tt
+              JOIN app.tags tg ON tg.id = tt.tag_id
+              WHERE tg.user_id = ${userId} AND tg.is_exceptional = true
+            )
             SELECT
               t.category_id,
               t.type::text AS type,
               TO_CHAR(t.date, 'YYYY-MM') AS year_month,
+              (et.transaction_id IS NOT NULL) AS is_exceptional,
               SUM(
                 CASE WHEN t.type = 'EXPENSE'
                   THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
@@ -131,13 +149,14 @@ export class BudgetsService {
             FROM app.transactions t
             JOIN app.categories c ON c.id = t.category_id
             LEFT JOIN app.accounts a ON a.id = t.account_id
+            LEFT JOIN exceptional_tx et ON et.transaction_id = t.id
             WHERE t.user_id = ${userId}
               AND t.date >= ${startDate}
               AND t.date <= ${endDate}
               AND t.category_id IS NOT NULL
               AND COALESCE(a.is_excluded_from_budget, false) = false
               AND c.is_excluded_from_budget = false
-            GROUP BY t.category_id, t.type, TO_CHAR(t.date, 'YYYY-MM')
+            GROUP BY t.category_id, t.type, TO_CHAR(t.date, 'YYYY-MM'), (et.transaction_id IS NOT NULL)
             ORDER BY t.category_id, TO_CHAR(t.date, 'YYYY-MM')
           `)
           : Promise.resolve([]),
@@ -203,6 +222,28 @@ export class BudgetsService {
     // Track received reimbursements by expense category
     const reimbursementsByExpenseCategory = new Map<string, number>()
 
+    // Gross expense carried by exceptional-tagged transactions, per category.
+    // Captured before any reimbursement deduction so the two shares can be
+    // split pro-rata further down.
+    const grossExceptionalByCategory = new Map<string, number>()
+
+    // Since `is_exceptional` joined the GROUP BY, a (category, subcategory)
+    // pair can now come back on two rows — accumulate instead of overwriting.
+    const addSubcategory = (
+      subcategories: Map<string, { total: number; count: number }>,
+      subcategory: string,
+      amount: number,
+      count: number
+    ): void => {
+      const existing = subcategories.get(subcategory)
+      if (existing) {
+        existing.total += amount
+        existing.count += count
+      } else {
+        subcategories.set(subcategory, { total: amount, count })
+      }
+    }
+
     for (const row of rows) {
       const categoryId = row.category_id
       const subcategory = row.subcategory
@@ -212,11 +253,18 @@ export class BudgetsService {
       if (row.type === 'EXPENSE') {
         totalExpenses += amount
 
+        if (row.is_exceptional) {
+          grossExceptionalByCategory.set(
+            categoryId,
+            (grossExceptionalByCategory.get(categoryId) ?? 0) + amount
+          )
+        }
+
         const existing = expenseMap.get(categoryId)
         if (existing) {
           existing.total += amount
           existing.count += count
-          existing.subcategories.set(subcategory, { total: amount, count })
+          addSubcategory(existing.subcategories, subcategory, amount, count)
         } else {
           const subcategories = new Map<
             string,
@@ -254,7 +302,7 @@ export class BudgetsService {
         if (existing) {
           existing.total += amount
           existing.count += count
-          existing.subcategories.set(subcategory, { total: amount, count })
+          addSubcategory(existing.subcategories, subcategory, amount, count)
         } else {
           const subcategories = new Map<
             string,
@@ -291,6 +339,7 @@ export class BudgetsService {
     // Build monthly breakdown maps (keyed by category_id → sorted monthly amounts)
     // Deductions from reimbursements and pending are applied per-month to match the toggles.
     const monthlyByCategory = new Map<string, number[]>()
+    const everydayMonthlyByCategory = new Map<string, number[]>()
     const allMonths: string[] = []
     if (shouldIncludeMonthly) {
       // Generate all year-month keys in the period
@@ -301,14 +350,31 @@ export class BudgetsService {
         cursor.setMonth(cursor.getMonth() + 1)
       }
 
-      // Group monthly rows by type:category_id → month → amount
+      // Group monthly rows by type:category_id → month → amount. Rows are now
+      // also split on `is_exceptional`, so months must be accumulated.
       const rawMap = new Map<string, Map<string, number>>()
+      const rawExceptionalMap = new Map<string, Map<string, number>>()
       for (const row of monthlyRows) {
         const key = `${row.type}:${row.category_id}`
         if (!rawMap.has(key)) {
           rawMap.set(key, new Map())
         }
-        rawMap.get(key)!.set(row.year_month, row.monthly_amount)
+        const target = rawMap.get(key)!
+        target.set(
+          row.year_month,
+          (target.get(row.year_month) ?? 0) + row.monthly_amount
+        )
+
+        if (row.type === 'EXPENSE' && row.is_exceptional) {
+          if (!rawExceptionalMap.has(key)) {
+            rawExceptionalMap.set(key, new Map())
+          }
+          const exceptional = rawExceptionalMap.get(key)!
+          exceptional.set(
+            row.year_month,
+            (exceptional.get(row.year_month) ?? 0) + row.monthly_amount
+          )
+        }
       }
 
       // Build monthly reimbursement deductions per expense category per month
@@ -356,17 +422,29 @@ export class BudgetsService {
         const reimbMonths = monthlyReimbByExpenseCat.get(catId)
         const pendingMonths = monthlyPendingByExpenseCat.get(catId)
 
-        const amounts = allMonths.map(m => {
-          let val = monthMap.get(m) ?? 0
+        const exceptionalMonths = rawExceptionalMap.get(key)
+
+        const amounts: number[] = []
+        const everydayAmounts: number[] = []
+        for (const m of allMonths) {
+          const gross = monthMap.get(m) ?? 0
+          let val = gross
           if (reimbMonths) {
             val = Math.max(0, val - (reimbMonths.get(m) ?? 0))
           }
           if (pendingMonths) {
             val = Math.max(0, val - (pendingMonths.get(m) ?? 0))
           }
-          return this.round(val)
-        })
+          amounts.push(this.round(val))
+
+          // Same pro-rata as the category totals: a reimbursement received on
+          // an exceptional expense must not be deducted from everyday life.
+          const grossExceptional = exceptionalMonths?.get(m) ?? 0
+          const exceptionalRatio = gross > 0 ? grossExceptional / gross : 0
+          everydayAmounts.push(this.round(val * (1 - exceptionalRatio)))
+        }
         monthlyByCategory.set(catId, amounts)
+        everydayMonthlyByCategory.set(catId, everydayAmounts)
       }
 
       // Income monthly arrays (no deduction applied)
@@ -429,6 +507,10 @@ export class BudgetsService {
       totalDeductionByCategory.set(catId, received + pending)
     }
 
+    // Net expense carried by exceptional events, accumulated while building
+    // the category DTOs below.
+    let totalExceptionalExpenses = 0
+
     // Convert to response format with averages and subcategories
     const expensesByCategory: CategoryAverageDto[] = Array.from(
       expenseMap.values()
@@ -455,6 +537,17 @@ export class BudgetsService {
           })
           .sort((a, b) => b.totalAmount - a.totalAmount)
 
+        // Split the NET total between everyday life and one-off events, in the
+        // proportion observed on the gross — reimbursements are thus shared by
+        // both, exactly like the dashboard does.
+        const grossExceptional =
+          grossExceptionalByCategory.get(e.categoryId) ?? 0
+        const exceptionalRatio =
+          grossTotal > 0 ? grossExceptional / grossTotal : 0
+        const exceptionalAmount = e.total * exceptionalRatio
+        const everydayAmount = e.total - exceptionalAmount
+        totalExceptionalExpenses += exceptionalAmount
+
         const result: CategoryAverageDto = {
           categoryId: e.categoryId,
           categoryName: e.categoryName,
@@ -462,6 +555,11 @@ export class BudgetsService {
           totalAmount: this.round(e.total),
           transactionCount: e.count,
           averagePerMonth: this.round(e.total / periodMonths),
+          exceptionalAmount: this.round(exceptionalAmount),
+          everydayAmount: this.round(everydayAmount),
+          // Divided by the plain period, exactly like averagePerMonth: a
+          // category no event ever touched must read identically in both.
+          everydayAveragePerMonth: this.round(everydayAmount / periodMonths),
         }
 
         const receivedReimb = shouldDeductReimbursements
@@ -481,6 +579,10 @@ export class BudgetsService {
           const monthly = monthlyByCategory.get(e.categoryId)
           if (monthly) {
             result.monthlyAmounts = monthly
+          }
+          const everydayMonthly = everydayMonthlyByCategory.get(e.categoryId)
+          if (everydayMonthly) {
+            result.everydayMonthlyAmounts = everydayMonthly
           }
         }
 
@@ -535,6 +637,7 @@ export class BudgetsService {
       totalIncome: this.round(totalIncome),
       averageMonthlyExpenses: this.round(totalExpenses / periodMonths),
       averageMonthlyIncome: this.round(totalIncome / periodMonths),
+      totalExceptionalExpenses: this.round(totalExceptionalExpenses),
     }
 
     if (totalReimbursements > 0) {

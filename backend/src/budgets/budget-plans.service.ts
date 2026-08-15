@@ -87,6 +87,8 @@ export class BudgetPlansService {
         name: dto.name.trim(),
         startDate,
         endDate,
+        savingsTarget: dto.savingsTarget ?? null,
+        referenceIncome: dto.referenceIncome ?? null,
         entries: {
           create: dto.entries.map(e => ({
             categoryId: e.categoryId,
@@ -135,6 +137,14 @@ export class BudgetPlansService {
           name: dto.name?.trim() ?? existing.name,
           startDate: newStart,
           endDate: newEnd,
+          // `undefined` leaves the column alone, `null` clears it — so an
+          // update that only touches the entries keeps the equation intact.
+          ...(dto.savingsTarget !== undefined
+            ? { savingsTarget: dto.savingsTarget }
+            : {}),
+          ...(dto.referenceIncome !== undefined
+            ? { referenceIncome: dto.referenceIncome }
+            : {}),
         },
       })
 
@@ -187,6 +197,8 @@ export class BudgetPlansService {
     name: string
     startDate: Date
     endDate: Date
+    savingsTarget?: { toString(): string } | number | null
+    referenceIncome?: { toString(): string } | number | null
     createdAt: Date
     updatedAt: Date
     entries: {
@@ -207,13 +219,35 @@ export class BudgetPlansService {
       entries.reduce((sum, e) => sum + e.amount, 0)
     )
 
+    const monthCount = this.monthCount(plan.startDate, plan.endDate)
+    const savingsTarget =
+      plan.savingsTarget === null || plan.savingsTarget === undefined
+        ? null
+        : Number(plan.savingsTarget)
+    const referenceIncome =
+      plan.referenceIncome === null || plan.referenceIncome === undefined
+        ? null
+        : Number(plan.referenceIncome)
+
+    // What the plan leaves for one-off projects. Never clamped: a negative
+    // reserve means the plan does not add up, and that is the whole point.
+    const projectReserve =
+      savingsTarget === null || referenceIncome === null
+        ? null
+        : this.round(
+            (referenceIncome - savingsTarget - totalAmount) * monthCount
+          )
+
     return {
       id: plan.id,
       name: plan.name,
       startDate: this.formatDate(plan.startDate),
       endDate: this.formatDate(plan.endDate),
-      monthCount: this.monthCount(plan.startDate, plan.endDate),
+      monthCount,
       totalAmount,
+      savingsTarget,
+      referenceIncome,
+      projectReserve,
       entries,
       createdAt: plan.createdAt.toISOString(),
       updatedAt: plan.updatedAt.toISOString(),

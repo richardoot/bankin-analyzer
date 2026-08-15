@@ -9,6 +9,7 @@ import {
   Min,
   MinLength,
   MaxLength,
+  ValidateIf,
 } from 'class-validator'
 import { Type } from 'class-transformer'
 
@@ -42,6 +43,22 @@ export class BudgetPlanResponseDto {
 
   /** Total of all entry amounts */
   totalAmount!: number
+
+  /** Monthly amount decided for savings / investment. Null when not set. */
+  savingsTarget?: number | null
+
+  /** Monthly income assumed when the plan was drawn up. Null when not set. */
+  referenceIncome?: number | null
+
+  /**
+   * Budget left for one-off projects over the whole plan:
+   * `(referenceIncome − savingsTarget − totalAmount) × monthCount`.
+   *
+   * Null unless both `referenceIncome` and `savingsTarget` are set. May be
+   * negative — that is the signal that the plan is not financeable, and it is
+   * deliberately not clamped to zero.
+   */
+  projectReserve?: number | null
 
   @ApiProperty({ type: [BudgetPlanEntryResponseDto] })
   entries!: BudgetPlanEntryResponseDto[]
@@ -95,6 +112,20 @@ export class CreateBudgetPlanDto {
   @IsDateString()
   endDate!: string
 
+  /** Monthly savings target. Omit to leave the plan without an equation. */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  savingsTarget?: number
+
+  /** Monthly income assumed at planning time. */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  referenceIncome?: number
+
   @ApiProperty({ type: [CreateBudgetPlanEntryDto] })
   @IsArray()
   @ValidateNested({ each: true })
@@ -119,6 +150,22 @@ export class UpdateBudgetPlanDto {
   @IsOptional()
   @IsDateString()
   endDate?: string
+
+  /** Pass null to clear the target. */
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsNumber()
+  @Min(0)
+  savingsTarget?: number | null
+
+  /** Pass null to clear the reference. */
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsNumber()
+  @Min(0)
+  referenceIncome?: number | null
 
   @ApiPropertyOptional({ type: [CreateBudgetPlanEntryDto] })
   @IsOptional()

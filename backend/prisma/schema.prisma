@@ -335,6 +335,17 @@ model BudgetPlan {
   name      String
   startDate DateTime @map("start_date") @db.Date
   endDate   DateTime @map("end_date") @db.Date
+
+  /// Monthly amount the user has decided to set aside (savings, investment).
+  /// An input of the plan, not a residual: what is left after it and after the
+  /// category envelopes is the budget available for one-off projects.
+  savingsTarget Decimal? @map("savings_target") @db.Decimal(12, 2)
+
+  /// Monthly income assumed when the plan was drawn up. Frozen on purpose:
+  /// recomputing the project reserve from today's income would silently move a
+  /// figure the user decided once, and hide the drift instead of showing it.
+  referenceIncome Decimal? @map("reference_income") @db.Decimal(12, 2)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

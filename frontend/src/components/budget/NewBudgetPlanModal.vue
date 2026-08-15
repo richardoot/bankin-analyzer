@@ -45,6 +45,15 @@
   const initSource = ref<InitSource>('averages')
   type LookbackOption = '3m' | '6m' | '12m'
   const lookback = ref<LookbackOption>('6m')
+  /**
+   * Which historical figure seeds the envelopes.
+   * - 'everyday' : the recurring lifestyle, with one-off events (holidays,
+   *   birthdays) taken out — otherwise a single trip in the lookback window
+   *   gets budgeted every month of the plan.
+   * - 'all'      : the raw average, events included.
+   */
+  type SeedBasis = 'everyday' | 'all'
+  const seedBasis = ref<SeedBasis>('everyday')
   const copyFromPlanId = ref<string | null>(null)
   const previewEntries = ref<Map<string, number>>(new Map())
   const previewCategories = ref<CategoryAverageDto[]>([])
@@ -230,6 +239,44 @@
     }
   }
 
+  /**
+   * Monthly figure a category is seeded with, per the active basis. Falls back
+   * to the raw average when the backend sent no split (copied plans, older
+   * responses) so the modal degrades to its previous behaviour.
+   */
+  function seedBasisAmount(cat: CategoryAverageDto): number {
+    if (
+      seedBasis.value === 'everyday' &&
+      cat.everydayAveragePerMonth !== undefined
+    ) {
+      return cat.everydayAveragePerMonth
+    }
+    return cat.averagePerMonth
+  }
+
+  /**
+   * Only categories that actually have a historical amount get a prefilled
+   * input — others stay empty so the user must opt in.
+   */
+  function seedEntriesFrom(categories: CategoryAverageDto[]): void {
+    previewEntries.value = new Map(
+      categories
+        .filter(c => !isHidden(c.categoryName) && seedBasisAmount(c) > 0)
+        .map(c => [c.categoryId, Math.round(seedBasisAmount(c))])
+    )
+  }
+
+  /** Exceptional share excluded from a row, 0 when the basis is 'all'. */
+  function excludedFromSeed(cat: CategoryAverageDto): number {
+    if (seedBasis.value !== 'everyday') return 0
+    if (cat.everydayAveragePerMonth === undefined) return 0
+    return cat.averagePerMonth - cat.everydayAveragePerMonth
+  }
+
+  const hasExceptionalInLookback = computed(() =>
+    previewCategories.value.some(c => excludedFromSeed(c) > 0.005)
+  )
+
   async function loadAveragesPreview() {
     const range = lookbackRange(lookback.value)
     if (!range) return
@@ -255,17 +302,12 @@
       previewCategories.value = mergeCategoriesWithStats(
         stats.expensesByCategory.filter(c => !isHidden(c.categoryName))
       )
-      // Only categories that actually have a historical average get a
-      // prefilled input — others stay empty so the user must opt in.
-      previewEntries.value = new Map(
-        stats.expensesByCategory
-          .filter(c => !isHidden(c.categoryName) && c.averagePerMonth > 0)
-          .map(c => [c.categoryId, Math.round(c.averagePerMonth)])
-      )
+      seedEntriesFrom(stats.expensesByCategory)
       // Income reference comes "for free" with this query; keep it for the
       // "Épargne prévue" indicator at the bottom of step 2.
       referenceIncomeAvg.value = computeIncomeReference(stats)
       referenceIncomeLabel.value = lookbackLabel(lookback.value)
+      captureExceptionalReference(stats)
     } catch (err) {
       error.value =
         err instanceof Error ? err.message : 'Échec du chargement des moyennes'
@@ -292,9 +334,11 @@
       })
       referenceIncomeAvg.value = computeIncomeReference(stats)
       referenceIncomeLabel.value = lookbackLabel(lookback.value)
+      captureExceptionalReference(stats)
     } catch {
       referenceIncomeAvg.value = 0
       referenceIncomeLabel.value = ''
+      lookbackExceptionalPerMonth.value = 0
     }
   }
 
@@ -440,6 +484,13 @@
     }
   }
 
+  // Switching the basis only re-seeds: the stats already carry both figures,
+  // no need to hit the API again.
+  watch(seedBasis, () => {
+    if (step.value !== 2 || initSource.value !== 'averages') return
+    seedEntriesFrom(previewCategories.value)
+  })
+
   // Refresh the preview when the source / lookback / source plan / toggles change
   watch(
     [
@@ -513,6 +564,62 @@
   /** True only when we actually have an income reference to display. */
   const showSavingsIndicator = computed(() => referenceIncomeAvg.value > 0)
 
+  /**
+   * Monthly amount the user decides to set aside. An input of the plan, not a
+   * residual — null means they haven't decided, and the modal falls back to
+   * showing the leftover the way it always did.
+   */
+  const savingsTarget = ref<number | null>(null)
+
+  function setSavingsTarget(raw: string): void {
+    const trimmed = raw.trim()
+    if (trimmed === '') {
+      savingsTarget.value = null
+      return
+    }
+    const parsed = Number(trimmed)
+    savingsTarget.value = Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+  }
+
+  /**
+   * Exceptional spend per month observed over the lookback window. Kept
+   * per-month on purpose: annualising a 3-month window would be a guess.
+   */
+  const lookbackExceptionalPerMonth = ref(0)
+
+  /** What the plan leaves for one-off projects, per month. */
+  const monthlyProjectReserve = computed<number | null>(() => {
+    if (savingsTarget.value === null) return null
+    return referenceIncomeAvg.value - savingsTarget.value - previewTotal.value
+  })
+
+  /** Same figure over the whole plan — a project envelope is a total. */
+  const planProjectReserve = computed<number | null>(() => {
+    const monthly = monthlyProjectReserve.value
+    if (monthly === null) return null
+    return monthly * planMonthCount.value
+  })
+
+  /**
+   * Gap between what the plan affords for projects and what the user's events
+   * have actually cost. Negative means the plan is not financeable.
+   */
+  const reserveGap = computed<number | null>(() => {
+    const monthly = monthlyProjectReserve.value
+    if (monthly === null || lookbackExceptionalPerMonth.value <= 0) return null
+    return monthly - lookbackExceptionalPerMonth.value
+  })
+
+  /** Records the observed exceptional spend from a statistics response. */
+  function captureExceptionalReference(stats: BudgetStatisticsDto): void {
+    if (stats.periodMonths <= 0 || !stats.totalExceptionalExpenses) {
+      lookbackExceptionalPerMonth.value = 0
+      return
+    }
+    lookbackExceptionalPerMonth.value =
+      stats.totalExceptionalExpenses / stats.periodMonths
+  }
+
   // ── Submit ───────────────────────────────────────────────────────────────
   async function submit() {
     if (step1Error.value) {
@@ -530,6 +637,14 @@
         startDate: startDateOfMonth(startMonth.value),
         endDate: endDateOfMonth(endMonth.value),
         entries,
+        // Both halves of the equation travel together: a target without the
+        // income it was decided against cannot produce a reserve.
+        ...(savingsTarget.value !== null && referenceIncomeAvg.value > 0
+          ? {
+              savingsTarget: round2(savingsTarget.value),
+              referenceIncome: round2(referenceIncomeAvg.value),
+            }
+          : {}),
       })
       emit('created', created)
       reset()
@@ -556,7 +671,14 @@
     deductPendingReimbursements.value = false
     referenceIncomeAvg.value = 0
     referenceIncomeLabel.value = ''
+    savingsTarget.value = null
+    lookbackExceptionalPerMonth.value = 0
+    seedBasis.value = 'everyday'
     error.value = null
+  }
+
+  function round2(value: number): number {
+    return Math.round(value * 100) / 100
   }
 
   function onClose() {
@@ -787,6 +909,48 @@
                 </div>
               </div>
 
+              <!-- Which historical figure seeds the envelopes -->
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span
+                  class="text-xs font-medium text-gray-600 dark:text-gray-400"
+                >
+                  Base des enveloppes
+                </span>
+                <div
+                  class="inline-flex rounded-lg bg-gray-100 dark:bg-slate-700/50 p-0.5"
+                >
+                  <button
+                    v-for="opt in [
+                      { value: 'everyday', label: 'Vie courante' },
+                      { value: 'all', label: 'Tout' },
+                    ]"
+                    :key="opt.value"
+                    type="button"
+                    :data-testid="`seed-basis-${opt.value}`"
+                    class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+                    :class="
+                      seedBasis === (opt.value as SeedBasis)
+                        ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    "
+                    @click="seedBasis = opt.value as SeedBasis"
+                  >
+                    {{ opt.label }}
+                  </button>
+                </div>
+                <span
+                  v-if="hasExceptionalInLookback"
+                  data-testid="seed-basis-hint"
+                  class="text-xs text-gray-500 dark:text-gray-400 leading-snug"
+                >
+                  {{
+                    seedBasis === 'everyday'
+                      ? 'Les dépenses étiquetées exceptionnelles sont retirées : un voyage ponctuel ne doit pas être budgété tous les mois.'
+                      : 'Les événements ponctuels de la période sont inclus dans chaque enveloppe mensuelle.'
+                  }}
+                </span>
+              </div>
+
               <div
                 class="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-5"
               >
@@ -970,6 +1134,108 @@
                 </span>
               </div>
 
+              <!-- The equation: savings is decided, the project reserve is
+                   what the plan leaves once it is set aside. -->
+              <div
+                v-if="showSavingsIndicator"
+                data-testid="savings-equation"
+                class="mb-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-900/20 px-3 py-2.5 text-xs"
+              >
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <label
+                    for="savings-target"
+                    class="font-medium text-indigo-900 dark:text-indigo-300"
+                  >
+                    Épargne décidée / mois
+                  </label>
+                  <div class="relative shrink-0">
+                    <input
+                      id="savings-target"
+                      data-testid="savings-target-input"
+                      type="number"
+                      min="0"
+                      step="10"
+                      :value="savingsTarget ?? ''"
+                      placeholder="—"
+                      class="w-28 pl-2 pr-7 py-1 text-sm text-right bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-md text-gray-900 dark:text-gray-100 tabular-nums"
+                      @input="
+                        setSavingsTarget(
+                          ($event.target as HTMLInputElement).value
+                        )
+                      "
+                    />
+                    <span
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"
+                    >
+                      €
+                    </span>
+                  </div>
+                  <span
+                    v-if="savingsTarget === null"
+                    class="text-indigo-700/80 dark:text-indigo-400/80 leading-snug"
+                  >
+                    Décide-la avant de répartir le reste : ce plan dégage
+                    actuellement
+                    {{ formatCurrency(projectedSavings) }} / mois.
+                  </span>
+                </div>
+
+                <!-- Derived reserve — deliberately shown even when negative -->
+                <div
+                  v-if="monthlyProjectReserve !== null"
+                  data-testid="project-reserve"
+                  class="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1"
+                >
+                  <span class="text-indigo-900 dark:text-indigo-300">
+                    Budget projets :
+                  </span>
+                  <strong
+                    class="text-sm tabular-nums"
+                    :class="
+                      monthlyProjectReserve < 0
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-indigo-700 dark:text-indigo-300'
+                    "
+                  >
+                    {{ formatCurrency(monthlyProjectReserve) }} / mois
+                  </strong>
+                  <span class="text-indigo-700/70 dark:text-indigo-400/70">
+                    soit
+                    {{ formatCurrency(planProjectReserve ?? 0) }} sur
+                    {{ planMonthCount }} mois
+                  </span>
+                </div>
+
+                <!-- Confrontation with what events have actually cost -->
+                <p
+                  v-if="reserveGap !== null"
+                  data-testid="reserve-gap"
+                  class="mt-2 leading-snug"
+                  :class="
+                    reserveGap < 0
+                      ? 'text-red-700 dark:text-red-400'
+                      : 'text-emerald-700 dark:text-emerald-400'
+                  "
+                >
+                  <template v-if="reserveGap < 0">
+                    Tes événements ont coûté
+                    {{ formatCurrency(lookbackExceptionalPerMonth) }} / mois sur
+                    {{ referenceIncomeLabel }}. Il manque
+                    <strong>{{ formatCurrency(-reserveGap) }} / mois</strong> :
+                    épargner moins, couper dans la vie courante, ou renoncer à
+                    un projet.
+                  </template>
+                  <template v-else>
+                    Tes événements ont coûté
+                    {{ formatCurrency(lookbackExceptionalPerMonth) }} / mois sur
+                    {{ referenceIncomeLabel }} — ce plan en finance le train
+                    habituel, avec
+                    <strong>{{ formatCurrency(reserveGap) }} / mois</strong> de
+                    marge.
+                  </template>
+                </p>
+              </div>
+
               <p
                 v-if="initSource === 'copy' && !copyFromPlanId"
                 class="mb-2 text-xs text-gray-500 dark:text-gray-400 italic"
@@ -1021,10 +1287,18 @@
                     −{{ formatCurrency(cat.pendingReimbursement) }} en attente
                   </span>
                   <span
+                    v-if="excludedFromSeed(cat) > 0.005"
+                    :data-testid="`preview-exceptional-${cat.categoryName}`"
+                    class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400"
+                    :title="`Part exceptionnelle exclue de l'enveloppe : ${formatCurrency(excludedFromSeed(cat))}/mois sur une moyenne de ${formatCurrency(cat.averagePerMonth)}`"
+                  >
+                    −{{ formatCurrency(excludedFromSeed(cat)) }} exceptionnel
+                  </span>
+                  <span
                     class="text-xs text-gray-400 dark:text-gray-500 tabular-nums hidden sm:inline shrink-0"
                   >
-                    <template v-if="cat.averagePerMonth > 0">
-                      Moy. {{ formatCurrency(cat.averagePerMonth) }}
+                    <template v-if="seedBasisAmount(cat) > 0">
+                      Moy. {{ formatCurrency(seedBasisAmount(cat)) }}
                     </template>
                     <template v-else>Pas d'historique</template>
                   </span>
