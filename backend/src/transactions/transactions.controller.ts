@@ -145,6 +145,24 @@ export class TransactionsController {
   @ApiQuery({ name: 'isPointed', required: false, type: Boolean })
   @ApiQuery({ name: 'account', required: false, type: String })
   @ApiQuery({ name: 'tagId', required: false, type: String })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Keyword matched against description, note and subcategory',
+  })
+  @ApiQuery({
+    name: 'amountMin',
+    required: false,
+    type: Number,
+    description: 'Minimum absolute amount',
+  })
+  @ApiQuery({
+    name: 'amountMax',
+    required: false,
+    type: Number,
+    description: 'Maximum absolute amount',
+  })
   async findAll(
     @CurrentUser() user: User,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
@@ -155,7 +173,10 @@ export class TransactionsController {
     @Query('categoryId') categoryId?: string,
     @Query('isPointed') isPointed?: string,
     @Query('account') account?: string,
-    @Query('tagId') tagId?: string
+    @Query('tagId') tagId?: string,
+    @Query('search') search?: string,
+    @Query('amountMin') amountMin?: string,
+    @Query('amountMax') amountMax?: string
   ): Promise<PaginatedTransactionsResponseDto> {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
@@ -168,15 +189,32 @@ export class TransactionsController {
       isPointed?: boolean
       account?: string
       tagId?: string
+      search?: string
+      amountMin?: number
+      amountMax?: number
     } = {}
 
     if (type) filters.type = type
     if (startDate) filters.startDate = new Date(startDate)
-    if (endDate) filters.endDate = new Date(endDate)
+    if (endDate) {
+      const end = new Date(endDate)
+      // A date-only bound (YYYY-MM-DD) parses to UTC midnight; extend it to the
+      // end of that day so the whole day is included in the inclusive upper bound.
+      if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) end.setUTCHours(23, 59, 59, 999)
+      filters.endDate = end
+    }
     if (categoryId) filters.categoryId = categoryId
     if (isPointed !== undefined) filters.isPointed = isPointed === 'true'
     if (account) filters.account = account
     if (tagId) filters.tagId = tagId
+    if (search && search.trim()) filters.search = search.trim()
+    // Parse amount bounds defensively: ignore non-numeric or negative input.
+    const parsedMin = amountMin !== undefined ? Number(amountMin) : NaN
+    const parsedMax = amountMax !== undefined ? Number(amountMax) : NaN
+    if (Number.isFinite(parsedMin) && parsedMin >= 0)
+      filters.amountMin = parsedMin
+    if (Number.isFinite(parsedMax) && parsedMax >= 0)
+      filters.amountMax = parsedMax
 
     const { data: transactions, total } =
       await this.transactionsService.findAllByUserPaginated(

@@ -316,6 +316,75 @@ describe('TransactionsService', () => {
         expect.objectContaining({ where: expectedWhere })
       )
     })
+
+    it('should apply a single date bound independently', async () => {
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockPrismaService.transaction.count.mockResolvedValue(0)
+      const startDate = new Date('2024-01-01')
+
+      await service.findAllByUserPaginated(
+        mockUserId,
+        { page: 1, limit: 10 },
+        { startDate }
+      )
+
+      expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: mockUserId, date: { gte: startDate } },
+        })
+      )
+    })
+
+    it('should search description, note and subcategory (case-insensitive)', async () => {
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockPrismaService.transaction.count.mockResolvedValue(0)
+
+      await service.findAllByUserPaginated(
+        mockUserId,
+        { page: 1, limit: 10 },
+        { search: 'uber' }
+      )
+
+      expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId: mockUserId,
+            AND: [
+              {
+                OR: [
+                  { description: { contains: 'uber', mode: 'insensitive' } },
+                  { note: { contains: 'uber', mode: 'insensitive' } },
+                  { subcategory: { contains: 'uber', mode: 'insensitive' } },
+                ],
+              },
+            ],
+          },
+        })
+      )
+    })
+
+    it('should filter by absolute amount range', async () => {
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockPrismaService.transaction.count.mockResolvedValue(0)
+
+      await service.findAllByUserPaginated(
+        mockUserId,
+        { page: 1, limit: 10 },
+        { amountMin: 100, amountMax: 500 }
+      )
+
+      expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId: mockUserId,
+            AND: [
+              { OR: [{ amount: { gte: 100 } }, { amount: { lte: -100 } }] },
+              { amount: { gte: -500, lte: 500 } },
+            ],
+          },
+        })
+      )
+    })
   })
 
   // -------------------------------------------------------------------

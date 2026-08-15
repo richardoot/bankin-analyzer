@@ -167,6 +167,9 @@ export interface TransactionQueryParams {
   isPointed?: boolean
   account?: string
   tagId?: string
+  search?: string
+  amountMin?: number
+  amountMax?: number
 }
 
 export interface FilterPreferencesDto {
@@ -892,6 +895,11 @@ export const api = {
       searchParams.set('isPointed', params.isPointed.toString())
     if (params?.account) searchParams.set('account', params.account)
     if (params?.tagId) searchParams.set('tagId', params.tagId)
+    if (params?.search) searchParams.set('search', params.search)
+    if (params?.amountMin !== undefined)
+      searchParams.set('amountMin', params.amountMin.toString())
+    if (params?.amountMax !== undefined)
+      searchParams.set('amountMax', params.amountMax.toString())
 
     const queryString = searchParams.toString()
     const url = queryString

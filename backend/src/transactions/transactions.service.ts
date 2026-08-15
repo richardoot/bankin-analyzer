@@ -5,7 +5,7 @@ import { CategoriesService } from '../categories/categories.service'
 import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { AccountsService } from '../accounts/accounts.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
-import type { Transaction, TransactionType } from '../generated/prisma'
+import type { Prisma, Transaction, TransactionType } from '../generated/prisma'
 import type {
   CreateTransactionDto,
   ImportResultDto,
@@ -217,9 +217,49 @@ export class TransactionsService {
       isPointed?: boolean
       account?: string
       tagId?: string
+      search?: string
+      amountMin?: number
+      amountMax?: number
     }
   ): Promise<{ data: Transaction[]; total: number }> {
-    const where = {
+    // Conditions that either combine several fields (keyword OR) or express a
+    // constraint on the signed amount are collected in an AND array so they
+    // never collide with each other or with the top-level filters below.
+    const and: Prisma.TransactionWhereInput[] = []
+
+    const search = filters?.search?.trim()
+    if (search) {
+      and.push({
+        OR: [
+          { description: { contains: search, mode: 'insensitive' } },
+          { note: { contains: search, mode: 'insensitive' } },
+          { subcategory: { contains: search, mode: 'insensitive' } },
+        ],
+      })
+    }
+
+    // Amounts are stored signed (expenses negative, income positive) but the
+    // user reasons in magnitude, so min/max filter the absolute value.
+    if (filters?.amountMin !== undefined) {
+      // |amount| >= min  ⇔  amount >= min OR amount <= -min
+      and.push({
+        OR: [
+          { amount: { gte: filters.amountMin } },
+          { amount: { lte: -filters.amountMin } },
+        ],
+      })
+    }
+    if (filters?.amountMax !== undefined) {
+      // |amount| <= max  ⇔  -max <= amount <= max
+      and.push({ amount: { gte: -filters.amountMax, lte: filters.amountMax } })
+    }
+
+    // Date window: each bound is optional and applied independently.
+    const dateFilter: Prisma.DateTimeFilter = {}
+    if (filters?.startDate) dateFilter.gte = filters.startDate
+    if (filters?.endDate) dateFilter.lte = filters.endDate
+
+    const where: Prisma.TransactionWhereInput = {
       userId,
       ...(filters?.type && { type: filters.type }),
       ...(filters?.categoryId && { categoryId: filters.categoryId }),
@@ -230,13 +270,8 @@ export class TransactionsService {
       ...(filters?.tagId && {
         tags: { some: { tagId: filters.tagId } },
       }),
-      ...(filters?.startDate &&
-        filters?.endDate && {
-          date: {
-            gte: filters.startDate,
-            lte: filters.endDate,
-          },
-        }),
+      ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
+      ...(and.length > 0 && { AND: and }),
     }
 
     const [data, total] = await Promise.all([

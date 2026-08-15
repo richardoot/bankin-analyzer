@@ -376,4 +376,68 @@ describe('TransactionsPage — optimistic updates', () => {
       ).toBe(0)
     })
   })
+
+  describe('advanced search filters', () => {
+    beforeEach(() => {
+      localStorage.clear()
+    })
+
+    it('passes the date window to the API immediately', async () => {
+      const wrapper = await mountPage()
+      vi.mocked(api.getTransactions).mockClear()
+
+      await wrapper
+        .find('[data-testid="transactions-start-date-filter"]')
+        .setValue('2024-01-01')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ startDate: '2024-01-01' })
+      )
+    })
+
+    it('debounces the keyword search before calling the API', async () => {
+      vi.useFakeTimers()
+      try {
+        const wrapper = await mountPage()
+        vi.mocked(api.getTransactions).mockClear()
+
+        await wrapper
+          .find('[data-testid="transactions-search-input"]')
+          .setValue('uber')
+
+        // Not fired yet: still within the debounce window.
+        expect(api.getTransactions).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(350)
+        await flushPromises()
+
+        expect(api.getTransactions).toHaveBeenLastCalledWith(
+          expect.objectContaining({ search: 'uber' })
+        )
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('sends absolute amount bounds, ignoring empty/negative values', async () => {
+      vi.useFakeTimers()
+      try {
+        const wrapper = await mountPage()
+        vi.mocked(api.getTransactions).mockClear()
+
+        await wrapper
+          .find('[data-testid="transactions-amount-min-filter"]')
+          .setValue('100')
+        vi.advanceTimersByTime(350)
+        await flushPromises()
+
+        expect(api.getTransactions).toHaveBeenLastCalledWith(
+          expect.objectContaining({ amountMin: 100, amountMax: undefined })
+        )
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
 })

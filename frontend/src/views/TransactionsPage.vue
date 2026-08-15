@@ -20,6 +20,7 @@
   import BulkCategoryModal from '@/components/transactions/BulkCategoryModal.vue'
   import ReimbursementCategoryConfirmModal from '@/components/transactions/ReimbursementCategoryConfirmModal.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
+  import ToggleSwitch from '@/components/ToggleSwitch.vue'
   import { formatCurrency } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
 
@@ -56,6 +57,11 @@
     selectedAccount: string | null
     selectedTag: string | null
     showOnlyNotPointed: boolean
+    searchKeyword: string
+    filterStartDate: string
+    filterEndDate: string
+    amountMin: string
+    amountMax: string
   } {
     try {
       const saved = localStorage.getItem(FILTERS_STORAGE_KEY)
@@ -67,6 +73,11 @@
           selectedAccount: parsed.selectedAccount ?? null,
           selectedTag: parsed.selectedTag ?? null,
           showOnlyNotPointed: parsed.showOnlyNotPointed ?? false,
+          searchKeyword: parsed.searchKeyword ?? '',
+          filterStartDate: parsed.filterStartDate ?? '',
+          filterEndDate: parsed.filterEndDate ?? '',
+          amountMin: parsed.amountMin ?? '',
+          amountMax: parsed.amountMax ?? '',
         }
       }
     } catch {
@@ -78,6 +89,11 @@
       selectedAccount: null,
       selectedTag: null,
       showOnlyNotPointed: false,
+      searchKeyword: '',
+      filterStartDate: '',
+      filterEndDate: '',
+      amountMin: '',
+      amountMax: '',
     }
   }
 
@@ -89,6 +105,12 @@
   const selectedAccount = ref<string | null>(savedFilters.selectedAccount)
   const selectedTag = ref<string | null>(savedFilters.selectedTag)
   const showOnlyNotPointed = ref(savedFilters.showOnlyNotPointed)
+  // Advanced search filters (keyword, date window, amount range)
+  const searchKeyword = ref(savedFilters.searchKeyword)
+  const filterStartDate = ref(savedFilters.filterStartDate)
+  const filterEndDate = ref(savedFilters.filterEndDate)
+  const amountMin = ref(savedFilters.amountMin)
+  const amountMax = ref(savedFilters.amountMax)
 
   // Save filters to localStorage
   function saveFilters() {
@@ -100,6 +122,11 @@
         selectedAccount: selectedAccount.value,
         selectedTag: selectedTag.value,
         showOnlyNotPointed: showOnlyNotPointed.value,
+        searchKeyword: searchKeyword.value,
+        filterStartDate: filterStartDate.value,
+        filterEndDate: filterEndDate.value,
+        amountMin: amountMin.value,
+        amountMax: amountMax.value,
       })
     )
   }
@@ -111,6 +138,11 @@
     selectedAccount.value = null
     selectedTag.value = null
     showOnlyNotPointed.value = false
+    searchKeyword.value = ''
+    filterStartDate.value = ''
+    filterEndDate.value = ''
+    amountMin.value = ''
+    amountMax.value = ''
     localStorage.removeItem(FILTERS_STORAGE_KEY)
   }
 
@@ -121,7 +153,12 @@
       selectedCategory.value !== null ||
       selectedAccount.value !== null ||
       selectedTag.value !== null ||
-      showOnlyNotPointed.value
+      showOnlyNotPointed.value ||
+      searchKeyword.value.trim() !== '' ||
+      filterStartDate.value !== '' ||
+      filterEndDate.value !== '' ||
+      amountMin.value !== '' ||
+      amountMax.value !== ''
     )
   })
 
@@ -608,7 +645,19 @@
     }
   }
 
-  // Refetch when filters change (reset to page 1)
+  // Apply a filter change: persist, jump back to page 1 and refetch. Setting
+  // currentPage triggers its own watch (which fetches); when already on page 1
+  // that watch won't fire, so we fetch manually.
+  function applyFilterChange() {
+    saveFilters()
+    const wasOnPage1 = currentPage.value === 1
+    currentPage.value = 1
+    if (wasOnPage1) {
+      fetchTransactions()
+    }
+  }
+
+  // Refetch immediately when discrete filters change (selects / checkbox / dates)
   watch(
     [
       typeFilter,
@@ -616,16 +665,18 @@
       selectedAccount,
       selectedTag,
       showOnlyNotPointed,
+      filterStartDate,
+      filterEndDate,
     ],
-    () => {
-      saveFilters()
-      const wasOnPage1 = currentPage.value === 1
-      currentPage.value = 1
-      if (wasOnPage1) {
-        fetchTransactions()
-      }
-    }
+    applyFilterChange
   )
+
+  // Debounce free-text / numeric inputs so we don't fire a request per keystroke
+  let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined
+  watch([searchKeyword, amountMin, amountMax], () => {
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = setTimeout(applyFilterChange, 350)
+  })
 
   // Refetch when page changes
   watch(currentPage, (newPage, oldPage) => {
@@ -640,6 +691,9 @@
       isLoadingTransactions.value = true
       transactionsError.value = null
 
+      const parsedMin = amountMin.value !== '' ? Number(amountMin.value) : NaN
+      const parsedMax = amountMax.value !== '' ? Number(amountMax.value) : NaN
+
       const response = await api.getTransactions({
         page: currentPage.value,
         limit: pageSize,
@@ -648,6 +702,13 @@
         account: selectedAccount.value || undefined,
         tagId: selectedTag.value || undefined,
         isPointed: showOnlyNotPointed.value ? false : undefined,
+        search: searchKeyword.value.trim() || undefined,
+        startDate: filterStartDate.value || undefined,
+        endDate: filterEndDate.value || undefined,
+        amountMin:
+          Number.isFinite(parsedMin) && parsedMin >= 0 ? parsedMin : undefined,
+        amountMax:
+          Number.isFinite(parsedMax) && parsedMax >= 0 ? parsedMax : undefined,
       })
       transactions.value = response.data
       transactionsMeta.value = response.meta
@@ -823,171 +884,269 @@
         data-testid="transactions-filter-area"
         class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 mb-6"
       >
+        <!-- Keyword search bar -->
+        <div class="relative">
+          <svg
+            class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-gray-500 pointer-events-none"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          <input
+            v-model="searchKeyword"
+            type="search"
+            data-testid="transactions-search-input"
+            placeholder="Rechercher par mot-cle (libelle, note, sous-categorie)..."
+            class="w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+          />
+        </div>
+
+        <!-- Filter groups: each control carries an uppercase label so the
+             different filters can be told apart at a glance. Naturally paired
+             ranges (dates, amounts) are grouped with an inline separator, and
+             vertical rules cluster the three families. -->
         <div
-          class="flex flex-col gap-3 md:flex-row md:flex-wrap md:gap-4 md:items-center"
+          class="mt-4 grid grid-cols-2 gap-x-3 gap-y-4 md:flex md:flex-wrap md:items-end md:gap-x-4 md:gap-y-3"
         >
-          <!-- Filters row: Type + Category + Account -->
-          <div class="grid grid-cols-2 gap-3 md:contents">
-            <!-- Type filter -->
-            <div
-              class="flex flex-col gap-1 md:flex-row md:items-center md:gap-2"
+          <!-- Type -->
+          <div class="flex flex-col gap-1">
+            <span
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              >Type</span
             >
-              <label class="text-xs md:text-sm text-gray-600 dark:text-gray-400"
-                >Type:</label
-              >
-              <select
-                v-model="typeFilter"
-                data-testid="transactions-type-filter"
-                class="w-full md:w-auto px-3 py-2 md:py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
-              >
-                <option value="ALL">Toutes</option>
-                <option value="EXPENSE">Depenses</option>
-                <option value="INCOME">Revenus</option>
-              </select>
-            </div>
+            <select
+              v-model="typeFilter"
+              data-testid="transactions-type-filter"
+              class="h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+            >
+              <option value="ALL">Toutes</option>
+              <option value="EXPENSE">Depenses</option>
+              <option value="INCOME">Revenus</option>
+            </select>
+          </div>
 
-            <!-- Category filter -->
-            <div
-              class="flex flex-col gap-1 md:flex-row md:items-center md:gap-2"
+          <!-- Category -->
+          <div class="flex flex-col gap-1">
+            <span
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              >Categorie</span
             >
-              <label class="text-xs md:text-sm text-gray-600 dark:text-gray-400"
-                >Categorie:</label
+            <select
+              v-model="selectedCategory"
+              data-testid="transactions-category-filter"
+              class="h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+            >
+              <option :value="null">Toutes</option>
+              <option
+                v-for="cat in filteredCategories"
+                :key="cat.id"
+                :value="cat.id"
               >
-              <select
-                v-model="selectedCategory"
-                data-testid="transactions-category-filter"
-                class="w-full md:w-auto px-3 py-2 md:py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
-              >
-                <option :value="null">Toutes</option>
-                <option
-                  v-for="cat in filteredCategories"
-                  :key="cat.id"
-                  :value="cat.id"
-                >
-                  {{ cat.name }}
-                </option>
-              </select>
-            </div>
+                {{ cat.name }}
+              </option>
+            </select>
+          </div>
 
-            <!-- Account filter -->
-            <div
-              class="col-span-2 md:col-span-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-2"
+          <!-- Account -->
+          <div class="flex flex-col gap-1">
+            <span
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              >Compte</span
             >
-              <label class="text-xs md:text-sm text-gray-600 dark:text-gray-400"
-                >Compte:</label
+            <select
+              v-model="selectedAccount"
+              data-testid="transactions-account-filter"
+              class="h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+            >
+              <option :value="null">Tous</option>
+              <option
+                v-for="account in accountsStore.sortedAccounts"
+                :key="account.id"
+                :value="account.name"
               >
-              <select
-                v-model="selectedAccount"
-                data-testid="transactions-account-filter"
-                class="w-full md:w-auto px-3 py-2 md:py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
-              >
-                <option :value="null">Tous</option>
-                <option
-                  v-for="account in accountsStore.sortedAccounts"
-                  :key="account.id"
-                  :value="account.name"
-                >
-                  {{ account.name }}
-                </option>
-              </select>
-            </div>
+                {{ account.name }}
+              </option>
+            </select>
+          </div>
 
-            <!-- Tag filter -->
-            <div
-              class="col-span-2 md:col-span-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-2"
+          <!-- Tag -->
+          <div class="flex flex-col gap-1">
+            <span
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              >Etiquette</span
             >
-              <label class="text-xs md:text-sm text-gray-600 dark:text-gray-400"
-                >Etiquette:</label
+            <select
+              v-model="selectedTag"
+              data-testid="transactions-tag-filter"
+              class="h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+            >
+              <option :value="null">Toutes</option>
+              <option
+                v-for="tag in tagsStore.tags"
+                :key="tag.id"
+                :value="tag.id"
               >
-              <select
-                v-model="selectedTag"
-                data-testid="transactions-tag-filter"
-                class="w-full md:w-auto px-3 py-2 md:py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
-              >
-                <option :value="null">Toutes</option>
-                <option
-                  v-for="tag in tagsStore.tags"
-                  :key="tag.id"
-                  :value="tag.id"
-                >
-                  {{ tag.name }}
-                </option>
-              </select>
+                {{ tag.name }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Divider between attribute filters and range filters -->
+          <div
+            class="hidden md:block w-px h-9 self-end bg-gray-200 dark:bg-slate-700"
+            aria-hidden="true"
+          ></div>
+
+          <!-- Date window -->
+          <div class="col-span-2 flex flex-col gap-1">
+            <span
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              >Periode</span
+            >
+            <div class="flex items-center gap-1.5">
+              <input
+                v-model="filterStartDate"
+                type="date"
+                aria-label="Date de debut"
+                data-testid="transactions-start-date-filter"
+                class="h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              />
+              <span class="shrink-0 text-gray-400 dark:text-gray-500">→</span>
+              <input
+                v-model="filterEndDate"
+                type="date"
+                aria-label="Date de fin"
+                data-testid="transactions-end-date-filter"
+                class="h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              />
             </div>
           </div>
 
-          <!-- Not pointed filter -->
-          <label class="flex items-center gap-2 cursor-pointer py-1 md:py-0">
-            <input
-              v-model="showOnlyNotPointed"
-              type="checkbox"
-              class="h-5 w-5 md:h-4 md:w-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-slate-600 rounded focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
-            />
-            <span class="text-sm text-gray-600 dark:text-gray-400"
-              >Uniquement non pointees</span
+          <!-- Amount range -->
+          <div class="col-span-2 flex flex-col gap-1">
+            <span
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              >Montant (€)</span
             >
-          </label>
-
-          <!-- Transaction count and actions (separate row on mobile) -->
-          <div
-            class="flex items-center justify-between gap-2 pt-3 border-t border-gray-200 dark:border-slate-700 md:border-0 md:pt-0 md:ml-auto md:gap-4"
-          >
-            <span class="text-sm text-gray-500 dark:text-gray-400">
-              {{ totalTransactions }} transaction(s)
-            </span>
-
-            <div class="flex items-center gap-2">
-              <!-- Reset filters button -->
-              <button
-                v-if="hasActiveFilters"
-                class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                @click="resetFilters"
-              >
-                <svg
-                  class="h-5 w-5 md:h-4 md:w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-                <span class="hidden md:inline md:ml-1.5">Reinitialiser</span>
-              </button>
-              <!-- Selection mode toggle -->
-              <button
-                class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium rounded-lg transition-colors"
-                :class="
-                  isSelectionMode
-                    ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-300 dark:border-indigo-700'
-                    : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600'
-                "
-                @click="toggleSelectionMode"
-              >
-                <svg
-                  class="h-5 w-5 md:h-4 md:w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                  />
-                </svg>
-                <span class="hidden md:inline md:ml-1.5">{{
-                  isSelectionMode
-                    ? 'Mode selection actif'
-                    : 'Selection multiple'
-                }}</span>
-              </button>
+            <div class="flex items-center gap-1.5">
+              <input
+                v-model="amountMin"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="0.01"
+                placeholder="min"
+                aria-label="Montant minimum"
+                data-testid="transactions-amount-min-filter"
+                class="h-9 w-full md:w-24 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              />
+              <span class="shrink-0 text-gray-400 dark:text-gray-500">–</span>
+              <input
+                v-model="amountMax"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="0.01"
+                placeholder="max"
+                aria-label="Montant maximum"
+                data-testid="transactions-amount-max-filter"
+                class="h-9 w-full md:w-24 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              />
             </div>
+          </div>
+
+          <!-- Divider before options -->
+          <div
+            class="hidden md:block w-px h-9 self-end bg-gray-200 dark:bg-slate-700"
+            aria-hidden="true"
+          ></div>
+
+          <!-- State toggle -->
+          <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
+            <span
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              >Etat</span
+            >
+            <div
+              class="inline-flex h-9 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 dark:border-slate-600 dark:bg-slate-800"
+            >
+              <ToggleSwitch
+                :checked="showOnlyNotPointed"
+                aria-label="Afficher uniquement les transactions non pointees"
+                @change="showOnlyNotPointed = $event"
+              />
+              <span
+                class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-300"
+                >Non pointees</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer: result count + actions -->
+        <div
+          class="mt-4 flex items-center justify-between gap-2 border-t border-gray-200 pt-3 dark:border-slate-700"
+        >
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {{ totalTransactions }} transaction(s)
+          </span>
+
+          <div class="flex items-center gap-2">
+            <!-- Reset filters button -->
+            <button
+              v-if="hasActiveFilters"
+              class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+              @click="resetFilters"
+            >
+              <svg
+                class="h-5 w-5 md:h-4 md:w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+              <span class="hidden md:inline md:ml-1.5">Reinitialiser</span>
+            </button>
+            <!-- Selection mode toggle -->
+            <button
+              class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium rounded-lg transition-colors"
+              :class="
+                isSelectionMode
+                  ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-300 dark:border-indigo-700'
+                  : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600'
+              "
+              @click="toggleSelectionMode"
+            >
+              <svg
+                class="h-5 w-5 md:h-4 md:w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                />
+              </svg>
+              <span class="hidden md:inline md:ml-1.5">{{
+                isSelectionMode ? 'Mode selection actif' : 'Selection multiple'
+              }}</span>
+            </button>
           </div>
         </div>
       </div>

@@ -480,6 +480,90 @@ describe('TransactionsController', () => {
       )
     })
 
+    it('should extend a date-only end bound to the end of the day', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
+
+      await controller.findAll(
+        mockUser,
+        1,
+        20,
+        undefined,
+        undefined,
+        '2024-01-31'
+      )
+
+      const filters =
+        mockTransactionsService.findAllByUserPaginated.mock.calls[0][2]
+      expect((filters.endDate as Date).toISOString()).toBe(
+        '2024-01-31T23:59:59.999Z'
+      )
+    })
+
+    it('should pass keyword and absolute amount bounds through', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
+
+      await controller.findAll(
+        mockUser,
+        1,
+        20,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        '  uber  ',
+        '100',
+        '500'
+      )
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 20 },
+        expect.objectContaining({
+          search: 'uber',
+          amountMin: 100,
+          amountMax: 500,
+        })
+      )
+    })
+
+    it('should ignore non-numeric or negative amount bounds', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
+
+      await controller.findAll(
+        mockUser,
+        1,
+        20,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'abc',
+        '-5'
+      )
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(mockUser.id, { page: 1, limit: 20 }, undefined)
+    })
+
     it('should return empty data when no transactions', async () => {
       mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
         data: [],
