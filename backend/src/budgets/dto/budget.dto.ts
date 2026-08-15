@@ -64,6 +64,27 @@ export class CategoryAverageDto {
   /** Monthly amounts over the period (chronological order). Only included when includeMonthlyBreakdown is true. */
   monthlyAmounts?: number[]
 
+  /**
+   * Share of `totalAmount` carried by transactions tagged as exceptional
+   * (holiday, birthday, competition). Expense categories only.
+   */
+  exceptionalAmount?: number
+
+  /**
+   * `totalAmount` minus `exceptionalAmount` — the recurring lifestyle, which
+   * is what a monthly budget envelope should be sized on.
+   */
+  everydayAmount?: number
+
+  /**
+   * `everydayAmount` divided by the same `periodMonths` as `averagePerMonth`.
+   * A category no exceptional event ever touched reads identically in both.
+   */
+  everydayAveragePerMonth?: number
+
+  /** Everyday counterpart of `monthlyAmounts`, same indexes and length. */
+  everydayMonthlyAmounts?: number[]
+
   /** Breakdown by subcategory */
   @ApiProperty({ type: [SubcategoryAverageDto] })
   subcategories?: SubcategoryAverageDto[]
@@ -97,6 +118,12 @@ export class BudgetStatisticsResponseDto {
 
   /** Total pending reimbursements deducted from expenses */
   totalPendingReimbursements?: number
+
+  /**
+   * Total expense carried by exceptional events over the period, net of
+   * reimbursements. `totalExpenses` minus this is everyday spending.
+   */
+  totalExceptionalExpenses?: number
 
   /** Month labels corresponding to monthlyAmounts indexes (e.g. ['2025-04', '2025-05', ...]). Only included when includeMonthlyBreakdown is true. */
   monthLabels?: string[]

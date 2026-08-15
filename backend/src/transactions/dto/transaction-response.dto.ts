@@ -15,6 +15,20 @@ export class TransactionSettlementSummaryDto {
   amountUsed!: number
 }
 
+export class TransactionTagSummaryDto {
+  /** Tag ID */
+  id!: string
+
+  /** Tag name */
+  name!: string
+
+  /** Display color (hex) or null */
+  color!: string | null
+
+  /** Icon identifier or null */
+  icon!: string | null
+}
+
 export class TransactionResponseDto {
   /** Transaction ID */
   id!: string
@@ -68,6 +82,10 @@ export class TransactionResponseDto {
    */
   @ApiProperty({ type: [TransactionSettlementSummaryDto], required: false })
   settlements?: TransactionSettlementSummaryDto[]
+
+  /** Tags attached to this transaction */
+  @ApiProperty({ type: [TransactionTagSummaryDto], required: false })
+  tags?: TransactionTagSummaryDto[]
 
   /** Creation date */
   createdAt!: Date

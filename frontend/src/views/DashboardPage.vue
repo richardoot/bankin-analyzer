@@ -1,5 +1,6 @@
 <script setup lang="ts">
-  import { onMounted, computed } from 'vue'
+  import { onMounted, computed, ref } from 'vue'
+  import { useRouter } from 'vue-router'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import CategoryPieChart from '@/components/charts/CategoryPieChart.vue'
   import AdvancedFiltersPanel from '@/components/filters/AdvancedFiltersPanel.vue'
@@ -9,10 +10,16 @@
   import { useDashboardData } from '@/composables/useDashboardData'
   import { formatCurrency } from '@/lib/formatters'
 
+  const router = useRouter()
+
   const {
     totalExpenses,
     totalIncome,
     averageMonthlyExpenses,
+    totalEverydayExpenses,
+    averageEverydayMonthlyExpenses,
+    exceptionalEvents,
+    hasExceptionalExpenses,
     averageMonthlyIncome,
     averageMonthlySavings,
     expensesSparkline,
@@ -57,6 +64,36 @@
 
   // Show subtle refresh indicator when reloading with existing data
   const isRefreshing = computed(() => isLoading.value && hasInitialData.value)
+
+  // Real vs everyday breakdown, persisted so the choice survives a reload.
+  const BREAKDOWN_MODE_KEY = 'dashboard-breakdown-mode'
+  const breakdownMode = ref<'real' | 'everyday'>(
+    localStorage.getItem(BREAKDOWN_MODE_KEY) === 'everyday'
+      ? 'everyday'
+      : 'real'
+  )
+
+  function setBreakdownMode(mode: 'real' | 'everyday'): void {
+    breakdownMode.value = mode
+    try {
+      localStorage.setItem(BREAKDOWN_MODE_KEY, mode)
+    } catch {
+      // Private browsing: the choice simply does not persist.
+    }
+  }
+
+  /**
+   * Sum of the listed events, so the banner header matches the chips below it.
+   * Deliberately not `totalExceptionalExpenses`, which is net of reimbursements
+   * while the per-event amounts are gross.
+   */
+  const exceptionalEventsTotal = computed(() =>
+    exceptionalEvents.value.reduce((sum, e) => sum + e.amount, 0)
+  )
+
+  function openTagAnalysis(tagId: string): void {
+    router.push({ name: 'tag-analysis', params: { id: tagId } })
+  }
 
   onMounted(() => {
     fetchData()
@@ -247,6 +284,19 @@
                 >
                   {{ formatCurrency(averageMonthlyExpenses) }}
                 </div>
+                <!-- Everyday baseline: what the lifestyle costs once the
+                     one-off events are set aside. -->
+                <div
+                  v-if="hasExceptionalExpenses"
+                  class="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                  title="Moyenne calculée hors dépenses étiquetées comme exceptionnelles, sur la même période"
+                >
+                  dont vie courante
+                  <span class="font-semibold text-gray-700 dark:text-gray-300">
+                    {{ formatCurrency(averageEverydayMonthlyExpenses) }}
+                  </span>
+                  / mois
+                </div>
               </div>
               <SparklineChart
                 v-if="expensesSparkline.length >= 2"
@@ -428,19 +478,99 @@
             v-if="expenseCategoriesDetailed.length > 0"
             class="mt-6 bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
           >
-            <h3
-              class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1"
-            >
-              Détail par catégorie
-            </h3>
+            <div class="flex flex-wrap items-start justify-between gap-3 mb-1">
+              <h3
+                class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+              >
+                Détail par catégorie
+              </h3>
+
+              <!-- Real vs everyday selector -->
+              <div
+                v-if="hasExceptionalExpenses"
+                class="inline-flex rounded-lg border border-gray-200 dark:border-slate-700 p-0.5 text-xs"
+                role="group"
+                aria-label="Mode d'affichage des moyennes"
+              >
+                <button
+                  type="button"
+                  data-testid="breakdown-mode-real"
+                  class="px-2.5 py-1 rounded-md transition-colors"
+                  :class="
+                    breakdownMode === 'real'
+                      ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
+                      : 'text-gray-500 dark:text-gray-400'
+                  "
+                  @click="setBreakdownMode('real')"
+                >
+                  Tout
+                </button>
+                <button
+                  type="button"
+                  data-testid="breakdown-mode-everyday"
+                  class="px-2.5 py-1 rounded-md transition-colors"
+                  :class="
+                    breakdownMode === 'everyday'
+                      ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
+                      : 'text-gray-500 dark:text-gray-400'
+                  "
+                  @click="setBreakdownMode('everyday')"
+                >
+                  Vie courante
+                </button>
+              </div>
+            </div>
             <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">
-              Cliquez sur une catégorie pour voir ses sous-catégories et son
-              évolution mensuelle.
+              <template v-if="breakdownMode === 'everyday'">
+                Moyennes hors dépenses étiquetées comme exceptionnelles. Seules
+                les catégories concernées par un événement changent de valeur.
+              </template>
+              <template v-else>
+                Cliquez sur une catégorie pour voir ses sous-catégories et son
+                évolution mensuelle.
+              </template>
             </p>
+
+            <!-- What the exceptional share is made of -->
+            <div
+              v-if="hasExceptionalExpenses && exceptionalEvents.length > 0"
+              class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5"
+            >
+              <p
+                class="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1.5"
+              >
+                Événements de la période —
+                {{ formatCurrency(exceptionalEventsTotal) }}
+              </p>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  v-for="event in exceptionalEvents"
+                  :key="event.id"
+                  type="button"
+                  class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-amber-300 transition"
+                  @click="openTagAnalysis(event.id)"
+                >
+                  <span
+                    class="inline-block h-2 w-2 rounded-full shrink-0"
+                    :style="{ backgroundColor: event.color ?? '#9ca3af' }"
+                  ></span>
+                  {{ event.name }}
+                  <span class="font-semibold tabular-nums">
+                    {{ formatCurrency(event.amount) }}
+                  </span>
+                </button>
+              </div>
+            </div>
+
             <CategoryBreakdownList
               :categories="expenseCategoriesDetailed"
               :month-labels="monthLabels"
-              :total="totalExpenses"
+              :total="
+                breakdownMode === 'everyday'
+                  ? totalEverydayExpenses
+                  : totalExpenses
+              "
+              :mode="breakdownMode"
               color="#ef4444"
             />
           </div>

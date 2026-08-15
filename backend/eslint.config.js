@@ -13,7 +13,7 @@ export default [
   sharedIgnores,
   // Ignore generated files and config files
   {
-    ignores: ['src/generated/**', 'eslint.config.js'],
+    ignores: ['src/generated/**', 'eslint.config.js', 'prisma/seed.mjs'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

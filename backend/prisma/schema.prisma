@@ -26,6 +26,7 @@ model User {
   settlements           Settlement[]
   categoryAssociations  CategoryAssociation[]
   budgetPlans           BudgetPlan[]
+  tags                  Tag[]
 
   @@map("users")
   @@schema("app")
@@ -56,6 +57,7 @@ model Transaction {
   importHistory         ImportHistory?         @relation(fields: [importHistoryId], references: [id], onDelete: SetNull)
   reimbursementRequests ReimbursementRequest[]
   settlementsAsIncome   Settlement[]           @relation("SettlementIncome")
+  tags                  TransactionTag[]
 
   @@index([userId])
   @@index([accountId])
@@ -333,6 +335,17 @@ model BudgetPlan {
   name      String
   startDate DateTime @map("start_date") @db.Date
   endDate   DateTime @map("end_date") @db.Date
+
+  /// Monthly amount the user has decided to set aside (savings, investment).
+  /// An input of the plan, not a residual: what is left after it and after the
+  /// category envelopes is the budget available for one-off projects.
+  savingsTarget Decimal? @map("savings_target") @db.Decimal(12, 2)
+
+  /// Monthly income assumed when the plan was drawn up. Frozen on purpose:
+  /// recomputing the project reserve from today's income would silently move a
+  /// figure the user decided once, and hide the drift instead of showing it.
+  referenceIncome Decimal? @map("reference_income") @db.Decimal(12, 2)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -359,5 +372,60 @@ model BudgetPlanEntry {
   @@index([budgetPlanId])
   @@index([categoryId])
   @@map("budget_plan_entries")
+  @@schema("app")
+}
+
+/// A user-defined label used to group transactions around a theme, event or
+/// trip (e.g. "Vacances Italie", "Anniversaire Marie"). A transaction can carry
+/// several tags (many-to-many via TransactionTag), enabling per-tag analysis.
+model Tag {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  color     String?
+  icon      String?
+
+  /// When true, the tagged transactions are kept out of the "everyday"
+  /// averages of the dashboard: they describe a one-off event (holiday,
+  /// birthday, competition) rather than the user's recurring lifestyle.
+  isExceptional Boolean @default(false) @map("is_exceptional")
+
+  /// Optional window during which everyday life is *suspended* (a trip: the
+  /// user is away and does not buy groceries, fuel…). When set, those days are
+  /// removed from the denominator of everyday averages and the category
+  /// baseline is deducted from the event's surplus. When absent, the event is
+  /// considered additive (a party at home) and nothing is deducted.
+  eventStartDate DateTime? @map("event_start_date") @db.Date
+  eventEndDate   DateTime? @map("event_end_date") @db.Date
+
+  /// Total budget allocated to this event — an envelope for the whole project,
+  /// never a monthly amount: a trip is decided once, not every month. Charged
+  /// against the plan's project reserve (BudgetPlan.savingsTarget).
+  budgetAmount Decimal? @map("budget_amount") @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions TransactionTag[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("tags")
+  @@schema("app")
+}
+
+/// Join table linking a Tag to a Transaction (many-to-many).
+model TransactionTag {
+  transactionId String   @map("transaction_id")
+  tagId         String   @map("tag_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  tag         Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([transactionId, tagId])
+  @@index([tagId])
+  @@map("transaction_tags")
   @@schema("app")
 }

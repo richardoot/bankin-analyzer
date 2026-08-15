@@ -15,6 +15,7 @@ describe('BudgetsService', () => {
       category_icon: string | null
       type: string
       subcategory: string
+      is_exceptional: boolean
       transaction_count: number
       total_amount: number
     }>
@@ -24,6 +25,7 @@ describe('BudgetsService', () => {
     category_icon: overrides.category_icon ?? null,
     type: overrides.type ?? 'EXPENSE',
     subcategory: overrides.subcategory ?? '',
+    is_exceptional: overrides.is_exceptional ?? false,
     transaction_count: overrides.transaction_count ?? 1,
     total_amount: overrides.total_amount ?? 100,
   })
@@ -1784,6 +1786,257 @@ describe('BudgetsService', () => {
 
       // 2 $queryRaw calls: aggregated + monthly. No pending queries.
       expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  // The everyday / exceptional split is what lets a budget plan be seeded on
+  // the recurring lifestyle instead of an average inflated by a one-off trip.
+  describe('everyday / exceptional split', () => {
+    it('splits a category between everyday life and exceptional events', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({
+          category_id: 'cat-food',
+          category_name: 'Alimentation',
+          total_amount: 900,
+          is_exceptional: false,
+        }),
+        createRow({
+          category_id: 'cat-food',
+          category_name: 'Alimentation',
+          total_amount: 300,
+          is_exceptional: true,
+        }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+      })
+
+      const food = result.expensesByCategory[0]
+      expect(food.totalAmount).toBe(1200)
+      expect(food.everydayAmount).toBe(900)
+      expect(food.exceptionalAmount).toBe(300)
+      // 3 months → the envelope is sized on 300/month, not 400.
+      expect(food.averagePerMonth).toBe(400)
+      expect(food.everydayAveragePerMonth).toBe(300)
+    })
+
+    it('leaves a category untouched by any event identical in both modes', async () => {
+      // Regression: the everyday figure must use the same divisor as
+      // averagePerMonth. Correcting the denominator globally would move every
+      // category, including those no event ever touched.
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({
+          category_id: 'cat-rent',
+          category_name: 'Loyer',
+          total_amount: 3000,
+        }),
+        createRow({
+          category_id: 'cat-travel',
+          category_name: 'Voyages',
+          total_amount: 1200,
+          is_exceptional: true,
+        }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+      })
+
+      const rent = result.expensesByCategory.find(
+        c => c.categoryId === 'cat-rent'
+      )!
+      expect(rent.everydayAveragePerMonth).toBe(rent.averagePerMonth)
+      expect(rent.everydayAmount).toBe(rent.totalAmount)
+      expect(rent.exceptionalAmount).toBe(0)
+
+      const travel = result.expensesByCategory.find(
+        c => c.categoryId === 'cat-travel'
+      )!
+      expect(travel.everydayAveragePerMonth).toBe(0)
+    })
+
+    it('keeps everyday + exceptional equal to the category total', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({ category_id: 'cat-1', total_amount: 733.33 }),
+        createRow({
+          category_id: 'cat-1',
+          total_amount: 266.67,
+          is_exceptional: true,
+        }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-02-29',
+      })
+
+      const cat = result.expensesByCategory[0]
+      expect(cat.everydayAmount! + cat.exceptionalAmount!).toBeCloseTo(
+        cat.totalAmount,
+        2
+      )
+    })
+
+    it('shares a reimbursement pro-rata between the two shares', async () => {
+      // 1000 gross = 600 everyday + 400 exceptional, minus 200 reimbursed.
+      // The reimbursement must not be charged entirely to everyday life.
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({
+          category_id: 'cat-health',
+          category_name: 'Santé',
+          total_amount: 600,
+        }),
+        createRow({
+          category_id: 'cat-health',
+          category_name: 'Santé',
+          total_amount: 400,
+          is_exceptional: true,
+        }),
+        createRow({
+          category_id: 'cat-reimb',
+          category_name: 'Remboursement Mutuelle',
+          type: 'INCOME',
+          total_amount: 200,
+        }),
+      ])
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-health',
+          incomeCategoryId: 'cat-reimb',
+          expenseCategory: { id: 'cat-health', name: 'Santé' },
+          incomeCategory: { id: 'cat-reimb', name: 'Remboursement Mutuelle' },
+        },
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+      })
+
+      const health = result.expensesByCategory[0]
+      expect(health.totalAmount).toBe(800)
+      // 40 % of the net follows the exceptional share.
+      expect(health.exceptionalAmount).toBe(320)
+      expect(health.everydayAmount).toBe(480)
+    })
+
+    it('accumulates subcategory totals across the exceptional split', async () => {
+      // Regression: `is_exceptional` joined the GROUP BY, so the same
+      // (category, subcategory) pair now comes back on two rows.
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({
+          category_id: 'cat-food',
+          subcategory: 'Courses',
+          transaction_count: 8,
+          total_amount: 300,
+        }),
+        createRow({
+          category_id: 'cat-food',
+          subcategory: 'Courses',
+          transaction_count: 2,
+          total_amount: 200,
+          is_exceptional: true,
+        }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+      })
+
+      const courses = result.expensesByCategory[0].subcategories!.find(
+        s => s.subcategory === 'Courses'
+      )!
+      expect(courses.totalAmount).toBe(500)
+      expect(courses.transactionCount).toBe(10)
+    })
+
+    it('reports the total exceptional expense over the period', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({ category_id: 'cat-1', total_amount: 500 }),
+        createRow({
+          category_id: 'cat-1',
+          total_amount: 200,
+          is_exceptional: true,
+        }),
+        createRow({
+          category_id: 'cat-2',
+          total_amount: 150,
+          is_exceptional: true,
+        }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+      })
+
+      expect(result.totalExceptionalExpenses).toBe(350)
+    })
+
+    it('mirrors monthlyAmounts with an everyday counterpart', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({ category_id: 'cat-1', total_amount: 200 }),
+          createRow({
+            category_id: 'cat-1',
+            total_amount: 100,
+            is_exceptional: true,
+          }),
+        ])
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-1',
+            type: 'EXPENSE',
+            year_month: '2024-01',
+            is_exceptional: false,
+            monthly_amount: 100,
+          },
+          {
+            category_id: 'cat-1',
+            type: 'EXPENSE',
+            year_month: '2024-02',
+            is_exceptional: false,
+            monthly_amount: 100,
+          },
+          {
+            category_id: 'cat-1',
+            type: 'EXPENSE',
+            year_month: '2024-02',
+            is_exceptional: true,
+            monthly_amount: 100,
+          },
+        ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+        includeMonthlyBreakdown: true,
+      })
+
+      const cat = result.expensesByCategory[0]
+      // February carries both shares, and only the everyday one survives.
+      expect(cat.monthlyAmounts).toEqual([100, 200, 0])
+      expect(cat.everydayMonthlyAmounts).toEqual([100, 100, 0])
+    })
+
+    it('scopes the exceptional CTE to the user', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([])
+
+      await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+      })
+
+      const sql = mockPrismaService.$queryRaw.mock.calls[0][0].strings.join('')
+      expect(sql).toContain('exceptional_tx')
+      expect(sql).toContain('app.transaction_tags')
+      expect(sql).toContain('tg.is_exceptional = true')
     })
   })
 })

@@ -40,6 +40,9 @@ type TransactionWithRelations = Transaction & {
     personId: string
     person: { name: string }
   }[]
+  tags?: {
+    tag: { id: string; name: string; color: string | null; icon: string | null }
+  }[]
 }
 
 @ApiTags('transactions')
@@ -75,6 +78,16 @@ export class TransactionsController {
               personId: s.personId,
               personName: s.person.name,
               amountUsed: Number(s.amountUsed),
+            })),
+          }
+        : {}),
+      ...(tx.tags?.length
+        ? {
+            tags: tx.tags.map(tt => ({
+              id: tt.tag.id,
+              name: tt.tag.name,
+              color: tt.tag.color,
+              icon: tt.tag.icon,
             })),
           }
         : {}),
@@ -131,6 +144,7 @@ export class TransactionsController {
   @ApiQuery({ name: 'categoryId', required: false, type: String })
   @ApiQuery({ name: 'isPointed', required: false, type: Boolean })
   @ApiQuery({ name: 'account', required: false, type: String })
+  @ApiQuery({ name: 'tagId', required: false, type: String })
   async findAll(
     @CurrentUser() user: User,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
@@ -140,7 +154,8 @@ export class TransactionsController {
     @Query('endDate') endDate?: string,
     @Query('categoryId') categoryId?: string,
     @Query('isPointed') isPointed?: string,
-    @Query('account') account?: string
+    @Query('account') account?: string,
+    @Query('tagId') tagId?: string
   ): Promise<PaginatedTransactionsResponseDto> {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
@@ -152,6 +167,7 @@ export class TransactionsController {
       categoryId?: string
       isPointed?: boolean
       account?: string
+      tagId?: string
     } = {}
 
     if (type) filters.type = type
@@ -160,6 +176,7 @@ export class TransactionsController {
     if (categoryId) filters.categoryId = categoryId
     if (isPointed !== undefined) filters.isPointed = isPointed === 'true'
     if (account) filters.account = account
+    if (tagId) filters.tagId = tagId
 
     const { data: transactions, total } =
       await this.transactionsService.findAllByUserPaginated(

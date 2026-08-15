@@ -1076,4 +1076,167 @@ describe('useDashboardData', () => {
       expect(total).toBe(1100)
     })
   })
+  describe('everyday vs exceptional aggregation', () => {
+    const summaryWithEvents: DashboardSummaryDto = {
+      monthlyData: [
+        {
+          month: '2024-01',
+          label: 'Jan 2024',
+          expenses: 800,
+          netExpenses: 800,
+          income: 2500,
+          exceptionalExpenses: 0,
+          everydayNetExpenses: 800,
+        },
+        {
+          month: '2024-02',
+          label: 'Fév 2024',
+          expenses: 1400,
+          netExpenses: 1400,
+          income: 2500,
+          exceptionalExpenses: 600,
+          everydayNetExpenses: 800,
+        },
+      ],
+      expensesByCategory: [
+        {
+          category: 'Logement',
+          amount: 1600,
+          everydayAmount: 1600,
+          exceptionalAmount: 0,
+          averagePerMonth: 800,
+          everydayAveragePerMonth: 800,
+        },
+        {
+          category: 'Voyages',
+          amount: 600,
+          everydayAmount: 0,
+          exceptionalAmount: 600,
+          averagePerMonth: 300,
+          everydayAveragePerMonth: 0,
+        },
+      ],
+      incomeByCategory: [{ category: 'Salaires', amount: 5000 }],
+      totalExpenses: 2200,
+      totalIncome: 5000,
+      allExpenseCategories: ['Logement', 'Voyages'],
+      allIncomeCategories: ['Salaires'],
+      availableAccounts: ['Compte Courant'],
+      periodMonths: 2,
+      monthLabels: ['2024-01', '2024-02'],
+      totalExceptionalExpenses: 600,
+      exceptionalEvents: [
+        {
+          id: 'tag-1',
+          name: 'Vacances Italie',
+          color: '#06b6d4',
+          icon: null,
+          amount: 600,
+        },
+      ],
+    }
+
+    it('sums the everyday share across categories', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
+
+      const { fetchData, totalEverydayExpenses, totalExceptionalExpenses } =
+        useDashboardData()
+      await fetchData()
+
+      expect(totalEverydayExpenses.value).toBe(1600)
+      expect(totalExceptionalExpenses.value).toBe(600)
+    })
+
+    it('uses the same divisor as the real average', async () => {
+      // The regression: dividing the everyday total by a shrunken number of
+      // "everyday months" moved figures that carried no event at all.
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
+
+      const {
+        fetchData,
+        averageMonthlyExpenses,
+        averageEverydayMonthlyExpenses,
+        periodMonths,
+      } = useDashboardData()
+      await fetchData()
+
+      expect(periodMonths.value).toBe(2)
+      expect(averageMonthlyExpenses.value).toBe(1100) // 2200 / 2
+      expect(averageEverydayMonthlyExpenses.value).toBe(800) // 1600 / 2
+
+      // The gap between both figures is exactly the exceptional spending.
+      const gap =
+        (averageMonthlyExpenses.value - averageEverydayMonthlyExpenses.value) *
+        periodMonths.value
+      expect(gap).toBeCloseTo(totalExceptionalOf(summaryWithEvents), 2)
+    })
+
+    it('exposes the events of the period', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
+
+      const { fetchData, exceptionalEvents, hasExceptionalExpenses } =
+        useDashboardData()
+      await fetchData()
+
+      expect(hasExceptionalExpenses.value).toBe(true)
+      expect(exceptionalEvents.value).toHaveLength(1)
+      expect(exceptionalEvents.value[0]?.name).toBe('Vacances Italie')
+    })
+
+    it('reports no exceptional spending when there is none', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue({
+        ...summaryWithEvents,
+        expensesByCategory: [
+          {
+            category: 'Logement',
+            amount: 1600,
+            everydayAmount: 1600,
+            exceptionalAmount: 0,
+          },
+        ],
+        totalExpenses: 1600,
+        totalExceptionalExpenses: 0,
+        exceptionalEvents: [],
+      })
+
+      const {
+        fetchData,
+        hasExceptionalExpenses,
+        averageMonthlyExpenses,
+        averageEverydayMonthlyExpenses,
+      } = useDashboardData()
+      await fetchData()
+
+      expect(hasExceptionalExpenses.value).toBe(false)
+      // With no event, both averages must be strictly identical.
+      expect(averageEverydayMonthlyExpenses.value).toBe(
+        averageMonthlyExpenses.value
+      )
+    })
+
+    it('falls back to the real amounts when the everyday share is absent', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue({
+        ...summaryWithEvents,
+        // A response without the category breakdown carries no everyday field.
+        expensesByCategory: [
+          { category: 'Logement', amount: 1600 },
+          { category: 'Voyages', amount: 600 },
+        ],
+        totalExceptionalExpenses: 0,
+      })
+
+      const { fetchData, totalEverydayExpenses } = useDashboardData()
+      await fetchData()
+
+      expect(totalEverydayExpenses.value).toBe(2200)
+    })
+  })
 })
+
+/** Total exceptional spending declared by a summary fixture. */
+function totalExceptionalOf(summary: DashboardSummaryDto): number {
+  return summary.expensesByCategory.reduce(
+    (acc, c) => acc + (c.exceptionalAmount ?? 0),
+    0
+  )
+}

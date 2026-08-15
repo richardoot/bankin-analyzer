@@ -31,6 +31,7 @@
       testId: 'nav-reimbursements-link',
     },
     { to: '/budget', label: 'Budget', testId: 'nav-budget-link' },
+    { to: '/tags', label: 'Etiquettes', testId: 'nav-tags-link' },
   ]
 
   // Liens supplémentaires pour le menu mobile (inclus dans le dropdown sur desktop)

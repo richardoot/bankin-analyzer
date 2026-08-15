@@ -89,6 +89,39 @@ export function useDashboardData() {
       ) / 100
   )
 
+  // --- Everyday vs exceptional -------------------------------------------
+  // Transactions carrying a tag flagged "exceptional" (a holiday, a birthday)
+  // describe a one-off event, not the user's recurring lifestyle. Keeping them
+  // out of the averages is what makes those averages usable as a budget.
+
+  const totalExceptionalExpenses = computed(
+    () => summaryData.value?.totalExceptionalExpenses ?? 0
+  )
+  const exceptionalEvents = computed(
+    () => summaryData.value?.exceptionalEvents ?? []
+  )
+  const totalEverydayExpenses = computed(() => {
+    const categories = summaryData.value?.expensesByCategory ?? []
+    // `everydayAmount` is absent before a breakdown is requested; the real
+    // amount is then the best available answer.
+    const sum = categories.reduce(
+      (acc, cat) => acc + (cat.everydayAmount ?? cat.amount),
+      0
+    )
+    return Math.round(sum * 100) / 100
+  })
+
+  // Same divisor as averageMonthlyExpenses, so the gap between the two figures
+  // is exactly the exceptional spending and nothing else.
+  const averageEverydayMonthlyExpenses = computed(
+    () =>
+      Math.round((totalEverydayExpenses.value / periodMonths.value) * 100) / 100
+  )
+
+  const hasExceptionalExpenses = computed(
+    () => totalExceptionalExpenses.value > 0
+  )
+
   // Per-month series for sparklines
   const expensesSparkline = computed(() =>
     monthlyData.value.map(d => d.netExpenses)
@@ -433,6 +466,11 @@ export function useDashboardData() {
     averageMonthlyExpenses,
     averageMonthlyIncome,
     averageMonthlySavings,
+    totalExceptionalExpenses,
+    totalEverydayExpenses,
+    averageEverydayMonthlyExpenses,
+    exceptionalEvents,
+    hasExceptionalExpenses,
     expensesSparkline,
     incomeSparkline,
     savingsSparkline,

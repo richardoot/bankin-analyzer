@@ -21,6 +21,7 @@ import { AiSuggestionsModule } from './ai-suggestions/ai-suggestions.module'
 import { BudgetsModule } from './budgets/budgets.module'
 import { AccountsModule } from './accounts/accounts.module'
 import { McpModule } from './mcp/mcp.module'
+import { TagsModule } from './tags/tags.module'
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { McpModule } from './mcp/mcp.module'
     CategoryAssociationModule,
     AiSuggestionsModule,
     BudgetsModule,
+    TagsModule,
     McpModule,
   ],
   controllers: [AppController],

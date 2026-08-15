@@ -20,7 +20,8 @@
     "prisma:generate": "prisma generate --config prisma/prisma.config.ts",
     "prisma:migrate": "prisma migrate dev --config prisma/prisma.config.ts",
     "prisma:deploy": "prisma migrate deploy --config prisma/prisma.config.ts",
-    "prisma:studio": "prisma studio --config prisma/prisma.config.ts"
+    "prisma:studio": "prisma studio --config prisma/prisma.config.ts",
+    "seed": "node prisma/seed.mjs"
   },
   "dependencies": {
     "@langchain/anthropic": "1.3.25",

@@ -361,4 +361,141 @@ describe('BudgetPlansService', () => {
       })
     })
   })
+
+  // ── savings target / project reserve ───────────────────────────────────
+
+  describe('project reserve', () => {
+    /** A 3-month plan holding 500/month of envelopes. */
+    const planRow = (over: Record<string, unknown> = {}) => ({
+      id: 'plan-1',
+      name: 'Trimestre',
+      startDate: utcDate('2026-01-01'),
+      endDate: utcDate('2026-03-31'),
+      savingsTarget: null,
+      referenceIncome: null,
+      createdAt: utcDate('2025-12-01'),
+      updatedAt: utcDate('2025-12-01'),
+      entries: [
+        {
+          id: 'e1',
+          categoryId: 'cat-1',
+          amount: 500,
+          category: { name: 'Alimentation', icon: null },
+        },
+      ],
+      ...over,
+    })
+
+    it('derives the reserve over the whole plan', async () => {
+      mockPrismaService.budgetPlan.findFirst.mockResolvedValueOnce(
+        planRow({ savingsTarget: 400, referenceIncome: 2000 })
+      )
+
+      const result = await service.findOne(mockUserId, 'plan-1')
+
+      // (2000 − 400 − 500) × 3 months
+      expect(result.projectReserve).toBe(3300)
+      expect(result.savingsTarget).toBe(400)
+      expect(result.referenceIncome).toBe(2000)
+    })
+
+    it('reports a negative reserve rather than clamping it', async () => {
+      mockPrismaService.budgetPlan.findFirst.mockResolvedValueOnce(
+        planRow({ savingsTarget: 1600, referenceIncome: 2000 })
+      )
+
+      const result = await service.findOne(mockUserId, 'plan-1')
+
+      // (2000 − 1600 − 500) × 3 — the plan does not add up, and says so.
+      expect(result.projectReserve).toBe(-300)
+    })
+
+    it('leaves the reserve null when the equation is incomplete', async () => {
+      mockPrismaService.budgetPlan.findFirst.mockResolvedValueOnce(
+        planRow({ savingsTarget: 400 })
+      )
+
+      const result = await service.findOne(mockUserId, 'plan-1')
+
+      expect(result.projectReserve).toBeNull()
+      expect(result.referenceIncome).toBeNull()
+    })
+
+    it('persists both figures on create', async () => {
+      mockPrismaService.budgetPlan.create.mockResolvedValue(
+        planRow({ savingsTarget: 400, referenceIncome: 2000 })
+      )
+
+      await service.create(mockUserId, {
+        name: 'Trimestre',
+        startDate: '2026-01-01',
+        endDate: '2026-03-31',
+        savingsTarget: 400,
+        referenceIncome: 2000,
+        entries: [{ categoryId: 'cat-1', amount: 500 }],
+      })
+
+      const data = mockPrismaService.budgetPlan.create.mock.calls[0][0].data
+      expect(data.savingsTarget).toBe(400)
+      expect(data.referenceIncome).toBe(2000)
+    })
+
+    it('stores null when the plan is created without an equation', async () => {
+      mockPrismaService.budgetPlan.create.mockResolvedValue(planRow())
+
+      await service.create(mockUserId, {
+        name: 'Trimestre',
+        startDate: '2026-01-01',
+        endDate: '2026-03-31',
+        entries: [],
+      })
+
+      const data = mockPrismaService.budgetPlan.create.mock.calls[0][0].data
+      expect(data.savingsTarget).toBeNull()
+      expect(data.referenceIncome).toBeNull()
+    })
+
+    describe('update', () => {
+      let planUpdate: ReturnType<typeof vi.fn>
+
+      beforeEach(() => {
+        planUpdate = vi.fn().mockResolvedValue(undefined)
+        mockPrismaService.budgetPlan.findFirst.mockResolvedValueOnce(planRow())
+        mockPrismaService.$transaction.mockImplementation(async cb =>
+          cb({
+            budgetPlan: {
+              update: planUpdate,
+              findUniqueOrThrow: vi.fn().mockResolvedValue(planRow()),
+            },
+            budgetPlanEntry: {
+              deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+              createMany: vi.fn().mockResolvedValue({ count: 0 }),
+            },
+          })
+        )
+      })
+
+      it('leaves the equation alone when only entries change', async () => {
+        await service.update(mockUserId, 'plan-1', {
+          entries: [{ categoryId: 'cat-1', amount: 600 }],
+        })
+
+        const data = planUpdate.mock.calls[0][0].data
+        expect(data).not.toHaveProperty('savingsTarget')
+        expect(data).not.toHaveProperty('referenceIncome')
+      })
+
+      it('clears the target when null is sent explicitly', async () => {
+        await service.update(mockUserId, 'plan-1', { savingsTarget: null })
+
+        expect(planUpdate.mock.calls[0][0].data.savingsTarget).toBeNull()
+      })
+
+      it('updates the target when a number is sent', async () => {
+        await service.update(mockUserId, 'plan-1', { savingsTarget: 250 })
+
+        expect(planUpdate.mock.calls[0][0].data.savingsTarget).toBe(250)
+      })
+    })
+  })
 })
