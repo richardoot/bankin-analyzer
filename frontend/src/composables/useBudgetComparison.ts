@@ -1,4 +1,4 @@
-import { computed, type Ref } from 'vue'
+import { computed, ref, type Ref } from 'vue'
 import type {
   BudgetPlanDto,
   BudgetStatisticsDto,
@@ -40,12 +40,23 @@ export interface ComparisonRange {
  */
 export type MonthZone = 'plan' | 'comparison' | 'gap' | 'outside'
 
+/**
+ * Which expense series the aggregates read.
+ * - `real`     : everything that left the account
+ * - `everyday` : the recurring lifestyle, with one-off events removed
+ *
+ * Income is never segmented — only expenses carry the split.
+ */
+export type BreakdownMode = 'real' | 'everyday'
+
 interface UseBudgetComparisonDeps {
   plan: Ref<BudgetPlanDto | null>
   comparison: Ref<ComparisonRange | null>
   statistics: Ref<BudgetStatisticsDto | null>
   /** Inject the current date (for testability). Defaults to `new Date()`. */
   now?: () => Date
+  /** Active breakdown mode. Defaults to `real`. */
+  mode?: Ref<BreakdownMode>
 }
 
 export function useBudgetComparison({
@@ -53,6 +64,7 @@ export function useBudgetComparison({
   comparison,
   statistics,
   now = () => new Date(),
+  mode = ref<BreakdownMode>('real'),
 }: UseBudgetComparisonDeps) {
   /** Plan span as YYYY-MM bounds (null when no plan). */
   const planMonthRange = computed<{
@@ -202,9 +214,26 @@ export function useBudgetComparison({
     return sum / indices.length
   }
 
+  /**
+   * Monthly series to read for an expense category, per the active mode.
+   * Falls back to the raw series when the backend sent no split, so the page
+   * degrades to its previous behaviour rather than reading zeroes.
+   */
+  function seriesFor(cat: CategoryAverageDto): number[] | undefined {
+    if (mode.value === 'everyday' && cat.everydayMonthlyAmounts) {
+      return cat.everydayMonthlyAmounts
+    }
+    return cat.monthlyAmounts
+  }
+
+  /** Income is never segmented — always its raw series. */
+  function rawSeries(cat: CategoryAverageDto): number[] | undefined {
+    return cat.monthlyAmounts
+  }
+
   /** Per-category average over the plan months (incl. partial / future). */
   function planAverage(cat: CategoryAverageDto): number {
-    return avgOverIndices(cat.monthlyAmounts, planIndices.value)
+    return avgOverIndices(seriesFor(cat), planIndices.value)
   }
 
   /**
@@ -212,23 +241,39 @@ export function useBudgetComparison({
    * This is the "Réel à date" / "Réel observé" inside the plan.
    */
   function planActualAverage(cat: CategoryAverageDto): number {
-    return avgOverIndices(cat.monthlyAmounts, completePlanIndices.value)
+    return avgOverIndices(seriesFor(cat), completePlanIndices.value)
   }
 
   /** Per-category average over the comparison months. */
   function comparisonAverage(cat: CategoryAverageDto): number {
-    return avgOverIndices(cat.monthlyAmounts, comparisonIndices.value)
+    return avgOverIndices(seriesFor(cat), comparisonIndices.value)
   }
 
-  /** Sum of `monthlyAmounts` across categories at the given month index. */
+  /**
+   * Exceptional share of a category's "Réel à date" — how much of the row a
+   * one-off event carries. Independent of the active mode: it is what the
+   * everyday reading leaves out. Zero when the backend sent no split.
+   */
+  function planActualExceptionalAverage(cat: CategoryAverageDto): number {
+    if (!cat.everydayMonthlyAmounts) return 0
+    const indices = completePlanIndices.value
+    return (
+      avgOverIndices(cat.monthlyAmounts, indices) -
+      avgOverIndices(cat.everydayMonthlyAmounts, indices)
+    )
+  }
+
+  /** Sum across categories at the given month index, for a chosen series. */
   function totalAtIndex(
     categories: CategoryAverageDto[],
-    index: number
+    index: number,
+    pick: (cat: CategoryAverageDto) => number[] | undefined
   ): number {
     let total = 0
     for (const cat of categories) {
-      if (!cat.monthlyAmounts) continue
-      total += cat.monthlyAmounts[index] ?? 0
+      const series = pick(cat)
+      if (!series) continue
+      total += series[index] ?? 0
     }
     return total
   }
@@ -236,11 +281,12 @@ export function useBudgetComparison({
   /** Average total (across all visible categories) over given indices. */
   function totalAvgOver(
     categories: CategoryAverageDto[],
-    indices: number[]
+    indices: number[],
+    pick: (cat: CategoryAverageDto) => number[] | undefined
   ): number {
     if (indices.length === 0) return 0
     let sum = 0
-    for (const i of indices) sum += totalAtIndex(categories, i)
+    for (const i of indices) sum += totalAtIndex(categories, i, pick)
     return sum / indices.length
   }
 
@@ -254,33 +300,46 @@ export function useBudgetComparison({
    */
   function aggregatesFor(visibleExpenseCategories: CategoryAverageDto[]) {
     return {
-      planExpenseAvg: totalAvgOver(visibleExpenseCategories, planIndices.value),
+      planExpenseAvg: totalAvgOver(
+        visibleExpenseCategories,
+        planIndices.value,
+        seriesFor
+      ),
       planActualExpenseAvg: totalAvgOver(
         visibleExpenseCategories,
-        completePlanIndices.value
+        completePlanIndices.value,
+        seriesFor
       ),
       comparisonExpenseAvg: totalAvgOver(
         visibleExpenseCategories,
-        comparisonIndices.value
+        comparisonIndices.value,
+        seriesFor
       ),
     }
   }
 
   function incomeAggregates(visibleIncomeCategories: CategoryAverageDto[]) {
     return {
-      planIncomeAvg: totalAvgOver(visibleIncomeCategories, planIndices.value),
+      planIncomeAvg: totalAvgOver(
+        visibleIncomeCategories,
+        planIndices.value,
+        rawSeries
+      ),
       planActualIncomeAvg: totalAvgOver(
         visibleIncomeCategories,
-        completePlanIndices.value
+        completePlanIndices.value,
+        rawSeries
       ),
       /** Avg over started plan months (elapsed + current) — not future-diluted. */
       planToDateIncomeAvg: totalAvgOver(
         visibleIncomeCategories,
-        startedPlanIndices.value
+        startedPlanIndices.value,
+        rawSeries
       ),
       comparisonIncomeAvg: totalAvgOver(
         visibleIncomeCategories,
-        comparisonIndices.value
+        comparisonIndices.value,
+        rawSeries
       ),
     }
   }
@@ -317,9 +376,11 @@ export function useBudgetComparison({
     planIndices,
     comparisonIndices,
     completePlanIndices,
+    seriesFor,
     planAverage,
     planActualAverage,
     comparisonAverage,
+    planActualExceptionalAverage,
     aggregatesFor,
     incomeAggregates,
     completePlanMonthsCount,

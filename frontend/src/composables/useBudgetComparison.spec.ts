@@ -405,4 +405,85 @@ describe('useBudgetComparison', () => {
       expect(inc.planActualIncomeAvg).toBe(1232)
     })
   })
+
+  describe('breakdown mode', () => {
+    /** Two elapsed months; the second carries an event worth 120. */
+    function eventStats() {
+      const food = cat('cat-food', 'Alimentation', [200, 320])
+      food.everydayMonthlyAmounts = [200, 200]
+      const rent = cat('cat-rent', 'Loyer', [800, 800])
+      rent.everydayMonthlyAmounts = [800, 800]
+      return makeStats(['2026-01', '2026-02'], [food, rent])
+    }
+
+    function setup(mode: 'real' | 'everyday') {
+      return useBudgetComparison({
+        plan: ref(makePlan('2026-01-01', '2026-02-28')),
+        comparison: ref(null),
+        statistics: ref(eventStats()),
+        mode: ref(mode),
+        now: () => new Date('2026-05-15T00:00:00Z'),
+      })
+    }
+
+    it('reads the raw series in real mode', () => {
+      const { planActualAverage } = setup('real')
+      const food = eventStats().expensesByCategory[0]!
+      expect(planActualAverage(food)).toBe(260) // (200 + 320) / 2
+    })
+
+    it('reads the everyday series in everyday mode', () => {
+      const { planActualAverage } = setup('everyday')
+      const food = eventStats().expensesByCategory[0]!
+      expect(planActualAverage(food)).toBe(200)
+    })
+
+    it('leaves an event-free category identical across modes', () => {
+      const rent = eventStats().expensesByCategory[1]!
+      expect(setup('real').planActualAverage(rent)).toBe(
+        setup('everyday').planActualAverage(rent)
+      )
+    })
+
+    it('exposes the exceptional share independently of the mode', () => {
+      const food = eventStats().expensesByCategory[0]!
+      // (260 − 200) — the same figure whichever mode is displayed.
+      expect(setup('everyday').planActualExceptionalAverage(food)).toBe(60)
+      expect(setup('real').planActualExceptionalAverage(food)).toBe(60)
+    })
+
+    it('reports no exceptional share when the backend sent no split', () => {
+      const plain = cat('cat-x', 'X', [100, 100])
+      expect(setup('everyday').planActualExceptionalAverage(plain)).toBe(0)
+      // …and falls back to the raw series rather than reading zeroes.
+      expect(setup('everyday').planActualAverage(plain)).toBe(100)
+    })
+
+    it('applies the mode to expense aggregates but never to income', () => {
+      const stats = eventStats()
+      const expenses = stats.expensesByCategory
+      const income = [cat('cat-salary', 'Salaire', [2000, 2000])]
+
+      const everyday = setup('everyday')
+      const real = setup('real')
+
+      // 200 + 800 everyday vs 260 + 800 real.
+      expect(everyday.aggregatesFor(expenses).planActualExpenseAvg).toBe(1000)
+      expect(real.aggregatesFor(expenses).planActualExpenseAvg).toBe(1060)
+      // Income is not segmented — same figure either way.
+      expect(everyday.incomeAggregates(income).planActualIncomeAvg).toBe(
+        real.incomeAggregates(income).planActualIncomeAvg
+      )
+    })
+
+    it('defaults to real when no mode is given', () => {
+      const { planActualAverage } = useBudgetComparison({
+        plan: ref(makePlan('2026-01-01', '2026-02-28')),
+        comparison: ref(null),
+        statistics: ref(eventStats()),
+        now: () => new Date('2026-05-15T00:00:00Z'),
+      })
+      expect(planActualAverage(eventStats().expensesByCategory[0]!)).toBe(260)
+    })
+  })
 })

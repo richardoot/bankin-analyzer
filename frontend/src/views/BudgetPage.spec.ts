@@ -11,6 +11,11 @@ vi.mock('vue3-apexcharts', () => ({
   },
 }))
 
+const routerPush = vi.fn()
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: routerPush }),
+}))
+
 vi.mock('@/lib/api', () => ({
   api: {
     getCurrentBudgetPlan: vi.fn(),
@@ -20,6 +25,8 @@ vi.mock('@/lib/api', () => ({
     createBudgetPlan: vi.fn(),
     updateBudgetPlan: vi.fn(),
     deleteBudgetPlan: vi.fn(),
+    getTags: vi.fn().mockResolvedValue([]),
+    getTagBudgetSummary: vi.fn(),
   },
 }))
 
@@ -96,6 +103,13 @@ describe('BudgetPage', () => {
   beforeEach(() => {
     vi.useRealTimers()
     vi.resetAllMocks()
+    vi.mocked(api.getTags).mockResolvedValue([])
+    vi.mocked(api.getTagBudgetSummary).mockResolvedValue({
+      items: [],
+      totalBudget: 0,
+      totalSpent: 0,
+    })
+    localStorage.clear()
   })
 
   describe('empty state', () => {
@@ -511,6 +525,326 @@ describe('BudgetPage', () => {
       expect(chart.exists()).toBe(true)
       // Elapsed-month average (June only), not the diluted 352.08.
       expect(chart.props('averageIncome')).toBeCloseTo(1232.28, 2)
+      wrapper.unmount()
+    })
+  })
+
+  describe('everyday vs real tracking', () => {
+    /**
+     * May 2026 is fully elapsed, so "Réel à date" is shown. Alimentation is
+     * budgeted 250 and spent 320, of which 120 belongs to a holiday: the
+     * everyday reading (200) is under budget, the raw one (320) is over.
+     */
+    const statisticsWithEvent: BudgetStatisticsDto = {
+      ...sampleStatistics,
+      totalExceptionalExpenses: 120,
+      expensesByCategory: [
+        {
+          ...sampleStatistics.expensesByCategory[0]!,
+          monthlyAmounts: [320],
+          everydayMonthlyAmounts: [200],
+        },
+        {
+          ...sampleStatistics.expensesByCategory[1]!,
+          monthlyAmounts: [100],
+          everydayMonthlyAmounts: [100],
+        },
+      ],
+    }
+
+    beforeEach(() => {
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue(samplePlan)
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(statisticsWithEvent)
+    })
+
+    function foodRow(wrapper: ReturnType<typeof mount>) {
+      return wrapper.get('[data-testid="budget-row-Alimentation"]')
+    }
+
+    it('does not flag an overrun caused by a one-off event', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      // Everyday is the default: 200 spent against a 250 envelope.
+      expect(foodRow(wrapper).text()).not.toContain('Dépassé')
+
+      wrapper.unmount()
+    })
+
+    it('flags the same row as over once the mode includes events', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      await wrapper.get('[data-testid="budget-mode-real"]').trigger('click')
+      await flushPromises()
+
+      // 320 spent against a 250 envelope.
+      expect(foodRow(wrapper).text()).toContain('Dépassé')
+
+      wrapper.unmount()
+    })
+
+    it('keeps a category untouched by any event identical in both modes', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const before = wrapper
+        .get('[data-testid="budget-row-Transport"]')
+        .text()
+        .replace(/\s+/g, ' ')
+
+      await wrapper.get('[data-testid="budget-mode-real"]').trigger('click')
+      await flushPromises()
+
+      const after = wrapper
+        .get('[data-testid="budget-row-Transport"]')
+        .text()
+        .replace(/\s+/g, ' ')
+
+      expect(after).toBe(before)
+
+      wrapper.unmount()
+    })
+
+    it('keeps the exceptional share visible in both modes', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const chip = wrapper.get(
+        '[data-testid="budget-exceptional-Alimentation"]'
+      )
+      expect(chip.text()).toContain('hors')
+      expect(chip.text()).toMatch(/120/)
+
+      await wrapper.get('[data-testid="budget-mode-real"]').trigger('click')
+      await flushPromises()
+
+      expect(
+        wrapper.get('[data-testid="budget-exceptional-Alimentation"]').text()
+      ).toContain('dont')
+
+      // Never on a category no event touched.
+      expect(
+        wrapper.find('[data-testid="budget-exceptional-Transport"]').exists()
+      ).toBe(false)
+
+      wrapper.unmount()
+    })
+
+    it('hides the mode selector when no event touches the plan', async () => {
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStatistics)
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="budget-breakdown-mode"]').exists()
+      ).toBe(false)
+
+      wrapper.unmount()
+    })
+
+    it('lists the events overlapping the window and links to their analysis', async () => {
+      vi.mocked(api.getTags).mockResolvedValue([
+        {
+          id: 'tag-trip',
+          name: 'Vacances Italie',
+          color: '#06b6d4',
+          icon: null,
+          transactionCount: 5,
+          isExceptional: true,
+          eventStartDate: '2026-05-10',
+          eventEndDate: '2026-05-14',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+        {
+          // Outside the plan window → not listed.
+          id: 'tag-ski',
+          name: 'Week-end Ski',
+          color: null,
+          icon: null,
+          transactionCount: 3,
+          isExceptional: true,
+          eventStartDate: '2025-01-10',
+          eventEndDate: '2025-01-12',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ])
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const chip = wrapper.get('[data-testid="budget-event-Vacances Italie"]')
+      expect(
+        wrapper.find('[data-testid="budget-event-Week-end Ski"]').exists()
+      ).toBe(false)
+
+      await chip.trigger('click')
+      expect(routerPush).toHaveBeenCalledWith('/tags/tag-trip')
+
+      wrapper.unmount()
+    })
+
+    it('surfaces the plan equation and flags a plan that does not add up', async () => {
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue({
+        ...samplePlan,
+        savingsTarget: 1900,
+        referenceIncome: 2000,
+        projectReserve: -200,
+      })
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const band = wrapper.get('[data-testid="plan-project-reserve"]')
+      expect(band.text()).toContain('ne tient pas')
+      expect(band.text().replace(/\s+/g, ' ')).toMatch(/1\s?900|1900/)
+
+      wrapper.unmount()
+    })
+
+    it('hides the equation on a plan created without one', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="plan-project-reserve"]').exists()
+      ).toBe(false)
+
+      wrapper.unmount()
+    })
+
+    it('charges the projects against the plan reserve', async () => {
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue({
+        ...samplePlan,
+        savingsTarget: 400,
+        referenceIncome: 2000,
+        projectReserve: 1300,
+      })
+      vi.mocked(api.getTagBudgetSummary).mockResolvedValue({
+        items: [
+          {
+            id: 'tag-trip',
+            name: 'Vacances Italie',
+            color: '#06b6d4',
+            icon: null,
+            eventStartDate: '2026-05-10',
+            eventEndDate: '2026-05-14',
+            budgetAmount: 1500,
+            spent: 1259,
+          },
+        ],
+        totalBudget: 1500,
+        totalSpent: 1259,
+      })
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      // The window matches the plan, not the wider stats range.
+      expect(api.getTagBudgetSummary).toHaveBeenCalledWith({
+        startDate: samplePlan.startDate,
+        endDate: samplePlan.endDate,
+      })
+
+      // 1 500 committed against 1 300 of reserve → 200 over.
+      const remaining = wrapper
+        .get('[data-testid="reserve-remaining"]')
+        .text()
+        .replace(/\s+/g, ' ')
+      expect(remaining).toContain('dépassement')
+      expect(remaining).toMatch(/200/)
+
+      wrapper.unmount()
+    })
+
+    it('links a project chip to its analysis', async () => {
+      vi.mocked(api.getTagBudgetSummary).mockResolvedValue({
+        items: [
+          {
+            id: 'tag-trip',
+            name: 'Vacances Italie',
+            color: null,
+            icon: null,
+            eventStartDate: '2026-05-10',
+            eventEndDate: '2026-05-14',
+            budgetAmount: null,
+            spent: 450,
+          },
+        ],
+        totalBudget: 0,
+        totalSpent: 450,
+      })
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const chip = wrapper.get('[data-testid="project-Vacances Italie"]')
+      // A project with no envelope is shown as such, not as a zero.
+      expect(chip.text()).toContain('sans enveloppe')
+
+      await chip.trigger('click')
+      expect(routerPush).toHaveBeenCalledWith('/tags/tag-trip')
+
+      wrapper.unmount()
+    })
+
+    it('hides the projects band when nothing overlaps the plan', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="budget-projects"]').exists()).toBe(
+        false
+      )
+
+      wrapper.unmount()
+    })
+
+    it('omits the reserve line on a plan without an equation', async () => {
+      vi.mocked(api.getTagBudgetSummary).mockResolvedValue({
+        items: [
+          {
+            id: 'tag-trip',
+            name: 'Vacances Italie',
+            color: null,
+            icon: null,
+            eventStartDate: '2026-05-10',
+            eventEndDate: '2026-05-14',
+            budgetAmount: 1500,
+            spent: 1259,
+          },
+        ],
+        totalBudget: 1500,
+        totalSpent: 1259,
+      })
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      // The band still lists the project…
+      expect(wrapper.find('[data-testid="budget-projects"]').exists()).toBe(
+        true
+      )
+      // …but there is no reserve to charge it against.
+      expect(wrapper.find('[data-testid="reserve-remaining"]').exists()).toBe(
+        false
+      )
+
+      wrapper.unmount()
+    })
+
+    it('degrades to the raw series when the backend sent no split', async () => {
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStatistics)
+      localStorage.setItem('budget-breakdown-mode', 'everyday')
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      // 320 shown, not 0 — the everyday mode must not read missing data.
+      expect(foodRow(wrapper).text()).toMatch(/320/)
+
       wrapper.unmount()
     })
   })

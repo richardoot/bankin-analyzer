@@ -5,6 +5,8 @@
     BudgetPlanDto,
     BudgetStatisticsDto,
     CategoryAverageDto,
+    TagBudgetSummaryDto,
+    TagDto,
   } from '@/lib/api'
   import { useFiltersStore } from '@/stores/filters'
   import { formatCurrency } from '@/lib/formatters'
@@ -17,11 +19,31 @@
   import ComparisonSelector from '@/components/budget/ComparisonSelector.vue'
   import {
     useBudgetComparison,
+    type BreakdownMode,
     type ComparisonPreset,
     type ComparisonRange,
   } from '@/composables/useBudgetComparison'
+  import { useRouter } from 'vue-router'
 
   const filtersStore = useFiltersStore()
+  const router = useRouter()
+
+  // Real vs everyday tracking, persisted so the choice survives a reload.
+  // Defaults to everyday: a holiday inside the plan must not read as an
+  // overrun of the recurring budget.
+  const BREAKDOWN_MODE_KEY = 'budget-breakdown-mode'
+  const breakdownMode = ref<BreakdownMode>(
+    localStorage.getItem(BREAKDOWN_MODE_KEY) === 'real' ? 'real' : 'everyday'
+  )
+
+  function setBreakdownMode(mode: BreakdownMode): void {
+    breakdownMode.value = mode
+    try {
+      localStorage.setItem(BREAKDOWN_MODE_KEY, mode)
+    } catch {
+      // Private browsing: the choice simply does not persist.
+    }
+  }
 
   // ── Sort options ─────────────────────────────────────────────────────────
   type SortOrder = 'amount-desc' | 'amount-asc' | 'difference-desc' | 'alpha'
@@ -53,6 +75,12 @@
   const sortOrder = ref<SortOrder>('amount-desc')
   const budgetInputs = ref<Map<string, number>>(new Map())
   const expandedCategories = ref<Set<string>>(new Set())
+
+  /** Exceptional tags owned by the user, for the events band. */
+  const exceptionalTags = ref<TagDto[]>([])
+
+  /** Projects overlapping the plan, with spend vs envelope. */
+  const projects = ref<TagBudgetSummaryDto | null>(null)
 
   const isModalOpen = ref(false)
   const isHistoryOpen = ref(false)
@@ -131,6 +159,15 @@
     return 'none'
   }
 
+  /**
+   * Exceptional share of the row's "Réel à date". Shown as an annotation in
+   * both modes: in everyday it is what was left out, in real it is what
+   * inflates the figure. Either way the money stays visible.
+   */
+  function getExceptionalAverage(category: CategoryAverageDto): number {
+    return comparison.planActualExceptionalAverage(category)
+  }
+
   /** Sort value depending on what's the meaningful primary metric. */
   function getSortAmount(category: CategoryAverageDto): number {
     if (showHistoricalColumn.value) return getHistoricalAverage(category)
@@ -187,6 +224,7 @@
     plan,
     comparison: comparisonRange,
     statistics,
+    mode: breakdownMode,
   })
 
   /** Show the "Historique" column when a comparison range is selected. */
@@ -324,14 +362,63 @@
     if (len === 0) return []
     const totals: number[] = new Array(len).fill(0)
     for (const cat of cats) {
-      if (!cat.monthlyAmounts) continue
-      for (let i = 0; i < cat.monthlyAmounts.length; i++) {
+      const series = comparison.seriesFor(cat)
+      if (!series) continue
+      for (let i = 0; i < series.length; i++) {
         const current = totals[i] ?? 0
-        totals[i] = current + (cat.monthlyAmounts[i] ?? 0)
+        totals[i] = current + (series[i] ?? 0)
       }
     }
     return totals.map(v => Math.round(v * 100) / 100)
   })
+
+  /**
+   * True when at least one visible category carries exceptional spending in
+   * the elapsed plan months — drives whether the mode selector is offered.
+   */
+  const hasExceptionalInPlan = computed(() =>
+    visibleExpenseCategories.value.some(c => getExceptionalAverage(c) > 0.005)
+  )
+
+  /**
+   * Exceptional events whose declared period overlaps the analysed window.
+   * Tags without a period (a party at home) cannot be placed in time and are
+   * therefore not listed — their spending still shows in the row annotations.
+   */
+  const planEvents = computed(() => {
+    const range = referenceDateRange.value
+    if (!range) return []
+    return exceptionalTags.value.filter(t => {
+      if (!t.eventStartDate || !t.eventEndDate) return false
+      return (
+        t.eventStartDate <= range.endDate && t.eventEndDate >= range.startDate
+      )
+    })
+  })
+
+  function openTagAnalysis(tagId: string): void {
+    void router.push(`/tags/${tagId}`)
+  }
+
+  const hasProjects = computed(() => (projects.value?.items.length ?? 0) > 0)
+
+  /**
+   * Reserve minus the envelopes already committed to projects. Null unless the
+   * plan carries an equation — without it there is nothing to charge against.
+   */
+  const reserveRemaining = computed<number | null>(() => {
+    const reserve = plan.value?.projectReserve
+    if (reserve === null || reserve === undefined) return null
+    return reserve - (projects.value?.totalBudget ?? 0)
+  })
+
+  /** Projects that have spent more than their envelope allowed. */
+  function isProjectOver(item: {
+    budgetAmount: number | null
+    spent: number
+  }): boolean {
+    return item.budgetAmount !== null && item.spent > item.budgetAmount
+  }
 
   const MONTH_LABEL_FR: Record<string, string> = {
     '01': 'Jan',
@@ -353,7 +440,7 @@
       const [, m] = ym.split('-')
       return MONTH_LABEL_FR[m ?? ''] ?? ym
     })
-    return { labels, values: cat.monthlyAmounts ?? [] }
+    return { labels, values: comparison.seriesFor(cat) ?? [] }
   }
 
   // ── Data loading ─────────────────────────────────────────────────────────
@@ -377,6 +464,35 @@
       deductPendingReimbursements: deductPendingReimbursements.value,
       includeMonthlyBreakdown: true,
     })
+  }
+
+  /**
+   * Exceptional tags, used to name the events behind the amber annotations.
+   * Non-fatal: without them the amounts still show, only the links are lost.
+   */
+  async function fetchExceptionalTags() {
+    try {
+      const tags = await api.getTags()
+      exceptionalTags.value = tags.filter(t => t.isExceptional)
+    } catch {
+      exceptionalTags.value = []
+    }
+  }
+
+  /** Projects overlapping the plan, weighed against their envelopes. */
+  async function fetchProjects() {
+    if (!plan.value) {
+      projects.value = null
+      return
+    }
+    try {
+      projects.value = await api.getTagBudgetSummary({
+        startDate: plan.value.startDate,
+        endDate: plan.value.endDate,
+      })
+    } catch {
+      projects.value = null
+    }
   }
 
   async function fetchPlanCount() {
@@ -429,6 +545,8 @@
         fetchStatistics(),
         fetchPlanCount(),
         checkYearAgoAvailability(),
+        fetchExceptionalTags(),
+        fetchProjects(),
       ])
     } catch (err) {
       error.value =
@@ -621,6 +739,35 @@
             </span>
             <span class="text-gray-400 dark:text-gray-500">
               ({{ plan.monthCount }} mois)
+            </span>
+          </p>
+          <!-- The plan's equation, when one was decided at creation. -->
+          <p
+            v-if="
+              plan &&
+              plan.projectReserve !== null &&
+              plan.projectReserve !== undefined
+            "
+            data-testid="plan-project-reserve"
+            class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
+          >
+            Épargne décidée
+            <strong class="text-gray-700 dark:text-gray-300 tabular-nums">
+              {{ formatCurrency(plan.savingsTarget ?? 0) }} / mois
+            </strong>
+            · Budget projets
+            <strong
+              class="tabular-nums"
+              :class="
+                plan.projectReserve < 0
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-indigo-600 dark:text-indigo-400'
+              "
+            >
+              {{ formatCurrency(plan.projectReserve) }}
+            </strong>
+            <span v-if="plan.projectReserve < 0">
+              — ce plan ne tient pas dans les revenus prévus
             </span>
           </p>
           <p
@@ -992,6 +1139,156 @@
             </button>
           </div>
 
+          <!-- Tracking mode: everyday keeps a one-off event from reading as an
+               overrun of the recurring budget. -->
+          <div
+            v-if="hasExceptionalInPlan"
+            data-testid="budget-breakdown-mode"
+            class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5"
+          >
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span
+                class="text-xs font-medium text-amber-800 dark:text-amber-300"
+              >
+                Suivi
+              </span>
+              <div
+                class="inline-flex rounded-lg border border-amber-300 dark:border-amber-700 bg-white/70 dark:bg-slate-900/40 p-0.5 text-xs"
+                role="group"
+                aria-label="Mode de suivi du budget"
+              >
+                <button
+                  type="button"
+                  data-testid="budget-mode-everyday"
+                  class="px-2.5 py-1 rounded-md transition-colors"
+                  :class="
+                    breakdownMode === 'everyday'
+                      ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
+                      : 'text-gray-600 dark:text-gray-400'
+                  "
+                  @click="setBreakdownMode('everyday')"
+                >
+                  Vie courante
+                </button>
+                <button
+                  type="button"
+                  data-testid="budget-mode-real"
+                  class="px-2.5 py-1 rounded-md transition-colors"
+                  :class="
+                    breakdownMode === 'real'
+                      ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
+                      : 'text-gray-600 dark:text-gray-400'
+                  "
+                  @click="setBreakdownMode('real')"
+                >
+                  Tout
+                </button>
+              </div>
+              <span
+                class="text-xs text-amber-700 dark:text-amber-400 leading-snug"
+              >
+                {{
+                  breakdownMode === 'everyday'
+                    ? 'Les dépenses d’événements sont sorties du réel : une enveloppe n’est dépassée que par la vie courante.'
+                    : 'Les dépenses d’événements sont incluses : une enveloppe peut être dépassée par un projet ponctuel.'
+                }}
+              </span>
+            </div>
+
+            <div
+              v-if="planEvents.length > 0"
+              class="mt-2 flex flex-wrap items-center gap-1.5"
+            >
+              <span class="text-xs text-amber-700 dark:text-amber-400">
+                Événements de la période :
+              </span>
+              <button
+                v-for="event in planEvents"
+                :key="event.id"
+                type="button"
+                :data-testid="`budget-event-${event.name}`"
+                class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-amber-300 transition"
+                @click="openTagAnalysis(event.id)"
+              >
+                <span
+                  class="inline-block h-2 w-2 rounded-full shrink-0"
+                  :style="{ backgroundColor: event.color ?? '#9ca3af' }"
+                ></span>
+                {{ event.name }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Projects: the second tier of the budget, charged against the
+               plan's reserve rather than against the monthly envelopes. -->
+          <div
+            v-if="hasProjects"
+            data-testid="budget-projects"
+            class="mb-4 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-900/20 px-3 py-2.5"
+          >
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <p
+                class="text-xs font-medium text-indigo-900 dark:text-indigo-300"
+              >
+                Projets de la période
+              </p>
+              <p
+                v-if="reserveRemaining !== null"
+                data-testid="reserve-remaining"
+                class="text-xs tabular-nums"
+                :class="
+                  reserveRemaining < 0
+                    ? 'text-red-600 dark:text-red-400 font-semibold'
+                    : 'text-indigo-700 dark:text-indigo-400'
+                "
+              >
+                <template v-if="reserveRemaining < 0">
+                  {{ formatCurrency(projects?.totalBudget ?? 0) }} engagés sur
+                  {{ formatCurrency(plan?.projectReserve ?? 0) }} de réserve —
+                  dépassement de {{ formatCurrency(-reserveRemaining) }}
+                </template>
+                <template v-else>
+                  {{ formatCurrency(projects?.totalBudget ?? 0) }} engagés sur
+                  {{ formatCurrency(plan?.projectReserve ?? 0) }} de réserve
+                </template>
+              </p>
+            </div>
+
+            <div class="mt-2 flex flex-wrap gap-1.5">
+              <button
+                v-for="item in projects?.items ?? []"
+                :key="item.id"
+                type="button"
+                :data-testid="`project-${item.name}`"
+                class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-indigo-300 transition"
+                @click="openTagAnalysis(item.id)"
+              >
+                <span
+                  class="inline-block h-2 w-2 rounded-full shrink-0"
+                  :style="{ backgroundColor: item.color ?? '#9ca3af' }"
+                ></span>
+                {{ item.name }}
+                <span
+                  class="font-semibold tabular-nums"
+                  :class="
+                    isProjectOver(item) ? 'text-red-600 dark:text-red-400' : ''
+                  "
+                >
+                  {{ formatCurrency(item.spent) }}
+                </span>
+                <span
+                  v-if="item.budgetAmount !== null"
+                  class="text-gray-400 dark:text-gray-500 tabular-nums"
+                >
+                  / {{ formatCurrency(item.budgetAmount) }}
+                </span>
+                <span v-else class="text-gray-400 dark:text-gray-500 italic">
+                  sans enveloppe
+                </span>
+              </button>
+            </div>
+          </div>
+
           <!-- Column-count CSS variable drives both header & row grids so
                the table adapts to which columns are visible. -->
           <div
@@ -1175,13 +1472,26 @@
                     {{ formatCurrency(getPlanActualAverage(cat)) }}
                   </button>
                   <span v-else class="text-gray-400 dark:text-gray-500">—</span>
+                  <span
+                    v-if="getExceptionalAverage(cat) > 0.005"
+                    :data-testid="`budget-exceptional-${cat.categoryName}`"
+                    class="block text-[10px] text-amber-600 dark:text-amber-500"
+                    :title="
+                      breakdownMode === 'everyday'
+                        ? 'Part portée par un événement, exclue de ce réel'
+                        : 'Part portée par un événement, incluse dans ce réel'
+                    "
+                  >
+                    {{ breakdownMode === 'everyday' ? 'hors' : 'dont' }}
+                    {{ formatCurrency(getExceptionalAverage(cat)) }}
+                  </span>
                 </div>
 
                 <!-- Sparkline -->
                 <div class="hidden sm:flex justify-end items-center w-24">
                   <SparklineChart
-                    v-if="(cat.monthlyAmounts?.length ?? 0) >= 2"
-                    :data="cat.monthlyAmounts ?? []"
+                    v-if="(comparison.seriesFor(cat)?.length ?? 0) >= 2"
+                    :data="comparison.seriesFor(cat) ?? []"
                     color="#ef4444"
                   />
                 </div>
