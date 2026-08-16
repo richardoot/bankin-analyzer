@@ -11,6 +11,7 @@
     ReimbursementDto,
     SettlementDto,
     CategoryDto,
+    SubcategoryDto,
     PaginationMeta,
   } from '@/lib/api'
   import CategorySubcategoryModal from '@/components/CategorySubcategoryModal.vue'
@@ -39,6 +40,9 @@
 
   // Categories state
   const allCategories = ref<CategoryDto[]>([])
+  // Every subcategory the user owns; the filter list is derived from it, so a
+  // single fetch avoids a round-trip on each category change.
+  const allSubcategories = ref<SubcategoryDto[]>([])
 
   // Reimbursements state (for checking if transaction is assigned)
   const reimbursements = ref<ReimbursementDto[]>([])
@@ -54,6 +58,7 @@
   function loadSavedFilters(): {
     typeFilter: 'ALL' | 'EXPENSE' | 'INCOME'
     selectedCategory: string | null
+    selectedSubcategory: string | null
     selectedAccount: string | null
     selectedTag: string | null
     showOnlyNotPointed: boolean
@@ -70,6 +75,10 @@
         return {
           typeFilter: parsed.typeFilter ?? 'ALL',
           selectedCategory: parsed.selectedCategory ?? null,
+          // A saved subcategory is meaningless without its parent category.
+          selectedSubcategory: parsed.selectedCategory
+            ? (parsed.selectedSubcategory ?? null)
+            : null,
           selectedAccount: parsed.selectedAccount ?? null,
           selectedTag: parsed.selectedTag ?? null,
           showOnlyNotPointed: parsed.showOnlyNotPointed ?? false,
@@ -86,6 +95,7 @@
     return {
       typeFilter: 'ALL',
       selectedCategory: null,
+      selectedSubcategory: null,
       selectedAccount: null,
       selectedTag: null,
       showOnlyNotPointed: false,
@@ -102,6 +112,11 @@
   // Filters
   const typeFilter = ref<'ALL' | 'EXPENSE' | 'INCOME'>(savedFilters.typeFilter)
   const selectedCategory = ref<string | null>(savedFilters.selectedCategory)
+  // Only selectable once a category is chosen: its options are the
+  // subcategories of that category.
+  const selectedSubcategory = ref<string | null>(
+    savedFilters.selectedSubcategory
+  )
   const selectedAccount = ref<string | null>(savedFilters.selectedAccount)
   const selectedTag = ref<string | null>(savedFilters.selectedTag)
   const showOnlyNotPointed = ref(savedFilters.showOnlyNotPointed)
@@ -119,6 +134,7 @@
       JSON.stringify({
         typeFilter: typeFilter.value,
         selectedCategory: selectedCategory.value,
+        selectedSubcategory: selectedSubcategory.value,
         selectedAccount: selectedAccount.value,
         selectedTag: selectedTag.value,
         showOnlyNotPointed: showOnlyNotPointed.value,
@@ -135,6 +151,7 @@
   function resetFilters() {
     typeFilter.value = 'ALL'
     selectedCategory.value = null
+    selectedSubcategory.value = null
     selectedAccount.value = null
     selectedTag.value = null
     showOnlyNotPointed.value = false
@@ -151,6 +168,7 @@
     return (
       typeFilter.value !== 'ALL' ||
       selectedCategory.value !== null ||
+      selectedSubcategory.value !== null ||
       selectedAccount.value !== null ||
       selectedTag.value !== null ||
       showOnlyNotPointed.value ||
@@ -258,6 +276,15 @@
     }
     return allCategories.value
       .filter(c => c.type === typeFilter.value)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  })
+
+  // Computed: subcategories of the selected category — empty (and the select
+  // disabled) as long as no category is picked.
+  const filteredSubcategories = computed(() => {
+    if (!selectedCategory.value) return []
+    return allSubcategories.value
+      .filter(s => s.categoryId === selectedCategory.value)
       .sort((a, b) => a.name.localeCompare(b.name))
   })
 
@@ -468,6 +495,10 @@
         transactions.value[index] = updated
       }
 
+      // The modal can create subcategories on the fly: refresh the list so the
+      // filter dropdown offers them too.
+      fetchSubcategories()
+
       // If the category actually changed and the transaction has reimbursements,
       // ask the user whether to update the reimbursements' category as well.
       if (
@@ -657,11 +688,19 @@
     }
   }
 
+  // A subcategory belongs to one category, so changing the category drops the
+  // previous subcategory. Declared before the refetch watcher below so both
+  // changes land in the same flush and only one request is fired.
+  watch(selectedCategory, () => {
+    selectedSubcategory.value = null
+  })
+
   // Refetch immediately when discrete filters change (selects / checkbox / dates)
   watch(
     [
       typeFilter,
       selectedCategory,
+      selectedSubcategory,
       selectedAccount,
       selectedTag,
       showOnlyNotPointed,
@@ -699,6 +738,9 @@
         limit: pageSize,
         type: typeFilter.value === 'ALL' ? undefined : typeFilter.value,
         categoryId: selectedCategory.value || undefined,
+        subcategoryId: selectedCategory.value
+          ? selectedSubcategory.value || undefined
+          : undefined,
         account: selectedAccount.value || undefined,
         tagId: selectedTag.value || undefined,
         isPointed: showOnlyNotPointed.value ? false : undefined,
@@ -728,6 +770,15 @@
       allCategories.value = await api.getCategories()
     } catch (err) {
       console.error('Failed to fetch categories:', err)
+    }
+  }
+
+  // Fetch subcategories (all categories at once, for the filter dropdown)
+  async function fetchSubcategories() {
+    try {
+      allSubcategories.value = await api.getSubcategories()
+    } catch (err) {
+      console.error('Failed to fetch subcategories:', err)
     }
   }
 
@@ -861,6 +912,7 @@
     tagsStore.fetchTags()
     fetchTransactions()
     fetchCategories()
+    fetchSubcategories()
     fetchReimbursements()
   })
 </script>
@@ -950,6 +1002,41 @@
                 :value="cat.id"
               >
                 {{ cat.name }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Subcategory: locked until a category narrows down the choices -->
+          <div class="flex flex-col gap-1">
+            <span
+              class="text-[11px] font-semibold uppercase tracking-wide"
+              :class="
+                selectedCategory
+                  ? 'text-gray-400 dark:text-gray-500'
+                  : 'text-gray-300 dark:text-gray-600'
+              "
+              >Sous-categorie</span
+            >
+            <select
+              v-model="selectedSubcategory"
+              :disabled="!selectedCategory"
+              data-testid="transactions-subcategory-filter"
+              :title="
+                selectedCategory
+                  ? undefined
+                  : 'Selectionnez d\'abord une categorie'
+              "
+              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/60 dark:disabled:text-gray-500"
+            >
+              <option :value="null">
+                {{ selectedCategory ? 'Toutes' : 'Choisir une categorie' }}
+              </option>
+              <option
+                v-for="sub in filteredSubcategories"
+                :key="sub.id"
+                :value="sub.id"
+              >
+                {{ sub.name }}
               </option>
             </select>
           </div>

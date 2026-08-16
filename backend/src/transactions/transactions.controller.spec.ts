@@ -453,6 +453,54 @@ describe('TransactionsController', () => {
       )
     })
 
+    it('should pass the subcategory filter when a category is set', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
+
+      await controller.findAll(
+        mockUser,
+        1,
+        20,
+        undefined,
+        undefined,
+        undefined,
+        'cat-1',
+        'sub-1'
+      )
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 20 },
+        expect.objectContaining({ categoryId: 'cat-1', subcategoryId: 'sub-1' })
+      )
+    })
+
+    it('should ignore a subcategory filter without a category', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
+
+      await controller.findAll(
+        mockUser,
+        1,
+        20,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'sub-1'
+      )
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(mockUser.id, { page: 1, limit: 20 }, undefined)
+    })
+
     it('should filter by date range', async () => {
       mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
         data: [],
@@ -519,6 +567,7 @@ describe('TransactionsController', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         '  uber  ',
         '100',
         '500'
@@ -547,6 +596,7 @@ describe('TransactionsController', () => {
         mockUser,
         1,
         20,
+        undefined,
         undefined,
         undefined,
         undefined,

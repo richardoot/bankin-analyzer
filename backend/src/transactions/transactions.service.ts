@@ -214,6 +214,7 @@ export class TransactionsService {
       startDate?: Date
       endDate?: Date
       categoryId?: string
+      subcategoryId?: string
       isPointed?: boolean
       account?: string
       tagId?: string
@@ -263,6 +264,7 @@ export class TransactionsService {
       userId,
       ...(filters?.type && { type: filters.type }),
       ...(filters?.categoryId && { categoryId: filters.categoryId }),
+      ...(filters?.subcategoryId && { subcategoryId: filters.subcategoryId }),
       ...(filters?.isPointed !== undefined && { isPointed: filters.isPointed }),
       ...(filters?.account && {
         accountRef: { name: filters.account },

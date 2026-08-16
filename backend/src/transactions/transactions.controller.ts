@@ -142,6 +142,12 @@ export class TransactionsController {
   @ApiQuery({ name: 'startDate', required: false, type: String })
   @ApiQuery({ name: 'endDate', required: false, type: String })
   @ApiQuery({ name: 'categoryId', required: false, type: String })
+  @ApiQuery({
+    name: 'subcategoryId',
+    required: false,
+    type: String,
+    description: 'Only meaningful together with categoryId',
+  })
   @ApiQuery({ name: 'isPointed', required: false, type: Boolean })
   @ApiQuery({ name: 'account', required: false, type: String })
   @ApiQuery({ name: 'tagId', required: false, type: String })
@@ -171,6 +177,7 @@ export class TransactionsController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('categoryId') categoryId?: string,
+    @Query('subcategoryId') subcategoryId?: string,
     @Query('isPointed') isPointed?: string,
     @Query('account') account?: string,
     @Query('tagId') tagId?: string,
@@ -186,6 +193,7 @@ export class TransactionsController {
       startDate?: Date
       endDate?: Date
       categoryId?: string
+      subcategoryId?: string
       isPointed?: boolean
       account?: string
       tagId?: string
@@ -204,6 +212,9 @@ export class TransactionsController {
       filters.endDate = end
     }
     if (categoryId) filters.categoryId = categoryId
+    // A subcategory only exists inside a category, so narrowing by subcategory
+    // without a category would be ambiguous: ignore it in that case.
+    if (categoryId && subcategoryId) filters.subcategoryId = subcategoryId
     if (isPointed !== undefined) filters.isPointed = isPointed === 'true'
     if (account) filters.account = account
     if (tagId) filters.tagId = tagId

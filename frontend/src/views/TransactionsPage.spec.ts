@@ -9,6 +9,7 @@ vi.mock('@/lib/api', () => ({
   api: {
     getTransactions: vi.fn(),
     getCategories: vi.fn(),
+    getSubcategories: vi.fn(),
     getReimbursements: vi.fn(),
     getAccounts: vi.fn(),
     getPersons: vi.fn(),
@@ -99,6 +100,29 @@ describe('TransactionsPage — optimistic updates', () => {
     vi.mocked(api.getCategories).mockResolvedValue([
       { id: 'cat-1', name: 'Alimentation', type: 'EXPENSE', icon: null },
       { id: 'cat-2', name: 'Transport', type: 'EXPENSE', icon: '🚗' },
+    ])
+    vi.mocked(api.getSubcategories).mockResolvedValue([
+      {
+        id: 'sub-1',
+        categoryId: 'cat-1',
+        name: 'Courses',
+        icon: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'sub-2',
+        categoryId: 'cat-1',
+        name: 'Restaurant',
+        icon: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'sub-3',
+        categoryId: 'cat-2',
+        name: 'Essence',
+        icon: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
     ])
     vi.mocked(api.getReimbursements).mockResolvedValue([])
     vi.mocked(api.getAccounts).mockResolvedValue([])
@@ -374,6 +398,84 @@ describe('TransactionsPage — optimistic updates', () => {
       expect(
         wrapper.findAll('button[title^="Voir le reglement de"]').length
       ).toBe(0)
+    })
+  })
+
+  describe('subcategory filter', () => {
+    beforeEach(() => {
+      localStorage.clear()
+    })
+
+    it('is disabled until a category is selected', async () => {
+      const wrapper = await mountPage()
+      const select = wrapper.find(
+        '[data-testid="transactions-subcategory-filter"]'
+      )
+
+      expect(select.attributes('disabled')).toBeDefined()
+      expect(select.text()).toContain('Choisir une categorie')
+    })
+
+    it('lists only the subcategories of the selected category', async () => {
+      const wrapper = await mountPage()
+
+      await wrapper
+        .find('[data-testid="transactions-category-filter"]')
+        .setValue('cat-1')
+      await flushPromises()
+
+      const select = wrapper.find(
+        '[data-testid="transactions-subcategory-filter"]'
+      )
+      expect(select.attributes('disabled')).toBeUndefined()
+      const options = select.findAll('option').map(o => o.text())
+      expect(options).toEqual(['Toutes', 'Courses', 'Restaurant'])
+    })
+
+    it('sends the selected subcategory to the API', async () => {
+      const wrapper = await mountPage()
+
+      await wrapper
+        .find('[data-testid="transactions-category-filter"]')
+        .setValue('cat-1')
+      await flushPromises()
+      vi.mocked(api.getTransactions).mockClear()
+
+      await wrapper
+        .find('[data-testid="transactions-subcategory-filter"]')
+        .setValue('sub-2')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ categoryId: 'cat-1', subcategoryId: 'sub-2' })
+      )
+    })
+
+    it('clears the subcategory when the category changes', async () => {
+      const wrapper = await mountPage()
+
+      await wrapper
+        .find('[data-testid="transactions-category-filter"]')
+        .setValue('cat-1')
+      await flushPromises()
+      await wrapper
+        .find('[data-testid="transactions-subcategory-filter"]')
+        .setValue('sub-2')
+      await flushPromises()
+      vi.mocked(api.getTransactions).mockClear()
+
+      await wrapper
+        .find('[data-testid="transactions-category-filter"]')
+        .setValue('cat-2')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenCalledTimes(1)
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          categoryId: 'cat-2',
+          subcategoryId: undefined,
+        })
+      )
     })
   })
 

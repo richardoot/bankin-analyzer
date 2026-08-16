@@ -164,6 +164,7 @@ export interface TransactionQueryParams {
   startDate?: string
   endDate?: string
   categoryId?: string
+  subcategoryId?: string
   isPointed?: boolean
   account?: string
   tagId?: string
@@ -906,6 +907,8 @@ export const api = {
     if (params?.startDate) searchParams.set('startDate', params.startDate)
     if (params?.endDate) searchParams.set('endDate', params.endDate)
     if (params?.categoryId) searchParams.set('categoryId', params.categoryId)
+    if (params?.subcategoryId)
+      searchParams.set('subcategoryId', params.subcategoryId)
     if (params?.isPointed !== undefined)
       searchParams.set('isPointed', params.isPointed.toString())
     if (params?.account) searchParams.set('account', params.account)
