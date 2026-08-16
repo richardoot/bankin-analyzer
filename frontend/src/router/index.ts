@@ -87,10 +87,32 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
-    path: '/preferences',
-    name: 'preferences',
-    component: () => import('@/views/PreferencesPage.vue'),
+    path: '/settings',
+    component: () => import('@/views/settings/SettingsLayout.vue'),
     meta: { requiresAuth: true },
+    children: [
+      { path: '', redirect: '/settings/accounts' },
+      {
+        path: 'accounts',
+        name: 'settings-accounts',
+        component: () => import('@/views/settings/AccountsSettingsPage.vue'),
+      },
+      {
+        path: 'categories',
+        name: 'settings-categories',
+        component: () => import('@/views/settings/CategoriesSettingsPage.vue'),
+      },
+      {
+        path: 'general',
+        name: 'settings-general',
+        component: () => import('@/views/settings/GeneralSettingsPage.vue'),
+      },
+    ],
+  },
+  // The settings hub replaced the single preferences page; keep old links working.
+  {
+    path: '/preferences',
+    redirect: '/settings',
   },
 ]
 

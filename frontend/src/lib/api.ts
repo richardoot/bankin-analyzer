@@ -850,6 +850,21 @@ export const api = {
   },
 
   // Subcategories API
+  /**
+   * Every subcategory the user owns, in one round-trip. The settings page
+   * needs the counts for all categories at once, so fetching per category
+   * would mean one request per row.
+   */
+  async getSubcategories(): Promise<SubcategoryDto[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/subcategories`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch subcategories')
+    }
+
+    return response.json() as Promise<SubcategoryDto[]>
+  },
+
   async getSubcategoriesByCategory(
     categoryId: string
   ): Promise<SubcategoryDto[]> {

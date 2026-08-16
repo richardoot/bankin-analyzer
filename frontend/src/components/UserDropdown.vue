@@ -20,8 +20,8 @@
       icon: 'user',
     },
     {
-      to: '/preferences',
-      label: 'Preferences',
+      to: '/settings',
+      label: 'Réglages',
       icon: 'settings',
     },
     {

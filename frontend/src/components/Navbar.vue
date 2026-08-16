@@ -37,7 +37,7 @@
   // Liens supplémentaires pour le menu mobile (inclus dans le dropdown sur desktop)
   const accountLinks = [
     { to: '/profile', label: 'Mon profil' },
-    { to: '/preferences', label: 'Preferences' },
+    { to: '/settings', label: 'Réglages' },
     { to: '/import/history', label: 'Historique des imports' },
   ]
 
