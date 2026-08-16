@@ -152,6 +152,32 @@ describe('BudgetsService', () => {
       }
     })
 
+    it('should bind the date range as whole UTC days', async () => {
+      // Transaction dates are calendar days anchored at UTC midnight. A bound
+      // of `2024-03-31T00:00:00Z` on an inclusive `<=` still covers the 31st,
+      // but only by luck; extending to end-of-day makes the day inclusive
+      // regardless of any time component, and the lower bound must stay at
+      // midnight so the first day of the range is never dropped.
+      mockPrismaService.$queryRaw.mockResolvedValue([])
+
+      await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+      })
+
+      const dates = mockPrismaService.$queryRaw.mock.calls
+        .flatMap(([sql]: [{ values: unknown[] }]) => sql.values)
+        .filter((v: unknown): v is Date => v instanceof Date)
+
+      expect(dates.length).toBeGreaterThan(0)
+      for (const d of dates) {
+        expect([
+          '2024-01-01T00:00:00.000Z',
+          '2024-03-31T23:59:59.999Z',
+        ]).toContain(d.toISOString())
+      }
+    })
+
     it('should apply account divisor to expenses and reimbursements', async () => {
       // SQL already applies divisor: expense 400/2=200, reimbursement 200/2=100
       mockPrismaService.$queryRaw.mockResolvedValue([

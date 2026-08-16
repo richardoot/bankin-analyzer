@@ -152,13 +152,19 @@
       )
       if (isNaN(amount)) continue
 
-      // Parse date DD/MM/YYYY to ISO
+      // Parse date DD/MM/YYYY to ISO. Anchored at UTC midnight, never local
+      // midnight: a local-midnight Date serialises to the *previous* day for
+      // any timezone east of UTC (Paris → 23:00Z / 22:00Z in DST), which
+      // shifts the transaction into the wrong day and the wrong month for
+      // every UTC-based query downstream (budget ranges, monthly grouping).
       const dateParts = rawDate.match(/(\d{2})\/(\d{2})\/(\d{4})/)
       if (!dateParts) continue
       const isoDate = new Date(
-        parseInt(dateParts[3]),
-        parseInt(dateParts[2]) - 1,
-        parseInt(dateParts[1])
+        Date.UTC(
+          parseInt(dateParts[3]),
+          parseInt(dateParts[2]) - 1,
+          parseInt(dateParts[1])
+        )
       ).toISOString()
 
       // Parse pointed

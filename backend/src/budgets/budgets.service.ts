@@ -8,6 +8,23 @@ import type {
   SubcategoryAverageDto,
 } from './dto'
 
+/**
+ * Lower bound of the UTC day `value` falls in. Accepts a `YYYY-MM-DD` string
+ * or a full ISO timestamp.
+ */
+function startOfUtcDay(value: string | Date): Date {
+  const d = new Date(value)
+  d.setUTCHours(0, 0, 0, 0)
+  return d
+}
+
+/** Upper bound (inclusive) of the UTC day `value` falls in. */
+function endOfUtcDay(value: string | Date): Date {
+  const d = new Date(value)
+  d.setUTCHours(23, 59, 59, 999)
+  return d
+}
+
 interface AggregatedTransactionRow {
   category_id: string
   category_name: string
@@ -52,8 +69,11 @@ export class BudgetsService {
     userId: string,
     filters: BudgetStatisticsFiltersDto
   ): Promise<BudgetStatisticsResponseDto> {
-    const startDate = new Date(filters.startDate)
-    const endDate = new Date(filters.endDate)
+    // Transaction dates are calendar days anchored at UTC midnight, so the
+    // bounds must span whole UTC days. Without the upper extension a plan
+    // ending on the 31st drops every transaction of the 31st itself.
+    const startDate = startOfUtcDay(filters.startDate)
+    const endDate = endOfUtcDay(filters.endDate)
     const shouldDeductReimbursements = filters.deductReimbursements !== false
     const shouldDeductPending = filters.deductPendingReimbursements === true
     const shouldIncludeMonthly = filters.includeMonthlyBreakdown === true
@@ -342,12 +362,16 @@ export class BudgetsService {
     const everydayMonthlyByCategory = new Map<string, number[]>()
     const allMonths: string[] = []
     if (shouldIncludeMonthly) {
-      // Generate all year-month keys in the period
-      const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1)
+      // Generate all year-month keys in the period. UTC throughout, to match
+      // the `TO_CHAR(t.date, 'YYYY-MM')` keys the SQL above produces — local
+      // getters would drift by a month on servers west of UTC.
+      const cursor = new Date(
+        Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1)
+      )
       while (cursor <= endDate) {
-        const ym = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`
+        const ym = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}`
         allMonths.push(ym)
-        cursor.setMonth(cursor.getMonth() + 1)
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1)
       }
 
       // Group monthly rows by type:category_id → month → amount. Rows are now
@@ -660,8 +684,8 @@ export class BudgetsService {
    */
   private calculateMonthsDiff(start: Date, end: Date): number {
     const months =
-      (end.getFullYear() - start.getFullYear()) * 12 +
-      (end.getMonth() - start.getMonth()) +
+      (end.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+      (end.getUTCMonth() - start.getUTCMonth()) +
       1 // Include both start and end months
 
     return Math.max(1, months)

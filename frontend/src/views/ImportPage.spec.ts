@@ -330,6 +330,10 @@ describe('ImportPage', () => {
             description: 'Test',
             amount: -50,
             type: 'EXPENSE',
+            // Anchored at UTC midnight: a local-midnight Date would serialise
+            // to 2024-01-14T23:00:00.000Z in Paris, shifting the transaction
+            // into the previous day (and previous month on the 1st).
+            date: '2024-01-15T00:00:00.000Z',
           }),
         ]),
         'import-123'
