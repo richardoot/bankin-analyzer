@@ -449,6 +449,103 @@ describe('SettlementsService', () => {
         },
       })
     })
+
+    it('should force-complete only the lines that opt in', async () => {
+      const otherReimbursement = {
+        ...mockReimbursement,
+        id: '550e8400-e29b-41d4-a716-446655440041',
+        amount: new Decimal(40),
+      }
+      const mockUpdate = vi.fn()
+      mockPrismaService.transaction.findFirst.mockResolvedValue(
+        mockIncomeTransaction
+      )
+      mockPrismaService.person.findFirst.mockResolvedValue(mockPerson)
+      mockPrismaService.reimbursementRequest.findMany.mockResolvedValue([
+        mockReimbursement,
+        otherReimbursement,
+      ])
+      mockPrismaService.$transaction.mockImplementation(async callback => {
+        return callback({
+          settlement: { create: vi.fn().mockResolvedValue(mockSettlement) },
+          reimbursementRequest: { update: mockUpdate },
+        })
+      })
+
+      await service.create(mockUserId, {
+        personId: mockPerson.id,
+        incomeTransactionId: mockIncomeTransaction.id,
+        reimbursements: [
+          {
+            reimbursementId: mockReimbursement.id,
+            amountSettled: 50,
+            forceComplete: true,
+          },
+          { reimbursementId: otherReimbursement.id, amountSettled: 10 },
+        ],
+      })
+
+      expect(mockUpdate).toHaveBeenCalledWith({
+        where: { id: mockReimbursement.id },
+        data: {
+          amountReceived: 80, // forgiven up to the original amount
+          status: ReimbursementStatus.COMPLETED,
+        },
+      })
+      expect(mockUpdate).toHaveBeenCalledWith({
+        where: { id: otherReimbursement.id },
+        data: {
+          amountReceived: 10, // untouched by the sibling's forceComplete
+          status: ReimbursementStatus.PARTIAL,
+        },
+      })
+    })
+
+    it('should record the credited delta, not the original amount, when force-completing a partially paid reimbursement', async () => {
+      // 30 already received on an 80 debt, 5 more in cash, remainder forgiven.
+      const partiallyPaid = {
+        ...mockReimbursement,
+        amountReceived: new Decimal(30),
+        status: ReimbursementStatus.PARTIAL,
+      }
+      const mockCreate = vi.fn().mockResolvedValue(mockSettlement)
+      mockPrismaService.transaction.findFirst.mockResolvedValue(
+        mockIncomeTransaction
+      )
+      mockPrismaService.person.findFirst.mockResolvedValue(mockPerson)
+      mockPrismaService.reimbursementRequest.findMany.mockResolvedValue([
+        partiallyPaid,
+      ])
+      mockPrismaService.$transaction.mockImplementation(async callback => {
+        return callback({
+          settlement: { create: mockCreate },
+          reimbursementRequest: { update: vi.fn() },
+        })
+      })
+
+      await service.create(mockUserId, {
+        personId: mockPerson.id,
+        incomeTransactionId: mockIncomeTransaction.id,
+        reimbursements: [
+          {
+            reimbursementId: partiallyPaid.id,
+            amountSettled: 5,
+            forceComplete: true,
+          },
+        ],
+      })
+
+      const createArgs = mockCreate.mock.calls[0]?.[0] as {
+        data: {
+          amountUsed: number
+          reimbursements: { create: { amountSettled: number }[] }
+        }
+      }
+      // Cash drawn from the income transaction stays 5...
+      expect(createArgs.data.amountUsed).toBe(5)
+      // ...while the debt is credited 50 (30 -> 80), which is what delete must reverse.
+      expect(createArgs.data.reimbursements.create[0]?.amountSettled).toBe(50)
+    })
   })
 
   describe('delete', () => {
@@ -483,6 +580,41 @@ describe('SettlementsService', () => {
       await service.delete(mockSettlement.id, mockUserId)
 
       expect(mockPrismaService.$transaction).toHaveBeenCalled()
+    })
+
+    it('should restore an earlier partial payment when reversing a force-completed settlement', async () => {
+      // The reimbursement had received 30 before being force-completed to 80,
+      // so the settlement credited 50. Reversing must land back on 30, not 0.
+      const mockUpdate = vi.fn()
+      mockPrismaService.settlement.findFirst.mockResolvedValue({
+        ...mockSettlement,
+        reimbursements: [
+          {
+            amountSettled: new Decimal(50),
+            reimbursement: {
+              ...mockReimbursement,
+              amountReceived: new Decimal(80),
+              status: ReimbursementStatus.COMPLETED,
+            },
+          },
+        ],
+      })
+      mockPrismaService.$transaction.mockImplementation(async callback => {
+        return callback({
+          reimbursementRequest: { update: mockUpdate },
+          settlement: { delete: vi.fn() },
+        })
+      })
+
+      await service.delete(mockSettlement.id, mockUserId)
+
+      expect(mockUpdate).toHaveBeenCalledWith({
+        where: { id: mockReimbursement.id },
+        data: {
+          amountReceived: 30,
+          status: ReimbursementStatus.PARTIAL,
+        },
+      })
     })
 
     it('should throw NotFoundException when settlement not found', async () => {

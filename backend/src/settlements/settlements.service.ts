@@ -265,20 +265,49 @@ export class SettlementsService {
       )
     }
 
-    // 6. Create settlement in a transaction
+    // 6. Resolve, for each line, the credit applied to the debt.
+    //
+    // `amountSettled` on the join row records the credit actually applied to
+    // the reimbursement, which is the cash drawn from the income transaction
+    // plus, when the line is force-completed, the forgiven remainder. It is
+    // deliberately allowed to differ from `Settlement.amountUsed` (cash only):
+    // `delete` reverses exactly what was credited, and `getAvailableAmount`
+    // only ever frees the cash that was really consumed.
+    const reimbursementMap = new Map(reimbursements.map(r => [r.id, r]))
+    const resolvedLines = dto.reimbursements.map(r => {
+      const reimb = reimbursementMap.get(r.reimbursementId)
+      // Already validated above, but keep the type narrowing local.
+      const previouslyReceived = reimb ? Number(reimb.amountReceived) : 0
+      const originalAmount = reimb ? Number(reimb.amount) : 0
+      const forceComplete = r.forceComplete ?? dto.forceComplete ?? false
+
+      const receivedAfter = forceComplete
+        ? Math.max(originalAmount, previouslyReceived + r.amountSettled)
+        : previouslyReceived + r.amountSettled
+
+      let status: ReimbursementStatus
+      if (receivedAfter >= originalAmount) {
+        status = ReimbursementStatus.COMPLETED
+      } else if (receivedAfter > 0) {
+        status = ReimbursementStatus.PARTIAL
+      } else {
+        status = ReimbursementStatus.PENDING
+      }
+
+      return {
+        reimbursementId: r.reimbursementId,
+        amountSettled: receivedAfter - previouslyReceived,
+        receivedAfter,
+        status,
+      }
+    })
+
+    // 7. Create settlement in a transaction
     const settlement = await this.prisma.$transaction(async tx => {
-      // Build reimbursement data with correct amounts
-      const reimbursementMap = new Map(reimbursements.map(r => [r.id, r]))
-      const settlementReimbursements = dto.reimbursements.map(r => {
-        const reimb = reimbursementMap.get(r.reimbursementId)
-        // If forceComplete, store the full original amount as amountSettled
-        const amountSettled =
-          dto.forceComplete && reimb ? Number(reimb.amount) : r.amountSettled
-        return {
-          reimbursementId: r.reimbursementId,
-          amountSettled,
-        }
-      })
+      const settlementReimbursements = resolvedLines.map(line => ({
+        reimbursementId: line.reimbursementId,
+        amountSettled: line.amountSettled,
+      }))
 
       // Create the settlement
       const created = await tx.settlement.create({
@@ -322,32 +351,12 @@ export class SettlementsService {
       })
 
       // Update each reimbursement's amountReceived and status
-      for (const r of dto.reimbursements) {
-        const reimb = reimbursementMap.get(r.reimbursementId)
-        if (!reimb) continue // Already validated above
-        const newAmountReceived = Number(reimb.amountReceived) + r.amountSettled
-        const originalAmount = Number(reimb.amount)
-
-        let newStatus: ReimbursementStatus
-        if (dto.forceComplete || newAmountReceived >= originalAmount) {
-          // Force complete OR full amount received
-          newStatus = ReimbursementStatus.COMPLETED
-        } else if (newAmountReceived > 0) {
-          newStatus = ReimbursementStatus.PARTIAL
-        } else {
-          newStatus = ReimbursementStatus.PENDING
-        }
-
-        // If forceComplete, set amountReceived to full amount
-        const finalAmountReceived = dto.forceComplete
-          ? originalAmount
-          : newAmountReceived
-
+      for (const line of resolvedLines) {
         await tx.reimbursementRequest.update({
-          where: { id: r.reimbursementId },
+          where: { id: line.reimbursementId },
           data: {
-            amountReceived: finalAmountReceived,
-            status: newStatus,
+            amountReceived: line.receivedAfter,
+            status: line.status,
           },
         })
       }

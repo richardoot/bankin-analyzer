@@ -367,6 +367,8 @@ export interface CreateReimbursementDto {
 export interface SettlementReimbursementItemDto {
   reimbursementId: string
   amountSettled: number
+  /** Mark this line as fully settled even though amountSettled falls short */
+  forceComplete?: boolean
 }
 
 export interface CreateSettlementDto {

@@ -42,6 +42,7 @@
   const showSettlementModal = ref(false)
   const settlementModalPersonId = ref<string | null>(null)
   const settlementModalPersonName = ref<string>('')
+  const settlementModalFocusId = ref<string | null>(null)
 
   // Settlement detail modal state
   const showSettlementDetailModal = ref(false)
@@ -233,28 +234,10 @@
     }
   }
 
-  // Get pending reimbursements by category for a specific person
-  function getPendingByCategoryForPerson(personId: string): Map<
-    string | null,
-    {
-      categoryId: string | null
-      categoryName: string
-      amount: number
-      reimbursements: ReimbursementDto[]
-    }
-  > {
-    const result = new Map<
-      string | null,
-      {
-        categoryId: string | null
-        categoryName: string
-        amount: number
-        reimbursements: ReimbursementDto[]
-      }
-    >()
-
-    // Only include reimbursements with remaining amount and exclude hidden categories
-    reimbursements.value
+  // Pending reimbursements handed to the settlement modal, which does its own
+  // grouping by category.
+  function getPendingForPerson(personId: string): ReimbursementDto[] {
+    return reimbursements.value
       .filter(r => r.personId === personId && r.amountRemaining > 0)
       .filter(
         r =>
@@ -262,32 +245,29 @@
             r.categoryName || 'Sans categorie'
           )
       )
-      .forEach(r => {
-        const catKey = r.categoryId
-        const catName = r.categoryName || 'Sans categorie'
-
-        if (!result.has(catKey)) {
-          result.set(catKey, {
-            categoryId: r.categoryId,
-            categoryName: catName,
-            amount: 0,
-            reimbursements: [],
-          })
-        }
-
-        const category = result.get(catKey)
-        if (!category) return
-        category.amount += r.amountRemaining
-        category.reimbursements.push(r)
-      })
-
-    return result
   }
+
+  const settlementModalPendingReimbursements = computed(() =>
+    settlementModalPersonId.value
+      ? getPendingForPerson(settlementModalPersonId.value)
+      : []
+  )
 
   // Open settlement modal for a person
   function openSettlementModal(personId: string, personName: string) {
     settlementModalPersonId.value = personId
     settlementModalPersonName.value = personName
+    settlementModalFocusId.value = null
+    showSettlementModal.value = true
+  }
+
+  // Open settlement modal seeded on a single transaction line
+  function openSettlementModalForReimbursement(
+    reimbursement: ReimbursementDto
+  ) {
+    settlementModalPersonId.value = reimbursement.personId
+    settlementModalPersonName.value = reimbursement.personName
+    settlementModalFocusId.value = reimbursement.id
     showSettlementModal.value = true
   }
 
@@ -809,7 +789,7 @@
                     <div
                       v-for="r in cat.reimbursements"
                       :key="r.id"
-                      class="flex flex-col sm:flex-row sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-amber-200 dark:border-amber-700"
+                      class="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-amber-200 dark:border-amber-700"
                     >
                       <span class="truncate">
                         <span class="text-gray-400 dark:text-gray-500"
@@ -820,15 +800,25 @@
                         {{ r.transaction?.description || 'Transaction' }}
                       </span>
                       <span
-                        class="font-medium whitespace-nowrap mt-0.5 sm:mt-0 sm:ml-2"
+                        class="flex items-center gap-2 whitespace-nowrap mt-0.5 sm:mt-0 sm:ml-2"
                       >
-                        {{ formatCurrency(r.amountRemaining) }}
-                        <span
-                          v-if="r.amountReceived > 0"
-                          class="text-emerald-600 dark:text-emerald-400 ml-1"
-                        >
-                          (recu: {{ formatCurrency(r.amountReceived) }})
+                        <span class="font-medium">
+                          {{ formatCurrency(r.amountRemaining) }}
+                          <span
+                            v-if="r.amountReceived > 0"
+                            class="text-emerald-600 dark:text-emerald-400 ml-1"
+                          >
+                            (recu: {{ formatCurrency(r.amountReceived) }})
+                          </span>
                         </span>
+                        <button
+                          type="button"
+                          class="px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                          :title="`Regler uniquement ${r.transaction?.description || 'cette transaction'}`"
+                          @click="openSettlementModalForReimbursement(r)"
+                        >
+                          Regler
+                        </button>
                       </span>
                     </div>
                   </div>
@@ -1016,9 +1006,8 @@
       :is-open="showSettlementModal"
       :person-id="settlementModalPersonId ?? ''"
       :person-name="settlementModalPersonName"
-      :pending-by-category="
-        getPendingByCategoryForPerson(settlementModalPersonId ?? '')
-      "
+      :pending-reimbursements="settlementModalPendingReimbursements"
+      :focus-reimbursement-id="settlementModalFocusId"
       @close="showSettlementModal = false"
       @confirm="handleSettlementCreated"
     />

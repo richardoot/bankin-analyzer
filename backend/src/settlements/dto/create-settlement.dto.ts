@@ -23,6 +23,15 @@ export class SettlementReimbursementItemDto {
   @IsNumber()
   @IsPositive()
   amountSettled!: number
+
+  /**
+   * Mark this reimbursement as fully settled even though `amountSettled` does
+   * not cover the remaining due. Only affects this line; the settlement still
+   * consumes `amountSettled` from the income transaction.
+   */
+  @IsOptional()
+  @IsBoolean()
+  forceComplete?: boolean
 }
 
 export class CreateSettlementDto {
@@ -49,7 +58,11 @@ export class CreateSettlementDto {
   @IsString()
   note?: string
 
-  /** Force mark reimbursements as completed even if amount is partial */
+  /**
+   * Force mark every reimbursement of this settlement as completed even if the
+   * amount is partial. Kept for backward compatibility; prefer the per-line
+   * `forceComplete` on each item.
+   */
   @IsOptional()
   @IsBoolean()
   forceComplete?: boolean
