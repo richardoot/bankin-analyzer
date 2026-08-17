@@ -147,6 +147,27 @@
     )
   }
 
+  /**
+   * The saved account filter holds a name, and an account can be deleted from
+   * the preferences page between two visits. Left alone, the stale name would
+   * filter the list down to nothing while the select — having no matching
+   * option — looks empty, and localStorage would keep it that way across
+   * reloads. Same defensive spirit as dropping a subcategory without its
+   * parent category above.
+   *
+   * Only called once the real list is known, and never after a failed load:
+   * an empty list then means "we don't know", not "no accounts".
+   */
+  function dropUnknownAccountFilter(): void {
+    const saved = selectedAccount.value
+    if (saved === null || accountsStore.error !== null) return
+    if (accountsStore.accounts.some(account => account.name === saved)) return
+
+    // Clearing it is enough: the filter watcher refetches and rewrites the
+    // saved filters.
+    selectedAccount.value = null
+  }
+
   // Reset all filters
   function resetFilters() {
     typeFilter.value = 'ALL'
@@ -907,7 +928,10 @@
 
   onMounted(() => {
     personsStore.fetchPersons()
-    accountsStore.load()
+    // Not awaited before fetchTransactions() on purpose: the list must not wait
+    // on the accounts request. In the rare stale case the prune fires a second,
+    // corrected fetch.
+    void accountsStore.load().then(dropUnknownAccountFilter)
     categoryAssociationsStore.load()
     tagsStore.fetchTags()
     fetchTransactions()

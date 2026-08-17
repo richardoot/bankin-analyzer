@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
 import { setActivePinia, createPinia } from 'pinia'
@@ -540,6 +540,111 @@ describe('TransactionsPage — optimistic updates', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+  })
+  // A deleted bank account leaves its *name* behind in the saved filters, so
+  // the page has to notice the filter points at nothing once the real account
+  // list arrives.
+  describe('stale account filter', () => {
+    const makeAccountDto = (name: string) => ({
+      id: `acc-${name}`,
+      name,
+      type: 'STANDARD' as const,
+      divisor: 1,
+      isExcludedFromBudget: false,
+      isExcludedFromStats: false,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    })
+
+    const savedFiltersWithAccount = (name: string) =>
+      JSON.stringify({ typeFilter: 'ALL', selectedAccount: name })
+
+    afterEach(() => {
+      vi.mocked(localStorage.getItem).mockReturnValue(undefined as never)
+    })
+
+    const mountWithAccounts = async (
+      savedAccount: string,
+      accounts: ReturnType<typeof makeAccountDto>[]
+    ) => {
+      vi.mocked(localStorage.getItem).mockReturnValue(
+        savedFiltersWithAccount(savedAccount)
+      )
+      setupDefaultMocks()
+      vi.mocked(api.getAccounts).mockResolvedValue(accounts)
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+      return wrapper
+    }
+
+    it('drops a saved account that no longer exists and refetches unfiltered', async () => {
+      const wrapper = await mountWithAccounts('Compte Supprime', [
+        makeAccountDto('Checking'),
+      ])
+
+      // First request still carried the stale name; the corrected one does not.
+      expect(api.getTransactions).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ account: 'Compte Supprime' })
+      )
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ account: undefined })
+      )
+
+      // The select falls back on its "Tous" option instead of showing blank.
+      const select = wrapper.find<HTMLSelectElement>(
+        '[data-testid="transactions-account-filter"]'
+      )
+      expect(select.element.value).toBe('Tous')
+    })
+
+    it('keeps a saved account that still exists', async () => {
+      await mountWithAccounts('Checking', [makeAccountDto('Checking')])
+
+      expect(api.getTransactions).toHaveBeenCalledTimes(1)
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ account: 'Checking' })
+      )
+    })
+
+    it('keeps the saved account when the accounts request fails', async () => {
+      vi.mocked(localStorage.getItem).mockReturnValue(
+        savedFiltersWithAccount('Checking')
+      )
+      setupDefaultMocks()
+      vi.mocked(api.getAccounts).mockRejectedValue(new Error('API down'))
+
+      mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      // An empty list after a failure means "unknown", not "no accounts".
+      expect(api.getTransactions).toHaveBeenCalledTimes(1)
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ account: 'Checking' })
+      )
     })
   })
 })
