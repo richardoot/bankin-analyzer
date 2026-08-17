@@ -203,6 +203,21 @@ export interface UpdateAccountDto {
   isExcludedFromStats?: boolean
 }
 
+/** What deleting an account would take away — shown before confirming. */
+export interface AccountDeletionSummaryDto {
+  accountId: string
+  accountName: string
+  transactionCount: number
+  firstTransactionDate: string | null
+  lastTransactionDate: string | null
+  reimbursementCount: number
+  settlementCount: number
+}
+
+export interface AccountDeletionResultDto {
+  deletedTransactions: number
+}
+
 export interface PersonDto {
   id: string
   name: string
@@ -1036,6 +1051,40 @@ export const api = {
     }
 
     return response.json() as Promise<AccountDto>
+  },
+
+  async getAccountDeletionSummary(
+    id: string
+  ): Promise<AccountDeletionSummaryDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/accounts/${id}/deletion-summary`
+    )
+
+    if (!response.ok) {
+      throw new Error("Impossible de calculer l'impact de la suppression")
+    }
+
+    return response.json() as Promise<AccountDeletionSummaryDto>
+  },
+
+  /** Deletes a *bank* account; `deleteAccount` above wipes the user itself. */
+  async deleteBankAccount(id: string): Promise<AccountDeletionResultDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/accounts/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      let message = 'Failed to delete account'
+      try {
+        const payload = (await response.json()) as { message?: string }
+        if (payload?.message) message = payload.message
+      } catch {
+        // Body wasn't JSON — fall back to the generic message.
+      }
+      throw new Error(message)
+    }
+
+    return response.json() as Promise<AccountDeletionResultDto>
   },
 
   // Dashboard API

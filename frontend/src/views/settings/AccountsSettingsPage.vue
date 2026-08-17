@@ -10,6 +10,7 @@
   import { useToast } from '@/composables/useToast'
   import type { AccountDto, AccountType } from '@/lib/api'
   import SettingsCard from '@/components/settings/SettingsCard.vue'
+  import DeleteBankAccountModal from '@/components/settings/DeleteBankAccountModal.vue'
   import ToggleSwitch from '@/components/ToggleSwitch.vue'
 
   const accountsStore = useAccountsStore()
@@ -220,7 +221,32 @@
 
   const accounts = computed(() => accountsStore.sortedAccounts)
 
-  /** Deleting and merging need endpoints the API does not expose yet. */
+  // ── Deletion ──────────────────────────────────────────────────────────────
+  // The modal owns the whole safety sequence (impact preview, name
+  // confirmation, error display); the page only says which account is aimed at
+  // and reacts once it is gone.
+  const accountPendingDeletion = ref<AccountDto | null>(null)
+
+  function askDeletion(account: AccountDto): void {
+    accountPendingDeletion.value = account
+  }
+
+  function onDeleted(payload: {
+    account: AccountDto
+    deletedTransactions: number
+  }): void {
+    accountPendingDeletion.value = null
+    const next = new Set(expanded.value)
+    next.delete(payload.account.id)
+    expanded.value = next
+    toast.success(
+      `« ${payload.account.name} » supprimé (${payload.deletedTransactions} transaction${
+        payload.deletedTransactions > 1 ? 's' : ''
+      })`
+    )
+  }
+
+  /** Merging still needs an endpoint the API does not expose yet. */
   const UNAVAILABLE_HINT =
     'Pas encore disponible : cette action nécessite un nouvel endpoint côté serveur.'
 </script>
@@ -465,10 +491,10 @@
               </div>
             </div>
 
-            <!-- Not yet wired: both need backend endpoints -->
             <div
               class="flex flex-wrap gap-2 border-t border-gray-100 pt-4 dark:border-slate-700/60"
             >
+              <!-- Merging still needs a backend endpoint -->
               <button
                 type="button"
                 disabled
@@ -479,11 +505,12 @@
               </button>
               <button
                 type="button"
-                disabled
-                :title="UNAVAILABLE_HINT"
-                class="cursor-not-allowed rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-400 dark:border-slate-700 dark:text-gray-500"
+                :disabled="isSaving(account.id)"
+                class="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                data-testid="delete-account"
+                @click="askDeletion(account)"
               >
-                Supprimer le compte
+                Supprimer le compte…
               </button>
             </div>
           </div>
@@ -493,10 +520,17 @@
       <div
         class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
       >
-        <strong>Doublons :</strong> la fusion et la suppression de comptes ne
-        sont pas encore branchées. En attendant, renommer un compte avec le nom
-        exact d'un autre échoue — les deux comptes restent distincts.
+        <strong>Doublons :</strong> la fusion de comptes n'est pas encore
+        branchée, et renommer un compte avec le nom exact d'un autre échoue.
+        Pour résorber un doublon, supprimez le compte en trop — ses transactions
+        partiront avec lui, réimportez-les ensuite sur le bon compte.
       </div>
     </SettingsCard>
+
+    <DeleteBankAccountModal
+      :account="accountPendingDeletion"
+      @close="accountPendingDeletion = null"
+      @deleted="onDeleted"
+    />
   </div>
 </template>

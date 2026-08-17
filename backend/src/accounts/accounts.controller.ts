@@ -1,4 +1,12 @@
-import { Controller, Get, Put, Param, Body, UseGuards } from '@nestjs/common'
+import {
+  Controller,
+  Get,
+  Put,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+} from '@nestjs/common'
 import {
   ApiTags,
   ApiOperation,
@@ -6,7 +14,12 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger'
 import { AccountsService } from './accounts.service'
-import { AccountDto, UpdateAccountDto } from './dto'
+import {
+  AccountDeletionResultDto,
+  AccountDeletionSummaryDto,
+  AccountDto,
+  UpdateAccountDto,
+} from './dto'
 import { SupabaseGuard, CurrentUser } from '../auth'
 import type { User } from '../generated/prisma'
 
@@ -55,6 +68,19 @@ export class AccountsController {
     }
   }
 
+  @Get(':id/deletion-summary')
+  @ApiOperation({
+    summary: 'Preview what deleting an account would remove',
+  })
+  @ApiResponse({ status: 200, type: AccountDeletionSummaryDto })
+  @ApiResponse({ status: 404, description: 'Account not found' })
+  async deletionSummary(
+    @CurrentUser() user: User,
+    @Param('id') id: string
+  ): Promise<AccountDeletionSummaryDto> {
+    return this.accountsService.getDeletionSummary(user.id, id)
+  }
+
   @Put(':id')
   @ApiOperation({ summary: 'Update an account' })
   @ApiResponse({ status: 200, type: AccountDto })
@@ -75,5 +101,18 @@ export class AccountsController {
       createdAt: account.createdAt,
       updatedAt: account.updatedAt,
     }
+  }
+
+  @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete an account and the transactions booked on it',
+  })
+  @ApiResponse({ status: 200, type: AccountDeletionResultDto })
+  @ApiResponse({ status: 404, description: 'Account not found' })
+  async remove(
+    @CurrentUser() user: User,
+    @Param('id') id: string
+  ): Promise<AccountDeletionResultDto> {
+    return this.accountsService.remove(user.id, id)
   }
 }

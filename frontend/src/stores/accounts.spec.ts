@@ -6,6 +6,8 @@ vi.mock('@/lib/api', () => ({
   api: {
     getAccounts: vi.fn(),
     updateAccount: vi.fn(),
+    getAccountDeletionSummary: vi.fn(),
+    deleteBankAccount: vi.fn(),
   },
 }))
 
@@ -185,6 +187,31 @@ describe('useAccountsStore', () => {
 
       expect(store.accounts).toHaveLength(1)
       expect(store.accounts[0].name).toBe('A')
+    })
+  })
+
+  describe('remove', () => {
+    it('drops the account from the cache and reports the transactions deleted', async () => {
+      const store = useAccountsStore()
+      store.accounts = [makeAccount({ id: '1' }), makeAccount({ id: '2' })]
+      mockedApi.deleteBankAccount.mockResolvedValue({ deletedTransactions: 12 })
+
+      const deleted = await store.remove('1')
+
+      expect(deleted).toBe(12)
+      expect(store.accounts.map(a => a.id)).toEqual(['2'])
+    })
+
+    it('keeps the account on failure and lets the caller catch', async () => {
+      const store = useAccountsStore()
+      store.accounts = [makeAccount({ id: '1' })]
+      const apiError = new Error('Account 1 not found')
+      mockedApi.deleteBankAccount.mockRejectedValue(apiError)
+
+      await expect(store.remove('1')).rejects.toBe(apiError)
+
+      expect(store.accounts).toHaveLength(1)
+      expect(store.error).toBeNull()
     })
   })
 })

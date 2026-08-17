@@ -1,6 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { api, type AccountDto, type AccountType } from '@/lib/api'
+import {
+  api,
+  type AccountDeletionSummaryDto,
+  type AccountDto,
+  type AccountType,
+} from '@/lib/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 
 export const useAccountsStore = defineStore('accounts', () => {
@@ -88,6 +93,23 @@ export const useAccountsStore = defineStore('accounts', () => {
     }
   }
 
+  /**
+   * Deleting an account also deletes its transactions, so both the preview and
+   * the deletion itself bubble their errors up to the caller: the confirmation
+   * dialog shows them in place rather than as a toast that could be missed.
+   */
+  async function deletionSummary(
+    accountId: string
+  ): Promise<AccountDeletionSummaryDto> {
+    return api.getAccountDeletionSummary(accountId)
+  }
+
+  async function remove(accountId: string): Promise<number> {
+    const { deletedTransactions } = await api.deleteBankAccount(accountId)
+    accounts.value = accounts.value.filter(a => a.id !== accountId)
+    return deletedTransactions
+  }
+
   return {
     accounts,
     sortedAccounts,
@@ -101,5 +123,7 @@ export const useAccountsStore = defineStore('accounts', () => {
     updateType,
     updateSettings,
     rename,
+    deletionSummary,
+    remove,
   }
 })

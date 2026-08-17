@@ -4,8 +4,17 @@ import {
   ConflictException,
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { Account, AccountType, Prisma } from '../generated/prisma'
-import { UpdateAccountDto } from './dto'
+import {
+  Account,
+  AccountType,
+  Prisma,
+  ReimbursementStatus,
+} from '../generated/prisma'
+import {
+  AccountDeletionResultDto,
+  AccountDeletionSummaryDto,
+  UpdateAccountDto,
+} from './dto'
 
 @Injectable()
 export class AccountsService {
@@ -93,6 +102,181 @@ export class AccountsService {
       }
       throw err
     }
+  }
+
+  /**
+   * What deleting this account would cost, so the UI can spell it out before
+   * asking for a confirmation. Read-only: nothing is changed here.
+   */
+  async getDeletionSummary(
+    userId: string,
+    accountId: string
+  ): Promise<AccountDeletionSummaryDto> {
+    const account = await this.findOne(userId, accountId)
+
+    const [aggregate, reimbursementCount, settlementCount] = await Promise.all([
+      this.prisma.transaction.aggregate({
+        where: { accountId, userId },
+        _count: { _all: true },
+        _min: { date: true },
+        _max: { date: true },
+      }),
+      this.prisma.reimbursementRequest.count({
+        where: { userId, transaction: { accountId } },
+      }),
+      this.prisma.settlement.count({
+        where: { userId, incomeTransaction: { accountId } },
+      }),
+    ])
+
+    return {
+      accountId: account.id,
+      accountName: account.name,
+      transactionCount: aggregate._count._all,
+      firstTransactionDate: aggregate._min.date,
+      lastTransactionDate: aggregate._max.date,
+      reimbursementCount,
+      settlementCount,
+    }
+  }
+
+  /**
+   * Delete an account and, with it, the transactions booked on it — and only
+   * those: categories, subcategories, tags, persons and budget plans are
+   * user-configured entities shared across accounts, so they stay untouched
+   * (same rule as deleting an import).
+   *
+   * Reimbursement bookkeeping needs care, because reimbursements can straddle
+   * two accounts: an expense advanced on account A can be repaid by an income
+   * received on account B. Both directions are settled before the delete so no
+   * debt is left claiming money that no longer exists.
+   */
+  async remove(
+    userId: string,
+    accountId: string
+  ): Promise<AccountDeletionResultDto> {
+    await this.findOne(userId, accountId)
+
+    return this.prisma.$transaction(async tx => {
+      const transactionCount = await tx.transaction.count({
+        where: { accountId, userId },
+      })
+
+      if (transactionCount > 0) {
+        await this.revertSettlementsFundedBy(tx, accountId)
+        const emptiedSettlementIds = await this.settlementsLosingAllDebts(
+          tx,
+          accountId
+        )
+
+        await tx.transaction.deleteMany({ where: { accountId, userId } })
+
+        // The cascade removed their last line; the settlement itself is now an
+        // empty shell reserving money on a surviving income transaction.
+        if (emptiedSettlementIds.length > 0) {
+          await tx.settlement.deleteMany({
+            where: { id: { in: emptiedSettlementIds } },
+          })
+        }
+      }
+
+      await tx.account.delete({ where: { id: accountId } })
+
+      return { deletedTransactions: transactionCount }
+    })
+  }
+
+  /**
+   * Give back the credits paid by income transactions of the doomed account.
+   * Debts carried by that same account are skipped: the cascade deletes them
+   * anyway.
+   */
+  private async revertSettlementsFundedBy(
+    tx: Prisma.TransactionClient,
+    accountId: string
+  ): Promise<void> {
+    const settlements = await tx.settlement.findMany({
+      where: { incomeTransaction: { accountId } },
+      include: {
+        reimbursements: {
+          include: {
+            reimbursement: {
+              include: { transaction: { select: { accountId: true } } },
+            },
+          },
+        },
+      },
+    })
+
+    for (const settlement of settlements) {
+      for (const line of settlement.reimbursements) {
+        const debt = line.reimbursement
+        if (debt.transaction.accountId === accountId) continue
+
+        const amountReceived = Math.max(
+          0,
+          Number(debt.amountReceived) - Number(line.amountSettled)
+        )
+        await tx.reimbursementRequest.update({
+          where: { id: debt.id },
+          data: {
+            amountReceived,
+            status: this.statusFor(amountReceived, Number(debt.amount)),
+          },
+        })
+      }
+    }
+  }
+
+  /**
+   * Settlements whose every reimbursement line is carried by the doomed
+   * account, and whose income transaction survives elsewhere. Their
+   * `amountUsed` would otherwise keep reserving cash on that surviving income
+   * for a debt nobody owes any more.
+   *
+   * Settlements that lose only *some* of their lines are left alone on
+   * purpose: `amountUsed` counts cash, while a line's `amountSettled` may also
+   * include a forgiven remainder, so subtracting one from the other could free
+   * money that was never spent.
+   */
+  private async settlementsLosingAllDebts(
+    tx: Prisma.TransactionClient,
+    accountId: string
+  ): Promise<string[]> {
+    const candidates = await tx.settlement.findMany({
+      where: {
+        incomeTransaction: { accountId: { not: accountId } },
+        reimbursements: {
+          some: { reimbursement: { transaction: { accountId } } },
+        },
+      },
+      include: {
+        reimbursements: {
+          select: {
+            reimbursement: {
+              select: { transaction: { select: { accountId: true } } },
+            },
+          },
+        },
+      },
+    })
+
+    return candidates
+      .filter(settlement =>
+        settlement.reimbursements.every(
+          line => line.reimbursement.transaction.accountId === accountId
+        )
+      )
+      .map(settlement => settlement.id)
+  }
+
+  private statusFor(
+    amountReceived: number,
+    amountDue: number
+  ): ReimbursementStatus {
+    if (amountReceived >= amountDue) return ReimbursementStatus.COMPLETED
+    if (amountReceived > 0) return ReimbursementStatus.PARTIAL
+    return ReimbursementStatus.PENDING
   }
 
   /**
