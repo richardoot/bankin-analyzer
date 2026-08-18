@@ -21,24 +21,25 @@ export class FilterPreferencesService {
       where: { userId },
       create: {
         userId,
-        hiddenExpenseCategories: dto.hiddenExpenseCategories ?? [],
-        hiddenIncomeCategories: dto.hiddenIncomeCategories ?? [],
-        globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories ?? [],
-        globalHiddenIncomeCategories: dto.globalHiddenIncomeCategories ?? [],
+        hiddenExpenseCategoryIds: dto.hiddenExpenseCategoryIds ?? [],
+        hiddenIncomeCategoryIds: dto.hiddenIncomeCategoryIds ?? [],
+        globalHiddenExpenseCategoryIds:
+          dto.globalHiddenExpenseCategoryIds ?? [],
+        globalHiddenIncomeCategoryIds: dto.globalHiddenIncomeCategoryIds ?? [],
         isPanelExpanded: dto.isPanelExpanded ?? true,
       },
       update: {
-        ...(dto.hiddenExpenseCategories !== undefined && {
-          hiddenExpenseCategories: dto.hiddenExpenseCategories,
+        ...(dto.hiddenExpenseCategoryIds !== undefined && {
+          hiddenExpenseCategoryIds: dto.hiddenExpenseCategoryIds,
         }),
-        ...(dto.hiddenIncomeCategories !== undefined && {
-          hiddenIncomeCategories: dto.hiddenIncomeCategories,
+        ...(dto.hiddenIncomeCategoryIds !== undefined && {
+          hiddenIncomeCategoryIds: dto.hiddenIncomeCategoryIds,
         }),
-        ...(dto.globalHiddenExpenseCategories !== undefined && {
-          globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
+        ...(dto.globalHiddenExpenseCategoryIds !== undefined && {
+          globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
         }),
-        ...(dto.globalHiddenIncomeCategories !== undefined && {
-          globalHiddenIncomeCategories: dto.globalHiddenIncomeCategories,
+        ...(dto.globalHiddenIncomeCategoryIds !== undefined && {
+          globalHiddenIncomeCategoryIds: dto.globalHiddenIncomeCategoryIds,
         }),
         ...(dto.isPanelExpanded !== undefined && {
           isPanelExpanded: dto.isPanelExpanded,

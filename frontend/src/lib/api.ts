@@ -173,11 +173,12 @@ export interface TransactionQueryParams {
   amountMax?: number
 }
 
+/** Hidden categories are addressed by Category id, never by name. */
 export interface FilterPreferencesDto {
-  hiddenExpenseCategories: string[]
-  hiddenIncomeCategories: string[]
-  globalHiddenExpenseCategories: string[]
-  globalHiddenIncomeCategories: string[]
+  hiddenExpenseCategoryIds: string[]
+  hiddenIncomeCategoryIds: string[]
+  globalHiddenExpenseCategoryIds: string[]
+  globalHiddenIncomeCategoryIds: string[]
   isPanelExpanded: boolean
 }
 
@@ -508,7 +509,9 @@ export interface SubcategoryDataDto {
 }
 
 export interface CategoryDataDto {
-  categoryId?: string
+  /** Category id, or UNCATEGORIZED_CATEGORY_ID for uncategorized rows */
+  categoryId: string
+  /** Display name only — never use it as a key */
   category: string
   amount: number
   icon?: string | null
@@ -536,9 +539,21 @@ export interface ExceptionalEventDto {
   amount: number
 }
 
+/**
+ * Id standing for transactions with no category. Not a real Category, but the
+ * filter panel lists that bucket and must be able to hide it like any other.
+ */
+export const UNCATEGORIZED_CATEGORY_ID = '__uncategorized__'
+
+/** A category as offered in the filter panel: addressed by id, shown by name. */
+export interface CategoryOptionDto {
+  id: string
+  name: string
+}
+
 export interface DashboardFiltersDto {
-  hiddenExpenseCategories?: string[]
-  hiddenIncomeCategories?: string[]
+  hiddenExpenseCategoryIds?: string[]
+  hiddenIncomeCategoryIds?: string[]
   startDate?: string
   endDate?: string
   deductReimbursements?: boolean
@@ -552,8 +567,8 @@ export interface DashboardSummaryDto {
   incomeByCategory: CategoryDataDto[]
   totalExpenses: number
   totalIncome: number
-  allExpenseCategories: string[]
-  allIncomeCategories: string[]
+  allExpenseCategories: CategoryOptionDto[]
+  allIncomeCategories: CategoryOptionDto[]
   availableAccounts: string[]
   periodMonths?: number
   monthLabels?: string[]
@@ -853,7 +868,7 @@ export const api = {
 
   async updateCategory(
     id: string,
-    dto: { isExcludedFromBudget?: boolean }
+    dto: { name?: string; isExcludedFromBudget?: boolean }
   ): Promise<CategoryDto> {
     const response = await fetchWithAuth(`${API_BASE_URL}/categories/${id}`, {
       method: 'PATCH',
@@ -861,7 +876,16 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to update category')
+      // A rename can clash with an existing category; the server explains
+      // which one, so the message is worth surfacing verbatim.
+      let message = 'Failed to update category'
+      try {
+        const payload = (await response.json()) as { message?: string }
+        if (payload?.message) message = payload.message
+      } catch {
+        // Body wasn't JSON — fall back to the generic message.
+      }
+      throw new Error(message)
     }
 
     return response.json() as Promise<CategoryDto>

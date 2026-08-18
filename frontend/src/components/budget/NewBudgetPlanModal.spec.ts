@@ -13,16 +13,16 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
-// Mutable sets of globally-hidden category names — tests reset them in
+// Mutable sets of globally-hidden category ids — tests reset them in
 // beforeEach.
-const hiddenExpenseCategoryNames = new Set<string>()
-const hiddenIncomeCategoryNames = new Set<string>()
+const hiddenExpenseCategoryIds = new Set<string>()
+const hiddenIncomeCategoryIds = new Set<string>()
 vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
-    isExpenseCategoryGloballyHidden: (name: string) =>
-      hiddenExpenseCategoryNames.has(name),
-    isIncomeCategoryGloballyHidden: (name: string) =>
-      hiddenIncomeCategoryNames.has(name),
+    isExpenseCategoryGloballyHidden: (id: string) =>
+      hiddenExpenseCategoryIds.has(id),
+    isIncomeCategoryGloballyHidden: (id: string) =>
+      hiddenIncomeCategoryIds.has(id),
   }),
 }))
 
@@ -104,8 +104,8 @@ describe('NewBudgetPlanModal', () => {
     vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStats)
     vi.mocked(api.getBudgetPlans).mockResolvedValue([])
     vi.mocked(api.getCategories).mockResolvedValue(sampleCategories)
-    hiddenExpenseCategoryNames.clear()
-    hiddenIncomeCategoryNames.clear()
+    hiddenExpenseCategoryIds.clear()
+    hiddenIncomeCategoryIds.clear()
   })
 
   afterEach(() => {
@@ -481,7 +481,7 @@ describe('NewBudgetPlanModal', () => {
   })
 
   it('excludes globally-hidden categories from the averages preview and from the created plan', async () => {
-    hiddenExpenseCategoryNames.add('Transport')
+    hiddenExpenseCategoryIds.add('cat-transport')
     vi.mocked(api.createBudgetPlan).mockResolvedValue(samplePlan)
     const wrapper = mountModal()
     await flushPromises()
@@ -514,7 +514,7 @@ describe('NewBudgetPlanModal', () => {
   })
 
   it('excludes globally-hidden categories when copying an existing plan', async () => {
-    hiddenExpenseCategoryNames.add('Transport')
+    hiddenExpenseCategoryIds.add('cat-transport')
     vi.mocked(api.getBudgetPlans).mockResolvedValue([
       {
         id: 'plan-old',
@@ -819,7 +819,7 @@ describe('NewBudgetPlanModal', () => {
     // Two income categories: salary (visible) + a "remboursement frais pro"
     // category the user has globally hidden. The reference must only count
     // the salary.
-    hiddenIncomeCategoryNames.add('Remboursements frais pro')
+    hiddenIncomeCategoryIds.add('cat-pro')
     vi.mocked(api.getBudgetStatistics).mockResolvedValue({
       ...sampleStats,
       periodMonths: 6,

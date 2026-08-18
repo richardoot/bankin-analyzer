@@ -2,22 +2,28 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/lib/api'
 
-const STORAGE_KEY = 'bankin-analyzer-filters'
+// v2: hidden categories moved from names to Category ids. The old payload is
+// dropped on read — resolving stale names would need the category list and
+// would reintroduce the very matching this migration removes. Only the
+// dashboard-only lists are lost (one click to redo); the global ones come back
+// from the backend, which migrated them in SQL.
+const STORAGE_KEY = 'bankin-analyzer-filters-v2'
+const LEGACY_STORAGE_KEY = 'bankin-analyzer-filters'
 
 export type TimePeriod = '3m' | '6m' | '1y' | 'all' | 'custom'
 
 export const useFiltersStore = defineStore('filters', () => {
   // === DASHBOARD FILTERS (localStorage only, NOT synced to DB) ===
-  const hiddenExpenseCategories = ref<string[]>([])
-  const hiddenIncomeCategories = ref<string[]>([])
+  const hiddenExpenseCategoryIds = ref<string[]>([])
+  const hiddenIncomeCategoryIds = ref<string[]>([])
   const timePeriod = ref<TimePeriod>('all')
   // Custom range — only used when timePeriod === 'custom'
   const customStartDate = ref<string | null>(null)
   const customEndDate = ref<string | null>(null)
 
   // === GLOBAL SETTINGS (synced to DB) ===
-  const globalHiddenExpenseCategories = ref<string[]>([])
-  const globalHiddenIncomeCategories = ref<string[]>([])
+  const globalHiddenExpenseCategoryIds = ref<string[]>([])
+  const globalHiddenIncomeCategoryIds = ref<string[]>([])
   // Always start collapsed on page load — the user can expand it on demand.
   const isPanelExpanded = ref(false)
 
@@ -28,23 +34,24 @@ export const useFiltersStore = defineStore('filters', () => {
 
   // Initialiser depuis localStorage (dashboard filters + cache of global)
   function initFromStorage() {
+    localStorage.removeItem(LEGACY_STORAGE_KEY)
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
       try {
         const data = JSON.parse(stored)
         // Dashboard filters (local only)
-        hiddenExpenseCategories.value = data.hiddenExpenseCategories || []
-        hiddenIncomeCategories.value = data.hiddenIncomeCategories || []
+        hiddenExpenseCategoryIds.value = data.hiddenExpenseCategoryIds || []
+        hiddenIncomeCategoryIds.value = data.hiddenIncomeCategoryIds || []
         if (data.timePeriod) {
           timePeriod.value = data.timePeriod as TimePeriod
         }
         customStartDate.value = data.customStartDate ?? null
         customEndDate.value = data.customEndDate ?? null
         // Global settings (cached)
-        globalHiddenExpenseCategories.value =
-          data.globalHiddenExpenseCategories || []
-        globalHiddenIncomeCategories.value =
-          data.globalHiddenIncomeCategories || []
+        globalHiddenExpenseCategoryIds.value =
+          data.globalHiddenExpenseCategoryIds || []
+        globalHiddenIncomeCategoryIds.value =
+          data.globalHiddenIncomeCategoryIds || []
         // isPanelExpanded is intentionally NOT restored — the panel always
         // starts collapsed on each page load.
       } catch {
@@ -59,14 +66,14 @@ export const useFiltersStore = defineStore('filters', () => {
       STORAGE_KEY,
       JSON.stringify({
         // Dashboard filters (local only)
-        hiddenExpenseCategories: hiddenExpenseCategories.value,
-        hiddenIncomeCategories: hiddenIncomeCategories.value,
+        hiddenExpenseCategoryIds: hiddenExpenseCategoryIds.value,
+        hiddenIncomeCategoryIds: hiddenIncomeCategoryIds.value,
         timePeriod: timePeriod.value,
         customStartDate: customStartDate.value,
         customEndDate: customEndDate.value,
         // Global settings (cached)
-        globalHiddenExpenseCategories: globalHiddenExpenseCategories.value,
-        globalHiddenIncomeCategories: globalHiddenIncomeCategories.value,
+        globalHiddenExpenseCategoryIds: globalHiddenExpenseCategoryIds.value,
+        globalHiddenIncomeCategoryIds: globalHiddenIncomeCategoryIds.value,
         isPanelExpanded: isPanelExpanded.value,
       })
     )
@@ -93,8 +100,8 @@ export const useFiltersStore = defineStore('filters', () => {
 
       // Only sync global settings, NOT dashboard filters
       await api.updateFilterPreferences({
-        globalHiddenExpenseCategories: globalHiddenExpenseCategories.value,
-        globalHiddenIncomeCategories: globalHiddenIncomeCategories.value,
+        globalHiddenExpenseCategoryIds: globalHiddenExpenseCategoryIds.value,
+        globalHiddenIncomeCategoryIds: globalHiddenIncomeCategoryIds.value,
         isPanelExpanded: isPanelExpanded.value,
       })
 
@@ -126,8 +133,9 @@ export const useFiltersStore = defineStore('filters', () => {
       const prefs = await api.getFilterPreferences()
 
       // Load global settings from backend
-      globalHiddenExpenseCategories.value = prefs.globalHiddenExpenseCategories
-      globalHiddenIncomeCategories.value = prefs.globalHiddenIncomeCategories
+      globalHiddenExpenseCategoryIds.value =
+        prefs.globalHiddenExpenseCategoryIds
+      globalHiddenIncomeCategoryIds.value = prefs.globalHiddenIncomeCategoryIds
       // isPanelExpanded is intentionally NOT restored — the panel always
       // starts collapsed on each page load.
 
@@ -136,8 +144,8 @@ export const useFiltersStore = defineStore('filters', () => {
       if (stored) {
         try {
           const data = JSON.parse(stored)
-          hiddenExpenseCategories.value = data.hiddenExpenseCategories || []
-          hiddenIncomeCategories.value = data.hiddenIncomeCategories || []
+          hiddenExpenseCategoryIds.value = data.hiddenExpenseCategoryIds || []
+          hiddenIncomeCategoryIds.value = data.hiddenIncomeCategoryIds || []
         } catch {
           // Ignore
         }
@@ -159,84 +167,75 @@ export const useFiltersStore = defineStore('filters', () => {
     isPanelExpanded.value = !isPanelExpanded.value
   }
 
+  /** Add or remove an id from a list, in place. */
+  function toggleId(list: string[], categoryId: string) {
+    const index = list.indexOf(categoryId)
+    if (index === -1) {
+      list.push(categoryId)
+    } else {
+      list.splice(index, 1)
+    }
+  }
+
   // === DASHBOARD FILTERS (local only, NOT synced to DB) ===
-  function toggleHiddenExpenseCategory(category: string) {
-    const index = hiddenExpenseCategories.value.indexOf(category)
-    if (index === -1) {
-      hiddenExpenseCategories.value.push(category)
-    } else {
-      hiddenExpenseCategories.value.splice(index, 1)
-    }
+  function toggleHiddenExpenseCategory(categoryId: string) {
+    toggleId(hiddenExpenseCategoryIds.value, categoryId)
     // Only save to localStorage, NOT mark as changed for DB sync
     saveToStorage()
   }
 
-  function toggleHiddenIncomeCategory(category: string) {
-    const index = hiddenIncomeCategories.value.indexOf(category)
-    if (index === -1) {
-      hiddenIncomeCategories.value.push(category)
-    } else {
-      hiddenIncomeCategories.value.splice(index, 1)
-    }
+  function toggleHiddenIncomeCategory(categoryId: string) {
+    toggleId(hiddenIncomeCategoryIds.value, categoryId)
     // Only save to localStorage, NOT mark as changed for DB sync
     saveToStorage()
   }
 
-  function isExpenseCategoryHidden(category: string): boolean {
-    return hiddenExpenseCategories.value.includes(category)
+  function isExpenseCategoryHidden(categoryId: string): boolean {
+    return hiddenExpenseCategoryIds.value.includes(categoryId)
   }
 
-  function isIncomeCategoryHidden(category: string): boolean {
-    return hiddenIncomeCategories.value.includes(category)
+  function isIncomeCategoryHidden(categoryId: string): boolean {
+    return hiddenIncomeCategoryIds.value.includes(categoryId)
   }
 
   // === GLOBAL HIDDEN CATEGORIES (synced to DB) ===
-  function toggleGlobalHiddenExpenseCategory(category: string) {
-    const index = globalHiddenExpenseCategories.value.indexOf(category)
-    if (index === -1) {
-      globalHiddenExpenseCategories.value.push(category)
-    } else {
-      globalHiddenExpenseCategories.value.splice(index, 1)
-    }
+  function toggleGlobalHiddenExpenseCategory(categoryId: string) {
+    toggleId(globalHiddenExpenseCategoryIds.value, categoryId)
     markAsChanged()
   }
 
-  function toggleGlobalHiddenIncomeCategory(category: string) {
-    const index = globalHiddenIncomeCategories.value.indexOf(category)
-    if (index === -1) {
-      globalHiddenIncomeCategories.value.push(category)
-    } else {
-      globalHiddenIncomeCategories.value.splice(index, 1)
-    }
+  function toggleGlobalHiddenIncomeCategory(categoryId: string) {
+    toggleId(globalHiddenIncomeCategoryIds.value, categoryId)
     markAsChanged()
   }
 
-  function isExpenseCategoryGloballyHidden(category: string): boolean {
-    return globalHiddenExpenseCategories.value.includes(category)
+  function isExpenseCategoryGloballyHidden(categoryId: string): boolean {
+    return globalHiddenExpenseCategoryIds.value.includes(categoryId)
   }
 
-  function isIncomeCategoryGloballyHidden(category: string): boolean {
-    return globalHiddenIncomeCategories.value.includes(category)
+  function isIncomeCategoryGloballyHidden(categoryId: string): boolean {
+    return globalHiddenIncomeCategoryIds.value.includes(categoryId)
   }
 
   // Computed sets
-  const hiddenExpenseCategoriesSet = computed(
-    () => new Set(hiddenExpenseCategories.value)
+  const hiddenExpenseCategoryIdsSet = computed(
+    () => new Set(hiddenExpenseCategoryIds.value)
   )
-  const hiddenIncomeCategoriesSet = computed(
-    () => new Set(hiddenIncomeCategories.value)
+  const hiddenIncomeCategoryIdsSet = computed(
+    () => new Set(hiddenIncomeCategoryIds.value)
   )
-  const globalHiddenExpenseCategoriesSet = computed(
-    () => new Set(globalHiddenExpenseCategories.value)
+  const globalHiddenExpenseCategoryIdsSet = computed(
+    () => new Set(globalHiddenExpenseCategoryIds.value)
   )
-  const globalHiddenIncomeCategoriesSet = computed(
-    () => new Set(globalHiddenIncomeCategories.value)
+  const globalHiddenIncomeCategoryIdsSet = computed(
+    () => new Set(globalHiddenIncomeCategoryIds.value)
   )
 
   // Computed pour le nombre de filtres dashboard actifs (local filters only)
   const activeFiltersCount = computed(
     () =>
-      hiddenExpenseCategories.value.length + hiddenIncomeCategories.value.length
+      hiddenExpenseCategoryIds.value.length +
+      hiddenIncomeCategoryIds.value.length
   )
 
   // Time period functions
@@ -304,21 +303,21 @@ export const useFiltersStore = defineStore('filters', () => {
 
   return {
     // Dashboard filters (local only)
-    hiddenExpenseCategories,
-    hiddenExpenseCategoriesSet,
+    hiddenExpenseCategoryIds,
+    hiddenExpenseCategoryIdsSet,
     toggleHiddenExpenseCategory,
     isExpenseCategoryHidden,
-    hiddenIncomeCategories,
-    hiddenIncomeCategoriesSet,
+    hiddenIncomeCategoryIds,
+    hiddenIncomeCategoryIdsSet,
     toggleHiddenIncomeCategory,
     isIncomeCategoryHidden,
     // Global hidden categories (synced to DB)
-    globalHiddenExpenseCategories,
-    globalHiddenExpenseCategoriesSet,
+    globalHiddenExpenseCategoryIds,
+    globalHiddenExpenseCategoryIdsSet,
     toggleGlobalHiddenExpenseCategory,
     isExpenseCategoryGloballyHidden,
-    globalHiddenIncomeCategories,
-    globalHiddenIncomeCategoriesSet,
+    globalHiddenIncomeCategoryIds,
+    globalHiddenIncomeCategoryIdsSet,
     toggleGlobalHiddenIncomeCategory,
     isIncomeCategoryGloballyHidden,
     // Panel state

@@ -48,57 +48,57 @@ describe('useFiltersStore', () => {
 
     expect(store.activeFiltersCount).toBe(0)
 
-    store.toggleHiddenExpenseCategory('Restaurant')
+    store.toggleHiddenExpenseCategory('cat-restaurant')
     expect(store.activeFiltersCount).toBe(1)
 
-    store.toggleHiddenIncomeCategory('Salaire')
+    store.toggleHiddenIncomeCategory('cat-salaire')
     expect(store.activeFiltersCount).toBe(2)
 
-    store.toggleHiddenExpenseCategory('Restaurant')
+    store.toggleHiddenExpenseCategory('cat-restaurant')
     expect(store.activeFiltersCount).toBe(1)
   })
 
   it('should start with empty hidden categories', () => {
     const store = useFiltersStore()
-    expect(store.hiddenExpenseCategories).toEqual([])
-    expect(store.hiddenIncomeCategories).toEqual([])
+    expect(store.hiddenExpenseCategoryIds).toEqual([])
+    expect(store.hiddenIncomeCategoryIds).toEqual([])
   })
 
   it('should toggle hidden expense category', () => {
     const store = useFiltersStore()
 
-    store.toggleHiddenExpenseCategory('Restaurant')
-    expect(store.isExpenseCategoryHidden('Restaurant')).toBe(true)
+    store.toggleHiddenExpenseCategory('cat-restaurant')
+    expect(store.isExpenseCategoryHidden('cat-restaurant')).toBe(true)
 
-    store.toggleHiddenExpenseCategory('Restaurant')
-    expect(store.isExpenseCategoryHidden('Restaurant')).toBe(false)
+    store.toggleHiddenExpenseCategory('cat-restaurant')
+    expect(store.isExpenseCategoryHidden('cat-restaurant')).toBe(false)
   })
 
   it('should toggle hidden income category', () => {
     const store = useFiltersStore()
 
-    store.toggleHiddenIncomeCategory('Salaire')
-    expect(store.isIncomeCategoryHidden('Salaire')).toBe(true)
+    store.toggleHiddenIncomeCategory('cat-salaire')
+    expect(store.isIncomeCategoryHidden('cat-salaire')).toBe(true)
 
-    store.toggleHiddenIncomeCategory('Salaire')
-    expect(store.isIncomeCategoryHidden('Salaire')).toBe(false)
+    store.toggleHiddenIncomeCategory('cat-salaire')
+    expect(store.isIncomeCategoryHidden('cat-salaire')).toBe(false)
   })
 
   it('should persist hidden categories to localStorage', () => {
     const store = useFiltersStore()
 
-    store.toggleHiddenExpenseCategory('Restaurant')
+    store.toggleHiddenExpenseCategory('cat-restaurant')
 
     expect(localStorage.setItem).toHaveBeenCalledWith(
-      'bankin-analyzer-filters',
+      'bankin-analyzer-filters-v2',
       JSON.stringify({
-        hiddenExpenseCategories: ['Restaurant'],
-        hiddenIncomeCategories: [],
+        hiddenExpenseCategoryIds: ['cat-restaurant'],
+        hiddenIncomeCategoryIds: [],
         timePeriod: 'all',
         customStartDate: null,
         customEndDate: null,
-        globalHiddenExpenseCategories: [],
-        globalHiddenIncomeCategories: [],
+        globalHiddenExpenseCategoryIds: [],
+        globalHiddenIncomeCategoryIds: [],
         isPanelExpanded: false,
       })
     )
@@ -107,8 +107,8 @@ describe('useFiltersStore', () => {
   it('should restore hidden categories from localStorage', () => {
     vi.mocked(localStorage.getItem).mockReturnValue(
       JSON.stringify({
-        hiddenExpenseCategories: ['Restaurant'],
-        hiddenIncomeCategories: ['Salaire'],
+        hiddenExpenseCategoryIds: ['cat-restaurant'],
+        hiddenIncomeCategoryIds: ['cat-salaire'],
         isPanelExpanded: true,
       })
     )
@@ -116,8 +116,8 @@ describe('useFiltersStore', () => {
     setActivePinia(createPinia())
     const store = useFiltersStore()
 
-    expect(store.isExpenseCategoryHidden('Restaurant')).toBe(true)
-    expect(store.isIncomeCategoryHidden('Salaire')).toBe(true)
+    expect(store.isExpenseCategoryHidden('cat-restaurant')).toBe(true)
+    expect(store.isIncomeCategoryHidden('cat-salaire')).toBe(true)
   })
 
   it('should handle invalid localStorage data gracefully', () => {
@@ -126,102 +126,108 @@ describe('useFiltersStore', () => {
     setActivePinia(createPinia())
     const store = useFiltersStore()
 
-    expect(store.hiddenExpenseCategories).toEqual([])
-    expect(store.hiddenIncomeCategories).toEqual([])
+    expect(store.hiddenExpenseCategoryIds).toEqual([])
+    expect(store.hiddenIncomeCategoryIds).toEqual([])
   })
 
   describe('global hidden categories', () => {
     it('should start with empty global hidden categories', () => {
       const store = useFiltersStore()
-      expect(store.globalHiddenExpenseCategories).toEqual([])
-      expect(store.globalHiddenIncomeCategories).toEqual([])
+      expect(store.globalHiddenExpenseCategoryIds).toEqual([])
+      expect(store.globalHiddenIncomeCategoryIds).toEqual([])
     })
 
     it('should toggle global hidden expense category', () => {
       const store = useFiltersStore()
 
-      store.toggleGlobalHiddenExpenseCategory('Restaurant')
-      expect(store.isExpenseCategoryGloballyHidden('Restaurant')).toBe(true)
+      store.toggleGlobalHiddenExpenseCategory('cat-restaurant')
+      expect(store.isExpenseCategoryGloballyHidden('cat-restaurant')).toBe(true)
 
-      store.toggleGlobalHiddenExpenseCategory('Restaurant')
-      expect(store.isExpenseCategoryGloballyHidden('Restaurant')).toBe(false)
+      store.toggleGlobalHiddenExpenseCategory('cat-restaurant')
+      expect(store.isExpenseCategoryGloballyHidden('cat-restaurant')).toBe(
+        false
+      )
     })
 
     it('should toggle global hidden income category', () => {
       const store = useFiltersStore()
 
-      store.toggleGlobalHiddenIncomeCategory('Salaire')
-      expect(store.isIncomeCategoryGloballyHidden('Salaire')).toBe(true)
+      store.toggleGlobalHiddenIncomeCategory('cat-salaire')
+      expect(store.isIncomeCategoryGloballyHidden('cat-salaire')).toBe(true)
 
-      store.toggleGlobalHiddenIncomeCategory('Salaire')
-      expect(store.isIncomeCategoryGloballyHidden('Salaire')).toBe(false)
+      store.toggleGlobalHiddenIncomeCategory('cat-salaire')
+      expect(store.isIncomeCategoryGloballyHidden('cat-salaire')).toBe(false)
     })
 
     it('should mark as having unsaved changes when toggling global categories', () => {
       const store = useFiltersStore()
 
       expect(store.hasUnsavedChanges).toBe(false)
-      store.toggleGlobalHiddenExpenseCategory('Restaurant')
+      store.toggleGlobalHiddenExpenseCategory('cat-restaurant')
       expect(store.hasUnsavedChanges).toBe(true)
     })
 
     it('should restore global hidden categories from localStorage', () => {
       vi.mocked(localStorage.getItem).mockReturnValue(
         JSON.stringify({
-          globalHiddenExpenseCategories: ['Restaurant'],
-          globalHiddenIncomeCategories: ['Salaire'],
+          globalHiddenExpenseCategoryIds: ['cat-restaurant'],
+          globalHiddenIncomeCategoryIds: ['cat-salaire'],
         })
       )
 
       setActivePinia(createPinia())
       const store = useFiltersStore()
 
-      expect(store.isExpenseCategoryGloballyHidden('Restaurant')).toBe(true)
-      expect(store.isIncomeCategoryGloballyHidden('Salaire')).toBe(true)
+      expect(store.isExpenseCategoryGloballyHidden('cat-restaurant')).toBe(true)
+      expect(store.isIncomeCategoryGloballyHidden('cat-salaire')).toBe(true)
     })
   })
 
   describe('computed sets', () => {
-    it('should provide hiddenExpenseCategoriesSet', () => {
+    it('should provide hiddenExpenseCategoryIdsSet', () => {
       const store = useFiltersStore()
 
-      store.toggleHiddenExpenseCategory('Restaurant')
-      store.toggleHiddenExpenseCategory('Transport')
+      store.toggleHiddenExpenseCategory('cat-restaurant')
+      store.toggleHiddenExpenseCategory('cat-transport')
 
-      expect(store.hiddenExpenseCategoriesSet.has('Restaurant')).toBe(true)
-      expect(store.hiddenExpenseCategoriesSet.has('Transport')).toBe(true)
-      expect(store.hiddenExpenseCategoriesSet.has('Loisirs')).toBe(false)
+      expect(store.hiddenExpenseCategoryIdsSet.has('cat-restaurant')).toBe(true)
+      expect(store.hiddenExpenseCategoryIdsSet.has('cat-transport')).toBe(true)
+      expect(store.hiddenExpenseCategoryIdsSet.has('cat-loisirs')).toBe(false)
     })
 
-    it('should provide hiddenIncomeCategoriesSet', () => {
+    it('should provide hiddenIncomeCategoryIdsSet', () => {
       const store = useFiltersStore()
 
-      store.toggleHiddenIncomeCategory('Salaire')
+      store.toggleHiddenIncomeCategory('cat-salaire')
 
-      expect(store.hiddenIncomeCategoriesSet.has('Salaire')).toBe(true)
-      expect(store.hiddenIncomeCategoriesSet.has('Prime')).toBe(false)
+      expect(store.hiddenIncomeCategoryIdsSet.has('cat-salaire')).toBe(true)
+      expect(store.hiddenIncomeCategoryIdsSet.has('cat-prime')).toBe(false)
     })
 
-    it('should provide globalHiddenExpenseCategoriesSet', () => {
+    it('should provide globalHiddenExpenseCategoryIdsSet', () => {
       const store = useFiltersStore()
 
-      store.toggleGlobalHiddenExpenseCategory('Restaurant')
+      store.toggleGlobalHiddenExpenseCategory('cat-restaurant')
 
-      expect(store.globalHiddenExpenseCategoriesSet.has('Restaurant')).toBe(
-        true
-      )
-      expect(store.globalHiddenExpenseCategoriesSet.has('Transport')).toBe(
+      expect(
+        store.globalHiddenExpenseCategoryIdsSet.has('cat-restaurant')
+      ).toBe(true)
+      expect(store.globalHiddenExpenseCategoryIdsSet.has('cat-transport')).toBe(
         false
       )
     })
 
-    it('should provide globalHiddenIncomeCategoriesSet', () => {
+    it('should provide globalHiddenIncomeCategoryIdsSet', () => {
       const store = useFiltersStore()
 
-      store.toggleGlobalHiddenIncomeCategory('Salaire')
+      store.toggleGlobalHiddenIncomeCategory('cat-salaire')
 
-      expect(store.globalHiddenIncomeCategoriesSet.has('Salaire')).toBe(true)
-      expect(store.globalHiddenIncomeCategoriesSet.has('Prime')).toBe(false)
+      expect(store.globalHiddenIncomeCategoryIdsSet.has('cat-salaire')).toBe(
+        true
+      )
+      expect(store.globalHiddenIncomeCategoryIdsSet.has('cat-prime')).toBe(
+        false
+      )
     })
   })
 

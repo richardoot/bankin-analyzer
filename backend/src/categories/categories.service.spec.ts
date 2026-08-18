@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
-import { NotFoundException } from '@nestjs/common'
+import { ConflictException, NotFoundException } from '@nestjs/common'
 import { CategoriesService } from './categories.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { TransactionType } from '../generated/prisma'
+import { Prisma, TransactionType } from '../generated/prisma'
 
 const mockCategory = {
   id: '550e8400-e29b-41d4-a716-446655440000',
@@ -193,6 +193,67 @@ describe('CategoriesService', () => {
         where: { id: mockCategory.id },
         data: {},
       })
+    })
+  })
+
+  describe('update — renaming', () => {
+    const renamed = { ...mockCategory, name: 'Courses' }
+
+    it('should rename the category', async () => {
+      mockPrismaService.category.findFirst.mockResolvedValue(mockCategory)
+      mockPrismaService.category.update.mockResolvedValue(renamed)
+
+      const result = await service.update(
+        mockCategory.userId,
+        mockCategory.id,
+        {
+          name: 'Courses',
+        }
+      )
+
+      expect(result.name).toBe('Courses')
+      expect(mockPrismaService.category.update).toHaveBeenCalledWith({
+        where: { id: mockCategory.id },
+        data: { name: 'Courses' },
+      })
+    })
+
+    // Everything referencing a category — transactions, budget entries,
+    // associations, hidden-category preferences — does so by id, so a rename
+    // is one UPDATE and nothing else. The Prisma mock exposes no other model,
+    // so any attempt at a side write would throw here.
+    it('should rename an income category the same single-statement way', async () => {
+      mockPrismaService.category.findFirst.mockResolvedValue(mockCategory2)
+      mockPrismaService.category.update.mockResolvedValue({
+        ...mockCategory2,
+        name: 'Paie',
+      })
+
+      await service.update(mockCategory2.userId, mockCategory2.id, {
+        name: 'Paie',
+      })
+
+      expect(mockPrismaService.category.update).toHaveBeenCalledTimes(1)
+      expect(mockPrismaService.category.update).toHaveBeenCalledWith({
+        where: { id: mockCategory2.id },
+        data: { name: 'Paie' },
+      })
+    })
+
+    it('should reject a name already taken by another category of the same type', async () => {
+      mockPrismaService.category.findFirst.mockResolvedValue(mockCategory)
+      mockPrismaService.category.update.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+        })
+      )
+
+      await expect(
+        service.update(mockCategory.userId, mockCategory.id, {
+          name: 'Loisirs',
+        })
+      ).rejects.toThrow(ConflictException)
     })
   })
 })

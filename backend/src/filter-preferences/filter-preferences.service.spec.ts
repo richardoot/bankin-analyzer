@@ -13,10 +13,10 @@ describe('FilterPreferencesService', () => {
   const mockFilterPreferences: FilterPreferences = {
     id: 'pref-1',
     userId: mockUserId,
-    hiddenExpenseCategories: ['Loisirs'],
-    hiddenIncomeCategories: ['Revenus exceptionnels'],
-    globalHiddenExpenseCategories: ['Épargne'],
-    globalHiddenIncomeCategories: ['Cadeaux'],
+    hiddenExpenseCategoryIds: ['cat-loisirs'],
+    hiddenIncomeCategoryIds: ['cat-revenus-exceptionnels'],
+    globalHiddenExpenseCategoryIds: ['cat-epargne'],
+    globalHiddenIncomeCategoryIds: ['cat-cadeaux'],
     isPanelExpanded: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -75,10 +75,10 @@ describe('FilterPreferencesService', () => {
   describe('upsert', () => {
     it('should create new preferences with all fields', async () => {
       const dto = {
-        hiddenExpenseCategories: ['Shopping'],
-        hiddenIncomeCategories: ['Primes'],
-        globalHiddenExpenseCategories: ['Investissement'],
-        globalHiddenIncomeCategories: ['Virement'],
+        hiddenExpenseCategoryIds: ['cat-shopping'],
+        hiddenIncomeCategoryIds: ['cat-primes'],
+        globalHiddenExpenseCategoryIds: ['cat-investissement'],
+        globalHiddenIncomeCategoryIds: ['cat-virement'],
         isPanelExpanded: false,
       }
 
@@ -89,28 +89,28 @@ describe('FilterPreferencesService', () => {
 
       const result = await service.upsert(mockUserId, dto)
 
-      expect(result.hiddenExpenseCategories).toEqual(
-        dto.hiddenExpenseCategories
+      expect(result.hiddenExpenseCategoryIds).toEqual(
+        dto.hiddenExpenseCategoryIds
       )
-      expect(result.globalHiddenExpenseCategories).toEqual(
-        dto.globalHiddenExpenseCategories
+      expect(result.globalHiddenExpenseCategoryIds).toEqual(
+        dto.globalHiddenExpenseCategoryIds
       )
       expect(result.isPanelExpanded).toBe(false)
       expect(prisma.filterPreferences.upsert).toHaveBeenCalledWith({
         where: { userId: mockUserId },
         create: {
           userId: mockUserId,
-          hiddenExpenseCategories: dto.hiddenExpenseCategories,
-          hiddenIncomeCategories: dto.hiddenIncomeCategories,
-          globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
-          globalHiddenIncomeCategories: dto.globalHiddenIncomeCategories,
+          hiddenExpenseCategoryIds: dto.hiddenExpenseCategoryIds,
+          hiddenIncomeCategoryIds: dto.hiddenIncomeCategoryIds,
+          globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
+          globalHiddenIncomeCategoryIds: dto.globalHiddenIncomeCategoryIds,
           isPanelExpanded: dto.isPanelExpanded,
         },
         update: {
-          hiddenExpenseCategories: dto.hiddenExpenseCategories,
-          hiddenIncomeCategories: dto.hiddenIncomeCategories,
-          globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
-          globalHiddenIncomeCategories: dto.globalHiddenIncomeCategories,
+          hiddenExpenseCategoryIds: dto.hiddenExpenseCategoryIds,
+          hiddenIncomeCategoryIds: dto.hiddenIncomeCategoryIds,
+          globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
+          globalHiddenIncomeCategoryIds: dto.globalHiddenIncomeCategoryIds,
           isPanelExpanded: dto.isPanelExpanded,
         },
       })
@@ -121,10 +121,10 @@ describe('FilterPreferencesService', () => {
 
       mockPrismaService.filterPreferences.upsert.mockResolvedValue({
         ...mockFilterPreferences,
-        hiddenExpenseCategories: [],
-        hiddenIncomeCategories: [],
-        globalHiddenExpenseCategories: [],
-        globalHiddenIncomeCategories: [],
+        hiddenExpenseCategoryIds: [],
+        hiddenIncomeCategoryIds: [],
+        globalHiddenExpenseCategoryIds: [],
+        globalHiddenIncomeCategoryIds: [],
         isPanelExpanded: true,
       })
 
@@ -134,24 +134,24 @@ describe('FilterPreferencesService', () => {
         where: { userId: mockUserId },
         create: {
           userId: mockUserId,
-          hiddenExpenseCategories: [],
-          hiddenIncomeCategories: [],
-          globalHiddenExpenseCategories: [],
-          globalHiddenIncomeCategories: [],
+          hiddenExpenseCategoryIds: [],
+          hiddenIncomeCategoryIds: [],
+          globalHiddenExpenseCategoryIds: [],
+          globalHiddenIncomeCategoryIds: [],
           isPanelExpanded: true,
         },
         update: {},
       })
     })
 
-    it('should update only globalHiddenExpenseCategories when provided', async () => {
+    it('should update only globalHiddenExpenseCategoryIds when provided', async () => {
       const dto = {
-        globalHiddenExpenseCategories: ['Épargne'],
+        globalHiddenExpenseCategoryIds: ['cat-epargne'],
       }
 
       mockPrismaService.filterPreferences.upsert.mockResolvedValue({
         ...mockFilterPreferences,
-        globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
+        globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
       })
 
       await service.upsert(mockUserId, dto)
@@ -160,14 +160,14 @@ describe('FilterPreferencesService', () => {
         where: { userId: mockUserId },
         create: {
           userId: mockUserId,
-          hiddenExpenseCategories: [],
-          hiddenIncomeCategories: [],
-          globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
-          globalHiddenIncomeCategories: [],
+          hiddenExpenseCategoryIds: [],
+          hiddenIncomeCategoryIds: [],
+          globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
+          globalHiddenIncomeCategoryIds: [],
           isPanelExpanded: true,
         },
         update: {
-          globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
+          globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
         },
       })
     })
@@ -188,10 +188,10 @@ describe('FilterPreferencesService', () => {
         where: { userId: mockUserId },
         create: {
           userId: mockUserId,
-          hiddenExpenseCategories: [],
-          hiddenIncomeCategories: [],
-          globalHiddenExpenseCategories: [],
-          globalHiddenIncomeCategories: [],
+          hiddenExpenseCategoryIds: [],
+          hiddenIncomeCategoryIds: [],
+          globalHiddenExpenseCategoryIds: [],
+          globalHiddenIncomeCategoryIds: [],
           isPanelExpanded: false,
         },
         update: {

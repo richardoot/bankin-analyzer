@@ -149,13 +149,13 @@ describe('prorataAllocate', () => {
 describe('scoreIncomeTransaction', () => {
   const context = {
     personName: 'Alice Martin',
-    pendingCategoryNames: new Set(['R Courses']),
+    pendingCategoryIds: new Set<string | null>(['cat-courses']),
     pendingTotals: [57, 45, 12],
   }
 
   it('matches the person name through case and accents', () => {
     const { reasons } = scoreIncomeTransaction(
-      income({ description: 'VIR ALICE MARTIN', categoryName: undefined }),
+      income({ description: 'VIR ALICE MARTIN', categoryId: null }),
       { ...context, personName: 'Alice Màrtin' }
     )
 
@@ -176,7 +176,7 @@ describe('scoreIncomeTransaction', () => {
       income({
         description: 'REMBOURSEMENT CPAM',
         amount: 84.2,
-        categoryName: 'Sante',
+        categoryId: 'cat-sante',
       }),
       context
     )
@@ -185,13 +185,23 @@ describe('scoreIncomeTransaction', () => {
     expect(reasons).toEqual([])
   })
 
+  it('still flags the category after it has been renamed', () => {
+    const { reasons } = scoreIncomeTransaction(
+      // Same category, new label: the id is what the context matches on.
+      income({ description: 'VIREMENT', categoryName: 'Courses du mois' }),
+      context
+    )
+
+    expect(reasons).toContain('category')
+  })
+
   it('ranks a name match above a category match', () => {
     const withName = scoreIncomeTransaction(
-      income({ description: 'VIR ALICE', categoryName: 'Sante', amount: 3 }),
+      income({ description: 'VIR ALICE', categoryId: 'cat-sante', amount: 3 }),
       context
     )
     const withCategory = scoreIncomeTransaction(
-      income({ description: 'VIREMENT', categoryName: 'R Courses', amount: 3 }),
+      income({ description: 'VIREMENT', categoryId: 'cat-courses', amount: 3 }),
       context
     )
 

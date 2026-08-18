@@ -51,8 +51,12 @@ export class CategoriesController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a category' })
+  @ApiOperation({ summary: 'Rename a category or change its budget exclusion' })
   @ApiResponse({ status: 200, type: CategoryResponseDto })
+  @ApiResponse({
+    status: 409,
+    description: 'Another category of the same type already bears that name',
+  })
   async update(
     @CurrentUser() user: User,
     @Param('id') id: string,

@@ -3,7 +3,7 @@
   import { RouterLink } from 'vue-router'
   import { usePersonsStore } from '@/stores/persons'
   import { useFiltersStore } from '@/stores/filters'
-  import { api } from '@/lib/api'
+  import { api, UNCATEGORIZED_CATEGORY_ID } from '@/lib/api'
   import type { ReimbursementDto, SettlementDto } from '@/lib/api'
   import { usePdfExport } from '@/composables/usePdfExport'
   import SettlementModal from '@/components/settlements/SettlementModal.vue'
@@ -127,7 +127,7 @@
       .filter(
         r =>
           !filtersStore.isExpenseCategoryGloballyHidden(
-            r.categoryName || 'Sans categorie'
+            r.categoryId ?? UNCATEGORIZED_CATEGORY_ID
           )
       )
       .forEach(r => {
@@ -199,7 +199,7 @@
       .filter(
         r =>
           !filtersStore.isExpenseCategoryGloballyHidden(
-            r.categoryName || 'Sans categorie'
+            r.categoryId ?? UNCATEGORIZED_CATEGORY_ID
           )
       )
       .reduce((sum, r) => sum + r.amountRemaining, 0)
@@ -242,7 +242,7 @@
       .filter(
         r =>
           !filtersStore.isExpenseCategoryGloballyHidden(
-            r.categoryName || 'Sans categorie'
+            r.categoryId ?? UNCATEGORIZED_CATEGORY_ID
           )
       )
   }

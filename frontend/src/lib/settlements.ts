@@ -115,9 +115,13 @@ function normalize(value: string): string {
 
 export interface SuggestionContext {
   personName: string
-  /** Category names with a pending balance for this person. */
-  pendingCategoryNames: Set<string>
-  /** Pending total per category name, plus the grand total, for amount matching. */
+  /**
+   * Category ids with a pending balance for this person, `null` standing for
+   * the uncategorized ones. Ids rather than names: a rename must not quietly
+   * stop the suggestion from firing.
+   */
+  pendingCategoryIds: Set<string | null>
+  /** Pending total per category, plus the grand total, for amount matching. */
   pendingTotals: number[]
 }
 
@@ -142,10 +146,7 @@ export function scoreIncomeTransaction(
     reasons.push('name')
   }
 
-  if (
-    transaction.categoryName &&
-    context.pendingCategoryNames.has(transaction.categoryName)
-  ) {
+  if (context.pendingCategoryIds.has(transaction.categoryId ?? null)) {
     reasons.push('category')
   }
 

@@ -25,7 +25,7 @@ vi.mock('@/lib/api', () => ({
 vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
     isExpenseCategoryGloballyHidden: vi.fn(() => false),
-    globalHiddenExpenseCategories: [],
+    globalHiddenExpenseCategoryIds: [],
   }),
 }))
 

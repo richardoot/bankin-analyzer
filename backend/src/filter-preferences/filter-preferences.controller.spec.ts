@@ -20,10 +20,10 @@ describe('FilterPreferencesController', () => {
   const mockFilterPreferences: FilterPreferences = {
     id: 'pref-1',
     userId: mockUser.id,
-    hiddenExpenseCategories: ['Loisirs'],
-    hiddenIncomeCategories: ['Revenus exceptionnels'],
-    globalHiddenExpenseCategories: ['Épargne'],
-    globalHiddenIncomeCategories: ['Cadeaux'],
+    hiddenExpenseCategoryIds: ['cat-loisirs'],
+    hiddenIncomeCategoryIds: ['cat-revenus-exceptionnels'],
+    globalHiddenExpenseCategoryIds: ['cat-epargne'],
+    globalHiddenIncomeCategoryIds: ['cat-cadeaux'],
     isPanelExpanded: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -63,12 +63,13 @@ describe('FilterPreferencesController', () => {
       const result = await controller.get(mockUser)
 
       expect(result).toEqual({
-        hiddenExpenseCategories: mockFilterPreferences.hiddenExpenseCategories,
-        hiddenIncomeCategories: mockFilterPreferences.hiddenIncomeCategories,
-        globalHiddenExpenseCategories:
-          mockFilterPreferences.globalHiddenExpenseCategories,
-        globalHiddenIncomeCategories:
-          mockFilterPreferences.globalHiddenIncomeCategories,
+        hiddenExpenseCategoryIds:
+          mockFilterPreferences.hiddenExpenseCategoryIds,
+        hiddenIncomeCategoryIds: mockFilterPreferences.hiddenIncomeCategoryIds,
+        globalHiddenExpenseCategoryIds:
+          mockFilterPreferences.globalHiddenExpenseCategoryIds,
+        globalHiddenIncomeCategoryIds:
+          mockFilterPreferences.globalHiddenIncomeCategoryIds,
         isPanelExpanded: mockFilterPreferences.isPanelExpanded,
       })
       expect(service.findByUser).toHaveBeenCalledWith(mockUser.id)
@@ -80,10 +81,10 @@ describe('FilterPreferencesController', () => {
       const result = await controller.get(mockUser)
 
       expect(result).toEqual({
-        hiddenExpenseCategories: [],
-        hiddenIncomeCategories: [],
-        globalHiddenExpenseCategories: [],
-        globalHiddenIncomeCategories: [],
+        hiddenExpenseCategoryIds: [],
+        hiddenIncomeCategoryIds: [],
+        globalHiddenExpenseCategoryIds: [],
+        globalHiddenIncomeCategoryIds: [],
         isPanelExpanded: true,
       })
       expect(service.findByUser).toHaveBeenCalledWith(mockUser.id)
@@ -92,35 +93,35 @@ describe('FilterPreferencesController', () => {
     it('should return empty arrays for preferences with no data', async () => {
       const emptyPreferences: FilterPreferences = {
         ...mockFilterPreferences,
-        hiddenExpenseCategories: [],
-        hiddenIncomeCategories: [],
-        globalHiddenExpenseCategories: [],
-        globalHiddenIncomeCategories: [],
+        hiddenExpenseCategoryIds: [],
+        hiddenIncomeCategoryIds: [],
+        globalHiddenExpenseCategoryIds: [],
+        globalHiddenIncomeCategoryIds: [],
       }
       mockService.findByUser.mockResolvedValue(emptyPreferences)
 
       const result = await controller.get(mockUser)
 
-      expect(result.hiddenExpenseCategories).toEqual([])
-      expect(result.hiddenIncomeCategories).toEqual([])
-      expect(result.globalHiddenExpenseCategories).toEqual([])
-      expect(result.globalHiddenIncomeCategories).toEqual([])
+      expect(result.hiddenExpenseCategoryIds).toEqual([])
+      expect(result.hiddenIncomeCategoryIds).toEqual([])
+      expect(result.globalHiddenExpenseCategoryIds).toEqual([])
+      expect(result.globalHiddenIncomeCategoryIds).toEqual([])
     })
   })
 
   describe('update', () => {
     it('should update and return filter preferences', async () => {
       const dto = {
-        hiddenExpenseCategories: ['Shopping'],
-        globalHiddenExpenseCategories: ['Investissement'],
+        hiddenExpenseCategoryIds: ['cat-shopping'],
+        globalHiddenExpenseCategoryIds: ['cat-investissement'],
         isPanelExpanded: false,
       }
 
       const updatedPreferences: FilterPreferences = {
         ...mockFilterPreferences,
         ...dto,
-        hiddenIncomeCategories: [],
-        globalHiddenIncomeCategories: [],
+        hiddenIncomeCategoryIds: [],
+        globalHiddenIncomeCategoryIds: [],
       }
 
       mockService.upsert.mockResolvedValue(updatedPreferences)
@@ -128,10 +129,10 @@ describe('FilterPreferencesController', () => {
       const result = await controller.update(mockUser, dto)
 
       expect(result).toEqual({
-        hiddenExpenseCategories: dto.hiddenExpenseCategories,
-        hiddenIncomeCategories: [],
-        globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
-        globalHiddenIncomeCategories: [],
+        hiddenExpenseCategoryIds: dto.hiddenExpenseCategoryIds,
+        hiddenIncomeCategoryIds: [],
+        globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
+        globalHiddenIncomeCategoryIds: [],
         isPanelExpanded: dto.isPanelExpanded,
       })
       expect(service.upsert).toHaveBeenCalledWith(mockUser.id, dto)
@@ -139,18 +140,18 @@ describe('FilterPreferencesController', () => {
 
     it('should update only specific fields', async () => {
       const dto = {
-        globalHiddenExpenseCategories: ['Épargne'],
+        globalHiddenExpenseCategoryIds: ['cat-epargne'],
       }
 
       mockService.upsert.mockResolvedValue({
         ...mockFilterPreferences,
-        globalHiddenExpenseCategories: dto.globalHiddenExpenseCategories,
+        globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
       })
 
       const result = await controller.update(mockUser, dto)
 
-      expect(result.globalHiddenExpenseCategories).toEqual(
-        dto.globalHiddenExpenseCategories
+      expect(result.globalHiddenExpenseCategoryIds).toEqual(
+        dto.globalHiddenExpenseCategoryIds
       )
       expect(service.upsert).toHaveBeenCalledWith(mockUser.id, dto)
     })

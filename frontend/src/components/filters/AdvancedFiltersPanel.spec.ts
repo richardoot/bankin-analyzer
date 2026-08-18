@@ -9,9 +9,16 @@ describe('AdvancedFiltersPanel', () => {
     setActivePinia(createPinia())
   })
 
+  /** Categories are addressed by id and displayed by name. */
+  const option = (name: string) => ({ id: `cat-${name}`, name })
+
   const defaultProps = {
-    allExpenseCategories: ['Restaurant', 'Transport', 'Loisirs'],
-    allIncomeCategories: ['Salaire', 'Prime'],
+    allExpenseCategories: [
+      option('Restaurant'),
+      option('Transport'),
+      option('Loisirs'),
+    ],
+    allIncomeCategories: [option('Salaire'), option('Prime')],
   }
 
   it('should display the panel title', () => {
@@ -83,13 +90,13 @@ describe('AdvancedFiltersPanel', () => {
     })
 
     const store = useFiltersStore()
-    expect(store.isExpenseCategoryHidden('Restaurant')).toBe(false)
+    expect(store.isExpenseCategoryHidden('cat-Restaurant')).toBe(false)
 
     const buttons = wrapper.findAll('button')
     const restaurantButton = buttons.find(b => b.text().includes('Restaurant'))
     await restaurantButton?.trigger('click')
 
-    expect(store.isExpenseCategoryHidden('Restaurant')).toBe(true)
+    expect(store.isExpenseCategoryHidden('cat-Restaurant')).toBe(true)
   })
 
   it('should toggle hidden income category on click', async () => {
@@ -98,18 +105,18 @@ describe('AdvancedFiltersPanel', () => {
     })
 
     const store = useFiltersStore()
-    expect(store.isIncomeCategoryHidden('Salaire')).toBe(false)
+    expect(store.isIncomeCategoryHidden('cat-Salaire')).toBe(false)
 
     const buttons = wrapper.findAll('button')
     const salaireButton = buttons.find(b => b.text().includes('Salaire'))
     await salaireButton?.trigger('click')
 
-    expect(store.isIncomeCategoryHidden('Salaire')).toBe(true)
+    expect(store.isIncomeCategoryHidden('cat-Salaire')).toBe(true)
   })
 
   it('should highlight hidden expense categories in red', () => {
     const store = useFiltersStore()
-    store.toggleHiddenExpenseCategory('Restaurant')
+    store.toggleHiddenExpenseCategory('cat-Restaurant')
 
     const wrapper = mount(AdvancedFiltersPanel, {
       props: defaultProps,
@@ -123,7 +130,7 @@ describe('AdvancedFiltersPanel', () => {
 
   it('should highlight hidden income categories in red', () => {
     const store = useFiltersStore()
-    store.toggleHiddenIncomeCategory('Salaire')
+    store.toggleHiddenIncomeCategory('cat-Salaire')
 
     const wrapper = mount(AdvancedFiltersPanel, {
       props: defaultProps,
@@ -137,8 +144,8 @@ describe('AdvancedFiltersPanel', () => {
 
   it('should show active filters count badge', async () => {
     const store = useFiltersStore()
-    store.toggleHiddenExpenseCategory('Restaurant')
-    store.toggleHiddenIncomeCategory('Salaire')
+    store.toggleHiddenExpenseCategory('cat-Restaurant')
+    store.toggleHiddenIncomeCategory('cat-Salaire')
 
     const wrapper = mount(AdvancedFiltersPanel, {
       props: defaultProps,
@@ -164,7 +171,7 @@ describe('AdvancedFiltersPanel', () => {
   it('should display empty message when no income categories', () => {
     const wrapper = mount(AdvancedFiltersPanel, {
       props: {
-        allExpenseCategories: ['Restaurant'],
+        allExpenseCategories: [option('Restaurant')],
         allIncomeCategories: [],
       },
     })
@@ -174,7 +181,7 @@ describe('AdvancedFiltersPanel', () => {
 
   it('should not show globally hidden categories in expense list', () => {
     const store = useFiltersStore()
-    store.toggleGlobalHiddenExpenseCategory('Restaurant')
+    store.toggleGlobalHiddenExpenseCategory('cat-Restaurant')
 
     const wrapper = mount(AdvancedFiltersPanel, {
       props: defaultProps,
@@ -188,7 +195,7 @@ describe('AdvancedFiltersPanel', () => {
 
   it('should not show globally hidden categories in income list', () => {
     const store = useFiltersStore()
-    store.toggleGlobalHiddenIncomeCategory('Salaire')
+    store.toggleGlobalHiddenIncomeCategory('cat-Salaire')
 
     const wrapper = mount(AdvancedFiltersPanel, {
       props: defaultProps,

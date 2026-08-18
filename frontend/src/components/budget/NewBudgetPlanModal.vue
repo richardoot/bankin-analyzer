@@ -24,12 +24,12 @@
   const filtersStore = useFiltersStore()
 
   /** Drop categories the user has globally hidden so they don't pollute the preview. */
-  function isHidden(categoryName: string): boolean {
-    return filtersStore.isExpenseCategoryGloballyHidden(categoryName)
+  function isHidden(categoryId: string): boolean {
+    return filtersStore.isExpenseCategoryGloballyHidden(categoryId)
   }
 
-  function isHiddenIncome(categoryName: string): boolean {
-    return filtersStore.isIncomeCategoryGloballyHidden(categoryName)
+  function isHiddenIncome(categoryId: string): boolean {
+    return filtersStore.isIncomeCategoryGloballyHidden(categoryId)
   }
 
   // ── Step 1 state ─────────────────────────────────────────────────────────
@@ -261,7 +261,7 @@
   function seedEntriesFrom(categories: CategoryAverageDto[]): void {
     previewEntries.value = new Map(
       categories
-        .filter(c => !isHidden(c.categoryName) && seedBasisAmount(c) > 0)
+        .filter(c => !isHidden(c.categoryId) && seedBasisAmount(c) > 0)
         .map(c => [c.categoryId, Math.round(seedBasisAmount(c))])
     )
   }
@@ -300,7 +300,7 @@
         loadAllExpenseCategories(),
       ])
       previewCategories.value = mergeCategoriesWithStats(
-        stats.expensesByCategory.filter(c => !isHidden(c.categoryName))
+        stats.expensesByCategory.filter(c => !isHidden(c.categoryId))
       )
       seedEntriesFrom(stats.expensesByCategory)
       // Income reference comes "for free" with this query; keep it for the
@@ -370,7 +370,7 @@
     }
     let totalVisible = 0
     for (const cat of stats.incomeByCategory) {
-      if (isHiddenIncome(cat.categoryName)) continue
+      if (isHiddenIncome(cat.categoryId)) continue
       totalVisible += cat.totalAmount
     }
     return totalVisible / stats.periodMonths
@@ -403,7 +403,7 @@
   ): CategoryAverageDto[] {
     const statsById = new Map(statsExpenses.map(c => [c.categoryId, c]))
     const merged = allExpenseCategories.value
-      .filter(c => !isHidden(c.name))
+      .filter(c => !isHidden(c.id))
       .map<CategoryAverageDto>(cat => {
         const stat = statsById.get(cat.id)
         if (stat) return stat
@@ -441,9 +441,7 @@
         api.getBudgetPlan(copyFromPlanId.value),
         loadAllExpenseCategories(),
       ])
-      const visibleEntries = source.entries.filter(
-        e => !isHidden(e.categoryName)
-      )
+      const visibleEntries = source.entries.filter(e => !isHidden(e.categoryId))
       const copiedAsAverages: CategoryAverageDto[] = visibleEntries.map(e => {
         const dto: CategoryAverageDto = {
           categoryId: e.categoryId,

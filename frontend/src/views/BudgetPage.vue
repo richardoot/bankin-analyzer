@@ -257,14 +257,14 @@
   const visibleExpenseCategories = computed(
     () =>
       statistics.value?.expensesByCategory?.filter(
-        cat => !filtersStore.isExpenseCategoryGloballyHidden(cat.categoryName)
+        cat => !filtersStore.isExpenseCategoryGloballyHidden(cat.categoryId)
       ) ?? []
   )
 
   const visibleIncomeCategories = computed(
     () =>
       statistics.value?.incomeByCategory?.filter(
-        cat => !filtersStore.isIncomeCategoryGloballyHidden(cat.categoryName)
+        cat => !filtersStore.isIncomeCategoryGloballyHidden(cat.categoryId)
       ) ?? []
   )
 

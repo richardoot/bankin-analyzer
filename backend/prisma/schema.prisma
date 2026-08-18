@@ -169,13 +169,16 @@ model FilterPreferences {
   id     String @id @default(uuid())
   userId String @unique @map("user_id")
 
+  // Hidden categories are stored as Category ids, never as names: a rename
+  // must not silently un-hide a category, and two categories of different
+  // types may legitimately share a name.
   // Dashboard filters (temporary, also in localStorage)
-  hiddenExpenseCategories String[] @default([]) @map("hidden_expense_categories")
-  hiddenIncomeCategories  String[] @default([]) @map("hidden_income_categories")
+  hiddenExpenseCategoryIds String[] @default([]) @map("hidden_expense_category_ids")
+  hiddenIncomeCategoryIds  String[] @default([]) @map("hidden_income_category_ids")
 
   // Global hidden categories
-  globalHiddenExpenseCategories String[] @default([]) @map("global_hidden_expense_categories")
-  globalHiddenIncomeCategories  String[] @default([]) @map("global_hidden_income_categories")
+  globalHiddenExpenseCategoryIds String[] @default([]) @map("global_hidden_expense_category_ids")
+  globalHiddenIncomeCategoryIds  String[] @default([]) @map("global_hidden_income_category_ids")
 
   // UI state only
   isPanelExpanded Boolean @default(true) @map("is_panel_expanded")

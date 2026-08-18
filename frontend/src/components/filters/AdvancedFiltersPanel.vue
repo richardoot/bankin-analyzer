@@ -1,11 +1,12 @@
 <script setup lang="ts">
   import { computed, ref } from 'vue'
+  import type { CategoryOptionDto } from '@/lib/api'
   import { useFiltersStore } from '@/stores/filters'
   import { useAuthStore } from '@/stores/auth'
 
   const props = defineProps<{
-    allExpenseCategories: string[]
-    allIncomeCategories: string[]
+    allExpenseCategories: CategoryOptionDto[]
+    allIncomeCategories: CategoryOptionDto[]
   }>()
 
   const filtersStore = useFiltersStore()
@@ -31,14 +32,14 @@
   const sortedExpenseCategories = computed(() => {
     // Exclure les catégories masquées globalement (elles ne doivent pas apparaître du tout)
     const availableCategories = props.allExpenseCategories.filter(
-      cat => !filtersStore.isExpenseCategoryGloballyHidden(cat)
+      cat => !filtersStore.isExpenseCategoryGloballyHidden(cat.id)
     )
     const visible = availableCategories
-      .filter(cat => !filtersStore.isExpenseCategoryHidden(cat))
-      .sort((a, b) => a.localeCompare(b, 'fr'))
+      .filter(cat => !filtersStore.isExpenseCategoryHidden(cat.id))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
     const hidden = availableCategories
-      .filter(cat => filtersStore.isExpenseCategoryHidden(cat))
-      .sort((a, b) => a.localeCompare(b, 'fr'))
+      .filter(cat => filtersStore.isExpenseCategoryHidden(cat.id))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
     return [...visible, ...hidden]
   })
 
@@ -47,14 +48,14 @@
   const sortedIncomeCategories = computed(() => {
     // Exclure les catégories masquées globalement (elles ne doivent pas apparaître du tout)
     const availableCategories = props.allIncomeCategories.filter(
-      cat => !filtersStore.isIncomeCategoryGloballyHidden(cat)
+      cat => !filtersStore.isIncomeCategoryGloballyHidden(cat.id)
     )
     const visible = availableCategories
-      .filter(cat => !filtersStore.isIncomeCategoryHidden(cat))
-      .sort((a, b) => a.localeCompare(b, 'fr'))
+      .filter(cat => !filtersStore.isIncomeCategoryHidden(cat.id))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
     const hidden = availableCategories
-      .filter(cat => filtersStore.isIncomeCategoryHidden(cat))
-      .sort((a, b) => a.localeCompare(b, 'fr'))
+      .filter(cat => filtersStore.isIncomeCategoryHidden(cat.id))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
     return [...visible, ...hidden]
   })
 </script>
@@ -231,18 +232,18 @@
           >
             <button
               v-for="category in sortedExpenseCategories"
-              :key="category"
+              :key="category.id"
               class="group px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150"
               :class="
-                filtersStore.isExpenseCategoryHidden(category)
+                filtersStore.isExpenseCategoryHidden(category.id)
                   ? 'bg-red-600 dark:bg-red-500 text-white shadow-md shadow-red-200 dark:shadow-red-900/30'
                   : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 hover:shadow-sm'
               "
-              @click="filtersStore.toggleHiddenExpenseCategory(category)"
+              @click="filtersStore.toggleHiddenExpenseCategory(category.id)"
             >
               <span class="flex items-center gap-2">
                 <svg
-                  v-if="filtersStore.isExpenseCategoryHidden(category)"
+                  v-if="filtersStore.isExpenseCategoryHidden(category.id)"
                   class="w-4 h-4"
                   fill="none"
                   stroke="currentColor"
@@ -255,7 +256,7 @@
                     d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
                   />
                 </svg>
-                {{ category }}
+                {{ category.name }}
               </span>
             </button>
           </div>
@@ -298,18 +299,18 @@
           >
             <button
               v-for="category in sortedIncomeCategories"
-              :key="category"
+              :key="category.id"
               class="group px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150"
               :class="
-                filtersStore.isIncomeCategoryHidden(category)
+                filtersStore.isIncomeCategoryHidden(category.id)
                   ? 'bg-red-600 dark:bg-red-500 text-white shadow-md shadow-red-200 dark:shadow-red-900/30'
                   : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600 hover:shadow-sm'
               "
-              @click="filtersStore.toggleHiddenIncomeCategory(category)"
+              @click="filtersStore.toggleHiddenIncomeCategory(category.id)"
             >
               <span class="flex items-center gap-2">
                 <svg
-                  v-if="filtersStore.isIncomeCategoryHidden(category)"
+                  v-if="filtersStore.isIncomeCategoryHidden(category.id)"
                   class="w-4 h-4"
                   fill="none"
                   stroke="currentColor"
@@ -322,7 +323,7 @@
                     d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
                   />
                 </svg>
-                {{ category }}
+                {{ category.name }}
               </span>
             </button>
           </div>

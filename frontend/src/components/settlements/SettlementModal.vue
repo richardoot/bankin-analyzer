@@ -137,9 +137,7 @@
   // --- Step 1: ranking the income transactions -----------------------------
 
   const suggestionContext = computed(() => {
-    const pendingCategoryNames = new Set(
-      lines.value.map(line => line.categoryName)
-    )
+    const pendingCategoryIds = new Set(lines.value.map(line => line.categoryId))
     const categoryTotals = groups.value.map(group => group.due)
     const lineTotals = lines.value.map(line => line.amountDue)
     const grandTotal = round2(
@@ -147,7 +145,7 @@
     )
     return {
       personName: props.personName,
-      pendingCategoryNames,
+      pendingCategoryIds,
       pendingTotals: [grandTotal, ...categoryTotals, ...lineTotals],
     }
   })
@@ -219,10 +217,10 @@
       if (focused) return [focused]
     }
 
-    const categoryName = selectedTransaction.value?.categoryName
-    if (categoryName) {
+    const categoryId = selectedTransaction.value?.categoryId
+    if (categoryId) {
       const matching = lines.value.filter(
-        line => line.categoryName === categoryName
+        line => line.categoryId === categoryId
       )
       if (matching.length > 0) return matching
     }

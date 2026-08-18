@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import type { DashboardSummaryDto, TransactionDto } from '@/lib/api'
 
 vi.mock('@/lib/api', () => ({
+  UNCATEGORIZED_CATEGORY_ID: '__uncategorized__',
   api: {
     getDashboardSummary: vi.fn(),
     getTransactions: vi.fn(),
@@ -14,10 +15,10 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
-    hiddenExpenseCategories: [],
-    hiddenIncomeCategories: [],
-    globalHiddenExpenseCategories: [],
-    globalHiddenIncomeCategories: [],
+    hiddenExpenseCategoryIds: [],
+    hiddenIncomeCategoryIds: [],
+    globalHiddenExpenseCategoryIds: [],
+    globalHiddenIncomeCategoryIds: [],
     isExpenseCategoryHidden: vi.fn(() => false),
     isIncomeCategoryHidden: vi.fn(() => false),
     isExpenseCategoryGloballyHidden: vi.fn(() => false),
@@ -45,8 +46,8 @@ vi.mock('@/stores/accounts', () => ({
 
 // Configurable mock for category associations
 let mockAssociations: Array<{
-  expenseCategoryName: string
-  incomeCategoryName: string
+  expenseCategoryId: string
+  incomeCategoryId: string
 }> = []
 
 vi.mock('@/stores/categoryAssociations', () => ({
@@ -92,8 +93,11 @@ describe('useDashboardData', () => {
     incomeByCategory: [{ category: 'Salaires', amount: 5000 }],
     totalExpenses: 965.5,
     totalIncome: 5000,
-    allExpenseCategories: ['Alimentation', 'Logement'],
-    allIncomeCategories: ['Salaires'],
+    allExpenseCategories: [
+      { id: 'cat-Alimentation', name: 'Alimentation' },
+      { id: 'cat-Logement', name: 'Logement' },
+    ],
+    allIncomeCategories: [{ id: 'cat-Salaires', name: 'Salaires' }],
     availableAccounts: ['Compte Courant'],
   }
 
@@ -106,6 +110,7 @@ describe('useDashboardData', () => {
       type: 'EXPENSE',
       accountId: 'Compte Courant',
       account: 'Compte Courant',
+      categoryId: 'cat-Alimentation',
       categoryName: 'Alimentation',
       isPointed: false,
       createdAt: '2024-01-15T00:00:00.000Z',
@@ -118,6 +123,7 @@ describe('useDashboardData', () => {
       type: 'EXPENSE',
       accountId: 'Compte Courant',
       account: 'Compte Courant',
+      categoryId: 'cat-Alimentation',
       categoryName: 'Alimentation',
       isPointed: false,
       createdAt: '2024-01-20T00:00:00.000Z',
@@ -135,8 +141,8 @@ describe('useDashboardData', () => {
       await fetchData()
 
       expect(api.getDashboardSummary).toHaveBeenCalledWith({
-        hiddenExpenseCategories: [],
-        hiddenIncomeCategories: [],
+        hiddenExpenseCategoryIds: [],
+        hiddenIncomeCategoryIds: [],
         startDate: undefined,
         endDate: undefined,
         deductReimbursements: true,
@@ -276,7 +282,10 @@ describe('useDashboardData', () => {
       const { fetchData, allExpenseCategories } = useDashboardData()
       await fetchData()
 
-      expect(allExpenseCategories.value).toEqual(['Alimentation', 'Logement'])
+      expect(allExpenseCategories.value.map(c => c.name)).toEqual([
+        'Alimentation',
+        'Logement',
+      ])
     })
 
     it('should return all income categories from summary', async () => {
@@ -285,7 +294,7 @@ describe('useDashboardData', () => {
       const { fetchData, allIncomeCategories } = useDashboardData()
       await fetchData()
 
-      expect(allIncomeCategories.value).toEqual(['Salaires'])
+      expect(allIncomeCategories.value.map(c => c.name)).toEqual(['Salaires'])
     })
   })
 
@@ -323,9 +332,9 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedCategory('Alimentation')
+      await setSelectedCategory('cat-Alimentation')
 
-      expect(selectedCategory.value).toBe('Alimentation')
+      expect(selectedCategory.value).toBe('cat-Alimentation')
       expect(api.getTransactions).toHaveBeenCalled()
     })
 
@@ -347,7 +356,7 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedCategory('Alimentation')
+      await setSelectedCategory('cat-Alimentation')
 
       // All months from period shown, with Alimentation expenses (45.5 + 120 = 165.5) in January, 0 in February
       expect(filteredExpensesByMonth.value.labels).toEqual([
@@ -375,7 +384,7 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedCategory('Catégorie Inexistante')
+      await setSelectedCategory('cat-Catégorie Inexistante')
 
       // All months from period shown with zero values
       expect(filteredExpensesByMonth.value.labels).toEqual([
@@ -403,8 +412,8 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedCategory('Alimentation')
-      await setSelectedIncomeCategory('Salaires')
+      await setSelectedCategory('cat-Alimentation')
+      await setSelectedIncomeCategory('cat-Salaires')
 
       // Should only call getTransactions once
       expect(api.getTransactions).toHaveBeenCalledTimes(1)
@@ -428,8 +437,8 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedCategory('Alimentation')
-      expect(selectedCategory.value).toBe('Alimentation')
+      await setSelectedCategory('cat-Alimentation')
+      expect(selectedCategory.value).toBe('cat-Alimentation')
 
       await setSelectedCategory(null)
       expect(selectedCategory.value).toBeNull()
@@ -445,6 +454,7 @@ describe('useDashboardData', () => {
           type: 'EXPENSE',
           accountId: 'Compte Courant',
           account: 'Compte Courant',
+          categoryId: 'cat-Santé',
           categoryName: 'Santé',
           isPointed: false,
           createdAt: '2024-01-15T00:00:00.000Z',
@@ -457,6 +467,7 @@ describe('useDashboardData', () => {
           type: 'INCOME',
           accountId: 'Compte Courant',
           account: 'Compte Courant',
+          categoryId: 'cat-Remboursement Santé',
           categoryName: 'Remboursement Santé',
           isPointed: false,
           createdAt: '2024-01-20T00:00:00.000Z',
@@ -469,6 +480,7 @@ describe('useDashboardData', () => {
           type: 'EXPENSE',
           accountId: 'Compte Courant',
           account: 'Compte Courant',
+          categoryId: 'cat-Santé',
           categoryName: 'Santé',
           isPointed: false,
           createdAt: '2024-02-10T00:00:00.000Z',
@@ -491,8 +503,8 @@ describe('useDashboardData', () => {
       // Configure the mock associations
       mockAssociations = [
         {
-          expenseCategoryName: 'Santé',
-          incomeCategoryName: 'Remboursement Santé',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement Santé',
         },
       ]
 
@@ -500,7 +512,7 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedCategory('Santé')
+      await setSelectedCategory('cat-Santé')
 
       // Jan: 100 expense - 60 reimbursement = 40 net
       // Feb: 200 expense - 0 reimbursement = 200 net
@@ -522,6 +534,7 @@ describe('useDashboardData', () => {
         type: 'INCOME',
         accountId: 'Compte Courant',
         account: 'Compte Courant',
+        categoryId: 'cat-Salaires',
         categoryName: 'Salaires',
         isPointed: true,
         createdAt: '2024-01-25T00:00:00.000Z',
@@ -534,6 +547,7 @@ describe('useDashboardData', () => {
         type: 'INCOME',
         accountId: 'Compte Courant',
         account: 'Compte Courant',
+        categoryId: 'cat-Salaires',
         categoryName: 'Salaires',
         isPointed: true,
         createdAt: '2024-02-25T00:00:00.000Z',
@@ -573,7 +587,7 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedIncomeCategory('Salaires')
+      await setSelectedIncomeCategory('cat-Salaires')
 
       expect(filteredIncomeByMonth.value.labels).toEqual([
         'Jan 2024',
@@ -602,8 +616,8 @@ describe('useDashboardData', () => {
 
       expect(selectedIncomeCategory.value).toBeNull()
 
-      await setSelectedIncomeCategory('Salaires')
-      expect(selectedIncomeCategory.value).toBe('Salaires')
+      await setSelectedIncomeCategory('cat-Salaires')
+      expect(selectedIncomeCategory.value).toBe('cat-Salaires')
 
       await setSelectedIncomeCategory(null)
       expect(selectedIncomeCategory.value).toBeNull()
@@ -629,7 +643,7 @@ describe('useDashboardData', () => {
         useDashboardData()
 
       await fetchData()
-      await setSelectedCategory('Alimentation')
+      await setSelectedCategory('cat-Alimentation')
 
       expect(transactions.value).toHaveLength(2)
 
@@ -661,7 +675,7 @@ describe('useDashboardData', () => {
         useDashboardData()
 
       await fetchData()
-      await setSelectedCategory('Alimentation')
+      await setSelectedCategory('cat-Alimentation')
 
       expect(transactions.value).toHaveLength(2)
       expect(api.getTransactions).toHaveBeenCalledTimes(1)
@@ -685,6 +699,7 @@ describe('useDashboardData', () => {
         type: 'EXPENSE',
         accountId: 'Compte Joint',
         account: 'Compte Joint',
+        categoryId: 'cat-Logement',
         categoryName: 'Logement',
         isPointed: false,
         createdAt: '2024-01-15T00:00:00.000Z',
@@ -697,6 +712,7 @@ describe('useDashboardData', () => {
         type: 'EXPENSE',
         accountId: 'Compte Joint',
         account: 'Compte Joint',
+        categoryId: 'cat-Logement',
         categoryName: 'Logement',
         isPointed: false,
         createdAt: '2024-01-20T00:00:00.000Z',
@@ -709,6 +725,7 @@ describe('useDashboardData', () => {
         type: 'EXPENSE',
         accountId: 'Compte Joint',
         account: 'Compte Joint',
+        categoryId: 'cat-Logement',
         categoryName: 'Logement',
         isPointed: false,
         createdAt: '2024-02-15T00:00:00.000Z',
@@ -738,7 +755,7 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedCategory('Logement')
+      await setSelectedCategory('cat-Logement')
 
       // Jan: (1000 + 200) / 2 = 600
       // Feb: 1000 / 2 = 500
@@ -759,6 +776,7 @@ describe('useDashboardData', () => {
           type: 'EXPENSE',
           accountId: 'Compte Joint',
           account: 'Compte Joint',
+          categoryId: 'cat-Logement',
           categoryName: 'Logement',
           isPointed: false,
           createdAt: '2024-01-15T00:00:00.000Z',
@@ -771,6 +789,7 @@ describe('useDashboardData', () => {
           type: 'EXPENSE',
           accountId: 'Compte Courant',
           account: 'Compte Courant',
+          categoryId: 'cat-Logement',
           categoryName: 'Logement',
           isPointed: false,
           createdAt: '2024-01-20T00:00:00.000Z',
@@ -800,7 +819,7 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedCategory('Logement')
+      await setSelectedCategory('cat-Logement')
 
       // Jan: 1000/2 + 100/1 = 500 + 100 = 600
       expect(filteredExpensesByMonth.value.values).toEqual([600, 0])
@@ -816,6 +835,7 @@ describe('useDashboardData', () => {
           type: 'INCOME',
           accountId: 'Compte Joint',
           account: 'Compte Joint',
+          categoryId: 'cat-Salaires',
           categoryName: 'Salaires',
           isPointed: false,
           createdAt: '2024-01-25T00:00:00.000Z',
@@ -828,6 +848,7 @@ describe('useDashboardData', () => {
           type: 'INCOME',
           accountId: 'Compte Joint',
           account: 'Compte Joint',
+          categoryId: 'cat-Salaires',
           categoryName: 'Salaires',
           isPointed: false,
           createdAt: '2024-02-25T00:00:00.000Z',
@@ -855,7 +876,7 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedIncomeCategory('Salaires')
+      await setSelectedIncomeCategory('cat-Salaires')
 
       // Jan: 4000/2 = 2000, Feb: 4000/2 = 2000
       expect(filteredIncomeByMonth.value.values).toEqual([2000, 2000])
@@ -871,6 +892,7 @@ describe('useDashboardData', () => {
           type: 'EXPENSE',
           accountId: 'Compte Joint',
           account: 'Compte Joint',
+          categoryId: 'cat-Santé',
           categoryName: 'Santé',
           isPointed: false,
           createdAt: '2024-01-15T00:00:00.000Z',
@@ -883,6 +905,7 @@ describe('useDashboardData', () => {
           type: 'INCOME',
           accountId: 'Compte Joint',
           account: 'Compte Joint',
+          categoryId: 'cat-Remboursement Santé',
           categoryName: 'Remboursement Santé',
           isPointed: false,
           createdAt: '2024-01-20T00:00:00.000Z',
@@ -895,6 +918,7 @@ describe('useDashboardData', () => {
           type: 'EXPENSE',
           accountId: 'Compte Joint',
           account: 'Compte Joint',
+          categoryId: 'cat-Santé',
           categoryName: 'Santé',
           isPointed: false,
           createdAt: '2024-02-10T00:00:00.000Z',
@@ -908,8 +932,8 @@ describe('useDashboardData', () => {
       // Configure category association
       mockAssociations = [
         {
-          expenseCategoryName: 'Santé',
-          incomeCategoryName: 'Remboursement Santé',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement Santé',
         },
       ]
 
@@ -930,7 +954,7 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedCategory('Santé')
+      await setSelectedCategory('cat-Santé')
 
       // Jan: expense = 400/2 = 200, reimbursement = 200/2 = 100, net = 100
       // Feb: expense = 600/2 = 300, reimbursement = 0, net = 300
@@ -947,6 +971,7 @@ describe('useDashboardData', () => {
           type: 'EXPENSE',
           accountId: 'Compte Joint',
           account: 'Compte Joint',
+          categoryId: 'cat-Santé',
           categoryName: 'Santé',
           isPointed: false,
           createdAt: '2024-01-15T00:00:00.000Z',
@@ -959,6 +984,7 @@ describe('useDashboardData', () => {
           type: 'INCOME',
           accountId: 'Compte Courant',
           account: 'Compte Courant', // Personal account
+          categoryId: 'cat-Remboursement Santé',
           categoryName: 'Remboursement Santé',
           isPointed: false,
           createdAt: '2024-01-20T00:00:00.000Z',
@@ -972,8 +998,8 @@ describe('useDashboardData', () => {
 
       mockAssociations = [
         {
-          expenseCategoryName: 'Santé',
-          incomeCategoryName: 'Remboursement Santé',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement Santé',
         },
       ]
 
@@ -994,7 +1020,7 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedCategory('Santé')
+      await setSelectedCategory('cat-Santé')
 
       // Jan: expense = 400/2 = 200, reimbursement = 100/1 = 100, net = 100
       expect(filteredExpensesByMonth.value.values).toEqual([100, 0])
@@ -1010,6 +1036,7 @@ describe('useDashboardData', () => {
           type: 'EXPENSE',
           accountId: 'Compte Inconnu',
           account: 'Compte Inconnu',
+          categoryId: 'cat-Divers',
           categoryName: 'Divers',
           isPointed: false,
           createdAt: '2024-01-15T00:00:00.000Z',
@@ -1036,7 +1063,7 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedCategory('Divers')
+      await setSelectedCategory('cat-Divers')
 
       // Should use divisor 1, so amount stays 100
       expect(filteredExpensesByMonth.value.values).toEqual([100, 0])
@@ -1064,7 +1091,7 @@ describe('useDashboardData', () => {
         useDashboardData()
       await fetchData()
 
-      await setSelectedCategory('Logement')
+      await setSelectedCategory('cat-Logement')
 
       // Jan: (1000 + 200) / 2 = 600
       // Feb: 1000 / 2 = 500

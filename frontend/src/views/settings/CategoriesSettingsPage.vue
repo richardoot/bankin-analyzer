@@ -67,8 +67,8 @@
   // budget too, so its budget switch reads off and is disabled.
   function isGloballyHidden(category: CategoryDto): boolean {
     return category.type === 'EXPENSE'
-      ? filtersStore.isExpenseCategoryGloballyHidden(category.name)
-      : filtersStore.isIncomeCategoryGloballyHidden(category.name)
+      ? filtersStore.isExpenseCategoryGloballyHidden(category.id)
+      : filtersStore.isIncomeCategoryGloballyHidden(category.id)
   }
 
   function isDashboardVisible(category: CategoryDto): boolean {
@@ -98,9 +98,9 @@
     const willBeVisible = !isDashboardVisible(category)
 
     if (category.type === 'EXPENSE') {
-      filtersStore.toggleGlobalHiddenExpenseCategory(category.name)
+      filtersStore.toggleGlobalHiddenExpenseCategory(category.id)
     } else {
-      filtersStore.toggleGlobalHiddenIncomeCategory(category.name)
+      filtersStore.toggleGlobalHiddenIncomeCategory(category.id)
     }
 
     markSaving(savingVisibility, category.id, true)
@@ -259,6 +259,57 @@
     }
   }
 
+  // ── Rename ────────────────────────────────────────────────────────────────
+  // Transactions, budget plans, associations and the hidden-category
+  // preferences all point at the category by id, so they follow a rename on
+  // their own. The one exception is the association recap below, which holds a
+  // snapshot of both names — reloaded once the write went through.
+  const renameDrafts = ref<Record<string, string>>({})
+  const renameErrors = ref<Record<string, string | null>>({})
+  const renameSaving = ref<Record<string, boolean>>({})
+
+  function renameDraftFor(category: CategoryDto): string {
+    return renameDrafts.value[category.id] ?? category.name
+  }
+
+  function onRenameDraftChange(categoryId: string, value: string): void {
+    renameDrafts.value[categoryId] = value
+    renameErrors.value[categoryId] = null
+  }
+
+  function isRenameDirty(category: CategoryDto): boolean {
+    const draft = renameDrafts.value[category.id]
+    if (draft === undefined) return false
+    const trimmed = draft.trim()
+    return trimmed !== category.name && trimmed.length > 0
+  }
+
+  async function submitRename(category: CategoryDto): Promise<void> {
+    const draft = renameDrafts.value[category.id]?.trim() ?? ''
+    if (draft.length === 0 || draft === category.name) return
+
+    const wasAssociated = associationIdFor(category) !== null
+    renameSaving.value[category.id] = true
+    renameErrors.value[category.id] = null
+    try {
+      const updated = await api.updateCategory(category.id, { name: draft })
+      category.name = updated.name
+      delete renameDrafts.value[category.id]
+      if (wasAssociated) await categoryAssociationsStore.load()
+      toast.success(`Catégorie renommée en « ${updated.name} »`)
+    } catch (err) {
+      renameErrors.value[category.id] =
+        err instanceof Error ? err.message : 'Erreur lors du renommage'
+    } finally {
+      renameSaving.value[category.id] = false
+    }
+  }
+
+  function cancelRename(categoryId: string): void {
+    delete renameDrafts.value[categoryId]
+    renameErrors.value[categoryId] = null
+  }
+
   // ── Reimbursement associations ────────────────────────────────────────────
   // An association pairs one expense category with one income category, and
   // each side can only be used once — hence the "available" lists.
@@ -405,8 +456,8 @@
   }
 
   /**
-   * Renaming, changing the icon and deleting need endpoints the API lacks —
-   * PATCH /categories only accepts `isExcludedFromBudget` today.
+   * Changing the icon and deleting still need endpoints the API lacks —
+   * PATCH /categories accepts the name and the budget flag, nothing else.
    */
   const UNAVAILABLE_HINT =
     'Pas encore disponible : cette action nécessite un nouvel endpoint côté serveur.'
@@ -699,6 +750,75 @@
                 v-show="isExpanded(category.id)"
                 class="space-y-4 border-t border-gray-100 bg-gray-50/60 px-4 py-4 dark:border-slate-700/60 dark:bg-slate-800/40"
               >
+                <!-- Name -->
+                <div>
+                  <label
+                    :for="`category-name-${category.id}`"
+                    class="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                  >
+                    Nom
+                  </label>
+                  <form
+                    class="flex flex-col gap-2 sm:flex-row sm:items-center"
+                    @submit.prevent="submitRename(category)"
+                  >
+                    <input
+                      :id="`category-name-${category.id}`"
+                      type="text"
+                      maxlength="100"
+                      :value="renameDraftFor(category)"
+                      :disabled="renameSaving[category.id]"
+                      data-testid="rename-input"
+                      class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                      @input="
+                        onRenameDraftChange(
+                          category.id,
+                          ($event.target as HTMLInputElement).value
+                        )
+                      "
+                    />
+                    <div class="flex gap-2">
+                      <button
+                        type="submit"
+                        :disabled="
+                          !isRenameDirty(category) || renameSaving[category.id]
+                        "
+                        class="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {{
+                          renameSaving[category.id]
+                            ? 'Enregistrement…'
+                            : 'Renommer'
+                        }}
+                      </button>
+                      <button
+                        v-if="isRenameDirty(category)"
+                        type="button"
+                        :disabled="renameSaving[category.id]"
+                        class="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600"
+                        @click="cancelRename(category.id)"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  </form>
+                  <p
+                    v-if="renameErrors[category.id]"
+                    class="mt-2 text-sm text-red-600 dark:text-red-400"
+                    data-testid="rename-error"
+                  >
+                    {{ renameErrors[category.id] }}
+                  </p>
+                  <p
+                    v-else
+                    class="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400"
+                  >
+                    Transactions, budgets, associations et sous-catégories
+                    suivent la catégorie renommée. Seul un futur import CSV
+                    portant l'ancien nom recréerait une catégorie distincte.
+                  </p>
+                </div>
+
                 <!-- Subcategories -->
                 <div>
                   <h4
@@ -816,18 +936,10 @@
                   </p>
                 </div>
 
-                <!-- Not yet wired: PATCH /categories only accepts the budget flag -->
+                <!-- Not yet wired: no endpoint for the icon nor the deletion -->
                 <div
                   class="flex flex-wrap gap-2 border-t border-gray-200 pt-3 dark:border-slate-700"
                 >
-                  <button
-                    type="button"
-                    disabled
-                    :title="UNAVAILABLE_HINT"
-                    class="cursor-not-allowed rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-400 dark:border-slate-700 dark:text-gray-500"
-                  >
-                    Renommer
-                  </button>
                   <button
                     type="button"
                     disabled

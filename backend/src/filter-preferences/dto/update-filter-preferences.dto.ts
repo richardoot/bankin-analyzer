@@ -1,34 +1,39 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
 import { IsString, IsArray, IsOptional, IsBoolean } from 'class-validator'
 
+/**
+ * Hidden categories are addressed by Category id. Ids of categories that no
+ * longer exist are accepted and simply match nothing — pruning them would make
+ * a temporarily unresolvable id (a not-yet-synced import) drop a preference.
+ */
 export class UpdateFilterPreferencesDto {
-  /** List of hidden expense category names (dashboard filter only) */
+  /** Hidden expense category ids (dashboard filter only) */
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  hiddenExpenseCategories?: string[]
+  hiddenExpenseCategoryIds?: string[]
 
-  /** List of hidden income category names (dashboard filter only) */
+  /** Hidden income category ids (dashboard filter only) */
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  hiddenIncomeCategories?: string[]
+  hiddenIncomeCategoryIds?: string[]
 
-  /** List of globally hidden expense category names (hidden everywhere) */
+  /** Globally hidden expense category ids (hidden everywhere) */
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  globalHiddenExpenseCategories?: string[]
+  globalHiddenExpenseCategoryIds?: string[]
 
-  /** List of globally hidden income category names (hidden everywhere) */
+  /** Globally hidden income category ids (hidden everywhere) */
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  globalHiddenIncomeCategories?: string[]
+  globalHiddenIncomeCategoryIds?: string[]
 
   /** Whether the advanced filters panel is expanded */
   @IsOptional()

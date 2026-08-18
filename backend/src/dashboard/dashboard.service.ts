@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { Prisma } from '../generated/prisma'
+import { UNCATEGORIZED_CATEGORY_ID } from './dto'
 import type {
   DashboardFiltersDto,
   DashboardSummaryDto,
   MonthlyDataDto,
   CategoryDataDto,
+  CategoryOptionDto,
   SubcategoryDataDto,
   ExceptionalEventDto,
 } from './dto'
@@ -23,6 +25,21 @@ const MONTH_LABELS: Record<string, string> = {
   '10': 'Oct',
   '11': 'Nov',
   '12': 'Déc',
+}
+
+/**
+ * Id a row is filtered and listed under. Transactions with no category share
+ * the sentinel bucket, which the filter panel can hide like any other.
+ */
+function categoryKeyOf(categoryId: string | null): string {
+  return categoryId ?? UNCATEGORIZED_CATEGORY_ID
+}
+
+/** Category options for the filter panel, alphabetical as before. */
+function toSortedOptions(byId: Map<string, string>): CategoryOptionDto[] {
+  return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) =>
+    a.name.localeCompare(b.name, 'fr')
+  )
 }
 
 interface DashboardAggregatedRow {
@@ -73,11 +90,12 @@ export class DashboardService {
       ? new Date(filters.endDate)
       : new Date('2099-12-31')
 
-    const hiddenExpenseCategoriesSet = new Set(
-      filters.hiddenExpenseCategories ?? []
+    // Hidden categories are addressed by id, so a rename never un-hides one.
+    const hiddenExpenseCategoryIdsSet = new Set(
+      filters.hiddenExpenseCategoryIds ?? []
     )
-    const hiddenIncomeCategoriesSet = new Set(
-      filters.hiddenIncomeCategories ?? []
+    const hiddenIncomeCategoryIdsSet = new Set(
+      filters.hiddenIncomeCategoryIds ?? []
     )
 
     const shouldDeductReimbursements = filters.deductReimbursements !== false
@@ -190,27 +208,38 @@ export class DashboardService {
       `),
       ])
 
-    // Convert DB associations to name-based associations
-    const categoryAssociations = dbAssociations.map(a => ({
-      expenseCategory: a.expenseCategory.name,
-      incomeCategory: a.incomeCategory.name,
-    }))
-
-    // Build a set of income categories used as reimbursements
-    const reimbursementIncomeCategories = new Set(
-      categoryAssociations.map(a => a.incomeCategory)
+    // Reimbursement associations, by id. Two categories of different types may
+    // share a name, so matching on names could credit a reimbursement to the
+    // wrong side of the association.
+    const expenseCategoryIdByIncomeCategoryId = new Map(
+      dbAssociations.map(a => [a.incomeCategoryId, a.expenseCategoryId])
     )
 
-    // Extract all categories from aggregated rows (before filtering hidden ones)
-    const allExpenseCategories = new Set<string>()
-    const allIncomeCategories = new Set<string>()
+    // Extract all categories from aggregated rows (before filtering hidden
+    // ones), keyed by the id the filter panel will send back.
+    const allExpenseCategories = new Map<string, string>()
+    const allIncomeCategories = new Map<string, string>()
+
+    // Display name for every id the response may mention. Association and
+    // pending-reimbursement endpoints are included: an expense category can
+    // collect a reimbursement over the period without carrying a single
+    // transaction of its own, and would otherwise have no name to show.
+    const categoryNameById = new Map<string, string>([
+      [UNCATEGORIZED_CATEGORY_ID, 'Autre'],
+    ])
 
     for (const row of rows) {
-      if (row.type === 'EXPENSE') {
-        allExpenseCategories.add(row.category_name)
-      } else {
-        allIncomeCategories.add(row.category_name)
-      }
+      const target =
+        row.type === 'EXPENSE' ? allExpenseCategories : allIncomeCategories
+      target.set(categoryKeyOf(row.category_id), row.category_name)
+      categoryNameById.set(categoryKeyOf(row.category_id), row.category_name)
+    }
+    for (const a of dbAssociations) {
+      categoryNameById.set(a.expenseCategoryId, a.expenseCategory.name)
+      categoryNameById.set(a.incomeCategoryId, a.incomeCategory.name)
+    }
+    for (const row of pendingRows) {
+      categoryNameById.set(row.category_id, row.category_name)
     }
 
     // Build aggregation data structures
@@ -236,7 +265,6 @@ export class DashboardService {
     const reimbursementsByExpenseCategory = new Map<string, number>()
 
     // Breakdown structures (only populated when shouldIncludeBreakdown is true)
-    const categoryIdByName = new Map<string, string>()
     const expenseMonthlyByCategory = new Map<string, Map<string, number>>()
     const incomeMonthlyByCategory = new Map<string, Map<string, number>>()
     const expenseSubcatByCategory = new Map<
@@ -255,22 +283,21 @@ export class DashboardService {
     >()
 
     for (const row of rows) {
-      const categoryName = row.category_name
+      const categoryKey = categoryKeyOf(row.category_id)
       const amount = row.total_amount
 
       // Handle reimbursement income: track by expense category and by month
       // Only when the deductReimbursements toggle is on. Otherwise these
       // rows are treated as regular income.
       if (shouldDeductReimbursements && row.type === 'INCOME') {
-        const assoc = categoryAssociations.find(
-          a => a.incomeCategory === categoryName
-        )
-        if (assoc) {
+        const expenseCategoryId =
+          expenseCategoryIdByIncomeCategoryId.get(categoryKey)
+        if (expenseCategoryId) {
           // Track reimbursements by expense category
           const current =
-            reimbursementsByExpenseCategory.get(assoc.expenseCategory) ?? 0
+            reimbursementsByExpenseCategory.get(expenseCategoryId) ?? 0
           reimbursementsByExpenseCategory.set(
-            assoc.expenseCategory,
+            expenseCategoryId,
             current + amount
           )
 
@@ -286,10 +313,10 @@ export class DashboardService {
 
           // Track reimbursements per-month per-expense-category (for breakdown)
           if (shouldIncludeBreakdown) {
-            let m = reimbByExpenseCategoryByMonth.get(assoc.expenseCategory)
+            let m = reimbByExpenseCategoryByMonth.get(expenseCategoryId)
             if (!m) {
               m = new Map<string, number>()
-              reimbByExpenseCategoryByMonth.set(assoc.expenseCategory, m)
+              reimbByExpenseCategoryByMonth.set(expenseCategoryId, m)
             }
             m.set(row.month_key, (m.get(row.month_key) ?? 0) + amount)
           }
@@ -300,13 +327,13 @@ export class DashboardService {
       // Skip hidden categories for aggregations
       if (
         row.type === 'EXPENSE' &&
-        hiddenExpenseCategoriesSet.has(categoryName)
+        hiddenExpenseCategoryIdsSet.has(categoryKey)
       ) {
         continue
       }
       if (
         row.type === 'INCOME' &&
-        hiddenIncomeCategoriesSet.has(categoryName)
+        hiddenIncomeCategoryIdsSet.has(categoryKey)
       ) {
         continue
       }
@@ -315,7 +342,7 @@ export class DashboardService {
       if (
         shouldDeductReimbursements &&
         row.type === 'INCOME' &&
-        reimbursementIncomeCategories.has(categoryName)
+        expenseCategoryIdByIncomeCategoryId.has(categoryKey)
       ) {
         continue
       }
@@ -338,20 +365,20 @@ export class DashboardService {
 
       // Category aggregation
       if (row.type === 'EXPENSE') {
-        const current = expenseByCategoryMap.get(categoryName)
-        expenseByCategoryMap.set(categoryName, {
+        const current = expenseByCategoryMap.get(categoryKey)
+        expenseByCategoryMap.set(categoryKey, {
           amount: (current?.amount ?? 0) + amount,
           icon: current?.icon ?? row.category_icon,
         })
         if (row.is_exceptional) {
           exceptionalExpenseByCategory.set(
-            categoryName,
-            (exceptionalExpenseByCategory.get(categoryName) ?? 0) + amount
+            categoryKey,
+            (exceptionalExpenseByCategory.get(categoryKey) ?? 0) + amount
           )
         }
       } else {
-        const current = incomeByCategoryMap.get(categoryName)
-        incomeByCategoryMap.set(categoryName, {
+        const current = incomeByCategoryMap.get(categoryKey)
+        incomeByCategoryMap.set(categoryKey, {
           amount: (current?.amount ?? 0) + amount,
           icon: current?.icon ?? row.category_icon,
         })
@@ -359,26 +386,22 @@ export class DashboardService {
 
       // Breakdown aggregation (per-month + per-subcategory by category)
       if (shouldIncludeBreakdown) {
-        if (row.category_id && !categoryIdByName.has(categoryName)) {
-          categoryIdByName.set(categoryName, row.category_id)
-        }
         const monthlyTarget =
           row.type === 'EXPENSE'
             ? expenseMonthlyByCategory
             : incomeMonthlyByCategory
-        let monthMap = monthlyTarget.get(categoryName)
+        let monthMap = monthlyTarget.get(categoryKey)
         if (!monthMap) {
           monthMap = new Map<string, number>()
-          monthlyTarget.set(categoryName, monthMap)
+          monthlyTarget.set(categoryKey, monthMap)
         }
         monthMap.set(row.month_key, (monthMap.get(row.month_key) ?? 0) + amount)
 
         if (row.type === 'EXPENSE' && row.is_exceptional) {
-          let excMonthMap =
-            expenseExceptionalMonthlyByCategory.get(categoryName)
+          let excMonthMap = expenseExceptionalMonthlyByCategory.get(categoryKey)
           if (!excMonthMap) {
             excMonthMap = new Map<string, number>()
-            expenseExceptionalMonthlyByCategory.set(categoryName, excMonthMap)
+            expenseExceptionalMonthlyByCategory.set(categoryKey, excMonthMap)
           }
           excMonthMap.set(
             row.month_key,
@@ -390,13 +413,13 @@ export class DashboardService {
           row.type === 'EXPENSE'
             ? expenseSubcatByCategory
             : incomeSubcatByCategory
-        let subMap = subcatTarget.get(categoryName)
+        let subMap = subcatTarget.get(categoryKey)
         if (!subMap) {
           subMap = new Map<
             string,
             { total: number; count: number; icon: string | null }
           >()
-          subcatTarget.set(categoryName, subMap)
+          subcatTarget.set(categoryKey, subMap)
         }
         const subKey = row.subcategory ?? ''
         const subCurrent = subMap.get(subKey) ?? {
@@ -416,46 +439,44 @@ export class DashboardService {
     // everyday/exceptional split is computed on gross amounts, then the
     // deductions below are re-applied pro rata (see buildExpenseCategoryDto).
     const grossExpenseByCategory = new Map<string, number>()
-    for (const [name, data] of expenseByCategoryMap) {
-      grossExpenseByCategory.set(name, data.amount)
+    for (const [categoryId, data] of expenseByCategoryMap) {
+      grossExpenseByCategory.set(categoryId, data.amount)
     }
 
     // Deduct reimbursements from expense categories
     for (const [
-      expenseCategory,
+      expenseCategoryId,
       reimbursement,
     ] of reimbursementsByExpenseCategory) {
-      const current = expenseByCategoryMap.get(expenseCategory)
-      expenseByCategoryMap.set(expenseCategory, {
+      const current = expenseByCategoryMap.get(expenseCategoryId)
+      expenseByCategoryMap.set(expenseCategoryId, {
         amount: Math.max(0, (current?.amount ?? 0) - reimbursement),
         icon: current?.icon ?? null,
       })
     }
 
-    // Aggregate pending reimbursements by expense category name and by month.
-    // pendingRows are keyed by expense category id; map to name via dbAssociations
-    // (the rr.category_id IS the expense category id) — but we joined on
-    // app.categories so each row already carries the name.
-    const pendingByExpenseCategoryName = new Map<string, number>()
+    // Aggregate pending reimbursements by expense category and by month.
+    // `rr.category_id` IS the expense category id, so the rows key directly.
+    const pendingByExpenseCategory = new Map<string, number>()
     const pendingByMonth = new Map<string, number>()
     const pendingByExpenseCategoryByMonth = new Map<
       string,
       Map<string, number>
     >()
     for (const row of pendingRows) {
-      const current = pendingByExpenseCategoryName.get(row.category_name) ?? 0
-      pendingByExpenseCategoryName.set(
-        row.category_name,
+      const current = pendingByExpenseCategory.get(row.category_id) ?? 0
+      pendingByExpenseCategory.set(
+        row.category_id,
         current + row.pending_amount
       )
       const monthCurrent = pendingByMonth.get(row.month_key) ?? 0
       pendingByMonth.set(row.month_key, monthCurrent + row.pending_amount)
 
       if (shouldIncludeBreakdown) {
-        let m = pendingByExpenseCategoryByMonth.get(row.category_name)
+        let m = pendingByExpenseCategoryByMonth.get(row.category_id)
         if (!m) {
           m = new Map<string, number>()
-          pendingByExpenseCategoryByMonth.set(row.category_name, m)
+          pendingByExpenseCategoryByMonth.set(row.category_id, m)
         }
         m.set(row.month_key, (m.get(row.month_key) ?? 0) + row.pending_amount)
       }
@@ -463,12 +484,9 @@ export class DashboardService {
 
     // Deduct pending reimbursements from expense categories (toggle-gated:
     // pendingRows is empty when shouldDeductPending is false).
-    for (const [
-      expenseCategoryName,
-      pendingAmount,
-    ] of pendingByExpenseCategoryName) {
-      const current = expenseByCategoryMap.get(expenseCategoryName)
-      expenseByCategoryMap.set(expenseCategoryName, {
+    for (const [expenseCategoryId, pendingAmount] of pendingByExpenseCategory) {
+      const current = expenseByCategoryMap.get(expenseCategoryId)
+      expenseByCategoryMap.set(expenseCategoryId, {
         amount: Math.max(0, (current?.amount ?? 0) - pendingAmount),
         icon: current?.icon ?? null,
       })
@@ -536,23 +554,21 @@ export class DashboardService {
     const round = (v: number) => Math.round(v * 100) / 100
 
     function buildExpenseCategoryDto(
-      category: string,
+      categoryId: string,
       data: { amount: number; icon: string | null }
     ): CategoryDataDto {
       const dto: CategoryDataDto = {
-        category,
+        categoryId,
+        category: categoryNameById.get(categoryId) ?? 'Autre',
         amount: round(data.amount),
         icon: data.icon,
       }
       if (!shouldIncludeBreakdown) return dto
 
-      const id = categoryIdByName.get(category)
-      if (id) dto.categoryId = id
-
       const monthMap =
-        expenseMonthlyByCategory.get(category) ?? new Map<string, number>()
-      const reimbMonths = reimbByExpenseCategoryByMonth.get(category)
-      const pendingMonths = pendingByExpenseCategoryByMonth.get(category)
+        expenseMonthlyByCategory.get(categoryId) ?? new Map<string, number>()
+      const reimbMonths = reimbByExpenseCategoryByMonth.get(categoryId)
+      const pendingMonths = pendingByExpenseCategoryByMonth.get(categoryId)
 
       // Allow negative values for months where deductions exceed expenses
       // (e.g. a delayed reimbursement received in a month with no spending).
@@ -565,15 +581,15 @@ export class DashboardService {
 
       const gross = Array.from(monthMap.values()).reduce((s, v) => s + v, 0)
       const recvDeduction = shouldDeductReimbursements
-        ? (reimbursementsByExpenseCategory.get(category) ?? 0)
+        ? (reimbursementsByExpenseCategory.get(categoryId) ?? 0)
         : 0
       const pendDeduction = shouldDeductPending
-        ? (pendingByExpenseCategoryName.get(category) ?? 0)
+        ? (pendingByExpenseCategory.get(categoryId) ?? 0)
         : 0
       const totalDeduction = recvDeduction + pendDeduction
 
       const subMap =
-        expenseSubcatByCategory.get(category) ??
+        expenseSubcatByCategory.get(categoryId) ??
         new Map<string, { total: number; count: number; icon: string | null }>()
       const subcategories: SubcategoryDataDto[] = Array.from(subMap.entries())
         .map(([subcategory, sd]) => {
@@ -602,8 +618,8 @@ export class DashboardService {
       // Everyday / exceptional split. The ratio is taken on gross amounts, then
       // applied to the net one so that reimbursements are shared between the two
       // shares instead of being charged entirely to the everyday baseline.
-      const grossTotal = grossExpenseByCategory.get(category) ?? gross
-      const grossExceptional = exceptionalExpenseByCategory.get(category) ?? 0
+      const grossTotal = grossExpenseByCategory.get(categoryId) ?? gross
+      const grossExceptional = exceptionalExpenseByCategory.get(categoryId) ?? 0
       const exceptionalRatio =
         grossTotal > 0 ? grossExceptional / grossTotal : 0
       const exceptionalAmount = data.amount * exceptionalRatio
@@ -618,7 +634,7 @@ export class DashboardService {
       // still debited while their owner is away.
       dto.everydayAveragePerMonth = round(everydayAmount / periodMonthsCount)
 
-      const excMonthMap = expenseExceptionalMonthlyByCategory.get(category)
+      const excMonthMap = expenseExceptionalMonthlyByCategory.get(categoryId)
       dto.everydayMonthlyAmounts = breakdownMonthLabels.map((m, i) => {
         const net = dto.monthlyAmounts?.[i] ?? 0
         const monthGross = monthMap.get(m) ?? 0
@@ -635,27 +651,25 @@ export class DashboardService {
     }
 
     function buildIncomeCategoryDto(
-      category: string,
+      categoryId: string,
       data: { amount: number; icon: string | null }
     ): CategoryDataDto {
       const dto: CategoryDataDto = {
-        category,
+        categoryId,
+        category: categoryNameById.get(categoryId) ?? 'Autre',
         amount: round(data.amount),
         icon: data.icon,
       }
       if (!shouldIncludeBreakdown) return dto
 
-      const id = categoryIdByName.get(category)
-      if (id) dto.categoryId = id
-
       const monthMap =
-        incomeMonthlyByCategory.get(category) ?? new Map<string, number>()
+        incomeMonthlyByCategory.get(categoryId) ?? new Map<string, number>()
       dto.monthlyAmounts = breakdownMonthLabels.map(m =>
         round(monthMap.get(m) ?? 0)
       )
 
       const subMap =
-        incomeSubcatByCategory.get(category) ??
+        incomeSubcatByCategory.get(categoryId) ??
         new Map<string, { total: number; count: number; icon: string | null }>()
       const subcategories: SubcategoryDataDto[] = Array.from(subMap.entries())
         .map(([subcategory, sd]) => {
@@ -687,13 +701,13 @@ export class DashboardService {
       expenseByCategoryMap.entries()
     )
       .sort((a, b) => b[1].amount - a[1].amount)
-      .map(([category, data]) => buildExpenseCategoryDto(category, data))
+      .map(([categoryId, data]) => buildExpenseCategoryDto(categoryId, data))
 
     const incomeByCategory: CategoryDataDto[] = Array.from(
       incomeByCategoryMap.entries()
     )
       .sort((a, b) => b[1].amount - a[1].amount)
-      .map(([category, data]) => buildIncomeCategoryDto(category, data))
+      .map(([categoryId, data]) => buildIncomeCategoryDto(categoryId, data))
 
     // Calculate totals from category data
     const totalExpenses =
@@ -729,8 +743,8 @@ export class DashboardService {
       incomeByCategory,
       totalExpenses,
       totalIncome,
-      allExpenseCategories: Array.from(allExpenseCategories).sort(),
-      allIncomeCategories: Array.from(allIncomeCategories).sort(),
+      allExpenseCategories: toSortedOptions(allExpenseCategories),
+      allIncomeCategories: toSortedOptions(allIncomeCategories),
       availableAccounts: accountRows.map(r => r.account),
       totalExceptionalExpenses,
       exceptionalEvents,

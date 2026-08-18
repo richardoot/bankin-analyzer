@@ -30,13 +30,13 @@ export const useCategoryAssociationsStore = defineStore(
       return map
     })
 
-    // Set of income category names that have associations
-    const associatedIncomeCategoryNames = computed(() => {
-      const names = new Set<string>()
+    // Set of income category ids that have associations
+    const associatedIncomeCategoryIds = computed(() => {
+      const ids = new Set<string>()
       for (const assoc of associations.value) {
-        names.add(assoc.incomeCategoryName)
+        ids.add(assoc.incomeCategoryId)
       }
-      return names
+      return ids
     })
 
     async function load(): Promise<void> {
@@ -76,31 +76,8 @@ export const useCategoryAssociationsStore = defineStore(
       return associationByIncomeCategoryId.value.get(incomeCategoryId)
     }
 
-    function getIncomeCategoryNameForExpense(
-      expenseCategoryId: string
-    ): string | null {
-      const assoc = getIncomeCategoryForExpense(expenseCategoryId)
-      return assoc?.incomeCategoryName ?? null
-    }
-
-    function getExpenseCategoryNameForIncome(
-      incomeCategoryId: string
-    ): string | null {
-      const assoc = getExpenseCategoryForIncome(incomeCategoryId)
-      return assoc?.expenseCategoryName ?? null
-    }
-
-    function isIncomeCategoryAssociated(categoryName: string): boolean {
-      return associatedIncomeCategoryNames.value.has(categoryName)
-    }
-
-    function getAssociatedIncomeCategoryNameByExpenseName(
-      expenseCategoryName: string
-    ): string | null {
-      const assoc = associations.value.find(
-        a => a.expenseCategoryName === expenseCategoryName
-      )
-      return assoc?.incomeCategoryName ?? null
+    function isIncomeCategoryAssociated(categoryId: string): boolean {
+      return associatedIncomeCategoryIds.value.has(categoryId)
     }
 
     function reset(): void {
@@ -112,16 +89,13 @@ export const useCategoryAssociationsStore = defineStore(
       associations,
       isLoading,
       error,
-      associatedIncomeCategoryNames,
+      associatedIncomeCategoryIds,
       load,
       create,
       remove,
       getIncomeCategoryForExpense,
       getExpenseCategoryForIncome,
-      getIncomeCategoryNameForExpense,
-      getExpenseCategoryNameForIncome,
       isIncomeCategoryAssociated,
-      getAssociatedIncomeCategoryNameByExpenseName,
       reset,
     }
   }

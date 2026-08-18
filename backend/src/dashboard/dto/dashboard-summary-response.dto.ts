@@ -1,5 +1,21 @@
 import { ApiProperty } from '@nestjs/swagger'
 
+/**
+ * Id used for transactions carrying no category. Not a real Category row, but
+ * the filter panel lists that bucket and must be able to address it — hence a
+ * sentinel rather than the "Autre" label, which a real category could bear.
+ */
+export const UNCATEGORIZED_CATEGORY_ID = '__uncategorized__'
+
+/** A category as offered in the filter panel: addressed by id, shown by name. */
+export class CategoryOptionDto {
+  /** Category id, or `UNCATEGORIZED_CATEGORY_ID` */
+  id!: string
+
+  /** Display name */
+  name!: string
+}
+
 export class MonthlyDataDto {
   /** Month key in format YYYY-MM */
   month!: string
@@ -41,10 +57,10 @@ export class SubcategoryDataDto {
 }
 
 export class CategoryDataDto {
-  /** Category id (only when includeCategoryBreakdown is true) */
-  categoryId?: string
+  /** Category id, or `UNCATEGORIZED_CATEGORY_ID` for uncategorized rows */
+  categoryId!: string
 
-  /** Category name */
+  /** Category name, for display only */
   category!: string
 
   /** Total amount for this category (after reimbursement deductions when applicable) */
@@ -124,13 +140,13 @@ export class DashboardSummaryDto {
   /** Total income (excluding reimbursement categories) */
   totalIncome!: number
 
-  /** All available expense categories */
-  @ApiProperty({ type: [String] })
-  allExpenseCategories!: string[]
+  /** All expense categories present over the period, hidden ones included */
+  @ApiProperty({ type: [CategoryOptionDto] })
+  allExpenseCategories!: CategoryOptionDto[]
 
-  /** All available income categories */
-  @ApiProperty({ type: [String] })
-  allIncomeCategories!: string[]
+  /** All income categories present over the period, hidden ones included */
+  @ApiProperty({ type: [CategoryOptionDto] })
+  allIncomeCategories!: CategoryOptionDto[]
 
   /** All available account names */
   @ApiProperty({ type: [String] })

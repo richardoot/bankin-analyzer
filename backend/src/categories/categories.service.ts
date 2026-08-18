@@ -1,6 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import type { Category, TransactionType } from '../generated/prisma'
+import { Prisma, TransactionType } from '../generated/prisma'
+import type { Category } from '../generated/prisma'
 import type { CreateCategoryDto, UpdateCategoryDto } from './dto'
 
 @Injectable()
@@ -38,6 +43,11 @@ export class CategoriesService {
     return this.findOrCreate(userId, dto.name, dto.type)
   }
 
+  /**
+   * Update a category. Everything that points at a category does so by id —
+   * transactions, budget plan entries, associations, hidden-category
+   * preferences — so a rename carries over on its own, with nothing to replay.
+   */
   async update(
     userId: string,
     id: string,
@@ -50,14 +60,28 @@ export class CategoriesService {
       throw new NotFoundException(`Category ${id} not found`)
     }
 
-    return this.prisma.category.update({
-      where: { id },
-      data: {
-        ...(dto.isExcludedFromBudget !== undefined && {
-          isExcludedFromBudget: dto.isExcludedFromBudget,
-        }),
-      },
-    })
+    const data = {
+      ...(dto.name !== undefined && { name: dto.name }),
+      ...(dto.isExcludedFromBudget !== undefined && {
+        isExcludedFromBudget: dto.isExcludedFromBudget,
+      }),
+    }
+    const isRenaming = dto.name !== undefined && dto.name !== category.name
+
+    try {
+      return await this.prisma.category.update({ where: { id }, data })
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002' &&
+        isRenaming
+      ) {
+        throw new ConflictException(
+          `A category named "${dto.name}" already exists for this type.`
+        )
+      }
+      throw err
+    }
   }
 
   /**

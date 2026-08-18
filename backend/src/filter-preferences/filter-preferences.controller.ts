@@ -25,19 +25,19 @@ export class FilterPreferencesController {
 
     if (!prefs) {
       return {
-        hiddenExpenseCategories: [],
-        hiddenIncomeCategories: [],
-        globalHiddenExpenseCategories: [],
-        globalHiddenIncomeCategories: [],
+        hiddenExpenseCategoryIds: [],
+        hiddenIncomeCategoryIds: [],
+        globalHiddenExpenseCategoryIds: [],
+        globalHiddenIncomeCategoryIds: [],
         isPanelExpanded: true,
       }
     }
 
     return {
-      hiddenExpenseCategories: prefs.hiddenExpenseCategories,
-      hiddenIncomeCategories: prefs.hiddenIncomeCategories,
-      globalHiddenExpenseCategories: prefs.globalHiddenExpenseCategories,
-      globalHiddenIncomeCategories: prefs.globalHiddenIncomeCategories,
+      hiddenExpenseCategoryIds: prefs.hiddenExpenseCategoryIds,
+      hiddenIncomeCategoryIds: prefs.hiddenIncomeCategoryIds,
+      globalHiddenExpenseCategoryIds: prefs.globalHiddenExpenseCategoryIds,
+      globalHiddenIncomeCategoryIds: prefs.globalHiddenIncomeCategoryIds,
       isPanelExpanded: prefs.isPanelExpanded,
     }
   }
@@ -52,10 +52,10 @@ export class FilterPreferencesController {
     const prefs = await this.service.upsert(user.id, dto)
 
     return {
-      hiddenExpenseCategories: prefs.hiddenExpenseCategories,
-      hiddenIncomeCategories: prefs.hiddenIncomeCategories,
-      globalHiddenExpenseCategories: prefs.globalHiddenExpenseCategories,
-      globalHiddenIncomeCategories: prefs.globalHiddenIncomeCategories,
+      hiddenExpenseCategoryIds: prefs.hiddenExpenseCategoryIds,
+      hiddenIncomeCategoryIds: prefs.hiddenIncomeCategoryIds,
+      globalHiddenExpenseCategoryIds: prefs.globalHiddenExpenseCategoryIds,
+      globalHiddenIncomeCategoryIds: prefs.globalHiddenIncomeCategoryIds,
       isPanelExpanded: prefs.isPanelExpanded,
     }
   }

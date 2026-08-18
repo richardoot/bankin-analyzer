@@ -28,11 +28,10 @@ vi.mock('@/composables/useToast', () => ({
 // covered elsewhere, here we only care that the page saves on every toggle.
 const saveToBackend = vi.fn().mockResolvedValue(true)
 const toggleGlobalHiddenExpenseCategory = vi.fn()
-const hiddenExpenseNames = new Set<string>()
+const hiddenExpenseIds = new Set<string>()
 vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
-    isExpenseCategoryGloballyHidden: (name: string) =>
-      hiddenExpenseNames.has(name),
+    isExpenseCategoryGloballyHidden: (id: string) => hiddenExpenseIds.has(id),
     isIncomeCategoryGloballyHidden: () => false,
     toggleGlobalHiddenExpenseCategory,
     toggleGlobalHiddenIncomeCategory: vi.fn(),
@@ -74,8 +73,10 @@ async function mountPage(options?: {
   categories?: CategoryDto[]
   subcategories?: SubcategoryDto[]
 }) {
+  // Cloned: the page writes the server's answer back into the row it was
+  // given, so a shared fixture would carry a rename over to the next test.
   vi.mocked(api.getCategories).mockResolvedValue(
-    options?.categories ?? [foodCategory, salaryCategory]
+    (options?.categories ?? [foodCategory, salaryCategory]).map(c => ({ ...c }))
   )
   vi.mocked(api.getSubcategories).mockResolvedValue(
     options?.subcategories ?? [groceriesSub]
@@ -101,7 +102,7 @@ async function expandRow(
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
-  hiddenExpenseNames.clear()
+  hiddenExpenseIds.clear()
   saveToBackend.mockResolvedValue(true)
 })
 
@@ -121,9 +122,7 @@ describe('CategoriesSettingsPage', () => {
     await switches[0].trigger('click')
     await flushPromises()
 
-    expect(toggleGlobalHiddenExpenseCategory).toHaveBeenCalledWith(
-      'Alimentation'
-    )
+    expect(toggleGlobalHiddenExpenseCategory).toHaveBeenCalledWith('cat-food')
     expect(saveToBackend).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).not.toContain('Enregistrer')
   })
@@ -167,9 +166,10 @@ describe('CategoriesSettingsPage', () => {
     await expandRow(wrapper, 0)
     expect(wrapper.text()).toContain('Courses')
 
+    // The panel opens with the rename form, so the subcategory one comes second.
     const row = wrapper.findAll('[data-testid="category-row"]')[0]
-    await row.find('input[type="text"]').setValue('Restaurant')
-    await row.find('form').trigger('submit')
+    await row.findAll('input[type="text"]')[1].setValue('Restaurant')
+    await row.findAll('form')[1].trigger('submit')
     await flushPromises()
 
     expect(api.createSubcategory).toHaveBeenCalledWith({
@@ -177,6 +177,46 @@ describe('CategoriesSettingsPage', () => {
       name: 'Restaurant',
     })
     expect(wrapper.text()).toContain('Restaurant')
+  })
+
+  it('renames a category', async () => {
+    const wrapper = await mountPage()
+    vi.mocked(api.updateCategory).mockResolvedValue({
+      ...foodCategory,
+      name: 'Courses',
+    })
+
+    await expandRow(wrapper, 0)
+    const row = wrapper.findAll('[data-testid="category-row"]')[0]
+    await row.find('[data-testid="rename-input"]').setValue('Courses')
+    await row.findAll('form')[0].trigger('submit')
+    await flushPromises()
+
+    expect(api.updateCategory).toHaveBeenCalledWith('cat-food', {
+      name: 'Courses',
+    })
+    // Nothing to replay: the hidden lists key off the id, which never moved.
+    expect(wrapper.text()).toContain('Courses')
+    expect(toastSuccess).toHaveBeenCalled()
+  })
+
+  it('shows the server message when the new name is already taken', async () => {
+    const wrapper = await mountPage()
+    vi.mocked(api.updateCategory).mockRejectedValue(
+      new Error('A category named "Salaire" already exists for this type.')
+    )
+
+    await expandRow(wrapper, 0)
+    const row = wrapper.findAll('[data-testid="category-row"]')[0]
+    await row.find('[data-testid="rename-input"]').setValue('Salaire')
+    await row.findAll('form')[0].trigger('submit')
+    await flushPromises()
+
+    expect(row.find('[data-testid="rename-error"]').text()).toContain(
+      'already exists'
+    )
+    // The row keeps its old name until the rename actually goes through.
+    expect(row.text()).toContain('Alimentation')
   })
 
   it('creates a reimbursement association from an expense row', async () => {
@@ -194,7 +234,7 @@ describe('CategoriesSettingsPage', () => {
     await expandRow(wrapper, 0)
     const row = wrapper.findAll('[data-testid="category-row"]')[0]
     await row.find('select').setValue('cat-salary')
-    await row.findAll('form')[1].trigger('submit')
+    await row.findAll('form')[2].trigger('submit')
     await flushPromises()
 
     expect(api.createCategoryAssociation).toHaveBeenCalledWith({

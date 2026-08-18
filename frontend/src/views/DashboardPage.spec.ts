@@ -15,6 +15,7 @@ vi.mock('vue3-apexcharts', () => ({
 
 // Mock the API
 vi.mock('@/lib/api', () => ({
+  UNCATEGORIZED_CATEGORY_ID: '__uncategorized__',
   api: {
     getDashboardSummary: vi.fn(),
     getTransactions: vi.fn(),
@@ -25,10 +26,10 @@ vi.mock('@/lib/api', () => ({
 // Mock the filters store
 vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
-    hiddenExpenseCategories: [],
-    hiddenIncomeCategories: [],
-    globalHiddenExpenseCategories: [],
-    globalHiddenIncomeCategories: [],
+    hiddenExpenseCategoryIds: [],
+    hiddenIncomeCategoryIds: [],
+    globalHiddenExpenseCategoryIds: [],
+    globalHiddenIncomeCategoryIds: [],
     isExpenseCategoryHidden: vi.fn(() => false),
     isIncomeCategoryHidden: vi.fn(() => false),
     isExpenseCategoryGloballyHidden: vi.fn(() => false),
@@ -90,8 +91,11 @@ describe('DashboardPage', () => {
     incomeByCategory: [{ category: 'Salaires', amount: 2500 }],
     totalExpenses: 845.5,
     totalIncome: 2500,
-    allExpenseCategories: ['Alimentation', 'Logement'],
-    allIncomeCategories: ['Salaires'],
+    allExpenseCategories: [
+      { id: 'cat-Alimentation', name: 'Alimentation' },
+      { id: 'cat-Logement', name: 'Logement' },
+    ],
+    allIncomeCategories: [{ id: 'cat-Salaires', name: 'Salaires' }],
     availableAccounts: ['Compte Courant'],
   }
 
@@ -115,7 +119,7 @@ describe('DashboardPage', () => {
     totalExpenses: 0,
     totalIncome: 2500,
     allExpenseCategories: [],
-    allIncomeCategories: ['Salaires'],
+    allIncomeCategories: [{ id: 'cat-Salaires', name: 'Salaires' }],
     availableAccounts: ['Compte Courant'],
   }
 
@@ -127,7 +131,7 @@ describe('DashboardPage', () => {
     incomeByCategory: [],
     totalExpenses: 45.5,
     totalIncome: 0,
-    allExpenseCategories: ['Alimentation'],
+    allExpenseCategories: [{ id: 'cat-Alimentation', name: 'Alimentation' }],
     allIncomeCategories: [],
     availableAccounts: ['Compte Courant'],
   }

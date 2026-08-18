@@ -8,6 +8,13 @@ describe('DashboardService', () => {
 
   const mockUserId = 'user-123'
 
+  /** Stable fake id for a category name, so tests can name what they hide. */
+  const categoryIdFor = (name: string) => `cat-${name}`
+
+  /** Names of the category options returned for the filter panel. */
+  const optionNames = (options: { id: string; name: string }[]) =>
+    options.map(o => o.name)
+
   const createRow = (
     overrides: Partial<{
       month_key: string
@@ -22,7 +29,13 @@ describe('DashboardService', () => {
     }> = {}
   ) => ({
     month_key: overrides.month_key ?? '2024-01',
-    category_id: overrides.category_id ?? null,
+    // Rows are grouped and filtered by category id, so each name gets a
+    // distinct one unless a test explicitly passes `category_id: null` to
+    // stand for an uncategorized transaction.
+    category_id:
+      'category_id' in overrides
+        ? overrides.category_id
+        : categoryIdFor(overrides.category_name ?? 'Alimentation'),
     category_name: overrides.category_name ?? 'Alimentation',
     category_icon: overrides.category_icon ?? null,
     type: overrides.type ?? 'EXPENSE',
@@ -95,8 +108,8 @@ describe('DashboardService', () => {
       expect(result.incomeByCategory).toEqual([])
       expect(result.totalExpenses).toBe(0)
       expect(result.totalIncome).toBe(0)
-      expect(result.allExpenseCategories).toEqual([])
-      expect(result.allIncomeCategories).toEqual([])
+      expect(optionNames(result.allExpenseCategories)).toEqual([])
+      expect(optionNames(result.allIncomeCategories)).toEqual([])
       expect(result.availableAccounts).toEqual([])
     })
 
@@ -161,9 +174,19 @@ describe('DashboardService', () => {
       const result = await service.getSummary(mockUserId, {})
 
       expect(result.expensesByCategory).toEqual([
-        { category: 'Loyer', amount: 500, icon: null },
-        { category: 'Alimentation', amount: 100, icon: null },
-        { category: 'Transport', amount: 50, icon: null },
+        { categoryId: 'cat-Loyer', category: 'Loyer', amount: 500, icon: null },
+        {
+          categoryId: 'cat-Alimentation',
+          category: 'Alimentation',
+          amount: 100,
+          icon: null,
+        },
+        {
+          categoryId: 'cat-Transport',
+          category: 'Transport',
+          amount: 50,
+          icon: null,
+        },
       ])
     })
 
@@ -189,11 +212,13 @@ describe('DashboardService', () => {
 
       expect(result.expensesByCategory).toHaveLength(2)
       expect(result.expensesByCategory).toContainEqual({
+        categoryId: 'cat-Alimentation',
         category: 'Alimentation',
         amount: 100,
         icon: null,
       })
       expect(result.expensesByCategory).toContainEqual({
+        categoryId: 'cat-Loyer',
         category: 'Loyer',
         amount: 100,
         icon: null,
@@ -216,16 +241,21 @@ describe('DashboardService', () => {
       ])
 
       const result = await service.getSummary(mockUserId, {
-        hiddenExpenseCategories: ['Loisirs'],
+        hiddenExpenseCategoryIds: ['cat-Loisirs'],
       })
 
       expect(result.expensesByCategory).toEqual([
-        { category: 'Alimentation', amount: 100, icon: null },
+        {
+          categoryId: 'cat-Alimentation',
+          category: 'Alimentation',
+          amount: 100,
+          icon: null,
+        },
       ])
       expect(result.totalExpenses).toBe(100)
       // But allExpenseCategories should still include hidden categories
-      expect(result.allExpenseCategories).toContain('Loisirs')
-      expect(result.allExpenseCategories).toContain('Alimentation')
+      expect(optionNames(result.allExpenseCategories)).toContain('Loisirs')
+      expect(optionNames(result.allExpenseCategories)).toContain('Alimentation')
     })
 
     it('should exclude hidden income categories from aggregations', async () => {
@@ -243,15 +273,20 @@ describe('DashboardService', () => {
       ])
 
       const result = await service.getSummary(mockUserId, {
-        hiddenIncomeCategories: ['Prime'],
+        hiddenIncomeCategoryIds: ['cat-Prime'],
       })
 
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 2500, icon: null },
+        {
+          categoryId: 'cat-Salaire',
+          category: 'Salaire',
+          amount: 2500,
+          icon: null,
+        },
       ])
       expect(result.totalIncome).toBe(2500)
       // But allIncomeCategories should still include hidden categories
-      expect(result.allIncomeCategories).toContain('Prime')
+      expect(optionNames(result.allIncomeCategories)).toContain('Prime')
     })
 
     it('should deduct reimbursements from expense categories', async () => {
@@ -272,8 +307,8 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement Mutuelle',
           expenseCategory: { name: 'Santé' },
           incomeCategory: { name: 'Remboursement Mutuelle' },
         },
@@ -283,7 +318,7 @@ describe('DashboardService', () => {
 
       // Santé: 500 - 200 = 300
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 300, icon: null },
+        { categoryId: 'cat-Santé', category: 'Santé', amount: 300, icon: null },
       ])
       // Remboursement should not appear in income
       expect(result.incomeByCategory).toEqual([])
@@ -308,8 +343,8 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement Mutuelle',
           expenseCategory: { name: 'Santé' },
           incomeCategory: { name: 'Remboursement Mutuelle' },
         },
@@ -319,7 +354,7 @@ describe('DashboardService', () => {
 
       // Category stays at 0 (capped) but monthly netExpenses can be negative
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 0, icon: null },
+        { categoryId: 'cat-Santé', category: 'Santé', amount: 0, icon: null },
       ])
       // Monthly data shows negative netExpenses (reimbursement > expense)
       expect(result.monthlyData[0].netExpenses).toBe(-100)
@@ -340,6 +375,7 @@ describe('DashboardService', () => {
     it('should handle transactions without category (default to Autre)', async () => {
       setupMocks([
         createRow({
+          category_id: null,
           category_name: 'Autre',
           type: 'EXPENSE',
           total_amount: 100,
@@ -349,9 +385,155 @@ describe('DashboardService', () => {
       const result = await service.getSummary(mockUserId, {})
 
       expect(result.expensesByCategory).toEqual([
-        { category: 'Autre', amount: 100, icon: null },
+        {
+          categoryId: '__uncategorized__',
+          category: 'Autre',
+          amount: 100,
+          icon: null,
+        },
       ])
-      expect(result.allExpenseCategories).toContain('Autre')
+      // Uncategorized transactions get the sentinel id so the filter panel can
+      // still address that bucket.
+      expect(result.allExpenseCategories).toEqual([
+        { id: '__uncategorized__', name: 'Autre' },
+      ])
+    })
+
+    it('should keep an expense and an income category sharing a name apart', async () => {
+      // Names are unique per user *and per type*, so this pair is legal. Keyed
+      // by name, the two collapsed into one bucket and each side could be
+      // handed the other's id.
+      setupMocks([
+        createRow({
+          category_id: 'cat-remb-expense',
+          category_name: 'Remboursements',
+          type: 'EXPENSE',
+          total_amount: 300,
+        }),
+        createRow({
+          category_id: 'cat-remb-income',
+          category_name: 'Remboursements',
+          type: 'INCOME',
+          total_amount: 80,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.expensesByCategory).toEqual([
+        {
+          categoryId: 'cat-remb-expense',
+          category: 'Remboursements',
+          amount: 300,
+          icon: null,
+        },
+      ])
+      expect(result.incomeByCategory).toEqual([
+        {
+          categoryId: 'cat-remb-income',
+          category: 'Remboursements',
+          amount: 80,
+          icon: null,
+        },
+      ])
+    })
+
+    it('should hide only the expense side when both types share a hidden name', async () => {
+      setupMocks([
+        createRow({
+          category_id: 'cat-remb-expense',
+          category_name: 'Remboursements',
+          type: 'EXPENSE',
+          total_amount: 300,
+        }),
+        createRow({
+          category_id: 'cat-remb-income',
+          category_name: 'Remboursements',
+          type: 'INCOME',
+          total_amount: 80,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        hiddenExpenseCategoryIds: ['cat-remb-expense'],
+      })
+
+      expect(result.expensesByCategory).toEqual([])
+      expect(result.incomeByCategory).toHaveLength(1)
+      expect(result.totalIncome).toBe(80)
+    })
+
+    it('should name an expense category that only collected a reimbursement', async () => {
+      // The expense category carries no transaction over the period, so no
+      // aggregated row mentions it — only the association does.
+      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
+        {
+          id: 'assoc-1',
+          userId: mockUserId,
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement Mutuelle',
+          expenseCategory: { name: 'Santé' },
+          incomeCategory: { name: 'Remboursement Mutuelle' },
+        },
+      ])
+      setupMocks([
+        createRow({
+          category_name: 'Remboursement Mutuelle',
+          type: 'INCOME',
+          total_amount: 60,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.expensesByCategory).toEqual([
+        {
+          categoryId: 'cat-Santé',
+          category: 'Santé',
+          amount: 0,
+          icon: null,
+        },
+      ])
+    })
+
+    it('should expose the category id even without the breakdown', async () => {
+      setupMocks([
+        createRow({ category_name: 'Alimentation', total_amount: 100 }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.expensesByCategory[0]?.categoryId).toBe('cat-Alimentation')
+    })
+
+    it('should hide uncategorized transactions through the sentinel id', async () => {
+      setupMocks([
+        createRow({
+          category_id: null,
+          category_name: 'Autre',
+          type: 'EXPENSE',
+          total_amount: 100,
+        }),
+        createRow({
+          category_name: 'Alimentation',
+          type: 'EXPENSE',
+          total_amount: 40,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        hiddenExpenseCategoryIds: ['__uncategorized__'],
+      })
+
+      expect(result.expensesByCategory).toEqual([
+        {
+          categoryId: 'cat-Alimentation',
+          category: 'Alimentation',
+          amount: 40,
+          icon: null,
+        },
+      ])
+      expect(result.totalExpenses).toBe(40)
     })
 
     it('should format month labels correctly', async () => {
@@ -412,8 +594,8 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement',
           expenseCategory: { name: 'Santé' },
           incomeCategory: { name: 'Remboursement' },
         },
@@ -452,8 +634,8 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement',
           expenseCategory: { name: 'Santé' },
           incomeCategory: { name: 'Remboursement' },
         },
@@ -513,7 +695,12 @@ describe('DashboardService', () => {
 
       // Should only include Alimentation, not Investissement
       expect(result.expensesByCategory).toEqual([
-        { category: 'Alimentation', amount: 100, icon: null },
+        {
+          categoryId: 'cat-Alimentation',
+          category: 'Alimentation',
+          amount: 100,
+          icon: null,
+        },
       ])
       expect(result.totalExpenses).toBe(100)
     })
@@ -541,11 +728,13 @@ describe('DashboardService', () => {
       const result = await service.getSummary(mockUserId, {})
 
       expect(result.incomeByCategory).toContainEqual({
+        categoryId: 'cat-Salaire',
         category: 'Salaire',
         amount: 1500,
         icon: null,
       })
       expect(result.incomeByCategory).toContainEqual({
+        categoryId: 'cat-Prime',
         category: 'Prime',
         amount: 2000,
         icon: null,
@@ -615,16 +804,19 @@ describe('DashboardService', () => {
       const result = await service.getSummary(mockUserId, {})
 
       expect(result.expensesByCategory).toContainEqual({
+        categoryId: 'cat-Loyer',
         category: 'Loyer',
         amount: 150,
         icon: null,
       })
       expect(result.expensesByCategory).toContainEqual({
+        categoryId: 'cat-Electricité',
         category: 'Electricité',
         amount: 100,
         icon: null,
       })
       expect(result.expensesByCategory).toContainEqual({
+        categoryId: 'cat-Alimentation',
         category: 'Alimentation',
         amount: 100,
         icon: null,
@@ -648,7 +840,12 @@ describe('DashboardService', () => {
       const result = await service.getSummary(mockUserId, {})
 
       expect(result.expensesByCategory).toEqual([
-        { category: 'Divers', amount: 200, icon: null },
+        {
+          categoryId: 'cat-Divers',
+          category: 'Divers',
+          amount: 200,
+          icon: null,
+        },
       ])
       expect(result.totalExpenses).toBe(200)
     })
@@ -677,8 +874,8 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement Mutuelle',
           expenseCategory: { name: 'Santé' },
           incomeCategory: { name: 'Remboursement Mutuelle' },
         },
@@ -688,7 +885,7 @@ describe('DashboardService', () => {
 
       // Santé: 250 - 150 = 100
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 100, icon: null },
+        { categoryId: 'cat-Santé', category: 'Santé', amount: 100, icon: null },
       ])
       expect(result.totalExpenses).toBe(100)
       expect(result.incomeByCategory).toEqual([])
@@ -717,8 +914,8 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement Mutuelle',
           expenseCategory: { name: 'Santé' },
           incomeCategory: { name: 'Remboursement Mutuelle' },
         },
@@ -728,7 +925,7 @@ describe('DashboardService', () => {
 
       // Santé: 200 - 100 = 100
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 100, icon: null },
+        { categoryId: 'cat-Santé', category: 'Santé', amount: 100, icon: null },
       ])
       expect(result.totalExpenses).toBe(100)
     })
@@ -765,8 +962,8 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement Mutuelle',
           expenseCategory: { name: 'Santé' },
           incomeCategory: { name: 'Remboursement Mutuelle' },
         },
@@ -810,8 +1007,8 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement Mutuelle',
           expenseCategory: { name: 'Santé' },
           incomeCategory: { name: 'Remboursement Mutuelle' },
         },
@@ -821,7 +1018,7 @@ describe('DashboardService', () => {
 
       // Santé: 700 - 300 = 400
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 400, icon: null },
+        { categoryId: 'cat-Santé', category: 'Santé', amount: 400, icon: null },
       ])
       expect(result.totalExpenses).toBe(400)
     })
@@ -854,8 +1051,8 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement Mutuelle',
           expenseCategory: { name: 'Santé' },
           incomeCategory: { name: 'Remboursement Mutuelle' },
         },
@@ -865,13 +1062,18 @@ describe('DashboardService', () => {
 
       // Only Salaire should appear in income
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 1500, icon: null },
+        {
+          categoryId: 'cat-Salaire',
+          category: 'Salaire',
+          amount: 1500,
+          icon: null,
+        },
       ])
       expect(result.totalIncome).toBe(1500)
 
       // Santé: 100 - 50 = 50
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 50, icon: null },
+        { categoryId: 'cat-Santé', category: 'Santé', amount: 50, icon: null },
       ])
     })
   })
@@ -948,6 +1150,7 @@ describe('DashboardService', () => {
 
       // Category totals (sorted desc)
       expect(result.expensesByCategory[0]).toEqual({
+        categoryId: 'cat-Alimentation',
         category: 'Alimentation',
         amount: 1250,
         icon: null,
@@ -956,12 +1159,12 @@ describe('DashboardService', () => {
       expect(result.totalIncome).toBe(9200)
 
       // All categories tracked
-      expect(result.allExpenseCategories).toEqual([
+      expect(optionNames(result.allExpenseCategories)).toEqual([
         'Alimentation',
         'Loisirs',
         'Transport',
       ])
-      expect(result.allIncomeCategories).toEqual(['Salaire'])
+      expect(optionNames(result.allIncomeCategories)).toEqual(['Salaire'])
     })
 
     it('should hide multiple expense categories while keeping them in allExpenseCategories', async () => {
@@ -989,18 +1192,23 @@ describe('DashboardService', () => {
       ])
 
       const result = await service.getSummary(mockUserId, {
-        hiddenExpenseCategories: ['Loisirs', 'Transport'],
+        hiddenExpenseCategoryIds: ['cat-Loisirs', 'cat-Transport'],
       })
 
       // Only non-hidden categories in aggregations
       expect(result.expensesByCategory).toEqual([
-        { category: 'Loyer', amount: 800, icon: null },
-        { category: 'Alimentation', amount: 300, icon: null },
+        { categoryId: 'cat-Loyer', category: 'Loyer', amount: 800, icon: null },
+        {
+          categoryId: 'cat-Alimentation',
+          category: 'Alimentation',
+          amount: 300,
+          icon: null,
+        },
       ])
       expect(result.totalExpenses).toBe(1100)
 
       // All categories still listed for filter panel
-      expect(result.allExpenseCategories).toEqual(
+      expect(optionNames(result.allExpenseCategories)).toEqual(
         expect.arrayContaining([
           'Alimentation',
           'Loisirs',
@@ -1035,22 +1243,32 @@ describe('DashboardService', () => {
       ])
 
       const result = await service.getSummary(mockUserId, {
-        hiddenExpenseCategories: ['Loisirs'],
-        hiddenIncomeCategories: ['Prime'],
+        hiddenExpenseCategoryIds: ['cat-Loisirs'],
+        hiddenIncomeCategoryIds: ['cat-Prime'],
       })
 
       expect(result.expensesByCategory).toEqual([
-        { category: 'Alimentation', amount: 300, icon: null },
+        {
+          categoryId: 'cat-Alimentation',
+          category: 'Alimentation',
+          amount: 300,
+          icon: null,
+        },
       ])
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 3000, icon: null },
+        {
+          categoryId: 'cat-Salaire',
+          category: 'Salaire',
+          amount: 3000,
+          icon: null,
+        },
       ])
       expect(result.totalExpenses).toBe(300)
       expect(result.totalIncome).toBe(3000)
 
       // Hidden categories still in allCategories
-      expect(result.allExpenseCategories).toContain('Loisirs')
-      expect(result.allIncomeCategories).toContain('Prime')
+      expect(optionNames(result.allExpenseCategories)).toContain('Loisirs')
+      expect(optionNames(result.allIncomeCategories)).toContain('Prime')
     })
 
     it('should not include reimbursement categories in allIncomeCategories exclusion', async () => {
@@ -1077,8 +1295,8 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement',
           expenseCategory: { name: 'Santé' },
           incomeCategory: { name: 'Remboursement' },
         },
@@ -1087,10 +1305,15 @@ describe('DashboardService', () => {
       const result = await service.getSummary(mockUserId, {})
 
       // Remboursement appears in allIncomeCategories but not in incomeByCategory
-      expect(result.allIncomeCategories).toContain('Remboursement')
-      expect(result.allIncomeCategories).toContain('Salaire')
+      expect(optionNames(result.allIncomeCategories)).toContain('Remboursement')
+      expect(optionNames(result.allIncomeCategories)).toContain('Salaire')
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 3000, icon: null },
+        {
+          categoryId: 'cat-Salaire',
+          category: 'Salaire',
+          amount: 3000,
+          icon: null,
+        },
       ])
     })
 
@@ -1113,8 +1336,18 @@ describe('DashboardService', () => {
       expect(result.expensesByCategory).toEqual([])
       expect(result.totalExpenses).toBe(0)
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 3000, icon: null },
-        { category: 'Freelance', amount: 1000, icon: null },
+        {
+          categoryId: 'cat-Salaire',
+          category: 'Salaire',
+          amount: 3000,
+          icon: null,
+        },
+        {
+          categoryId: 'cat-Freelance',
+          category: 'Freelance',
+          amount: 1000,
+          icon: null,
+        },
       ])
       expect(result.totalIncome).toBe(4000)
       expect(result.monthlyData[0].expenses).toBe(0)
@@ -1135,7 +1368,12 @@ describe('DashboardService', () => {
       expect(result.incomeByCategory).toEqual([])
       expect(result.totalIncome).toBe(0)
       expect(result.expensesByCategory).toEqual([
-        { category: 'Alimentation', amount: 300, icon: null },
+        {
+          categoryId: 'cat-Alimentation',
+          category: 'Alimentation',
+          amount: 300,
+          icon: null,
+        },
       ])
       expect(result.totalExpenses).toBe(300)
     })
@@ -1173,16 +1411,16 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remb. Mutuelle',
           expenseCategory: { name: 'Santé' },
           incomeCategory: { name: 'Remb. Mutuelle' },
         },
         {
           id: 'assoc-2',
           userId: mockUserId,
-          expenseCategoryId: 'cat-3',
-          incomeCategoryId: 'cat-4',
+          expenseCategoryId: 'cat-Transport',
+          incomeCategoryId: 'cat-Remb. Transport',
           expenseCategory: { name: 'Transport' },
           incomeCategory: { name: 'Remb. Transport' },
         },
@@ -1192,14 +1430,24 @@ describe('DashboardService', () => {
 
       // Santé: 800 - 200 = 600, Transport: 300 - 50 = 250
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 600, icon: null },
-        { category: 'Transport', amount: 250, icon: null },
+        { categoryId: 'cat-Santé', category: 'Santé', amount: 600, icon: null },
+        {
+          categoryId: 'cat-Transport',
+          category: 'Transport',
+          amount: 250,
+          icon: null,
+        },
       ])
       expect(result.totalExpenses).toBe(850)
 
       // Only Salaire in income (reimbursements excluded)
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 3000, icon: null },
+        {
+          categoryId: 'cat-Salaire',
+          category: 'Salaire',
+          amount: 3000,
+          icon: null,
+        },
       ])
       expect(result.totalIncome).toBe(3000)
     })
@@ -1223,8 +1471,8 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Santé',
+          incomeCategoryId: 'cat-Remboursement',
           expenseCategory: { name: 'Santé' },
           incomeCategory: { name: 'Remboursement' },
         },
@@ -1234,12 +1482,17 @@ describe('DashboardService', () => {
 
       // Santé appears with 0 amount (reimbursement deduction creates the entry)
       expect(result.expensesByCategory).toEqual([
-        { category: 'Santé', amount: 0, icon: null },
+        { categoryId: 'cat-Santé', category: 'Santé', amount: 0, icon: null },
       ])
       expect(result.totalExpenses).toBe(0)
       // Reimbursement still excluded from income
       expect(result.incomeByCategory).toEqual([
-        { category: 'Salaire', amount: 3000, icon: null },
+        {
+          categoryId: 'cat-Salaire',
+          category: 'Salaire',
+          amount: 3000,
+          icon: null,
+        },
       ])
     })
 
@@ -1269,7 +1522,12 @@ describe('DashboardService', () => {
 
       // Category total should sum across months
       expect(result.expensesByCategory).toEqual([
-        { category: 'Alimentation', amount: 1050, icon: null },
+        {
+          categoryId: 'cat-Alimentation',
+          category: 'Alimentation',
+          amount: 1050,
+          icon: null,
+        },
       ])
       // Each month should have its own value
       expect(result.monthlyData[0].expenses).toBe(300)
@@ -1325,7 +1583,12 @@ describe('DashboardService', () => {
       ])
       // But only non-excluded data in aggregations
       expect(result.expensesByCategory).toEqual([
-        { category: 'Alimentation', amount: 100, icon: null },
+        {
+          categoryId: 'cat-Alimentation',
+          category: 'Alimentation',
+          amount: 100,
+          icon: null,
+        },
       ])
     })
 
@@ -1365,12 +1628,12 @@ describe('DashboardService', () => {
 
       const result = await service.getSummary(mockUserId, {})
 
-      expect(result.allExpenseCategories).toEqual([
+      expect(optionNames(result.allExpenseCategories)).toEqual([
         'Alimentation',
         'Loyer',
         'Transport',
       ])
-      expect(result.allIncomeCategories).toEqual([
+      expect(optionNames(result.allIncomeCategories)).toEqual([
         'Freelance',
         'Prime',
         'Salaire',
@@ -1661,8 +1924,8 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Voyages',
+          incomeCategoryId: 'cat-Remb Voyages',
           expenseCategory: { name: 'Voyages' },
           incomeCategory: { name: 'Remb Voyages' },
         },
@@ -1687,7 +1950,7 @@ describe('DashboardService', () => {
         // Query 4 only runs when the pending toggle is on.
         .mockResolvedValueOnce([
           {
-            category_id: 'cat-l',
+            category_id: 'cat-Loisirs',
             category_name: 'Loisirs',
             month_key: '2024-01',
             pending_amount: 100,
@@ -1783,7 +2046,7 @@ describe('DashboardService', () => {
 
       const result = await service.getSummary(mockUserId, {
         includeCategoryBreakdown: true,
-        hiddenExpenseCategories: ['Voyages'],
+        hiddenExpenseCategoryIds: ['cat-Voyages'],
       })
 
       expect(result.totalExceptionalExpenses).toBe(0)
@@ -1872,8 +2135,8 @@ describe('DashboardService', () => {
         {
           id: 'assoc-1',
           userId: mockUserId,
-          expenseCategoryId: 'cat-1',
-          incomeCategoryId: 'cat-2',
+          expenseCategoryId: 'cat-Voyages',
+          incomeCategoryId: 'cat-Remb Voyages',
           expenseCategory: { name: 'Voyages' },
           incomeCategory: { name: 'Remb Voyages' },
         },

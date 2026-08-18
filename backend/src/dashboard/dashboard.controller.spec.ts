@@ -81,8 +81,8 @@ describe('DashboardController', () => {
       mockDashboardService.getSummary.mockResolvedValue(mockSummary)
 
       const filters = {
-        hiddenExpenseCategories: ['Loisirs'],
-        hiddenIncomeCategories: ['Prime'],
+        hiddenExpenseCategoryIds: ['cat-loisirs'],
+        hiddenIncomeCategoryIds: ['cat-prime'],
       }
 
       await controller.getSummary(mockUser, filters)
@@ -109,8 +109,8 @@ describe('DashboardController', () => {
 
       const filters = {
         jointAccounts: ['Compte Joint'],
-        hiddenExpenseCategories: ['Loisirs'],
-        hiddenIncomeCategories: ['Prime'],
+        hiddenExpenseCategoryIds: ['cat-loisirs'],
+        hiddenIncomeCategoryIds: ['cat-prime'],
         categoryAssociations: [
           { expenseCategory: 'Santé', incomeCategory: 'Remboursement' },
         ],

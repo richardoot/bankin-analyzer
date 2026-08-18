@@ -9,19 +9,22 @@ import {
 import { Type } from 'class-transformer'
 
 export class DashboardFiltersDto {
-  /** List of hidden expense category names */
+  /**
+   * Hidden expense category ids. Transactions with no category are addressed
+   * by the `UNCATEGORIZED_CATEGORY_ID` sentinel.
+   */
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  hiddenExpenseCategories?: string[]
+  hiddenExpenseCategoryIds?: string[]
 
-  /** List of hidden income category names */
+  /** Hidden income category ids (same sentinel rule as expenses) */
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  hiddenIncomeCategories?: string[]
+  hiddenIncomeCategoryIds?: string[]
 
   /** Start date for filtering (ISO format: YYYY-MM-DD) */
   @IsOptional()

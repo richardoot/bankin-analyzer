@@ -1,21 +1,21 @@
 import { ApiProperty } from '@nestjs/swagger'
 
 export class FilterPreferencesDto {
-  /** List of hidden expense category names (dashboard filter only) */
+  /** Hidden expense category ids (dashboard filter only) */
   @ApiProperty({ type: [String] })
-  hiddenExpenseCategories!: string[]
+  hiddenExpenseCategoryIds!: string[]
 
-  /** List of hidden income category names (dashboard filter only) */
+  /** Hidden income category ids (dashboard filter only) */
   @ApiProperty({ type: [String] })
-  hiddenIncomeCategories!: string[]
+  hiddenIncomeCategoryIds!: string[]
 
-  /** List of globally hidden expense category names (hidden everywhere) */
+  /** Globally hidden expense category ids (hidden everywhere) */
   @ApiProperty({ type: [String] })
-  globalHiddenExpenseCategories!: string[]
+  globalHiddenExpenseCategoryIds!: string[]
 
-  /** List of globally hidden income category names (hidden everywhere) */
+  /** Globally hidden income category ids (hidden everywhere) */
   @ApiProperty({ type: [String] })
-  globalHiddenIncomeCategories!: string[]
+  globalHiddenIncomeCategoryIds!: string[]
 
   /** Whether the advanced filters panel is expanded */
   isPanelExpanded!: boolean

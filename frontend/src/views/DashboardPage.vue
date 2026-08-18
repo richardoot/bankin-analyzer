@@ -400,10 +400,10 @@
                   <option value="">Toutes les catégories</option>
                   <option
                     v-for="cat in availableExpenseCategories"
-                    :key="cat"
-                    :value="cat"
+                    :key="cat.id"
+                    :value="cat.id"
                   >
-                    {{ cat }}
+                    {{ cat.name }}
                   </option>
                 </select>
               </div>
@@ -604,10 +604,10 @@
                   <option value="">Toutes les catégories</option>
                   <option
                     v-for="cat in availableIncomeCategories"
-                    :key="cat"
-                    :value="cat"
+                    :key="cat.id"
+                    :value="cat.id"
                   >
-                    {{ cat }}
+                    {{ cat.name }}
                   </option>
                 </select>
               </div>

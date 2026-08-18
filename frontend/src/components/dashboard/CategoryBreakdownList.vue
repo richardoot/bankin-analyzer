@@ -62,7 +62,7 @@
   )
 
   function rowKey(cat: CategoryDataDto): string {
-    return cat.categoryId ?? cat.category
+    return cat.categoryId
   }
 
   const isEveryday = computed(() => props.mode === 'everyday')

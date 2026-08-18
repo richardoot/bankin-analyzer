@@ -198,40 +198,6 @@ describe('categoryAssociations store', () => {
     })
   })
 
-  describe('getIncomeCategoryNameForExpense', () => {
-    it('should return income category name for expense category', async () => {
-      mockApi.getCategoryAssociations.mockResolvedValue([mockAssociation])
-      await store.load()
-
-      const result = store.getIncomeCategoryNameForExpense('cat-expense-1')
-
-      expect(result).toBe('Remboursement Mutuelle')
-    })
-
-    it('should return null if no association exists', () => {
-      const result = store.getIncomeCategoryNameForExpense('non-existent')
-
-      expect(result).toBeNull()
-    })
-  })
-
-  describe('getExpenseCategoryNameForIncome', () => {
-    it('should return expense category name for income category', async () => {
-      mockApi.getCategoryAssociations.mockResolvedValue([mockAssociation])
-      await store.load()
-
-      const result = store.getExpenseCategoryNameForIncome('cat-income-1')
-
-      expect(result).toBe('Sante')
-    })
-
-    it('should return null if no association exists', () => {
-      const result = store.getExpenseCategoryNameForIncome('non-existent')
-
-      expect(result).toBeNull()
-    })
-  })
-
   describe('reset', () => {
     it('should clear associations and error', async () => {
       mockApi.getCategoryAssociations.mockResolvedValue([mockAssociation])

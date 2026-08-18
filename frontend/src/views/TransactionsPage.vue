@@ -314,7 +314,7 @@
     return allCategories.value.filter(
       c =>
         c.type === 'INCOME' &&
-        categoryAssociationsStore.associatedIncomeCategoryNames.has(c.name)
+        categoryAssociationsStore.associatedIncomeCategoryIds.has(c.id)
     )
   })
 
