@@ -1,132 +1,196 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
-import { Test } from '@nestjs/testing'
-import type { TestingModule } from '@nestjs/testing'
-import type { INestApplication } from '@nestjs/common'
-import * as request from 'supertest'
-import { AppModule } from '../src/app.module'
-import { PrismaService } from '../src/prisma/prisma.service'
+import request from 'supertest'
+import type { PrismaService } from '../src/prisma/prisma.service'
+import { createE2eApp, e2eIdentity } from './e2e-app'
+import type { E2eContext } from './e2e-app'
+
+/** Two callers, so ownership rules can be exercised for real. */
+const alice = e2eIdentity('alice')
+const bob = e2eIdentity('bob')
 
 describe('Users (e2e)', () => {
-  let app: INestApplication
-  let prismaService: PrismaService
+  let ctx: E2eContext
+  let prisma: PrismaService
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile()
-
-    app = moduleFixture.createNestApplication()
-    prismaService = moduleFixture.get<PrismaService>(PrismaService)
-    await app.init()
+    ctx = await createE2eApp([alice, bob])
+    prisma = ctx.prisma
   })
 
   afterAll(async () => {
-    await app.close()
+    await ctx.close()
   })
 
+  // The database starts empty and is dropped with the file, so each test wipes
+  // only what it needs to.
   beforeEach(async () => {
-    // Clean up test data
-    await prismaService.user.deleteMany()
+    await prisma.user.deleteMany()
+  })
+
+  function usersOf(body: unknown): { id: string; email: string }[] {
+    return Array.isArray(body) ? (body as { id: string; email: string }[]) : []
+  }
+
+  /** Hitting any authenticated route provisions the caller's row. */
+  async function signIn(identity = alice): Promise<{ id: string }> {
+    const response = await request(ctx.server)
+      .get('/users/me')
+      .set(ctx.auth(identity))
+
+    expect(response.status).toBe(200)
+    return response.body as { id: string }
+  }
+
+  describe('authentication', () => {
+    it('should reject a request with no token', async () => {
+      const response = await request(ctx.server).get('/users/me')
+
+      expect(response.status).toBe(401)
+    })
+
+    it('should reject a malformed authorization header', async () => {
+      const response = await request(ctx.server)
+        .get('/users/me')
+        .set({ Authorization: `Token ${alice.token}` })
+
+      expect(response.status).toBe(401)
+    })
+
+    it('should reject an unknown token', async () => {
+      const response = await request(ctx.server)
+        .get('/users/me')
+        .set({ Authorization: 'Bearer not-a-real-token' })
+
+      expect(response.status).toBe(401)
+    })
+  })
+
+  describe('/users/me (GET)', () => {
+    it('should provision the user on first call', async () => {
+      expect(
+        await prisma.user.findUnique({
+          where: { supabaseId: alice.supabaseId },
+        })
+      ).toBeNull()
+
+      const response = await request(ctx.server)
+        .get('/users/me')
+        .set(ctx.auth(alice))
+
+      expect(response.status).toBe(200)
+      expect(response.body.email).toBe(alice.email)
+      expect(response.body.supabaseId).toBe(alice.supabaseId)
+
+      // The guard wrote it through, not just echoed it back.
+      expect(
+        await prisma.user.findUnique({
+          where: { supabaseId: alice.supabaseId },
+        })
+      ).not.toBeNull()
+    })
+
+    it('should reuse the same row on the next call', async () => {
+      const first = await signIn()
+      const second = await signIn()
+
+      expect(second.id).toBe(first.id)
+      expect(await prisma.user.count()).toBe(1)
+    })
   })
 
   describe('/users (GET)', () => {
-    it('should return empty array when no users', async () => {
-      const response = await request(app.getHttpServer()).get('/users')
+    it('should return only the caller before anyone else signs in', async () => {
+      const response = await request(ctx.server)
+        .get('/users')
+        .set(ctx.auth(alice))
 
       expect(response.status).toBe(200)
-      expect(response.body).toEqual([])
+      // Alice provisioned herself by calling this route, and is the only one.
+      expect(usersOf(response.body).map(u => u.email)).toEqual([alice.email])
     })
 
-    it('should return all users', async () => {
-      // Create test user
-      await prismaService.user.create({
-        data: {
-          supabaseId: 'test-supabase-id',
-          email: 'test@example.com',
-        },
-      })
+    it('should list every user once both have signed in', async () => {
+      await signIn(alice)
+      await signIn(bob)
 
-      const response = await request(app.getHttpServer()).get('/users')
+      const response = await request(ctx.server)
+        .get('/users')
+        .set(ctx.auth(alice))
 
       expect(response.status).toBe(200)
-      expect(response.body).toHaveLength(1)
-      expect(response.body[0].email).toBe('test@example.com')
+      expect(
+        usersOf(response.body)
+          .map(u => u.email)
+          .sort()
+      ).toEqual([alice.email, bob.email].sort())
     })
   })
 
   describe('/users/:id (GET)', () => {
     it('should return a user by id', async () => {
-      const user = await prismaService.user.create({
-        data: {
-          supabaseId: 'test-supabase-id',
-          email: 'test@example.com',
-        },
-      })
+      const caller = await signIn()
 
-      const response = await request(app.getHttpServer()).get(
-        `/users/${user.id}`
-      )
+      const response = await request(ctx.server)
+        .get(`/users/${caller.id}`)
+        .set(ctx.auth(alice))
 
       expect(response.status).toBe(200)
-      expect(response.body.id).toBe(user.id)
-      expect(response.body.email).toBe('test@example.com')
+      expect(response.body.id).toBe(caller.id)
+      expect(response.body.email).toBe(alice.email)
     })
 
-    it('should return 404 for non-existent user', async () => {
-      const response = await request(app.getHttpServer()).get(
-        '/users/550e8400-e29b-41d4-a716-446655440000'
-      )
+    it('should return 404 for a non-existent user', async () => {
+      await signIn()
+
+      const response = await request(ctx.server)
+        .get('/users/550e8400-e29b-41d4-a716-446655440000')
+        .set(ctx.auth(alice))
 
       expect(response.status).toBe(404)
-    })
-  })
-
-  describe('/users (POST)', () => {
-    it('should create a new user', async () => {
-      const createUserDto = {
-        supabaseId: 'new-supabase-id',
-        email: 'new@example.com',
-      }
-
-      const response = await request(app.getHttpServer())
-        .post('/users')
-        .send(createUserDto)
-
-      expect(response.status).toBe(201)
-      expect(response.body.email).toBe('new@example.com')
-      expect(response.body.supabaseId).toBe('new-supabase-id')
-      expect(response.body.id).toBeDefined()
     })
   })
 
   describe('/users/:id (DELETE)', () => {
-    it('should delete a user', async () => {
-      const user = await prismaService.user.create({
-        data: {
-          supabaseId: 'test-supabase-id',
-          email: 'test@example.com',
-        },
-      })
+    it('should delete your own account', async () => {
+      const { id } = await signIn()
 
-      const response = await request(app.getHttpServer()).delete(
-        `/users/${user.id}`
-      )
+      const response = await request(ctx.server)
+        .delete(`/users/${id}`)
+        .set(ctx.auth(alice))
 
       expect(response.status).toBe(204)
-
-      // Verify user is deleted
-      const deletedUser = await prismaService.user.findUnique({
-        where: { id: user.id },
-      })
-      expect(deletedUser).toBeNull()
+      expect(await prisma.user.findUnique({ where: { id } })).toBeNull()
     })
 
-    it('should return 404 when deleting non-existent user', async () => {
-      const response = await request(app.getHttpServer()).delete(
-        '/users/550e8400-e29b-41d4-a716-446655440000'
-      )
+    it("should refuse to delete someone else's account", async () => {
+      const caller = await signIn(alice)
+      await signIn(bob)
 
-      expect(response.status).toBe(404)
+      const response = await request(ctx.server)
+        .delete(`/users/${caller.id}`)
+        .set(ctx.auth(bob))
+
+      expect(response.status).toBe(403)
+      // And Alice is still there.
+      expect(
+        await prisma.user.findUnique({ where: { id: caller.id } })
+      ).not.toBeNull()
+    })
+  })
+
+  describe('/users/me (DELETE)', () => {
+    it('should delete the caller account', async () => {
+      const { id } = await signIn()
+
+      const response = await request(ctx.server)
+        .delete('/users/me')
+        .set(ctx.auth(alice))
+
+      expect(response.status).toBe(204)
+      expect(await prisma.user.findUnique({ where: { id } })).toBeNull()
+      // The Supabase identity goes too, otherwise the next sign-in would
+      // silently re-provision a fresh, empty account.
+      expect(ctx.deletedFromAuth).toContain(alice.supabaseId)
     })
   })
 })

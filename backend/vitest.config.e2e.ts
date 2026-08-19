@@ -7,7 +7,11 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.e2e-spec.ts'],
+    // Neutralises DATABASE_URL so nothing can reach a real server by accident.
+    setupFiles: ['./test/e2e-setup.ts'],
     environment: 'node',
+    // Each file starts its own database server and replays the migrations
+    // into it, which takes a second or so before the first test runs.
     testTimeout: 30000,
   },
   resolve: {
