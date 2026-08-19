@@ -35,6 +35,8 @@ const mockCategoriesService = {
   findAllByUser: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
+  getDeletionSummary: vi.fn(),
+  remove: vi.fn(),
   findWithoutIcons: vi.fn(),
   findSubcategoriesWithoutIcons: vi.fn(),
 }
@@ -130,6 +132,40 @@ describe('CategoriesController', () => {
         mockUser.id,
         mockCategory.id,
         dto
+      )
+    })
+  })
+
+  describe('deletionSummary', () => {
+    it('should forward the summary lookup to the service', async () => {
+      const summary = { categoryId: mockCategory.id, transactionCount: 12 }
+      mockCategoriesService.getDeletionSummary.mockResolvedValue(summary)
+
+      const result = await controller.deletionSummary(mockUser, mockCategory.id)
+
+      expect(result).toEqual(summary)
+      expect(mockCategoriesService.getDeletionSummary).toHaveBeenCalledWith(
+        mockUser.id,
+        mockCategory.id
+      )
+    })
+  })
+
+  describe('remove', () => {
+    it('should forward the deletion to the service', async () => {
+      const outcome = {
+        uncategorizedTransactions: 12,
+        deletedSubcategories: 1,
+        deletedBudgetPlanEntries: 0,
+      }
+      mockCategoriesService.remove.mockResolvedValue(outcome)
+
+      const result = await controller.remove(mockUser, mockCategory.id)
+
+      expect(result).toEqual(outcome)
+      expect(mockCategoriesService.remove).toHaveBeenCalledWith(
+        mockUser.id,
+        mockCategory.id
       )
     })
   })

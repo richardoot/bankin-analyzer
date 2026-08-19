@@ -15,6 +15,8 @@ vi.mock('@/lib/api', () => ({
     getCategoryAssociations: vi.fn(),
     createCategoryAssociation: vi.fn(),
     deleteCategoryAssociation: vi.fn(),
+    getCategoryDeletionSummary: vi.fn(),
+    deleteCategory: vi.fn(),
   },
 }))
 
@@ -28,6 +30,7 @@ vi.mock('@/composables/useToast', () => ({
 // covered elsewhere, here we only care that the page saves on every toggle.
 const saveToBackend = vi.fn().mockResolvedValue(true)
 const toggleGlobalHiddenExpenseCategory = vi.fn()
+const forgetCategory = vi.fn()
 const hiddenExpenseIds = new Set<string>()
 vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
@@ -35,6 +38,7 @@ vi.mock('@/stores/filters', () => ({
     isIncomeCategoryGloballyHidden: () => false,
     toggleGlobalHiddenExpenseCategory,
     toggleGlobalHiddenIncomeCategory: vi.fn(),
+    forgetCategory,
     saveToBackend,
   }),
 }))
@@ -298,5 +302,79 @@ describe('CategoriesSettingsPage', () => {
     expect(
       wrapper.find('[data-testid="generate-icons"]').attributes('disabled')
     ).toBeDefined()
+  })
+
+  it('deletes a category through the confirmation modal', async () => {
+    const wrapper = await mountPage()
+    vi.mocked(api.getCategoryDeletionSummary).mockResolvedValue({
+      categoryId: 'cat-food',
+      categoryName: 'Alimentation',
+      type: 'EXPENSE',
+      transactionCount: 0,
+      firstTransactionDate: null,
+      lastTransactionDate: null,
+      subcategoryNames: [],
+      labelledTransactionCount: 0,
+      budgetPlanEntries: [],
+      reimbursementCount: 0,
+      associatedCategoryName: null,
+      isGloballyHidden: false,
+      isExcludedFromBudget: false,
+    })
+    vi.mocked(api.deleteCategory).mockResolvedValue({
+      uncategorizedTransactions: 0,
+      deletedSubcategories: 0,
+      deletedBudgetPlanEntries: 0,
+    })
+
+    await expandRow(wrapper, 0)
+    await wrapper
+      .get('[data-testid="delete-category-cat-food"]')
+      .trigger('click')
+    await flushPromises()
+
+    await wrapper
+      .get('[data-testid="delete-category-confirm"]')
+      .trigger('click')
+    await flushPromises()
+
+    expect(api.deleteCategory).toHaveBeenCalledWith('cat-food')
+    // The row is gone and the store no longer carries the dangling id.
+    expect(wrapper.text()).not.toContain('Alimentation')
+    expect(forgetCategory).toHaveBeenCalledWith('cat-food', 'EXPENSE')
+    expect(toastSuccess).toHaveBeenCalled()
+  })
+
+  it('keeps the row when the deletion fails', async () => {
+    const wrapper = await mountPage()
+    vi.mocked(api.getCategoryDeletionSummary).mockResolvedValue({
+      categoryId: 'cat-food',
+      categoryName: 'Alimentation',
+      type: 'EXPENSE',
+      transactionCount: 0,
+      firstTransactionDate: null,
+      lastTransactionDate: null,
+      subcategoryNames: [],
+      labelledTransactionCount: 0,
+      budgetPlanEntries: [],
+      reimbursementCount: 0,
+      associatedCategoryName: null,
+      isGloballyHidden: false,
+      isExcludedFromBudget: false,
+    })
+    vi.mocked(api.deleteCategory).mockRejectedValue(new Error('Boom'))
+
+    await expandRow(wrapper, 0)
+    await wrapper
+      .get('[data-testid="delete-category-cat-food"]')
+      .trigger('click')
+    await flushPromises()
+    await wrapper
+      .get('[data-testid="delete-category-confirm"]')
+      .trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Alimentation')
+    expect(forgetCategory).not.toHaveBeenCalled()
   })
 })

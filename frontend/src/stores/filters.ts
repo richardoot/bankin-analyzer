@@ -217,6 +217,30 @@ export const useFiltersStore = defineStore('filters', () => {
     return globalHiddenIncomeCategoryIds.value.includes(categoryId)
   }
 
+  /**
+   * Drop a deleted category from the hidden lists. A dangling id is inert —
+   * it matches no category — but the backend prunes its own copy on delete,
+   * and a later saveToBackend would otherwise push the stale id straight back.
+   */
+  function forgetCategory(categoryId: string, type: 'EXPENSE' | 'INCOME') {
+    const without = (ids: string[]): string[] =>
+      ids.filter(candidate => candidate !== categoryId)
+
+    if (type === 'EXPENSE') {
+      hiddenExpenseCategoryIds.value = without(hiddenExpenseCategoryIds.value)
+      globalHiddenExpenseCategoryIds.value = without(
+        globalHiddenExpenseCategoryIds.value
+      )
+    } else {
+      hiddenIncomeCategoryIds.value = without(hiddenIncomeCategoryIds.value)
+      globalHiddenIncomeCategoryIds.value = without(
+        globalHiddenIncomeCategoryIds.value
+      )
+    }
+
+    saveToStorage()
+  }
+
   // Computed sets
   const hiddenExpenseCategoryIdsSet = computed(
     () => new Set(hiddenExpenseCategoryIds.value)
@@ -320,6 +344,7 @@ export const useFiltersStore = defineStore('filters', () => {
     globalHiddenIncomeCategoryIdsSet,
     toggleGlobalHiddenIncomeCategory,
     isIncomeCategoryGloballyHidden,
+    forgetCategory,
     // Panel state
     isPanelExpanded,
     togglePanelExpanded,

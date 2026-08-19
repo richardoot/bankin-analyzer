@@ -15,6 +15,7 @@
   import { api, type CategoryDto, type SubcategoryDto } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
   import CategoryIcon from '@/components/CategoryIcon.vue'
+  import DeleteCategoryModal from '@/components/settings/DeleteCategoryModal.vue'
   import SettingsCard from '@/components/settings/SettingsCard.vue'
   import ToggleSwitch from '@/components/ToggleSwitch.vue'
 
@@ -455,9 +456,45 @@
     }
   }
 
+  // ── Deletion ──────────────────────────────────────────────────────────────
+  // The modal owns the impact inventory and the confirmation; the page only
+  // opens it and cleans up once the deletion went through. Subcategories and
+  // associations are reloaded rather than pruned by hand: the server cascade
+  // decides what is left, not us.
+  const categoryPendingDeletion = ref<CategoryDto | null>(null)
+
+  function askDelete(category: CategoryDto): void {
+    categoryPendingDeletion.value = category
+  }
+
+  function cancelDelete(): void {
+    categoryPendingDeletion.value = null
+  }
+
+  async function onDeleted(payload: {
+    category: CategoryDto
+    uncategorizedTransactions: number
+  }): Promise<void> {
+    const { category, uncategorizedTransactions } = payload
+    categoryPendingDeletion.value = null
+    categories.value = categories.value.filter(c => c.id !== category.id)
+    expanded.value = new Set(
+      [...expanded.value].filter(id => id !== category.id)
+    )
+    filtersStore.forgetCategory(category.id, category.type)
+
+    await Promise.all([loadSubcategories(), categoryAssociationsStore.load()])
+
+    toast.success(
+      uncategorizedTransactions > 0
+        ? `« ${category.name} » supprimée — ${uncategorizedTransactions} transaction(s) sans catégorie`
+        : `« ${category.name} » supprimée`
+    )
+  }
+
   /**
-   * Changing the icon and deleting still need endpoints the API lacks —
-   * PATCH /categories accepts the name and the budget flag, nothing else.
+   * Changing the icon still needs an endpoint the API lacks — PATCH
+   * /categories accepts the name and the budget flag, nothing else.
    */
   const UNAVAILABLE_HINT =
     'Pas encore disponible : cette action nécessite un nouvel endpoint côté serveur.'
@@ -936,7 +973,7 @@
                   </p>
                 </div>
 
-                <!-- Not yet wired: no endpoint for the icon nor the deletion -->
+                <!-- Not yet wired: no endpoint for the icon -->
                 <div
                   class="flex flex-wrap gap-2 border-t border-gray-200 pt-3 dark:border-slate-700"
                 >
@@ -950,9 +987,9 @@
                   </button>
                   <button
                     type="button"
-                    disabled
-                    :title="UNAVAILABLE_HINT"
-                    class="cursor-not-allowed rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-400 dark:border-slate-700 dark:text-gray-500"
+                    :data-testid="`delete-category-${category.id}`"
+                    class="rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
+                    @click="askDelete(category)"
                   >
                     Supprimer
                   </button>
@@ -1120,6 +1157,12 @@
         </div>
       </Transition>
     </Teleport>
+
+    <DeleteCategoryModal
+      :category="categoryPendingDeletion"
+      @close="cancelDelete"
+      @deleted="onDeleted"
+    />
   </div>
 </template>
 

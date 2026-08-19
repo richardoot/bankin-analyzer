@@ -97,6 +97,41 @@ export interface CategoryDto {
   createdAt: string
 }
 
+/** One budget plan line lost with the category. */
+export interface BudgetPlanEntrySummaryDto {
+  planName: string
+  amount: number
+  startDate: string
+  endDate: string
+}
+
+/**
+ * Everything attached to a category, so the confirmation dialog can state what
+ * deleting it does. Transactions and reimbursement requests are kept and only
+ * lose their filing; the rest is destroyed.
+ */
+export interface CategoryDeletionSummaryDto {
+  categoryId: string
+  categoryName: string
+  type: 'EXPENSE' | 'INCOME'
+  transactionCount: number
+  firstTransactionDate: string | null
+  lastTransactionDate: string | null
+  subcategoryNames: string[]
+  labelledTransactionCount: number
+  budgetPlanEntries: BudgetPlanEntrySummaryDto[]
+  reimbursementCount: number
+  associatedCategoryName: string | null
+  isGloballyHidden: boolean
+  isExcludedFromBudget: boolean
+}
+
+export interface CategoryDeletionResultDto {
+  uncategorizedTransactions: number
+  deletedSubcategories: number
+  deletedBudgetPlanEntries: number
+}
+
 export interface SubcategoryDto {
   id: string
   categoryId: string
@@ -889,6 +924,32 @@ export const api = {
     }
 
     return response.json() as Promise<CategoryDto>
+  },
+
+  async getCategoryDeletionSummary(
+    id: string
+  ): Promise<CategoryDeletionSummaryDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/categories/${id}/deletion-summary`
+    )
+
+    if (!response.ok) {
+      throw new Error("Impossible de calculer l'impact de la suppression")
+    }
+
+    return response.json() as Promise<CategoryDeletionSummaryDto>
+  },
+
+  async deleteCategory(id: string): Promise<CategoryDeletionResultDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/categories/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      throw new Error('Erreur lors de la suppression de la catégorie')
+    }
+
+    return response.json() as Promise<CategoryDeletionResultDto>
   },
 
   // Subcategories API

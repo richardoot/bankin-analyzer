@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   UseGuards,
@@ -16,6 +17,8 @@ import {
 import { CategoriesService } from './categories.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import {
+  CategoryDeletionResultDto,
+  CategoryDeletionSummaryDto,
   CategoryResponseDto,
   CreateCategoryDto,
   UpdateCategoryDto,
@@ -63,6 +66,33 @@ export class CategoriesController {
     @Body() dto: UpdateCategoryDto
   ): Promise<CategoryResponseDto> {
     return this.categoriesService.update(user.id, id, dto)
+  }
+
+  @Get(':id/deletion-summary')
+  @ApiOperation({
+    summary: 'Preview everything deleting a category would touch',
+  })
+  @ApiResponse({ status: 200, type: CategoryDeletionSummaryDto })
+  @ApiResponse({ status: 404, description: 'Category not found' })
+  async deletionSummary(
+    @CurrentUser() user: User,
+    @Param('id') id: string
+  ): Promise<CategoryDeletionSummaryDto> {
+    return this.categoriesService.getDeletionSummary(user.id, id)
+  }
+
+  @Delete(':id')
+  @ApiOperation({
+    summary:
+      'Delete a category. Its transactions are kept and become uncategorized',
+  })
+  @ApiResponse({ status: 200, type: CategoryDeletionResultDto })
+  @ApiResponse({ status: 404, description: 'Category not found' })
+  async remove(
+    @CurrentUser() user: User,
+    @Param('id') id: string
+  ): Promise<CategoryDeletionResultDto> {
+    return this.categoriesService.remove(user.id, id)
   }
 
   @Post('generate-icons')
