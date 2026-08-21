@@ -121,7 +121,6 @@ export interface CategoryDeletionSummaryDto {
   labelledTransactionCount: number
   budgetPlanEntries: BudgetPlanEntrySummaryDto[]
   reimbursementCount: number
-  associatedCategoryName: string | null
   isGloballyHidden: boolean
   isExcludedFromBudget: boolean
 }
@@ -463,37 +462,6 @@ export interface SettlementDto {
   reimbursements: SettlementReimbursementResponseDto[]
 }
 
-/** Why a transfer was proposed. Shown to the user, never hidden. */
-export type SuggestionReason = 'name' | 'category' | 'amount'
-
-export interface SuggestedDebtDto {
-  reimbursementId: string
-  description: string
-  expenseDate: string
-  categoryId: string | null
-  categoryName: string | null
-  amountRemaining: number
-}
-
-/**
- * An incoming transfer that looks like it repays someone. Advisory: confirming
- * one creates an ordinary settlement, and nothing happens until then.
- */
-export interface SettlementSuggestionDto {
-  transactionId: string
-  date: string
-  description: string
-  availableAmount: number
-  personId: string
-  personName: string
-  /** Ranking weight, not a probability — only meaningful for ordering. */
-  score: number
-  reasons: SuggestionReason[]
-  debts: SuggestedDebtDto[]
-  /** What the transfer would cover: its cash, capped by what is owed. */
-  coverage: number
-}
-
 export interface TransactionAvailableAmountDto {
   transactionId: string
   totalAmount: number
@@ -539,28 +507,6 @@ export interface CreateImportHistoryDto {
 }
 
 // Category Associations DTOs (DB-based)
-export interface DbCategoryAssociationDto {
-  id: string
-  expenseCategoryId: string
-  expenseCategoryName: string
-  incomeCategoryId: string
-  incomeCategoryName: string
-}
-
-export interface CreateCategoryAssociationDto {
-  expenseCategoryId: string
-  incomeCategoryId: string
-}
-
-export interface CategorySuggestionDto {
-  expenseCategoryId: string
-  expenseCategoryName: string
-  suggestedIncomeCategoryId: string
-  suggestedIncomeCategoryName: string
-  confidence: number
-  reasoning: string
-}
-
 // Dashboard DTOs
 export interface MonthlyDataDto {
   month: string
@@ -1491,18 +1437,6 @@ export const api = {
     return response.json() as Promise<TransactionAvailableAmountDto>
   },
 
-  async getSettlementSuggestions(): Promise<SettlementSuggestionDto[]> {
-    const response = await fetchWithAuth(
-      `${API_BASE_URL}/settlements/suggestions`
-    )
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch settlement suggestions')
-    }
-
-    return response.json() as Promise<SettlementSuggestionDto[]>
-  },
-
   async createSettlement(dto: CreateSettlementDto): Promise<SettlementDto> {
     const response = await fetchWithAuth(`${API_BASE_URL}/settlements`, {
       method: 'POST',
@@ -1613,71 +1547,7 @@ export const api = {
   },
 
   // Category Associations API
-  async getCategoryAssociations(): Promise<DbCategoryAssociationDto[]> {
-    const response = await fetchWithAuth(
-      `${API_BASE_URL}/category-associations`
-    )
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch category associations')
-    }
-
-    return response.json() as Promise<DbCategoryAssociationDto[]>
-  },
-
-  async createCategoryAssociation(
-    dto: CreateCategoryAssociationDto
-  ): Promise<DbCategoryAssociationDto> {
-    const response = await fetchWithAuth(
-      `${API_BASE_URL}/category-associations`,
-      {
-        method: 'POST',
-        body: JSON.stringify(dto),
-      }
-    )
-
-    if (!response.ok) {
-      if (response.status === 409) {
-        throw new Error('Cette association existe déjà')
-      }
-      throw new Error('Failed to create category association')
-    }
-
-    return response.json() as Promise<DbCategoryAssociationDto>
-  },
-
-  async deleteCategoryAssociation(id: string): Promise<void> {
-    const response = await fetchWithAuth(
-      `${API_BASE_URL}/category-associations/${id}`,
-      {
-        method: 'DELETE',
-      }
-    )
-
-    if (!response.ok) {
-      throw new Error('Failed to delete category association')
-    }
-  },
-
   // AI Suggestions API
-  async getAiCategorySuggestions(
-    expenseCategoryIds: string[]
-  ): Promise<CategorySuggestionDto[]> {
-    const response = await fetchWithAuth(
-      `${API_BASE_URL}/ai-suggestions/category-associations`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ expenseCategoryIds }),
-      }
-    )
-
-    if (!response.ok) {
-      throw new Error('Failed to get AI category suggestions')
-    }
-
-    return response.json() as Promise<CategorySuggestionDto[]>
-  },
-
   // Budget plans API
   async getBudgetPlans(): Promise<BudgetPlanSummaryDto[]> {
     const response = await fetchWithAuth(`${API_BASE_URL}/budget-plans`)

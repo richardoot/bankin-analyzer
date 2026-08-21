@@ -51,9 +51,6 @@ const mockPrismaService = {
   reimbursementRequest: {
     count: vi.fn(),
   },
-  categoryAssociation: {
-    findFirst: vi.fn(),
-  },
   filterPreferences: {
     findUnique: vi.fn(),
     update: vi.fn(),
@@ -86,7 +83,6 @@ function stubEmptySummary(): void {
   mockPrismaService.subcategory.findMany.mockResolvedValue([])
   mockPrismaService.budgetPlanEntry.findMany.mockResolvedValue([])
   mockPrismaService.reimbursementRequest.count.mockResolvedValue(0)
-  mockPrismaService.categoryAssociation.findFirst.mockResolvedValue(null)
   mockPrismaService.filterPreferences.findUnique.mockResolvedValue(null)
 }
 
@@ -336,7 +332,6 @@ describe('CategoriesService', () => {
         labelledTransactionCount: 0,
         budgetPlanEntries: [],
         reimbursementCount: 0,
-        associatedCategoryName: null,
         isGloballyHidden: false,
         isExcludedFromBudget: false,
       })
@@ -366,10 +361,6 @@ describe('CategoriesService', () => {
         },
       ])
       mockPrismaService.reimbursementRequest.count.mockResolvedValue(3)
-      mockPrismaService.categoryAssociation.findFirst.mockResolvedValue({
-        expenseCategory: { name: 'Alimentation' },
-        incomeCategory: { name: 'Remboursement courses' },
-      })
       mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
         ...emptyPreferences,
         globalHiddenExpenseCategoryIds: [mockCategory.id],
@@ -396,23 +387,6 @@ describe('CategoriesService', () => {
       ])
       expect(summary.reimbursementCount).toBe(3)
       expect(summary.isGloballyHidden).toBe(true)
-    })
-
-    it('should name the other side of the association', async () => {
-      // Asked from the income side, the pairing must report the expense one.
-      mockPrismaService.category.findFirst.mockResolvedValue(mockCategory2)
-      stubEmptySummary()
-      mockPrismaService.categoryAssociation.findFirst.mockResolvedValue({
-        expenseCategory: { name: 'Alimentation' },
-        incomeCategory: { name: 'Salaires' },
-      })
-
-      const summary = await service.getDeletionSummary(
-        mockCategory2.userId,
-        mockCategory2.id
-      )
-
-      expect(summary.associatedCategoryName).toBe('Alimentation')
     })
 
     it('should throw NotFoundException when the category is not owned', async () => {

@@ -8,7 +8,6 @@
   import { usePdfExport } from '@/composables/usePdfExport'
   import SettlementModal from '@/components/settlements/SettlementModal.vue'
   import SettlementHistorySection from '@/components/settlements/SettlementHistorySection.vue'
-  import SuggestedSettlements from '@/components/settlements/SuggestedSettlements.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
   import { formatCurrency } from '@/lib/formatters'
 
@@ -392,17 +391,6 @@
     }
   }
 
-  const suggestedSettlements = ref<{ load: () => Promise<void> } | null>(null)
-
-  /** Anything that changes what is owed also changes what can be suggested. */
-  async function refreshAll(): Promise<void> {
-    await Promise.all([
-      fetchReimbursements(),
-      fetchSettlements(),
-      suggestedSettlements.value?.load() ?? Promise.resolve(),
-    ])
-  }
-
   onMounted(() => {
     personsStore.fetchPersons()
     fetchReimbursements()
@@ -449,8 +437,6 @@
           Voir les transactions
         </RouterLink>
       </div>
-
-      <SuggestedSettlements ref="suggestedSettlements" @settled="refreshAll" />
 
       <!-- Persons Section -->
       <div

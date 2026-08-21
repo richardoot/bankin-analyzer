@@ -2,7 +2,6 @@
   import { ref, computed, onMounted, watch } from 'vue'
   import { usePersonsStore } from '@/stores/persons'
   import { useAccountsStore } from '@/stores/accounts'
-  import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
   import { useTagsStore } from '@/stores/tags'
   import { api } from '@/lib/api'
   import type {
@@ -28,7 +27,6 @@
 
   const personsStore = usePersonsStore()
   const accountsStore = useAccountsStore()
-  const categoryAssociationsStore = useCategoryAssociationsStore()
   const tagsStore = useTagsStore()
 
   // Transactions state
@@ -816,7 +814,6 @@
     // on the accounts request. In the rare stale case the prune fires a second,
     // corrected fetch.
     void accountsStore.load().then(dropUnknownAccountFilter)
-    categoryAssociationsStore.load()
     tagsStore.fetchTags()
     fetchTransactions()
     fetchCategories()

@@ -24,7 +24,6 @@ model User {
   reimbursementRequests ReimbursementRequest[]
   importHistories       ImportHistory[]
   settlements           Settlement[]
-  categoryAssociations  CategoryAssociation[]
   budgetPlans           BudgetPlan[]
   tags                  Tag[]
   reimbursementPayments ReimbursementPayment[]
@@ -84,8 +83,6 @@ model Category {
   transactions                Transaction[]
   subcategories               Subcategory[]
   reimbursementRequests       ReimbursementRequest[]
-  expenseCategoryAssociations CategoryAssociation[]  @relation("ExpenseCategory")
-  incomeCategoryAssociations  CategoryAssociation[]  @relation("IncomeCategory")
   budgetPlanEntries           BudgetPlanEntry[]
 
   @@unique([userId, name, type])
@@ -203,7 +200,8 @@ model FilterPreferences {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // REMOVED: jointAccounts (now in Account.type)
-  // REMOVED: categoryAssociations (deprecated, use CategoryAssociation table)
+  // REMOVED: categoryAssociations. The table that replaced them is gone too:
+  // a refund is now tied to the expense transaction it repays.
 
   @@map("filter_preferences")
   @@schema("app")
@@ -370,30 +368,6 @@ model ReimbursementPayment {
   @@index([incomeTransactionId])
   @@index([settlementId])
   @@map("reimbursement_payments")
-  @@schema("app")
-}
-
-model CategoryAssociation {
-  id                String   @id @default(uuid())
-  userId            String   @map("user_id")
-  expenseCategoryId String   @map("expense_category_id")
-  incomeCategoryId  String   @map("income_category_id")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expenseCategory Category @relation("ExpenseCategory", fields: [expenseCategoryId], references: [id], onDelete: Cascade)
-  incomeCategory  Category @relation("IncomeCategory", fields: [incomeCategoryId], references: [id], onDelete: Cascade)
-
-  /// Many-to-many since the pairing stopped driving any calculation. The old
-  /// bijection existed because a refund found its way back to an expense
-  /// *through* this table, so each side had to name exactly one partner — which
-  /// made "Remboursement sante" feeding both Sante and Pharmacie impossible,
-  /// and forced users to invent a dummy income category per expense category.
-  /// The pair itself stays unique: recording it twice says nothing new.
-  @@unique([userId, expenseCategoryId, incomeCategoryId])
-  @@index([userId])
-  @@map("category_associations")
   @@schema("app")
 }
 

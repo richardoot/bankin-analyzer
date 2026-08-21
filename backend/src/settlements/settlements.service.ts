@@ -15,16 +15,10 @@ import {
   splitCredit,
   type LedgerEntry,
 } from '../reimbursements/reimbursement-ledger'
-import {
-  suggestSettlements,
-  type PendingDebt,
-  type UnsettledIncome,
-} from './settlement-suggestions'
 import type { CreateSettlementDto } from './dto'
 import type {
   SettlementResponseDto,
   SettlementReimbursementResponseDto,
-  SettlementSuggestionDto,
   TransactionAvailableAmountDto,
 } from './dto'
 
@@ -217,113 +211,6 @@ export class SettlementsService {
       usedAmount,
       availableAmount: totalAmount - usedAmount,
     }
-  }
-
-  /**
-   * Incoming transfers that look like they repay someone.
-   *
-   * This is what pays back the gesture the payment ledger costs: the old
-   * category pairing deducted refunds on its own, forever, once configured.
-   * Linking each encashment by hand is exact but tedious, so the obvious pairs
-   * are surfaced ready to confirm.
-   *
-   * Nothing is decided here and nothing is written. `CategoryAssociation` is
-   * read, but only as one hint among three — it has no say in any figure
-   * since phase 4.
-   */
-  async suggest(userId: string): Promise<SettlementSuggestionDto[]> {
-    const [incomeRows, debtRows, associations] = await Promise.all([
-      this.prisma.transaction.findMany({
-        where: { userId, type: TransactionType.INCOME },
-        select: {
-          id: true,
-          date: true,
-          description: true,
-          amount: true,
-          categoryId: true,
-          // Cash already drawn by settlements, so a transfer that is fully
-          // consumed never shows up as a candidate.
-          reimbursementPayments: {
-            where: { kind: 'CASH' },
-            select: { amount: true },
-          },
-        },
-      }),
-      this.prisma.reimbursementRequest.findMany({
-        where: { userId },
-        select: {
-          id: true,
-          amount: true,
-          person: { select: { id: true, name: true } },
-          transaction: {
-            select: {
-              date: true,
-              description: true,
-              categoryId: true,
-              category: { select: { name: true } },
-            },
-          },
-          payments: { select: { amount: true, kind: true } },
-        },
-      }),
-      this.prisma.categoryAssociation.findMany({
-        where: { userId },
-        select: { expenseCategoryId: true, incomeCategoryId: true },
-      }),
-    ])
-
-    const incomes: UnsettledIncome[] = incomeRows.map(row => {
-      const amount = Number(row.amount)
-      const drawn = row.reimbursementPayments.reduce(
-        (sum, payment) => sum + Number(payment.amount),
-        0
-      )
-      return {
-        transactionId: row.id,
-        date: row.date,
-        description: row.description,
-        amount,
-        availableAmount: round2(amount - drawn),
-        categoryId: row.categoryId,
-      }
-    })
-
-    const debts: PendingDebt[] = debtRows.map(row => ({
-      reimbursementId: row.id,
-      personId: row.person.id,
-      personName: row.person.name,
-      description: row.transaction.description,
-      expenseDate: row.transaction.date,
-      expenseCategoryId: row.transaction.categoryId,
-      expenseCategoryName: row.transaction.category?.name ?? null,
-      amountRemaining: round2(
-        Number(row.amount) - creditedTotal(toLedgerEntries(row.payments))
-      ),
-    }))
-
-    const hints = new Map(
-      associations.map(a => [a.incomeCategoryId, a.expenseCategoryId])
-    )
-
-    return suggestSettlements(incomes, debts, hints).map(suggestion => ({
-      transactionId: suggestion.transactionId,
-      date: suggestion.date,
-      description: suggestion.description,
-      availableAmount: suggestion.availableAmount,
-      personId: suggestion.personId,
-      personName: suggestion.personName,
-      score: suggestion.score,
-      reasons: suggestion.reasons,
-      coverage: suggestion.coverage,
-      debts: suggestion.debts.map(debt => ({
-        reimbursementId: debt.reimbursementId,
-        description: debt.description,
-        expenseDate: debt.expenseDate,
-        categoryId: debt.expenseCategoryId,
-        categoryName: debt.expenseCategoryName,
-        amountRemaining: debt.amountRemaining,
-      })),
-    }))
   }
 
   async create(

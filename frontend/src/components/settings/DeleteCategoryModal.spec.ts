@@ -35,7 +35,6 @@ const emptySummary: CategoryDeletionSummaryDto = {
   labelledTransactionCount: 0,
   budgetPlanEntries: [],
   reimbursementCount: 0,
-  associatedCategoryName: null,
   isGloballyHidden: false,
   isExcludedFromBudget: false,
 }
@@ -56,7 +55,6 @@ const fullSummary: CategoryDeletionSummaryDto = {
     },
   ],
   reimbursementCount: 3,
-  associatedCategoryName: 'Remboursement courses',
   isGloballyHidden: true,
   isExcludedFromBudget: false,
 }
@@ -112,7 +110,6 @@ describe('DeleteCategoryModal', () => {
     expect(destroyed).toContain('Courses, Restaurant')
     expect(destroyed).toContain('Budget 2024')
     expect(destroyed).toContain('450')
-    expect(destroyed).toContain('Remboursement courses')
   })
 
   it('recalls the settings currently applied to the category', async () => {

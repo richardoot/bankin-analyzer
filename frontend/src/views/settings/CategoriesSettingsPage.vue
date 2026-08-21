@@ -2,7 +2,7 @@
   /**
    * One row per category, and everything about that category reachable from
    * it: where it shows up, its subcategories, and its reimbursement pairing.
-   * The three former sections (associations, icons, hidden categories) are
+   * The two former sections (icons, hidden categories) are
    * folded into this single list.
    *
    * Both visibility switches now write through immediately — the dashboard one
@@ -10,7 +10,6 @@
    * on click, which made two switches on the same row behave differently.
    */
   import { computed, onMounted, ref } from 'vue'
-  import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
   import { useFiltersStore } from '@/stores/filters'
   import { api, type CategoryDto, type SubcategoryDto } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
@@ -19,7 +18,6 @@
   import SettingsCard from '@/components/settings/SettingsCard.vue'
   import ToggleSwitch from '@/components/ToggleSwitch.vue'
 
-  const categoryAssociationsStore = useCategoryAssociationsStore()
   const filtersStore = useFiltersStore()
   const toast = useToast()
 
@@ -28,11 +26,7 @@
   const isLoadingCategories = ref(false)
 
   onMounted(async () => {
-    await Promise.all([
-      loadCategories(),
-      loadSubcategories(),
-      categoryAssociationsStore.load(),
-    ])
+    await Promise.all([loadCategories(), loadSubcategories()])
   })
 
   async function loadCategories(): Promise<void> {
@@ -205,7 +199,7 @@
     categoryStateFilter.value = 'all'
   }
 
-  // ── Row expansion: subcategories + association ────────────────────────────
+  // ── Row expansion: subcategories ──────────────────────────────────────────
   const expanded = ref<Set<string>>(new Set())
 
   function isExpanded(categoryId: string): boolean {
@@ -261,7 +255,7 @@
   }
 
   // ── Rename ────────────────────────────────────────────────────────────────
-  // Transactions, budget plans, associations and the hidden-category
+  // Transactions, budget plans and the hidden-category
   // preferences all point at the category by id, so they follow a rename on
   // their own. The one exception is the association recap below, which holds a
   // snapshot of both names — reloaded once the write went through.
@@ -289,14 +283,12 @@
     const draft = renameDrafts.value[category.id]?.trim() ?? ''
     if (draft.length === 0 || draft === category.name) return
 
-    const wasAssociated = associationIdFor(category) !== null
     renameSaving.value[category.id] = true
     renameErrors.value[category.id] = null
     try {
       const updated = await api.updateCategory(category.id, { name: draft })
       category.name = updated.name
       delete renameDrafts.value[category.id]
-      if (wasAssociated) await categoryAssociationsStore.load()
       toast.success(`Catégorie renommée en « ${updated.name} »`)
     } catch (err) {
       renameErrors.value[category.id] =
@@ -309,90 +301,6 @@
   function cancelRename(categoryId: string): void {
     delete renameDrafts.value[categoryId]
     renameErrors.value[categoryId] = null
-  }
-
-  // ── Reimbursement associations ────────────────────────────────────────────
-  // An association pairs one expense category with one income category, and
-  // each side can only be used once — hence the "available" lists.
-  const associationByExpenseId = computed(() => {
-    const map = new Map<string, string>()
-    for (const assoc of categoryAssociationsStore.associations) {
-      map.set(assoc.expenseCategoryId, assoc.incomeCategoryName)
-    }
-    return map
-  })
-
-  const associationByIncomeId = computed(() => {
-    const map = new Map<string, string>()
-    for (const assoc of categoryAssociationsStore.associations) {
-      map.set(assoc.incomeCategoryId, assoc.expenseCategoryName)
-    }
-    return map
-  })
-
-  function associatedNameFor(category: CategoryDto): string | null {
-    return category.type === 'EXPENSE'
-      ? (associationByExpenseId.value.get(category.id) ?? null)
-      : (associationByIncomeId.value.get(category.id) ?? null)
-  }
-
-  function associationIdFor(category: CategoryDto): string | null {
-    const assoc = categoryAssociationsStore.associations.find(a =>
-      category.type === 'EXPENSE'
-        ? a.expenseCategoryId === category.id
-        : a.incomeCategoryId === category.id
-    )
-    return assoc?.id ?? null
-  }
-
-  const availableIncomeCategories = computed(() => {
-    const used = new Set(
-      categoryAssociationsStore.associations.map(a => a.incomeCategoryId)
-    )
-    return incomeCategories.value.filter(c => !used.has(c.id))
-  })
-
-  const associationDrafts = ref<Record<string, string>>({})
-  const savingAssociation = ref<Set<string>>(new Set())
-
-  async function createAssociation(category: CategoryDto): Promise<void> {
-    const incomeCategoryId = associationDrafts.value[category.id] ?? ''
-    if (incomeCategoryId === '' || savingAssociation.value.has(category.id))
-      return
-
-    markSaving(savingAssociation, category.id, true)
-    try {
-      const created = await categoryAssociationsStore.create({
-        expenseCategoryId: category.id,
-        incomeCategoryId,
-      })
-      if (created) {
-        associationDrafts.value[category.id] = ''
-        toast.success(
-          `« ${category.name} » associée à « ${created.incomeCategoryName} »`
-        )
-      } else {
-        toast.error(
-          categoryAssociationsStore.error ?? 'Erreur lors de l’association'
-        )
-      }
-    } finally {
-      markSaving(savingAssociation, category.id, false)
-    }
-  }
-
-  async function removeAssociation(category: CategoryDto): Promise<void> {
-    const id = associationIdFor(category)
-    if (id === null || savingAssociation.value.has(category.id)) return
-
-    markSaving(savingAssociation, category.id, true)
-    try {
-      const ok = await categoryAssociationsStore.remove(id)
-      if (ok) toast.success(`Association de « ${category.name} » supprimée`)
-      else toast.error('Erreur lors de la suppression de l’association')
-    } finally {
-      markSaving(savingAssociation, category.id, false)
-    }
   }
 
   // ── Create a category ─────────────────────────────────────────────────────
@@ -483,7 +391,7 @@
     )
     filtersStore.forgetCategory(category.id, category.type)
 
-    await Promise.all([loadSubcategories(), categoryAssociationsStore.load()])
+    await loadSubcategories()
 
     toast.success(
       uncategorizedTransactions > 0
@@ -740,13 +648,6 @@
                     Hors budget
                   </span>
                   <span
-                    v-if="associatedNameFor(category)"
-                    class="hidden shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 sm:inline dark:bg-emerald-900/30 dark:text-emerald-400"
-                    :title="`Associée à « ${associatedNameFor(category)} »`"
-                  >
-                    ↔ {{ associatedNameFor(category) }}
-                  </span>
-                  <span
                     v-if="subcategoriesFor(category.id).length > 0"
                     class="hidden shrink-0 text-[10px] text-gray-400 sm:inline dark:text-gray-500"
                   >
@@ -908,71 +809,6 @@
                   </form>
                 </div>
 
-                <!-- Association -->
-                <div>
-                  <h4
-                    class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                  >
-                    Association de remboursement
-                  </h4>
-
-                  <div
-                    v-if="associatedNameFor(category)"
-                    class="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
-                  >
-                    <span>
-                      Associée à
-                      <strong>« {{ associatedNameFor(category) }} »</strong>
-                    </span>
-                    <button
-                      type="button"
-                      :disabled="savingAssociation.has(category.id)"
-                      class="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-                      @click="removeAssociation(category)"
-                    >
-                      Dissocier
-                    </button>
-                  </div>
-
-                  <form
-                    v-else-if="category.type === 'EXPENSE'"
-                    class="flex flex-col gap-2 sm:flex-row"
-                    @submit.prevent="createAssociation(category)"
-                  >
-                    <select
-                      v-model="associationDrafts[category.id]"
-                      :aria-label="`Catégorie de revenu associée à ${category.name}`"
-                      class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                    >
-                      <option value="">
-                        Associer à une catégorie de revenu…
-                      </option>
-                      <option
-                        v-for="income in availableIncomeCategories"
-                        :key="income.id"
-                        :value="income.id"
-                      >
-                        {{ income.name }}
-                      </option>
-                    </select>
-                    <button
-                      type="submit"
-                      :disabled="
-                        !associationDrafts[category.id] ||
-                        savingAssociation.has(category.id)
-                      "
-                      class="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Associer
-                    </button>
-                  </form>
-
-                  <p v-else class="text-xs text-gray-500 dark:text-gray-400">
-                    Une association se crée depuis la catégorie de dépense
-                    correspondante.
-                  </p>
-                </div>
-
                 <!-- Not yet wired: no endpoint for the icon -->
                 <div
                   class="flex flex-wrap gap-2 border-t border-gray-200 pt-3 dark:border-slate-700"
@@ -1007,48 +843,6 @@
           une.
         </div>
       </div>
-    </SettingsCard>
-
-    <!-- Association recap -->
-    <SettingsCard
-      title="Associations de remboursement"
-      description="Récapitulatif des paires dépense ↔ revenu. Elles déduisent automatiquement les remboursements dans le tableau de bord."
-    >
-      <p
-        v-if="categoryAssociationsStore.associations.length === 0"
-        class="rounded-lg bg-gray-50 p-4 text-sm italic text-gray-500 dark:bg-slate-800 dark:text-gray-400"
-      >
-        Aucune association. Dépliez une catégorie de dépense ci-dessus pour en
-        créer une.
-      </p>
-
-      <ul v-else class="space-y-2">
-        <li
-          v-for="association in categoryAssociationsStore.associations"
-          :key="association.id"
-          class="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-slate-700"
-        >
-          <span
-            class="rounded-full bg-red-100 px-2.5 py-0.5 font-medium text-red-800 dark:bg-red-900/30 dark:text-red-300"
-          >
-            {{ association.expenseCategoryName }}
-          </span>
-          <span class="text-gray-400">→</span>
-          <span
-            class="rounded-full bg-emerald-100 px-2.5 py-0.5 font-medium text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-          >
-            {{ association.incomeCategoryName }}
-          </span>
-          <button
-            type="button"
-            class="ml-auto text-xs font-medium text-red-600 hover:underline dark:text-red-400"
-            :aria-label="`Supprimer l'association ${association.expenseCategoryName}`"
-            @click="categoryAssociationsStore.remove(association.id)"
-          >
-            Supprimer
-          </button>
-        </li>
-      </ul>
     </SettingsCard>
 
     <!-- Create category modal -->

@@ -12,9 +12,6 @@ vi.mock('@/lib/api', () => ({
     updateCategory: vi.fn(),
     createSubcategory: vi.fn(),
     generateCategoryIcons: vi.fn(),
-    getCategoryAssociations: vi.fn(),
-    createCategoryAssociation: vi.fn(),
-    deleteCategoryAssociation: vi.fn(),
     getCategoryDeletionSummary: vi.fn(),
     deleteCategory: vi.fn(),
   },
@@ -85,7 +82,6 @@ async function mountPage(options?: {
   vi.mocked(api.getSubcategories).mockResolvedValue(
     options?.subcategories ?? [groceriesSub]
   )
-  vi.mocked(api.getCategoryAssociations).mockResolvedValue([])
 
   const wrapper = mount(CategoriesSettingsPage, {
     global: { stubs: { Teleport: true } },
@@ -221,43 +217,6 @@ describe('CategoriesSettingsPage', () => {
     )
     // The row keeps its old name until the rename actually goes through.
     expect(row.text()).toContain('Alimentation')
-  })
-
-  it('creates a reimbursement association from an expense row', async () => {
-    const wrapper = await mountPage()
-    vi.mocked(api.createCategoryAssociation).mockResolvedValue({
-      id: 'assoc-1',
-      expenseCategoryId: 'cat-food',
-      expenseCategoryName: 'Alimentation',
-      incomeCategoryId: 'cat-salary',
-      incomeCategoryName: 'Salaire',
-      createdAt: '2026-01-01T00:00:00Z',
-      updatedAt: '2026-01-01T00:00:00Z',
-    })
-
-    await expandRow(wrapper, 0)
-    const row = wrapper.findAll('[data-testid="category-row"]')[0]
-    await row.find('select').setValue('cat-salary')
-    await row.findAll('form')[2].trigger('submit')
-    await flushPromises()
-
-    expect(api.createCategoryAssociation).toHaveBeenCalledWith({
-      expenseCategoryId: 'cat-food',
-      incomeCategoryId: 'cat-salary',
-    })
-    expect(wrapper.text()).toContain('Associée à')
-  })
-
-  it('offers no association form on an income category', async () => {
-    const wrapper = await mountPage()
-
-    await expandRow(wrapper, 1)
-
-    const row = wrapper.findAll('[data-testid="category-row"]')[1]
-    expect(row.find('select').exists()).toBe(false)
-    expect(row.text()).toContain(
-      'Une association se crée depuis la catégorie de dépense'
-    )
   })
 
   it('creates a category from the modal', async () => {

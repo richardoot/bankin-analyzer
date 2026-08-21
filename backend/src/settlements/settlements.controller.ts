@@ -21,7 +21,6 @@ import { SettlementsService } from './settlements.service'
 import {
   CreateSettlementDto,
   SettlementResponseDto,
-  SettlementSuggestionDto,
   TransactionAvailableAmountDto,
 } from './dto'
 import { SupabaseGuard, CurrentUser } from '../auth'
@@ -49,21 +48,6 @@ export class SettlementsController {
     @Query('personId') personId?: string
   ): Promise<SettlementResponseDto[]> {
     return this.settlementsService.findAll(user.id, personId)
-  }
-
-  // Declared before `:id`, or Nest would read "suggestions" as a settlement id.
-  @Get('suggestions')
-  @ApiOperation({
-    summary: 'Incoming transfers that look like they repay someone',
-    description:
-      'Ranks unsettled income transactions against outstanding debts, using ' +
-      'the payer name in the bank wording, the category pairing and the ' +
-      'amount. Advisory only: nothing is written, and each suggestion carries ' +
-      'the reasons it was made so the user can judge it.',
-  })
-  @ApiResponse({ status: 200, type: [SettlementSuggestionDto] })
-  async suggest(@CurrentUser() user: User): Promise<SettlementSuggestionDto[]> {
-    return this.settlementsService.suggest(user.id)
   }
 
   @Get('transaction/:transactionId/available-amount')

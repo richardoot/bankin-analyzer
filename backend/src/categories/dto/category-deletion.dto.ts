@@ -61,8 +61,6 @@ export class CategoryDeletionSummaryDto {
   /**
    * The category this one is paired with for reimbursements, if any. The
    * pairing is deleted; the paired category itself is untouched.
-   */
-  associatedCategoryName!: string | null
 
   /** Whether the category is currently hidden from the dashboard */
   isGloballyHidden!: boolean

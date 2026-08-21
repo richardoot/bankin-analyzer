@@ -50,7 +50,7 @@ export class CategoriesService {
 
   /**
    * Update a category. Everything that points at a category does so by id —
-   * transactions, budget plan entries, associations, hidden-category
+   * transactions, budget plan entries, hidden-category
    * preferences — so a rename carries over on its own, with nothing to replay.
    */
   async update(
@@ -102,7 +102,6 @@ export class CategoriesService {
       subcategories,
       entries,
       reimbursementCount,
-      association,
       preferences,
     ] = await Promise.all([
       this.prisma.transaction.aggregate({
@@ -132,16 +131,6 @@ export class CategoriesService {
       this.prisma.reimbursementRequest.count({
         where: { categoryId: id, userId },
       }),
-      this.prisma.categoryAssociation.findFirst({
-        where: {
-          userId,
-          OR: [{ expenseCategoryId: id }, { incomeCategoryId: id }],
-        },
-        include: {
-          expenseCategory: { select: { name: true } },
-          incomeCategory: { select: { name: true } },
-        },
-      }),
       this.prisma.filterPreferences.findUnique({ where: { userId } }),
     ])
 
@@ -166,12 +155,6 @@ export class CategoriesService {
         endDate: entry.budgetPlan.endDate,
       })),
       reimbursementCount,
-      // The association names one category on each side; report the other one.
-      associatedCategoryName: association
-        ? isExpense
-          ? association.incomeCategory.name
-          : association.expenseCategory.name
-        : null,
       isGloballyHidden: globalHidden.includes(id),
       isExcludedFromBudget: category.isExcludedFromBudget,
     }

@@ -92,13 +92,6 @@ describe('Categories (e2e)', () => {
     const income = await prisma.category.create({
       data: { userId, name: 'Remboursement courses', type: 'INCOME' },
     })
-    await prisma.categoryAssociation.create({
-      data: {
-        userId,
-        expenseCategoryId: categoryId,
-        incomeCategoryId: income.id,
-      },
-    })
     const plan = await prisma.budgetPlan.create({
       data: {
         userId,
@@ -217,7 +210,6 @@ describe('Categories (e2e)', () => {
         subcategoryNames: [],
         budgetPlanEntries: [],
         reimbursementCount: 0,
-        associatedCategoryName: null,
         isGloballyHidden: false,
       })
     })
@@ -236,7 +228,6 @@ describe('Categories (e2e)', () => {
         labelledTransactionCount: 1,
         subcategoryNames: ['Courses', 'Restaurant'],
         reimbursementCount: 1,
-        associatedCategoryName: 'Remboursement courses',
         isGloballyHidden: true,
       })
       expect(response.body.budgetPlanEntries).toEqual([
@@ -296,19 +287,11 @@ describe('Categories (e2e)', () => {
           prisma.subcategory.count({ where: { categoryId } }),
           prisma.reimbursementRequest.count({ where: { categoryId } }),
           prisma.budgetPlanEntry.count({ where: { categoryId } }),
-          prisma.categoryAssociation.count({
-            where: {
-              OR: [
-                { expenseCategoryId: categoryId },
-                { incomeCategoryId: categoryId },
-              ],
-            },
-          }),
         ]),
       ])
 
       // Nothing references the dead id anywhere.
-      expect(counts).toEqual([0, 0, 0, 0, 0, 0])
+      expect(counts).toEqual([0, 0, 0, 0, 0])
 
       // The transaction survives, detached, with no orphan subcategory label.
       expect(transaction).not.toBeNull()

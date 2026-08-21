@@ -46,8 +46,7 @@
       s.transactionCount === 0 &&
       s.subcategoryNames.length === 0 &&
       s.budgetPlanEntries.length === 0 &&
-      s.reimbursementCount === 0 &&
-      s.associatedCategoryName === null
+      s.reimbursementCount === 0
     )
   })
 
@@ -271,8 +270,7 @@
               <div
                 v-if="
                   summary.subcategoryNames.length > 0 ||
-                  summary.budgetPlanEntries.length > 0 ||
-                  summary.associatedCategoryName
+                  summary.budgetPlanEntries.length > 0
                 "
                 data-testid="deletion-destroyed"
               >
@@ -317,11 +315,6 @@
                         {{ currencyFormatter.format(entry.amount) }} / mois
                       </li>
                     </ul>
-                  </li>
-                  <li v-if="summary.associatedCategoryName">
-                    L'association de remboursement avec «
-                    {{ summary.associatedCategoryName }} ». La catégorie
-                    associée, elle, n'est pas touchée.
                   </li>
                 </ul>
               </div>

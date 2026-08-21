@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config'
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
+import { AiSuggestionsModule } from './ai-suggestions/ai-suggestions.module'
 import { PrismaModule } from './prisma/prisma.module'
 import { UsersModule } from './users/users.module'
 import { AuthModule } from './auth/auth.module'
@@ -16,8 +17,6 @@ import { ReimbursementsModule } from './reimbursements/reimbursements.module'
 import { ImportHistoriesModule } from './import-histories/import-histories.module'
 import { SettlementsModule } from './settlements/settlements.module'
 import { DashboardModule } from './dashboard/dashboard.module'
-import { CategoryAssociationModule } from './category-association/category-association.module'
-import { AiSuggestionsModule } from './ai-suggestions/ai-suggestions.module'
 import { BudgetsModule } from './budgets/budgets.module'
 import { AccountsModule } from './accounts/accounts.module'
 import { McpModule } from './mcp/mcp.module'
@@ -43,9 +42,8 @@ import { TagsModule } from './tags/tags.module'
     ReimbursementsModule,
     ImportHistoriesModule,
     SettlementsModule,
-    DashboardModule,
-    CategoryAssociationModule,
     AiSuggestionsModule,
+    DashboardModule,
     BudgetsModule,
     TagsModule,
     McpModule,

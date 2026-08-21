@@ -325,15 +325,6 @@ async function seed(
     'category:RemboursementSante'
   )
 
-  // The pairing the whole current deduction hangs off.
-  await prisma.categoryAssociation.create({
-    data: {
-      userId,
-      expenseCategoryId: sante.id,
-      incomeCategoryId: remboursementSante.id,
-    },
-  })
-
   const dentiste = label(
     await prisma.subcategory.create({
       data: { userId, categoryId: sante.id, name: 'Dentiste' },
