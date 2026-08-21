@@ -166,7 +166,11 @@ export interface TransactionDto {
   note?: string | null
   isPointed: boolean
   categoryId?: string | null
-  categoryName?: string
+  // Mirrors the backend, which omits the key entirely when the transaction has
+  // no category. Under `exactOptionalPropertyTypes` an absent property and one
+  // explicitly set to `undefined` are different types, so this says both — as
+  // its `| null` neighbours already do in their own way.
+  categoryName?: string | undefined
   subcategoryId?: string | null
   subcategoryName?: string | null
   categoryIcon?: string | null
@@ -453,6 +457,37 @@ export interface SettlementDto {
   note: string | null
   createdAt: string
   reimbursements: SettlementReimbursementResponseDto[]
+}
+
+/** Why a transfer was proposed. Shown to the user, never hidden. */
+export type SuggestionReason = 'name' | 'category' | 'amount'
+
+export interface SuggestedDebtDto {
+  reimbursementId: string
+  description: string
+  expenseDate: string
+  categoryId: string | null
+  categoryName: string | null
+  amountRemaining: number
+}
+
+/**
+ * An incoming transfer that looks like it repays someone. Advisory: confirming
+ * one creates an ordinary settlement, and nothing happens until then.
+ */
+export interface SettlementSuggestionDto {
+  transactionId: string
+  date: string
+  description: string
+  availableAmount: number
+  personId: string
+  personName: string
+  /** Ranking weight, not a probability — only meaningful for ordering. */
+  score: number
+  reasons: SuggestionReason[]
+  debts: SuggestedDebtDto[]
+  /** What the transfer would cover: its cash, capped by what is owed. */
+  coverage: number
 }
 
 export interface TransactionAvailableAmountDto {
@@ -1450,6 +1485,18 @@ export const api = {
     }
 
     return response.json() as Promise<TransactionAvailableAmountDto>
+  },
+
+  async getSettlementSuggestions(): Promise<SettlementSuggestionDto[]> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/settlements/suggestions`
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch settlement suggestions')
+    }
+
+    return response.json() as Promise<SettlementSuggestionDto[]>
   },
 
   async createSettlement(dto: CreateSettlementDto): Promise<SettlementDto> {
