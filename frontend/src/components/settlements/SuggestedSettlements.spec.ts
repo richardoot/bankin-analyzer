@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import SuggestedSettlements from './SuggestedSettlements.vue'
+import SuggestedSettlementRow from './SuggestedSettlementRow.vue'
 import { api } from '@/lib/api'
 import type { SettlementSuggestionDto } from '@/lib/api'
 
@@ -43,9 +44,21 @@ describe('SuggestedSettlements', () => {
   })
 
   async function mountComponent() {
-    const wrapper = mount(SuggestedSettlements)
+    // The modal is teleported to <body>, which would put it outside the
+    // wrapper's DOM; stubbing the teleport keeps it queryable in place.
+    const wrapper = mount(SuggestedSettlements, {
+      global: { stubs: { teleport: true } },
+    })
     await flushPromises()
     return wrapper
+  }
+
+  function openAll(wrapper: ReturnType<typeof mount>) {
+    const trigger = wrapper
+      .findAll('button')
+      .find(b => b.text().includes('Voir les'))
+    if (!trigger) throw new Error('no "see all" button rendered')
+    return trigger.trigger('click')
   }
 
   it('stays out of the way when there is nothing to match', async () => {
@@ -118,6 +131,62 @@ describe('SuggestedSettlements', () => {
     ).toHaveLength(1)
     expect(wrapper.text()).toContain('Alice Martin')
     expect(wrapper.text()).not.toContain('Bruno Petit')
+  })
+
+  describe('the five-row preview', () => {
+    const many = (count: number) =>
+      Array.from({ length: count }, (_, i) =>
+        suggestion({ transactionId: `tx-${i}`, personName: `Payeur ${i}` })
+      )
+
+    function rows(wrapper: ReturnType<typeof mount>) {
+      return wrapper.findAllComponents(SuggestedSettlementRow)
+    }
+
+    it('shows everything when it fits', async () => {
+      vi.mocked(api.getSettlementSuggestions).mockResolvedValue(many(4))
+
+      const wrapper = await mountComponent()
+
+      expect(rows(wrapper)).toHaveLength(4)
+      expect(wrapper.text()).not.toContain('Voir les')
+    })
+
+    it('caps the section at five and offers the rest', async () => {
+      vi.mocked(api.getSettlementSuggestions).mockResolvedValue(many(36))
+
+      const wrapper = await mountComponent()
+
+      expect(rows(wrapper)).toHaveLength(5)
+      expect(wrapper.text()).toContain('Voir les 36 suggestions')
+      expect(wrapper.text()).toContain('31 de plus')
+    })
+
+    it('lists them all in the modal', async () => {
+      vi.mocked(api.getSettlementSuggestions).mockResolvedValue(many(36))
+
+      const wrapper = await mountComponent()
+      await openAll(wrapper)
+
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+      // The five in the section, plus the full list in the modal.
+      expect(rows(wrapper)).toHaveLength(5 + 36)
+    })
+
+    it('closes the modal once nothing is left to suggest', async () => {
+      vi.mocked(api.getSettlementSuggestions).mockResolvedValue(many(36))
+      const wrapper = await mountComponent()
+      await openAll(wrapper)
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+
+      // Everything got settled elsewhere; an empty dialog over the page is
+      // worse than no dialog.
+      vi.mocked(api.getSettlementSuggestions).mockResolvedValue([])
+      await (wrapper.vm as unknown as { load: () => Promise<void> }).load()
+      await flushPromises()
+
+      expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    })
   })
 
   it('settles the debts oldest first when confirmed', async () => {
