@@ -1,0 +1,25 @@
+-- Drop the category pairing table.
+--
+-- ## Why
+--
+-- It existed to route a refund back to an expense: an income transaction filed
+-- under a paired category had its amount deducted from the partner expense
+-- category. Since the credit attaches to the expense transaction the debt hangs
+-- off, the pairing drove no figure — it survived only as one hint among three
+-- in the settlement suggestion engine, and that engine has been removed for
+-- want of a use.
+--
+-- ## What goes with it
+--
+-- The AI helper that proposed pairings (its icon generation stays, it is a
+-- separate concern), the settings section that maintained them, and the
+-- suggestion engine that read them.
+--
+-- ## Irreversible
+--
+-- This drops user-entered data: each row is a pairing somebody chose. Nothing
+-- reads it any more, and nothing recreates it — restoring means a database
+-- backup. It is deliberately a migration of its own so it can be deployed
+-- after the code that stopped needing it, not with it.
+
+DROP TABLE "app"."category_associations";
