@@ -85,8 +85,8 @@ describe('SuggestedSettlements', () => {
     const help = wrapper.find('details')
 
     expect(help.exists()).toBe(true)
-    // Including the caveat that one indice alone is enough to appear.
-    expect(help.text()).toContain('un seul indice')
+    // Including the rule that decides what appears at all.
+    expect(help.text()).toContain('deux indices doivent concorder')
   })
 
   it('shows why the transfer was suggested', async () => {

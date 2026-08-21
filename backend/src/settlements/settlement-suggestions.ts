@@ -27,8 +27,18 @@
  *  - **amount** — the cash available matches what someone still owes. Weakest
  *    on its own, since round numbers collide constantly.
  *
- * The weights only order the list; they are not a probability, and nothing is
- * ever hidden because it scored low.
+ * The weights only order the list; they are not a probability.
+ *
+ * ## Why two indices are required
+ *
+ * A single signal is not evidence. On real data, `name` alone produced 322
+ * proposals against 38 actual debts: a bank writes the account holder's name
+ * into salary lines, internal transfers and joint-account movements, so it
+ * matches almost everywhere. `amount` alone is worse — round numbers collide
+ * constantly. Requiring two agreeing indices cut the same dataset to 35 rows,
+ * the order of magnitude of the debts themselves.
+ *
+ * A list long enough to bury the real matches is not a suggestion.
  */
 
 /** A debt still owed, flattened for matching. */
@@ -76,6 +86,12 @@ const REASON_WEIGHTS: Record<SuggestionReason, number> = {
 /** Half a cent: amounts are Decimal(12,2), so anything below this is noise. */
 const EPSILON = 0.005
 
+/**
+ * How many signals must agree before a pair is worth showing. Two: one alone
+ * fires on coincidence often enough to bury the real matches.
+ */
+export const MINIMUM_INDICES = 2
+
 export interface Suggestion {
   transactionId: string
   date: Date
@@ -119,10 +135,8 @@ function round2(value: number): number {
 }
 
 /**
- * Rank every (unsettled income, person owing something) pair that shows at
- * least one signal. Pairs with no signal at all are left out entirely — an
- * unranked list of every transfer against every person is not a suggestion,
- * it is the raw data the user already has.
+ * Rank every (unsettled income, person owing something) pair on which at least
+ * two signals agree. Anything weaker is left out.
  */
 export function suggestSettlements(
   incomes: UnsettledIncome[],
@@ -175,7 +189,9 @@ export function suggestSettlements(
         reasons.push('amount')
       }
 
-      if (reasons.length === 0) continue
+      // Two agreeing indices, or nothing. One on its own is coincidence far
+      // more often than it is a match — see the note at the top of the file.
+      if (reasons.length < MINIMUM_INDICES) continue
 
       suggestions.push({
         transactionId: income.transactionId,

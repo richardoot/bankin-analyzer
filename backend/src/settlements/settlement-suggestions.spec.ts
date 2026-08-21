@@ -69,15 +69,16 @@ describe('suggestSettlements', () => {
     expect(suggestion?.coverage).toBe(600)
   })
 
-  it('suggests on the name alone', () => {
-    const [suggestion] = suggestSettlements(
-      [income({ categoryId: null, availableAmount: 137.42 })],
-      [debt()],
-      hints
-    )
-
-    expect(suggestion?.reasons).toEqual(['name'])
-    expect(suggestion?.score).toBe(4)
+  it('refuses a single indice, however strong', () => {
+    // The name alone: a bank writes the account holder into salary lines and
+    // internal transfers, so it matches almost everywhere.
+    expect(
+      suggestSettlements(
+        [income({ categoryId: null, availableAmount: 137.42 })],
+        [debt()],
+        hints
+      )
+    ).toEqual([])
   })
 
   it('leaves out a pair with no signal at all', () => {
@@ -95,19 +96,15 @@ describe('suggestSettlements', () => {
       debt({ reimbursementId: 'a', amountRemaining: 600 }),
       debt({ reimbursementId: 'b', amountRemaining: 100 }),
     ]
+    // Paired with the name so the row clears the two-indice bar; what is
+    // under test is that 100 matches debt "b" rather than the 700 balance.
     const [suggestion] = suggestSettlements(
-      [
-        income({
-          description: 'VIR RECU',
-          categoryId: null,
-          availableAmount: 100,
-        }),
-      ],
+      [income({ categoryId: null, availableAmount: 100 })],
       two,
       hints
     )
 
-    expect(suggestion?.reasons).toEqual(['amount'])
+    expect(suggestion?.reasons).toEqual(['name', 'amount'])
   })
 
   it('caps the coverage at what is actually owed', () => {
@@ -143,23 +140,26 @@ describe('suggestSettlements', () => {
   })
 
   it('does not fire the category signal without an association', () => {
-    const [suggestion] = suggestSettlements(
-      [income({ description: 'VIR RECU', availableAmount: 137.42 })],
-      [debt()],
-      new Map()
-    )
-
-    expect(suggestion).toBeUndefined()
+    // Only the amount would remain, and one indice is not enough.
+    expect(
+      suggestSettlements(
+        [income({ description: 'VIR RECU', availableAmount: 600 })],
+        [debt()],
+        new Map()
+      )
+    ).toEqual([])
   })
 
   it('does not fire the category signal when no debt matches the pairing', () => {
+    // Name and amount carry the row; the pairing points at Sante while the
+    // debt repays Loisirs, so `category` must stay silent.
     const [suggestion] = suggestSettlements(
-      [income({ description: 'VIR ALICE MARTIN', availableAmount: 137.42 })],
+      [income({ description: 'VIR ALICE MARTIN', availableAmount: 600 })],
       [debt({ expenseCategoryId: 'cat-loisirs' })],
       hints
     )
 
-    expect(suggestion?.reasons).toEqual(['name'])
+    expect(suggestion?.reasons).toEqual(['name', 'amount'])
   })
 
   it('lists a person debts oldest first, as the cascade settles them', () => {
@@ -194,14 +194,15 @@ describe('suggestSettlements', () => {
         reimbursementId: 'reimb-bruno',
         personId: 'person-bruno',
         personName: 'Bruno Petit',
-        expenseCategoryId: 'cat-loisirs',
+        // Same category pairing and the same amount as Alice, but unnamed in
+        // the wording — two indices, so he is ranked, just lower.
         amountRemaining: 600,
       }),
     ]
 
     const ranked = suggestSettlements([income()], debts, hints)
 
-    // Alice is named in the wording; Bruno only happens to owe the same amount.
+    // Alice is named in the wording; Bruno only matches on category and amount.
     expect(ranked.map(s => s.personName)).toEqual([
       'Alice Martin',
       'Bruno Petit',

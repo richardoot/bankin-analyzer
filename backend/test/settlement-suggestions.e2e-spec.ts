@@ -172,19 +172,40 @@ describe('Settlement suggestions (e2e)', () => {
     })
     const tx = await expense(600)
     await owes('Alice Martin', 600, tx)
-    // Neither the name nor the amount matches: only the pairing can fire.
-    await incoming(137.42, 'VIREMENT RECU')
+    // The name is absent from the wording, so the row rests on the pairing
+    // and the amount — and would not appear on either alone.
+    await incoming(600, 'VIREMENT RECU')
 
     const [suggestion] = await suggestions()
 
-    expect(suggestion?.reasons).toEqual(['category'])
+    expect(suggestion?.reasons).toEqual(['category', 'amount'])
   })
 
-  it('ranks the named payer above one that merely owes the same amount', async () => {
+  it('stays silent when only one indice agrees', async () => {
+    const tx = await expense(600)
+    await owes('Alice Martin', 600, tx)
+    // The payer is named, and nothing else lines up: a bank writes the account
+    // holder into salary lines and internal transfers, so the name alone
+    // matches almost everywhere.
+    await incoming(137.42, 'VIR ALICE MARTIN', null)
+
+    expect(await suggestions()).toEqual([])
+  })
+
+  it('ranks the named payer above one merely matching on category and amount', async () => {
+    await prisma.categoryAssociation.create({
+      data: {
+        userId,
+        expenseCategoryId: santeId,
+        incomeCategoryId: remboursementSanteId,
+      },
+    })
     const first = await expense(600)
     const second = await expense(600)
     await owes('Alice Martin', 600, first)
     await owes('Bruno Petit', 600, second)
+    // Both clear the two-indice bar — Bruno on category and amount, Alice on
+    // those plus her name in the wording.
     await incoming(600, 'VIR ALICE MARTIN')
 
     const ranked = await suggestions()

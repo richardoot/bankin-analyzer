@@ -173,10 +173,15 @@
             </li>
           </ul>
           <p>
-            Les indices trouves sont affiches sous chaque ligne. Plus il y en a,
-            plus la proposition est haute dans la liste — mais un seul indice
-            suffit a la faire apparaitre, donc une proposition peut n'avoir
-            aucun sens.
+            <strong>Au moins deux indices doivent concorder</strong> pour qu'une
+            ligne apparaisse : un seul se declenche trop souvent par hasard —
+            votre nom figure dans quantite de libelles qui n'ont rien de
+            remboursements. Les indices retenus sont affiches sous chaque ligne,
+            et plus il y en a, plus la proposition est haute dans la liste.
+          </p>
+          <p>
+            Une proposition reste une hypothese : verifiez-la avant de
+            confirmer.
           </p>
         </div>
       </details>
