@@ -26,6 +26,8 @@ describe('DashboardService', () => {
       is_exceptional: boolean
       transaction_count: number
       total_amount: number
+      received_credit: number
+      pending_credit: number
     }> = {}
   ) => ({
     month_key: overrides.month_key ?? '2024-01',
@@ -41,6 +43,11 @@ describe('DashboardService', () => {
     type: overrides.type ?? 'EXPENSE',
     subcategory: overrides.subcategory ?? '',
     is_exceptional: overrides.is_exceptional ?? false,
+    // Since the deduction moved into SQL, `total_amount` arrives already net
+    // and these two only report what was taken off. A row with no
+    // reimbursement carries zeros.
+    received_credit: overrides.received_credit ?? 0,
+    pending_credit: overrides.pending_credit ?? 0,
     transaction_count: overrides.transaction_count ?? 1,
     total_amount: overrides.total_amount ?? 100,
   })
@@ -289,77 +296,6 @@ describe('DashboardService', () => {
       expect(optionNames(result.allIncomeCategories)).toContain('Prime')
     })
 
-    it('should deduct reimbursements from expense categories', async () => {
-      setupMocks([
-        createRow({
-          category_name: 'Santé',
-          type: 'EXPENSE',
-          total_amount: 500,
-        }),
-        createRow({
-          category_name: 'Remboursement Mutuelle',
-          type: 'INCOME',
-          total_amount: 200,
-        }),
-      ])
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement Mutuelle',
-          expenseCategory: { name: 'Santé' },
-          incomeCategory: { name: 'Remboursement Mutuelle' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {})
-
-      // Santé: 500 - 200 = 300
-      expect(result.expensesByCategory).toEqual([
-        { categoryId: 'cat-Santé', category: 'Santé', amount: 300, icon: null },
-      ])
-      // Remboursement should not appear in income
-      expect(result.incomeByCategory).toEqual([])
-      expect(result.totalIncome).toBe(0)
-    })
-
-    it('should handle reimbursements greater than expenses', async () => {
-      setupMocks([
-        createRow({
-          category_name: 'Santé',
-          type: 'EXPENSE',
-          total_amount: 100,
-        }),
-        createRow({
-          category_name: 'Remboursement Mutuelle',
-          type: 'INCOME',
-          total_amount: 200,
-        }),
-      ])
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement Mutuelle',
-          expenseCategory: { name: 'Santé' },
-          incomeCategory: { name: 'Remboursement Mutuelle' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {})
-
-      // Category stays at 0 (capped) but monthly netExpenses can be negative
-      expect(result.expensesByCategory).toEqual([
-        { categoryId: 'cat-Santé', category: 'Santé', amount: 0, icon: null },
-      ])
-      // Monthly data shows negative netExpenses (reimbursement > expense)
-      expect(result.monthlyData[0].netExpenses).toBe(-100)
-    })
-
     it('should return all available accounts', async () => {
       setupMocks([createRow()], ['Compte Courant', 'Compte Joint', 'Livret A'])
 
@@ -463,39 +399,6 @@ describe('DashboardService', () => {
       expect(result.totalIncome).toBe(80)
     })
 
-    it('should name an expense category that only collected a reimbursement', async () => {
-      // The expense category carries no transaction over the period, so no
-      // aggregated row mentions it — only the association does.
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement Mutuelle',
-          expenseCategory: { name: 'Santé' },
-          incomeCategory: { name: 'Remboursement Mutuelle' },
-        },
-      ])
-      setupMocks([
-        createRow({
-          category_name: 'Remboursement Mutuelle',
-          type: 'INCOME',
-          total_amount: 60,
-        }),
-      ])
-
-      const result = await service.getSummary(mockUserId, {})
-
-      expect(result.expensesByCategory).toEqual([
-        {
-          categoryId: 'cat-Santé',
-          category: 'Santé',
-          amount: 0,
-          icon: null,
-        },
-      ])
-    })
-
     it('should expose the category id even without the breakdown', async () => {
       setupMocks([
         createRow({ category_name: 'Alimentation', total_amount: 100 }),
@@ -566,94 +469,6 @@ describe('DashboardService', () => {
         '2024-02',
         '2024-03',
       ])
-    })
-
-    it('should deduct reimbursements from the month they occurred', async () => {
-      setupMocks([
-        createRow({
-          month_key: '2024-01',
-          category_name: 'Santé',
-          type: 'EXPENSE',
-          total_amount: 100,
-        }),
-        createRow({
-          month_key: '2024-02',
-          category_name: 'Santé',
-          type: 'EXPENSE',
-          total_amount: 300,
-        }),
-        createRow({
-          month_key: '2024-01',
-          category_name: 'Remboursement',
-          type: 'INCOME',
-          total_amount: 100,
-        }),
-      ])
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement',
-          expenseCategory: { name: 'Santé' },
-          incomeCategory: { name: 'Remboursement' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {})
-
-      // Jan: expenses = 100, reimbursement = 100 in same month, netExpenses = 0
-      // Feb: expenses = 300, no reimbursement, netExpenses = 300
-      expect(result.monthlyData[0].expenses).toBe(100)
-      expect(result.monthlyData[0].netExpenses).toBe(0)
-      expect(result.monthlyData[1].expenses).toBe(300)
-      expect(result.monthlyData[1].netExpenses).toBe(300)
-
-      // Total should be sum of category amounts after deduction
-      expect(result.totalExpenses).toBe(300)
-    })
-
-    it('should have consistent totals between monthly and category data when reimbursement is in different month', async () => {
-      setupMocks([
-        createRow({
-          month_key: '2024-01',
-          category_name: 'Santé',
-          type: 'EXPENSE',
-          total_amount: 100,
-        }),
-        createRow({
-          month_key: '2024-02',
-          category_name: 'Remboursement',
-          type: 'INCOME',
-          total_amount: 50,
-        }),
-      ])
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement',
-          expenseCategory: { name: 'Santé' },
-          incomeCategory: { name: 'Remboursement' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {})
-
-      // Category total should match totalExpenses
-      const categoryTotal = result.expensesByCategory.reduce(
-        (sum, cat) => sum + cat.amount,
-        0
-      )
-      expect(categoryTotal).toBe(result.totalExpenses)
-      expect(result.totalExpenses).toBe(50)
-
-      // Monthly data shows reimbursement in different month
-      expect(result.monthlyData[0].netExpenses).toBe(100) // Jan: expense only
-      expect(result.monthlyData[1].netExpenses).toBe(-50) // Feb: reimbursement only
     })
 
     it('should round amounts to 2 decimal places', async () => {
@@ -851,233 +666,6 @@ describe('DashboardService', () => {
     })
   })
 
-  describe('Category associations with joint accounts', () => {
-    it('should divide reimbursements by account divisor and deduct from expenses', async () => {
-      // SQL already applies divisors: Santé 500/2=250, Reimb 300/2=150
-      setupMocks(
-        [
-          createRow({
-            category_name: 'Santé',
-            type: 'EXPENSE',
-            total_amount: 250, // 500/2
-          }),
-          createRow({
-            category_name: 'Remboursement Mutuelle',
-            type: 'INCOME',
-            total_amount: 150, // 300/2
-          }),
-        ],
-        ['Compte Joint']
-      )
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement Mutuelle',
-          expenseCategory: { name: 'Santé' },
-          incomeCategory: { name: 'Remboursement Mutuelle' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {})
-
-      // Santé: 250 - 150 = 100
-      expect(result.expensesByCategory).toEqual([
-        { categoryId: 'cat-Santé', category: 'Santé', amount: 100, icon: null },
-      ])
-      expect(result.totalExpenses).toBe(100)
-      expect(result.incomeByCategory).toEqual([])
-      expect(result.totalIncome).toBe(0)
-    })
-
-    it('should handle reimbursements from different accounts with different divisors', async () => {
-      // SQL already applies divisors: Santé 400/2=200, Reimb 100/1=100
-      setupMocks(
-        [
-          createRow({
-            category_name: 'Santé',
-            type: 'EXPENSE',
-            total_amount: 200, // 400/2
-          }),
-          createRow({
-            category_name: 'Remboursement Mutuelle',
-            type: 'INCOME',
-            total_amount: 100, // 100/1
-          }),
-        ],
-        ['Compte Joint', 'Compte Courant']
-      )
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement Mutuelle',
-          expenseCategory: { name: 'Santé' },
-          incomeCategory: { name: 'Remboursement Mutuelle' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {})
-
-      // Santé: 200 - 100 = 100
-      expect(result.expensesByCategory).toEqual([
-        { categoryId: 'cat-Santé', category: 'Santé', amount: 100, icon: null },
-      ])
-      expect(result.totalExpenses).toBe(100)
-    })
-
-    it('should apply divisors correctly in monthly net expenses with reimbursements', async () => {
-      // SQL already applies divisors:
-      // Jan: Santé expense 600/2=300, Reimb 200/2=100
-      // Feb: Santé expense 400/2=200
-      setupMocks(
-        [
-          createRow({
-            month_key: '2024-01',
-            category_name: 'Santé',
-            type: 'EXPENSE',
-            total_amount: 300, // 600/2
-          }),
-          createRow({
-            month_key: '2024-01',
-            category_name: 'Remboursement Mutuelle',
-            type: 'INCOME',
-            total_amount: 100, // 200/2
-          }),
-          createRow({
-            month_key: '2024-02',
-            category_name: 'Santé',
-            type: 'EXPENSE',
-            total_amount: 200, // 400/2
-          }),
-        ],
-        ['Compte Joint']
-      )
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement Mutuelle',
-          expenseCategory: { name: 'Santé' },
-          incomeCategory: { name: 'Remboursement Mutuelle' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {})
-
-      // Jan: expense = 300, reimbursement = 100, netExpense = 200
-      // Feb: expense = 200, reimbursement = 0, netExpense = 200
-      expect(result.monthlyData).toHaveLength(2)
-      expect(result.monthlyData[0].expenses).toBe(300)
-      expect(result.monthlyData[0].netExpenses).toBe(200)
-      expect(result.monthlyData[1].expenses).toBe(200)
-      expect(result.monthlyData[1].netExpenses).toBe(200)
-
-      // Total net expenses = category total after deduction: 500 - 100 = 400
-      expect(result.totalExpenses).toBe(400)
-    })
-
-    it('should handle mixed expenses and reimbursements from joint and personal accounts', async () => {
-      // SQL already applies divisors:
-      // Santé expenses: 1000/2 + 200/1 = 500 + 200 = 700
-      // Reimb: 400/2 + 100/1 = 200 + 100 = 300
-      setupMocks(
-        [
-          createRow({
-            category_name: 'Santé',
-            type: 'EXPENSE',
-            total_amount: 700, // (1000/2) + (200/1)
-          }),
-          createRow({
-            category_name: 'Remboursement Mutuelle',
-            type: 'INCOME',
-            total_amount: 300, // (400/2) + (100/1)
-          }),
-        ],
-        ['Compte Joint', 'Compte Courant']
-      )
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement Mutuelle',
-          expenseCategory: { name: 'Santé' },
-          incomeCategory: { name: 'Remboursement Mutuelle' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {})
-
-      // Santé: 700 - 300 = 400
-      expect(result.expensesByCategory).toEqual([
-        { categoryId: 'cat-Santé', category: 'Santé', amount: 400, icon: null },
-      ])
-      expect(result.totalExpenses).toBe(400)
-    })
-
-    it('should not count associated income as regular income when from joint account', async () => {
-      // SQL already applies divisors:
-      // Santé: 200/2=100, Reimb: 100/2=50, Salaire: 3000/2=1500
-      setupMocks(
-        [
-          createRow({
-            category_name: 'Santé',
-            type: 'EXPENSE',
-            total_amount: 100, // 200/2
-          }),
-          createRow({
-            category_name: 'Remboursement Mutuelle',
-            type: 'INCOME',
-            total_amount: 50, // 100/2
-          }),
-          createRow({
-            category_name: 'Salaire',
-            type: 'INCOME',
-            total_amount: 1500, // 3000/2
-          }),
-        ],
-        ['Compte Joint']
-      )
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement Mutuelle',
-          expenseCategory: { name: 'Santé' },
-          incomeCategory: { name: 'Remboursement Mutuelle' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {})
-
-      // Only Salaire should appear in income
-      expect(result.incomeByCategory).toEqual([
-        {
-          categoryId: 'cat-Salaire',
-          category: 'Salaire',
-          amount: 1500,
-          icon: null,
-        },
-      ])
-      expect(result.totalIncome).toBe(1500)
-
-      // Santé: 100 - 50 = 50
-      expect(result.expensesByCategory).toEqual([
-        { categoryId: 'cat-Santé', category: 'Santé', amount: 50, icon: null },
-      ])
-    })
-  })
-
   describe('Additional scenarios', () => {
     it('should handle many categories across multiple months', async () => {
       setupMocks([
@@ -1271,52 +859,6 @@ describe('DashboardService', () => {
       expect(optionNames(result.allIncomeCategories)).toContain('Prime')
     })
 
-    it('should not include reimbursement categories in allIncomeCategories exclusion', async () => {
-      // Reimbursement categories should still appear in allIncomeCategories
-      setupMocks([
-        createRow({
-          category_name: 'Santé',
-          type: 'EXPENSE',
-          total_amount: 500,
-        }),
-        createRow({
-          category_name: 'Remboursement',
-          type: 'INCOME',
-          total_amount: 200,
-        }),
-        createRow({
-          category_name: 'Salaire',
-          type: 'INCOME',
-          total_amount: 3000,
-        }),
-      ])
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement',
-          expenseCategory: { name: 'Santé' },
-          incomeCategory: { name: 'Remboursement' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {})
-
-      // Remboursement appears in allIncomeCategories but not in incomeByCategory
-      expect(optionNames(result.allIncomeCategories)).toContain('Remboursement')
-      expect(optionNames(result.allIncomeCategories)).toContain('Salaire')
-      expect(result.incomeByCategory).toEqual([
-        {
-          categoryId: 'cat-Salaire',
-          category: 'Salaire',
-          amount: 3000,
-          icon: null,
-        },
-      ])
-    })
-
     it('should handle only income transactions with no expenses', async () => {
       setupMocks([
         createRow({
@@ -1376,124 +918,6 @@ describe('DashboardService', () => {
         },
       ])
       expect(result.totalExpenses).toBe(300)
-    })
-
-    it('should handle multiple reimbursement associations independently', async () => {
-      setupMocks([
-        createRow({
-          category_name: 'Santé',
-          type: 'EXPENSE',
-          total_amount: 800,
-        }),
-        createRow({
-          category_name: 'Transport',
-          type: 'EXPENSE',
-          total_amount: 300,
-        }),
-        createRow({
-          category_name: 'Remb. Mutuelle',
-          type: 'INCOME',
-          total_amount: 200,
-        }),
-        createRow({
-          category_name: 'Remb. Transport',
-          type: 'INCOME',
-          total_amount: 50,
-        }),
-        createRow({
-          category_name: 'Salaire',
-          type: 'INCOME',
-          total_amount: 3000,
-        }),
-      ])
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remb. Mutuelle',
-          expenseCategory: { name: 'Santé' },
-          incomeCategory: { name: 'Remb. Mutuelle' },
-        },
-        {
-          id: 'assoc-2',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Transport',
-          incomeCategoryId: 'cat-Remb. Transport',
-          expenseCategory: { name: 'Transport' },
-          incomeCategory: { name: 'Remb. Transport' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {})
-
-      // Santé: 800 - 200 = 600, Transport: 300 - 50 = 250
-      expect(result.expensesByCategory).toEqual([
-        { categoryId: 'cat-Santé', category: 'Santé', amount: 600, icon: null },
-        {
-          categoryId: 'cat-Transport',
-          category: 'Transport',
-          amount: 250,
-          icon: null,
-        },
-      ])
-      expect(result.totalExpenses).toBe(850)
-
-      // Only Salaire in income (reimbursements excluded)
-      expect(result.incomeByCategory).toEqual([
-        {
-          categoryId: 'cat-Salaire',
-          category: 'Salaire',
-          amount: 3000,
-          icon: null,
-        },
-      ])
-      expect(result.totalIncome).toBe(3000)
-    })
-
-    it('should handle reimbursement for a category that has no expenses', async () => {
-      // Edge case: reimbursement income exists but no corresponding expense in the period
-      setupMocks([
-        createRow({
-          category_name: 'Remboursement',
-          type: 'INCOME',
-          total_amount: 200,
-        }),
-        createRow({
-          category_name: 'Salaire',
-          type: 'INCOME',
-          total_amount: 3000,
-        }),
-      ])
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement',
-          expenseCategory: { name: 'Santé' },
-          incomeCategory: { name: 'Remboursement' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {})
-
-      // Santé appears with 0 amount (reimbursement deduction creates the entry)
-      expect(result.expensesByCategory).toEqual([
-        { categoryId: 'cat-Santé', category: 'Santé', amount: 0, icon: null },
-      ])
-      expect(result.totalExpenses).toBe(0)
-      // Reimbursement still excluded from income
-      expect(result.incomeByCategory).toEqual([
-        {
-          categoryId: 'cat-Salaire',
-          category: 'Salaire',
-          amount: 3000,
-          icon: null,
-        },
-      ])
     })
 
     it('should handle same category appearing in different months correctly', async () => {
@@ -1907,70 +1331,6 @@ describe('DashboardService', () => {
       ]
     }
 
-    it('splits received reimbursements pro rata, not off the everyday share', async () => {
-      // 1000 € gross, 600 € of which is a holiday refunded 200 € by friends.
-      // Charging the whole refund to the everyday share would shrink the very
-      // baseline the user budgets on.
-      setupMocks([
-        ...mixedCategory('Voyages', '2024-01', 400, 600),
-        createRow({
-          month_key: '2024-01',
-          category_name: 'Remb Voyages',
-          type: 'INCOME',
-          total_amount: 200,
-        }),
-      ])
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Voyages',
-          incomeCategoryId: 'cat-Remb Voyages',
-          expenseCategory: { name: 'Voyages' },
-          incomeCategory: { name: 'Remb Voyages' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {
-        includeCategoryBreakdown: true,
-      })
-
-      const travel = result.expensesByCategory[0]
-      expect(travel?.amount).toBe(800) // 1000 - 200
-      expect(travel?.exceptionalAmount).toBe(480) // 800 * 0.6
-      expect(travel?.everydayAmount).toBe(320) // 800 * 0.4
-      expect(travel?.everydayAveragePerMonth).toBe(320)
-      expect(travel?.everydayMonthlyAmounts).toEqual([320])
-    })
-
-    it('splits pending reimbursements pro rata too', async () => {
-      mockPrismaService.$queryRaw
-        .mockResolvedValueOnce(mixedCategory('Loisirs', '2024-01', 700, 300))
-        .mockResolvedValueOnce([{ account: 'Compte Courant' }])
-        // Query 4 only runs when the pending toggle is on.
-        .mockResolvedValueOnce([
-          {
-            category_id: 'cat-Loisirs',
-            category_name: 'Loisirs',
-            month_key: '2024-01',
-            pending_amount: 100,
-          },
-        ])
-        .mockResolvedValueOnce([])
-
-      const result = await service.getSummary(mockUserId, {
-        includeCategoryBreakdown: true,
-        deductPendingReimbursements: true,
-      })
-
-      const leisure = result.expensesByCategory[0]
-      expect(leisure?.amount).toBe(900) // 1000 - 100
-      expect(leisure?.pendingReimbursement).toBe(100)
-      expect(leisure?.exceptionalAmount).toBe(270) // 900 * 0.3
-      expect(leisure?.everydayAmount).toBe(630)
-      expect(leisure?.everydayMonthlyAmounts).toEqual([630])
-    })
-
     it('keeps everyday + exceptional equal to the total on a messy dataset', async () => {
       setupMocks([
         ...mixedCategory('Alimentation', '2024-01', 380, 0),
@@ -2119,39 +1479,6 @@ describe('DashboardService', () => {
       expect(month?.expenses).toBe(1000)
       expect(month?.exceptionalExpenses).toBe(550)
       expect(month?.everydayNetExpenses).toBe(450)
-    })
-
-    it('never produces a negative everyday share when refunds exceed spending', async () => {
-      setupMocks([
-        ...mixedCategory('Voyages', '2024-01', 400, 600),
-        createRow({
-          month_key: '2024-01',
-          category_name: 'Remb Voyages',
-          type: 'INCOME',
-          total_amount: 1500,
-        }),
-      ])
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-Voyages',
-          incomeCategoryId: 'cat-Remb Voyages',
-          expenseCategory: { name: 'Voyages' },
-          incomeCategory: { name: 'Remb Voyages' },
-        },
-      ])
-
-      const result = await service.getSummary(mockUserId, {
-        includeCategoryBreakdown: true,
-      })
-
-      const travel = result.expensesByCategory[0]
-      // The category total is clamped at 0, so both shares are too.
-      expect(travel?.amount).toBe(0)
-      expect(travel?.everydayAmount).toBe(0)
-      expect(travel?.exceptionalAmount).toBe(0)
-      expect(travel?.everydayAveragePerMonth).toBe(0)
     })
 
     it('preserves the split through the joint-account divisor', async () => {

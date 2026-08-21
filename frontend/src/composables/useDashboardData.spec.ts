@@ -77,6 +77,8 @@ describe('useDashboardData', () => {
         expenses: 165.5,
         netExpenses: 165.5,
         income: 2500,
+        exceptionalExpenses: 0,
+        everydayNetExpenses: 165.5,
       },
       {
         month: '2024-02',
@@ -84,13 +86,35 @@ describe('useDashboardData', () => {
         expenses: 800,
         netExpenses: 800,
         income: 2500,
+        exceptionalExpenses: 0,
+        everydayNetExpenses: 800,
       },
     ],
+    // `monthlyAmounts` is aligned with `monthLabels`, and is what the
+    // drill-down charts read now that the server computes the netting.
     expensesByCategory: [
-      { category: 'Logement', amount: 800 },
-      { category: 'Alimentation', amount: 165.5 },
+      {
+        categoryId: 'cat-Logement',
+        category: 'Logement',
+        amount: 800,
+        monthlyAmounts: [0, 800],
+      },
+      {
+        categoryId: 'cat-Alimentation',
+        category: 'Alimentation',
+        amount: 165.5,
+        monthlyAmounts: [165.5, 0],
+      },
     ],
-    incomeByCategory: [{ category: 'Salaires', amount: 5000 }],
+    incomeByCategory: [
+      {
+        categoryId: 'cat-Salaires',
+        category: 'Salaires',
+        amount: 5000,
+        monthlyAmounts: [2500, 2500],
+      },
+    ],
+    monthLabels: ['2024-01', '2024-02'],
     totalExpenses: 965.5,
     totalIncome: 5000,
     allExpenseCategories: [
@@ -99,6 +123,8 @@ describe('useDashboardData', () => {
     ],
     allIncomeCategories: [{ id: 'cat-Salaires', name: 'Salaires' }],
     availableAccounts: ['Compte Courant'],
+    totalExceptionalExpenses: 0,
+    exceptionalEvents: [],
   }
 
   const mockTransactions: TransactionDto[] = [
@@ -198,6 +224,8 @@ describe('useDashboardData', () => {
         allExpenseCategories: [],
         allIncomeCategories: [],
         availableAccounts: [],
+        totalExceptionalExpenses: 0,
+        exceptionalEvents: [],
       }
 
       vi.mocked(api.getDashboardSummary).mockResolvedValue(emptySummary)
@@ -314,56 +342,34 @@ describe('useDashboardData', () => {
       expect(filteredExpensesByMonth.value.values).toEqual([165.5, 800])
     })
 
-    it('should load transactions when category is selected for drill-down', async () => {
+    it('shows the selected category monthly series', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: mockTransactions,
-        meta: {
-          total: 2,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, setSelectedCategory, selectedCategory } =
-        useDashboardData()
-      await fetchData()
-
-      await setSelectedCategory('cat-Alimentation')
-
-      expect(selectedCategory.value).toBe('cat-Alimentation')
-      expect(api.getTransactions).toHaveBeenCalled()
-    })
-
-    it('should filter expenses by selected category after loading transactions', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: mockTransactions,
-        meta: {
-          total: 2,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
 
       const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
         useDashboardData()
       await fetchData()
 
-      await setSelectedCategory('cat-Alimentation')
+      setSelectedCategory('cat-Alimentation')
 
-      // All months from period shown, with Alimentation expenses (45.5 + 120 = 165.5) in January, 0 in February
+      // Read straight from the summary rather than recomputed from raw
+      // transactions, so the chart cannot disagree with the breakdown beside it.
       expect(filteredExpensesByMonth.value.labels).toEqual([
         'Jan 2024',
         'Fév 2024',
       ])
       expect(filteredExpensesByMonth.value.values).toEqual([165.5, 0])
+    })
+
+    it('does not fetch transactions to draw the drill-down', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+
+      const { fetchData, setSelectedCategory } = useDashboardData()
+      await fetchData()
+      setSelectedCategory('cat-Alimentation')
+
+      // Selecting a category used to trigger a full paginated walk of every
+      // transaction on the account.
+      expect(api.getTransactions).not.toHaveBeenCalled()
     })
 
     it('should show all months with zeros when no transactions match selected category', async () => {
@@ -394,31 +400,6 @@ describe('useDashboardData', () => {
       expect(filteredExpensesByMonth.value.values).toEqual([0, 0])
     })
 
-    it('should not reload transactions if already loaded', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: mockTransactions,
-        meta: {
-          total: 2,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, setSelectedCategory, setSelectedIncomeCategory } =
-        useDashboardData()
-      await fetchData()
-
-      await setSelectedCategory('cat-Alimentation')
-      await setSelectedIncomeCategory('cat-Salaires')
-
-      // Should only call getTransactions once
-      expect(api.getTransactions).toHaveBeenCalledTimes(1)
-    })
-
     it('should clear selected category', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
       vi.mocked(api.getTransactions).mockResolvedValue({
@@ -442,85 +423,6 @@ describe('useDashboardData', () => {
 
       await setSelectedCategory(null)
       expect(selectedCategory.value).toBeNull()
-    })
-
-    it('should deduct reimbursements from filtered expenses when category has association', async () => {
-      const transactionsWithReimbursements: TransactionDto[] = [
-        {
-          id: '1',
-          date: '2024-01-15T00:00:00.000Z',
-          description: 'Frais médicaux',
-          amount: -100.0,
-          type: 'EXPENSE',
-          accountId: 'Compte Courant',
-          account: 'Compte Courant',
-          categoryId: 'cat-Santé',
-          categoryName: 'Santé',
-          isPointed: false,
-          createdAt: '2024-01-15T00:00:00.000Z',
-        },
-        {
-          id: '2',
-          date: '2024-01-20T00:00:00.000Z',
-          description: 'Remboursement mutuelle',
-          amount: 60.0,
-          type: 'INCOME',
-          accountId: 'Compte Courant',
-          account: 'Compte Courant',
-          categoryId: 'cat-Remboursement Santé',
-          categoryName: 'Remboursement Santé',
-          isPointed: false,
-          createdAt: '2024-01-20T00:00:00.000Z',
-        },
-        {
-          id: '3',
-          date: '2024-02-10T00:00:00.000Z',
-          description: 'Frais médicaux',
-          amount: -200.0,
-          type: 'EXPENSE',
-          accountId: 'Compte Courant',
-          account: 'Compte Courant',
-          categoryId: 'cat-Santé',
-          categoryName: 'Santé',
-          isPointed: false,
-          createdAt: '2024-02-10T00:00:00.000Z',
-        },
-      ]
-
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: transactionsWithReimbursements,
-        meta: {
-          total: 3,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      // Configure the mock associations
-      mockAssociations = [
-        {
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement Santé',
-        },
-      ]
-
-      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
-        useDashboardData()
-      await fetchData()
-
-      await setSelectedCategory('cat-Santé')
-
-      // Jan: 100 expense - 60 reimbursement = 40 net
-      // Feb: 200 expense - 0 reimbursement = 200 net
-      expect(filteredExpensesByMonth.value.labels).toEqual([
-        'Jan 2024',
-        'Fév 2024',
-      ])
-      expect(filteredExpensesByMonth.value.values).toEqual([40, 200])
     })
   })
 
@@ -569,25 +471,14 @@ describe('useDashboardData', () => {
       expect(filteredIncomeByMonth.value.values).toEqual([2500, 2500])
     })
 
-    it('should filter income by selected category', async () => {
+    it('shows the selected income category monthly series', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: mockIncomeTransactions,
-        meta: {
-          total: 2,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
 
       const { fetchData, filteredIncomeByMonth, setSelectedIncomeCategory } =
         useDashboardData()
       await fetchData()
 
-      await setSelectedIncomeCategory('cat-Salaires')
+      setSelectedIncomeCategory('cat-Salaires')
 
       expect(filteredIncomeByMonth.value.labels).toEqual([
         'Jan 2024',
@@ -624,485 +515,6 @@ describe('useDashboardData', () => {
     })
   })
 
-  describe('data reset on refetch', () => {
-    it('should reset transactions when fetchData is called again without category filter', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: mockTransactions,
-        meta: {
-          total: 2,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, setSelectedCategory, transactions } =
-        useDashboardData()
-
-      await fetchData()
-      await setSelectedCategory('cat-Alimentation')
-
-      expect(transactions.value).toHaveLength(2)
-
-      // Clear category filter
-      await setSelectedCategory(null)
-
-      // Fetch data again
-      await fetchData()
-
-      // Transactions should be reset when no category filter is active
-      expect(transactions.value).toHaveLength(0)
-    })
-
-    it('should reload transactions when fetchData is called with active category filter', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: mockTransactions,
-        meta: {
-          total: 2,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, setSelectedCategory, transactions } =
-        useDashboardData()
-
-      await fetchData()
-      await setSelectedCategory('cat-Alimentation')
-
-      expect(transactions.value).toHaveLength(2)
-      expect(api.getTransactions).toHaveBeenCalledTimes(1)
-
-      // Fetch data again with category still selected
-      await fetchData()
-
-      // Transactions should be reloaded to maintain drill-down view
-      expect(transactions.value).toHaveLength(2)
-      expect(api.getTransactions).toHaveBeenCalledTimes(2)
-    })
-  })
-
-  describe('Joint accounts with divisors - drill-down', () => {
-    const jointAccountTransactions: TransactionDto[] = [
-      {
-        id: '1',
-        date: '2024-01-15T00:00:00.000Z',
-        description: 'Loyer',
-        amount: -1000,
-        type: 'EXPENSE',
-        accountId: 'Compte Joint',
-        account: 'Compte Joint',
-        categoryId: 'cat-Logement',
-        categoryName: 'Logement',
-        isPointed: false,
-        createdAt: '2024-01-15T00:00:00.000Z',
-      },
-      {
-        id: '2',
-        date: '2024-01-20T00:00:00.000Z',
-        description: 'Electricité',
-        amount: -200,
-        type: 'EXPENSE',
-        accountId: 'Compte Joint',
-        account: 'Compte Joint',
-        categoryId: 'cat-Logement',
-        categoryName: 'Logement',
-        isPointed: false,
-        createdAt: '2024-01-20T00:00:00.000Z',
-      },
-      {
-        id: '3',
-        date: '2024-02-15T00:00:00.000Z',
-        description: 'Loyer',
-        amount: -1000,
-        type: 'EXPENSE',
-        accountId: 'Compte Joint',
-        account: 'Compte Joint',
-        categoryId: 'cat-Logement',
-        categoryName: 'Logement',
-        isPointed: false,
-        createdAt: '2024-02-15T00:00:00.000Z',
-      },
-    ]
-
-    it('should divide expenses by account divisor in drill-down view', async () => {
-      // Configure joint account with divisor 2
-      mockAccountDivisors = {
-        'Compte Joint': 2,
-      }
-
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: jointAccountTransactions,
-        meta: {
-          total: 3,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
-        useDashboardData()
-      await fetchData()
-
-      await setSelectedCategory('cat-Logement')
-
-      // Jan: (1000 + 200) / 2 = 600
-      // Feb: 1000 / 2 = 500
-      expect(filteredExpensesByMonth.value.labels).toEqual([
-        'Jan 2024',
-        'Fév 2024',
-      ])
-      expect(filteredExpensesByMonth.value.values).toEqual([600, 500])
-    })
-
-    it('should handle mixed accounts with different divisors in drill-down', async () => {
-      const mixedAccountTransactions: TransactionDto[] = [
-        {
-          id: '1',
-          date: '2024-01-15T00:00:00.000Z',
-          description: 'Loyer',
-          amount: -1000,
-          type: 'EXPENSE',
-          accountId: 'Compte Joint',
-          account: 'Compte Joint',
-          categoryId: 'cat-Logement',
-          categoryName: 'Logement',
-          isPointed: false,
-          createdAt: '2024-01-15T00:00:00.000Z',
-        },
-        {
-          id: '2',
-          date: '2024-01-20T00:00:00.000Z',
-          description: 'Assurance habitation',
-          amount: -100,
-          type: 'EXPENSE',
-          accountId: 'Compte Courant',
-          account: 'Compte Courant',
-          categoryId: 'cat-Logement',
-          categoryName: 'Logement',
-          isPointed: false,
-          createdAt: '2024-01-20T00:00:00.000Z',
-        },
-      ]
-
-      // Configure different divisors
-      mockAccountDivisors = {
-        'Compte Joint': 2,
-        'Compte Courant': 1,
-      }
-
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: mixedAccountTransactions,
-        meta: {
-          total: 2,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
-        useDashboardData()
-      await fetchData()
-
-      await setSelectedCategory('cat-Logement')
-
-      // Jan: 1000/2 + 100/1 = 500 + 100 = 600
-      expect(filteredExpensesByMonth.value.values).toEqual([600, 0])
-    })
-
-    it('should divide income by account divisor in drill-down view', async () => {
-      const jointAccountIncomeTransactions: TransactionDto[] = [
-        {
-          id: '1',
-          date: '2024-01-25T00:00:00.000Z',
-          description: 'Salaire',
-          amount: 4000,
-          type: 'INCOME',
-          accountId: 'Compte Joint',
-          account: 'Compte Joint',
-          categoryId: 'cat-Salaires',
-          categoryName: 'Salaires',
-          isPointed: false,
-          createdAt: '2024-01-25T00:00:00.000Z',
-        },
-        {
-          id: '2',
-          date: '2024-02-25T00:00:00.000Z',
-          description: 'Salaire',
-          amount: 4000,
-          type: 'INCOME',
-          accountId: 'Compte Joint',
-          account: 'Compte Joint',
-          categoryId: 'cat-Salaires',
-          categoryName: 'Salaires',
-          isPointed: false,
-          createdAt: '2024-02-25T00:00:00.000Z',
-        },
-      ]
-
-      mockAccountDivisors = {
-        'Compte Joint': 2,
-      }
-
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: jointAccountIncomeTransactions,
-        meta: {
-          total: 2,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, filteredIncomeByMonth, setSelectedIncomeCategory } =
-        useDashboardData()
-      await fetchData()
-
-      await setSelectedIncomeCategory('cat-Salaires')
-
-      // Jan: 4000/2 = 2000, Feb: 4000/2 = 2000
-      expect(filteredIncomeByMonth.value.values).toEqual([2000, 2000])
-    })
-
-    it('should apply divisor to reimbursements and deduct from expenses in drill-down', async () => {
-      const transactionsWithReimbursements: TransactionDto[] = [
-        {
-          id: '1',
-          date: '2024-01-15T00:00:00.000Z',
-          description: 'Frais médicaux',
-          amount: -400,
-          type: 'EXPENSE',
-          accountId: 'Compte Joint',
-          account: 'Compte Joint',
-          categoryId: 'cat-Santé',
-          categoryName: 'Santé',
-          isPointed: false,
-          createdAt: '2024-01-15T00:00:00.000Z',
-        },
-        {
-          id: '2',
-          date: '2024-01-20T00:00:00.000Z',
-          description: 'Remboursement mutuelle',
-          amount: 200,
-          type: 'INCOME',
-          accountId: 'Compte Joint',
-          account: 'Compte Joint',
-          categoryId: 'cat-Remboursement Santé',
-          categoryName: 'Remboursement Santé',
-          isPointed: false,
-          createdAt: '2024-01-20T00:00:00.000Z',
-        },
-        {
-          id: '3',
-          date: '2024-02-10T00:00:00.000Z',
-          description: 'Frais médicaux',
-          amount: -600,
-          type: 'EXPENSE',
-          accountId: 'Compte Joint',
-          account: 'Compte Joint',
-          categoryId: 'cat-Santé',
-          categoryName: 'Santé',
-          isPointed: false,
-          createdAt: '2024-02-10T00:00:00.000Z',
-        },
-      ]
-
-      mockAccountDivisors = {
-        'Compte Joint': 2,
-      }
-
-      // Configure category association
-      mockAssociations = [
-        {
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement Santé',
-        },
-      ]
-
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: transactionsWithReimbursements,
-        meta: {
-          total: 3,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
-        useDashboardData()
-      await fetchData()
-
-      await setSelectedCategory('cat-Santé')
-
-      // Jan: expense = 400/2 = 200, reimbursement = 200/2 = 100, net = 100
-      // Feb: expense = 600/2 = 300, reimbursement = 0, net = 300
-      expect(filteredExpensesByMonth.value.values).toEqual([100, 300])
-    })
-
-    it('should handle reimbursements from different accounts with different divisors', async () => {
-      const mixedReimbursementTransactions: TransactionDto[] = [
-        {
-          id: '1',
-          date: '2024-01-15T00:00:00.000Z',
-          description: 'Frais médicaux',
-          amount: -400,
-          type: 'EXPENSE',
-          accountId: 'Compte Joint',
-          account: 'Compte Joint',
-          categoryId: 'cat-Santé',
-          categoryName: 'Santé',
-          isPointed: false,
-          createdAt: '2024-01-15T00:00:00.000Z',
-        },
-        {
-          id: '2',
-          date: '2024-01-20T00:00:00.000Z',
-          description: 'Remboursement mutuelle',
-          amount: 100,
-          type: 'INCOME',
-          accountId: 'Compte Courant',
-          account: 'Compte Courant', // Personal account
-          categoryId: 'cat-Remboursement Santé',
-          categoryName: 'Remboursement Santé',
-          isPointed: false,
-          createdAt: '2024-01-20T00:00:00.000Z',
-        },
-      ]
-
-      mockAccountDivisors = {
-        'Compte Joint': 2,
-        'Compte Courant': 1,
-      }
-
-      mockAssociations = [
-        {
-          expenseCategoryId: 'cat-Santé',
-          incomeCategoryId: 'cat-Remboursement Santé',
-        },
-      ]
-
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: mixedReimbursementTransactions,
-        meta: {
-          total: 2,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
-        useDashboardData()
-      await fetchData()
-
-      await setSelectedCategory('cat-Santé')
-
-      // Jan: expense = 400/2 = 200, reimbursement = 100/1 = 100, net = 100
-      expect(filteredExpensesByMonth.value.values).toEqual([100, 0])
-    })
-
-    it('should use default divisor 1 for unknown accounts', async () => {
-      const unknownAccountTransactions: TransactionDto[] = [
-        {
-          id: '1',
-          date: '2024-01-15T00:00:00.000Z',
-          description: 'Achat',
-          amount: -100,
-          type: 'EXPENSE',
-          accountId: 'Compte Inconnu',
-          account: 'Compte Inconnu',
-          categoryId: 'cat-Divers',
-          categoryName: 'Divers',
-          isPointed: false,
-          createdAt: '2024-01-15T00:00:00.000Z',
-        },
-      ]
-
-      // No divisor configured for 'Compte Inconnu' - should default to 1
-      mockAccountDivisors = {}
-
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: unknownAccountTransactions,
-        meta: {
-          total: 1,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
-        useDashboardData()
-      await fetchData()
-
-      await setSelectedCategory('cat-Divers')
-
-      // Should use divisor 1, so amount stays 100
-      expect(filteredExpensesByMonth.value.values).toEqual([100, 0])
-    })
-
-    it('should correctly compute total filtered expenses with divisors', async () => {
-      mockAccountDivisors = {
-        'Compte Joint': 2,
-      }
-
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: jointAccountTransactions,
-        meta: {
-          total: 3,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
-        useDashboardData()
-      await fetchData()
-
-      await setSelectedCategory('cat-Logement')
-
-      // Jan: (1000 + 200) / 2 = 600
-      // Feb: 1000 / 2 = 500
-      // Total: 600 + 500 = 1100
-      const total = filteredExpensesByMonth.value.values.reduce(
-        (sum, val) => sum + val,
-        0
-      )
-      expect(total).toBe(1100)
-    })
-  })
   describe('everyday vs exceptional aggregation', () => {
     const summaryWithEvents: DashboardSummaryDto = {
       monthlyData: [
@@ -1127,6 +539,7 @@ describe('useDashboardData', () => {
       ],
       expensesByCategory: [
         {
+          categoryId: 'cat-Logement',
           category: 'Logement',
           amount: 1600,
           everydayAmount: 1600,
@@ -1135,6 +548,7 @@ describe('useDashboardData', () => {
           everydayAveragePerMonth: 800,
         },
         {
+          categoryId: 'cat-Voyages',
           category: 'Voyages',
           amount: 600,
           everydayAmount: 0,
@@ -1143,11 +557,20 @@ describe('useDashboardData', () => {
           everydayAveragePerMonth: 0,
         },
       ],
-      incomeByCategory: [{ category: 'Salaires', amount: 5000 }],
+      incomeByCategory: [
+        {
+          categoryId: 'cat-Salaires',
+          category: 'Salaires',
+          amount: 5000,
+        },
+      ],
       totalExpenses: 2200,
       totalIncome: 5000,
-      allExpenseCategories: ['Logement', 'Voyages'],
-      allIncomeCategories: ['Salaires'],
+      allExpenseCategories: [
+        { id: 'cat-Logement', name: 'Logement' },
+        { id: 'cat-Voyages', name: 'Voyages' },
+      ],
+      allIncomeCategories: [{ id: 'cat-Salaires', name: 'Salaires' }],
       availableAccounts: ['Compte Courant'],
       periodMonths: 2,
       monthLabels: ['2024-01', '2024-02'],
@@ -1215,6 +638,7 @@ describe('useDashboardData', () => {
         ...summaryWithEvents,
         expensesByCategory: [
           {
+            categoryId: 'cat-Logement',
             category: 'Logement',
             amount: 1600,
             everydayAmount: 1600,
@@ -1246,8 +670,16 @@ describe('useDashboardData', () => {
         ...summaryWithEvents,
         // A response without the category breakdown carries no everyday field.
         expensesByCategory: [
-          { category: 'Logement', amount: 1600 },
-          { category: 'Voyages', amount: 600 },
+          {
+            categoryId: 'cat-Logement',
+            category: 'Logement',
+            amount: 1600,
+          },
+          {
+            categoryId: 'cat-Voyages',
+            category: 'Voyages',
+            amount: 600,
+          },
         ],
         totalExceptionalExpenses: 0,
       })

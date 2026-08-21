@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { Prisma } from '../generated/prisma'
+import {
+  PENDING_CREDIT_SCALED,
+  RECEIVED_CREDIT_SCALED,
+  REIMBURSEMENT_CREDIT_JOINS,
+  netAmountSql,
+  reimbursementCreditCtes,
+} from '../reimbursements/reimbursement-credit.sql'
 import type {
   BudgetStatisticsResponseDto,
   BudgetStatisticsFiltersDto,
@@ -34,10 +41,16 @@ interface AggregatedTransactionRow {
   /** True when the transaction carries at least one tag flagged exceptional. */
   is_exceptional: boolean
   transaction_count: number
+  /** Already net of whichever deductions the filters asked for. */
   total_amount: number
+  /** Cash received against the expenses in this group, for reporting. */
+  received_credit: number
+  /** Still owed on them, for reporting. */
+  pending_credit: number
 }
 
-interface PendingReimbursementRow {
+/** Debt still owed on an expense that falls outside the statistics window. */
+interface OutOfPeriodPendingRow {
   category_id: string
   pending_amount: number
 }
@@ -48,12 +61,6 @@ interface MonthlyBreakdownRow {
   year_month: string
   is_exceptional: boolean
   monthly_amount: number
-}
-
-interface MonthlyPendingRow {
-  category_id: string
-  year_month: string
-  pending_amount: number
 }
 
 @Injectable()
@@ -82,17 +89,23 @@ export class BudgetsService {
     // Calculate period in months
     const periodMonths = this.calculateMonthsDiff(startDate, endDate)
 
-    // Fetch aggregated transactions, category associations, and optionally
-    // pending reimbursements + monthly breakdown — all in parallel.
-    const [rows, associations, pendingRows, monthlyRows, monthlyPendingRows] =
-      await Promise.all([
-        this.prisma.$queryRaw<AggregatedTransactionRow[]>(Prisma.sql`
+    // Same rule as the dashboard, from the same module: the deduction is
+    // applied per transaction inside the aggregation, so the rows come back
+    // net and `CategoryAssociation` takes no part in the calculation.
+    const netAmount = netAmountSql({
+      deductReceived: shouldDeductReimbursements,
+      deductPending: shouldDeductPending,
+    })
+
+    const [rows, monthlyRows, outOfPeriodPendingRows] = await Promise.all([
+      this.prisma.$queryRaw<AggregatedTransactionRow[]>(Prisma.sql`
         WITH exceptional_tx AS (
           SELECT DISTINCT tt.transaction_id
           FROM app.transaction_tags tt
           JOIN app.tags tg ON tg.id = tt.tag_id
           WHERE tg.user_id = ${userId} AND tg.is_exceptional = true
-        )
+        ),
+        ${reimbursementCreditCtes(userId)}
         SELECT
           t.category_id,
           c.name AS category_name,
@@ -101,16 +114,14 @@ export class BudgetsService {
           COALESCE(t.subcategory, '') AS subcategory,
           (et.transaction_id IS NOT NULL) AS is_exceptional,
           COUNT(*)::int AS transaction_count,
-          SUM(
-            CASE WHEN t.type = 'EXPENSE'
-              THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
-              ELSE t.amount::numeric / COALESCE(a.divisor, 1)
-            END
-          )::float AS total_amount
+          SUM(${netAmount})::float AS total_amount,
+          SUM(${RECEIVED_CREDIT_SCALED})::float AS received_credit,
+          SUM(${PENDING_CREDIT_SCALED})::float AS pending_credit
         FROM app.transactions t
         JOIN app.categories c ON c.id = t.category_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
         LEFT JOIN exceptional_tx et ON et.transaction_id = t.id
+        ${REIMBURSEMENT_CREDIT_JOINS}
         WHERE t.user_id = ${userId}
           AND t.date >= ${startDate}
           AND t.date <= ${endDate}
@@ -119,57 +130,26 @@ export class BudgetsService {
           AND c.is_excluded_from_budget = false
         GROUP BY t.category_id, c.name, c.icon, t.type, COALESCE(t.subcategory, ''), (et.transaction_id IS NOT NULL)
       `),
-        this.prisma.categoryAssociation.findMany({
-          where: { userId },
-          include: {
-            expenseCategory: true,
-            incomeCategory: true,
-          },
-        }),
-        shouldDeductPending
-          ? this.prisma.$queryRaw<PendingReimbursementRow[]>(Prisma.sql`
-            SELECT
-              rr.category_id,
-              SUM(
-                (rr.amount::numeric - rr.amount_received::numeric) / COALESCE(a.divisor, 1)
-              )::float AS pending_amount
-            FROM app.reimbursement_requests rr
-            JOIN app.transactions t ON t.id = rr.transaction_id
-            LEFT JOIN app.accounts a ON a.id = t.account_id
-            WHERE rr.user_id = ${userId}
-              AND rr.status IN ('PENDING', 'PARTIAL')
-              ${
-                includeAllPending
-                  ? Prisma.empty
-                  : Prisma.sql`AND t.date >= ${startDate} AND t.date <= ${endDate}`
-              }
-              AND COALESCE(a.is_excluded_from_budget, false) = false
-            GROUP BY rr.category_id
-          `)
-          : Promise.resolve([]),
-        shouldIncludeMonthly
-          ? this.prisma.$queryRaw<MonthlyBreakdownRow[]>(Prisma.sql`
+      shouldIncludeMonthly
+        ? this.prisma.$queryRaw<MonthlyBreakdownRow[]>(Prisma.sql`
             WITH exceptional_tx AS (
               SELECT DISTINCT tt.transaction_id
               FROM app.transaction_tags tt
               JOIN app.tags tg ON tg.id = tt.tag_id
               WHERE tg.user_id = ${userId} AND tg.is_exceptional = true
-            )
+            ),
+            ${reimbursementCreditCtes(userId)}
             SELECT
               t.category_id,
               t.type::text AS type,
               TO_CHAR(t.date, 'YYYY-MM') AS year_month,
               (et.transaction_id IS NOT NULL) AS is_exceptional,
-              SUM(
-                CASE WHEN t.type = 'EXPENSE'
-                  THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
-                  ELSE t.amount::numeric / COALESCE(a.divisor, 1)
-                END
-              )::float AS monthly_amount
+              SUM(${netAmount})::float AS monthly_amount
             FROM app.transactions t
             JOIN app.categories c ON c.id = t.category_id
             LEFT JOIN app.accounts a ON a.id = t.account_id
             LEFT JOIN exceptional_tx et ON et.transaction_id = t.id
+            ${REIMBURSEMENT_CREDIT_JOINS}
             WHERE t.user_id = ${userId}
               AND t.date >= ${startDate}
               AND t.date <= ${endDate}
@@ -179,38 +159,39 @@ export class BudgetsService {
             GROUP BY t.category_id, t.type, TO_CHAR(t.date, 'YYYY-MM'), (et.transaction_id IS NOT NULL)
             ORDER BY t.category_id, TO_CHAR(t.date, 'YYYY-MM')
           `)
-          : Promise.resolve([]),
-        shouldIncludeMonthly && shouldDeductPending
-          ? this.prisma.$queryRaw<MonthlyPendingRow[]>(Prisma.sql`
+        : Promise.resolve([]),
+      // Debts on expenses outside the window, keyed by the expense's own
+      // category — the deduction anchors on the spending now, so no category
+      // mapping is involved. Only fetched when the caller asks for it.
+      shouldDeductPending && includeAllPending
+        ? this.prisma.$queryRaw<OutOfPeriodPendingRow[]>(Prisma.sql`
             SELECT
-              rr.category_id,
-              TO_CHAR(t.date, 'YYYY-MM') AS year_month,
+              t.category_id,
               SUM(
-                (rr.amount::numeric - rr.amount_received::numeric) / COALESCE(a.divisor, 1)
+                (claims.claimed - claims.credited) / COALESCE(a.divisor, 1)
               )::float AS pending_amount
-            FROM app.reimbursement_requests rr
-            JOIN app.transactions t ON t.id = rr.transaction_id
+            FROM (
+              SELECT
+                r.transaction_id,
+                r.amount AS claimed,
+                COALESCE((
+                  SELECT SUM(p.amount) FROM app.reimbursement_payments p
+                  WHERE p.reimbursement_id = r.id
+                ), 0) AS credited
+              FROM app.reimbursement_requests r
+              WHERE r.user_id = ${userId}
+            ) claims
+            JOIN app.transactions t ON t.id = claims.transaction_id
+            JOIN app.categories c ON c.id = t.category_id
             LEFT JOIN app.accounts a ON a.id = t.account_id
-            WHERE rr.user_id = ${userId}
-              AND rr.status IN ('PENDING', 'PARTIAL')
-              ${
-                includeAllPending
-                  ? Prisma.empty
-                  : Prisma.sql`AND t.date >= ${startDate} AND t.date <= ${endDate}`
-              }
+            WHERE claims.claimed > claims.credited
+              AND (t.date < ${startDate} OR t.date > ${endDate})
               AND COALESCE(a.is_excluded_from_budget, false) = false
-            GROUP BY rr.category_id, TO_CHAR(t.date, 'YYYY-MM')
+              AND c.is_excluded_from_budget = false
+            GROUP BY t.category_id
           `)
-          : Promise.resolve([]),
-      ])
-
-    // Build reimbursement lookup maps
-    const reimbursementCategoryIds = new Set(
-      associations.map(a => a.incomeCategoryId)
-    )
-    const incomeCategoryToExpenseCategory = new Map(
-      associations.map(a => [a.incomeCategoryId, a.expenseCategoryId])
-    )
+        : Promise.resolve([] as OutOfPeriodPendingRow[]),
+    ])
 
     // Process aggregated rows into maps
     const expenseMap = new Map<
@@ -242,10 +223,10 @@ export class BudgetsService {
     // Track received reimbursements by expense category
     const reimbursementsByExpenseCategory = new Map<string, number>()
 
-    // Gross expense carried by exceptional-tagged transactions, per category.
-    // Captured before any reimbursement deduction so the two shares can be
-    // split pro-rata further down.
-    const grossExceptionalByCategory = new Map<string, number>()
+    // Expense carried by exceptional-tagged transactions, per category, net of
+    // reimbursements — the credit travelled with the tagged transaction itself,
+    // so a refunded holiday reduces this share and nothing else.
+    const netExceptionalByCategory = new Map<string, number>()
 
     // Since `is_exceptional` joined the GROUP BY, a (category, subcategory)
     // pair can now come back on two rows — accumulate instead of overwriting.
@@ -274,9 +255,9 @@ export class BudgetsService {
         totalExpenses += amount
 
         if (row.is_exceptional) {
-          grossExceptionalByCategory.set(
+          netExceptionalByCategory.set(
             categoryId,
-            (grossExceptionalByCategory.get(categoryId) ?? 0) + amount
+            (netExceptionalByCategory.get(categoryId) ?? 0) + amount
           )
         }
 
@@ -301,21 +282,10 @@ export class BudgetsService {
           })
         }
       } else {
-        // Track reimbursements by expense category before excluding
-        if (reimbursementCategoryIds.has(categoryId)) {
-          const expenseCategoryId =
-            incomeCategoryToExpenseCategory.get(categoryId)
-          if (expenseCategoryId) {
-            const current =
-              reimbursementsByExpenseCategory.get(expenseCategoryId) ?? 0
-            reimbursementsByExpenseCategory.set(
-              expenseCategoryId,
-              current + amount
-            )
-          }
-          continue
-        }
-
+        // No category is diverted wholesale any more. `amount` already excludes
+        // the cash this transaction paid back, so a transfer mixing salary and
+        // a refund contributes the salary and nothing else — where the previous
+        // model had to drop the entire category or keep all of it.
         totalIncome += amount
 
         const existing = incomeMap.get(categoryId)
@@ -341,17 +311,24 @@ export class BudgetsService {
       }
     }
 
-    // Build pending reimbursements map (keyed by expense category)
+    // Received and still-owed credit per expense category, taken straight
+    // from the aggregation: both travelled with the transactions they belong
+    // to, so no second query and no category mapping are involved.
     const pendingByExpenseCategory = new Map<string, number>()
-    for (const row of pendingRows) {
-      const expenseCategoryId = incomeCategoryToExpenseCategory.get(
-        row.category_id
-      )
-      if (expenseCategoryId) {
-        const current = pendingByExpenseCategory.get(expenseCategoryId) ?? 0
+    for (const row of rows) {
+      if (row.type !== 'EXPENSE') continue
+      if (shouldDeductReimbursements) {
+        reimbursementsByExpenseCategory.set(
+          row.category_id,
+          (reimbursementsByExpenseCategory.get(row.category_id) ?? 0) +
+            row.received_credit
+        )
+      }
+      if (shouldDeductPending) {
         pendingByExpenseCategory.set(
-          expenseCategoryId,
-          current + row.pending_amount
+          row.category_id,
+          (pendingByExpenseCategory.get(row.category_id) ?? 0) +
+            row.pending_credit
         )
       }
     }
@@ -401,71 +378,25 @@ export class BudgetsService {
         }
       }
 
-      // Build monthly reimbursement deductions per expense category per month
-      // reimbursementCategoryIds is the set of income category IDs that are reimbursement categories
-      // incomeCategoryToExpenseCategory maps income cat → expense cat
-      const monthlyReimbByExpenseCat = new Map<string, Map<string, number>>()
-      if (shouldDeductReimbursements) {
-        for (const [key, monthMap] of rawMap) {
-          if (!key.startsWith('INCOME:')) continue
-          const incomeCatId = key.split(':')[1] ?? key
-          if (!reimbursementCategoryIds.has(incomeCatId)) continue
-          const expCatId = incomeCategoryToExpenseCategory.get(incomeCatId)
-          if (!expCatId) continue
-          if (!monthlyReimbByExpenseCat.has(expCatId)) {
-            monthlyReimbByExpenseCat.set(expCatId, new Map())
-          }
-          const target = monthlyReimbByExpenseCat.get(expCatId)!
-          for (const [month, amount] of monthMap) {
-            target.set(month, (target.get(month) ?? 0) + amount)
-          }
-        }
-      }
-
-      // Build monthly pending deductions per expense category per month
-      const monthlyPendingByExpenseCat = new Map<string, Map<string, number>>()
-      if (shouldDeductPending) {
-        for (const row of monthlyPendingRows) {
-          const expCatId = incomeCategoryToExpenseCategory.get(row.category_id)
-          if (!expCatId) continue
-          if (!monthlyPendingByExpenseCat.has(expCatId)) {
-            monthlyPendingByExpenseCat.set(expCatId, new Map())
-          }
-          const target = monthlyPendingByExpenseCat.get(expCatId)!
-          target.set(
-            row.year_month,
-            (target.get(row.year_month) ?? 0) + row.pending_amount
-          )
-        }
-      }
-
-      // Build final expense monthly arrays with deductions applied
+      // The monthly rows are already net — the same per-transaction credit the
+      // category totals used — so there is nothing left to subtract here, and
+      // no `Math.max(0, …)` to swallow a month where a delayed refund exceeds
+      // what was spent.
       for (const [key, monthMap] of rawMap) {
         if (!key.startsWith('EXPENSE:')) continue
         const catId = key.split(':')[1] ?? key
-        const reimbMonths = monthlyReimbByExpenseCat.get(catId)
-        const pendingMonths = monthlyPendingByExpenseCat.get(catId)
-
         const exceptionalMonths = rawExceptionalMap.get(key)
 
         const amounts: number[] = []
         const everydayAmounts: number[] = []
         for (const m of allMonths) {
-          const gross = monthMap.get(m) ?? 0
-          let val = gross
-          if (reimbMonths) {
-            val = Math.max(0, val - (reimbMonths.get(m) ?? 0))
-          }
-          if (pendingMonths) {
-            val = Math.max(0, val - (pendingMonths.get(m) ?? 0))
-          }
-          amounts.push(this.round(val))
-
-          // Same pro-rata as the category totals: a reimbursement received on
-          // an exceptional expense must not be deducted from everyday life.
-          const grossExceptional = exceptionalMonths?.get(m) ?? 0
-          const exceptionalRatio = gross > 0 ? grossExceptional / gross : 0
-          everydayAmounts.push(this.round(val * (1 - exceptionalRatio)))
+          const net = monthMap.get(m) ?? 0
+          amounts.push(this.round(net))
+          // Exact, not pro rata: the exceptional share is the sum of the
+          // netted exceptional transactions of that month.
+          everydayAmounts.push(
+            this.round(net - (exceptionalMonths?.get(m) ?? 0))
+          )
         }
         monthlyByCategory.set(catId, amounts)
         everydayMonthlyByCategory.set(catId, everydayAmounts)
@@ -485,50 +416,35 @@ export class BudgetsService {
       categoryGrossTotals.set(categoryId, data.total)
     }
 
-    // Deduct received reimbursements from expense categories
+    // Already deducted inside the aggregation; these totals are reported, not
+    // applied. Subtracting again here would double-count.
     let totalReimbursements = 0
-    if (shouldDeductReimbursements) {
-      for (const [
-        expenseCategoryId,
-        reimbursement,
-      ] of reimbursementsByExpenseCategory) {
-        const expenseData = expenseMap.get(expenseCategoryId)
-        if (expenseData) {
-          const deduction = Math.min(expenseData.total, reimbursement)
-          expenseData.total = Math.max(0, expenseData.total - reimbursement)
-          totalExpenses -= deduction
-          totalReimbursements += deduction
-        }
-      }
+    for (const amount of reimbursementsByExpenseCategory.values()) {
+      totalReimbursements += amount
     }
-
-    // Deduct pending reimbursements from expense categories
     let totalPendingReimbursements = 0
-    if (shouldDeductPending) {
-      for (const [
-        expenseCategoryId,
-        pendingAmount,
-      ] of pendingByExpenseCategory) {
-        const expenseData = expenseMap.get(expenseCategoryId)
-        if (expenseData) {
-          const deduction = Math.min(expenseData.total, pendingAmount)
-          expenseData.total = Math.max(0, expenseData.total - pendingAmount)
-          totalExpenses -= deduction
-          totalPendingReimbursements += deduction
-        }
-      }
+    for (const amount of pendingByExpenseCategory.values()) {
+      totalPendingReimbursements += amount
     }
 
-    // Total deduction per category (received + pending) for proportional subcategory split
-    const totalDeductionByCategory = new Map<string, number>()
-    for (const [catId] of expenseMap) {
-      const received = shouldDeductReimbursements
-        ? (reimbursementsByExpenseCategory.get(catId) ?? 0)
-        : 0
-      const pending = shouldDeductPending
-        ? (pendingByExpenseCategory.get(catId) ?? 0)
-        : 0
-      totalDeductionByCategory.set(catId, received + pending)
+    // Debts whose expense falls outside the window. They have no row in the
+    // aggregation to attach to, so `includeAllPendingReimbursements` — meant
+    // for sizing a future plan against money still owed today — needs its own
+    // pass. Applied only to categories the period actually shows, exactly as
+    // before.
+    if (shouldDeductPending && includeAllPending) {
+      for (const row of outOfPeriodPendingRows) {
+        const expenseData = expenseMap.get(row.category_id)
+        if (!expenseData) continue
+        expenseData.total -= row.pending_amount
+        totalExpenses -= row.pending_amount
+        totalPendingReimbursements += row.pending_amount
+        pendingByExpenseCategory.set(
+          row.category_id,
+          (pendingByExpenseCategory.get(row.category_id) ?? 0) +
+            row.pending_amount
+        )
+      }
     }
 
     // Net expense carried by exceptional events, accumulated while building
@@ -540,35 +456,24 @@ export class BudgetsService {
       expenseMap.values()
     )
       .map(e => {
-        const grossTotal = categoryGrossTotals.get(e.categoryId) ?? e.total
-        const deduction = totalDeductionByCategory.get(e.categoryId) ?? 0
-
-        // Convert subcategories map to array with proportional deduction
+        // Subcategory totals are exact: each carries the credit of its own
+        // transactions. Sharing the deduction out pro rata used to move money
+        // between subcategories that had been refunded nothing.
         const subcategories: SubcategoryAverageDto[] = Array.from(
           e.subcategories.entries()
         )
-          .map(([subcategory, data]) => {
-            const proportion = grossTotal > 0 ? data.total / grossTotal : 0
-            const proportionalDeduction = deduction * proportion
-            const netTotal = Math.max(0, data.total - proportionalDeduction)
-
-            return {
-              subcategory,
-              totalAmount: this.round(netTotal),
-              transactionCount: data.count,
-              averagePerMonth: this.round(netTotal / periodMonths),
-            }
-          })
+          .map(([subcategory, data]) => ({
+            subcategory,
+            totalAmount: this.round(data.total),
+            transactionCount: data.count,
+            averagePerMonth: this.round(data.total / periodMonths),
+          }))
           .sort((a, b) => b.totalAmount - a.totalAmount)
 
-        // Split the NET total between everyday life and one-off events, in the
-        // proportion observed on the gross — reimbursements are thus shared by
-        // both, exactly like the dashboard does.
-        const grossExceptional =
-          grossExceptionalByCategory.get(e.categoryId) ?? 0
-        const exceptionalRatio =
-          grossTotal > 0 ? grossExceptional / grossTotal : 0
-        const exceptionalAmount = e.total * exceptionalRatio
+        // Both shares are sums of netted transactions, so the split is exact
+        // rather than a ratio taken on gross and re-applied to net.
+        const exceptionalAmount =
+          netExceptionalByCategory.get(e.categoryId) ?? 0
         const everydayAmount = e.total - exceptionalAmount
         totalExceptionalExpenses += exceptionalAmount
 

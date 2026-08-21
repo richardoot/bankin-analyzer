@@ -1,14 +1,11 @@
 import { ref, computed, watch } from 'vue'
 import {
   api,
-  UNCATEGORIZED_CATEGORY_ID,
   type CategoryOptionDto,
   type DashboardSummaryDto,
-  type TransactionDto,
 } from '@/lib/api'
 import { useFiltersStore } from '@/stores/filters'
 import { useAccountsStore } from '@/stores/accounts'
-import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
 
 export interface MonthlyData {
   month: string // "2024-01", "2024-02", ...
@@ -23,36 +20,16 @@ export interface ChartData {
   values: number[]
 }
 
-const MONTH_LABELS: Record<string, string> = {
-  '01': 'Jan',
-  '02': 'Fév',
-  '03': 'Mar',
-  '04': 'Avr',
-  '05': 'Mai',
-  '06': 'Juin',
-  '07': 'Juil',
-  '08': 'Août',
-  '09': 'Sep',
-  '10': 'Oct',
-  '11': 'Nov',
-  '12': 'Déc',
-}
-
 export function useDashboardData() {
   const filtersStore = useFiltersStore()
   const accountsStore = useAccountsStore()
-  const categoryAssociationsStore = useCategoryAssociationsStore()
 
   // Pre-aggregated data from backend
   const summaryData = ref<DashboardSummaryDto | null>(null)
 
   // Transactions for drill-down (loaded on demand)
-  const transactions = ref<TransactionDto[]>([])
-  const transactionsLoaded = ref(false)
 
   const isLoading = ref(false)
-  const isLoadingExpenseChart = ref(false)
-  const isLoadingIncomeChart = ref(false)
   const error = ref<string | null>(null)
   const selectedCategory = ref<string | null>(null)
   const selectedIncomeCategory = ref<string | null>(null)
@@ -169,11 +146,13 @@ export function useDashboardData() {
     () => summaryData.value?.allExpenseCategories ?? []
   )
 
-  // All income categories excluding those associated with expense categories
-  const allIncomeCategories = computed<CategoryOptionDto[]>(() =>
-    (summaryData.value?.allIncomeCategories ?? []).filter(
-      cat => !categoryAssociationsStore.isIncomeCategoryAssociated(cat.id)
-    )
+  // Every income category the period carries. Those linked to an expense
+  // category used to be filtered out here, because the server excluded them
+  // from income wholesale. It no longer does: a transfer is now netted by the
+  // cash it actually paid back, so a mixed one — salary plus a refund — still
+  // reports its salary, and hiding the category would hide real income.
+  const allIncomeCategories = computed<CategoryOptionDto[]>(
+    () => summaryData.value?.allIncomeCategories ?? []
   )
 
   // Helper: Check if category is hidden (dashboard filter OR globally hidden)
@@ -205,170 +184,74 @@ export function useDashboardData() {
     )
   )
 
-  // Helper pour obtenir le montant ajusté (divisé par le diviseur du compte)
-  function getAdjustedAmount(tx: TransactionDto): number {
-    const divisor = accountsStore.getDivisor(tx.accountId)
-    return tx.amount / divisor
+  /**
+   * The server's per-category monthly series, keyed by month.
+   *
+   * `monthlyAmounts` is aligned with `monthLabels`, which spans the whole
+   * requested period, while the chart axis follows `monthlyData` — the months
+   * that actually carry something. Going through a map rather than a shared
+   * index keeps the two from silently drifting apart.
+   */
+  function monthlySeriesOf(
+    categories: { categoryId: string; monthlyAmounts?: number[] }[],
+    categoryId: string
+  ): ChartData {
+    const category = categories.find(c => c.categoryId === categoryId)
+    const labels = monthLabels.value
+    const byMonth = new Map<string, number>(
+      (category?.monthlyAmounts ?? []).map((amount, index) => [
+        labels[index] ?? String(index),
+        amount,
+      ])
+    )
+
+    // The axis carries its own formatted label already; reusing it keeps the
+    // drill-down chart aligned with the overview above it.
+    return {
+      labels: monthlyData.value.map(d => d.label),
+      values: monthlyData.value.map(d => byMonth.get(d.month) ?? 0),
+    }
   }
 
-  // Filtered expenses by month (when category is selected) - requires transactions
-  // Deducts reimbursements from associated income category
-  // Shows all months from the selected time period, with zeros for months without data
+  // Both drill-down charts read the series the server already computed.
+  //
+  // They used to be recalculated here from every transaction of the account,
+  // which meant the chart and the category breakdown right next to it applied
+  // *different* rules: this one deducted a refund in the month it was received,
+  // through the category association, while the server now nets it against the
+  // expense it repays. Same screen, two answers. Reading the server's own
+  // figures makes them agree by construction — and drops the full paginated
+  // transaction fetch that existed only to feed this.
   const filteredExpensesByMonth = computed<ChartData>(() => {
     if (!selectedCategory.value) {
       return expensesByMonth.value
     }
-
-    if (!transactionsLoaded.value) {
-      return { labels: [], values: [] }
-    }
-
-    const expensesByMonthMap = new Map<string, number>()
-    const reimbursementsByMonthMap = new Map<string, number>()
-
-    // Find the associated income category for this expense category
-    // Access associations directly to ensure Vue tracks the dependency
-    const association = categoryAssociationsStore.associations.find(
-      a => a.expenseCategoryId === selectedCategory.value
+    return monthlySeriesOf(
+      expenseCategoriesDetailed.value,
+      selectedCategory.value
     )
-    const associatedIncomeCategoryId = association?.incomeCategoryId ?? null
-
-    for (const tx of transactions.value) {
-      const date = new Date(tx.date)
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      const categoryId = tx.categoryId ?? UNCATEGORIZED_CATEGORY_ID
-
-      // Sum expenses for selected category
-      if (tx.type === 'EXPENSE' && categoryId === selectedCategory.value) {
-        if (isExpenseCategoryHiddenOrGlobal(categoryId)) continue
-
-        const current = expensesByMonthMap.get(monthKey) ?? 0
-        expensesByMonthMap.set(
-          monthKey,
-          current + Math.abs(getAdjustedAmount(tx))
-        )
-      }
-
-      // Sum reimbursements from associated income category
-      if (
-        associatedIncomeCategoryId &&
-        tx.type === 'INCOME' &&
-        categoryId === associatedIncomeCategoryId
-      ) {
-        const current = reimbursementsByMonthMap.get(monthKey) ?? 0
-        reimbursementsByMonthMap.set(monthKey, current + getAdjustedAmount(tx))
-      }
-    }
-
-    // Use all months from the global monthlyData to maintain consistency with time period
-    const allMonthsFromPeriod = monthlyData.value.map(d => d.month)
-
-    // Calculate net expenses per month for all months in the period
-    return {
-      labels: allMonthsFromPeriod.map(month => {
-        const [year, monthNum] = month.split('-')
-        return `${MONTH_LABELS[monthNum]} ${year}`
-      }),
-      values: allMonthsFromPeriod.map(month => {
-        const expenses = expensesByMonthMap.get(month) ?? 0
-        const reimbursements = reimbursementsByMonthMap.get(month) ?? 0
-        // Allow negative values (when reimbursements > expenses)
-        const netExpenses = expenses - reimbursements
-        return Math.round(netExpenses * 100) / 100
-      }),
-    }
   })
 
-  // Filtered income by month (when category is selected) - requires transactions
-  // Shows all months from the selected time period, with zeros for months without data
   const filteredIncomeByMonth = computed<ChartData>(() => {
     if (!selectedIncomeCategory.value) {
       return incomeByMonth.value
     }
-
-    if (!transactionsLoaded.value) {
-      return { labels: [], values: [] }
-    }
-
-    const dataByMonth = new Map<string, number>()
-
-    for (const tx of transactions.value) {
-      const categoryId = tx.categoryId ?? UNCATEGORIZED_CATEGORY_ID
-      if (tx.type === 'INCOME' && categoryId === selectedIncomeCategory.value) {
-        if (isIncomeCategoryHiddenOrGlobal(categoryId)) continue
-
-        const date = new Date(tx.date)
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-
-        const current = dataByMonth.get(monthKey) ?? 0
-        dataByMonth.set(monthKey, current + getAdjustedAmount(tx))
-      }
-    }
-
-    // Use all months from the global monthlyData to maintain consistency with time period
-    const allMonthsFromPeriod = monthlyData.value.map(d => d.month)
-
-    return {
-      labels: allMonthsFromPeriod.map(month => {
-        const [year, monthNum] = month.split('-')
-        return `${MONTH_LABELS[monthNum]} ${year}`
-      }),
-      values: allMonthsFromPeriod.map(
-        month => Math.round((dataByMonth.get(month) ?? 0) * 100) / 100
-      ),
-    }
+    return monthlySeriesOf(
+      incomeCategoriesDetailed.value,
+      selectedIncomeCategory.value
+    )
   })
 
-  // Load transactions for drill-down (on demand)
-  // Fetches all transactions by paginating through all pages
-  async function loadTransactionsForDrillDown() {
-    if (transactionsLoaded.value) return
-
-    try {
-      const allTransactions: TransactionDto[] = []
-      let page = 1
-      const limit = 100 // Maximum allowed by backend
-
-      // Fetch all pages
-      while (true) {
-        const response = await api.getTransactions({ page, limit })
-        allTransactions.push(...response.data)
-
-        if (!response.meta.hasNextPage) {
-          break
-        }
-        page++
-      }
-
-      transactions.value = allTransactions
-      transactionsLoaded.value = true
-    } catch (err) {
-      console.error('Failed to load transactions for drill-down:', err)
-    }
-  }
-
-  async function setSelectedCategory(category: string | null) {
+  // Selecting a category no longer fetches anything: the summary already
+  // carries its monthly series. What used to happen here was a full paginated
+  // walk of every transaction on the account, on the first drill-down, purely
+  // to redraw a chart the server had already computed.
+  function setSelectedCategory(category: string | null): void {
     selectedCategory.value = category
-    if (category && !transactionsLoaded.value) {
-      isLoadingExpenseChart.value = true
-      try {
-        await loadTransactionsForDrillDown()
-      } finally {
-        isLoadingExpenseChart.value = false
-      }
-    }
   }
 
-  async function setSelectedIncomeCategory(category: string | null) {
+  function setSelectedIncomeCategory(category: string | null): void {
     selectedIncomeCategory.value = category
-    if (category && !transactionsLoaded.value) {
-      isLoadingIncomeChart.value = true
-      try {
-        await loadTransactionsForDrillDown()
-      } finally {
-        isLoadingIncomeChart.value = false
-      }
-    }
   }
 
   async function fetchData() {
@@ -400,26 +283,19 @@ export function useDashboardData() {
         api.getDashboardSummary({
           hiddenExpenseCategoryIds: combinedHiddenExpenseCategoryIds,
           hiddenIncomeCategoryIds: combinedHiddenIncomeCategoryIds,
-          startDate: startDate ?? undefined,
-          endDate: endDate ?? undefined,
+          // Omitted when absent rather than sent as `undefined`: an unbounded
+          // period is expressed by saying nothing, not by naming a date of
+          // nothing.
+          ...(startDate && { startDate }),
+          ...(endDate && { endDate }),
           deductReimbursements: deductReimbursements.value,
           deductPendingReimbursements: deductPendingReimbursements.value,
           includeCategoryBreakdown: true,
         }),
         accountsStore.load(),
-        categoryAssociationsStore.load(),
       ])
 
       summaryData.value = summary
-
-      // Reset drill-down state when reloading
-      transactionsLoaded.value = false
-      transactions.value = []
-
-      // If a category filter is active, reload transactions for drill-down
-      if (selectedCategory.value || selectedIncomeCategory.value) {
-        await loadTransactionsForDrillDown()
-      }
     } catch (err) {
       error.value =
         err instanceof Error
@@ -459,7 +335,6 @@ export function useDashboardData() {
   )
 
   return {
-    transactions,
     monthlyData,
     expensesByMonth,
     incomeByMonth,
@@ -495,8 +370,6 @@ export function useDashboardData() {
     deductReimbursements,
     deductPendingReimbursements,
     isLoading,
-    isLoadingExpenseChart,
-    isLoadingIncomeChart,
     error,
     fetchData,
   }
