@@ -64,6 +64,31 @@ describe('SuggestedSettlements', () => {
     expect(wrapper.text()).toContain('1 depense')
   })
 
+  it('says these are guesses, not recorded reimbursements', async () => {
+    vi.mocked(api.getSettlementSuggestions).mockResolvedValue([suggestion()])
+
+    const wrapper = await mountComponent()
+
+    // The section sits above a list of things the user entered themselves, so
+    // it has to disown its own contents loudly.
+    expect(wrapper.text()).toContain('Suggestions')
+    expect(wrapper.text()).toContain('devines')
+    expect(wrapper.text()).toContain("Rien n'est enregistre")
+    // The action confirms a proposal; it does not state a fact.
+    expect(wrapper.find('button').text()).toBe('Confirmer')
+  })
+
+  it('explains how a suggestion is arrived at', async () => {
+    vi.mocked(api.getSettlementSuggestions).mockResolvedValue([suggestion()])
+
+    const wrapper = await mountComponent()
+    const help = wrapper.find('details')
+
+    expect(help.exists()).toBe(true)
+    // Including the caveat that one indice alone is enough to appear.
+    expect(help.text()).toContain('un seul indice')
+  })
+
   it('shows why the transfer was suggested', async () => {
     vi.mocked(api.getSettlementSuggestions).mockResolvedValue([suggestion()])
 

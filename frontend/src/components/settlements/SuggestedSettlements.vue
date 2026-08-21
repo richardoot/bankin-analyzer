@@ -113,18 +113,73 @@
     v-if="isLoading || bestPerTransaction.length > 0 || error"
     class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 mb-6"
   >
-    <header class="flex items-baseline justify-between gap-3 mb-4">
-      <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-        Virements a rapprocher
-      </h2>
-      <span
-        v-if="bestPerTransaction.length > 0"
-        class="text-xs text-gray-500 dark:text-gray-400"
-      >
-        {{ bestPerTransaction.length }} suggestion{{
-          bestPerTransaction.length > 1 ? 's' : ''
-        }}
-      </span>
+    <!-- This section sits above a list of things the user entered themselves,
+         so it has to say loudly that its own contents are guesses. Without
+         that, a proposed pairing reads as a recorded fact. -->
+    <header class="mb-4">
+      <div class="flex items-baseline justify-between gap-3 flex-wrap">
+        <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">
+          <span
+            class="inline-block text-[11px] uppercase tracking-wide font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 align-middle mr-2"
+            >Suggestions</span
+          >
+          Virements qui ressemblent a des remboursements
+        </h2>
+        <span
+          v-if="bestPerTransaction.length > 0"
+          class="text-xs text-gray-500 dark:text-gray-400"
+        >
+          {{ bestPerTransaction.length }} proposition{{
+            bestPerTransaction.length > 1 ? 's' : ''
+          }}
+        </span>
+      </div>
+
+      <p class="text-sm text-gray-600 dark:text-gray-400 mt-1.5">
+        Rapprochements <strong>devines</strong> par l'application, pas des
+        remboursements que vous avez saisis.
+        <strong>Rien n'est enregistre</strong> tant que vous n'avez pas
+        confirme.
+      </p>
+
+      <!-- The ranking is only trustworthy if its rules are readable, and they
+           are simple enough to state in full. -->
+      <details class="mt-2">
+        <summary
+          class="text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 w-fit"
+        >
+          Comment ces suggestions sont-elles trouvees ?
+        </summary>
+        <div
+          class="text-xs text-gray-600 dark:text-gray-400 mt-2 pl-3 border-l-2 border-gray-200 dark:border-slate-700 flex flex-col gap-1.5"
+        >
+          <p>
+            Chaque virement dont l'argent n'a pas encore servi est compare a
+            chaque personne qui vous doit quelque chose. Trois indices sont
+            recherches :
+          </p>
+          <ul class="flex flex-col gap-1 pl-1">
+            <li>
+              <strong>nom du payeur</strong> — un mot du nom apparait dans le
+              libelle de la banque ;
+            </li>
+            <li>
+              <strong>categorie associee</strong> — le virement est classe dans
+              une categorie que vous avez associee a celle de la depense ;
+            </li>
+            <li>
+              <strong>montant</strong> — la somme disponible correspond
+              exactement a une dette, ou au total du par la personne.
+            </li>
+          </ul>
+          <p>
+            Les indices trouves sont affiches sous chaque ligne. Plus il y en a,
+            plus la proposition est haute dans la liste — mais un seul indice
+            suffit a la faire apparaitre, donc une proposition peut n'avoir
+            aucun sens.
+          </p>
+        </div>
+      </details>
     </header>
 
     <p
@@ -161,7 +216,7 @@
           </div>
 
           <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">
-            Rembourserait
+            Rembourserait peut-etre
             <span class="font-medium">{{ suggestion.personName }}</span>
             a hauteur de
             <span
@@ -195,8 +250,8 @@
         >
           {{
             confirmingId === suggestion.transactionId
-              ? 'Rapprochement...'
-              : 'Rapprocher'
+              ? 'Enregistrement...'
+              : 'Confirmer'
           }}
         </button>
       </li>
