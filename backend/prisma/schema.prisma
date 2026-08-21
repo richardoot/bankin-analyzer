@@ -385,8 +385,13 @@ model CategoryAssociation {
   expenseCategory Category @relation("ExpenseCategory", fields: [expenseCategoryId], references: [id], onDelete: Cascade)
   incomeCategory  Category @relation("IncomeCategory", fields: [incomeCategoryId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, expenseCategoryId])
-  @@unique([userId, incomeCategoryId])
+  /// Many-to-many since the pairing stopped driving any calculation. The old
+  /// bijection existed because a refund found its way back to an expense
+  /// *through* this table, so each side had to name exactly one partner — which
+  /// made "Remboursement sante" feeding both Sante and Pharmacie impossible,
+  /// and forced users to invent a dummy income category per expense category.
+  /// The pair itself stays unique: recording it twice says nothing new.
+  @@unique([userId, expenseCategoryId, incomeCategoryId])
   @@index([userId])
   @@map("category_associations")
   @@schema("app")

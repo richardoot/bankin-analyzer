@@ -12,7 +12,7 @@ describe('CategoryAssociationService', () => {
   const mockPrismaService = {
     categoryAssociation: {
       findMany: vi.fn(),
-      findUnique: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
       deleteMany: vi.fn(),
     },
@@ -109,7 +109,7 @@ describe('CategoryAssociationService', () => {
 
   describe('create', () => {
     it('should create a new association', async () => {
-      mockPrismaService.categoryAssociation.findUnique.mockResolvedValue(null)
+      mockPrismaService.categoryAssociation.findFirst.mockResolvedValue(null)
       mockPrismaService.categoryAssociation.create.mockResolvedValue({
         id: 'assoc-new',
         userId: mockUserId,
@@ -135,9 +135,19 @@ describe('CategoryAssociationService', () => {
       })
     })
 
-    it('should throw ConflictException if expense category already associated', async () => {
-      mockPrismaService.categoryAssociation.findUnique.mockResolvedValueOnce({
-        id: 'existing',
+    it('allows one income category to feed several expense categories', async () => {
+      // The bijection is gone: "Remboursement sante" can repay both Sante and
+      // Pharmacie, which used to force a dummy income category per expense one.
+      mockPrismaService.categoryAssociation.findFirst.mockResolvedValue(null)
+      mockPrismaService.categoryAssociation.create.mockResolvedValue({
+        id: 'assoc-second',
+        userId: mockUserId,
+        expenseCategoryId: 'cat-expense-1',
+        incomeCategoryId: 'cat-income-1',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        expenseCategory: { name: 'Pharmacie' },
+        incomeCategory: { name: 'Remboursement Mutuelle' },
       })
 
       await expect(
@@ -145,13 +155,13 @@ describe('CategoryAssociationService', () => {
           expenseCategoryId: 'cat-expense-1',
           incomeCategoryId: 'cat-income-1',
         })
-      ).rejects.toThrow(ConflictException)
+      ).resolves.toBeDefined()
     })
 
-    it('should throw ConflictException if income category already associated', async () => {
-      mockPrismaService.categoryAssociation.findUnique
-        .mockResolvedValueOnce(null) // First call for expense category
-        .mockResolvedValueOnce({ id: 'existing' }) // Second call for income category
+    it('still refuses the very same pairing twice', async () => {
+      mockPrismaService.categoryAssociation.findFirst.mockResolvedValue({
+        id: 'existing',
+      })
 
       await expect(
         service.create(mockUserId, {
@@ -178,45 +188,6 @@ describe('CategoryAssociationService', () => {
           userId: mockUserId,
         },
       })
-    })
-  })
-
-  describe('findByExpenseCategory', () => {
-    it('should return association for expense category', async () => {
-      mockPrismaService.categoryAssociation.findUnique.mockResolvedValue({
-        id: 'assoc-1',
-        userId: mockUserId,
-        expenseCategoryId: 'cat-expense-1',
-        incomeCategoryId: 'cat-income-1',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        expenseCategory: { name: 'Sante' },
-        incomeCategory: { name: 'Remboursement' },
-      })
-
-      const result = await service.findByExpenseCategory(
-        mockUserId,
-        'cat-expense-1'
-      )
-
-      expect(result).toEqual({
-        id: 'assoc-1',
-        expenseCategoryId: 'cat-expense-1',
-        expenseCategoryName: 'Sante',
-        incomeCategoryId: 'cat-income-1',
-        incomeCategoryName: 'Remboursement',
-      })
-    })
-
-    it('should return null if no association found', async () => {
-      mockPrismaService.categoryAssociation.findUnique.mockResolvedValue(null)
-
-      const result = await service.findByExpenseCategory(
-        mockUserId,
-        'cat-expense-1'
-      )
-
-      expect(result).toBeNull()
     })
   })
 })

@@ -85,38 +85,20 @@ export class CategoryAssociationService {
       ),
     ])
 
-    // Check if expense category already has an association
-    const existingExpenseAssociation =
-      await this.prisma.categoryAssociation.findUnique({
-        where: {
-          userId_expenseCategoryId: {
-            userId,
-            expenseCategoryId: dto.expenseCategoryId,
-          },
-        },
-      })
+    // Either side may now be paired several times: "Remboursement sante" can
+    // feed both Sante and Pharmacie, and Sante can be repaid by the Secu and a
+    // mutuelle. Only the exact pair stays unique — recording it twice says
+    // nothing new and would show the hint twice.
+    const duplicate = await this.prisma.categoryAssociation.findFirst({
+      where: {
+        userId,
+        expenseCategoryId: dto.expenseCategoryId,
+        incomeCategoryId: dto.incomeCategoryId,
+      },
+    })
 
-    if (existingExpenseAssociation) {
-      throw new ConflictException(
-        'Cette catégorie de dépense est déjà associée à une catégorie de revenu'
-      )
-    }
-
-    // Check if income category already has an association
-    const existingIncomeAssociation =
-      await this.prisma.categoryAssociation.findUnique({
-        where: {
-          userId_incomeCategoryId: {
-            userId,
-            incomeCategoryId: dto.incomeCategoryId,
-          },
-        },
-      })
-
-    if (existingIncomeAssociation) {
-      throw new ConflictException(
-        'Cette catégorie de revenu est déjà associée à une catégorie de dépense'
-      )
+    if (duplicate) {
+      throw new ConflictException('Cette association existe déjà')
     }
 
     const association = await this.prisma.categoryAssociation.create({
@@ -147,35 +129,5 @@ export class CategoryAssociationService {
         userId,
       },
     })
-  }
-
-  async findByExpenseCategory(
-    userId: string,
-    expenseCategoryId: string
-  ): Promise<CategoryAssociationDto | null> {
-    const association = await this.prisma.categoryAssociation.findUnique({
-      where: {
-        userId_expenseCategoryId: {
-          userId,
-          expenseCategoryId,
-        },
-      },
-      include: {
-        expenseCategory: true,
-        incomeCategory: true,
-      },
-    })
-
-    if (!association) {
-      return null
-    }
-
-    return {
-      id: association.id,
-      expenseCategoryId: association.expenseCategoryId,
-      expenseCategoryName: association.expenseCategory.name,
-      incomeCategoryId: association.incomeCategoryId,
-      incomeCategoryName: association.incomeCategory.name,
-    }
   }
 }

@@ -126,23 +126,64 @@ describe('Category associations (e2e)', () => {
     expect(response.status).toBe(404)
   })
 
-  it('keeps the pairing one-to-one on each side', async () => {
-    const expenseId = await category(ownerId, 'Sante', 'EXPENSE')
+  it('lets one income category feed several expense categories', async () => {
+    const sante = await category(ownerId, 'Sante', 'EXPENSE')
+    const pharmacie = await category(ownerId, 'Pharmacie', 'EXPENSE')
     const incomeId = await category(ownerId, 'Remboursement sante', 'INCOME')
-    const otherIncome = await category(ownerId, 'Remboursement bis', 'INCOME')
+
+    const first = await http()
+      .post('/category-associations')
+      .set(ctx.auth(owner))
+      .send({ expenseCategoryId: sante, incomeCategoryId: incomeId })
+    const second = await http()
+      .post('/category-associations')
+      .set(ctx.auth(owner))
+      .send({ expenseCategoryId: pharmacie, incomeCategoryId: incomeId })
+
+    // The bijection forced a dummy income category per expense category.
+    expect(first.status).toBe(201)
+    expect(second.status).toBe(201)
+    await expect(prisma.categoryAssociation.count()).resolves.toBe(2)
+  })
+
+  it('lets one expense category be repaid from several sources', async () => {
+    const sante = await category(ownerId, 'Sante', 'EXPENSE')
+    const secu = await category(ownerId, 'Remboursement Secu', 'INCOME')
+    const mutuelle = await category(ownerId, 'Remboursement mutuelle', 'INCOME')
 
     await http()
       .post('/category-associations')
       .set(ctx.auth(owner))
-      .send({ expenseCategoryId: expenseId, incomeCategoryId: incomeId })
-
+      .send({ expenseCategoryId: sante, incomeCategoryId: secu })
     const second = await http()
       .post('/category-associations')
       .set(ctx.auth(owner))
-      .send({ expenseCategoryId: expenseId, incomeCategoryId: otherIncome })
+      .send({ expenseCategoryId: sante, incomeCategoryId: mutuelle })
 
-    // Phase 6 relaxes this to N:N; until then the conflict is the contract.
-    expect(second.status).toBe(409)
+    expect(second.status).toBe(201)
+    await expect(prisma.categoryAssociation.count()).resolves.toBe(2)
+  })
+
+  it('still refuses the very same pairing twice', async () => {
+    const expenseId = await category(ownerId, 'Sante', 'EXPENSE')
+    const incomeId = await category(ownerId, 'Remboursement sante', 'INCOME')
+    const payload = {
+      expenseCategoryId: expenseId,
+      incomeCategoryId: incomeId,
+    }
+
+    await http()
+      .post('/category-associations')
+      .set(ctx.auth(owner))
+      .send(payload)
+    const duplicate = await http()
+      .post('/category-associations')
+      .set(ctx.auth(owner))
+      .send(payload)
+
+    // Recording it twice says nothing new and would show the hint twice.
+    expect(duplicate.status).toBe(409)
+    await expect(prisma.categoryAssociation.count()).resolves.toBe(1)
   })
 
   it('never lists another user associations', async () => {
