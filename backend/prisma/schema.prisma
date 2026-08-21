@@ -27,6 +27,7 @@ model User {
   categoryAssociations  CategoryAssociation[]
   budgetPlans           BudgetPlan[]
   tags                  Tag[]
+  reimbursementPayments ReimbursementPayment[]
 
   @@map("users")
   @@schema("app")
@@ -58,6 +59,7 @@ model Transaction {
   reimbursementRequests ReimbursementRequest[]
   settlementsAsIncome   Settlement[]           @relation("SettlementIncome")
   tags                  TransactionTag[]
+  reimbursementPayments ReimbursementPayment[] @relation("ReimbursementPaymentIncome")
 
   @@index([userId])
   @@index([accountId])
@@ -137,6 +139,18 @@ enum ImportStatus {
   IN_PROGRESS
   COMPLETED
   FAILED
+
+  @@schema("app")
+}
+
+/// How a reimbursement stopped being owed.
+enum PaymentKind {
+  /// Cash, drawn from a named income transaction.
+  CASH
+  /// A remainder the user gave up on. Deliberately a payment of its own kind
+  /// rather than a flag: forgiving a debt is an event with a date, and it must
+  /// be reversible without touching what was actually collected.
+  WRITE_OFF
 
   @@schema("app")
 }
@@ -231,6 +245,7 @@ model ReimbursementRequest {
   person      Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
   category    Category?   @relation(fields: [categoryId], references: [id])
   settlements SettlementReimbursement[]
+  payments    ReimbursementPayment[]
 
   @@index([userId])
   @@index([transactionId])
@@ -286,6 +301,7 @@ model Settlement {
   person            Person                    @relation(fields: [personId], references: [id], onDelete: Cascade)
   incomeTransaction Transaction               @relation("SettlementIncome", fields: [incomeTransactionId], references: [id], onDelete: Cascade)
   reimbursements    SettlementReimbursement[]
+  payments          ReimbursementPayment[]
 
   @@index([userId])
   @@index([personId])
@@ -306,6 +322,54 @@ model SettlementReimbursement {
   @@unique([settlementId, reimbursementId])
   @@index([reimbursementId])
   @@map("settlement_reimbursements")
+  @@schema("app")
+}
+
+/// One movement crediting a reimbursement: cash received, or a remainder
+/// written off. Together these form the ledger that will replace
+/// `ReimbursementRequest.amountReceived` and `status`, both of which become
+/// derivable sums rather than counters three code paths keep in step by hand.
+///
+/// Phase 2 of the rework only *fills* this table — the backfill in the
+/// migration mirrors every settlement row — so nothing reads it yet and it can
+/// be dropped without consequence. Reconciling it against the columns it will
+/// replace is the job of `scripts/reconcile-reimbursement-ledger.ts`.
+model ReimbursementPayment {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+
+  reimbursementId String @map("reimbursement_id")
+
+  /// The income transaction the money came from. Null only for a WRITE_OFF,
+  /// which by definition has no cash behind it — and, transitionally, for a
+  /// credit recorded before settlements existed, which named no transaction.
+  incomeTransactionId String? @map("income_transaction_id")
+
+  amount Decimal     @db.Decimal(12, 2)
+  kind   PaymentKind
+
+  /// When the credit was applied — the settlement's own timestamp, not the
+  /// income transaction's date. The two differ and the distinction matters:
+  /// one is when the user recorded it, the other when the bank moved it.
+  settledAt DateTime @map("settled_at")
+
+  /// The settlement this payment was recorded through, kept so the UI can
+  /// still say "this transfer closed these four lines". Null for a credit that
+  /// never went through one.
+  settlementId String? @map("settlement_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reimbursement     ReimbursementRequest @relation(fields: [reimbursementId], references: [id], onDelete: Cascade)
+  incomeTransaction Transaction?         @relation("ReimbursementPaymentIncome", fields: [incomeTransactionId], references: [id], onDelete: Cascade)
+  settlement        Settlement?          @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([reimbursementId])
+  @@index([incomeTransactionId])
+  @@index([settlementId])
+  @@map("reimbursement_payments")
   @@schema("app")
 }
 
