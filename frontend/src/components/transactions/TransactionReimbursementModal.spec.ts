@@ -1,9 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
-import { setActivePinia, createPinia } from 'pinia'
 import TransactionReimbursementModal from './TransactionReimbursementModal.vue'
-import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
-import type { TransactionDto, PersonDto, CategoryDto } from '@/lib/api'
+import { api } from '@/lib/api'
+import type { TransactionDto, PersonDto } from '@/lib/api'
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -43,32 +42,12 @@ const mockPersons: PersonDto[] = [
   },
 ]
 
-const mockIncomeCategories: CategoryDto[] = [
-  {
-    id: 'cat-remb-mutuelle',
-    name: 'Remboursement Mutuelle',
-    type: 'INCOME',
-    icon: '💊',
-    isExcludedFromBudget: false,
-    createdAt: '2026-01-01',
-  },
-  {
-    id: 'cat-remb-amis',
-    name: 'Remboursement amis',
-    type: 'INCOME',
-    icon: '👥',
-    isExcludedFromBudget: false,
-    createdAt: '2026-01-01',
-  },
-]
-
 const mountModal = (overrides: Partial<{ transaction: TransactionDto }> = {}) =>
   mount(TransactionReimbursementModal, {
     props: {
       isOpen: true,
       transaction: overrides.transaction ?? mockTransaction(),
       persons: mockPersons,
-      incomeCategories: mockIncomeCategories,
       remainingAmount: 50,
     },
     global: {
@@ -76,138 +55,45 @@ const mountModal = (overrides: Partial<{ transaction: TransactionDto }> = {}) =>
     },
   })
 
-describe('TransactionReimbursementModal — default category from associations', () => {
+describe('TransactionReimbursementModal', () => {
   enableAutoUnmount(afterEach)
 
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    vi.resetAllMocks()
+  it('no longer asks for an income category', () => {
+    const wrapper = mountModal()
+
+    // The field existed because the old model routed a refund back to an
+    // expense through a category pairing. The deduction now attaches to the
+    // expense transaction, which already knows its category. One select
+    // remains — the person owing the money.
+    expect(wrapper.findAll('select')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('Categorie')
   })
 
-  it('defaults the category to the income category associated with the expense category', async () => {
-    const store = useCategoryAssociationsStore()
-    store.associations = [
-      {
-        id: 'a1',
-        expenseCategoryId: 'cat-sante',
-        expenseCategoryName: 'Sante',
-        incomeCategoryId: 'cat-remb-mutuelle',
-        incomeCategoryName: 'Remboursement Mutuelle',
-      },
-    ]
-
+  it('creates the debt from the person, the amount and the note alone', async () => {
     const wrapper = mountModal()
+    vi.mocked(api.createReimbursement).mockResolvedValue({
+      id: 'reimb-1',
+    } as Awaited<ReturnType<typeof api.createReimbursement>>)
+
     const vm = wrapper.vm as unknown as {
-      resetForm?: () => void
-      form?: { categoryId: string }
+      form: { personId: string; amount: number; note: string }
     }
-    vm.resetForm?.()
+    vm.form.personId = 'person-1'
+    vm.form.amount = 30
+    vm.form.note = 'moitie'
     await wrapper.vm.$nextTick()
+    const submit = wrapper
+      .findAll('button')
+      .find(b => b.text().includes('Confirmer'))
+    if (!submit) throw new Error('no submit button rendered')
+    await submit.trigger('click')
     await flushPromises()
 
-    // Verify via the underlying form ref (most reliable check)
-    expect(vm.form?.categoryId).toBe('cat-remb-mutuelle')
-  })
-
-  it('leaves the category empty when no association exists for the transaction category', async () => {
-    const store = useCategoryAssociationsStore()
-    store.associations = []
-
-    const wrapper = mountModal()
-    const vm = wrapper.vm as unknown as {
-      resetForm: () => void
-      form: { categoryId: string }
-    }
-    vm.resetForm()
-    await flushPromises()
-
-    expect(vm.form.categoryId).toBe('')
-  })
-
-  it('leaves the category empty when the transaction has no category', async () => {
-    const store = useCategoryAssociationsStore()
-    store.associations = [
-      {
-        id: 'a1',
-        expenseCategoryId: 'cat-sante',
-        expenseCategoryName: 'Sante',
-        incomeCategoryId: 'cat-remb-mutuelle',
-        incomeCategoryName: 'Remboursement Mutuelle',
-      },
-    ]
-
-    const wrapper = mountModal({
-      transaction: mockTransaction({ categoryId: null }),
+    expect(api.createReimbursement).toHaveBeenCalledWith({
+      transactionId: 'tx-1',
+      personId: 'person-1',
+      amount: 30,
+      note: 'moitie',
     })
-    const vm = wrapper.vm as unknown as {
-      resetForm: () => void
-      form: { categoryId: string }
-    }
-    vm.resetForm()
-    await flushPromises()
-
-    expect(vm.form.categoryId).toBe('')
-  })
-
-  it('auto-resets the form when isOpen transitions from false to true (mirrors real parent flow)', async () => {
-    const store = useCategoryAssociationsStore()
-    store.associations = [
-      {
-        id: 'a1',
-        expenseCategoryId: 'cat-sante',
-        expenseCategoryName: 'Sante',
-        incomeCategoryId: 'cat-remb-mutuelle',
-        incomeCategoryName: 'Remboursement Mutuelle',
-      },
-    ]
-
-    // Mount with isOpen=false and no transaction (modal not yet visible)
-    const wrapper = mount(TransactionReimbursementModal, {
-      props: {
-        isOpen: false,
-        transaction: null,
-        persons: mockPersons,
-        incomeCategories: mockIncomeCategories,
-        remainingAmount: 0,
-      },
-      global: { stubs: { Teleport: true } },
-    })
-
-    // Now simulate the parent's openReimbursementModal: set transaction +
-    // open the modal. The watcher should run resetForm AFTER the prop is
-    // updated, so getDefaultCategoryId reads the right transaction.
-    await wrapper.setProps({
-      isOpen: true,
-      transaction: mockTransaction(),
-      remainingAmount: 50,
-    })
-    await flushPromises()
-
-    const vm = wrapper.vm as unknown as { form: { categoryId: string } }
-    expect(vm.form.categoryId).toBe('cat-remb-mutuelle')
-  })
-
-  it('leaves the category empty when the associated income category is not in the available list', async () => {
-    const store = useCategoryAssociationsStore()
-    // Association references an income category that is not in props.incomeCategories
-    store.associations = [
-      {
-        id: 'a1',
-        expenseCategoryId: 'cat-sante',
-        expenseCategoryName: 'Sante',
-        incomeCategoryId: 'cat-remb-hidden',
-        incomeCategoryName: 'Remboursement cache',
-      },
-    ]
-
-    const wrapper = mountModal()
-    const vm = wrapper.vm as unknown as {
-      resetForm: () => void
-      form: { categoryId: string }
-    }
-    vm.resetForm()
-    await flushPromises()
-
-    expect(vm.form.categoryId).toBe('')
   })
 })

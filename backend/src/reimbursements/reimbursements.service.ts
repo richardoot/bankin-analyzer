@@ -21,13 +21,35 @@ import type {
 type ReimbursementWithRelations = ReimbursementRequest & {
   person: { name: string }
   category: { name: string } | null
-  transaction?: {
+  transaction: {
     id: string
     date: Date
     description: string
     amount: Prisma.Decimal
+    category: { id: string; name: string } | null
   }
 }
+
+/**
+ * The relations every response needs. The expense transaction is always
+ * loaded, and always with its category: that category is where the credit is
+ * deducted, so it belongs on the debt itself rather than being an optional
+ * extra. `includeTransaction` now only decides whether the transaction *block*
+ * is echoed back, not whether the expense category is known.
+ */
+const RESPONSE_INCLUDE = {
+  person: { select: { name: true } },
+  category: { select: { name: true } },
+  transaction: {
+    select: {
+      id: true,
+      date: true,
+      description: true,
+      amount: true,
+      category: { select: { id: true, name: true } },
+    },
+  },
+} as const
 
 @Injectable()
 export class ReimbursementsService {
@@ -47,6 +69,8 @@ export class ReimbursementsService {
       personName: reimbursement.person.name,
       categoryId: reimbursement.categoryId,
       categoryName: reimbursement.category?.name ?? null,
+      expenseCategoryId: reimbursement.transaction.category?.id ?? null,
+      expenseCategoryName: reimbursement.transaction.category?.name ?? null,
       amount,
       amountReceived,
       amountRemaining: amount - amountReceived,
@@ -116,20 +140,7 @@ export class ReimbursementsService {
         userId,
         ...(filters?.status && { status: filters.status }),
       },
-      include: {
-        person: { select: { name: true } },
-        category: { select: { name: true } },
-        ...(filters?.includeTransaction && {
-          transaction: {
-            select: {
-              id: true,
-              date: true,
-              description: true,
-              amount: true,
-            },
-          },
-        }),
-      },
+      include: RESPONSE_INCLUDE,
       orderBy: { createdAt: 'desc' },
     })
 
@@ -147,10 +158,7 @@ export class ReimbursementsService {
   ): Promise<ReimbursementResponseDto[]> {
     const reimbursements = await this.prisma.reimbursementRequest.findMany({
       where: { transactionId, userId },
-      include: {
-        person: { select: { name: true } },
-        category: { select: { name: true } },
-      },
+      include: RESPONSE_INCLUDE,
       orderBy: { createdAt: 'desc' },
     })
 
@@ -165,18 +173,7 @@ export class ReimbursementsService {
   ): Promise<ReimbursementResponseDto[]> {
     const reimbursements = await this.prisma.reimbursementRequest.findMany({
       where: { personId, userId },
-      include: {
-        person: { select: { name: true } },
-        category: { select: { name: true } },
-        transaction: {
-          select: {
-            id: true,
-            date: true,
-            description: true,
-            amount: true,
-          },
-        },
-      },
+      include: RESPONSE_INCLUDE,
       orderBy: { createdAt: 'desc' },
     })
 
@@ -192,20 +189,7 @@ export class ReimbursementsService {
   ): Promise<ReimbursementResponseDto> {
     const reimbursement = await this.prisma.reimbursementRequest.findFirst({
       where: { id, userId },
-      include: {
-        person: { select: { name: true } },
-        category: { select: { name: true } },
-        ...(includeTransaction && {
-          transaction: {
-            select: {
-              id: true,
-              date: true,
-              description: true,
-              amount: true,
-            },
-          },
-        }),
-      },
+      include: RESPONSE_INCLUDE,
     })
 
     if (!reimbursement) {
@@ -281,10 +265,7 @@ export class ReimbursementsService {
         amount: dto.amount,
         note: dto.note ?? null,
       },
-      include: {
-        person: { select: { name: true } },
-        category: { select: { name: true } },
-      },
+      include: RESPONSE_INCLUDE,
     })
 
     return this.toResponseDto(reimbursement as ReimbursementWithRelations)
@@ -379,10 +360,7 @@ export class ReimbursementsService {
         ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
         ...(dto.note !== undefined && { note: dto.note }),
       },
-      include: {
-        person: { select: { name: true } },
-        category: { select: { name: true } },
-      },
+      include: RESPONSE_INCLUDE,
     })
 
     return this.toResponseDto(reimbursement as ReimbursementWithRelations)

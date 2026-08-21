@@ -398,8 +398,12 @@ export interface ReimbursementDto {
   transactionId: string
   personId: string
   personName: string
+  /** Income category the user expected the money back on — a hint, no more. */
   categoryId: string | null
   categoryName: string | null
+  /** Category of the expense being repaid: where the credit is deducted. */
+  expenseCategoryId: string | null
+  expenseCategoryName: string | null
   amount: number
   amountReceived: number
   amountRemaining: number

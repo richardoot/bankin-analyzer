@@ -19,7 +19,6 @@
   import TagSelector from '@/components/tags/TagSelector.vue'
   import TransactionReimbursementModal from '@/components/transactions/TransactionReimbursementModal.vue'
   import BulkCategoryModal from '@/components/transactions/BulkCategoryModal.vue'
-  import ReimbursementCategoryConfirmModal from '@/components/transactions/ReimbursementCategoryConfirmModal.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
   import ToggleSwitch from '@/components/ToggleSwitch.vue'
   import { formatCurrency } from '@/lib/formatters'
@@ -223,17 +222,6 @@
   const selectedTransaction = ref<TransactionDto | null>(null)
   const reimbursementModalRef = ref<{ resetForm: () => void } | null>(null)
 
-  // Modal state for reimbursement category confirmation after a transaction
-  // category change.
-  const showReimbursementCategoryConfirm = ref(false)
-  const reimbursementCategoryConfirmData = ref<{
-    transactionId: string
-    reimbursements: ReimbursementDto[]
-    newExpenseCategoryName: string
-    suggestedIncomeCategory: CategoryDto | null
-  } | null>(null)
-  const isUpdatingReimbursementCategories = ref(false)
-
   // Modal state for viewing a settlement linked to an income transaction
   const showSettlementDetailModal = ref(false)
   const selectedSettlement = ref<SettlementDto | null>(null)
@@ -307,15 +295,6 @@
     return allSubcategories.value
       .filter(s => s.categoryId === selectedCategory.value)
       .sort((a, b) => a.name.localeCompare(b.name))
-  })
-
-  // Computed: income categories for reimbursement dropdown (only associated ones)
-  const incomeCategories = computed(() => {
-    return allCategories.value.filter(
-      c =>
-        c.type === 'INCOME' &&
-        categoryAssociationsStore.associatedIncomeCategoryIds.has(c.id)
-    )
   })
 
   // Computed: total pages
@@ -505,8 +484,6 @@
     }
     closeCategoryModal()
 
-    const previousCategoryId = previousTx.categoryId
-
     try {
       const updated = await api.updateTransaction(tx.id, {
         categoryId: categoryId || undefined,
@@ -520,110 +497,17 @@
       // filter dropdown offers them too.
       fetchSubcategories()
 
-      // If the category actually changed and the transaction has reimbursements,
-      // ask the user whether to update the reimbursements' category as well.
-      if (
-        categoryId &&
-        categoryId !== previousCategoryId &&
-        updated.type === 'EXPENSE'
-      ) {
-        const linkedReimbursements = getReimbursementsForTransaction(tx.id)
-        if (linkedReimbursements.length > 0) {
-          const association =
-            categoryAssociationsStore.getIncomeCategoryForExpense(categoryId)
-          const suggested = association
-            ? (allCategories.value.find(
-                c => c.id === association.incomeCategoryId
-              ) ?? null)
-            : null
-
-          reimbursementCategoryConfirmData.value = {
-            transactionId: tx.id,
-            reimbursements: [...linkedReimbursements],
-            newExpenseCategoryName:
-              updated.categoryName ?? 'la nouvelle categorie',
-            suggestedIncomeCategory: suggested,
-          }
-          showReimbursementCategoryConfirm.value = true
-        }
-      }
+      // Nothing to ask about any more. A reimbursement is anchored on this
+      // transaction, so it follows the category change on its own — the prompt
+      // that used to appear here existed only to keep a duplicated income
+      // category in step, and getting it wrong silently credited the deduction
+      // to another category.
     } catch {
       // Rollback
       if (index !== -1) {
         transactions.value[index] = previousTx
       }
       toast.error('Echec de la mise a jour de la categorie')
-    }
-  }
-
-  function closeReimbursementCategoryConfirm(): void {
-    showReimbursementCategoryConfirm.value = false
-    reimbursementCategoryConfirmData.value = null
-  }
-
-  async function applyReimbursementCategoryUpdate(
-    newCategoryId: string | null
-  ): Promise<void> {
-    const data = reimbursementCategoryConfirmData.value
-    if (!data || !newCategoryId) {
-      closeReimbursementCategoryConfirm()
-      return
-    }
-
-    const toUpdate = data.reimbursements.filter(
-      r => r.categoryId !== newCategoryId
-    )
-    if (toUpdate.length === 0) {
-      closeReimbursementCategoryConfirm()
-      return
-    }
-
-    try {
-      isUpdatingReimbursementCategories.value = true
-      const updates = await Promise.all(
-        toUpdate.map(r =>
-          api.updateReimbursement(r.id, { categoryId: newCategoryId })
-        )
-      )
-      // Replace updated reimbursements in the list
-      const updatesById = new Map(updates.map(r => [r.id, r]))
-      reimbursements.value = reimbursements.value.map(
-        r => updatesById.get(r.id) ?? r
-      )
-      toast.success(
-        `${updates.length} remboursement${updates.length > 1 ? 's' : ''} mis a jour`
-      )
-    } catch {
-      toast.error('Echec de la mise a jour des remboursements')
-    } finally {
-      isUpdatingReimbursementCategories.value = false
-      closeReimbursementCategoryConfirm()
-    }
-  }
-
-  async function deleteReimbursementsFromConfirm(): Promise<void> {
-    const data = reimbursementCategoryConfirmData.value
-    if (!data || data.reimbursements.length === 0) {
-      closeReimbursementCategoryConfirm()
-      return
-    }
-
-    const idsToDelete = data.reimbursements.map(r => r.id)
-
-    try {
-      isUpdatingReimbursementCategories.value = true
-      await Promise.all(idsToDelete.map(id => api.deleteReimbursement(id)))
-      // Remove deleted reimbursements from the local list
-      const idSet = new Set(idsToDelete)
-      reimbursements.value = reimbursements.value.filter(r => !idSet.has(r.id))
-      toast.success(
-        `${idsToDelete.length} remboursement${idsToDelete.length > 1 ? 's' : ''} supprime${idsToDelete.length > 1 ? 's' : ''}`
-      )
-    } catch {
-      toast.error('Echec de la suppression des remboursements')
-    } finally {
-      isUpdatingReimbursementCategories.value = false
-      closeReimbursementCategoryConfirm()
     }
   }
 
@@ -2293,7 +2177,6 @@
       :is-open="showReimbursementModal"
       :transaction="selectedTransaction"
       :persons="personsStore.persons"
-      :income-categories="incomeCategories"
       :remaining-amount="
         selectedTransaction ? getRemainingAmount(selectedTransaction) : 0
       "
@@ -2328,21 +2211,6 @@
     />
 
     <!-- Reimbursement category confirmation after a transaction category change -->
-    <ReimbursementCategoryConfirmModal
-      v-if="reimbursementCategoryConfirmData"
-      :is-open="showReimbursementCategoryConfirm"
-      :reimbursements="reimbursementCategoryConfirmData.reimbursements"
-      :new-expense-category-name="
-        reimbursementCategoryConfirmData.newExpenseCategoryName
-      "
-      :suggested-income-category="
-        reimbursementCategoryConfirmData.suggestedIncomeCategory
-      "
-      :is-updating="isUpdatingReimbursementCategories"
-      @update="applyReimbursementCategoryUpdate"
-      @keep="closeReimbursementCategoryConfirm"
-      @delete="deleteReimbursementsFromConfirm"
-    />
 
     <!-- Settlement detail (read-only) for income transactions -->
     <SettlementDetailModal

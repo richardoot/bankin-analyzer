@@ -128,7 +128,7 @@
       .filter(
         r =>
           !filtersStore.isExpenseCategoryGloballyHidden(
-            r.categoryId ?? UNCATEGORIZED_CATEGORY_ID
+            r.expenseCategoryId ?? UNCATEGORIZED_CATEGORY_ID
           )
       )
       .forEach(r => {
@@ -148,11 +148,15 @@
         person.totalReceived += r.amountReceived
         person.totalRemaining += r.amountRemaining
 
-        const catKey = r.categoryId || 'none'
-        const catName = r.categoryName || 'Sans categorie'
+        // Grouped by the *expense* category: that is where the deduction
+        // lands. Grouping by the income category was a habit of the old model,
+        // where a refund found its way back to an expense through a category
+        // pairing — it now says nothing about what the debt repays.
+        const catKey = r.expenseCategoryId || 'none'
+        const catName = r.expenseCategoryName || 'Sans categorie'
         if (!person.byCategory.has(catKey)) {
           person.byCategory.set(catKey, {
-            categoryId: r.categoryId,
+            categoryId: r.expenseCategoryId,
             categoryName: catName,
             amount: 0,
             amountReceived: 0,
@@ -200,7 +204,7 @@
       .filter(
         r =>
           !filtersStore.isExpenseCategoryGloballyHidden(
-            r.categoryId ?? UNCATEGORIZED_CATEGORY_ID
+            r.expenseCategoryId ?? UNCATEGORIZED_CATEGORY_ID
           )
       )
       .reduce((sum, r) => sum + r.amountRemaining, 0)

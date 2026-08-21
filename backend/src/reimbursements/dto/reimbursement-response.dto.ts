@@ -28,11 +28,23 @@ export class ReimbursementResponseDto {
   /** Person name */
   personName!: string
 
-  /** Target category ID */
+  /**
+   * Income category the user expected the money back on. A saisie hint and
+   * nothing more since the deduction moved onto the expense transaction — it
+   * drives no figure. Kept for the rows that already carry one.
+   */
   categoryId!: string | null
 
-  /** Target category name */
   categoryName!: string | null
+
+  /**
+   * Category of the expense being repaid. This is the one that matters now:
+   * it is where the credit is deducted, so it is how a debt should be
+   * grouped and read.
+   */
+  expenseCategoryId!: string | null
+
+  expenseCategoryName!: string | null
 
   /** Amount to be reimbursed */
   amount!: number

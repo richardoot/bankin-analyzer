@@ -1,15 +1,22 @@
 <script setup lang="ts">
+  /**
+   * Assigning a debt to a person on an expense.
+   *
+   * There used to be an income-category field here. It existed because the old
+   * model routed a refund back to an expense through a category pairing, so the
+   * category had to be chosen up front. The deduction now attaches to the
+   * expense transaction itself, which already knows its category — the field
+   * decided nothing and only asked the user to guess.
+   */
   import { ref, watch } from 'vue'
   import { api } from '@/lib/api'
-  import type { TransactionDto, PersonDto, CategoryDto } from '@/lib/api'
+  import type { TransactionDto, PersonDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
-  import { useCategoryAssociationsStore } from '@/stores/categoryAssociations'
 
   const props = defineProps<{
     isOpen: boolean
     transaction: TransactionDto | null
     persons: PersonDto[]
-    incomeCategories: CategoryDto[]
     remainingAmount: number
   }>()
 
@@ -20,29 +27,9 @@
     ]
   }>()
 
-  const categoryAssociationsStore = useCategoryAssociationsStore()
-
-  /**
-   * Returns the income category ID associated with the given expense category,
-   * but only if it's actually present in the available `incomeCategories` list
-   * (it may have been filtered out at the page level — e.g. globally hidden).
-   */
-  function getDefaultCategoryId(): string {
-    const expenseCategoryId = props.transaction?.categoryId
-    if (!expenseCategoryId) return ''
-    const association =
-      categoryAssociationsStore.getIncomeCategoryForExpense(expenseCategoryId)
-    if (!association) return ''
-    const isAvailable = props.incomeCategories.some(
-      c => c.id === association.incomeCategoryId
-    )
-    return isAvailable ? association.incomeCategoryId : ''
-  }
-
   const form = ref({
     personId: '',
     amount: 0,
-    categoryId: '',
     note: '',
   })
   const isCreating = ref(false)
@@ -52,7 +39,6 @@
     form.value = {
       personId: '',
       amount: props.remainingAmount,
-      categoryId: getDefaultCategoryId(),
       note: '',
     }
     customDivisor.value = 2
@@ -83,7 +69,6 @@
         transactionId: props.transaction.id,
         personId: form.value.personId,
         amount: form.value.amount,
-        ...(form.value.categoryId && { categoryId: form.value.categoryId }),
         ...(form.value.note && { note: form.value.note }),
       })
       emit('created', newReimbursement)
@@ -249,27 +234,6 @@
                 </div>
               </div>
             </div>
-          </div>
-
-          <div>
-            <label
-              class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >
-              Categorie (optionnel)
-            </label>
-            <select
-              v-model="form.categoryId"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
-            >
-              <option value="">Sans categorie</option>
-              <option
-                v-for="cat in incomeCategories"
-                :key="cat.id"
-                :value="cat.id"
-              >
-                {{ cat.name }}
-              </option>
-            </select>
           </div>
 
           <div>
