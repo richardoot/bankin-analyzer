@@ -31,10 +31,10 @@
  *      strictly earlier also credit it. That earlier credit is precisely what
  *      would be destroyed.
  *
- * Caveat: `PATCH /reimbursements/:id/receive` also credits `amountReceived`
- * without leaving a settlement row. It has no caller in the frontend, so this
- * audit is exact in practice; a partial payment recorded by calling that
- * endpoint directly would be invisible here.
+ * Former caveat, now closed: `PATCH /reimbursements/:id/receive` used to credit
+ * `amountReceived` without leaving a settlement row, which such a payment would
+ * have made invisible here. The endpoint has been removed, and the prod audit
+ * found no row carrying that kind of credit, so this audit is exact.
  *
  * ## Usage
  *

@@ -45,7 +45,6 @@ const mockReimbursementsService = {
   findOne: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
-  receivePayment: vi.fn(),
   delete: vi.fn(),
 }
 
@@ -242,34 +241,6 @@ describe('ReimbursementsController', () => {
         mockReimbursementResponse.id,
         mockUser.id,
         updateDto
-      )
-    })
-  })
-
-  describe('receivePayment', () => {
-    it('should record a payment received', async () => {
-      const completedReimbursement = {
-        ...mockReimbursementResponse,
-        amountReceived: 30,
-        amountRemaining: 0,
-        status: ReimbursementStatus.COMPLETED,
-      }
-      mockReimbursementsService.receivePayment.mockResolvedValue(
-        completedReimbursement
-      )
-
-      const result = await controller.receivePayment(
-        mockUser,
-        mockReimbursementResponse.id,
-        { amount: 30 }
-      )
-
-      expect(result.amountReceived).toBe(30)
-      expect(result.status).toBe(ReimbursementStatus.COMPLETED)
-      expect(mockReimbursementsService.receivePayment).toHaveBeenCalledWith(
-        mockReimbursementResponse.id,
-        mockUser.id,
-        30
       )
     })
   })

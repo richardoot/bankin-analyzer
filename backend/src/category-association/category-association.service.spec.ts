@@ -16,6 +16,22 @@ describe('CategoryAssociationService', () => {
       create: vi.fn(),
       deleteMany: vi.fn(),
     },
+    category: {
+      findFirst: vi.fn(),
+    },
+  }
+
+  /**
+   * Categories the ownership check resolves against. `create` looks both sides
+   * up before doing anything else, so without them every create spec would
+   * fail on the guard rather than on what it means to assert. Ownership and
+   * type rejections are covered end-to-end in
+   * test/category-associations.e2e-spec.ts, where real SQL can tell one user's
+   * rows from another's.
+   */
+  const knownCategories: Record<string, { name: string; type: string }> = {
+    'cat-expense-1': { name: 'Sante', type: 'EXPENSE' },
+    'cat-income-1': { name: 'Remboursement Mutuelle', type: 'INCOME' },
   }
 
   beforeEach(async () => {
@@ -32,6 +48,13 @@ describe('CategoryAssociationService', () => {
     service = module.get<CategoryAssociationService>(CategoryAssociationService)
 
     vi.clearAllMocks()
+
+    mockPrismaService.category.findFirst.mockImplementation(
+      (args: { where: { id: string } }) => {
+        const known = knownCategories[args.where.id]
+        return Promise.resolve(known ? { id: args.where.id, ...known } : null)
+      }
+    )
   })
 
   describe('findAll', () => {

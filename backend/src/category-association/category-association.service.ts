@@ -1,5 +1,11 @@
-import { Injectable, ConflictException } from '@nestjs/common'
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { TransactionType } from '../generated/prisma'
 import type {
   CategoryAssociationDto,
   CreateCategoryAssociationDto,
@@ -8,6 +14,38 @@ import type {
 @Injectable()
 export class CategoryAssociationService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * A category of `type` the caller actually owns.
+   *
+   * The foreign keys alone accept any existing category id, including another
+   * user's: without this check a crafted request could pair a stranger's
+   * category and then read its name back through `findAll`. The type is
+   * verified in the same pass, since an association whose sides are not one
+   * EXPENSE and one INCOME cannot describe a reimbursement at all.
+   */
+  private async findOwnedCategory(
+    userId: string,
+    categoryId: string,
+    type: TransactionType
+  ): Promise<{ id: string; name: string }> {
+    const category = await this.prisma.category.findFirst({
+      where: { id: categoryId, userId },
+      select: { id: true, name: true, type: true },
+    })
+
+    if (!category) {
+      throw new NotFoundException(`Category with ID ${categoryId} not found`)
+    }
+
+    if (category.type !== type) {
+      throw new BadRequestException(
+        `Category ${category.name} is of type ${category.type}, expected ${type}`
+      )
+    }
+
+    return { id: category.id, name: category.name }
+  }
 
   async findAll(userId: string): Promise<CategoryAssociationDto[]> {
     const associations = await this.prisma.categoryAssociation.findMany({
@@ -32,6 +70,21 @@ export class CategoryAssociationService {
     userId: string,
     dto: CreateCategoryAssociationDto
   ): Promise<CategoryAssociationDto> {
+    // Ownership and type first: a request naming a stranger's category must
+    // fail before it can create a row that leaks the name back.
+    await Promise.all([
+      this.findOwnedCategory(
+        userId,
+        dto.expenseCategoryId,
+        TransactionType.EXPENSE
+      ),
+      this.findOwnedCategory(
+        userId,
+        dto.incomeCategoryId,
+        TransactionType.INCOME
+      ),
+    ])
+
     // Check if expense category already has an association
     const existingExpenseAssociation =
       await this.prisma.categoryAssociation.findUnique({

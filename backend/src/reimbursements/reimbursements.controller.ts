@@ -20,7 +20,6 @@ import { ReimbursementsService } from './reimbursements.service'
 import {
   CreateReimbursementDto,
   UpdateReimbursementDto,
-  ReceivePaymentDto,
   ReimbursementResponseDto,
 } from './dto'
 import { SupabaseGuard, CurrentUser } from '../auth'
@@ -112,16 +111,11 @@ export class ReimbursementsController {
     return this.reimbursementsService.update(id, user.id, dto)
   }
 
-  @Patch(':id/receive')
-  @ApiOperation({ summary: 'Record a payment received for a reimbursement' })
-  @ApiResponse({ status: 200, type: ReimbursementResponseDto })
-  async receivePayment(
-    @CurrentUser() user: User,
-    @Param('id') id: string,
-    @Body() dto: ReceivePaymentDto
-  ): Promise<ReimbursementResponseDto> {
-    return this.reimbursementsService.receivePayment(id, user.id, dto.amount)
-  }
+  // REMOVED: PATCH :id/receive. It credited `amountReceived` with no cap and
+  // left no settlement row behind, so the money it recorded was backed by
+  // nothing and `delete` could not reverse it. It never had a frontend caller,
+  // and the prod audit found zero rows carrying such a credit. Recording a
+  // payment goes through a settlement, which names the income transaction.
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a reimbursement request' })
