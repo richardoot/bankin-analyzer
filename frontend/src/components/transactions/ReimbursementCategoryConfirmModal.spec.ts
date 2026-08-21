@@ -31,6 +31,7 @@ const suggestedCategory: CategoryDto = {
   name: 'Remboursement Mutuelle',
   type: 'INCOME',
   icon: '💊',
+  isExcludedFromBudget: false,
   createdAt: '2026-01-01',
 }
 

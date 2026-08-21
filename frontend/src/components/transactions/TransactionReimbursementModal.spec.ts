@@ -19,6 +19,7 @@ const mockTransaction = (
   description: 'Pharmacie',
   amount: -50,
   type: 'EXPENSE',
+  accountId: 'acc-1',
   account: 'Checking',
   isPointed: false,
   categoryId: 'cat-sante',
@@ -48,6 +49,7 @@ const mockIncomeCategories: CategoryDto[] = [
     name: 'Remboursement Mutuelle',
     type: 'INCOME',
     icon: '💊',
+    isExcludedFromBudget: false,
     createdAt: '2026-01-01',
   },
   {
@@ -55,6 +57,7 @@ const mockIncomeCategories: CategoryDto[] = [
     name: 'Remboursement amis',
     type: 'INCOME',
     icon: '👥',
+    isExcludedFromBudget: false,
     createdAt: '2026-01-01',
   },
 ]
@@ -134,10 +137,7 @@ describe('TransactionReimbursementModal — default category from associations',
     ]
 
     const wrapper = mountModal({
-      transaction: mockTransaction({
-        categoryId: null,
-        categoryName: undefined,
-      }),
+      transaction: mockTransaction({ categoryId: null }),
     })
     const vm = wrapper.vm as unknown as {
       resetForm: () => void

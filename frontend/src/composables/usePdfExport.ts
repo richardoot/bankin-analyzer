@@ -17,7 +17,9 @@ interface ReimbursementDetail {
 }
 
 interface CategorySummary {
-  categoryId: string
+  // No `categoryId`: the export only ever prints the name, and requiring an id
+  // here made the interface reject the caller's own summary, whose id is
+  // legitimately null for uncategorized reimbursements.
   categoryName: string
   amount: number
   reimbursements: ReimbursementDetail[]

@@ -76,12 +76,15 @@
 
     try {
       isCreating.value = true
+      // The optional fields are omitted rather than sent as `undefined`:
+      // under `exactOptionalPropertyTypes` those are different things, and the
+      // payload should say "no category" by saying nothing.
       const newReimbursement = await api.createReimbursement({
         transactionId: props.transaction.id,
         personId: form.value.personId,
         amount: form.value.amount,
-        categoryId: form.value.categoryId || undefined,
-        note: form.value.note || undefined,
+        ...(form.value.categoryId && { categoryId: form.value.categoryId }),
+        ...(form.value.note && { note: form.value.note }),
       })
       emit('created', newReimbursement)
     } catch (err) {
