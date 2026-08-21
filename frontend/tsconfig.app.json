@@ -2,6 +2,9 @@
   "extends": ["../tsconfig.base.json", "@vue/tsconfig/tsconfig.dom.json"],
   "compilerOptions": {
     "composite": true,
+    // Type-checking only: `--build` walks these projects, and nothing here
+    // consumes another's declarations, so there is no output to produce.
+    "noEmit": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "baseUrl": ".",
     "paths": {

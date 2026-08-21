@@ -43,9 +43,8 @@ const mockPrismaService = {
   },
   // The service runs the delete in one interactive transaction; handing the
   // callback the same mock keeps the assertions readable.
-  $transaction: vi.fn(
-    (callback: (tx: typeof mockPrismaService) => unknown) =>
-      callback(mockPrismaService) as unknown
+  $transaction: vi.fn((callback: (tx: typeof mockPrismaService) => unknown) =>
+    callback(mockPrismaService)
   ),
 }
 
