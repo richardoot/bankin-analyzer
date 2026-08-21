@@ -53,6 +53,7 @@ const mockReimbursement = {
   person: mockPerson,
   category: mockCategory,
   transaction: mockExpenseTransaction,
+  payments: [] as Array<{ amount: Decimal; kind: string }>,
 }
 
 const mockSettlement = {
@@ -81,6 +82,22 @@ const mockSettlement = {
   ],
 }
 
+/**
+ * The ledger delegate every `$transaction` callback needs since phase 3 made
+ * the payments authoritative. `findMany` answers with what a debt still
+ * carries once the settlement under test has been removed, so a spec that
+ * cares about the reversal passes its own remainder.
+ */
+function paymentDelegate(
+  remaining: Array<{ amount: Decimal; kind: string }> = []
+) {
+  return {
+    create: vi.fn(),
+    deleteMany: vi.fn(),
+    findMany: vi.fn().mockResolvedValue(remaining),
+  }
+}
+
 const mockPrismaService = {
   settlement: {
     findMany: vi.fn(),
@@ -97,6 +114,11 @@ const mockPrismaService = {
   reimbursementRequest: {
     findMany: vi.fn(),
     update: vi.fn(),
+  },
+  reimbursementPayment: {
+    create: vi.fn(),
+    findMany: vi.fn(),
+    deleteMany: vi.fn(),
   },
   $transaction: vi.fn(),
 }
@@ -240,6 +262,7 @@ describe('SettlementsService', () => {
       ])
       mockPrismaService.$transaction.mockImplementation(async callback => {
         return callback({
+          reimbursementPayment: paymentDelegate(),
           settlement: {
             create: vi.fn().mockResolvedValue(mockSettlement),
           },
@@ -385,6 +408,7 @@ describe('SettlementsService', () => {
       ])
       mockPrismaService.$transaction.mockImplementation(async callback => {
         return callback({
+          reimbursementPayment: paymentDelegate(),
           settlement: {
             create: vi.fn().mockResolvedValue(mockSettlement),
           },
@@ -423,6 +447,7 @@ describe('SettlementsService', () => {
       ])
       mockPrismaService.$transaction.mockImplementation(async callback => {
         return callback({
+          reimbursementPayment: paymentDelegate(),
           settlement: {
             create: vi.fn().mockResolvedValue(mockSettlement),
           },
@@ -467,6 +492,7 @@ describe('SettlementsService', () => {
       ])
       mockPrismaService.$transaction.mockImplementation(async callback => {
         return callback({
+          reimbursementPayment: paymentDelegate(),
           settlement: { create: vi.fn().mockResolvedValue(mockSettlement) },
           reimbursementRequest: { update: mockUpdate },
         })
@@ -503,10 +529,13 @@ describe('SettlementsService', () => {
 
     it('should record the credited delta, not the original amount, when force-completing a partially paid reimbursement', async () => {
       // 30 already received on an 80 debt, 5 more in cash, remainder forgiven.
+      // What was already credited is read off the ledger now, not off the
+      // column: the payments are the fact, the column their sum.
       const partiallyPaid = {
         ...mockReimbursement,
         amountReceived: new Decimal(30),
         status: ReimbursementStatus.PARTIAL,
+        payments: [{ amount: new Decimal(30), kind: 'CASH' }],
       }
       const mockCreate = vi.fn().mockResolvedValue(mockSettlement)
       mockPrismaService.transaction.findFirst.mockResolvedValue(
@@ -518,6 +547,7 @@ describe('SettlementsService', () => {
       ])
       mockPrismaService.$transaction.mockImplementation(async callback => {
         return callback({
+          reimbursementPayment: paymentDelegate(),
           settlement: { create: mockCreate },
           reimbursementRequest: { update: vi.fn() },
         })
@@ -568,6 +598,7 @@ describe('SettlementsService', () => {
       )
       mockPrismaService.$transaction.mockImplementation(async callback => {
         return callback({
+          reimbursementPayment: paymentDelegate(),
           reimbursementRequest: {
             update: vi.fn(),
           },
@@ -601,6 +632,13 @@ describe('SettlementsService', () => {
       })
       mockPrismaService.$transaction.mockImplementation(async callback => {
         return callback({
+          // Once this settlement's own payments are removed, the only credit
+          // left on the debt is the earlier 30 — and re-totalling that is the
+          // whole reversal. Nothing is subtracted, so nothing can be
+          // subtracted twice.
+          reimbursementPayment: paymentDelegate([
+            { amount: new Decimal(30), kind: 'CASH' },
+          ]),
           reimbursementRequest: { update: mockUpdate },
           settlement: { delete: vi.fn() },
         })

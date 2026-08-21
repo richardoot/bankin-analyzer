@@ -4,12 +4,27 @@ import {
   BadRequestException,
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { ReimbursementStatus, TransactionType } from '../generated/prisma'
+import { TransactionType } from '../generated/prisma'
 import type { Settlement, Prisma } from '../generated/prisma'
+import {
+  LEDGER_EPSILON,
+  creditedTotal,
+  derivedStatusOf,
+  paymentsOf,
+  round2,
+  splitCredit,
+  type LedgerEntry,
+} from '../reimbursements/reimbursement-ledger'
+import {
+  suggestSettlements,
+  type PendingDebt,
+  type UnsettledIncome,
+} from './settlement-suggestions'
 import type { CreateSettlementDto } from './dto'
 import type {
   SettlementResponseDto,
   SettlementReimbursementResponseDto,
+  SettlementSuggestionDto,
   TransactionAvailableAmountDto,
 } from './dto'
 
@@ -37,6 +52,16 @@ type SettlementWithRelations = Settlement & {
       category: { name: string } | null
     }
   }>
+}
+
+/** Prisma rows to the plain shape the ledger arithmetic works on. */
+function toLedgerEntries(
+  payments: Array<{ amount: Prisma.Decimal | number; kind: string }>
+): LedgerEntry[] {
+  return payments.map(payment => ({
+    amount: Number(payment.amount),
+    kind: payment.kind as LedgerEntry['kind'],
+  }))
 }
 
 @Injectable()
@@ -194,6 +219,113 @@ export class SettlementsService {
     }
   }
 
+  /**
+   * Incoming transfers that look like they repay someone.
+   *
+   * This is what pays back the gesture the payment ledger costs: the old
+   * category pairing deducted refunds on its own, forever, once configured.
+   * Linking each encashment by hand is exact but tedious, so the obvious pairs
+   * are surfaced ready to confirm.
+   *
+   * Nothing is decided here and nothing is written. `CategoryAssociation` is
+   * read, but only as one hint among three — it has no say in any figure
+   * since phase 4.
+   */
+  async suggest(userId: string): Promise<SettlementSuggestionDto[]> {
+    const [incomeRows, debtRows, associations] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where: { userId, type: TransactionType.INCOME },
+        select: {
+          id: true,
+          date: true,
+          description: true,
+          amount: true,
+          categoryId: true,
+          // Cash already drawn by settlements, so a transfer that is fully
+          // consumed never shows up as a candidate.
+          reimbursementPayments: {
+            where: { kind: 'CASH' },
+            select: { amount: true },
+          },
+        },
+      }),
+      this.prisma.reimbursementRequest.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          amount: true,
+          person: { select: { id: true, name: true } },
+          transaction: {
+            select: {
+              date: true,
+              description: true,
+              categoryId: true,
+              category: { select: { name: true } },
+            },
+          },
+          payments: { select: { amount: true, kind: true } },
+        },
+      }),
+      this.prisma.categoryAssociation.findMany({
+        where: { userId },
+        select: { expenseCategoryId: true, incomeCategoryId: true },
+      }),
+    ])
+
+    const incomes: UnsettledIncome[] = incomeRows.map(row => {
+      const amount = Number(row.amount)
+      const drawn = row.reimbursementPayments.reduce(
+        (sum, payment) => sum + Number(payment.amount),
+        0
+      )
+      return {
+        transactionId: row.id,
+        date: row.date,
+        description: row.description,
+        amount,
+        availableAmount: round2(amount - drawn),
+        categoryId: row.categoryId,
+      }
+    })
+
+    const debts: PendingDebt[] = debtRows.map(row => ({
+      reimbursementId: row.id,
+      personId: row.person.id,
+      personName: row.person.name,
+      description: row.transaction.description,
+      expenseDate: row.transaction.date,
+      expenseCategoryId: row.transaction.categoryId,
+      expenseCategoryName: row.transaction.category?.name ?? null,
+      amountRemaining: round2(
+        Number(row.amount) - creditedTotal(toLedgerEntries(row.payments))
+      ),
+    }))
+
+    const hints = new Map(
+      associations.map(a => [a.incomeCategoryId, a.expenseCategoryId])
+    )
+
+    return suggestSettlements(incomes, debts, hints).map(suggestion => ({
+      transactionId: suggestion.transactionId,
+      date: suggestion.date,
+      description: suggestion.description,
+      availableAmount: suggestion.availableAmount,
+      personId: suggestion.personId,
+      personName: suggestion.personName,
+      score: suggestion.score,
+      reasons: suggestion.reasons,
+      coverage: suggestion.coverage,
+      debts: suggestion.debts.map(debt => ({
+        reimbursementId: debt.reimbursementId,
+        description: debt.description,
+        expenseDate: debt.expenseDate,
+        categoryId: debt.expenseCategoryId,
+        categoryName: debt.expenseCategoryName,
+        amountRemaining: debt.amountRemaining,
+      })),
+    }))
+  }
+
   async create(
     userId: string,
     dto: CreateSettlementDto
@@ -231,6 +363,11 @@ export class SettlementsService {
         id: { in: reimbursementIds },
         userId,
       },
+      include: {
+        // What the ledger already credits to each debt, which is what the
+        // split below measures the new credit against.
+        payments: { select: { amount: true, kind: true } },
+      },
     })
 
     if (reimbursements.length !== dto.reimbursements.length) {
@@ -265,48 +402,63 @@ export class SettlementsService {
       )
     }
 
-    // 6. Resolve, for each line, the credit applied to the debt.
+    // 6. Resolve, for each line, the credit applied to the debt — split into
+    // the cash it draws and the remainder it forgives.
     //
-    // `amountSettled` on the join row records the credit actually applied to
-    // the reimbursement, which is the cash drawn from the income transaction
-    // plus, when the line is force-completed, the forgiven remainder. It is
-    // deliberately allowed to differ from `Settlement.amountUsed` (cash only):
-    // `delete` reverses exactly what was credited, and `getAvailableAmount`
-    // only ever frees the cash that was really consumed.
+    // What each line has already been credited comes from the ledger, not from
+    // `amountReceived`: the payments are the source of truth from here on, and
+    // the column is only their sum, rewritten below in the same transaction.
+    const ledgerByReimbursement = new Map(
+      reimbursements.map(r => [
+        r.id,
+        creditedTotal(toLedgerEntries(r.payments)),
+      ])
+    )
     const reimbursementMap = new Map(reimbursements.map(r => [r.id, r]))
-    const resolvedLines = dto.reimbursements.map(r => {
-      const reimb = reimbursementMap.get(r.reimbursementId)
-      // Already validated above, but keep the type narrowing local.
-      const previouslyReceived = reimb ? Number(reimb.amountReceived) : 0
-      const originalAmount = reimb ? Number(reimb.amount) : 0
-      const forceComplete = r.forceComplete ?? dto.forceComplete ?? false
 
-      const receivedAfter = forceComplete
-        ? Math.max(originalAmount, previouslyReceived + r.amountSettled)
-        : previouslyReceived + r.amountSettled
+    const resolvedLines = dto.reimbursements.map(line => {
+      const reimbursement = reimbursementMap.get(line.reimbursementId)
+      // Already validated above; keep the type narrowing local.
+      const debtAmount = reimbursement ? Number(reimbursement.amount) : 0
+      const alreadyCredited =
+        ledgerByReimbursement.get(line.reimbursementId) ?? 0
 
-      let status: ReimbursementStatus
-      if (receivedAfter >= originalAmount) {
-        status = ReimbursementStatus.COMPLETED
-      } else if (receivedAfter > 0) {
-        status = ReimbursementStatus.PARTIAL
-      } else {
-        status = ReimbursementStatus.PENDING
+      const split = splitCredit({
+        debtAmount,
+        alreadyCredited,
+        cash: line.amountSettled,
+        forceComplete: line.forceComplete ?? dto.forceComplete ?? false,
+      })
+
+      const creditedAfter = round2(
+        alreadyCredited + split.cash + split.writeOff
+      )
+
+      // Invariant: a debt cannot be credited beyond what it was for. Nothing
+      // enforced this before, so an over-payment silently inflated the column.
+      if (creditedAfter - debtAmount > LEDGER_EPSILON) {
+        throw new BadRequestException(
+          `Reimbursement ${line.reimbursementId} would be credited ${creditedAfter} for a debt of ${debtAmount}`
+        )
       }
 
       return {
-        reimbursementId: r.reimbursementId,
-        amountSettled: receivedAfter - previouslyReceived,
-        receivedAfter,
-        status,
+        reimbursementId: line.reimbursementId,
+        split,
+        creditedAfter,
+        status: derivedStatusOf(debtAmount, creditedAfter),
       }
     })
 
     // 7. Create settlement in a transaction
     const settlement = await this.prisma.$transaction(async tx => {
+      // The join rows keep recording the total credit, cash and forgiveness
+      // together, exactly as before. They are the representation phase 6 will
+      // drop; until then they are written alongside the ledger so a rollback
+      // to the previous code finds the data it expects.
       const settlementReimbursements = resolvedLines.map(line => ({
         reimbursementId: line.reimbursementId,
-        amountSettled: line.amountSettled,
+        amountSettled: round2(line.split.cash + line.split.writeOff),
       }))
 
       // Create the settlement
@@ -350,12 +502,32 @@ export class SettlementsService {
         },
       })
 
-      // Update each reimbursement's amountReceived and status
+      // Record the ledger: one row per movement, so a deletion knows exactly
+      // what was cash and what was forgiven instead of having to guess.
       for (const line of resolvedLines) {
+        for (const entry of paymentsOf(line.split)) {
+          await tx.reimbursementPayment.create({
+            data: {
+              userId,
+              reimbursementId: line.reimbursementId,
+              // A forgiven remainder is backed by no money, so it names no
+              // transaction — that is what makes it reversible on its own.
+              incomeTransactionId:
+                entry.kind === 'CASH' ? dto.incomeTransactionId : null,
+              amount: entry.amount,
+              kind: entry.kind,
+              settledAt: created.createdAt,
+              settlementId: created.id,
+            },
+          })
+        }
+
+        // Derived, never decided: the column and the status are the ledger
+        // read back. Phase 6 removes them entirely.
         await tx.reimbursementRequest.update({
           where: { id: line.reimbursementId },
           data: {
-            amountReceived: line.receivedAfter,
+            amountReceived: line.creditedAfter,
             status: line.status,
           },
         })
@@ -384,31 +556,37 @@ export class SettlementsService {
       throw new NotFoundException(`Settlement with ID ${id} not found`)
     }
 
-    // Reverse the settlement in a transaction
+    // Reverse the settlement in a transaction.
+    //
+    // Nothing is subtracted here. The settlement's payments are removed and
+    // each affected debt is re-totalled from whatever payments remain, which is
+    // what makes the reversal exact: the previous code subtracted a stored
+    // `amountSettled` that mixed cash and forgiveness, and a force-completed
+    // line therefore gave back more than it had ever taken — silently wiping an
+    // earlier partial payment (see scripts/audit-forced-settlements.ts).
     await this.prisma.$transaction(async tx => {
-      // Reverse amounts on each reimbursement
-      for (const sr of settlement.reimbursements) {
-        const reimb = sr.reimbursement
-        const newAmountReceived = Math.max(
-          0,
-          Number(reimb.amountReceived) - Number(sr.amountSettled)
-        )
-        const originalAmount = Number(reimb.amount)
+      const affected = settlement.reimbursements.map(sr => sr.reimbursement)
 
-        let newStatus: ReimbursementStatus
-        if (newAmountReceived >= originalAmount) {
-          newStatus = ReimbursementStatus.COMPLETED
-        } else if (newAmountReceived > 0) {
-          newStatus = ReimbursementStatus.PARTIAL
-        } else {
-          newStatus = ReimbursementStatus.PENDING
-        }
+      // Cascade would take these with the settlement, but they have to be gone
+      // *before* the totals below are recomputed.
+      await tx.reimbursementPayment.deleteMany({
+        where: { settlementId: id },
+      })
+
+      for (const reimbursement of affected) {
+        const remaining = await tx.reimbursementPayment.findMany({
+          where: { reimbursementId: reimbursement.id },
+          select: { amount: true, kind: true },
+        })
+
+        const credited = creditedTotal(toLedgerEntries(remaining))
+        const debtAmount = Number(reimbursement.amount)
 
         await tx.reimbursementRequest.update({
-          where: { id: reimb.id },
+          where: { id: reimbursement.id },
           data: {
-            amountReceived: newAmountReceived,
-            status: newStatus,
+            amountReceived: credited,
+            status: derivedStatusOf(debtAmount, credited),
           },
         })
       }

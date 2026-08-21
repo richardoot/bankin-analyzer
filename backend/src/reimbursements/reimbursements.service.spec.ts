@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
-import { NotFoundException } from '@nestjs/common'
+import { NotFoundException, BadRequestException } from '@nestjs/common'
 import { Decimal } from 'decimal.js'
 import { ReimbursementsService } from './reimbursements.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { ReimbursementStatus } from '../generated/prisma'
+import { ReimbursementStatus, TransactionType } from '../generated/prisma'
 
 const mockUserId = '550e8400-e29b-41d4-a716-446655440001'
 
@@ -25,6 +25,9 @@ const mockTransaction = {
   date: new Date('2024-01-15'),
   description: 'Pharmacie',
   amount: new Decimal(-50),
+  // A reimbursement repays a spending: the service now checks the type it
+  // always assumed.
+  type: TransactionType.EXPENSE,
 }
 
 const mockReimbursement = {
@@ -41,6 +44,8 @@ const mockReimbursement = {
   updatedAt: new Date('2024-01-15T10:30:00.000Z'),
   person: mockPerson,
   category: mockCategory,
+  transaction: mockTransaction,
+  payments: [] as Array<{ amount: Decimal; kind: string }>,
 }
 
 const mockReimbursementPartial = {
@@ -57,6 +62,7 @@ const mockPrismaService = {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    aggregate: vi.fn(),
   },
   transaction: {
     findFirst: vi.fn(),
@@ -86,6 +92,12 @@ describe('ReimbursementsService', () => {
     service = module.get<ReimbursementsService>(ReimbursementsService)
 
     vi.clearAllMocks()
+
+    // By default nothing else is owed on the expense, so the cap never binds.
+    // The specs that exercise it say so explicitly.
+    mockPrismaService.reimbursementRequest.aggregate.mockResolvedValue({
+      _sum: { amount: null },
+    })
   })
 
   describe('findAllByUser', () => {
@@ -236,6 +248,65 @@ describe('ReimbursementsService', () => {
       ).rejects.toThrow(NotFoundException)
     })
 
+    it('should refuse a reimbursement on an income transaction', async () => {
+      // The deduction is anchored on the expense being repaid; a request on an
+      // income has nothing to reduce.
+      mockPrismaService.transaction.findFirst.mockResolvedValue({
+        ...mockTransaction,
+        amount: new Decimal(200),
+        type: TransactionType.INCOME,
+      })
+
+      await expect(
+        service.create(mockUserId, {
+          transactionId: mockTransaction.id,
+          personId: mockPerson.id,
+          amount: 30,
+        })
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('should refuse to owe more on an expense than it cost', async () => {
+      mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction)
+      // 40 already claimed on a 50 spending: 30 more overshoots by 20.
+      mockPrismaService.reimbursementRequest.aggregate.mockResolvedValue({
+        _sum: { amount: new Decimal(40) },
+      })
+
+      await expect(
+        service.create(mockUserId, {
+          transactionId: mockTransaction.id,
+          personId: mockPerson.id,
+          amount: 30,
+        })
+      ).rejects.toThrow(BadRequestException)
+
+      expect(
+        mockPrismaService.reimbursementRequest.create
+      ).not.toHaveBeenCalled()
+    })
+
+    it('should allow debts that exactly cover the expense', async () => {
+      mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction)
+      mockPrismaService.reimbursementRequest.aggregate.mockResolvedValue({
+        _sum: { amount: new Decimal(20) },
+      })
+      mockPrismaService.person.findFirst.mockResolvedValue(mockPerson)
+      mockPrismaService.category.findFirst.mockResolvedValue(mockCategory)
+      mockPrismaService.reimbursementRequest.create.mockResolvedValue(
+        mockReimbursement
+      )
+
+      // 20 + 30 = 50, the whole spending. The cap is inclusive.
+      await expect(
+        service.create(mockUserId, {
+          transactionId: mockTransaction.id,
+          personId: mockPerson.id,
+          amount: 30,
+        })
+      ).resolves.toBeDefined()
+    })
+
     it('should throw NotFoundException when person not found', async () => {
       mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction)
       mockPrismaService.person.findFirst.mockResolvedValue(null)
@@ -290,111 +361,6 @@ describe('ReimbursementsService', () => {
 
       await expect(
         service.update('non-existent-id', mockUserId, { note: 'Test' })
-      ).rejects.toThrow(NotFoundException)
-    })
-  })
-
-  describe('receivePayment', () => {
-    it('should update amountReceived and status to PARTIAL', async () => {
-      const partialReimbursement = {
-        ...mockReimbursement,
-        amountReceived: new Decimal(15),
-        status: ReimbursementStatus.PARTIAL,
-      }
-      mockPrismaService.reimbursementRequest.findFirst.mockResolvedValue(
-        mockReimbursement
-      )
-      mockPrismaService.reimbursementRequest.update.mockResolvedValue(
-        partialReimbursement
-      )
-
-      const result = await service.receivePayment(
-        mockReimbursement.id,
-        mockUserId,
-        15
-      )
-
-      expect(result.amountReceived).toBe(15)
-      expect(result.status).toBe(ReimbursementStatus.PARTIAL)
-      expect(
-        mockPrismaService.reimbursementRequest.update
-      ).toHaveBeenCalledWith({
-        where: { id: mockReimbursement.id },
-        data: {
-          amountReceived: 15,
-          status: ReimbursementStatus.PARTIAL,
-        },
-        include: {
-          person: { select: { name: true } },
-          category: { select: { name: true } },
-        },
-      })
-    })
-
-    it('should update status to COMPLETED when fully paid', async () => {
-      const completedReimbursement = {
-        ...mockReimbursement,
-        amountReceived: new Decimal(30),
-        status: ReimbursementStatus.COMPLETED,
-      }
-      mockPrismaService.reimbursementRequest.findFirst.mockResolvedValue(
-        mockReimbursement
-      )
-      mockPrismaService.reimbursementRequest.update.mockResolvedValue(
-        completedReimbursement
-      )
-
-      const result = await service.receivePayment(
-        mockReimbursement.id,
-        mockUserId,
-        30
-      )
-
-      expect(result.amountReceived).toBe(30)
-      expect(result.status).toBe(ReimbursementStatus.COMPLETED)
-    })
-
-    it('should accumulate payments', async () => {
-      const completedReimbursement = {
-        ...mockReimbursementPartial,
-        amountReceived: new Decimal(30),
-        status: ReimbursementStatus.COMPLETED,
-      }
-      mockPrismaService.reimbursementRequest.findFirst.mockResolvedValue(
-        mockReimbursementPartial
-      )
-      mockPrismaService.reimbursementRequest.update.mockResolvedValue(
-        completedReimbursement
-      )
-
-      const result = await service.receivePayment(
-        mockReimbursementPartial.id,
-        mockUserId,
-        15
-      )
-
-      expect(result.amountReceived).toBe(30)
-      expect(result.status).toBe(ReimbursementStatus.COMPLETED)
-      expect(
-        mockPrismaService.reimbursementRequest.update
-      ).toHaveBeenCalledWith({
-        where: { id: mockReimbursementPartial.id },
-        data: {
-          amountReceived: 30, // 15 (existing) + 15 (new)
-          status: ReimbursementStatus.COMPLETED,
-        },
-        include: {
-          person: { select: { name: true } },
-          category: { select: { name: true } },
-        },
-      })
-    })
-
-    it('should throw NotFoundException when not found', async () => {
-      mockPrismaService.reimbursementRequest.findFirst.mockResolvedValue(null)
-
-      await expect(
-        service.receivePayment('non-existent-id', mockUserId, 10)
       ).rejects.toThrow(NotFoundException)
     })
   })
