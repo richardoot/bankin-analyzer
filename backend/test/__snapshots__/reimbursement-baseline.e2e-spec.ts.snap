@@ -1,0 +1,1053 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Reimbursement baseline (e2e) > golden master > budget — nothing deducted 1`] = `
+{
+  "averageMonthlyExpenses": 1450,
+  "averageMonthlyIncome": 1800,
+  "expensesByCategory": [
+    {
+      "averagePerMonth": 600,
+      "categoryIcon": null,
+      "categoryId": "category:Voyage",
+      "categoryName": "Voyage",
+      "everydayAmount": 0,
+      "everydayAveragePerMonth": 0,
+      "everydayMonthlyAmounts": [
+        0,
+        0,
+      ],
+      "exceptionalAmount": 1200,
+      "monthlyAmounts": [
+        1200,
+        0,
+      ],
+      "subcategories": [
+        {
+          "averagePerMonth": 600,
+          "subcategory": "",
+          "totalAmount": 1200,
+          "transactionCount": 1,
+        },
+      ],
+      "totalAmount": 1200,
+      "transactionCount": 1,
+    },
+    {
+      "averagePerMonth": 500,
+      "categoryIcon": null,
+      "categoryId": "category:Sante",
+      "categoryName": "Sante",
+      "everydayAmount": 1000,
+      "everydayAveragePerMonth": 500,
+      "everydayMonthlyAmounts": [
+        1000,
+        0,
+      ],
+      "exceptionalAmount": 0,
+      "monthlyAmounts": [
+        1000,
+        0,
+      ],
+      "subcategories": [
+        {
+          "averagePerMonth": 400,
+          "subcategory": "Dentiste",
+          "totalAmount": 800,
+          "transactionCount": 1,
+        },
+        {
+          "averagePerMonth": 100,
+          "subcategory": "Pharmacie",
+          "totalAmount": 200,
+          "transactionCount": 1,
+        },
+      ],
+      "totalAmount": 1000,
+      "transactionCount": 2,
+    },
+    {
+      "averagePerMonth": 350,
+      "categoryIcon": null,
+      "categoryId": "category:Courses",
+      "categoryName": "Courses",
+      "everydayAmount": 700,
+      "everydayAveragePerMonth": 350,
+      "everydayMonthlyAmounts": [
+        300,
+        400,
+      ],
+      "exceptionalAmount": 0,
+      "monthlyAmounts": [
+        300,
+        400,
+      ],
+      "subcategories": [
+        {
+          "averagePerMonth": 350,
+          "subcategory": "",
+          "totalAmount": 700,
+          "transactionCount": 2,
+        },
+      ],
+      "totalAmount": 700,
+      "transactionCount": 2,
+    },
+  ],
+  "incomeByCategory": [
+    {
+      "averagePerMonth": 1500,
+      "categoryIcon": null,
+      "categoryId": "category:Salaire",
+      "categoryName": "Salaire",
+      "monthlyAmounts": [
+        3000,
+        0,
+      ],
+      "subcategories": [
+        {
+          "averagePerMonth": 1500,
+          "subcategory": "",
+          "totalAmount": 3000,
+          "transactionCount": 1,
+        },
+      ],
+      "totalAmount": 3000,
+      "transactionCount": 1,
+    },
+    {
+      "averagePerMonth": 300,
+      "categoryIcon": null,
+      "categoryId": "category:RemboursementSante",
+      "categoryName": "Remboursement sante",
+      "monthlyAmounts": [
+        0,
+        600,
+      ],
+      "subcategories": [
+        {
+          "averagePerMonth": 300,
+          "subcategory": "",
+          "totalAmount": 600,
+          "transactionCount": 1,
+        },
+      ],
+      "totalAmount": 600,
+      "transactionCount": 1,
+    },
+  ],
+  "monthLabels": [
+    "2026-01",
+    "2026-02",
+  ],
+  "periodMonths": 2,
+  "totalExceptionalExpenses": 1200,
+  "totalExpenses": 2900,
+  "totalIncome": 3600,
+}
+`;
+
+exports[`Reimbursement baseline (e2e) > golden master > budget — received and pending deducted 1`] = `
+{
+  "averageMonthlyExpenses": 1062.5,
+  "averageMonthlyIncome": 1500,
+  "expensesByCategory": [
+    {
+      "averagePerMonth": 600,
+      "categoryIcon": null,
+      "categoryId": "category:Voyage",
+      "categoryName": "Voyage",
+      "everydayAmount": 0,
+      "everydayAveragePerMonth": 0,
+      "everydayMonthlyAmounts": [
+        0,
+        0,
+      ],
+      "exceptionalAmount": 1200,
+      "monthlyAmounts": [
+        1200,
+        0,
+      ],
+      "subcategories": [
+        {
+          "averagePerMonth": 600,
+          "subcategory": "",
+          "totalAmount": 1200,
+          "transactionCount": 1,
+        },
+      ],
+      "totalAmount": 1200,
+      "transactionCount": 1,
+    },
+    {
+      "averagePerMonth": 312.5,
+      "categoryIcon": null,
+      "categoryId": "category:Courses",
+      "categoryName": "Courses",
+      "everydayAmount": 625,
+      "everydayAveragePerMonth": 312.5,
+      "everydayMonthlyAmounts": [
+        225,
+        400,
+      ],
+      "exceptionalAmount": 0,
+      "monthlyAmounts": [
+        225,
+        400,
+      ],
+      "pendingReimbursement": 75,
+      "subcategories": [
+        {
+          "averagePerMonth": 312.5,
+          "subcategory": "",
+          "totalAmount": 625,
+          "transactionCount": 2,
+        },
+      ],
+      "totalAmount": 625,
+      "transactionCount": 2,
+    },
+    {
+      "averagePerMonth": 150,
+      "categoryIcon": null,
+      "categoryId": "category:Sante",
+      "categoryName": "Sante",
+      "everydayAmount": 300,
+      "everydayAveragePerMonth": 150,
+      "everydayMonthlyAmounts": [
+        300,
+        0,
+      ],
+      "exceptionalAmount": 0,
+      "monthlyAmounts": [
+        300,
+        0,
+      ],
+      "pendingReimbursement": 100,
+      "reimbursement": 600,
+      "subcategories": [
+        {
+          "averagePerMonth": 100,
+          "subcategory": "Dentiste",
+          "totalAmount": 200,
+          "transactionCount": 1,
+        },
+        {
+          "averagePerMonth": 50,
+          "subcategory": "Pharmacie",
+          "totalAmount": 100,
+          "transactionCount": 1,
+        },
+      ],
+      "totalAmount": 300,
+      "transactionCount": 2,
+    },
+  ],
+  "incomeByCategory": [
+    {
+      "averagePerMonth": 1500,
+      "categoryIcon": null,
+      "categoryId": "category:Salaire",
+      "categoryName": "Salaire",
+      "monthlyAmounts": [
+        3000,
+        0,
+      ],
+      "subcategories": [
+        {
+          "averagePerMonth": 1500,
+          "subcategory": "",
+          "totalAmount": 3000,
+          "transactionCount": 1,
+        },
+      ],
+      "totalAmount": 3000,
+      "transactionCount": 1,
+    },
+    {
+      "averagePerMonth": 0,
+      "categoryIcon": null,
+      "categoryId": "category:RemboursementSante",
+      "categoryName": "Remboursement sante",
+      "monthlyAmounts": [
+        0,
+        0,
+      ],
+      "subcategories": [
+        {
+          "averagePerMonth": 0,
+          "subcategory": "",
+          "totalAmount": 0,
+          "transactionCount": 1,
+        },
+      ],
+      "totalAmount": 0,
+      "transactionCount": 1,
+    },
+  ],
+  "monthLabels": [
+    "2026-01",
+    "2026-02",
+  ],
+  "periodMonths": 2,
+  "totalExceptionalExpenses": 1200,
+  "totalExpenses": 2125,
+  "totalIncome": 3000,
+  "totalPendingReimbursements": 175,
+  "totalReimbursements": 600,
+}
+`;
+
+exports[`Reimbursement baseline (e2e) > golden master > budget — received deducted (default) 1`] = `
+{
+  "averageMonthlyExpenses": 1150,
+  "averageMonthlyIncome": 1500,
+  "expensesByCategory": [
+    {
+      "averagePerMonth": 600,
+      "categoryIcon": null,
+      "categoryId": "category:Voyage",
+      "categoryName": "Voyage",
+      "everydayAmount": 0,
+      "everydayAveragePerMonth": 0,
+      "everydayMonthlyAmounts": [
+        0,
+        0,
+      ],
+      "exceptionalAmount": 1200,
+      "monthlyAmounts": [
+        1200,
+        0,
+      ],
+      "subcategories": [
+        {
+          "averagePerMonth": 600,
+          "subcategory": "",
+          "totalAmount": 1200,
+          "transactionCount": 1,
+        },
+      ],
+      "totalAmount": 1200,
+      "transactionCount": 1,
+    },
+    {
+      "averagePerMonth": 350,
+      "categoryIcon": null,
+      "categoryId": "category:Courses",
+      "categoryName": "Courses",
+      "everydayAmount": 700,
+      "everydayAveragePerMonth": 350,
+      "everydayMonthlyAmounts": [
+        300,
+        400,
+      ],
+      "exceptionalAmount": 0,
+      "monthlyAmounts": [
+        300,
+        400,
+      ],
+      "subcategories": [
+        {
+          "averagePerMonth": 350,
+          "subcategory": "",
+          "totalAmount": 700,
+          "transactionCount": 2,
+        },
+      ],
+      "totalAmount": 700,
+      "transactionCount": 2,
+    },
+    {
+      "averagePerMonth": 200,
+      "categoryIcon": null,
+      "categoryId": "category:Sante",
+      "categoryName": "Sante",
+      "everydayAmount": 400,
+      "everydayAveragePerMonth": 200,
+      "everydayMonthlyAmounts": [
+        400,
+        0,
+      ],
+      "exceptionalAmount": 0,
+      "monthlyAmounts": [
+        400,
+        0,
+      ],
+      "reimbursement": 600,
+      "subcategories": [
+        {
+          "averagePerMonth": 120,
+          "subcategory": "Dentiste",
+          "totalAmount": 240,
+          "transactionCount": 1,
+        },
+        {
+          "averagePerMonth": 80,
+          "subcategory": "Pharmacie",
+          "totalAmount": 160,
+          "transactionCount": 1,
+        },
+      ],
+      "totalAmount": 400,
+      "transactionCount": 2,
+    },
+  ],
+  "incomeByCategory": [
+    {
+      "averagePerMonth": 1500,
+      "categoryIcon": null,
+      "categoryId": "category:Salaire",
+      "categoryName": "Salaire",
+      "monthlyAmounts": [
+        3000,
+        0,
+      ],
+      "subcategories": [
+        {
+          "averagePerMonth": 1500,
+          "subcategory": "",
+          "totalAmount": 3000,
+          "transactionCount": 1,
+        },
+      ],
+      "totalAmount": 3000,
+      "transactionCount": 1,
+    },
+    {
+      "averagePerMonth": 0,
+      "categoryIcon": null,
+      "categoryId": "category:RemboursementSante",
+      "categoryName": "Remboursement sante",
+      "monthlyAmounts": [
+        0,
+        0,
+      ],
+      "subcategories": [
+        {
+          "averagePerMonth": 0,
+          "subcategory": "",
+          "totalAmount": 0,
+          "transactionCount": 1,
+        },
+      ],
+      "totalAmount": 0,
+      "transactionCount": 1,
+    },
+  ],
+  "monthLabels": [
+    "2026-01",
+    "2026-02",
+  ],
+  "periodMonths": 2,
+  "totalExceptionalExpenses": 1200,
+  "totalExpenses": 2300,
+  "totalIncome": 3000,
+  "totalReimbursements": 600,
+}
+`;
+
+exports[`Reimbursement baseline (e2e) > golden master > dashboard — nothing deducted 1`] = `
+{
+  "allExpenseCategories": [
+    {
+      "id": "category:Courses",
+      "name": "Courses",
+    },
+    {
+      "id": "category:Sante",
+      "name": "Sante",
+    },
+    {
+      "id": "category:Voyage",
+      "name": "Voyage",
+    },
+  ],
+  "allIncomeCategories": [
+    {
+      "id": "category:RemboursementSante",
+      "name": "Remboursement sante",
+    },
+    {
+      "id": "category:Salaire",
+      "name": "Salaire",
+    },
+  ],
+  "availableAccounts": [
+    "Compte courant",
+    "Compte joint",
+  ],
+  "exceptionalEvents": [
+    {
+      "amount": 1200,
+      "color": null,
+      "icon": null,
+      "id": "tag:VacancesItalie",
+      "name": "Vacances Italie",
+    },
+  ],
+  "expensesByCategory": [
+    {
+      "amount": 1200,
+      "averagePerMonth": 600,
+      "category": "Voyage",
+      "categoryId": "category:Voyage",
+      "everydayAmount": 0,
+      "everydayAveragePerMonth": 0,
+      "everydayMonthlyAmounts": [
+        0,
+        0,
+      ],
+      "exceptionalAmount": 1200,
+      "icon": null,
+      "monthlyAmounts": [
+        1200,
+        0,
+      ],
+      "subcategories": [
+        {
+          "amount": 1200,
+          "averagePerMonth": 600,
+          "subcategory": "",
+          "transactionCount": 1,
+        },
+      ],
+      "transactionCount": 1,
+    },
+    {
+      "amount": 1000,
+      "averagePerMonth": 500,
+      "category": "Sante",
+      "categoryId": "category:Sante",
+      "everydayAmount": 1000,
+      "everydayAveragePerMonth": 500,
+      "everydayMonthlyAmounts": [
+        1000,
+        0,
+      ],
+      "exceptionalAmount": 0,
+      "icon": null,
+      "monthlyAmounts": [
+        1000,
+        0,
+      ],
+      "subcategories": [
+        {
+          "amount": 800,
+          "averagePerMonth": 400,
+          "subcategory": "Dentiste",
+          "transactionCount": 1,
+        },
+        {
+          "amount": 200,
+          "averagePerMonth": 100,
+          "subcategory": "Pharmacie",
+          "transactionCount": 1,
+        },
+      ],
+      "transactionCount": 2,
+    },
+    {
+      "amount": 700,
+      "averagePerMonth": 350,
+      "category": "Courses",
+      "categoryId": "category:Courses",
+      "everydayAmount": 700,
+      "everydayAveragePerMonth": 350,
+      "everydayMonthlyAmounts": [
+        300,
+        400,
+      ],
+      "exceptionalAmount": 0,
+      "icon": null,
+      "monthlyAmounts": [
+        300,
+        400,
+      ],
+      "subcategories": [
+        {
+          "amount": 700,
+          "averagePerMonth": 350,
+          "subcategory": "",
+          "transactionCount": 2,
+        },
+      ],
+      "transactionCount": 2,
+    },
+  ],
+  "incomeByCategory": [
+    {
+      "amount": 3000,
+      "averagePerMonth": 1500,
+      "category": "Salaire",
+      "categoryId": "category:Salaire",
+      "icon": null,
+      "monthlyAmounts": [
+        3000,
+        0,
+      ],
+      "subcategories": [
+        {
+          "amount": 3000,
+          "averagePerMonth": 1500,
+          "subcategory": "",
+          "transactionCount": 1,
+        },
+      ],
+      "transactionCount": 1,
+    },
+    {
+      "amount": 600,
+      "averagePerMonth": 300,
+      "category": "Remboursement sante",
+      "categoryId": "category:RemboursementSante",
+      "icon": null,
+      "monthlyAmounts": [
+        0,
+        600,
+      ],
+      "subcategories": [
+        {
+          "amount": 600,
+          "averagePerMonth": 300,
+          "subcategory": "",
+          "transactionCount": 1,
+        },
+      ],
+      "transactionCount": 1,
+    },
+  ],
+  "monthLabels": [
+    "2026-01",
+    "2026-02",
+  ],
+  "monthlyData": [
+    {
+      "everydayNetExpenses": 1300,
+      "exceptionalExpenses": 1200,
+      "expenses": 2500,
+      "income": 3000,
+      "label": "Jan 2026",
+      "month": "2026-01",
+      "netExpenses": 2500,
+    },
+    {
+      "everydayNetExpenses": 400,
+      "exceptionalExpenses": 0,
+      "expenses": 400,
+      "income": 600,
+      "label": "Fév 2026",
+      "month": "2026-02",
+      "netExpenses": 400,
+    },
+  ],
+  "periodMonths": 2,
+  "totalExceptionalExpenses": 1200,
+  "totalExpenses": 2900,
+  "totalIncome": 3600,
+}
+`;
+
+exports[`Reimbursement baseline (e2e) > golden master > dashboard — received and pending deducted 1`] = `
+{
+  "allExpenseCategories": [
+    {
+      "id": "category:Courses",
+      "name": "Courses",
+    },
+    {
+      "id": "category:Sante",
+      "name": "Sante",
+    },
+    {
+      "id": "category:Voyage",
+      "name": "Voyage",
+    },
+  ],
+  "allIncomeCategories": [
+    {
+      "id": "category:RemboursementSante",
+      "name": "Remboursement sante",
+    },
+    {
+      "id": "category:Salaire",
+      "name": "Salaire",
+    },
+  ],
+  "availableAccounts": [
+    "Compte courant",
+    "Compte joint",
+  ],
+  "exceptionalEvents": [
+    {
+      "amount": 1200,
+      "color": null,
+      "icon": null,
+      "id": "tag:VacancesItalie",
+      "name": "Vacances Italie",
+    },
+  ],
+  "expensesByCategory": [
+    {
+      "amount": 1200,
+      "averagePerMonth": 600,
+      "category": "Voyage",
+      "categoryId": "category:Voyage",
+      "everydayAmount": 0,
+      "everydayAveragePerMonth": 0,
+      "everydayMonthlyAmounts": [
+        0,
+        0,
+      ],
+      "exceptionalAmount": 1200,
+      "icon": null,
+      "monthlyAmounts": [
+        1200,
+        0,
+      ],
+      "subcategories": [
+        {
+          "amount": 1200,
+          "averagePerMonth": 600,
+          "subcategory": "",
+          "transactionCount": 1,
+        },
+      ],
+      "transactionCount": 1,
+    },
+    {
+      "amount": 625,
+      "averagePerMonth": 312.5,
+      "category": "Courses",
+      "categoryId": "category:Courses",
+      "everydayAmount": 625,
+      "everydayAveragePerMonth": 312.5,
+      "everydayMonthlyAmounts": [
+        225,
+        400,
+      ],
+      "exceptionalAmount": 0,
+      "icon": null,
+      "monthlyAmounts": [
+        225,
+        400,
+      ],
+      "pendingReimbursement": 75,
+      "subcategories": [
+        {
+          "amount": 625,
+          "averagePerMonth": 312.5,
+          "subcategory": "",
+          "transactionCount": 2,
+        },
+      ],
+      "transactionCount": 2,
+    },
+    {
+      "amount": 300,
+      "averagePerMonth": 150,
+      "category": "Sante",
+      "categoryId": "category:Sante",
+      "everydayAmount": 300,
+      "everydayAveragePerMonth": 150,
+      "everydayMonthlyAmounts": [
+        300,
+        0,
+      ],
+      "exceptionalAmount": 0,
+      "icon": null,
+      "monthlyAmounts": [
+        300,
+        0,
+      ],
+      "pendingReimbursement": 100,
+      "reimbursement": 600,
+      "subcategories": [
+        {
+          "amount": 200,
+          "averagePerMonth": 100,
+          "subcategory": "Dentiste",
+          "transactionCount": 1,
+        },
+        {
+          "amount": 100,
+          "averagePerMonth": 50,
+          "subcategory": "Pharmacie",
+          "transactionCount": 1,
+        },
+      ],
+      "transactionCount": 2,
+    },
+  ],
+  "incomeByCategory": [
+    {
+      "amount": 3000,
+      "averagePerMonth": 1500,
+      "category": "Salaire",
+      "categoryId": "category:Salaire",
+      "icon": null,
+      "monthlyAmounts": [
+        3000,
+        0,
+      ],
+      "subcategories": [
+        {
+          "amount": 3000,
+          "averagePerMonth": 1500,
+          "subcategory": "",
+          "transactionCount": 1,
+        },
+      ],
+      "transactionCount": 1,
+    },
+    {
+      "amount": 0,
+      "averagePerMonth": 0,
+      "category": "Remboursement sante",
+      "categoryId": "category:RemboursementSante",
+      "icon": null,
+      "monthlyAmounts": [
+        0,
+        0,
+      ],
+      "subcategories": [
+        {
+          "amount": 0,
+          "averagePerMonth": 0,
+          "subcategory": "",
+          "transactionCount": 1,
+        },
+      ],
+      "transactionCount": 1,
+    },
+  ],
+  "monthLabels": [
+    "2026-01",
+    "2026-02",
+  ],
+  "monthlyData": [
+    {
+      "everydayNetExpenses": 525,
+      "exceptionalExpenses": 1200,
+      "expenses": 2500,
+      "income": 3000,
+      "label": "Jan 2026",
+      "month": "2026-01",
+      "netExpenses": 1725,
+    },
+    {
+      "everydayNetExpenses": 400,
+      "exceptionalExpenses": 0,
+      "expenses": 400,
+      "income": 0,
+      "label": "Fév 2026",
+      "month": "2026-02",
+      "netExpenses": 400,
+    },
+  ],
+  "periodMonths": 2,
+  "totalExceptionalExpenses": 1200,
+  "totalExpenses": 2125,
+  "totalIncome": 3000,
+}
+`;
+
+exports[`Reimbursement baseline (e2e) > golden master > dashboard — received deducted (default) 1`] = `
+{
+  "allExpenseCategories": [
+    {
+      "id": "category:Courses",
+      "name": "Courses",
+    },
+    {
+      "id": "category:Sante",
+      "name": "Sante",
+    },
+    {
+      "id": "category:Voyage",
+      "name": "Voyage",
+    },
+  ],
+  "allIncomeCategories": [
+    {
+      "id": "category:RemboursementSante",
+      "name": "Remboursement sante",
+    },
+    {
+      "id": "category:Salaire",
+      "name": "Salaire",
+    },
+  ],
+  "availableAccounts": [
+    "Compte courant",
+    "Compte joint",
+  ],
+  "exceptionalEvents": [
+    {
+      "amount": 1200,
+      "color": null,
+      "icon": null,
+      "id": "tag:VacancesItalie",
+      "name": "Vacances Italie",
+    },
+  ],
+  "expensesByCategory": [
+    {
+      "amount": 1200,
+      "averagePerMonth": 600,
+      "category": "Voyage",
+      "categoryId": "category:Voyage",
+      "everydayAmount": 0,
+      "everydayAveragePerMonth": 0,
+      "everydayMonthlyAmounts": [
+        0,
+        0,
+      ],
+      "exceptionalAmount": 1200,
+      "icon": null,
+      "monthlyAmounts": [
+        1200,
+        0,
+      ],
+      "subcategories": [
+        {
+          "amount": 1200,
+          "averagePerMonth": 600,
+          "subcategory": "",
+          "transactionCount": 1,
+        },
+      ],
+      "transactionCount": 1,
+    },
+    {
+      "amount": 700,
+      "averagePerMonth": 350,
+      "category": "Courses",
+      "categoryId": "category:Courses",
+      "everydayAmount": 700,
+      "everydayAveragePerMonth": 350,
+      "everydayMonthlyAmounts": [
+        300,
+        400,
+      ],
+      "exceptionalAmount": 0,
+      "icon": null,
+      "monthlyAmounts": [
+        300,
+        400,
+      ],
+      "subcategories": [
+        {
+          "amount": 700,
+          "averagePerMonth": 350,
+          "subcategory": "",
+          "transactionCount": 2,
+        },
+      ],
+      "transactionCount": 2,
+    },
+    {
+      "amount": 400,
+      "averagePerMonth": 200,
+      "category": "Sante",
+      "categoryId": "category:Sante",
+      "everydayAmount": 400,
+      "everydayAveragePerMonth": 200,
+      "everydayMonthlyAmounts": [
+        400,
+        0,
+      ],
+      "exceptionalAmount": 0,
+      "icon": null,
+      "monthlyAmounts": [
+        400,
+        0,
+      ],
+      "reimbursement": 600,
+      "subcategories": [
+        {
+          "amount": 240,
+          "averagePerMonth": 120,
+          "subcategory": "Dentiste",
+          "transactionCount": 1,
+        },
+        {
+          "amount": 160,
+          "averagePerMonth": 80,
+          "subcategory": "Pharmacie",
+          "transactionCount": 1,
+        },
+      ],
+      "transactionCount": 2,
+    },
+  ],
+  "incomeByCategory": [
+    {
+      "amount": 3000,
+      "averagePerMonth": 1500,
+      "category": "Salaire",
+      "categoryId": "category:Salaire",
+      "icon": null,
+      "monthlyAmounts": [
+        3000,
+        0,
+      ],
+      "subcategories": [
+        {
+          "amount": 3000,
+          "averagePerMonth": 1500,
+          "subcategory": "",
+          "transactionCount": 1,
+        },
+      ],
+      "transactionCount": 1,
+    },
+    {
+      "amount": 0,
+      "averagePerMonth": 0,
+      "category": "Remboursement sante",
+      "categoryId": "category:RemboursementSante",
+      "icon": null,
+      "monthlyAmounts": [
+        0,
+        0,
+      ],
+      "subcategories": [
+        {
+          "amount": 0,
+          "averagePerMonth": 0,
+          "subcategory": "",
+          "transactionCount": 1,
+        },
+      ],
+      "transactionCount": 1,
+    },
+  ],
+  "monthLabels": [
+    "2026-01",
+    "2026-02",
+  ],
+  "monthlyData": [
+    {
+      "everydayNetExpenses": 700,
+      "exceptionalExpenses": 1200,
+      "expenses": 2500,
+      "income": 3000,
+      "label": "Jan 2026",
+      "month": "2026-01",
+      "netExpenses": 1900,
+    },
+    {
+      "everydayNetExpenses": 400,
+      "exceptionalExpenses": 0,
+      "expenses": 400,
+      "income": 0,
+      "label": "Fév 2026",
+      "month": "2026-02",
+      "netExpenses": 400,
+    },
+  ],
+  "periodMonths": 2,
+  "totalExceptionalExpenses": 1200,
+  "totalExpenses": 2300,
+  "totalIncome": 3000,
+}
+`;
