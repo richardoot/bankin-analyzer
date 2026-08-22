@@ -10,6 +10,10 @@ import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { AccountsService } from '../accounts/accounts.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import type { Prisma, Transaction, TransactionType } from '../generated/prisma'
+import {
+  buildTransactionWhere,
+  type TransactionFilters,
+} from './transaction-filters'
 import type {
   CreateTransactionDto,
   ImportResultDto,
@@ -19,6 +23,14 @@ import type {
   ExternalDuplicateDto,
   ExistingTransactionDto,
 } from './dto'
+
+/**
+ * Which transactions a bulk action applies to: the ids the user ticked, or the
+ * filter the list was showing plus the count they were shown.
+ */
+export type BulkSelection =
+  | { ids: string[] }
+  | { filters: TransactionFilters; expectedCount: number }
 
 // Internal type for batch processing
 interface HashData {
@@ -213,72 +225,9 @@ export class TransactionsService {
   async findAllByUserPaginated(
     userId: string,
     pagination: { page: number; limit: number },
-    filters?: {
-      type?: TransactionType
-      startDate?: Date
-      endDate?: Date
-      categoryId?: string
-      subcategoryId?: string
-      isPointed?: boolean
-      account?: string
-      tagId?: string
-      search?: string
-      amountMin?: number
-      amountMax?: number
-    }
+    filters?: TransactionFilters
   ): Promise<{ data: Transaction[]; total: number }> {
-    // Conditions that either combine several fields (keyword OR) or express a
-    // constraint on the signed amount are collected in an AND array so they
-    // never collide with each other or with the top-level filters below.
-    const and: Prisma.TransactionWhereInput[] = []
-
-    const search = filters?.search?.trim()
-    if (search) {
-      and.push({
-        OR: [
-          { description: { contains: search, mode: 'insensitive' } },
-          { note: { contains: search, mode: 'insensitive' } },
-          { subcategory: { contains: search, mode: 'insensitive' } },
-        ],
-      })
-    }
-
-    // Amounts are stored signed (expenses negative, income positive) but the
-    // user reasons in magnitude, so min/max filter the absolute value.
-    if (filters?.amountMin !== undefined) {
-      // |amount| >= min  ⇔  amount >= min OR amount <= -min
-      and.push({
-        OR: [
-          { amount: { gte: filters.amountMin } },
-          { amount: { lte: -filters.amountMin } },
-        ],
-      })
-    }
-    if (filters?.amountMax !== undefined) {
-      // |amount| <= max  ⇔  -max <= amount <= max
-      and.push({ amount: { gte: -filters.amountMax, lte: filters.amountMax } })
-    }
-
-    // Date window: each bound is optional and applied independently.
-    const dateFilter: Prisma.DateTimeFilter = {}
-    if (filters?.startDate) dateFilter.gte = filters.startDate
-    if (filters?.endDate) dateFilter.lte = filters.endDate
-
-    const where: Prisma.TransactionWhereInput = {
-      userId,
-      ...(filters?.type && { type: filters.type }),
-      ...(filters?.categoryId && { categoryId: filters.categoryId }),
-      ...(filters?.subcategoryId && { subcategoryId: filters.subcategoryId }),
-      ...(filters?.isPointed !== undefined && { isPointed: filters.isPointed }),
-      ...(filters?.account && {
-        accountRef: { name: filters.account },
-      }),
-      ...(filters?.tagId && {
-        tags: { some: { tagId: filters.tagId } },
-      }),
-      ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
-      ...(and.length > 0 && { AND: and }),
-    }
+    const where = buildTransactionWhere(userId, filters)
 
     const [data, total] = await Promise.all([
       this.prisma.transaction.findMany({
@@ -677,10 +626,17 @@ export class TransactionsService {
    * There is no correct default here, which is why the caller has to say:
    * passing `subcategoryId` files everything under it, passing `null` (or
    * omitting it) clears the subcategory rather than leaving a stale one.
+   *
+   * The selection is either an explicit list of ids, or the same filter the
+   * list view is showing — the latter so "apply to all 412 results" does not
+   * have to ship 412 ids, and does not silently stop at the fifty on screen.
+   * A filtered selection carries the count the user was shown and is refused if
+   * the database disagrees: the operation has no undo, so acting on more rows
+   * than were on screen is worse than failing.
    */
   async bulkUpdate(
     userId: string,
-    ids: string[],
+    selection: BulkSelection,
     data: {
       categoryId?: string
       subcategoryId?: string | null
@@ -737,12 +693,23 @@ export class TransactionsService {
       )
     }
 
-    // Filter to only update transactions owned by the user
+    // Both branches scope to the user, so nothing outside their data is ever
+    // reachable — by id or by filter.
+    let where: Prisma.TransactionWhereInput
+    if ('ids' in selection) {
+      where = { id: { in: selection.ids }, userId }
+    } else {
+      where = buildTransactionWhere(userId, selection.filters)
+      const actual = await this.prisma.transaction.count({ where })
+      if (actual !== selection.expectedCount) {
+        throw new BadRequestException(
+          `Selection changed: ${selection.expectedCount} transactions were shown, ${actual} match now. Refresh and try again.`
+        )
+      }
+    }
+
     const result = await this.prisma.transaction.updateMany({
-      where: {
-        id: { in: ids },
-        userId,
-      },
+      where,
       data: updateData,
     })
 

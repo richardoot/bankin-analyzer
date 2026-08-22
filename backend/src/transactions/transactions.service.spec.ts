@@ -1241,7 +1241,7 @@ describe('TransactionsService', () => {
 
       const result = await service.bulkUpdate(
         mockUserId,
-        ['tx-1', 'tx-2', 'tx-3'],
+        { ids: ['tx-1', 'tx-2', 'tx-3'] },
         { categoryId: 'cat-2' }
       )
 
@@ -1268,10 +1268,14 @@ describe('TransactionsService', () => {
       })
       mockPrismaService.transaction.updateMany.mockResolvedValue({ count: 2 })
 
-      await service.bulkUpdate(mockUserId, ['tx-1', 'tx-2'], {
-        categoryId: 'cat-2',
-        subcategoryId: 'sub-9',
-      })
+      await service.bulkUpdate(
+        mockUserId,
+        { ids: ['tx-1', 'tx-2'] },
+        {
+          categoryId: 'cat-2',
+          subcategoryId: 'sub-9',
+        }
+      )
 
       expect(mockPrismaService.subcategory.findFirst).toHaveBeenCalledWith({
         where: { id: 'sub-9', userId: mockUserId, categoryId: 'cat-2' },
@@ -1293,10 +1297,14 @@ describe('TransactionsService', () => {
       mockPrismaService.subcategory.findFirst.mockResolvedValue(null)
 
       await expect(
-        service.bulkUpdate(mockUserId, ['tx-1'], {
-          categoryId: 'cat-2',
-          subcategoryId: 'sub-from-elsewhere',
-        })
+        service.bulkUpdate(
+          mockUserId,
+          { ids: ['tx-1'] },
+          {
+            categoryId: 'cat-2',
+            subcategoryId: 'sub-from-elsewhere',
+          }
+        )
       ).rejects.toThrow(NotFoundException)
 
       expect(mockPrismaService.transaction.updateMany).not.toHaveBeenCalled()
@@ -1306,17 +1314,82 @@ describe('TransactionsService', () => {
       mockPrismaService.category.findFirst.mockResolvedValue(null)
 
       await expect(
-        service.bulkUpdate(mockUserId, ['tx-1'], { categoryId: 'someone-else' })
+        service.bulkUpdate(
+          mockUserId,
+          { ids: ['tx-1'] },
+          { categoryId: 'someone-else' }
+        )
       ).rejects.toThrow(NotFoundException)
 
       expect(mockPrismaService.transaction.updateMany).not.toHaveBeenCalled()
+    })
+
+    describe('selecting by filter', () => {
+      it('applies to everything matching, not just the ids on screen', async () => {
+        mockPrismaService.category.findFirst.mockResolvedValue(ownedCategory)
+        mockPrismaService.transaction.count.mockResolvedValue(412)
+        mockPrismaService.transaction.updateMany.mockResolvedValue({
+          count: 412,
+        })
+
+        const result = await service.bulkUpdate(
+          mockUserId,
+          { filters: { categoryId: 'cat-food' }, expectedCount: 412 },
+          { categoryId: 'cat-2' }
+        )
+
+        expect(result).toEqual({ updated: 412 })
+        // Scoped to the user through the shared where-builder, so a filter can
+        // never reach another account's rows.
+        expect(mockPrismaService.transaction.updateMany).toHaveBeenCalledWith({
+          where: { userId: mockUserId, categoryId: 'cat-food' },
+          data: {
+            categoryId: 'cat-2',
+            subcategoryId: null,
+            subcategory: null,
+          },
+        })
+      })
+
+      it('refuses when the database no longer agrees with the count shown', async () => {
+        // No undo: touching more rows than the user saw is worse than failing.
+        mockPrismaService.category.findFirst.mockResolvedValue(ownedCategory)
+        mockPrismaService.transaction.count.mockResolvedValue(500)
+
+        await expect(
+          service.bulkUpdate(
+            mockUserId,
+            { filters: { categoryId: 'cat-food' }, expectedCount: 412 },
+            { categoryId: 'cat-2' }
+          )
+        ).rejects.toThrow(/412 transactions were shown, 500 match now/)
+
+        expect(mockPrismaService.transaction.updateMany).not.toHaveBeenCalled()
+      })
+
+      it('still guards an empty filter, which would mean every transaction', async () => {
+        mockPrismaService.category.findFirst.mockResolvedValue(ownedCategory)
+        mockPrismaService.transaction.count.mockResolvedValue(3129)
+
+        await expect(
+          service.bulkUpdate(
+            mockUserId,
+            { filters: {}, expectedCount: 50 },
+            { categoryId: 'cat-2' }
+          )
+        ).rejects.toThrow(BadRequestException)
+      })
     })
 
     it('should refuse a subcategory sent without its category', async () => {
       // Nothing to validate it against: each row may sit in a different
       // category, and only some of them would accept it.
       await expect(
-        service.bulkUpdate(mockUserId, ['tx-1'], { subcategoryId: 'sub-9' })
+        service.bulkUpdate(
+          mockUserId,
+          { ids: ['tx-1'] },
+          { subcategoryId: 'sub-9' }
+        )
       ).rejects.toThrow(BadRequestException)
 
       expect(mockPrismaService.transaction.updateMany).not.toHaveBeenCalled()
@@ -1325,9 +1398,13 @@ describe('TransactionsService', () => {
     it('should bulk update isPointed', async () => {
       mockPrismaService.transaction.updateMany.mockResolvedValue({ count: 2 })
 
-      const result = await service.bulkUpdate(mockUserId, ['tx-1', 'tx-2'], {
-        isPointed: true,
-      })
+      const result = await service.bulkUpdate(
+        mockUserId,
+        { ids: ['tx-1', 'tx-2'] },
+        {
+          isPointed: true,
+        }
+      )
 
       expect(result).toEqual({ updated: 2 })
       expect(mockPrismaService.transaction.updateMany).toHaveBeenCalledWith({
@@ -1346,9 +1423,13 @@ describe('TransactionsService', () => {
         id: 'cat-1',
         userId: mockUserId,
       })
-      const result = await service.bulkUpdate(mockUserId, ['nonexistent'], {
-        categoryId: 'cat-1',
-      })
+      const result = await service.bulkUpdate(
+        mockUserId,
+        { ids: ['nonexistent'] },
+        {
+          categoryId: 'cat-1',
+        }
+      )
 
       expect(result).toEqual({ updated: 0 })
     })

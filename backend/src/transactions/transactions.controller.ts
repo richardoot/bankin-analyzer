@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -19,6 +20,10 @@ import {
   ApiQuery,
 } from '@nestjs/swagger'
 import { TransactionsService } from './transactions.service'
+import {
+  parseTransactionFilters,
+  type RawTransactionFilters,
+} from './transaction-filters'
 import {
   ImportTransactionsDto,
   ImportResultDto,
@@ -188,44 +193,19 @@ export class TransactionsController {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
 
-    const filters: {
-      type?: TransactionType
-      startDate?: Date
-      endDate?: Date
-      categoryId?: string
-      subcategoryId?: string
-      isPointed?: boolean
-      account?: string
-      tagId?: string
-      search?: string
-      amountMin?: number
-      amountMax?: number
-    } = {}
-
-    if (type) filters.type = type
-    if (startDate) filters.startDate = new Date(startDate)
-    if (endDate) {
-      const end = new Date(endDate)
-      // A date-only bound (YYYY-MM-DD) parses to UTC midnight; extend it to the
-      // end of that day so the whole day is included in the inclusive upper bound.
-      if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) end.setUTCHours(23, 59, 59, 999)
-      filters.endDate = end
-    }
-    if (categoryId) filters.categoryId = categoryId
-    // A subcategory only exists inside a category, so narrowing by subcategory
-    // without a category would be ambiguous: ignore it in that case.
-    if (categoryId && subcategoryId) filters.subcategoryId = subcategoryId
-    if (isPointed !== undefined) filters.isPointed = isPointed === 'true'
-    if (account) filters.account = account
-    if (tagId) filters.tagId = tagId
-    if (search && search.trim()) filters.search = search.trim()
-    // Parse amount bounds defensively: ignore non-numeric or negative input.
-    const parsedMin = amountMin !== undefined ? Number(amountMin) : NaN
-    const parsedMax = amountMax !== undefined ? Number(amountMax) : NaN
-    if (Number.isFinite(parsedMin) && parsedMin >= 0)
-      filters.amountMin = parsedMin
-    if (Number.isFinite(parsedMax) && parsedMax >= 0)
-      filters.amountMax = parsedMax
+    const filters = parseTransactionFilters({
+      ...(type && { type }),
+      ...(startDate && { startDate }),
+      ...(endDate && { endDate }),
+      ...(categoryId && { categoryId }),
+      ...(subcategoryId && { subcategoryId }),
+      ...(isPointed !== undefined && { isPointed }),
+      ...(account && { account }),
+      ...(tagId && { tagId }),
+      ...(search && { search }),
+      ...(amountMin !== undefined && { amountMin }),
+      ...(amountMax !== undefined && { amountMax }),
+    })
 
     const { data: transactions, total } =
       await this.transactionsService.findAllByUserPaginated(
@@ -264,7 +244,12 @@ export class TransactionsController {
     @CurrentUser() user: User,
     @Body()
     body: {
-      ids: string[]
+      /** Explicit selection. Mutually exclusive with `filters`. */
+      ids?: string[]
+      /** Everything matching the list view's filter, however many pages deep. */
+      filters?: RawTransactionFilters
+      /** Required with `filters`: the count the user was shown. */
+      expectedCount?: number
       categoryId?: string
       subcategoryId?: string | null
       isPointed?: boolean
@@ -281,7 +266,34 @@ export class TransactionsController {
     if (body.subcategoryId !== undefined)
       data.subcategoryId = body.subcategoryId
     if (body.isPointed !== undefined) data.isPointed = body.isPointed
-    return this.transactionsService.bulkUpdate(user.id, body.ids, data)
+
+    // Accepting both at once would leave which one wins to chance, on an
+    // operation that has no undo.
+    if (body.ids !== undefined && body.filters !== undefined) {
+      throw new BadRequestException('Send either ids or filters, not both')
+    }
+
+    if (body.filters !== undefined) {
+      if (typeof body.expectedCount !== 'number') {
+        throw new BadRequestException(
+          'expectedCount is required when selecting by filter'
+        )
+      }
+      return this.transactionsService.bulkUpdate(
+        user.id,
+        {
+          filters: parseTransactionFilters(body.filters),
+          expectedCount: body.expectedCount,
+        },
+        data
+      )
+    }
+
+    return this.transactionsService.bulkUpdate(
+      user.id,
+      { ids: body.ids ?? [] },
+      data
+    )
   }
 
   @Patch(':id')

@@ -12,6 +12,7 @@
     CategoryDto,
     SubcategoryDto,
     PaginationMeta,
+    TransactionQueryParams,
   } from '@/lib/api'
   import CategorySubcategoryModal from '@/components/CategorySubcategoryModal.vue'
   import TagChip from '@/components/tags/TagChip.vue'
@@ -209,6 +210,7 @@
   // Bulk category change modal
   const showBulkCategoryModal = ref(false)
   const bulkCategoryId = ref<string | null>(null)
+  const bulkSubcategoryId = ref<string | null>(null)
   const isBulkUpdating = ref(false)
 
   // Category/Subcategory selection modal state
@@ -333,6 +335,36 @@
     return pages
   })
 
+  /**
+   * The filter the list is showing right now.
+   *
+   * Extracted from the fetch because a bulk action can target every match
+   * rather than the page on screen, and the two must not be able to disagree
+   * about what "every match" means.
+   */
+  const currentFilters = computed<TransactionQueryParams>(() => {
+    const parsedMin = amountMin.value !== '' ? Number(amountMin.value) : NaN
+    const parsedMax = amountMax.value !== '' ? Number(amountMax.value) : NaN
+
+    return {
+      type: typeFilter.value === 'ALL' ? undefined : typeFilter.value,
+      categoryId: selectedCategory.value || undefined,
+      subcategoryId: selectedCategory.value
+        ? selectedSubcategory.value || undefined
+        : undefined,
+      account: selectedAccount.value || undefined,
+      tagId: selectedTag.value || undefined,
+      isPointed: showOnlyNotPointed.value ? false : undefined,
+      search: searchKeyword.value.trim() || undefined,
+      startDate: filterStartDate.value || undefined,
+      endDate: filterEndDate.value || undefined,
+      amountMin:
+        Number.isFinite(parsedMin) && parsedMin >= 0 ? parsedMin : undefined,
+      amountMax:
+        Number.isFinite(parsedMax) && parsedMax >= 0 ? parsedMax : undefined,
+    }
+  })
+
   // Computed: selection state
   const isAllSelected = computed(() => {
     if (transactions.value.length === 0) return false
@@ -343,7 +375,33 @@
     return selectedIds.value.size > 0 && !isAllSelected.value
   })
 
-  const selectedCount = computed(() => selectedIds.value.size)
+  /**
+   * Set when the user escalates from "the rows on this page" to "everything
+   * matching the filter". Ticking every box selects fifty; saying so out loud
+   * is what lets a bulk action reach the other pages.
+   */
+  const isWholeFilterSelected = ref(false)
+
+  const matchingCount = computed(() => transactionsMeta.value?.total ?? 0)
+
+  const selectedCount = computed(() =>
+    isWholeFilterSelected.value ? matchingCount.value : selectedIds.value.size
+  )
+
+  /**
+   * Whether to offer the escalation: every visible row is ticked, and there is
+   * more behind the current page.
+   */
+  const canSelectWholeFilter = computed(
+    () =>
+      !isWholeFilterSelected.value &&
+      isAllSelected.value &&
+      matchingCount.value > transactions.value.length
+  )
+
+  function selectWholeFilter() {
+    isWholeFilterSelected.value = true
+  }
 
   // Get reimbursements for a specific transaction
   function getReimbursementsForTransaction(txId: string): ReimbursementDto[] {
@@ -368,9 +426,11 @@
       newSet.add(id)
     }
     selectedIds.value = newSet
+    isWholeFilterSelected.value = false
   }
 
   function toggleSelectAll() {
+    isWholeFilterSelected.value = false
     if (isAllSelected.value) {
       selectedIds.value = new Set()
     } else {
@@ -380,18 +440,21 @@
 
   function clearSelection() {
     selectedIds.value = new Set()
+    isWholeFilterSelected.value = false
   }
 
   function toggleSelectionMode() {
     isSelectionMode.value = !isSelectionMode.value
     if (!isSelectionMode.value) {
       selectedIds.value = new Set()
+      isWholeFilterSelected.value = false
     }
   }
 
   function exitSelectionMode() {
     isSelectionMode.value = false
     selectedIds.value = new Set()
+    isWholeFilterSelected.value = false
   }
 
   // Inline note editing
@@ -559,7 +622,7 @@
 
     try {
       isBulkUpdating.value = true
-      await api.bulkUpdateTransactions([...selectedIds.value], {
+      await api.bulkUpdateTransactions(bulkSelection(), {
         isPointed: pointed,
       })
       // Refresh transactions to get updated data
@@ -572,24 +635,48 @@
     }
   }
 
+  /**
+   * What the bulk action applies to. Sending the filter rather than a list of
+   * ids is what lets "all 412 results" mean 412 and not the 50 on screen; the
+   * count travels with it so the server can refuse a stale selection.
+   */
+  function bulkSelection():
+    | { ids: string[] }
+    | { filters: TransactionQueryParams; expectedCount: number } {
+    return isWholeFilterSelected.value
+      ? { filters: currentFilters.value, expectedCount: matchingCount.value }
+      : { ids: [...selectedIds.value] }
+  }
+
   function openBulkCategoryModal() {
     bulkCategoryId.value = null
+    bulkSubcategoryId.value = null
     showBulkCategoryModal.value = true
   }
 
-  async function applyBulkCategory() {
-    if (selectedIds.value.size === 0 || !bulkCategoryId.value) return
+  async function applyBulkCategory(
+    categoryId: string,
+    subcategoryId: string | null
+  ) {
+    if (selectedCount.value === 0) return
 
     try {
       isBulkUpdating.value = true
-      await api.bulkUpdateTransactions([...selectedIds.value], {
-        categoryId: bulkCategoryId.value,
+      const { updated } = await api.bulkUpdateTransactions(bulkSelection(), {
+        categoryId,
+        subcategoryId,
       })
       await fetchTransactions()
       exitSelectionMode()
       showBulkCategoryModal.value = false
+      toast.success(
+        `${updated} transaction${updated > 1 ? 's' : ''} deplacee${updated > 1 ? 's' : ''}`
+      )
     } catch (err) {
       console.error('Failed to bulk update category:', err)
+      // Carries the server's message when the selection went stale, which the
+      // user can act on: refresh and try again.
+      toast.error(err instanceof Error ? err.message : 'Echec du deplacement')
     } finally {
       isBulkUpdating.value = false
     }
@@ -649,27 +736,10 @@
       isLoadingTransactions.value = true
       transactionsError.value = null
 
-      const parsedMin = amountMin.value !== '' ? Number(amountMin.value) : NaN
-      const parsedMax = amountMax.value !== '' ? Number(amountMax.value) : NaN
-
       const response = await api.getTransactions({
         page: currentPage.value,
         limit: pageSize,
-        type: typeFilter.value === 'ALL' ? undefined : typeFilter.value,
-        categoryId: selectedCategory.value || undefined,
-        subcategoryId: selectedCategory.value
-          ? selectedSubcategory.value || undefined
-          : undefined,
-        account: selectedAccount.value || undefined,
-        tagId: selectedTag.value || undefined,
-        isPointed: showOnlyNotPointed.value ? false : undefined,
-        search: searchKeyword.value.trim() || undefined,
-        startDate: filterStartDate.value || undefined,
-        endDate: filterEndDate.value || undefined,
-        amountMin:
-          Number.isFinite(parsedMin) && parsedMin >= 0 ? parsedMin : undefined,
-        amountMax:
-          Number.isFinite(parsedMax) && parsedMax >= 0 ? parsedMax : undefined,
+        ...currentFilters.value,
       })
       transactions.value = response.data
       transactionsMeta.value = response.meta
@@ -1133,6 +1203,7 @@
                   ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-300 dark:border-indigo-700'
                   : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600'
               "
+              data-testid="toggle-selection-mode"
               @click="toggleSelectionMode"
             >
               <svg
@@ -1154,6 +1225,48 @@
             </button>
           </div>
         </div>
+      </div>
+
+      <!--
+        Ticking every box selects the page, not the filter. Saying so — and
+        offering the escalation explicitly — is what stops a bulk action from
+        silently covering an eighth of what the user meant.
+      -->
+      <div
+        v-if="isSelectionMode && canSelectWholeFilter"
+        data-testid="select-whole-filter-banner"
+        class="flex flex-wrap items-center gap-x-2 gap-y-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-xl px-4 py-3 mb-4 text-sm text-amber-800 dark:text-amber-300"
+      >
+        <span>
+          Les <strong>{{ selectedIds.size }}</strong> transactions de cette page
+          sont selectionnees.
+        </span>
+        <button
+          type="button"
+          data-testid="select-whole-filter"
+          class="font-semibold underline underline-offset-2 hover:no-underline"
+          @click="selectWholeFilter"
+        >
+          Selectionner les {{ matchingCount }} transactions du filtre
+        </button>
+      </div>
+
+      <div
+        v-else-if="isSelectionMode && isWholeFilterSelected"
+        data-testid="whole-filter-selected-banner"
+        class="flex flex-wrap items-center gap-x-2 gap-y-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-xl px-4 py-3 mb-4 text-sm text-amber-800 dark:text-amber-300"
+      >
+        <span>
+          Les <strong>{{ matchingCount }}</strong> transactions du filtre sont
+          selectionnees, au-dela de cette page.
+        </span>
+        <button
+          type="button"
+          class="font-semibold underline underline-offset-2 hover:no-underline"
+          @click="clearSelection"
+        >
+          Annuler la selection
+        </button>
       </div>
 
       <!-- Bulk Actions Bar - Desktop (inline) -->
@@ -1187,6 +1300,7 @@
             <button
               :disabled="isBulkUpdating"
               class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors disabled:opacity-50"
+              data-testid="bulk-pointed"
               @click="bulkTogglePointed(true)"
             >
               <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -1378,6 +1492,7 @@
                   :checked="isAllSelected"
                   :indeterminate="isPartiallySelected"
                   class="h-4 w-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-slate-600 rounded focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
+                  data-testid="select-all"
                   @change="toggleSelectAll"
                 />
               </div>
@@ -1759,6 +1874,7 @@
                       type="checkbox"
                       :checked="selectedIds.has(tx.id)"
                       class="h-4 w-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-slate-600 rounded focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
+                      data-testid="select-row-desktop"
                       @change="toggleSelection(tx.id)"
                     />
                   </div>
@@ -2202,8 +2318,10 @@
     <!-- Bulk Category Change Modal -->
     <BulkCategoryModal
       v-model:category-id="bulkCategoryId"
+      v-model:subcategory-id="bulkSubcategoryId"
       :is-open="showBulkCategoryModal"
       :categories="allCategories"
+      :subcategories="allSubcategories"
       :selected-count="selectedCount"
       :is-updating="isBulkUpdating"
       @close="showBulkCategoryModal = false"

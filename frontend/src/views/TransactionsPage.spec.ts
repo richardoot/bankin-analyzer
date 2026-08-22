@@ -41,6 +41,7 @@ vi.mock('@/lib/formatters', () => ({
 
 import { api } from '@/lib/api'
 import type { TransactionDto } from '@/lib/api'
+import type { VueWrapper } from '@vue/test-utils'
 import { nth } from '@/test/nth'
 
 const router = createRouter({
@@ -561,6 +562,115 @@ describe('TransactionsPage — optimistic updates', () => {
   // A deleted bank account leaves its *name* behind in the saved filters, so
   // the page has to notice the filter points at nothing once the real account
   // list arrives.
+  describe('selecting beyond the current page', () => {
+    /** Mount with a page of `pageSize` rows out of `total` matches. */
+    const mountWithPage = async (pageSize: number, total: number) => {
+      const rows = Array.from({ length: pageSize }, (_, i) =>
+        makeTx({ id: `tx-${i}`, description: `Achat ${i}` })
+      )
+      setupDefaultMocks(rows)
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        data: rows,
+        meta: {
+          ...defaultPaginationMeta,
+          total,
+          totalPages: Math.ceil(total / pageSize),
+          hasNextPage: total > pageSize,
+        },
+      })
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+      return wrapper
+    }
+
+    /** Turn on selection mode, then tick every row on the page. */
+    const selectWholePage = async (wrapper: VueWrapper) => {
+      await wrapper
+        .get('[data-testid="toggle-selection-mode"]')
+        .trigger('click')
+      await wrapper.get('[data-testid="select-all"]').trigger('change')
+      await flushPromises()
+    }
+
+    it('offers to reach the rest of the filter once the page is fully ticked', async () => {
+      const wrapper = await mountWithPage(3, 412)
+      await selectWholePage(wrapper)
+
+      const banner = wrapper.get('[data-testid="select-whole-filter-banner"]')
+      expect(banner.text()).toContain('3')
+      expect(banner.text()).toContain('412')
+    })
+
+    it('stays quiet when the page already is the whole filter', async () => {
+      const wrapper = await mountWithPage(3, 3)
+      await selectWholePage(wrapper)
+
+      expect(
+        wrapper.find('[data-testid="select-whole-filter-banner"]').exists()
+      ).toBe(false)
+    })
+
+    it('sends the filter and the count shown, not a list of ids', async () => {
+      vi.mocked(api.bulkUpdateTransactions).mockResolvedValue({ updated: 412 })
+      const wrapper = await mountWithPage(3, 412)
+      await selectWholePage(wrapper)
+      await wrapper.get('[data-testid="select-whole-filter"]').trigger('click')
+
+      await wrapper.get('[data-testid="bulk-pointed"]').trigger('click')
+      await flushPromises()
+
+      const [selection] =
+        vi.mocked(api.bulkUpdateTransactions).mock.calls[0] ?? []
+      expect(selection).toMatchObject({ expectedCount: 412 })
+      // The whole point: 412 ids were never on screen to send.
+      expect(selection).not.toHaveProperty('ids')
+    })
+
+    it('falls back to ids when the selection is just this page', async () => {
+      vi.mocked(api.bulkUpdateTransactions).mockResolvedValue({ updated: 3 })
+      const wrapper = await mountWithPage(3, 412)
+      await selectWholePage(wrapper)
+
+      await wrapper.get('[data-testid="bulk-pointed"]').trigger('click')
+      await flushPromises()
+
+      const [selection] =
+        vi.mocked(api.bulkUpdateTransactions).mock.calls[0] ?? []
+      expect(selection).toEqual({ ids: ['tx-0', 'tx-1', 'tx-2'] })
+    })
+
+    it('drops the escalation as soon as a row is unticked', async () => {
+      const wrapper = await mountWithPage(3, 412)
+      await selectWholePage(wrapper)
+      await wrapper.get('[data-testid="select-whole-filter"]').trigger('click')
+      expect(
+        wrapper.find('[data-testid="whole-filter-selected-banner"]').exists()
+      ).toBe(true)
+
+      await nth(
+        wrapper.findAll('[data-testid="select-row-desktop"]'),
+        0,
+        'row checkbox'
+      ).trigger('change')
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="whole-filter-selected-banner"]').exists()
+      ).toBe(false)
+    })
+  })
+
   describe('stale account filter', () => {
     const makeAccountDto = (name: string) => ({
       id: `acc-${name}`,

@@ -1046,17 +1046,39 @@ export const api = {
     return response.json() as Promise<TransactionDto>
   },
 
+  /**
+   * Apply a change to many transactions at once.
+   *
+   * The selection is either the ids the user ticked, or the filter the list is
+   * showing — the second form so "all 412 results" does not stop at the fifty
+   * on screen. A filtered selection carries the count the user was shown, and
+   * the server refuses if the database disagrees.
+   *
+   * `subcategoryId` is deliberately explicit: a subcategory belongs to one
+   * category, so moving a transaction elsewhere either files it under a new
+   * subcategory or leaves it with none. Omitting the field clears it.
+   */
   async bulkUpdateTransactions(
-    ids: string[],
-    data: { categoryId?: string; isPointed?: boolean }
+    selection:
+      | { ids: string[] }
+      | { filters: TransactionQueryParams; expectedCount: number },
+    data: {
+      categoryId?: string
+      subcategoryId?: string | null
+      isPointed?: boolean
+    }
   ): Promise<{ updated: number }> {
     const response = await fetchWithAuth(`${API_BASE_URL}/transactions/bulk`, {
       method: 'PATCH',
-      body: JSON.stringify({ ids, ...data }),
+      body: JSON.stringify({ ...selection, ...data }),
     })
 
     if (!response.ok) {
-      throw new Error('Failed to bulk update transactions')
+      // The stale-selection refusal carries a message worth showing.
+      const detail = (await response.json().catch(() => null)) as {
+        message?: string
+      } | null
+      throw new Error(detail?.message ?? 'Failed to bulk update transactions')
     }
 
     return response.json() as Promise<{ updated: number }>
