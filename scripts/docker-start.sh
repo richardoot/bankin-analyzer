@@ -28,7 +28,10 @@ echo "✅ Database is ready!"
 
 # Exécuter les migrations Prisma
 echo "🔧 Running database migrations..."
-podman exec bankin-backend npx prisma migrate deploy || echo "⚠️  Migrations may have already been applied"
+# The datasource lives in prisma/prisma.config.ts, so a bare `migrate deploy`
+# has nowhere to connect and fails — quietly, because of the `||` below.
+podman exec bankin-backend npx prisma migrate deploy --config prisma/prisma.config.ts \
+    || echo "⚠️  Migrations failed (see above)"
 
 # Seed de données de démo (opt-in via SEED_ON_START=true dans .env.docker).
 # ⚠️  Destructif : efface puis régénère les données de l'utilisateur de démo.
@@ -51,10 +54,10 @@ echo "============================================"
 echo ""
 echo "📝 Access URLs:"
 echo "   Frontend:        http://localhost:5173"
-echo "   Backend API:     http://localhost:3000"
-echo "   Backend Swagger: http://localhost:3000/api/docs"
-echo "   Supabase API:    http://localhost:8000"
-echo "   Supabase Studio: http://localhost:3001"
+echo "   Backend API:     http://localhost:3001"
+echo "   Backend Swagger: http://localhost:3001/api/docs"
+echo "   Supabase API:    http://localhost:54321"
+echo "   Supabase Studio: http://localhost:54322"
 echo "   PostgreSQL:      localhost:5432"
 echo ""
 echo "📋 Useful commands:"

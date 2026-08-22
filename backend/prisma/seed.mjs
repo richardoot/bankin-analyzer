@@ -321,6 +321,7 @@ async function resolveUser() {
 
 async function wipeUserData(userId) {
   // Children first, respecting FKs.
+  await prisma.reimbursementPayment.deleteMany({ where: { userId } })
   await prisma.settlementReimbursement.deleteMany({
     where: { settlement: { userId } },
   })
@@ -334,7 +335,6 @@ async function wipeUserData(userId) {
     where: { budgetPlan: { userId } },
   })
   await prisma.budgetPlan.deleteMany({ where: { userId } })
-  await prisma.categoryAssociation.deleteMany({ where: { userId } })
   await prisma.transaction.deleteMany({ where: { userId } })
   await prisma.subcategory.deleteMany({ where: { userId } })
   await prisma.category.deleteMany({ where: { userId } })
@@ -394,22 +394,6 @@ async function main() {
     })
     categoryByName[c.name] = cat
   }
-
-  // ── Category associations (expense ↔ income for reimbursement matching) ──────
-  await prisma.categoryAssociation.create({
-    data: {
-      userId,
-      expenseCategoryId: categoryByName['Restaurants'].id,
-      incomeCategoryId: categoryByName['Remboursement'].id,
-    },
-  })
-  await prisma.categoryAssociation.create({
-    data: {
-      userId,
-      expenseCategoryId: categoryByName['Voyages'].id,
-      incomeCategoryId: categoryByName['Revenus locatifs'].id,
-    },
-  })
 
   // ── Persons ──────────────────────────────────────────────────────────────────
   const personByName = {}
@@ -1351,10 +1335,10 @@ async function main() {
   await prisma.filterPreferences.create({
     data: {
       userId,
-      hiddenExpenseCategories: [],
-      hiddenIncomeCategories: [],
-      globalHiddenExpenseCategories: [],
-      globalHiddenIncomeCategories: [],
+      hiddenExpenseCategoryIds: [],
+      hiddenIncomeCategoryIds: [],
+      globalHiddenExpenseCategoryIds: [],
+      globalHiddenIncomeCategoryIds: [],
       isPanelExpanded: true,
     },
   })
