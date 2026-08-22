@@ -256,14 +256,30 @@ export class TransactionsController {
   }
 
   @Patch('bulk')
-  @ApiOperation({ summary: 'Bulk update transactions (category, isPointed)' })
+  @ApiOperation({
+    summary: 'Bulk update transactions (category, subcategory, isPointed)',
+  })
   @ApiResponse({ status: 200 })
   async bulkUpdate(
     @CurrentUser() user: User,
-    @Body() body: { ids: string[]; categoryId?: string; isPointed?: boolean }
+    @Body()
+    body: {
+      ids: string[]
+      categoryId?: string
+      subcategoryId?: string | null
+      isPointed?: boolean
+    }
   ): Promise<{ updated: number }> {
-    const data: { categoryId?: string; isPointed?: boolean } = {}
+    const data: {
+      categoryId?: string
+      subcategoryId?: string | null
+      isPointed?: boolean
+    } = {}
     if (body.categoryId !== undefined) data.categoryId = body.categoryId
+    // Forwarded even when null: that is how the caller asks for the subcategory
+    // to be cleared rather than left pointing at the previous category's one.
+    if (body.subcategoryId !== undefined)
+      data.subcategoryId = body.subcategoryId
     if (body.isPointed !== undefined) data.isPointed = body.isPointed
     return this.transactionsService.bulkUpdate(user.id, body.ids, data)
   }

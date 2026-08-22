@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
-import { NotFoundException } from '@nestjs/common'
+import { BadRequestException, NotFoundException } from '@nestjs/common'
 import { TransactionsService } from './transactions.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { CategoriesService } from '../categories/categories.service'
@@ -89,6 +89,10 @@ const mockPrismaService = {
   },
   subcategory: {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
+  },
+  category: {
+    findFirst: vi.fn(),
   },
 }
 
@@ -1226,7 +1230,13 @@ describe('TransactionsService', () => {
   // bulkUpdate
   // -------------------------------------------------------------------
   describe('bulkUpdate', () => {
-    it('should bulk update transactions for the user', async () => {
+    const ownedCategory = { id: 'cat-2', userId: mockUserId, name: 'Courses' }
+
+    it('should clear the subcategory when moving to another category', async () => {
+      // The heart of the fix: a subcategory belongs to one category, so
+      // carrying it across would leave the row filed under a heading that does
+      // not exist where it now sits. Five production rows were in that state.
+      mockPrismaService.category.findFirst.mockResolvedValue(ownedCategory)
       mockPrismaService.transaction.updateMany.mockResolvedValue({ count: 3 })
 
       const result = await service.bulkUpdate(
@@ -1241,8 +1251,75 @@ describe('TransactionsService', () => {
           id: { in: ['tx-1', 'tx-2', 'tx-3'] },
           userId: mockUserId,
         },
-        data: { categoryId: 'cat-2' },
+        data: {
+          categoryId: 'cat-2',
+          subcategoryId: null,
+          subcategory: null,
+        },
       })
+    })
+
+    it('should file everything under the requested subcategory', async () => {
+      mockPrismaService.category.findFirst.mockResolvedValue(ownedCategory)
+      mockPrismaService.subcategory.findFirst.mockResolvedValue({
+        id: 'sub-9',
+        name: 'Supermarche',
+        categoryId: 'cat-2',
+      })
+      mockPrismaService.transaction.updateMany.mockResolvedValue({ count: 2 })
+
+      await service.bulkUpdate(mockUserId, ['tx-1', 'tx-2'], {
+        categoryId: 'cat-2',
+        subcategoryId: 'sub-9',
+      })
+
+      expect(mockPrismaService.subcategory.findFirst).toHaveBeenCalledWith({
+        where: { id: 'sub-9', userId: mockUserId, categoryId: 'cat-2' },
+      })
+      expect(mockPrismaService.transaction.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['tx-1', 'tx-2'] }, userId: mockUserId },
+        // The denormalized label is written too: the dashboard groups on it.
+        data: {
+          categoryId: 'cat-2',
+          subcategoryId: 'sub-9',
+          subcategory: 'Supermarche',
+        },
+      })
+    })
+
+    it('should refuse a subcategory belonging to another category', async () => {
+      mockPrismaService.category.findFirst.mockResolvedValue(ownedCategory)
+      // Scoped lookup finds nothing: the subcategory exists, elsewhere.
+      mockPrismaService.subcategory.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.bulkUpdate(mockUserId, ['tx-1'], {
+          categoryId: 'cat-2',
+          subcategoryId: 'sub-from-elsewhere',
+        })
+      ).rejects.toThrow(NotFoundException)
+
+      expect(mockPrismaService.transaction.updateMany).not.toHaveBeenCalled()
+    })
+
+    it('should refuse a category the user does not own', async () => {
+      mockPrismaService.category.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.bulkUpdate(mockUserId, ['tx-1'], { categoryId: 'someone-else' })
+      ).rejects.toThrow(NotFoundException)
+
+      expect(mockPrismaService.transaction.updateMany).not.toHaveBeenCalled()
+    })
+
+    it('should refuse a subcategory sent without its category', async () => {
+      // Nothing to validate it against: each row may sit in a different
+      // category, and only some of them would accept it.
+      await expect(
+        service.bulkUpdate(mockUserId, ['tx-1'], { subcategoryId: 'sub-9' })
+      ).rejects.toThrow(BadRequestException)
+
+      expect(mockPrismaService.transaction.updateMany).not.toHaveBeenCalled()
     })
 
     it('should bulk update isPointed', async () => {
@@ -1265,6 +1342,10 @@ describe('TransactionsService', () => {
     it('should return zero when no transactions match', async () => {
       mockPrismaService.transaction.updateMany.mockResolvedValue({ count: 0 })
 
+      mockPrismaService.category.findFirst.mockResolvedValue({
+        id: 'cat-1',
+        userId: mockUserId,
+      })
       const result = await service.bulkUpdate(mockUserId, ['nonexistent'], {
         categoryId: 'cat-1',
       })

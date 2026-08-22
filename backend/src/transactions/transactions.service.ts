@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 import { createHash, randomUUID } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
 import { CategoriesService } from '../categories/categories.service'
@@ -659,18 +663,87 @@ export class TransactionsService {
     })
   }
 
+  /**
+   * Move a batch of transactions to a category, and/or point them.
+   *
+   * A transaction's subcategory belongs to exactly one category, and nothing in
+   * the database enforces the pair — so writing `categoryId` alone used to leave
+   * the old subcategory attached to a category it does not belong to. That is
+   * not a harmless inconsistency: the dashboard groups on the denormalized
+   * `subcategory` label, so those rows show up under a heading that does not
+   * exist in the category they now claim. Five rows in production were in that
+   * state before this was fixed.
+   *
+   * There is no correct default here, which is why the caller has to say:
+   * passing `subcategoryId` files everything under it, passing `null` (or
+   * omitting it) clears the subcategory rather than leaving a stale one.
+   */
   async bulkUpdate(
     userId: string,
     ids: string[],
-    data: { categoryId?: string; isPointed?: boolean }
+    data: {
+      categoryId?: string
+      subcategoryId?: string | null
+      isPointed?: boolean
+    }
   ): Promise<{ updated: number }> {
+    const updateData: {
+      categoryId?: string
+      subcategoryId?: string | null
+      subcategory?: string | null
+      isPointed?: boolean
+    } = {}
+
+    if (data.isPointed !== undefined) updateData.isPointed = data.isPointed
+
+    if (data.categoryId !== undefined) {
+      const category = await this.prisma.category.findFirst({
+        where: { id: data.categoryId, userId },
+      })
+      if (!category) {
+        throw new NotFoundException(
+          `Category with ID ${data.categoryId} not found`
+        )
+      }
+      updateData.categoryId = data.categoryId
+
+      if (data.subcategoryId) {
+        // Scoped to the target category, so a subcategory belonging to another
+        // one cannot be attached even if the caller asks for it.
+        const subcategory = await this.prisma.subcategory.findFirst({
+          where: {
+            id: data.subcategoryId,
+            userId,
+            categoryId: data.categoryId,
+          },
+        })
+        if (!subcategory) {
+          throw new NotFoundException(
+            `Subcategory with ID ${data.subcategoryId} not found in category ${data.categoryId}`
+          )
+        }
+        updateData.subcategoryId = subcategory.id
+        updateData.subcategory = subcategory.name
+      } else {
+        updateData.subcategoryId = null
+        updateData.subcategory = null
+      }
+    } else if (data.subcategoryId !== undefined) {
+      // Without a target category there is nothing to validate the subcategory
+      // against: each row could sit in a different category, and only some of
+      // them would accept it.
+      throw new BadRequestException(
+        'A subcategory can only be set together with its category'
+      )
+    }
+
     // Filter to only update transactions owned by the user
     const result = await this.prisma.transaction.updateMany({
       where: {
         id: { in: ids },
         userId,
       },
-      data,
+      data: updateData,
     })
 
     return { updated: result.count }
