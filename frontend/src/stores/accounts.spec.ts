@@ -100,7 +100,7 @@ describe('useAccountsStore', () => {
     const result = await store.updateType('1', 'JOINT')
 
     expect(result).toBe(true)
-    expect(store.accounts[0].type).toBe('JOINT')
+    expect(store.accounts[0]?.type).toBe('JOINT')
   })
 
   it('updateSettings() updates account settings', async () => {
@@ -115,7 +115,7 @@ describe('useAccountsStore', () => {
     })
 
     expect(result).toBe(true)
-    expect(store.accounts[0].isExcludedFromBudget).toBe(true)
+    expect(store.accounts[0]?.isExcludedFromBudget).toBe(true)
   })
 
   it('computed sortedAccounts sorts by name', () => {
@@ -159,7 +159,7 @@ describe('useAccountsStore', () => {
       expect(mockedApi.updateAccount).toHaveBeenCalledWith('1', {
         name: 'New name',
       })
-      expect(store.accounts[0].name).toBe('New name')
+      expect(store.accounts[0]?.name).toBe('New name')
     })
 
     it('does not toast or set shared error state; lets the caller catch', async () => {
@@ -173,7 +173,7 @@ describe('useAccountsStore', () => {
       // Shared store error state stays clean — UI handles inline.
       expect(store.error).toBeNull()
       // Local cache untouched on failure.
-      expect(store.accounts[0].name).toBe('Old name')
+      expect(store.accounts[0]?.name).toBe('Old name')
     })
 
     it('leaves the local cache unchanged when the renamed id is unknown', async () => {
@@ -186,7 +186,7 @@ describe('useAccountsStore', () => {
       await store.rename('unknown', 'B')
 
       expect(store.accounts).toHaveLength(1)
-      expect(store.accounts[0].name).toBe('A')
+      expect(store.accounts[0]?.name).toBe('A')
     })
   })
 

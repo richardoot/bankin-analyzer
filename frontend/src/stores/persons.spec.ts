@@ -79,8 +79,8 @@ describe('usePersonsStore', () => {
 
     expect(result).toBe(true)
     expect(store.persons).toHaveLength(2)
-    expect(store.persons[0].name).toBe('Alice')
-    expect(store.persons[1].name).toBe('Charlie')
+    expect(store.persons[0]?.name).toBe('Alice')
+    expect(store.persons[1]?.name).toBe('Charlie')
   })
 
   it('addPerson() returns false on failure', async () => {
@@ -110,8 +110,8 @@ describe('usePersonsStore', () => {
     const result = await store.updatePerson('1', 'Alice Updated', 'a@b.com')
 
     expect(result).toBe(true)
-    expect(store.persons[0].name).toBe('Alice Updated')
-    expect(store.persons[0].email).toBe('a@b.com')
+    expect(store.persons[0]?.name).toBe('Alice Updated')
+    expect(store.persons[0]?.email).toBe('a@b.com')
   })
 
   it('removePerson() removes from list', async () => {
@@ -127,6 +127,6 @@ describe('usePersonsStore', () => {
 
     expect(result).toBe(true)
     expect(store.persons).toHaveLength(1)
-    expect(store.persons[0].id).toBe('2')
+    expect(store.persons[0]?.id).toBe('2')
   })
 })

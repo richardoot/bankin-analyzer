@@ -165,8 +165,8 @@ describe('MonthlyExpensesChart', () => {
     const chart = wrapper.findComponent({ name: 'VueApexCharts' })
     const xAnnotations = chart.props('options').annotations?.xaxis ?? []
     expect(xAnnotations).toHaveLength(1)
-    expect(xAnnotations[0].x).toBe('Avr')
-    expect(xAnnotations[0].label.text).toBe('En cours')
+    expect(xAnnotations[0]?.x).toBe('Avr')
+    expect(xAnnotations[0]?.label.text).toBe('En cours')
   })
 
   it('should have a custom tooltip function', () => {

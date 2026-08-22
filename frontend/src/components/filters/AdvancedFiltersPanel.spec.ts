@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import AdvancedFiltersPanel from './AdvancedFiltersPanel.vue'
 import { useFiltersStore } from '@/stores/filters'
+import { nth } from '@/test/nth'
 
 describe('AdvancedFiltersPanel', () => {
   beforeEach(() => {
@@ -39,7 +40,7 @@ describe('AdvancedFiltersPanel', () => {
     expect(store.isPanelExpanded).toBe(false)
 
     // Click header button (first button)
-    const headerButton = wrapper.findAll('button')[0]
+    const headerButton = wrapper.get('button')
     await headerButton.trigger('click')
 
     expect(store.isPanelExpanded).toBe(true)
@@ -58,7 +59,7 @@ describe('AdvancedFiltersPanel', () => {
     expect(wrapper.find('svg.rotate-180').exists()).toBe(false)
 
     // Expand the panel
-    await wrapper.findAll('button')[0]?.trigger('click')
+    await nth(wrapper.findAll('button'), 0)?.trigger('click')
 
     expect(wrapper.find('svg.rotate-180').exists()).toBe(true)
   })

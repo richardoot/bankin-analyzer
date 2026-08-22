@@ -18,6 +18,7 @@ vi.mock('@/composables/useToast', () => ({
 }))
 
 import { api } from '@/lib/api'
+import { nth } from '@/test/nth'
 
 enableAutoUnmount(afterEach)
 
@@ -115,7 +116,7 @@ describe('AccountsSettingsPage', () => {
     const typeButtons = wrapper
       .findAll('button')
       .filter(b => b.text() === 'Joint')
-    await typeButtons[0].trigger('click')
+    await nth(typeButtons, 0).trigger('click')
     await flushPromises()
 
     expect(api.updateAccount).toHaveBeenCalledWith('acc-1', { type: 'JOINT' })
@@ -144,7 +145,7 @@ describe('AccountsSettingsPage', () => {
 
     await wrapper.find('[data-testid="account-card"] button').trigger('click')
     const switches = wrapper.findAll('button[role="switch"]')
-    await switches[0].trigger('click')
+    await nth(switches, 0).trigger('click')
     await flushPromises()
 
     expect(api.updateAccount).toHaveBeenCalledWith('acc-1', {

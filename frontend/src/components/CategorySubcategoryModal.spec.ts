@@ -19,6 +19,7 @@ const mockCategories = [
     name: 'Courses',
     type: 'EXPENSE' as const,
     icon: '🛒',
+    isExcludedFromBudget: false,
     createdAt: '2026-01-01',
   },
   {
@@ -26,6 +27,7 @@ const mockCategories = [
     name: 'Transport',
     type: 'EXPENSE' as const,
     icon: '🚗',
+    isExcludedFromBudget: false,
     createdAt: '2026-01-01',
   },
   {
@@ -33,6 +35,7 @@ const mockCategories = [
     name: 'Salaire',
     type: 'INCOME' as const,
     icon: '💼',
+    isExcludedFromBudget: false,
     createdAt: '2026-01-01',
   },
 ]
@@ -111,6 +114,7 @@ describe('CategorySubcategoryModal — create category', () => {
       name: 'Sante',
       type: 'EXPENSE',
       icon: null,
+      isExcludedFromBudget: false,
       createdAt: '2026-04-26',
     })
 
@@ -168,6 +172,7 @@ describe('CategorySubcategoryModal — create category', () => {
       name: 'Salaire',
       type: 'EXPENSE',
       icon: null,
+      isExcludedFromBudget: false,
       createdAt: '2026-04-26',
     })
 
@@ -194,6 +199,7 @@ describe('CategorySubcategoryModal — create category', () => {
       name: 'Sante',
       type: 'EXPENSE' as const,
       icon: null,
+      isExcludedFromBudget: false,
       createdAt: '2026-04-26',
     }
     vi.mocked(api.createCategory).mockResolvedValue(newCategory)
@@ -241,6 +247,7 @@ describe('CategorySubcategoryModal — create category', () => {
       name: 'Sante',
       type: 'EXPENSE',
       icon: null,
+      isExcludedFromBudget: false,
       createdAt: '2026-04-26',
     })
 

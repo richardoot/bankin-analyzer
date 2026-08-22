@@ -41,6 +41,7 @@ vi.mock('@/stores/filters', () => ({
 }))
 
 import { api } from '@/lib/api'
+import { nth } from '@/test/nth'
 
 enableAutoUnmount(afterEach)
 
@@ -96,7 +97,9 @@ async function expandRow(
   index: number
 ) {
   const rows = wrapper.findAll('[data-testid="category-row"]')
-  await rows[index].find('button[aria-expanded]').trigger('click')
+  await nth(rows, index, 'category row')
+    .find('button[aria-expanded]')
+    .trigger('click')
 }
 
 beforeEach(() => {
@@ -119,7 +122,7 @@ describe('CategoriesSettingsPage', () => {
     const wrapper = await mountPage()
 
     const switches = wrapper.findAll('button[role="switch"]')
-    await switches[0].trigger('click')
+    await nth(switches, 0).trigger('click')
     await flushPromises()
 
     expect(toggleGlobalHiddenExpenseCategory).toHaveBeenCalledWith('cat-food')
@@ -135,7 +138,7 @@ describe('CategoriesSettingsPage', () => {
     })
 
     const switches = wrapper.findAll('button[role="switch"]')
-    await switches[1].trigger('click')
+    await nth(switches, 1).trigger('click')
     await flushPromises()
 
     expect(api.updateCategory).toHaveBeenCalledWith('cat-food', {
@@ -150,7 +153,7 @@ describe('CategoriesSettingsPage', () => {
 
     const rows = wrapper.findAll('[data-testid="category-row"]')
     expect(rows).toHaveLength(1)
-    expect(rows[0].text()).toContain('Salaire')
+    expect(rows[0]?.text()).toContain('Salaire')
   })
 
   it('lists the subcategories of an expanded category and adds one', async () => {
@@ -167,9 +170,9 @@ describe('CategoriesSettingsPage', () => {
     expect(wrapper.text()).toContain('Courses')
 
     // The panel opens with the rename form, so the subcategory one comes second.
-    const row = wrapper.findAll('[data-testid="category-row"]')[0]
-    await row.findAll('input[type="text"]')[1].setValue('Restaurant')
-    await row.findAll('form')[1].trigger('submit')
+    const row = nth(wrapper.findAll('[data-testid="category-row"]'), 0)
+    await nth(row.findAll('input[type="text"]'), 1).setValue('Restaurant')
+    await nth(row.findAll('form'), 1).trigger('submit')
     await flushPromises()
 
     expect(api.createSubcategory).toHaveBeenCalledWith({
@@ -187,9 +190,9 @@ describe('CategoriesSettingsPage', () => {
     })
 
     await expandRow(wrapper, 0)
-    const row = wrapper.findAll('[data-testid="category-row"]')[0]
+    const row = nth(wrapper.findAll('[data-testid="category-row"]'), 0)
     await row.find('[data-testid="rename-input"]').setValue('Courses')
-    await row.findAll('form')[0].trigger('submit')
+    await nth(row.findAll('form'), 0).trigger('submit')
     await flushPromises()
 
     expect(api.updateCategory).toHaveBeenCalledWith('cat-food', {
@@ -207,9 +210,9 @@ describe('CategoriesSettingsPage', () => {
     )
 
     await expandRow(wrapper, 0)
-    const row = wrapper.findAll('[data-testid="category-row"]')[0]
+    const row = nth(wrapper.findAll('[data-testid="category-row"]'), 0)
     await row.find('[data-testid="rename-input"]').setValue('Salaire')
-    await row.findAll('form')[0].trigger('submit')
+    await nth(row.findAll('form'), 0).trigger('submit')
     await flushPromises()
 
     expect(row.find('[data-testid="rename-error"]').text()).toContain(
@@ -276,7 +279,6 @@ describe('CategoriesSettingsPage', () => {
       labelledTransactionCount: 0,
       budgetPlanEntries: [],
       reimbursementCount: 0,
-      associatedCategoryName: null,
       isGloballyHidden: false,
       isExcludedFromBudget: false,
     })
@@ -317,7 +319,6 @@ describe('CategoriesSettingsPage', () => {
       labelledTransactionCount: 0,
       budgetPlanEntries: [],
       reimbursementCount: 0,
-      associatedCategoryName: null,
       isGloballyHidden: false,
       isExcludedFromBudget: false,
     })

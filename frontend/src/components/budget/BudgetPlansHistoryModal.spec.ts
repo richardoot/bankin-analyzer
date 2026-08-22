@@ -195,12 +195,13 @@ describe('BudgetPlansHistoryModal', () => {
   })
 
   describe('deletion', () => {
-    let confirmSpy: ReturnType<typeof vi.spyOn>
+    const spyOnConfirm = () => vi.spyOn(window, 'confirm')
+    let confirmSpy: ReturnType<typeof spyOnConfirm>
 
     beforeEach(() => {
       vi.mocked(api.getBudgetPlans).mockResolvedValue(makePlans())
       vi.mocked(api.deleteBudgetPlan).mockResolvedValue(undefined)
-      confirmSpy = vi.spyOn(window, 'confirm')
+      confirmSpy = spyOnConfirm()
     })
 
     afterEach(() => {

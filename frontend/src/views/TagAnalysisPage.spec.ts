@@ -3,6 +3,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import TagAnalysisPage from './TagAnalysisPage.vue'
 import { api } from '@/lib/api'
 import type { TagAnalysisDto, TransactionDto } from '@/lib/api'
+import { nth } from '@/test/nth'
 
 vi.mock('vue3-apexcharts', () => ({
   default: {
@@ -116,7 +117,14 @@ function mockAnalysis(analysis: TagAnalysisDto): void {
   vi.mocked(api.getTagAnalysis).mockResolvedValue(analysis)
   vi.mocked(api.getTransactions).mockResolvedValue({
     data: transactions,
-    meta: { total: 1, page: 1, limit: 100, totalPages: 1 },
+    meta: {
+      total: 1,
+      page: 1,
+      limit: 100,
+      totalPages: 1,
+      hasNextPage: false,
+      hasPreviousPage: false,
+    },
   })
 }
 
@@ -172,7 +180,8 @@ describe('TagAnalysisPage', () => {
       mockAnalysis(analysisWithBaseline)
 
       const wrapper = await mountPage()
-      const incomeCells = wrapper.findAll('tbody tr')[2]?.findAll('td') ?? []
+      const incomeCells =
+        nth(wrapper.findAll('tbody tr'), 2)?.findAll('td') ?? []
 
       // Catégorie | Dépensé | En temps normal | Surcoût
       expect(incomeCells).toHaveLength(4)
@@ -245,7 +254,7 @@ describe('TagAnalysisPage', () => {
 
       const headers = wrapper.findAll('thead th').map(h => h.text())
       expect(headers).toEqual(['Catégorie', 'Dépensé'])
-      expect(wrapper.findAll('tbody tr')[0]?.findAll('td')).toHaveLength(2)
+      expect(nth(wrapper.findAll('tbody tr'), 0)?.findAll('td')).toHaveLength(2)
     })
 
     it('still shows the amounts spent', async () => {

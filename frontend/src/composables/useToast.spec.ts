@@ -18,8 +18,8 @@ describe('useToast', () => {
     success('Operation succeeded')
 
     expect(toasts.value).toHaveLength(1)
-    expect(toasts.value[0].type).toBe('success')
-    expect(toasts.value[0].message).toBe('Operation succeeded')
+    expect(toasts.value[0]?.type).toBe('success')
+    expect(toasts.value[0]?.message).toBe('Operation succeeded')
   })
 
   it('error() adds an error toast', () => {
@@ -27,8 +27,8 @@ describe('useToast', () => {
     error('Something failed')
 
     expect(toasts.value).toHaveLength(1)
-    expect(toasts.value[0].type).toBe('error')
-    expect(toasts.value[0].message).toBe('Something failed')
+    expect(toasts.value[0]?.type).toBe('error')
+    expect(toasts.value[0]?.message).toBe('Something failed')
   })
 
   it('info() adds an info toast', () => {
@@ -36,14 +36,14 @@ describe('useToast', () => {
     info('FYI')
 
     expect(toasts.value).toHaveLength(1)
-    expect(toasts.value[0].type).toBe('info')
-    expect(toasts.value[0].message).toBe('FYI')
+    expect(toasts.value[0]?.type).toBe('info')
+    expect(toasts.value[0]?.message).toBe('FYI')
   })
 
   it('remove() removes a toast by id', () => {
     const { toasts, success, remove } = useToast()
     success('Toast 1')
-    const id = toasts.value[0].id
+    const id = toasts.value[0]?.id ?? -1
     remove(id)
 
     expect(toasts.value).toHaveLength(0)

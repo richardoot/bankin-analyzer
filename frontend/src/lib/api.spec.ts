@@ -196,25 +196,35 @@ describe('api', () => {
         })
       )
       expect(result).toHaveLength(2)
-      expect(result[0].name).toBe('Alimentation')
+      expect(result[0]?.name).toBe('Alimentation')
     })
   })
 
   describe('getTransactions', () => {
     it('should fetch transactions list', async () => {
-      const mockTransactions = [
-        {
-          id: 'tx-1',
-          date: '2024-01-15T00:00:00.000Z',
-          description: 'Restaurant',
-          amount: -45.5,
-          type: 'EXPENSE',
-          account: 'Compte Courant',
-          isPointed: false,
-          categoryName: 'Alimentation',
-          createdAt: '2024-01-15T00:00:00.000Z',
+      const mockTransactions = {
+        data: [
+          {
+            id: 'tx-1',
+            date: '2024-01-15T00:00:00.000Z',
+            description: 'Restaurant',
+            amount: -45.5,
+            type: 'EXPENSE',
+            account: 'Compte Courant',
+            isPointed: false,
+            categoryName: 'Alimentation',
+            createdAt: '2024-01-15T00:00:00.000Z',
+          },
+        ],
+        meta: {
+          total: 1,
+          page: 1,
+          limit: 50,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
         },
-      ]
+      }
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -231,8 +241,8 @@ describe('api', () => {
           }),
         })
       )
-      expect(result).toHaveLength(1)
-      expect(result[0].description).toBe('Restaurant')
+      expect(result.data).toHaveLength(1)
+      expect(result.data[0]?.description).toBe('Restaurant')
     })
   })
 
@@ -264,20 +274,16 @@ describe('api', () => {
       mockGetSession.mockImplementation(() => new Promise(() => {}))
 
       // Start the API call and immediately attach catch handler to prevent unhandled rejection
-      let caughtError: Error | null = null
-      const promise = api.getTransactions().catch(e => {
-        caughtError = e
-      })
+      const promise = api.getTransactions().catch((e: unknown) => e)
 
       // Fast-forward past the timeout (10000ms)
       await vi.advanceTimersByTimeAsync(10100)
 
-      // Wait for promise to settle
-      await promise
+      const caughtError = await promise
 
       // Verify the error
       expect(caughtError).toBeInstanceOf(AuthError)
-      expect(caughtError?.message).toBe(
+      expect((caughtError as AuthError).message).toBe(
         'Session timeout - veuillez rafraichir la page'
       )
 
@@ -287,19 +293,29 @@ describe('api', () => {
 
   describe('token refresh on 401', () => {
     it('should retry request after refreshing token on 401', async () => {
-      const mockTransactions = [
-        {
-          id: 'tx-1',
-          date: '2024-01-15T00:00:00.000Z',
-          description: 'Restaurant',
-          amount: -45.5,
-          type: 'EXPENSE',
-          account: 'Compte Courant',
-          isPointed: false,
-          categoryName: 'Alimentation',
-          createdAt: '2024-01-15T00:00:00.000Z',
+      const mockTransactions = {
+        data: [
+          {
+            id: 'tx-1',
+            date: '2024-01-15T00:00:00.000Z',
+            description: 'Restaurant',
+            amount: -45.5,
+            type: 'EXPENSE',
+            account: 'Compte Courant',
+            isPointed: false,
+            categoryName: 'Alimentation',
+            createdAt: '2024-01-15T00:00:00.000Z',
+          },
+        ],
+        meta: {
+          total: 1,
+          page: 1,
+          limit: 50,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
         },
-      ]
+      }
 
       // First call returns 401, second call succeeds
       mockFetch

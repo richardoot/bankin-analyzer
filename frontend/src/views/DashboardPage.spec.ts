@@ -82,13 +82,27 @@ describe('DashboardPage', () => {
 
   const mockSummary: DashboardSummaryDto = {
     monthlyData: [
-      { month: '2024-01', label: 'Jan 2024', expenses: 845.5, income: 2500 },
+      {
+        month: '2024-01',
+        label: 'Jan 2024',
+        expenses: 845.5,
+        netExpenses: 845.5,
+        income: 2500,
+        exceptionalExpenses: 0,
+        everydayNetExpenses: 845.5,
+      },
     ],
     expensesByCategory: [
-      { category: 'Logement', amount: 800 },
-      { category: 'Alimentation', amount: 45.5 },
+      { categoryId: 'cat-Logement', category: 'Logement', amount: 800 },
+      {
+        categoryId: 'cat-Alimentation',
+        category: 'Alimentation',
+        amount: 45.5,
+      },
     ],
-    incomeByCategory: [{ category: 'Salaires', amount: 2500 }],
+    incomeByCategory: [
+      { categoryId: 'cat-Salaires', category: 'Salaires', amount: 2500 },
+    ],
     totalExpenses: 845.5,
     totalIncome: 2500,
     allExpenseCategories: [
@@ -97,6 +111,8 @@ describe('DashboardPage', () => {
     ],
     allIncomeCategories: [{ id: 'cat-Salaires', name: 'Salaires' }],
     availableAccounts: ['Compte Courant'],
+    totalExceptionalExpenses: 0,
+    exceptionalEvents: [],
   }
 
   const mockEmptySummary: DashboardSummaryDto = {
@@ -108,32 +124,62 @@ describe('DashboardPage', () => {
     allExpenseCategories: [],
     allIncomeCategories: [],
     availableAccounts: [],
+    totalExceptionalExpenses: 0,
+    exceptionalEvents: [],
   }
 
   const mockIncomeOnlySummary: DashboardSummaryDto = {
     monthlyData: [
-      { month: '2024-01', label: 'Jan 2024', expenses: 0, income: 2500 },
+      {
+        month: '2024-01',
+        label: 'Jan 2024',
+        expenses: 0,
+        netExpenses: 0,
+        income: 2500,
+        exceptionalExpenses: 0,
+        everydayNetExpenses: 0,
+      },
     ],
     expensesByCategory: [],
-    incomeByCategory: [{ category: 'Salaires', amount: 2500 }],
+    incomeByCategory: [
+      { categoryId: 'cat-Salaires', category: 'Salaires', amount: 2500 },
+    ],
     totalExpenses: 0,
     totalIncome: 2500,
     allExpenseCategories: [],
     allIncomeCategories: [{ id: 'cat-Salaires', name: 'Salaires' }],
     availableAccounts: ['Compte Courant'],
+    totalExceptionalExpenses: 0,
+    exceptionalEvents: [],
   }
 
   const mockExpenseOnlySummary: DashboardSummaryDto = {
     monthlyData: [
-      { month: '2024-01', label: 'Jan 2024', expenses: 45.5, income: 0 },
+      {
+        month: '2024-01',
+        label: 'Jan 2024',
+        expenses: 45.5,
+        netExpenses: 45.5,
+        income: 0,
+        exceptionalExpenses: 0,
+        everydayNetExpenses: 45.5,
+      },
     ],
-    expensesByCategory: [{ category: 'Alimentation', amount: 45.5 }],
+    expensesByCategory: [
+      {
+        categoryId: 'cat-Alimentation',
+        category: 'Alimentation',
+        amount: 45.5,
+      },
+    ],
     incomeByCategory: [],
     totalExpenses: 45.5,
     totalIncome: 0,
     allExpenseCategories: [{ id: 'cat-Alimentation', name: 'Alimentation' }],
     allIncomeCategories: [],
     availableAccounts: ['Compte Courant'],
+    totalExceptionalExpenses: 0,
+    exceptionalEvents: [],
   }
 
   it('should display page title', async () => {

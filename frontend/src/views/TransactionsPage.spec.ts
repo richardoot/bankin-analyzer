@@ -15,7 +15,6 @@ vi.mock('@/lib/api', () => ({
     getPersons: vi.fn(),
     updateTransaction: vi.fn(),
     bulkUpdateTransactions: vi.fn(),
-    getCategoryAssociations: vi.fn(),
     getSettlement: vi.fn(),
     getTags: vi.fn(),
     attachTagToTransactions: vi.fn(),
@@ -42,6 +41,7 @@ vi.mock('@/lib/formatters', () => ({
 
 import { api } from '@/lib/api'
 import type { TransactionDto } from '@/lib/api'
+import { nth } from '@/test/nth'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -65,6 +65,7 @@ const makeTx = (overrides: Partial<TransactionDto> = {}): TransactionDto => ({
   description: 'Cafe',
   amount: -3.5,
   type: 'EXPENSE',
+  accountId: 'acc-1',
   account: 'Checking',
   isPointed: false,
   categoryId: 'cat-1',
@@ -84,6 +85,7 @@ const defaultPaginationMeta = {
   limit: 50,
   totalPages: 1,
   hasNextPage: false,
+  hasPreviousPage: false,
 }
 
 describe('TransactionsPage — optimistic updates', () => {
@@ -98,8 +100,22 @@ describe('TransactionsPage — optimistic updates', () => {
       meta: defaultPaginationMeta,
     })
     vi.mocked(api.getCategories).mockResolvedValue([
-      { id: 'cat-1', name: 'Alimentation', type: 'EXPENSE', icon: null },
-      { id: 'cat-2', name: 'Transport', type: 'EXPENSE', icon: '🚗' },
+      {
+        id: 'cat-1',
+        name: 'Alimentation',
+        type: 'EXPENSE',
+        icon: null,
+        isExcludedFromBudget: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'cat-2',
+        name: 'Transport',
+        type: 'EXPENSE',
+        icon: '🚗',
+        isExcludedFromBudget: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
     ])
     vi.mocked(api.getSubcategories).mockResolvedValue([
       {
@@ -127,7 +143,6 @@ describe('TransactionsPage — optimistic updates', () => {
     vi.mocked(api.getReimbursements).mockResolvedValue([])
     vi.mocked(api.getAccounts).mockResolvedValue([])
     vi.mocked(api.getPersons).mockResolvedValue([])
-    vi.mocked(api.getCategoryAssociations).mockResolvedValue([])
     vi.mocked(api.getTags).mockResolvedValue([])
   }
 
@@ -249,7 +264,7 @@ describe('TransactionsPage — optimistic updates', () => {
       const editButtons = wrapper.findAll('button[title="Modifier la note"]')
       if (editButtons.length === 0) return // skip if not rendered (mobile/desktop layout)
 
-      await editButtons[0].trigger('click')
+      await nth(editButtons, 0).trigger('click')
       await flushPromises()
 
       // Find the note input and type a new value
@@ -284,7 +299,7 @@ describe('TransactionsPage — optimistic updates', () => {
       const editButtons = wrapper.findAll('button[title="Modifier la note"]')
       if (editButtons.length === 0) return
 
-      await editButtons[0].trigger('click')
+      await nth(editButtons, 0).trigger('click')
       await flushPromises()
 
       const noteInput = wrapper.find('input[type="text"][placeholder]')
@@ -309,7 +324,7 @@ describe('TransactionsPage — optimistic updates', () => {
       const editButtons = wrapper.findAll('button[title="Modifier la note"]')
       if (editButtons.length === 0) return
 
-      await editButtons[0].trigger('click')
+      await nth(editButtons, 0).trigger('click')
       await flushPromises()
 
       // Don't modify the input, just save (empty note → same as original null)
@@ -384,9 +399,10 @@ describe('TransactionsPage — optimistic updates', () => {
       })
 
       const wrapper = await mountWith([incomeWithSettlements])
-      const marieLink = wrapper.findAll(
-        'button[title="Voir le reglement de Marie"]'
-      )[0]
+      const marieLink = nth(
+        wrapper.findAll('button[title="Voir le reglement de Marie"]'),
+        0
+      )
       await marieLink.trigger('click')
       await flushPromises()
 
