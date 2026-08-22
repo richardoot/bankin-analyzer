@@ -41,7 +41,9 @@
 
   function getCategoryNames(settlement: SettlementDto): string {
     const uniqueCategories = new Set(
-      settlement.reimbursements.map(r => r.categoryName || 'Sans categorie')
+      settlement.reimbursements.map(
+        r => r.expenseCategoryName || 'Sans categorie'
+      )
     )
     return Array.from(uniqueCategories).join(', ')
   }

@@ -37,13 +37,13 @@ type SettlementWithRelations = Settlement & {
       id: string
       amount: Prisma.Decimal
       transactionId: string
-      categoryId: string | null
       transaction: {
         id: string
         date: Date
         description: string
+        categoryId: string | null
+        category: { name: string } | null
       }
-      category: { name: string } | null
     }
   }>
 }
@@ -82,8 +82,12 @@ export class SettlementsService {
           transactionId: sr.reimbursement.transactionId,
           transactionDescription: sr.reimbursement.transaction.description,
           transactionDate: sr.reimbursement.transaction.date,
-          categoryId: sr.reimbursement.categoryId,
-          categoryName: sr.reimbursement.category?.name ?? null,
+          // The expense being repaid, not the income category the debt once
+          // expected: since the deduction attaches to the expense transaction,
+          // that is the only category this line is about.
+          expenseCategoryId: sr.reimbursement.transaction.categoryId,
+          expenseCategoryName:
+            sr.reimbursement.transaction.category?.name ?? null,
           originalAmount: Number(sr.reimbursement.amount),
           amountSettled: Number(sr.amountSettled),
         })
@@ -119,9 +123,10 @@ export class SettlementsService {
                     id: true,
                     date: true,
                     description: true,
+                    categoryId: true,
+                    category: { select: { name: true } },
                   },
                 },
-                category: { select: { name: true } },
               },
             },
           },
@@ -157,9 +162,10 @@ export class SettlementsService {
                     id: true,
                     date: true,
                     description: true,
+                    categoryId: true,
+                    category: { select: { name: true } },
                   },
                 },
-                category: { select: { name: true } },
               },
             },
           },
@@ -379,9 +385,10 @@ export class SettlementsService {
                       id: true,
                       date: true,
                       description: true,
+                      categoryId: true,
+                      category: { select: { name: true } },
                     },
                   },
-                  category: { select: { name: true } },
                 },
               },
             },

@@ -29,6 +29,11 @@ const mockIncomeTransaction = {
   settlementsAsIncome: [],
 }
 
+const mockExpenseCategory = {
+  id: '550e8400-e29b-41d4-a716-446655440032',
+  name: 'Alimentation',
+}
+
 const mockExpenseTransaction = {
   id: '550e8400-e29b-41d4-a716-446655440031',
   userId: mockUserId,
@@ -76,6 +81,8 @@ const mockSettlement = {
           id: mockExpenseTransaction.id,
           date: mockExpenseTransaction.date,
           description: mockExpenseTransaction.description,
+          categoryId: mockExpenseCategory.id,
+          category: { name: mockExpenseCategory.name },
         },
       },
     },
@@ -165,6 +172,21 @@ describe('SettlementsService', () => {
           where: { userId: mockUserId, personId: mockPerson.id },
         })
       )
+    })
+
+    it('should name the expense being repaid, not the income category', async () => {
+      // The line used to carry `reimbursement.categoryId` — the income category
+      // the debt once expected. Since the deduction attaches to the expense
+      // transaction, that is the category the settlement is about, and the two
+      // fixtures differ so a mix-up cannot pass.
+      mockPrismaService.settlement.findMany.mockResolvedValue([mockSettlement])
+
+      const result = await service.findAll(mockUserId)
+
+      expect(result[0].reimbursements[0]).toMatchObject({
+        expenseCategoryId: mockExpenseCategory.id,
+        expenseCategoryName: 'Alimentation',
+      })
     })
 
     it('should return empty array when no settlements', async () => {

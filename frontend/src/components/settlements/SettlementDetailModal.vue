@@ -202,8 +202,11 @@
                         class="text-xs text-gray-500 dark:text-gray-400 mt-0.5"
                       >
                         {{ formatDate(reimbursement.transactionDate) }}
-                        <span v-if="reimbursement.categoryName" class="ml-2">
-                          - {{ reimbursement.categoryName }}
+                        <span
+                          v-if="reimbursement.expenseCategoryName"
+                          class="ml-2"
+                        >
+                          - {{ reimbursement.expenseCategoryName }}
                         </span>
                       </div>
                     </div>

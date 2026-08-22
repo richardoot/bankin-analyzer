@@ -13,11 +13,11 @@ export class SettlementReimbursementResponseDto {
   /** Original transaction date */
   transactionDate!: Date
 
-  /** Category ID */
-  categoryId!: string | null
+  /** Category of the expense being repaid */
+  expenseCategoryId!: string | null
 
-  /** Category name */
-  categoryName!: string | null
+  /** Name of that category, null when the expense has none */
+  expenseCategoryName!: string | null
 
   /** Original reimbursement amount */
   originalAmount!: number

@@ -494,8 +494,13 @@ export interface SettlementReimbursementResponseDto {
   transactionId: string
   transactionDescription: string
   transactionDate: string
-  categoryId: string | null
-  categoryName: string | null
+  /**
+   * The expense being repaid. Not the income category the debt once expected:
+   * the deduction attaches to the expense transaction, so that is the only
+   * category this line is about.
+   */
+  expenseCategoryId: string | null
+  expenseCategoryName: string | null
   originalAmount: number
   amountSettled: number
 }
