@@ -54,17 +54,14 @@
   function handleDrop(e: DragEvent) {
     e.preventDefault()
     isDragOver.value = false
-    const files = e.dataTransfer?.files
-    if (files && files.length > 0) {
-      processFile(files[0])
-    }
+    const file = e.dataTransfer?.files?.[0]
+    if (file) processFile(file)
   }
 
   function handleFileSelect(e: Event) {
     const input = e.target as HTMLInputElement
-    if (input.files && input.files.length > 0) {
-      processFile(input.files[0])
-    }
+    const file = input.files?.[0]
+    if (file) processFile(file)
   }
 
   async function processFile(selectedFile: File) {
@@ -94,7 +91,7 @@
     }
 
     // Parse header - Bankin format uses semicolon
-    const headerLine = lines[0].replace(/"/g, '').trim()
+    const headerLine = (lines[0] ?? '').replace(/"/g, '').trim()
     const headers = headerLine.split(';').map(h => h.toLowerCase().trim())
 
     // Expected headers: Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
@@ -119,8 +116,8 @@
 
     const transactions: ImportTransactionDto[] = []
 
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim()
+    for (const rawLine of lines.slice(1)) {
+      const line = rawLine.trim()
       if (!line) continue
 
       // Parse CSV line with quoted fields
@@ -152,13 +149,10 @@
       // shifts the transaction into the wrong day and the wrong month for
       // every UTC-based query downstream (budget ranges, monthly grouping).
       const dateParts = rawDate.match(/(\d{2})\/(\d{2})\/(\d{4})/)
-      if (!dateParts) continue
+      const [, day, month, year] = dateParts ?? []
+      if (!day || !month || !year) continue
       const isoDate = new Date(
-        Date.UTC(
-          parseInt(dateParts[3]),
-          parseInt(dateParts[2]) - 1,
-          parseInt(dateParts[1])
-        )
+        Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day))
       ).toISOString()
 
       // Parse pointed
@@ -174,10 +168,12 @@
         description,
         amount,
         category,
-        subcategory: subcategory || undefined,
+        // Omitted rather than sent as `undefined`: an absent subcategory is
+        // said by saying nothing.
+        ...(subcategory && { subcategory }),
         account,
         type: isIncome ? 'INCOME' : 'EXPENSE',
-        note: note || undefined,
+        ...(note && { note }),
         isPointed,
       })
     }
@@ -258,7 +254,7 @@
     // Start import history BEFORE importing transactions
     const importHistory = await api.startImport({
       totalInFile: parsedTransactions.value.length,
-      fileName: file.value?.name,
+      ...(file.value?.name && { fileName: file.value.name }),
     })
 
     try {

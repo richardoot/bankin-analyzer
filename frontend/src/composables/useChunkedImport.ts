@@ -105,17 +105,15 @@ async function preDeduplicateTransactions(
     }
   }
 
-  // Compute all hashes in parallel (~14ms for 1500 transactions)
-  const hashes = await computeAllHashes(transactions)
+  const hashed = await computeAllHashes(transactions)
 
   // Group by hash to find duplicates
   const hashToIndices = new Map<string, number[]>()
-  for (let i = 0; i < transactions.length; i++) {
-    const hash = hashes[i]
-    const indices = hashToIndices.get(hash) || []
-    indices.push(i)
+  hashed.forEach(({ hash }, index) => {
+    const indices = hashToIndices.get(hash) ?? []
+    indices.push(index)
     hashToIndices.set(hash, indices)
-  }
+  })
 
   // Build results
   const internalDuplicates: InternalDuplicateDto[] = []
@@ -123,32 +121,24 @@ async function preDeduplicateTransactions(
   const indexMapping = new Map<number, number>()
   const seenHashes = new Set<string>()
 
-  for (let i = 0; i < transactions.length; i++) {
-    const hash = hashes[i]
+  hashed.forEach(({ transaction, hash }, index) => {
+    if (seenHashes.has(hash)) return // duplicate already seen -> skip
+
     const indices = hashToIndices.get(hash) ?? []
+    indexMapping.set(index, deduplicated.length)
+    deduplicated.push(transaction)
+    seenHashes.add(hash)
 
-    if (indices.length > 1 && !seenHashes.has(hash)) {
-      // First occurrence of a duplicate group -> keep it
-      const newIndex = deduplicated.length
-      deduplicated.push(transactions[i])
-      indexMapping.set(i, newIndex)
-      seenHashes.add(hash)
-
-      // Record the duplicate group
+    if (indices.length > 1) {
       internalDuplicates.push({
         hash,
         indices,
-        transactions: indices.map(idx => toUploadedDto(transactions[idx], idx)),
+        transactions: indices.map(idx =>
+          toUploadedDto(hashed[idx]?.transaction ?? transaction, idx)
+        ),
       })
-    } else if (!seenHashes.has(hash)) {
-      // Unique transaction
-      const newIndex = deduplicated.length
-      deduplicated.push(transactions[i])
-      indexMapping.set(i, newIndex)
-      seenHashes.add(hash)
     }
-    // else: duplicate already seen -> skip
-  }
+  })
 
   return { deduplicated, internalDuplicates, indexMapping }
 }
@@ -242,8 +232,8 @@ export function useChunkedImport() {
 
     const results: ImportPreviewResultDto[] = []
 
-    for (let i = 0; i < chunks.length; i++) {
-      const result = await api.previewImport(chunks[i])
+    for (const [i, chunk] of chunks.entries()) {
+      const result = await api.previewImport(chunk)
       results.push(result)
 
       progress.value = {
@@ -311,7 +301,7 @@ export function useChunkedImport() {
     let totalImported = 0
     let totalDuplicates = 0
 
-    for (let i = 0; i < chunks.length; i++) {
+    for (const [i, chunk] of chunks.entries()) {
       let success = false
       let lastError: Error | null = null
 
@@ -332,10 +322,7 @@ export function useChunkedImport() {
             await sleep(delay)
           }
 
-          const result = await api.importTransactions(
-            chunks[i],
-            importHistoryId
-          )
+          const result = await api.importTransactions(chunk, importHistoryId)
           totalImported += result.imported
           totalDuplicates += result.duplicates
           success = true
@@ -373,7 +360,7 @@ export function useChunkedImport() {
           failedAtChunk: i,
           chunksCompleted: i,
           chunksTotal: chunks.length,
-          lastError: lastError ?? 'Unknown error',
+          lastError: lastError ?? new Error('Unknown error'),
         })
       }
     }

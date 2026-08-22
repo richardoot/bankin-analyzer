@@ -16,7 +16,10 @@ export const usePersonsStore = defineStore('persons', () => {
 
   async function addPerson(name: string, email?: string): Promise<boolean> {
     const result = await run(async () => {
-      const newPerson = await api.createPerson({ name, email })
+      const newPerson = await api.createPerson({
+        name,
+        ...(email && { email }),
+      })
       persons.value.push(newPerson)
       persons.value.sort((a, b) => a.name.localeCompare(b.name))
       return true
@@ -30,7 +33,10 @@ export const usePersonsStore = defineStore('persons', () => {
     email?: string
   ): Promise<boolean> {
     const result = await run(async () => {
-      const updated = await api.updatePerson(id, { name, email })
+      const updated = await api.updatePerson(id, {
+        name,
+        ...(email && { email }),
+      })
       const index = persons.value.findIndex(p => p.id === id)
       if (index !== -1) {
         persons.value[index] = updated

@@ -26,16 +26,32 @@ export async function computeTransactionHash(
     .join('')
 }
 
+export interface HashedTransaction {
+  transaction: ImportTransactionDto
+  hash: string
+}
+
 /**
- * Compute hashes for all transactions in parallel.
- * ~14ms for 1500 transactions (Web Crypto is hardware-accelerated).
+ * Attach a hash to each transaction, in parallel — about 14ms for 1500 of
+ * them, Web Crypto being hardware-accelerated.
+ *
+ * Returns pairs rather than a parallel array of hashes: the caller used to
+ * index both by the same `i`, which only works while they stay exactly in
+ * step — a property nothing enforced, and which the compiler could only treat
+ * as "might be undefined" at every access.
  */
 export async function computeAllHashes(
   transactions: ImportTransactionDto[]
-): Promise<string[]> {
+): Promise<HashedTransaction[]> {
   return Promise.all(
-    transactions.map(tx =>
-      computeTransactionHash(tx.date, tx.amount, tx.account, tx.description)
-    )
+    transactions.map(async transaction => ({
+      transaction,
+      hash: await computeTransactionHash(
+        transaction.date,
+        transaction.amount,
+        transaction.account,
+        transaction.description
+      ),
+    }))
   )
 }

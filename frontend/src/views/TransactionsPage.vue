@@ -395,6 +395,20 @@
   }
 
   // Inline note editing
+  /**
+   * The row for a transaction and the slot it occupies, or null if the list no
+   * longer holds it. Returning the row itself — rather than an index the
+   * caller then dereferences — is what lets the optimistic updates below read
+   * as plain values instead of bounds checks.
+   */
+  function locate(
+    id: string
+  ): { current: TransactionDto; index: number } | null {
+    const index = transactions.value.findIndex(t => t.id === id)
+    const current = transactions.value[index]
+    return current ? { current, index } : null
+  }
+
   function startEditNote(tx: TransactionDto) {
     editingNoteId.value = tx.id
     editingNoteValue.value = tx.note ?? ''
@@ -413,26 +427,28 @@
     }
 
     // Optimistic update
-    const index = transactions.value.findIndex(t => t.id === tx.id)
+    const found = locate(tx.id)
     const previousNote = tx.note
-    if (index !== -1) {
-      transactions.value[index] = { ...tx, note: newNote || null }
+    if (found) {
+      transactions.value[found.index] = { ...tx, note: newNote || null }
     }
     cancelEditNote()
 
     try {
+      // Omitted rather than sent as `undefined`: clearing a note is saying
+      // nothing, not saying nothing-in-particular.
       const updated = await api.updateTransaction(tx.id, {
-        note: newNote || undefined,
+        ...(newNote && { note: newNote }),
       })
-      if (index !== -1) {
-        transactions.value[index] = updated
+      if (found) {
+        transactions.value[found.index] = updated
       }
     } catch {
       // Rollback
-      if (index !== -1) {
-        transactions.value[index] = {
-          ...transactions.value[index],
-          note: previousNote,
+      if (found) {
+        transactions.value[found.index] = {
+          ...found.current,
+          note: previousNote ?? null,
         }
       }
       toast.error('Echec de la mise a jour de la note')
@@ -466,17 +482,17 @@
     }
 
     // Optimistic update — resolve category name for immediate display
-    const index = transactions.value.findIndex(t => t.id === tx.id)
+    const found = locate(tx.id)
     const previousTx = { ...tx }
-    if (index !== -1) {
+    if (found) {
       const newCategory = categoryId
         ? allCategories.value.find(c => c.id === categoryId)
         : null
-      transactions.value[index] = {
+      transactions.value[found.index] = {
         ...tx,
-        categoryId: categoryId ?? tx.categoryId,
+        categoryId: categoryId ?? tx.categoryId ?? null,
         categoryName: newCategory?.name ?? tx.categoryName,
-        categoryIcon: newCategory?.icon ?? tx.categoryIcon,
+        categoryIcon: newCategory?.icon ?? tx.categoryIcon ?? null,
         subcategoryId: subcategoryId ?? null,
       }
     }
@@ -484,11 +500,11 @@
 
     try {
       const updated = await api.updateTransaction(tx.id, {
-        categoryId: categoryId || undefined,
+        ...(categoryId && { categoryId }),
         subcategoryId,
       })
-      if (index !== -1) {
-        transactions.value[index] = updated
+      if (found) {
+        transactions.value[found.index] = updated
       }
 
       // The modal can create subcategories on the fly: refresh the list so the
@@ -502,8 +518,8 @@
       // to another category.
     } catch {
       // Rollback
-      if (index !== -1) {
-        transactions.value[index] = previousTx
+      if (found) {
+        transactions.value[found.index] = previousTx
       }
       toast.error('Echec de la mise a jour de la categorie')
     }
@@ -512,24 +528,24 @@
   // Toggle pointed status
   async function togglePointed(tx: TransactionDto) {
     // Optimistic update
-    const index = transactions.value.findIndex(t => t.id === tx.id)
+    const found = locate(tx.id)
     const previousPointed = tx.isPointed
-    if (index !== -1) {
-      transactions.value[index] = { ...tx, isPointed: !tx.isPointed }
+    if (found) {
+      transactions.value[found.index] = { ...tx, isPointed: !tx.isPointed }
     }
 
     try {
       const updated = await api.updateTransaction(tx.id, {
         isPointed: !previousPointed,
       })
-      if (index !== -1) {
-        transactions.value[index] = updated
+      if (found) {
+        transactions.value[found.index] = updated
       }
     } catch {
       // Rollback
-      if (index !== -1) {
-        transactions.value[index] = {
-          ...transactions.value[index],
+      if (found) {
+        transactions.value[found.index] = {
+          ...found.current,
           isPointed: previousPointed,
         }
       }
@@ -744,14 +760,14 @@
     tagId: string
   ): Promise<void> {
     const tag = tagsStore.tags.find(t => t.id === tagId)
-    const index = transactions.value.findIndex(t => t.id === tx.id)
-    if (!tag || index === -1) return
+    const found = locate(tx.id)
+    if (!tag || !found) return
 
-    const current = transactions.value[index]
+    const { current } = found
     if ((current.tags ?? []).some(t => t.id === tagId)) return
 
     // Optimistic add
-    transactions.value[index] = {
+    transactions.value[found.index] = {
       ...current,
       tags: [
         ...(current.tags ?? []),
@@ -761,14 +777,13 @@
 
     const attached = await tagsStore.attachToTransactions(tagId, [tx.id])
     if (attached === 0) {
-      // Rollback
-      const idx = transactions.value.findIndex(t => t.id === tx.id)
-      if (idx !== -1) {
-        transactions.value[idx] = {
-          ...transactions.value[idx],
-          tags: (transactions.value[idx].tags ?? []).filter(
-            t => t.id !== tagId
-          ),
+      // Rollback. Located again rather than reusing the slot above: awaiting
+      // the request gives the list time to be replaced under us.
+      const after = locate(tx.id)
+      if (after) {
+        transactions.value[after.index] = {
+          ...after.current,
+          tags: (after.current.tags ?? []).filter(t => t.id !== tagId),
         }
       }
     }
@@ -778,24 +793,22 @@
     tx: TransactionDto,
     tagId: string
   ): Promise<void> {
-    const index = transactions.value.findIndex(t => t.id === tx.id)
-    if (index === -1) return
+    const found = locate(tx.id)
+    if (!found) return
 
-    const previous = transactions.value[index].tags ?? []
+    const previous = found.current.tags ?? []
     // Optimistic remove
-    transactions.value[index] = {
-      ...transactions.value[index],
+    transactions.value[found.index] = {
+      ...found.current,
       tags: previous.filter(t => t.id !== tagId),
     }
 
     const ok = await tagsStore.detachFromTransaction(tagId, tx.id)
     if (!ok) {
-      const idx = transactions.value.findIndex(t => t.id === tx.id)
-      if (idx !== -1) {
-        transactions.value[idx] = {
-          ...transactions.value[idx],
-          tags: previous,
-        }
+      // Located again: awaiting the request gives the list time to change.
+      const after = locate(tx.id)
+      if (after) {
+        transactions.value[after.index] = { ...after.current, tags: previous }
       }
     }
   }
@@ -1071,7 +1084,7 @@
             >
               <ToggleSwitch
                 :checked="showOnlyNotPointed"
-                aria-label="Afficher uniquement les transactions non pointees"
+                label="Afficher uniquement les transactions non pointees"
                 @change="showOnlyNotPointed = $event"
               />
               <span

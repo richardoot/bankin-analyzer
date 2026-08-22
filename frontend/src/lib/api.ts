@@ -195,20 +195,25 @@ export interface PaginatedResponse<T> {
   meta: PaginationMeta
 }
 
+/**
+ * Filters for the transaction list. Every field is optional *and* accepts
+ * `undefined`: to a query string, "absent" and "explicitly nothing" are the
+ * same instruction, and callers build these objects by nulling fields out.
+ */
 export interface TransactionQueryParams {
-  page?: number
-  limit?: number
-  type?: 'EXPENSE' | 'INCOME'
-  startDate?: string
-  endDate?: string
-  categoryId?: string
-  subcategoryId?: string
-  isPointed?: boolean
-  account?: string
-  tagId?: string
-  search?: string
-  amountMin?: number
-  amountMax?: number
+  page?: number | undefined
+  limit?: number | undefined
+  type?: 'EXPENSE' | 'INCOME' | undefined
+  startDate?: string | undefined
+  endDate?: string | undefined
+  categoryId?: string | undefined
+  subcategoryId?: string | undefined
+  isPointed?: boolean | undefined
+  account?: string | undefined
+  tagId?: string | undefined
+  search?: string | undefined
+  amountMin?: number | undefined
+  amountMax?: number | undefined
 }
 
 /** Hidden categories are addressed by Category id, never by name. */

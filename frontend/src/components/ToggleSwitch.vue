@@ -8,7 +8,8 @@
       checked: boolean
       disabled?: boolean
       loading?: boolean
-      ariaLabel: string
+      /** Describes the switch for assistive technology. */
+      label: string
     }>(),
     {
       disabled: false,
@@ -31,16 +32,16 @@
     type="button"
     role="switch"
     :aria-checked="checked"
-    :aria-label="ariaLabel"
+    :aria-label="label"
     :disabled="disabled || loading"
-    :title="ariaLabel"
+    :title="label"
     class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
     :class="
       checked
         ? 'bg-emerald-500 dark:bg-emerald-600'
         : 'bg-gray-300 dark:bg-slate-600'
     "
-    @click="onClick(checked, disabled || loading)"
+    @click="onClick(checked, disabled === true || loading === true)"
   >
     <span
       class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"

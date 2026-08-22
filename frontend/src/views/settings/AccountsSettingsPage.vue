@@ -458,7 +458,7 @@
                 <ToggleSwitch
                   :checked="!account.isExcludedFromStats"
                   :loading="isSaving(account.id)"
-                  :aria-label="
+                  :label="
                     account.isExcludedFromStats
                       ? `Compter ${account.name} dans les statistiques`
                       : `Retirer ${account.name} des statistiques`
@@ -481,7 +481,7 @@
                 <ToggleSwitch
                   :checked="!account.isExcludedFromBudget"
                   :loading="isSaving(account.id)"
-                  :aria-label="
+                  :label="
                     account.isExcludedFromBudget
                       ? `Compter ${account.name} dans les budgets`
                       : `Retirer ${account.name} des budgets`

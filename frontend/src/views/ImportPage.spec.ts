@@ -15,11 +15,16 @@ vi.mock('@/lib/api', () => ({
 
 // Mock the hash utils (to avoid crypto.subtle issues in tests)
 vi.mock('@/lib/hashUtils', () => ({
-  computeAllHashes: vi
-    .fn()
-    .mockImplementation((transactions: unknown[]) =>
-      Promise.resolve(transactions.map((_, i) => `hash-${i}`))
-    ),
+  // Pairs, matching the real signature: the hash travels with its
+  // transaction rather than in a parallel array.
+  computeAllHashes: vi.fn().mockImplementation((transactions: unknown[]) =>
+    Promise.resolve(
+      transactions.map((transaction, i) => ({
+        transaction,
+        hash: `hash-${i}`,
+      }))
+    )
+  ),
 }))
 
 import { api } from '@/lib/api'

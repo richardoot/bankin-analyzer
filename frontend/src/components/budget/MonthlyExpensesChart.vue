@@ -104,7 +104,9 @@
 
   // Annotations: horizontal lines for income and budget
   const yAnnotations = computed(() => {
-    const annotations: ApexAnnotations['yaxis'] = []
+    const annotations: NonNullable<
+      NonNullable<ApexOptions['annotations']>['yaxis']
+    > = []
     if (props.averageIncome > 0) {
       annotations.push({
         y: props.averageIncome,
@@ -200,13 +202,11 @@
             return labelColor.value
           }),
           fontSize: '11px',
-          fontWeight: props.monthLabels.map(ym =>
-            ym === currentYearMonth ||
-            (hasPlanRange.value && isPlanMonth(ym)) ||
-            (hasComparisonRange.value && isComparisonMonth(ym))
-              ? '700'
-              : '400'
-          ),
+          // A single weight: ApexCharts types `fontWeight` as one value, and
+          // only `colors` takes an array. The per-month array that used to sit
+          // here could not have been applied — the emphasis it was reaching for
+          // is already carried by the colours just above.
+          fontWeight: '400',
         },
       },
       axisBorder: { show: false },

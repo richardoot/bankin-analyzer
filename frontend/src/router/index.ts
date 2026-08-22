@@ -148,6 +148,10 @@ router.beforeEach(async to => {
   if (to.meta.guestOnly && authStore.isAuthenticated) {
     return { name: 'profile' }
   }
+
+  // Nothing to redirect to: let the navigation through. Said explicitly, since
+  // falling off the end and returning a redirect are different instructions.
+  return true
 })
 
 export default router

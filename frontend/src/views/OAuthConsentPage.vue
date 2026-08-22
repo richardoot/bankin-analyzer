@@ -35,8 +35,10 @@
         return
       }
 
-      clientName.value = data.client?.name ?? 'Application inconnue'
-      scopes.value = data.scope?.split(' ').filter(Boolean) ?? []
+      // The response is a union: a redirect carries neither field.
+      const details = 'client' in data ? data : null
+      clientName.value = details?.client?.name ?? 'Application inconnue'
+      scopes.value = details?.scope?.split(' ').filter(Boolean) ?? []
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Erreur inattendue'
     } finally {

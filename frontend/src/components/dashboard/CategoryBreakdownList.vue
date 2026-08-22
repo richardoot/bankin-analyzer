@@ -160,7 +160,7 @@
           <SparklineChart
             v-if="getSparklineData(cat).length >= 2"
             :data="getSparklineData(cat)"
-            :color="color"
+            :color="props.color"
           />
         </div>
 
@@ -255,7 +255,7 @@
           <MonthlyBarChart
             :data="chartDataFor(cat)"
             :title="cat.category"
-            :color="color"
+            :color="props.color"
           />
         </div>
 

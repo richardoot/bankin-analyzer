@@ -659,7 +659,7 @@
                   <ToggleSwitch
                     :checked="isDashboardVisible(category)"
                     :loading="savingVisibility.has(category.id)"
-                    :aria-label="
+                    :label="
                       isDashboardVisible(category)
                         ? `Masquer ${category.name} du tableau de bord`
                         : `Afficher ${category.name} dans le tableau de bord`
@@ -673,7 +673,7 @@
                     :checked="isBudgetIncluded(category)"
                     :disabled="!isDashboardVisible(category)"
                     :loading="savingBudget.has(category.id)"
-                    :aria-label="
+                    :label="
                       isBudgetIncluded(category)
                         ? `Exclure ${category.name} du budget`
                         : `Inclure ${category.name} dans le budget`

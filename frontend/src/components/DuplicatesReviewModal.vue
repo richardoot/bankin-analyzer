@@ -26,8 +26,9 @@
         // For internal duplicates: select first occurrence of each group by default
         const internalDefaults = new Set<number>()
         for (const group of result.internalDuplicates) {
-          if (group.indices.length > 0) {
-            internalDefaults.add(group.indices[0])
+          const first = group.indices[0]
+          if (first !== undefined) {
+            internalDefaults.add(first)
           }
         }
         selectedInternalIndices.value = internalDefaults

@@ -388,6 +388,7 @@
               <MonthlyBarChart
                 :data="monthlyExpenses"
                 title="Dépenses par mois"
+                color="#ef4444"
               />
             </div>
           </div>

@@ -31,7 +31,8 @@
 
     const line = pts.map(p => `${p.x},${p.y}`).join(' ')
     const area = `${line} ${props.width},${props.height} 0,${props.height}`
-    const last = pts[pts.length - 1]
+    const last = pts.at(-1)
+    if (!last) return { line, area, lastX: 0, lastY: 0 }
 
     return { line, area, lastX: last.x, lastY: last.y }
   })

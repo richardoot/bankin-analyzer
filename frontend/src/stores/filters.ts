@@ -317,8 +317,8 @@ export const useFiltersStore = defineStore('filters', () => {
     }
 
     return {
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
+      startDate: startDate.toISOString().slice(0, 10),
+      endDate: endDate.toISOString().slice(0, 10),
     }
   }
 
