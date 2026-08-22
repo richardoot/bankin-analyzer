@@ -125,6 +125,53 @@ export interface CategoryDeletionSummaryDto {
   isExcludedFromBudget: boolean
 }
 
+/** One decision of the mapping table. */
+export interface MigrationActionDto {
+  /** Null stands for the transactions with no subcategory. */
+  sourceSubcategoryId: string | null
+  action: 'MOVE' | 'MERGE' | 'KEEP'
+  /** Required by MERGE, meaningless otherwise. */
+  targetSubcategoryId?: string
+}
+
+export interface MigrationSourceSubcategoryDto {
+  id: string
+  name: string
+  transactionCount: number
+  /**
+   * The destination already has a subcategory of this name. Moving it would
+   * break the unique constraint, so the line has to merge — and the screen
+   * says why rather than silently removing the option.
+   */
+  nameTakenInTarget: boolean
+}
+
+export interface CategoryMigrationPreviewDto {
+  sourceCategoryId: string
+  sourceCategoryName: string
+  targetCategoryId: string
+  targetCategoryName: string
+  type: 'EXPENSE' | 'INCOME'
+  sourceSubcategories: MigrationSourceSubcategoryDto[]
+  targetSubcategories: { id: string; name: string }[]
+  uncategorizedCount: number
+  /** Confirming without touching anything sends these back unchanged. */
+  defaultActions: MigrationActionDto[]
+  budgetPlanEntries: BudgetPlanEntrySummaryDto[]
+}
+
+export interface CategoryMigrationResultDto {
+  sourceCategoryId: string
+  targetCategoryId: string
+  movedTransactions: number
+  movedSubcategories: number
+  mergedSubcategories: number
+  keptTransactions: number
+  keptSubcategories: number
+  /** The source is kept either way; this only says which case it is. */
+  sourceLeftEmpty: boolean
+}
+
 export interface CategoryDeletionResultDto {
   uncategorizedTransactions: number
   deletedSubcategories: number
@@ -928,6 +975,48 @@ export const api = {
     }
 
     return response.json() as Promise<CategoryDeletionSummaryDto>
+  },
+
+  async getCategoryMigrationPreview(
+    id: string,
+    targetCategoryId: string
+  ): Promise<CategoryMigrationPreviewDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/categories/${id}/migration-preview?targetCategoryId=${encodeURIComponent(targetCategoryId)}`
+    )
+
+    if (!response.ok) {
+      throw new Error('Impossible de preparer le deplacement')
+    }
+
+    return response.json() as Promise<CategoryMigrationPreviewDto>
+  },
+
+  async migrateCategory(
+    id: string,
+    targetCategoryId: string,
+    actions: MigrationActionDto[]
+  ): Promise<CategoryMigrationResultDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/categories/${id}/migrate`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ targetCategoryId, actions }),
+      }
+    )
+
+    if (!response.ok) {
+      // A refused arrangement carries a message the user can act on.
+      const detail = (await response.json().catch(() => null)) as {
+        message?: string | string[]
+      } | null
+      const message = Array.isArray(detail?.message)
+        ? detail.message.join(', ')
+        : detail?.message
+      throw new Error(message ?? 'Echec du deplacement')
+    }
+
+    return response.json() as Promise<CategoryMigrationResultDto>
   },
 
   async deleteCategory(id: string): Promise<CategoryDeletionResultDto> {

@@ -1,4 +1,5 @@
 export * from './category-deletion.dto'
+export * from './category-migration.dto'
 export * from './category-response.dto'
 export * from './create-category.dto'
 export * from './update-category.dto'

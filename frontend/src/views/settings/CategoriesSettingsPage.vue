@@ -15,6 +15,7 @@
   import { useToast } from '@/composables/useToast'
   import CategoryIcon from '@/components/CategoryIcon.vue'
   import DeleteCategoryModal from '@/components/settings/DeleteCategoryModal.vue'
+  import MigrateCategoryModal from '@/components/settings/MigrateCategoryModal.vue'
   import SettingsCard from '@/components/settings/SettingsCard.vue'
   import ToggleSwitch from '@/components/ToggleSwitch.vue'
 
@@ -373,6 +374,19 @@
 
   function askDelete(category: CategoryDto): void {
     categoryPendingDeletion.value = category
+  }
+
+  // Emptying a category and deleting it are separate intentions, so they are
+  // separate actions sitting side by side.
+  const categoryPendingMigration = ref<CategoryDto | null>(null)
+
+  function askMigrate(category: CategoryDto): void {
+    categoryPendingMigration.value = category
+  }
+
+  async function onMigrated(): Promise<void> {
+    // Subcategories move between categories, so both lists are stale.
+    await Promise.all([loadCategories(), loadSubcategories()])
   }
 
   function cancelDelete(): void {
@@ -823,6 +837,14 @@
                   </button>
                   <button
                     type="button"
+                    :data-testid="`migrate-category-${category.id}`"
+                    class="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:text-gray-300 dark:hover:bg-slate-800"
+                    @click="askMigrate(category)"
+                  >
+                    Déplacer les transactions…
+                  </button>
+                  <button
+                    type="button"
                     :data-testid="`delete-category-${category.id}`"
                     class="rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
                     @click="askDelete(category)"
@@ -956,6 +978,14 @@
       :category="categoryPendingDeletion"
       @close="cancelDelete"
       @deleted="onDeleted"
+    />
+
+    <MigrateCategoryModal
+      :is-open="categoryPendingMigration !== null"
+      :source="categoryPendingMigration"
+      :categories="categories"
+      @close="categoryPendingMigration = null"
+      @migrated="onMigrated"
     />
   </div>
 </template>
