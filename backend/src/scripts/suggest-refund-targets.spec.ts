@@ -15,6 +15,7 @@ const candidate = (
   description: 'Vir Chloe',
   amount: 50,
   alreadyDrawn: 0,
+  categoryId: 'cat-refunds',
   categoryName: 'Remboursements',
   subcategoryName: 'R Vacances',
   ...overrides,
@@ -180,7 +181,56 @@ describe('suggestRefundTargets', () => {
   it('returns nothing at all for an empty account', () => {
     expect(suggestRefundTargets([], categories)).toEqual({
       suggestions: [],
+      ignored: [],
       unmatched: [],
+    })
+  })
+
+  describe('hidden categories', () => {
+    it('sets aside a refund that sits in a hidden category', () => {
+      // Hidden means absent from the dashboard, so that income is not
+      // inflating anything and needs no deduction.
+      const { suggestions, ignored } = suggestRefundTargets(
+        [candidate({ categoryId: 'cat-errors-income' })],
+        categories,
+        new Set(['cat-errors-income'])
+      )
+
+      expect(suggestions).toHaveLength(0)
+      expect(ignored[0]).toMatchObject({ reason: 'income-hidden', total: 50 })
+    })
+
+    it('sets aside a target that is hidden', () => {
+      // Deducting from a category nobody sees changes nothing on screen.
+      const { suggestions, ignored } = suggestRefundTargets(
+        [candidate()],
+        categories,
+        new Set(['cat-holidays'])
+      )
+
+      expect(suggestions).toHaveLength(0)
+      expect(ignored[0]).toMatchObject({ reason: 'target-hidden' })
+    })
+
+    it('blames the income side when both are hidden', () => {
+      const { ignored } = suggestRefundTargets(
+        [candidate({ categoryId: 'cat-refunds' })],
+        categories,
+        new Set(['cat-refunds', 'cat-holidays'])
+      )
+
+      expect(ignored[0]?.reason).toBe('income-hidden')
+    })
+
+    it('leaves everything visible alone', () => {
+      const { suggestions, ignored } = suggestRefundTargets(
+        [candidate()],
+        categories,
+        new Set(['some-other-category'])
+      )
+
+      expect(suggestions).toHaveLength(1)
+      expect(ignored).toHaveLength(0)
     })
   })
 })

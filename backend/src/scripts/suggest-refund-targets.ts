@@ -50,6 +50,7 @@ export interface RefundCandidate {
   amount: number
   /** Cash already drawn from it by a settlement. */
   alreadyDrawn: number
+  categoryId: string | null
   categoryName: string | null
   subcategoryName: string | null
 }
@@ -70,6 +71,18 @@ export interface RefundSuggestion {
   /** What a credit would still have to cover once settlements are honoured. */
   remaining: number
   lines: RefundCandidate[]
+}
+
+/**
+ * A match that would change nothing on screen, and why.
+ *
+ * A globally hidden category is absent from the dashboard entirely, so a
+ * refund sitting in one is not inflating income, and a deduction aimed at one
+ * would land where nobody looks. Reporting these apart from the real
+ * suggestions keeps the number at the bottom honest.
+ */
+export interface IgnoredSuggestion extends RefundSuggestion {
+  reason: 'income-hidden' | 'target-hidden'
 }
 
 export interface UnmatchedGroup {
@@ -109,8 +122,13 @@ const round2 = (n: number): number => Math.round(n * 100) / 100
 
 export function suggestRefundTargets(
   candidates: RefundCandidate[],
-  expenseCategories: ExpenseCategory[]
-): { suggestions: RefundSuggestion[]; unmatched: UnmatchedGroup[] } {
+  expenseCategories: ExpenseCategory[],
+  hiddenCategoryIds: ReadonlySet<string> = new Set()
+): {
+  suggestions: RefundSuggestion[]
+  ignored: IgnoredSuggestion[]
+  unmatched: UnmatchedGroup[]
+} {
   const byNormalized = new Map<string, ExpenseCategory>()
   for (const category of expenseCategories) {
     // First writing wins, so a duplicate name cannot silently retarget a group.
@@ -119,6 +137,7 @@ export function suggestRefundTargets(
   }
 
   const suggestions = new Map<string, RefundSuggestion>()
+  const ignored = new Map<string, IgnoredSuggestion>()
   const unmatched = new Map<string, UnmatchedGroup>()
 
   for (const candidate of candidates) {
@@ -139,8 +158,19 @@ export function suggestRefundTargets(
       continue
     }
 
+    // Either side being hidden makes the move pointless: the income is not in
+    // the dashboard to be taken out, or the expense is not there to be reduced.
+    const reason: IgnoredSuggestion['reason'] | null =
+      candidate.categoryId !== null &&
+      hiddenCategoryIds.has(candidate.categoryId)
+        ? 'income-hidden'
+        : hiddenCategoryIds.has(target.id)
+          ? 'target-hidden'
+          : null
+
     const key = `${label} -> ${target.id}`
-    const suggestion = suggestions.get(key) ?? {
+    const bucket = reason ? ignored : suggestions
+    const suggestion = bucket.get(key) ?? {
       label,
       targetCategoryId: target.id,
       targetCategoryName: target.name,
@@ -149,6 +179,7 @@ export function suggestRefundTargets(
       alreadyDrawn: 0,
       remaining: 0,
       lines: [],
+      ...(reason ? { reason } : {}),
     }
     suggestion.count++
     suggestion.total = round2(suggestion.total + candidate.amount)
@@ -157,7 +188,7 @@ export function suggestRefundTargets(
     )
     suggestion.remaining = round2(suggestion.total - suggestion.alreadyDrawn)
     suggestion.lines.push(candidate)
-    suggestions.set(key, suggestion)
+    bucket.set(key, suggestion as IgnoredSuggestion)
   }
 
   const byTotalDesc = <T extends { total: number }>(a: T, b: T): number =>
@@ -165,6 +196,7 @@ export function suggestRefundTargets(
 
   return {
     suggestions: [...suggestions.values()].sort(byTotalDesc),
+    ignored: [...ignored.values()].sort(byTotalDesc),
     unmatched: [...unmatched.values()].sort(byTotalDesc),
   }
 }
@@ -207,29 +239,45 @@ export async function main(
   for (const user of users) {
     console.log(`\n=== ${user.email} ===\n`)
 
-    const [incomes, expenseCategories, payments] = await Promise.all([
-      prisma.transaction.findMany({
-        where: { userId: user.id, type: 'INCOME' },
-        select: {
-          id: true,
-          date: true,
-          description: true,
-          amount: true,
-          category: { select: { name: true } },
-          subcategoryRef: { select: { name: true } },
-        },
-        orderBy: { date: 'asc' },
-      }),
-      prisma.category.findMany({
-        where: { userId: user.id, type: 'EXPENSE' },
-        select: { id: true, name: true },
-        orderBy: { name: 'asc' },
-      }),
-      prisma.reimbursementPayment.groupBy({
-        by: ['incomeTransactionId'],
-        where: { userId: user.id, kind: 'CASH' },
-        _sum: { amount: true },
-      }),
+    const [incomes, expenseCategories, payments, preferences] =
+      await Promise.all([
+        prisma.transaction.findMany({
+          where: { userId: user.id, type: 'INCOME' },
+          select: {
+            id: true,
+            date: true,
+            description: true,
+            amount: true,
+            categoryId: true,
+            category: { select: { name: true } },
+            subcategoryRef: { select: { name: true } },
+          },
+          orderBy: { date: 'asc' },
+        }),
+        prisma.category.findMany({
+          where: { userId: user.id, type: 'EXPENSE' },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        }),
+        prisma.reimbursementPayment.groupBy({
+          by: ['incomeTransactionId'],
+          where: { userId: user.id, kind: 'CASH' },
+          _sum: { amount: true },
+        }),
+        prisma.filterPreferences.findUnique({
+          where: { userId: user.id },
+          select: {
+            globalHiddenExpenseCategoryIds: true,
+            globalHiddenIncomeCategoryIds: true,
+          },
+        }),
+      ])
+
+    // Only the global lists: a session filter is a temporary view, not a
+    // statement that this money is out of scope.
+    const hiddenCategoryIds = new Set([
+      ...(preferences?.globalHiddenExpenseCategoryIds ?? []),
+      ...(preferences?.globalHiddenIncomeCategoryIds ?? []),
     ])
 
     const drawnById = new Map(
@@ -244,13 +292,15 @@ export async function main(
       description: t.description,
       amount: Number(t.amount),
       alreadyDrawn: drawnById.get(t.id) ?? 0,
+      categoryId: t.categoryId,
       categoryName: t.category?.name ?? null,
       subcategoryName: t.subcategoryRef?.name ?? null,
     }))
 
-    const { suggestions, unmatched } = suggestRefundTargets(
+    const { suggestions, ignored, unmatched } = suggestRefundTargets(
       candidates,
-      expenseCategories
+      expenseCategories,
+      hiddenCategoryIds
     )
 
     if (suggestions.length === 0) {
@@ -279,6 +329,18 @@ export async function main(
         console.log(
           `      ... and ${suggestion.lines.length - options.samples} more`
         )
+      }
+      console.log('')
+    }
+
+    if (ignored.length > 0) {
+      console.log('  --- matched, but nothing to gain ---')
+      for (const group of ignored) {
+        const why =
+          group.reason === 'income-hidden'
+            ? `"${group.label}" sits in a hidden category, so it is not counted as income`
+            : `"${group.targetCategoryName}" is hidden, so a deduction there shows nowhere`
+        console.log(`  ${why}  [${group.count} tx]  ${group.total.toFixed(2)}`)
       }
       console.log('')
     }
