@@ -39,4 +39,14 @@ export class UpdateFilterPreferencesDto {
   @IsOptional()
   @IsBoolean()
   isPanelExpanded?: boolean
+
+  /**
+   * Whether an import adopts the categories written in the file. Off, the
+   * file's filing is ignored and transactions are placed among the categories
+   * that already exist.
+   */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  importCategoriesFromFile?: boolean
 }

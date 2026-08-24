@@ -30,6 +30,7 @@ export class FilterPreferencesController {
         globalHiddenExpenseCategoryIds: [],
         globalHiddenIncomeCategoryIds: [],
         isPanelExpanded: true,
+        importCategoriesFromFile: true,
       }
     }
 
@@ -39,6 +40,7 @@ export class FilterPreferencesController {
       globalHiddenExpenseCategoryIds: prefs.globalHiddenExpenseCategoryIds,
       globalHiddenIncomeCategoryIds: prefs.globalHiddenIncomeCategoryIds,
       isPanelExpanded: prefs.isPanelExpanded,
+      importCategoriesFromFile: prefs.importCategoriesFromFile,
     }
   }
 
@@ -57,6 +59,7 @@ export class FilterPreferencesController {
       globalHiddenExpenseCategoryIds: prefs.globalHiddenExpenseCategoryIds,
       globalHiddenIncomeCategoryIds: prefs.globalHiddenIncomeCategoryIds,
       isPanelExpanded: prefs.isPanelExpanded,
+      importCategoriesFromFile: prefs.importCategoriesFromFile,
     }
   }
 }

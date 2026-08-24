@@ -19,4 +19,7 @@ export class FilterPreferencesDto {
 
   /** Whether the advanced filters panel is expanded */
   isPanelExpanded!: boolean
+
+  /** Whether an import adopts the categories written in the file */
+  importCategoriesFromFile!: boolean
 }

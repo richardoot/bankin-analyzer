@@ -86,6 +86,7 @@ describe('FilterPreferencesController', () => {
         globalHiddenExpenseCategoryIds: [],
         globalHiddenIncomeCategoryIds: [],
         isPanelExpanded: true,
+        importCategoriesFromFile: true,
       })
       expect(service.findByUser).toHaveBeenCalledWith(mockUser.id)
     })

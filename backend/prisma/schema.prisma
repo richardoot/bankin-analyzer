@@ -194,6 +194,16 @@ model FilterPreferences {
   // UI state only
   isPanelExpanded Boolean @default(true) @map("is_panel_expanded")
 
+  /// Whether an import adopts the categories written in the file. On by
+  /// default, which is how imports have always behaved. Turned off, the file's
+  /// filing is ignored and the transactions are placed among the categories
+  /// the user already has — nothing new is created either way.
+  ///
+  /// Filed here rather than in a table of its own: this row is already where
+  /// the per-user preferences live, `isPanelExpanded` included, none of which
+  /// is a filter either.
+  importCategoriesFromFile Boolean @default(true) @map("import_categories_from_file")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

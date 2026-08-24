@@ -4,6 +4,8 @@ import type { TestingModule } from '@nestjs/testing'
 import { BadRequestException, NotFoundException } from '@nestjs/common'
 import { TransactionsService } from './transactions.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { CategoriesService } from '../categories/categories.service'
+import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { AccountsService } from '../accounts/accounts.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import { TransactionType } from '../generated/prisma'
@@ -94,10 +96,21 @@ const mockPrismaService = {
     findFirst: vi.fn(),
     findMany: vi.fn(),
   },
+  filterPreferences: {
+    findUnique: vi.fn(),
+  },
 }
 
 const mockAccountsService = {
   upsertByName: vi.fn(),
+}
+
+const mockCategoriesService = {
+  findOrCreateMany: vi.fn(),
+}
+
+const mockSubcategoriesService = {
+  findOrCreateMany: vi.fn(),
 }
 
 const mockAiSuggestionsService = {
@@ -115,6 +128,8 @@ describe('TransactionsService', () => {
       providers: [
         TransactionsService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: CategoriesService, useValue: mockCategoriesService },
+        { provide: SubcategoriesService, useValue: mockSubcategoriesService },
         { provide: AccountsService, useValue: mockAccountsService },
         { provide: AiSuggestionsService, useValue: mockAiSuggestionsService },
       ],
@@ -676,6 +691,17 @@ describe('TransactionsService', () => {
 
     const setupImportMocks = (): void => {
       mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
+        importCategoriesFromFile: true,
+      })
+      mockCategoriesService.findOrCreateMany.mockResolvedValue({
+        categories: [mockCategory],
+        newCount: 0,
+      })
+      mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
+        subcategories: [],
+        newCount: 0,
+      })
       mockPrismaService.category.findMany.mockResolvedValue([mockCategory])
       mockPrismaService.subcategory.findMany.mockResolvedValue([])
       mockAiSuggestionsService.categorizeTransactions.mockResolvedValue([])
@@ -712,7 +738,7 @@ describe('TransactionsService', () => {
             description: 'Restaurant',
             amount: -45.5,
             accountId: 'account-id',
-            categoryId: null,
+            categoryId: mockCategory.id,
             type: TransactionType.EXPENSE,
           }),
         ]),
@@ -774,7 +800,26 @@ describe('TransactionsService', () => {
       expect(createdData[0].hash).not.toBe(createdData[1].hash)
     })
 
+    it('adopts the categories written in the file by default', async () => {
+      // No preference row at all: the long-standing behaviour must survive.
+      setupImportMocks()
+      mockPrismaService.filterPreferences.findUnique.mockResolvedValue(null)
+
+      await service.importTransactions(mockUserId, [createTransactionDto])
+
+      expect(mockCategoriesService.findOrCreateMany).toHaveBeenCalledWith(
+        mockUserId,
+        [{ name: 'Alimentation', type: TransactionType.EXPENSE }]
+      )
+      expect(
+        mockAiSuggestionsService.categorizeTransactions
+      ).not.toHaveBeenCalled()
+    })
+
     it('files transactions among the existing categories, creating none', async () => {
+      mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
+        importCategoriesFromFile: false,
+      })
       mockPrismaService.transaction.findMany.mockResolvedValue([])
       mockPrismaService.transaction.createMany.mockResolvedValue({ count: 1 })
       mockPrismaService.category.findMany.mockResolvedValue([mockCategory])
@@ -815,6 +860,9 @@ describe('TransactionsService', () => {
     })
 
     it('imports unfiled rather than failing when the model is unavailable', async () => {
+      mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
+        importCategoriesFromFile: false,
+      })
       // A wrong category is worse than none, and a lost import worse than both.
       mockPrismaService.transaction.findMany.mockResolvedValue([])
       mockPrismaService.transaction.createMany.mockResolvedValue({ count: 1 })
@@ -900,6 +948,17 @@ describe('TransactionsService', () => {
           return []
         }
       )
+      mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
+        importCategoriesFromFile: true,
+      })
+      mockCategoriesService.findOrCreateMany.mockResolvedValue({
+        categories: [mockCategory],
+        newCount: 0,
+      })
+      mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
+        subcategories: [],
+        newCount: 0,
+      })
       mockPrismaService.category.findMany.mockResolvedValue([mockCategory])
       mockPrismaService.subcategory.findMany.mockResolvedValue([])
       mockAiSuggestionsService.categorizeTransactions.mockResolvedValue([])
@@ -930,6 +989,17 @@ describe('TransactionsService', () => {
           return []
         }
       )
+      mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
+        importCategoriesFromFile: true,
+      })
+      mockCategoriesService.findOrCreateMany.mockResolvedValue({
+        categories: [mockCategory],
+        newCount: 0,
+      })
+      mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
+        subcategories: [],
+        newCount: 0,
+      })
       mockPrismaService.category.findMany.mockResolvedValue([mockCategory])
       mockPrismaService.subcategory.findMany.mockResolvedValue([])
       mockAiSuggestionsService.categorizeTransactions.mockResolvedValue([])
@@ -965,6 +1035,17 @@ describe('TransactionsService', () => {
 
     it('should map each transaction to the correct accountId when importing several accounts', async () => {
       mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
+        importCategoriesFromFile: true,
+      })
+      mockCategoriesService.findOrCreateMany.mockResolvedValue({
+        categories: [mockCategory],
+        newCount: 0,
+      })
+      mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
+        subcategories: [],
+        newCount: 0,
+      })
       mockPrismaService.category.findMany.mockResolvedValue([mockCategory])
       mockPrismaService.subcategory.findMany.mockResolvedValue([])
       mockAiSuggestionsService.categorizeTransactions.mockResolvedValue([])
@@ -995,6 +1076,17 @@ describe('TransactionsService', () => {
 
     it('should throw if account upsert did not return an id for an imported transaction', async () => {
       mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
+        importCategoriesFromFile: true,
+      })
+      mockCategoriesService.findOrCreateMany.mockResolvedValue({
+        categories: [mockCategory],
+        newCount: 0,
+      })
+      mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
+        subcategories: [],
+        newCount: 0,
+      })
       mockPrismaService.category.findMany.mockResolvedValue([mockCategory])
       mockPrismaService.subcategory.findMany.mockResolvedValue([])
       mockAiSuggestionsService.categorizeTransactions.mockResolvedValue([])
@@ -1473,6 +1565,17 @@ describe('TransactionsService', () => {
 
     const setupHashMocks = (): void => {
       mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
+        importCategoriesFromFile: true,
+      })
+      mockCategoriesService.findOrCreateMany.mockResolvedValue({
+        categories: [mockCategory],
+        newCount: 0,
+      })
+      mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
+        subcategories: [],
+        newCount: 0,
+      })
       mockPrismaService.category.findMany.mockResolvedValue([mockCategory])
       mockPrismaService.subcategory.findMany.mockResolvedValue([])
       mockAiSuggestionsService.categorizeTransactions.mockResolvedValue([])

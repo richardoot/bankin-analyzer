@@ -27,6 +27,7 @@ export class FilterPreferencesService {
           dto.globalHiddenExpenseCategoryIds ?? [],
         globalHiddenIncomeCategoryIds: dto.globalHiddenIncomeCategoryIds ?? [],
         isPanelExpanded: dto.isPanelExpanded ?? true,
+        importCategoriesFromFile: dto.importCategoriesFromFile ?? true,
       },
       update: {
         ...(dto.hiddenExpenseCategoryIds !== undefined && {
@@ -43,6 +44,9 @@ export class FilterPreferencesService {
         }),
         ...(dto.isPanelExpanded !== undefined && {
           isPanelExpanded: dto.isPanelExpanded,
+        }),
+        ...(dto.importCategoriesFromFile !== undefined && {
+          importCategoriesFromFile: dto.importCategoriesFromFile,
         }),
       },
     })

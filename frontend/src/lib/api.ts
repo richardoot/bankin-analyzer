@@ -270,6 +270,13 @@ export interface FilterPreferencesDto {
   globalHiddenExpenseCategoryIds: string[]
   globalHiddenIncomeCategoryIds: string[]
   isPanelExpanded: boolean
+  /**
+   * Whether an import adopts the categories written in the file. On by
+   * default. Off, the file's filing is ignored and each transaction is placed
+   * among the categories that already exist — nothing new is created either
+   * way.
+   */
+  importCategoriesFromFile: boolean
 }
 
 // Account types

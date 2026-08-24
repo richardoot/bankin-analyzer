@@ -18,6 +18,7 @@ describe('FilterPreferencesService', () => {
     globalHiddenExpenseCategoryIds: ['cat-epargne'],
     globalHiddenIncomeCategoryIds: ['cat-cadeaux'],
     isPanelExpanded: true,
+    importCategoriesFromFile: true,
     createdAt: new Date(),
     updatedAt: new Date(),
   }
@@ -105,6 +106,7 @@ describe('FilterPreferencesService', () => {
           globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
           globalHiddenIncomeCategoryIds: dto.globalHiddenIncomeCategoryIds,
           isPanelExpanded: dto.isPanelExpanded,
+          importCategoriesFromFile: true,
         },
         update: {
           hiddenExpenseCategoryIds: dto.hiddenExpenseCategoryIds,
@@ -139,6 +141,7 @@ describe('FilterPreferencesService', () => {
           globalHiddenExpenseCategoryIds: [],
           globalHiddenIncomeCategoryIds: [],
           isPanelExpanded: true,
+          importCategoriesFromFile: true,
         },
         update: {},
       })
@@ -165,6 +168,7 @@ describe('FilterPreferencesService', () => {
           globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
           globalHiddenIncomeCategoryIds: [],
           isPanelExpanded: true,
+          importCategoriesFromFile: true,
         },
         update: {
           globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
@@ -193,6 +197,7 @@ describe('FilterPreferencesService', () => {
           globalHiddenExpenseCategoryIds: [],
           globalHiddenIncomeCategoryIds: [],
           isPanelExpanded: false,
+          importCategoriesFromFile: true,
         },
         update: {
           isPanelExpanded: false,

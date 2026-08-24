@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common'
 import { createHash, randomUUID } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
+import { CategoriesService } from '../categories/categories.service'
+import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { AccountsService } from '../accounts/accounts.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import type { Prisma, Transaction, TransactionType } from '../generated/prisma'
@@ -30,6 +32,14 @@ import type {
 export type BulkSelection =
   | { ids: string[] }
   | { filters: TransactionFilters; expectedCount: number }
+
+/** Where an imported transaction lands, however that was decided. */
+interface ImportFiling {
+  categoryId: string | null
+  subcategoryId: string | null
+  /** The denormalized label the dashboard groups on. */
+  subcategory: string | null
+}
 
 // Internal type for batch processing
 interface HashData {
@@ -69,6 +79,8 @@ export class TransactionsService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly categoriesService: CategoriesService,
+    private readonly subcategoriesService: SubcategoriesService,
     private readonly accountsService: AccountsService,
     private readonly aiSuggestionsService: AiSuggestionsService
   ) {}
@@ -446,75 +458,25 @@ export class TransactionsService {
       return { imported: 0, duplicates, total: transactions.length }
     }
 
-    // 5. File the transactions among the categories the user already has.
+    // 5. Decide where each transaction is filed.
     //
-    // The file's own category is deliberately ignored, and nothing is created
-    // from it: an export brings its provider's taxonomy, which drifts from the
-    // user's own and used to spawn near-duplicate categories on every import.
-    // The model picks from the existing list instead, and anything it names
-    // that does not exist is dropped rather than created.
-    const [existingCategories, existingSubcategories] = await Promise.all([
-      this.prisma.category.findMany({
-        where: { userId },
-        select: { id: true, name: true, type: true },
-      }),
-      this.prisma.subcategory.findMany({
-        where: { userId },
-        select: { id: true, name: true, categoryId: true },
-      }),
-    ])
-
-    const categorizable = allTxsToImport.map((tx, index) => ({
-      index,
-      description: tx.description,
-      amount: tx.amount,
-      type: tx.type,
-    }))
-
-    // Never fatal: an import that lands unfiled is recoverable, one that fails
-    // is not.
-    let assignments: Awaited<
-      ReturnType<AiSuggestionsService['categorizeTransactions']>
-    > = []
-    try {
-      assignments = await this.aiSuggestionsService.categorizeTransactions(
-        categorizable,
-        existingCategories,
-        existingSubcategories
-      )
-    } catch (error) {
-      this.logger.error('Categorization failed; importing unfiled', error)
-    }
-
-    const filingByIndex = new Map(assignments.map(a => [a.index, a]))
-    const filingOf = (
-      index: number
-    ): {
-      categoryId: string | null
-      subcategoryId: string | null
-      subcategory: string | null
-    } => {
-      const assignment = filingByIndex.get(index)
-      return {
-        categoryId: assignment?.categoryId ?? null,
-        subcategoryId: assignment?.subcategoryId ?? null,
-        subcategory: assignment?.subcategoryName ?? null,
-      }
-    }
-
-    // Icons stay a background nicety, now for the categories actually used.
-    const usedCategoryIds = new Set(assignments.map(a => a.categoryId))
-    const catsWithoutIcons = await this.prisma.category.findMany({
-      where: { userId, id: { in: [...usedCategoryIds] }, icon: null },
-      select: { id: true, name: true },
+    // Two ways, chosen by the user. By default the file's own categories are
+    // adopted and created as needed, which is how imports have always worked.
+    // Turned off, the export's taxonomy is ignored entirely — it drifts from
+    // the user's own and spawns near-duplicates like "Achats & Shopping"
+    // beside "Achats et Shopping" — and the model places each transaction
+    // among the categories that already exist, creating none.
+    const preferences = await this.prisma.filterPreferences.findUnique({
+      where: { userId },
+      select: { importCategoriesFromFile: true },
     })
-    if (catsWithoutIcons.length > 0) {
-      void this.aiSuggestionsService.generateAndSaveIcons(
-        userId,
-        catsWithoutIcons,
-        []
-      )
-    }
+    // Absent preferences mean a user who never opened the setting, and the
+    // long-standing behaviour is to trust the file.
+    const useFileCategories = preferences?.importCategoriesFromFile ?? true
+
+    const filingOf = useFileCategories
+      ? await this.filingFromFile(userId, allTxsToImport)
+      : await this.filingFromModel(userId, allTxsToImport)
 
     // Note: accountIdByName was already built upfront (step 2). Reuse the
     // resolver here for the createMany payload.
@@ -655,6 +617,136 @@ export class TransactionsService {
    * the database disagrees: the operation has no undo, so acting on more rows
    * than were on screen is worse than failing.
    */
+  /** What a transaction is filed under, once decided. */
+  private static readonly UNFILED = {
+    categoryId: null,
+    subcategoryId: null,
+    subcategory: null,
+  } as const
+
+  /**
+   * The historical behaviour: adopt the categories the file names, creating
+   * whatever is missing.
+   */
+  private async filingFromFile(
+    userId: string,
+    transactions: CreateTransactionDto[]
+  ): Promise<(index: number) => ImportFiling> {
+    const { categories } = await this.categoriesService.findOrCreateMany(
+      userId,
+      transactions.map(tx => ({ name: tx.category, type: tx.type }))
+    )
+    const categoryByName = new Map(categories.map(c => [c.name, c]))
+
+    const { subcategories } = await this.subcategoriesService.findOrCreateMany(
+      userId,
+      transactions
+        .filter(tx => tx.subcategory && tx.subcategory.trim())
+        .map(tx => ({
+          categoryId: categoryByName.get(tx.category)!.id,
+          name: tx.subcategory!,
+        }))
+    )
+    const subcategoryByKey = new Map(
+      subcategories.map(s => [`${s.categoryId}|${s.name}`, s])
+    )
+
+    // Fire-and-forget: whatever was just created has no icon yet.
+    const catsWithoutIcons = categories.filter(c => !c.icon)
+    const subsWithoutIcons = subcategories.filter(s => !s.icon)
+    if (catsWithoutIcons.length > 0 || subsWithoutIcons.length > 0) {
+      void this.aiSuggestionsService.generateAndSaveIcons(
+        userId,
+        catsWithoutIcons.map(c => ({ id: c.id, name: c.name })),
+        subsWithoutIcons.map(s => ({ id: s.id, name: s.name }))
+      )
+    }
+
+    return (index: number): ImportFiling => {
+      const tx = transactions[index]
+      if (!tx) return TransactionsService.UNFILED
+      const category = categoryByName.get(tx.category)
+      if (!category) return TransactionsService.UNFILED
+      const subcategory =
+        tx.subcategory && tx.subcategory.trim()
+          ? subcategoryByKey.get(`${category.id}|${tx.subcategory}`)
+          : undefined
+      return {
+        categoryId: category.id,
+        subcategoryId: subcategory?.id ?? null,
+        subcategory: tx.subcategory ?? null,
+      }
+    }
+  }
+
+  /**
+   * The opt-in behaviour: place each transaction among the categories the user
+   * already has, and create nothing.
+   *
+   * Never fatal. An import that lands unfiled is recoverable in a click; one
+   * that fails because the model was unavailable is not.
+   */
+  private async filingFromModel(
+    userId: string,
+    transactions: CreateTransactionDto[]
+  ): Promise<(index: number) => ImportFiling> {
+    const [categories, subcategories] = await Promise.all([
+      this.prisma.category.findMany({
+        where: { userId },
+        select: { id: true, name: true, type: true },
+      }),
+      this.prisma.subcategory.findMany({
+        where: { userId },
+        select: { id: true, name: true, categoryId: true },
+      }),
+    ])
+
+    let assignments: Awaited<
+      ReturnType<AiSuggestionsService['categorizeTransactions']>
+    > = []
+    try {
+      assignments = await this.aiSuggestionsService.categorizeTransactions(
+        transactions.map((tx, index) => ({
+          index,
+          description: tx.description,
+          amount: tx.amount,
+          type: tx.type,
+        })),
+        categories,
+        subcategories
+      )
+    } catch (error) {
+      this.logger.error('Categorization failed; importing unfiled', error)
+    }
+
+    const byIndex = new Map(assignments.map(a => [a.index, a]))
+
+    const usedCategoryIds = new Set(assignments.map(a => a.categoryId))
+    if (usedCategoryIds.size > 0) {
+      const withoutIcons = await this.prisma.category.findMany({
+        where: { userId, id: { in: [...usedCategoryIds] }, icon: null },
+        select: { id: true, name: true },
+      })
+      if (withoutIcons.length > 0) {
+        void this.aiSuggestionsService.generateAndSaveIcons(
+          userId,
+          withoutIcons,
+          []
+        )
+      }
+    }
+
+    return (index: number): ImportFiling => {
+      const assignment = byIndex.get(index)
+      if (!assignment) return TransactionsService.UNFILED
+      return {
+        categoryId: assignment.categoryId,
+        subcategoryId: assignment.subcategoryId,
+        subcategory: assignment.subcategoryName,
+      }
+    }
+  }
+
   async bulkUpdate(
     userId: string,
     selection: BulkSelection,
