@@ -2,12 +2,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import SettlementModal from './SettlementModal.vue'
-import type { ReimbursementDto, TransactionDto } from '@/lib/api'
+import type {
+  ReimbursementDto,
+  TransactionDto,
+  CategoryDto,
+  SubcategoryDto,
+} from '@/lib/api'
 
 vi.mock('@/lib/api', () => ({
   api: {
     getTransactions: vi.fn(),
     createSettlement: vi.fn(),
+    getCategories: vi.fn(),
+    getSubcategories: vi.fn(),
   },
 }))
 
@@ -75,6 +82,42 @@ const netflix: ReimbursementDto = {
     amount: -12,
   },
 }
+
+const category = (
+  id: string,
+  name: string,
+  type: 'EXPENSE' | 'INCOME'
+): CategoryDto => ({
+  id,
+  name,
+  type,
+  icon: null,
+  isExcludedFromBudget: false,
+  createdAt: '2026-01-01T00:00:00.000Z',
+})
+
+const CATEGORIES: CategoryDto[] = [
+  category('cat-refunds', 'Remboursements', 'INCOME'),
+  category('cat-salary', 'Salaires', 'INCOME'),
+  category('cat-health', 'Sante', 'EXPENSE'),
+]
+
+const SUBCATEGORIES: SubcategoryDto[] = [
+  {
+    id: 'sub-holidays',
+    categoryId: 'cat-refunds',
+    name: 'R Vacances',
+    icon: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'sub-bonus',
+    categoryId: 'cat-salary',
+    name: 'Prime',
+    icon: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+]
 
 const makeIncome = (
   overrides: Partial<TransactionDto> = {}
@@ -167,6 +210,8 @@ describe('SettlementModal', () => {
     vi.mocked(api.createSettlement).mockResolvedValue({
       id: 'settlement-1',
     } as never)
+    vi.mocked(api.getCategories).mockResolvedValue(CATEGORIES)
+    vi.mocked(api.getSubcategories).mockResolvedValue(SUBCATEGORIES)
   })
 
   it('loads income transactions when it opens and ranks the matching one first', async () => {
@@ -269,6 +314,95 @@ describe('SettlementModal', () => {
       expect(
         wrapper.find('[data-testid="settlement-truncated"]').exists()
       ).toBe(false)
+    })
+  })
+
+  describe('filtering by category', () => {
+    async function openFilters(wrapper: VueWrapper): Promise<void> {
+      await wrapper
+        .get('[data-testid="settlement-toggle-filters"]')
+        .trigger('click')
+    }
+
+    it('offers income categories only', async () => {
+      // An expense category can never hold the receipt being looked for.
+      const wrapper = await mountModal({})
+      await openFilters(wrapper)
+
+      const options = wrapper
+        .get('[data-testid="settlement-category"]')
+        .findAll('option')
+        .map(o => o.text())
+      expect(options).toEqual(['Toutes', 'Remboursements', 'Salaires'])
+    })
+
+    it('keeps the subcategory locked until a category is chosen', async () => {
+      const wrapper = await mountModal({})
+      await openFilters(wrapper)
+
+      expect(
+        wrapper
+          .get('[data-testid="settlement-subcategory"]')
+          .attributes('disabled')
+      ).toBeDefined()
+    })
+
+    it('narrows the subcategories to the chosen category', async () => {
+      const wrapper = await mountModal({})
+      await openFilters(wrapper)
+
+      await wrapper
+        .get('[data-testid="settlement-category"]')
+        .setValue('cat-refunds')
+
+      const options = wrapper
+        .get('[data-testid="settlement-subcategory"]')
+        .findAll('option')
+        .map(o => o.text())
+      expect(options).toEqual(['Toutes', 'R Vacances'])
+    })
+
+    it('sends both to the server', async () => {
+      const wrapper = await mountModal({})
+      await openFilters(wrapper)
+      await wrapper
+        .get('[data-testid="settlement-category"]')
+        .setValue('cat-refunds')
+      vi.mocked(api.getTransactions).mockClear()
+
+      vi.useFakeTimers()
+      await wrapper
+        .get('[data-testid="settlement-subcategory"]')
+        .setValue('sub-holidays')
+      await vi.advanceTimersByTimeAsync(400)
+      vi.useRealTimers()
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          categoryId: 'cat-refunds',
+          subcategoryId: 'sub-holidays',
+        })
+      )
+    })
+
+    it('drops the subcategory when the category changes under it', async () => {
+      const wrapper = await mountModal({})
+      await openFilters(wrapper)
+      await wrapper
+        .get('[data-testid="settlement-category"]')
+        .setValue('cat-refunds')
+      await wrapper
+        .get('[data-testid="settlement-subcategory"]')
+        .setValue('sub-holidays')
+
+      await wrapper
+        .get('[data-testid="settlement-category"]')
+        .setValue('cat-salary')
+
+      const selected = wrapper.get('[data-testid="settlement-subcategory"]')
+        .element as HTMLSelectElement
+      expect(selected.value).not.toBe('sub-holidays')
     })
   })
 

@@ -6,6 +6,8 @@
     type TransactionDto,
     type SettlementDto,
     type SettlementReimbursementItemDto,
+    type CategoryDto,
+    type SubcategoryDto,
   } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
   import {
@@ -56,6 +58,10 @@
   const filterEndDate = ref('')
   const filterAmountMin = ref('')
   const filterAmountMax = ref('')
+  const filterCategoryId = ref<string | null>(null)
+  const filterSubcategoryId = ref<string | null>(null)
+  const incomeCategories = ref<CategoryDto[]>([])
+  const allSubcategories = ref<SubcategoryDto[]>([])
   const showFilters = ref(false)
   const isLoadingTransactions = ref(false)
   /** How many suggestions show before "voir plus". */
@@ -406,8 +412,17 @@
       filterStartDate.value !== '' ||
       filterEndDate.value !== '' ||
       filterAmountMin.value !== '' ||
-      filterAmountMax.value !== ''
+      filterAmountMax.value !== '' ||
+      filterCategoryId.value !== null
   )
+
+  /** A subcategory belongs to one category, so the options follow the choice. */
+  const availableSubcategories = computed(() => {
+    if (!filterCategoryId.value) return []
+    return allSubcategories.value
+      .filter(sub => sub.categoryId === filterCategoryId.value)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  })
 
   function clearFilters(): void {
     searchQuery.value = ''
@@ -415,6 +430,28 @@
     filterEndDate.value = ''
     filterAmountMin.value = ''
     filterAmountMax.value = ''
+    filterCategoryId.value = null
+    filterSubcategoryId.value = null
+  }
+
+  /**
+   * Fetched here rather than passed in: the modal already loads its own
+   * transactions, and the page that opens it has no use for these lists.
+   */
+  async function loadFilterOptions(): Promise<void> {
+    try {
+      const [categories, subcategories] = await Promise.all([
+        api.getCategories(),
+        api.getSubcategories(),
+      ])
+      incomeCategories.value = categories
+        .filter(category => category.type === 'INCOME')
+        .sort((a, b) => a.name.localeCompare(b.name))
+      allSubcategories.value = subcategories
+    } catch {
+      // A missing filter list is a smaller problem than a modal that will not
+      // open: the search still works without it.
+    }
   }
 
   /**
@@ -435,6 +472,10 @@
         type: 'INCOME',
         limit: PAGE_SIZE,
         search: searchQuery.value.trim() || undefined,
+        categoryId: filterCategoryId.value || undefined,
+        // The API ignores a subcategory sent without its category, and the
+        // select below is disabled until one is picked.
+        subcategoryId: filterSubcategoryId.value || undefined,
         startDate: filterStartDate.value || undefined,
         endDate: filterEndDate.value || undefined,
         amountMin:
@@ -514,9 +555,15 @@
     async isOpen => {
       if (!isOpen) return
       resetModal()
-      await loadIncomeTransactions()
+      await Promise.all([loadIncomeTransactions(), loadFilterOptions()])
     }
   )
+
+  // Changing the category invalidates a subcategory picked under the previous
+  // one, exactly as it does everywhere else.
+  watch(filterCategoryId, () => {
+    filterSubcategoryId.value = null
+  })
 
   // Debounced so typing a description does not fire a request per keystroke.
   let searchDebounce: ReturnType<typeof setTimeout> | undefined
@@ -527,6 +574,8 @@
       filterEndDate,
       filterAmountMin,
       filterAmountMax,
+      filterCategoryId,
+      filterSubcategoryId,
     ],
     () => {
       if (!props.isOpen) return
@@ -688,6 +737,45 @@
                     data-testid="settlement-end-date"
                     class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
                   />
+                </label>
+                <label class="text-sm">
+                  <span class="block text-gray-600 dark:text-gray-400 mb-1"
+                    >Categorie</span
+                  >
+                  <select
+                    v-model="filterCategoryId"
+                    data-testid="settlement-category"
+                    class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+                  >
+                    <option :value="null">Toutes</option>
+                    <option
+                      v-for="category in incomeCategories"
+                      :key="category.id"
+                      :value="category.id"
+                    >
+                      {{ category.name }}
+                    </option>
+                  </select>
+                </label>
+                <label class="text-sm">
+                  <span class="block text-gray-600 dark:text-gray-400 mb-1"
+                    >Sous-categorie</span
+                  >
+                  <select
+                    v-model="filterSubcategoryId"
+                    data-testid="settlement-subcategory"
+                    :disabled="!filterCategoryId"
+                    class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option :value="null">Toutes</option>
+                    <option
+                      v-for="sub in availableSubcategories"
+                      :key="sub.id"
+                      :value="sub.id"
+                    >
+                      {{ sub.name }}
+                    </option>
+                  </select>
                 </label>
                 <label class="text-sm">
                   <span class="block text-gray-600 dark:text-gray-400 mb-1"
