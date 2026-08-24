@@ -50,7 +50,20 @@
   const allocations = ref<Record<string, LineState>>({})
   const expandedCategories = ref<Set<string>>(new Set())
   const searchQuery = ref('')
+  // Mirrors the transaction list's own filters, because the income being
+  // looked for is often a year old and the modal only ever holds one page.
+  const filterStartDate = ref('')
+  const filterEndDate = ref('')
+  const filterAmountMin = ref('')
+  const filterAmountMax = ref('')
+  const showFilters = ref(false)
   const isLoadingTransactions = ref(false)
+  /** How many suggestions show before "voir plus". */
+  const SUGGESTION_PREVIEW = 3
+  const showAllSuggestions = ref(false)
+  /** The page size the server is asked for; also what "some are missing" means. */
+  const PAGE_SIZE = 100
+  const totalMatching = ref(0)
   const isSubmitting = ref(false)
   const error = ref<string | null>(null)
 
@@ -180,20 +193,25 @@
       )
   )
 
-  const filteredTransactions = computed(() => {
-    const query = searchQuery.value.trim().toLowerCase()
-    if (!query) return rankedTransactions.value
-    return rankedTransactions.value.filter(entry =>
-      entry.transaction.description.toLowerCase().includes(query)
-    )
-  })
+  // The search is served by the API now: what came back *is* the result, so
+  // filtering it again locally would only re-apply a narrower rule.
+  const allSuggestions = computed(() =>
+    rankedTransactions.value.filter(entry => entry.score > 0)
+  )
 
+  /** Only the strongest few, unless the user asked to see the rest. */
   const suggestions = computed(() =>
-    filteredTransactions.value.filter(entry => entry.score > 0)
+    showAllSuggestions.value
+      ? allSuggestions.value
+      : allSuggestions.value.slice(0, SUGGESTION_PREVIEW)
+  )
+
+  const hiddenSuggestionCount = computed(() =>
+    Math.max(0, allSuggestions.value.length - suggestions.value.length)
   )
 
   const otherTransactions = computed(() =>
-    filteredTransactions.value.filter(entry => entry.score === 0)
+    rankedTransactions.value.filter(entry => entry.score === 0)
   )
 
   const REASON_LABELS: Record<SuggestionReason, string> = {
@@ -374,26 +392,75 @@
     selectedTransactionId.value = null
     allocations.value = {}
     expandedCategories.value = new Set()
-    searchQuery.value = ''
+    clearFilters()
+    showFilters.value = false
+    showAllSuggestions.value = false
+    totalMatching.value = 0
     error.value = null
     isSubmitting.value = false
   }
 
+  const hasActiveFilters = computed(
+    () =>
+      searchQuery.value.trim() !== '' ||
+      filterStartDate.value !== '' ||
+      filterEndDate.value !== '' ||
+      filterAmountMin.value !== '' ||
+      filterAmountMax.value !== ''
+  )
+
+  function clearFilters(): void {
+    searchQuery.value = ''
+    filterStartDate.value = ''
+    filterEndDate.value = ''
+    filterAmountMin.value = ''
+    filterAmountMax.value = ''
+  }
+
+  /**
+   * Ask the server rather than filter what is already loaded.
+   *
+   * The list is one page deep, so a purely local search could only ever find
+   * the most recent hundred receipts — which is exactly the transaction a
+   * year-old expense is *not* repaid by.
+   */
   async function loadIncomeTransactions(): Promise<void> {
     isLoadingTransactions.value = true
     error.value = null
     try {
+      const parsedMin = Number(filterAmountMin.value)
+      const parsedMax = Number(filterAmountMax.value)
+
       const response = await api.getTransactions({
         type: 'INCOME',
-        limit: 100,
+        limit: PAGE_SIZE,
+        search: searchQuery.value.trim() || undefined,
+        startDate: filterStartDate.value || undefined,
+        endDate: filterEndDate.value || undefined,
+        amountMin:
+          filterAmountMin.value !== '' &&
+          Number.isFinite(parsedMin) &&
+          parsedMin >= 0
+            ? parsedMin
+            : undefined,
+        amountMax:
+          filterAmountMax.value !== '' &&
+          Number.isFinite(parsedMax) &&
+          parsedMax >= 0
+            ? parsedMax
+            : undefined,
       })
       incomeTransactions.value = response.data
+      totalMatching.value = response.meta.total
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Erreur lors du chargement'
     } finally {
       isLoadingTransactions.value = false
     }
   }
+
+  /** True when the server has more matches than the page we are showing. */
+  const hasMoreThanShown = computed(() => totalMatching.value > PAGE_SIZE)
 
   function selectTransaction(transactionId: string): void {
     selectedTransactionId.value = transactionId
@@ -448,6 +515,26 @@
       if (!isOpen) return
       resetModal()
       await loadIncomeTransactions()
+    }
+  )
+
+  // Debounced so typing a description does not fire a request per keystroke.
+  let searchDebounce: ReturnType<typeof setTimeout> | undefined
+  watch(
+    [
+      searchQuery,
+      filterStartDate,
+      filterEndDate,
+      filterAmountMin,
+      filterAmountMax,
+    ],
+    () => {
+      if (!props.isOpen) return
+      showAllSuggestions.value = false
+      if (searchDebounce) clearTimeout(searchDebounce)
+      searchDebounce = setTimeout(() => {
+        void loadIncomeTransactions()
+      }, 350)
     }
   )
 
@@ -550,8 +637,84 @@
                   v-model="searchQuery"
                   type="text"
                   placeholder="Rechercher une transaction..."
+                  data-testid="settlement-search"
                   class="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 />
+              </div>
+
+              <div class="flex flex-wrap items-center gap-3 mb-3 text-sm">
+                <button
+                  type="button"
+                  data-testid="settlement-toggle-filters"
+                  class="text-emerald-600 dark:text-emerald-400 hover:underline"
+                  @click="showFilters = !showFilters"
+                >
+                  {{ showFilters ? 'Masquer les filtres' : 'Plus de filtres' }}
+                </button>
+                <button
+                  v-if="hasActiveFilters"
+                  type="button"
+                  data-testid="settlement-clear-filters"
+                  class="text-gray-500 dark:text-gray-400 hover:underline"
+                  @click="clearFilters"
+                >
+                  Reinitialiser
+                </button>
+              </div>
+
+              <div
+                v-if="showFilters"
+                data-testid="settlement-filters"
+                class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 p-3 border border-gray-200 dark:border-slate-700 rounded-lg"
+              >
+                <label class="text-sm">
+                  <span class="block text-gray-600 dark:text-gray-400 mb-1"
+                    >Du</span
+                  >
+                  <input
+                    v-model="filterStartDate"
+                    type="date"
+                    data-testid="settlement-start-date"
+                    class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+                  />
+                </label>
+                <label class="text-sm">
+                  <span class="block text-gray-600 dark:text-gray-400 mb-1"
+                    >Au</span
+                  >
+                  <input
+                    v-model="filterEndDate"
+                    type="date"
+                    data-testid="settlement-end-date"
+                    class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+                  />
+                </label>
+                <label class="text-sm">
+                  <span class="block text-gray-600 dark:text-gray-400 mb-1"
+                    >Montant min</span
+                  >
+                  <input
+                    v-model="filterAmountMin"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    data-testid="settlement-amount-min"
+                    class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+                  />
+                </label>
+                <label class="text-sm">
+                  <span class="block text-gray-600 dark:text-gray-400 mb-1"
+                    >Montant max</span
+                  >
+                  <input
+                    v-model="filterAmountMax"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    data-testid="settlement-amount-max"
+                    class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+                  />
+                </label>
               </div>
 
               <div v-if="isLoadingTransactions" class="py-12 text-center">
@@ -605,6 +768,15 @@
                       </div>
                     </button>
                   </div>
+                  <button
+                    v-if="hiddenSuggestionCount > 0"
+                    type="button"
+                    data-testid="settlement-more-suggestions"
+                    class="mt-2 text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
+                    @click="showAllSuggestions = true"
+                  >
+                    Voir les {{ hiddenSuggestionCount }} autres suggestions
+                  </button>
                 </section>
 
                 <section v-if="otherTransactions.length > 0">
@@ -642,10 +814,26 @@
                 </section>
 
                 <p
-                  v-if="filteredTransactions.length === 0"
+                  v-if="rankedTransactions.length === 0"
+                  data-testid="settlement-no-results"
                   class="py-8 text-center text-gray-500 dark:text-gray-400"
                 >
-                  Aucune transaction recue disponible
+                  Aucune transaction recue ne correspond. Affinez la recherche
+                  ou elargissez la periode.
+                </p>
+
+                <!--
+                  The list is one page deep. Saying so beats letting the user
+                  conclude the transaction does not exist.
+                -->
+                <p
+                  v-else-if="hasMoreThanShown"
+                  data-testid="settlement-truncated"
+                  class="pt-2 text-xs text-gray-500 dark:text-gray-400"
+                >
+                  {{ totalMatching }} transactions correspondent, les 100 plus
+                  recentes sont affichees. Affinez la recherche pour atteindre
+                  les autres.
                 </p>
               </div>
             </div>

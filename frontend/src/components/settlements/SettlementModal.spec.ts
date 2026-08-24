@@ -101,11 +101,13 @@ async function mountModal(options: {
   pending?: ReimbursementDto[]
   income?: TransactionDto[]
   focusReimbursementId?: string | null
+  /** What the server says it has, which may exceed the page returned. */
+  total?: number
 }) {
   vi.mocked(api.getTransactions).mockResolvedValue({
     data: options.income ?? [makeIncome()],
     meta: {
-      total: 1,
+      total: options.total ?? (options.income ?? [makeIncome()]).length,
       page: 1,
       limit: 100,
       totalPages: 1,
@@ -189,6 +191,129 @@ describe('SettlementModal', () => {
     expect(wrapper.text()).toContain('Suggestions')
     expect(wrapper.text()).toContain('VIR ALICE MARTIN')
     expect(wrapper.text()).toContain('REMBOURSEMENT CPAM')
+  })
+
+  describe('finding an old receipt', () => {
+    /** The debounce is real, so the tests drive the clock rather than wait. */
+    async function typeAndSettle(
+      wrapper: VueWrapper,
+      testId: string,
+      value: string
+    ): Promise<void> {
+      vi.useFakeTimers()
+      await wrapper.get(`[data-testid="${testId}"]`).setValue(value)
+      await vi.advanceTimersByTimeAsync(400)
+      vi.useRealTimers()
+      await flushPromises()
+    }
+
+    it('asks the server instead of filtering the page it already holds', async () => {
+      // The receipt for a year-old expense is precisely the one absent from
+      // the hundred most recent, so a local filter could never find it.
+      const wrapper = await mountModal({})
+      vi.mocked(api.getTransactions).mockClear()
+
+      await typeAndSettle(wrapper, 'settlement-search', 'cpam')
+
+      expect(api.getTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'INCOME', search: 'cpam' })
+      )
+    })
+
+    it('forwards the date window and the amount range', async () => {
+      const wrapper = await mountModal({})
+      await wrapper
+        .get('[data-testid="settlement-toggle-filters"]')
+        .trigger('click')
+      vi.mocked(api.getTransactions).mockClear()
+
+      await typeAndSettle(wrapper, 'settlement-start-date', '2025-01-01')
+
+      expect(api.getTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({ startDate: '2025-01-01' })
+      )
+
+      vi.mocked(api.getTransactions).mockClear()
+      await typeAndSettle(wrapper, 'settlement-amount-min', '40')
+
+      expect(api.getTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({ amountMin: 40 })
+      )
+    })
+
+    it('leaves a cleared field out of the query rather than sending zero', async () => {
+      const wrapper = await mountModal({})
+      await wrapper
+        .get('[data-testid="settlement-toggle-filters"]')
+        .trigger('click')
+      await typeAndSettle(wrapper, 'settlement-amount-min', '40')
+      vi.mocked(api.getTransactions).mockClear()
+
+      await typeAndSettle(wrapper, 'settlement-amount-min', '')
+
+      const [params] = vi.mocked(api.getTransactions).mock.calls[0] ?? []
+      expect(params?.amountMin).toBeUndefined()
+    })
+
+    it('says when the page does not hold every match', async () => {
+      const wrapper = await mountModal({ total: 412 })
+
+      expect(
+        wrapper.get('[data-testid="settlement-truncated"]').text()
+      ).toContain('412')
+    })
+
+    it('stays quiet when the page holds everything', async () => {
+      const wrapper = await mountModal({})
+
+      expect(
+        wrapper.find('[data-testid="settlement-truncated"]').exists()
+      ).toBe(false)
+    })
+  })
+
+  describe('suggestions', () => {
+    /** Five receipts that all match on the person's name. */
+    const manyMatches = Array.from({ length: 5 }, (_, i) =>
+      makeIncome({ id: `tx-${i}`, description: `VIR ALICE MARTIN ${i}` })
+    )
+
+    it('shows only the first three', async () => {
+      const wrapper = await mountModal({ income: manyMatches })
+
+      const shown = wrapper
+        .findAll('button')
+        .filter(b => b.text().includes('VIR ALICE MARTIN'))
+      expect(shown).toHaveLength(3)
+      expect(
+        wrapper.get('[data-testid="settlement-more-suggestions"]').text()
+      ).toContain('2')
+    })
+
+    it('reveals the rest on demand', async () => {
+      const wrapper = await mountModal({ income: manyMatches })
+
+      await wrapper
+        .get('[data-testid="settlement-more-suggestions"]')
+        .trigger('click')
+
+      expect(
+        wrapper
+          .findAll('button')
+          .filter(b => b.text().includes('VIR ALICE MARTIN'))
+      ).toHaveLength(5)
+      expect(
+        wrapper.find('[data-testid="settlement-more-suggestions"]').exists()
+      ).toBe(false)
+    })
+
+    it('offers no such link when three is all there is', async () => {
+      const wrapper = await mountModal({ income: manyMatches.slice(0, 2) })
+
+      expect(
+        wrapper.find('[data-testid="settlement-more-suggestions"]').exists()
+      ).toBe(false)
+    })
   })
 
   it('settles a whole category in two clicks when the income covers it', async () => {
