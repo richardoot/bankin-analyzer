@@ -6,6 +6,16 @@ import {
 import { ChatAnthropic } from '@langchain/anthropic'
 import { z } from 'zod'
 import { PrismaService } from '../prisma/prisma.service'
+import {
+  chunk,
+  describeCatalog,
+  resolveAssignments,
+  type CategorizableTransaction,
+  type CategoryChoice,
+  type RawAssignment,
+  type ResolvedAssignment,
+  type SubcategoryChoice,
+} from './transaction-categorizer'
 
 /**
  * Schéma Zod pour valider la sortie structurée du LLM (icônes)
@@ -24,8 +34,33 @@ const IconSchema = z.object({
 })
 
 /**
- * Schéma Zod pour valider la sortie structurée du LLM (suggestions)
+ * Schéma Zod pour valider la sortie structurée du LLM (catégorisation).
+ *
+ * Le modèle répond avec l'index de la transaction plutôt qu'avec son libellé :
+ * deux transactions peuvent porter exactement le même libellé, et un index ne
+ * se reformule pas.
  */
+const CategorizationSchema = z.object({
+  assignments: z.array(
+    z.object({
+      index: z.number().describe('Index of the transaction, as given'),
+      category: z
+        .string()
+        .describe('Exact name of one category from the provided list'),
+      subcategory: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          'Exact name of one subcategory of that category, or null if none fits'
+        ),
+    })
+  ),
+})
+
+/** How many transactions go in one prompt. */
+const CATEGORIZATION_BATCH_SIZE = 40
+
 @Injectable()
 export class AiSuggestionsService {
   private readonly logger = new Logger(AiSuggestionsService.name)
@@ -124,5 +159,95 @@ export class AiSuggestionsService {
     } catch (error) {
       this.logger.error('Error generating or saving icons', error)
     }
+  }
+
+  /**
+   * Pick the best fit, for each transaction, among the categories the user
+   * already has.
+   *
+   * Never creates anything: the model is handed a catalogue and its answer is
+   * checked against it (see `transaction-categorizer.ts`), so an invented name
+   * yields no filing rather than a new category.
+   *
+   * Expenses and income are asked about separately. A transaction can only
+   * land in a category of its own sign, so mixing them in one prompt would
+   * spend tokens listing choices that are not available anyway.
+   *
+   * A batch that fails is logged and skipped rather than thrown: an import
+   * must not be lost because the categorizer was unavailable. Those
+   * transactions arrive unfiled, which is visible and one click to fix.
+   */
+  async categorizeTransactions(
+    transactions: CategorizableTransaction[],
+    categories: CategoryChoice[],
+    subcategories: SubcategoryChoice[]
+  ): Promise<ResolvedAssignment[]> {
+    if (transactions.length === 0 || categories.length === 0) return []
+
+    const assignments: ResolvedAssignment[] = []
+
+    for (const type of ['EXPENSE', 'INCOME'] as const) {
+      const ofType = transactions.filter(t => t.type === type)
+      if (ofType.length === 0) continue
+
+      const catalog = describeCatalog(categories, subcategories, type)
+      if (catalog === '') continue
+
+      for (const batch of chunk(ofType, CATEGORIZATION_BATCH_SIZE)) {
+        try {
+          const raw = await this.classifyBatch(batch, catalog, type)
+          assignments.push(
+            ...resolveAssignments(raw, batch, categories, subcategories)
+          )
+        } catch (error) {
+          this.logger.error(
+            `Categorization failed for a batch of ${batch.length} ${type} transactions`,
+            error
+          )
+        }
+      }
+    }
+
+    return assignments
+  }
+
+  private async classifyBatch(
+    batch: CategorizableTransaction[],
+    catalog: string,
+    type: 'EXPENSE' | 'INCOME'
+  ): Promise<RawAssignment[]> {
+    const label = type === 'EXPENSE' ? 'depenses' : 'revenus'
+
+    const systemPrompt = [
+      'Tu classes des transactions bancaires francaises dans les categories',
+      "existantes d'un utilisateur.",
+      '',
+      'Regles imperatives :',
+      "- Choisis uniquement un nom present dans la liste, a l'identique.",
+      "- N'invente jamais de categorie ni de sous-categorie.",
+      '- La sous-categorie doit appartenir a la categorie choisie, sinon null.',
+      '- Si aucune categorie ne convient vraiment, omets la transaction :',
+      '  une transaction non classee vaut mieux quun mauvais classement.',
+      '- Reponds pour chaque transaction avec son index exact.',
+    ].join('\n')
+
+    const userPrompt = [
+      `Categories de ${label} disponibles :`,
+      catalog,
+      '',
+      'Transactions a classer :',
+      ...batch.map(
+        t =>
+          `${t.index}. ${t.description} (${Math.abs(t.amount).toFixed(2)} EUR)`
+      ),
+    ].join('\n')
+
+    const structuredLlm = this.llm.withStructuredOutput(CategorizationSchema)
+    const result = await structuredLlm.invoke([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ])
+
+    return result.assignments
   }
 }

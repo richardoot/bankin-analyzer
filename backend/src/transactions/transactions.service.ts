@@ -1,12 +1,11 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common'
 import { createHash, randomUUID } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
-import { CategoriesService } from '../categories/categories.service'
-import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { AccountsService } from '../accounts/accounts.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import type { Prisma, Transaction, TransactionType } from '../generated/prisma'
@@ -66,10 +65,10 @@ const TRANSACTION_READ_INCLUDE = {
 
 @Injectable()
 export class TransactionsService {
+  private readonly logger = new Logger(TransactionsService.name)
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly categoriesService: CategoriesService,
-    private readonly subcategoriesService: SubcategoriesService,
     private readonly accountsService: AccountsService,
     private readonly aiSuggestionsService: AiSuggestionsService
   ) {}
@@ -447,41 +446,73 @@ export class TransactionsService {
       return { imported: 0, duplicates, total: transactions.length }
     }
 
-    const categoryInputs = allTxsToImport.map(tx => ({
-      name: tx.category,
+    // 5. File the transactions among the categories the user already has.
+    //
+    // The file's own category is deliberately ignored, and nothing is created
+    // from it: an export brings its provider's taxonomy, which drifts from the
+    // user's own and used to spawn near-duplicate categories on every import.
+    // The model picks from the existing list instead, and anything it names
+    // that does not exist is dropped rather than created.
+    const [existingCategories, existingSubcategories] = await Promise.all([
+      this.prisma.category.findMany({
+        where: { userId },
+        select: { id: true, name: true, type: true },
+      }),
+      this.prisma.subcategory.findMany({
+        where: { userId },
+        select: { id: true, name: true, categoryId: true },
+      }),
+    ])
+
+    const categorizable = allTxsToImport.map((tx, index) => ({
+      index,
+      description: tx.description,
+      amount: tx.amount,
       type: tx.type,
     }))
 
-    const { categories } = await this.categoriesService.findOrCreateMany(
-      userId,
-      categoryInputs
-    )
-    const categoryByName = new Map(categories.map(c => [c.name, c]))
+    // Never fatal: an import that lands unfiled is recoverable, one that fails
+    // is not.
+    let assignments: Awaited<
+      ReturnType<AiSuggestionsService['categorizeTransactions']>
+    > = []
+    try {
+      assignments = await this.aiSuggestionsService.categorizeTransactions(
+        categorizable,
+        existingCategories,
+        existingSubcategories
+      )
+    } catch (error) {
+      this.logger.error('Categorization failed; importing unfiled', error)
+    }
 
-    // 5b. Batch create/fetch subcategories
-    const subcategoryInputs = allTxsToImport
-      .filter(tx => tx.subcategory && tx.subcategory.trim())
-      .map(tx => ({
-        categoryId: categoryByName.get(tx.category)!.id,
-        name: tx.subcategory!,
-      }))
+    const filingByIndex = new Map(assignments.map(a => [a.index, a]))
+    const filingOf = (
+      index: number
+    ): {
+      categoryId: string | null
+      subcategoryId: string | null
+      subcategory: string | null
+    } => {
+      const assignment = filingByIndex.get(index)
+      return {
+        categoryId: assignment?.categoryId ?? null,
+        subcategoryId: assignment?.subcategoryId ?? null,
+        subcategory: assignment?.subcategoryName ?? null,
+      }
+    }
 
-    const { subcategories } = await this.subcategoriesService.findOrCreateMany(
-      userId,
-      subcategoryInputs
-    )
-    const subcategoryMap = new Map(
-      subcategories.map(s => [`${s.categoryId}|${s.name}`, s])
-    )
-
-    // 5b2. Fire-and-forget: generate icons for categories/subcategories without icons
-    const catsWithoutIcons = categories.filter(c => !c.icon)
-    const subsWithoutIcons = subcategories.filter(s => !s.icon)
-    if (catsWithoutIcons.length > 0 || subsWithoutIcons.length > 0) {
+    // Icons stay a background nicety, now for the categories actually used.
+    const usedCategoryIds = new Set(assignments.map(a => a.categoryId))
+    const catsWithoutIcons = await this.prisma.category.findMany({
+      where: { userId, id: { in: [...usedCategoryIds] }, icon: null },
+      select: { id: true, name: true },
+    })
+    if (catsWithoutIcons.length > 0) {
       void this.aiSuggestionsService.generateAndSaveIcons(
         userId,
-        catsWithoutIcons.map(c => ({ id: c.id, name: c.name })),
-        subsWithoutIcons.map(s => ({ id: s.id, name: s.name }))
+        catsWithoutIcons,
+        []
       )
     }
 
@@ -501,48 +532,38 @@ export class TransactionsService {
 
     // 6. Bulk insert with createMany
     const dataToCreate = [
-      ...toImport.map(({ hash, date, tx }) => {
-        const categoryId = categoryByName.get(tx.category)!.id
-        const subcategoryId =
-          tx.subcategory && tx.subcategory.trim()
-            ? (subcategoryMap.get(`${categoryId}|${tx.subcategory}`)?.id ??
-              null)
-            : null
+      ...toImport.map(({ hash, date, tx }, offset) => {
+        const filing = filingOf(offset)
         return {
           userId,
           accountId: resolveAccountId(tx.account),
-          categoryId,
-          subcategoryId,
+          categoryId: filing.categoryId,
+          subcategoryId: filing.subcategoryId,
           importHistoryId: importHistoryId ?? null,
           hash,
           date,
           description: tx.description,
           amount: tx.amount,
           type: tx.type,
-          subcategory: tx.subcategory ?? null,
+          subcategory: filing.subcategory,
           note: tx.note ?? null,
           isPointed: tx.isPointed ?? false,
         }
       }),
-      ...forcedData.map(({ hash, date, tx }) => {
-        const categoryId = categoryByName.get(tx.category)!.id
-        const subcategoryId =
-          tx.subcategory && tx.subcategory.trim()
-            ? (subcategoryMap.get(`${categoryId}|${tx.subcategory}`)?.id ??
-              null)
-            : null
+      ...forcedData.map(({ hash, date, tx }, offset) => {
+        const filing = filingOf(toImport.length + offset)
         return {
           userId,
           accountId: resolveAccountId(tx.account),
-          categoryId,
-          subcategoryId,
+          categoryId: filing.categoryId,
+          subcategoryId: filing.subcategoryId,
           importHistoryId: importHistoryId ?? null,
           hash,
           date,
           description: tx.description,
           amount: tx.amount,
           type: tx.type,
-          subcategory: tx.subcategory ?? null,
+          subcategory: filing.subcategory,
           note: tx.note ?? null,
           isPointed: tx.isPointed ?? false,
         }
