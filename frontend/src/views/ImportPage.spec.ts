@@ -176,6 +176,102 @@ describe('ImportPage', () => {
       expect(wrapper.text()).toContain('2') // 2 transactions parsed
     })
 
+    /** Feed a CSV through the file input and settle. */
+    const upload = async (
+      csvContent: string
+    ): Promise<ReturnType<typeof mount>> => {
+      const wrapper = mount(ImportPage, { global: { plugins: [router] } })
+      const file = new File([csvContent], 'export.csv', { type: 'text/csv' })
+      const input = wrapper.find('input[type="file"]')
+      Object.defineProperty(input.element, 'files', { value: [file] })
+      await input.trigger('change')
+      await flushPromises()
+      return wrapper
+    }
+
+    describe('a note written on two lines', () => {
+      // Taken from the export that exposed the bug: the note carries a
+      // newline, which used to split the record in two and lose it.
+      const csvContent = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
+"08/10/2025";"Prlv Sepa Amnesty";"Perso CIC";"-15.0";"Divers";"Dons";"";"Oui"
+"08/10/2025";"Prlv Sepa Paypal";"Perso CIC";"-126.0";"Vacances";"Vacances - Autres";"Logement Hyrox Paris (2/2)
+Attente Remb. Chloé";"Oui"
+"07/10/2025";"Vir Filhet Allard";"Perso CIC";"6.65";"Entrées d'argent";"Remboursements";"";"Oui"`
+
+      it('imports it instead of dropping it', async () => {
+        const wrapper = await upload(csvContent)
+
+        expect(wrapper.text()).toContain("Aperçu de l'import")
+        expect(wrapper.text()).toContain('Prlv Sepa Paypal')
+      })
+
+      it('keeps all three transactions', async () => {
+        const wrapper = await upload(csvContent)
+
+        expect(wrapper.text()).toContain('Prlv Sepa Amnesty')
+        expect(wrapper.text()).toContain('Prlv Sepa Paypal')
+        expect(wrapper.text()).toContain('Vir Filhet Allard')
+      })
+
+      it('reports nothing as skipped', async () => {
+        const wrapper = await upload(csvContent)
+
+        expect(wrapper.find('[data-testid="skipped-rows"]').exists()).toBe(
+          false
+        )
+      })
+    })
+
+    describe('rows it cannot use', () => {
+      it('names the line and the reason instead of dropping in silence', async () => {
+        const csvContent = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
+"15/01/2024";"Bon";"Compte";"-45.50";"Cat";"Sub";"";"Oui"
+"pas une date";"Mauvaise date";"Compte";"-10.00";"Cat";"Sub";"";"Oui"`
+
+        const wrapper = await upload(csvContent)
+
+        const warning = wrapper.get('[data-testid="skipped-rows"]')
+        expect(warning.text()).toContain('Ligne 3')
+        expect(warning.text()).toContain('date illisible')
+        expect(warning.text()).toContain('Mauvaise date')
+      })
+
+      it('says so when a row is short of columns', async () => {
+        const csvContent = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
+"15/01/2024";"Bon";"Compte";"-45.50";"Cat";"Sub";"";"Oui"
+"15/01/2024";"Tronquee"`
+
+        const wrapper = await upload(csvContent)
+
+        expect(wrapper.get('[data-testid="skipped-rows"]').text()).toContain(
+          '2 colonnes au lieu de 8'
+        )
+      })
+
+      it('says so when the amount cannot be read', async () => {
+        const csvContent = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
+"15/01/2024";"Bon";"Compte";"-45.50";"Cat";"Sub";"";"Oui"
+"15/01/2024";"Montant casse";"Compte";"abc";"Cat";"Sub";"";"Oui"`
+
+        const wrapper = await upload(csvContent)
+
+        expect(wrapper.get('[data-testid="skipped-rows"]').text()).toContain(
+          'montant illisible'
+        )
+      })
+
+      it('still imports everything it could read', async () => {
+        const csvContent = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
+"15/01/2024";"Bon";"Compte";"-45.50";"Cat";"Sub";"";"Oui"
+"pas une date";"Mauvaise";"Compte";"-10.00";"Cat";"Sub";"";"Oui"`
+
+        const wrapper = await upload(csvContent)
+
+        expect(wrapper.text()).toContain("Aperçu de l'import")
+        expect(wrapper.text()).toContain('Bon')
+      })
+    })
+
     it('should handle quoted fields with semicolons', async () => {
       const csvContent = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
 "15/01/2024";"Description; avec point-virgule";"Compte";"-50.00";"Cat";"Sub";"";"Oui"`

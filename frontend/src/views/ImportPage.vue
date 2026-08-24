@@ -6,11 +6,19 @@
     type ImportTransactionDto,
     type ImportPreviewResultDto,
   } from '@/lib/api'
+  import { parseCsvRecords } from '@/lib/csv'
   import {
     useChunkedImport,
     PartialImportError,
   } from '@/composables/useChunkedImport'
   import DuplicatesReviewModal from '@/components/DuplicatesReviewModal.vue'
+
+  /** A row the parser could not use, and why. */
+  interface SkippedRow {
+    line: number
+    reason: string
+    excerpt: string
+  }
 
   const router = useRouter()
   const {
@@ -26,6 +34,8 @@
   const isPreviewLoading = ref(false)
   const error = ref<string | null>(null)
   const parsedTransactions = ref<ImportTransactionDto[]>([])
+  /** Rows the parser refused, surfaced instead of dropped. */
+  const skippedRows = ref<SkippedRow[]>([])
   const showPreview = ref(false)
   const showDuplicatesModal = ref(false)
   const previewResult = ref<ImportPreviewResultDto | null>(null)
@@ -72,6 +82,7 @@
 
     file.value = selectedFile
     error.value = null
+    skippedRows.value = []
 
     try {
       const text = await selectedFile.text()
@@ -85,14 +96,18 @@
   }
 
   function parseCSV(csvText: string): ImportTransactionDto[] {
-    const lines = csvText.split('\n')
-    if (lines.length < 2) {
+    // Records, not lines: a note written on two lines is one record, and
+    // splitting on newlines turned it into two short fragments that were both
+    // dropped without a word.
+    const records = parseCsvRecords(csvText)
+    if (records.length < 2) {
       throw new Error('Le fichier CSV est vide ou invalide')
     }
 
     // Parse header - Bankin format uses semicolon
-    const headerLine = (lines[0] ?? '').replace(/"/g, '').trim()
-    const headers = headerLine.split(';').map(h => h.toLowerCase().trim())
+    const headers: string[] = (records[0]?.fields ?? []).map(field =>
+      field.replace(/"/g, '').toLowerCase().trim()
+    )
 
     // Expected headers: Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
     const dateIdx = headers.findIndex(h => h === 'date')
@@ -116,13 +131,20 @@
 
     const transactions: ImportTransactionDto[] = []
 
-    for (const rawLine of lines.slice(1)) {
-      const line = rawLine.trim()
-      if (!line) continue
+    // Anything the loop refuses is collected rather than swallowed: a silently
+    // dropped row is indistinguishable from a row that was never in the file.
+    const skipped: SkippedRow[] = []
 
-      // Parse CSV line with quoted fields
-      const values = parseCSVLine(line)
-      if (values.length < headers.length) continue
+    for (const record of records.slice(1)) {
+      const values = record.fields
+      if (values.length < headers.length) {
+        skipped.push({
+          line: record.line,
+          reason: `${values.length} colonnes au lieu de ${headers.length}`,
+          excerpt: values.join(';').slice(0, 60),
+        })
+        continue
+      }
 
       const rawDate = values[dateIdx] || ''
       const description = values[descIdx] || ''
@@ -141,7 +163,14 @@
           .replace(/[€$£]/g, '')
           .replace('−', '-')
       )
-      if (isNaN(amount)) continue
+      if (isNaN(amount)) {
+        skipped.push({
+          line: record.line,
+          reason: `montant illisible ("${rawAmount}")`,
+          excerpt: description.slice(0, 60),
+        })
+        continue
+      }
 
       // Parse date DD/MM/YYYY to ISO. Anchored at UTC midnight, never local
       // midnight: a local-midnight Date serialises to the *previous* day for
@@ -150,7 +179,14 @@
       // every UTC-based query downstream (budget ranges, monthly grouping).
       const dateParts = rawDate.match(/(\d{2})\/(\d{2})\/(\d{4})/)
       const [, day, month, year] = dateParts ?? []
-      if (!day || !month || !year) continue
+      if (!day || !month || !year) {
+        skipped.push({
+          line: record.line,
+          reason: `date illisible ("${rawDate}")`,
+          excerpt: description.slice(0, 60),
+        })
+        continue
+      }
       const isoDate = new Date(
         Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day))
       ).toISOString()
@@ -178,38 +214,13 @@
       })
     }
 
+    skippedRows.value = skipped
+
     if (transactions.length === 0) {
       throw new Error('Aucune transaction valide trouvée dans le fichier')
     }
 
     return transactions
-  }
-
-  function parseCSVLine(line: string): string[] {
-    const values: string[] = []
-    let current = ''
-    let inQuotes = false
-
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i]
-
-      if (char === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          current += '"'
-          i++
-        } else {
-          inQuotes = !inQuotes
-        }
-      } else if (char === ';' && !inQuotes) {
-        values.push(current.trim())
-        current = ''
-      } else {
-        current += char
-      }
-    }
-
-    values.push(current.trim())
-    return values
   }
 
   async function submitImport() {
@@ -452,6 +463,39 @@
         class="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg"
       >
         {{ error }}
+      </div>
+
+      <!--
+        A row the parser refused used to vanish without a trace, which is how a
+        two-line note cost a transaction for months. Naming the line and the
+        reason is what makes the next case visible on the spot.
+      -->
+      <div
+        v-if="skippedRows.length > 0"
+        data-testid="skipped-rows"
+        class="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-lg"
+      >
+        <p class="font-medium">
+          {{ skippedRows.length }} ligne{{
+            skippedRows.length > 1 ? 's' : ''
+          }}
+          du fichier {{ skippedRows.length > 1 ? 'ont' : 'a' }} ete ignoree{{
+            skippedRows.length > 1 ? 's' : ''
+          }}
+        </p>
+        <ul class="mt-2 space-y-1 text-sm">
+          <li v-for="row in skippedRows.slice(0, 10)" :key="row.line">
+            Ligne {{ row.line }} : {{ row.reason }}
+            <span v-if="row.excerpt" class="opacity-75">
+              &mdash; {{ row.excerpt }}
+            </span>
+          </li>
+        </ul>
+        <p v-if="skippedRows.length > 10" class="mt-1 text-sm">
+          … et {{ skippedRows.length - 10 }} autre{{
+            skippedRows.length - 10 > 1 ? 's' : ''
+          }}
+        </p>
       </div>
 
       <!-- File upload zone -->
