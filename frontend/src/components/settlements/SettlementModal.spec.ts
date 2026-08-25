@@ -143,7 +143,6 @@ const makeIncome = (
 async function mountModal(options: {
   pending?: ReimbursementDto[]
   income?: TransactionDto[]
-  focusReimbursementId?: string | null
   /** What the server says it has, which may exceed the page returned. */
   total?: number
 }) {
@@ -165,7 +164,6 @@ async function mountModal(options: {
       personId: PERSON.id,
       personName: PERSON.name,
       pendingReimbursements: options.pending ?? [monoprix, carrefour, netflix],
-      focusReimbursementId: options.focusReimbursementId ?? null,
     },
     global: { stubs: { Teleport: true } },
   })
@@ -177,7 +175,41 @@ async function mountModal(options: {
   return wrapper
 }
 
-/** Step 1 lists transactions as buttons; pick the first one on offer. */
+/** Tick one debt line (or a whole category) by its accessible name. */
+async function tick(wrapper: VueWrapper, label: string): Promise<void> {
+  await wrapper
+    .get(`input[aria-label="Selectionner ${label}"]`)
+    .trigger('change')
+}
+
+/** Walk step 1 — the debt selection — and land on the receipt search. */
+async function goToReceipt(
+  wrapper: VueWrapper,
+  labels: string[] = []
+): Promise<void> {
+  if (labels.length === 0) {
+    await wrapper.get('[data-testid="settlement-select-all"]').trigger('click')
+  } else {
+    for (const label of labels) await tick(wrapper, label)
+  }
+  await wrapper.get('[data-testid="settlement-continue"]').trigger('click')
+  await flushPromises()
+}
+
+/**
+ * Most tests are about the receipt search, which now lives behind the
+ * selection: mount, retain what they care about, then step over.
+ */
+async function mountAtReceipt(
+  options: Parameters<typeof mountModal>[0],
+  labels: string[] = []
+) {
+  const wrapper = await mountModal(options)
+  await goToReceipt(wrapper, labels)
+  return wrapper
+}
+
+/** Step 2 lists transactions as buttons; pick the first one on offer. */
 async function pickFirstTransaction(wrapper: VueWrapper): Promise<void> {
   const candidates = wrapper
     .findAll('button')
@@ -198,6 +230,12 @@ async function setAmount(
   await flushPromises()
 }
 
+/** The only emerald call-to-action on screen at the step it is called from. */
+async function confirmSettlement(wrapper: VueWrapper): Promise<void> {
+  await wrapper.find('button[class*="bg-emerald-600"]').trigger('click')
+  await flushPromises()
+}
+
 function submittedLines() {
   return vi.mocked(api.createSettlement).mock.calls[0]?.[0].reimbursements
 }
@@ -214,8 +252,51 @@ describe('SettlementModal', () => {
     vi.mocked(api.getSubcategories).mockResolvedValue(SUBCATEGORIES)
   })
 
-  it('loads income transactions when it opens and ranks the matching one first', async () => {
-    const wrapper = await mountModal({
+  it('opens on the debts, with nothing retained and no way forward yet', async () => {
+    const wrapper = await mountModal({})
+
+    // The receipt search is a step away, so no transaction is fetched yet.
+    expect(api.getTransactions).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('que voulez-vous regler')
+    // Grouped by expense category, every line visible and none ticked.
+    expect(wrapper.text()).toContain('R Courses')
+    expect(wrapper.text()).toContain('R Abonnements')
+    expect(
+      wrapper
+        .findAll('input[type="checkbox"]')
+        .every(box => !(box.element as HTMLInputElement).checked)
+    ).toBe(true)
+    expect(
+      wrapper.get('[data-testid="settlement-continue"]').attributes('disabled')
+    ).toBeDefined()
+  })
+
+  it('totals what has been retained before any money is named', async () => {
+    const wrapper = await mountModal({})
+
+    await tick(wrapper, 'Carrefour')
+    expect(
+      wrapper.get('[data-testid="settlement-selection-total"]').text()
+    ).toContain('30,00')
+
+    await tick(wrapper, 'Netflix')
+    expect(
+      wrapper.get('[data-testid="settlement-selection-total"]').text()
+    ).toContain('42,00')
+  })
+
+  it('ticks a whole category at once', async () => {
+    const wrapper = await mountModal({})
+
+    await tick(wrapper, 'R Courses')
+
+    expect(
+      wrapper.get('[data-testid="settlement-selection-total"]').text()
+    ).toContain('45,00')
+  })
+
+  it('loads income transactions on the receipt step and ranks the matching one first', async () => {
+    const wrapper = await mountAtReceipt({
       income: [
         makeIncome({
           id: 'tx-cpam',
@@ -255,7 +336,7 @@ describe('SettlementModal', () => {
     it('asks the server instead of filtering the page it already holds', async () => {
       // The receipt for a year-old expense is precisely the one absent from
       // the hundred most recent, so a local filter could never find it.
-      const wrapper = await mountModal({})
+      const wrapper = await mountAtReceipt({})
       vi.mocked(api.getTransactions).mockClear()
 
       await typeAndSettle(wrapper, 'settlement-search', 'cpam')
@@ -266,7 +347,7 @@ describe('SettlementModal', () => {
     })
 
     it('forwards the date window and the amount range', async () => {
-      const wrapper = await mountModal({})
+      const wrapper = await mountAtReceipt({})
       await wrapper
         .get('[data-testid="settlement-toggle-filters"]')
         .trigger('click')
@@ -287,7 +368,7 @@ describe('SettlementModal', () => {
     })
 
     it('leaves a cleared field out of the query rather than sending zero', async () => {
-      const wrapper = await mountModal({})
+      const wrapper = await mountAtReceipt({})
       await wrapper
         .get('[data-testid="settlement-toggle-filters"]')
         .trigger('click')
@@ -301,7 +382,7 @@ describe('SettlementModal', () => {
     })
 
     it('says when the page does not hold every match', async () => {
-      const wrapper = await mountModal({ total: 412 })
+      const wrapper = await mountAtReceipt({ total: 412 })
 
       expect(
         wrapper.get('[data-testid="settlement-truncated"]').text()
@@ -309,7 +390,7 @@ describe('SettlementModal', () => {
     })
 
     it('stays quiet when the page holds everything', async () => {
-      const wrapper = await mountModal({})
+      const wrapper = await mountAtReceipt({})
 
       expect(
         wrapper.find('[data-testid="settlement-truncated"]').exists()
@@ -326,7 +407,7 @@ describe('SettlementModal', () => {
 
     it('offers income categories only', async () => {
       // An expense category can never hold the receipt being looked for.
-      const wrapper = await mountModal({})
+      const wrapper = await mountAtReceipt({})
       await openFilters(wrapper)
 
       const options = wrapper
@@ -337,7 +418,7 @@ describe('SettlementModal', () => {
     })
 
     it('keeps the subcategory locked until a category is chosen', async () => {
-      const wrapper = await mountModal({})
+      const wrapper = await mountAtReceipt({})
       await openFilters(wrapper)
 
       expect(
@@ -348,7 +429,7 @@ describe('SettlementModal', () => {
     })
 
     it('narrows the subcategories to the chosen category', async () => {
-      const wrapper = await mountModal({})
+      const wrapper = await mountAtReceipt({})
       await openFilters(wrapper)
 
       await wrapper
@@ -363,7 +444,7 @@ describe('SettlementModal', () => {
     })
 
     it('sends both to the server', async () => {
-      const wrapper = await mountModal({})
+      const wrapper = await mountAtReceipt({})
       await openFilters(wrapper)
       await wrapper
         .get('[data-testid="settlement-category"]')
@@ -387,7 +468,7 @@ describe('SettlementModal', () => {
     })
 
     it('drops the subcategory when the category changes under it', async () => {
-      const wrapper = await mountModal({})
+      const wrapper = await mountAtReceipt({})
       await openFilters(wrapper)
       await wrapper
         .get('[data-testid="settlement-category"]')
@@ -413,7 +494,7 @@ describe('SettlementModal', () => {
     )
 
     it('shows only the first three', async () => {
-      const wrapper = await mountModal({ income: manyMatches })
+      const wrapper = await mountAtReceipt({ income: manyMatches })
 
       const shown = wrapper
         .findAll('button')
@@ -425,7 +506,7 @@ describe('SettlementModal', () => {
     })
 
     it('reveals the rest on demand', async () => {
-      const wrapper = await mountModal({ income: manyMatches })
+      const wrapper = await mountAtReceipt({ income: manyMatches })
 
       await wrapper
         .get('[data-testid="settlement-more-suggestions"]')
@@ -442,7 +523,7 @@ describe('SettlementModal', () => {
     })
 
     it('offers no such link when three is all there is', async () => {
-      const wrapper = await mountModal({ income: manyMatches.slice(0, 2) })
+      const wrapper = await mountAtReceipt({ income: manyMatches.slice(0, 2) })
 
       expect(
         wrapper.find('[data-testid="settlement-more-suggestions"]').exists()
@@ -450,15 +531,16 @@ describe('SettlementModal', () => {
     })
   })
 
-  it('settles a whole category in two clicks when the income covers it', async () => {
+  it('cascades the receipt over exactly what was retained', async () => {
     const wrapper = await mountModal({})
+    await goToReceipt(wrapper, ['R Courses'])
     await pickFirstTransaction(wrapper)
 
-    // 45 EUR filed under "R Courses" pre-fills exactly that category's lines.
+    // 45 EUR against the 45 EUR retained: nothing is left over, and the
+    // untouched Netflix line never enters the settlement.
     expect(wrapper.text()).toContain('Tout est affecte')
 
-    await wrapper.find('button[class*="bg-emerald-600"]').trigger('click')
-    await flushPromises()
+    await confirmSettlement(wrapper)
 
     expect(submittedLines()).toEqual([
       { reimbursementId: 'r-monoprix', amountSettled: 15 },
@@ -466,22 +548,33 @@ describe('SettlementModal', () => {
     ])
   })
 
-  it('settles a single transaction of a category when seeded on one line', async () => {
-    const wrapper = await mountModal({ focusReimbursementId: 'r-carrefour' })
+  it('settles a single line, leaving its category sibling alone', async () => {
+    const wrapper = await mountModal({})
+    await goToReceipt(wrapper, ['Carrefour'])
     await pickFirstTransaction(wrapper)
 
-    await wrapper.find('button[class*="bg-emerald-600"]').trigger('click')
-    await flushPromises()
+    await confirmSettlement(wrapper)
 
-    // This is the case the category-level modal could not express: one line
-    // settled in full, its sibling left completely alone.
     expect(submittedLines()).toEqual([
       { reimbursementId: 'r-carrefour', amountSettled: 30 },
     ])
   })
 
+  it('ranks a receipt matching the retained total exactly', async () => {
+    // 30 EUR is nobody's grand total; it is what *this* selection needs.
+    const wrapper = await mountModal({
+      income: [
+        makeIncome({ id: 'tx-odd', description: 'VIREMENT', amount: 30 }),
+      ],
+    })
+    await goToReceipt(wrapper, ['Carrefour'])
+
+    expect(wrapper.text()).toContain('montant exact')
+  })
+
   it('leaves the unallocated cash available on the transaction', async () => {
-    const wrapper = await mountModal({ focusReimbursementId: 'r-carrefour' })
+    const wrapper = await mountModal({})
+    await goToReceipt(wrapper, ['Carrefour'])
     await pickFirstTransaction(wrapper)
 
     expect(wrapper.text()).toContain('resteront')
@@ -491,12 +584,12 @@ describe('SettlementModal', () => {
     const wrapper = await mountModal({
       income: [makeIncome({ amount: 100, categoryName: undefined })],
     })
+    await goToReceipt(wrapper, ['R Courses'])
     await pickFirstTransaction(wrapper)
 
     await setAmount(wrapper, 'R Courses', '20')
 
-    await wrapper.find('button[class*="bg-emerald-600"]').trigger('click')
-    await flushPromises()
+    await confirmSettlement(wrapper)
 
     // 20 EUR cascades onto the oldest line, then spills 5 onto the next.
     expect(submittedLines()).toEqual(
@@ -512,6 +605,7 @@ describe('SettlementModal', () => {
       pending: [carrefour],
       income: [makeIncome({ amount: 100, categoryName: undefined })],
     })
+    await goToReceipt(wrapper)
     await pickFirstTransaction(wrapper)
 
     await setAmount(wrapper, 'Carrefour', '18')
@@ -519,8 +613,7 @@ describe('SettlementModal', () => {
     await wrapper.find('input[aria-label="Solder Carrefour"]').trigger('change')
     await flushPromises()
 
-    await wrapper.find('button[class*="bg-emerald-600"]').trigger('click')
-    await flushPromises()
+    await confirmSettlement(wrapper)
 
     expect(submittedLines()).toEqual([
       {
@@ -531,14 +624,90 @@ describe('SettlementModal', () => {
     ])
   })
 
+  it('recomputes the split when the selection changes under the receipt', async () => {
+    // The trap the reorder opens: amounts were derived from a selection that
+    // no longer holds, so a line added on the way back would settle for zero.
+    const wrapper = await mountModal({})
+    await goToReceipt(wrapper, ['Carrefour'])
+    await pickFirstTransaction(wrapper)
+
+    await wrapper.get('[data-testid="settlement-back"]').trigger('click')
+    await tick(wrapper, 'Netflix')
+    await wrapper.get('[data-testid="settlement-continue"]').trigger('click')
+    await flushPromises()
+
+    await confirmSettlement(wrapper)
+
+    expect(submittedLines()).toEqual([
+      { reimbursementId: 'r-netflix', amountSettled: 12 },
+      { reimbursementId: 'r-carrefour', amountSettled: 30 },
+    ])
+  })
+
+  it('refuses to settle more than the receipt holds', async () => {
+    const wrapper = await mountModal({
+      income: [makeIncome({ amount: 20, categoryName: undefined })],
+    })
+    await goToReceipt(wrapper)
+    await pickFirstTransaction(wrapper)
+
+    // 20 EUR cascaded onto 57 EUR of debt, then one line pushed to its full due.
+    await setAmount(wrapper, 'Carrefour', '30')
+
+    expect(wrapper.text()).toContain('Depassement')
+    expect(
+      wrapper.find('button[class*="bg-emerald-600"]').attributes('disabled')
+    ).toBeDefined()
+  })
+
+  it('leaves a retained line out of the settlement when it got nothing', async () => {
+    const wrapper = await mountModal({
+      income: [makeIncome({ amount: 20, categoryName: undefined })],
+    })
+    await goToReceipt(wrapper)
+    await pickFirstTransaction(wrapper)
+
+    await confirmSettlement(wrapper)
+
+    // The pot dries up on the two oldest; Carrefour is retained but unpaid, and
+    // must not reach the API as a zero-euro line.
+    expect(submittedLines()).toEqual([
+      { reimbursementId: 'r-netflix', amountSettled: 12 },
+      { reimbursementId: 'r-monoprix', amountSettled: 8 },
+    ])
+  })
+
+  it('forgets the previous selection when reopened', async () => {
+    const wrapper = await mountModal({})
+    await goToReceipt(wrapper)
+
+    await wrapper.setProps({ isOpen: false })
+    await wrapper.setProps({ isOpen: true })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('que voulez-vous regler')
+    expect(
+      wrapper.get('[data-testid="settlement-selection-total"]').text()
+    ).toContain('0,00')
+  })
+
+  it('says so when the person owes nothing', async () => {
+    const wrapper = await mountModal({ pending: [] })
+
+    expect(wrapper.text()).toContain('Aucun remboursement en attente')
+    expect(
+      wrapper.get('[data-testid="settlement-continue"]').attributes('disabled')
+    ).toBeDefined()
+  })
+
   it('never allocates more than the transaction holds', async () => {
     const wrapper = await mountModal({
       income: [makeIncome({ amount: 20, categoryName: undefined })],
     })
+    await goToReceipt(wrapper)
     await pickFirstTransaction(wrapper)
 
-    await wrapper.find('button[class*="bg-emerald-600"]').trigger('click')
-    await flushPromises()
+    await confirmSettlement(wrapper)
 
     const total = (submittedLines() ?? []).reduce(
       (sum, line) => sum + line.amountSettled,

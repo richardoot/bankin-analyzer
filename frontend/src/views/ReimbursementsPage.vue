@@ -7,6 +7,7 @@
   import type { ReimbursementDto, SettlementDto } from '@/lib/api'
   import { usePdfExport } from '@/composables/usePdfExport'
   import SettlementModal from '@/components/settlements/SettlementModal.vue'
+  import SingleSettlementModal from '@/components/settlements/SingleSettlementModal.vue'
   import SettlementHistorySection from '@/components/settlements/SettlementHistorySection.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
   import { formatCurrency } from '@/lib/formatters'
@@ -42,7 +43,10 @@
   const showSettlementModal = ref(false)
   const settlementModalPersonId = ref<string | null>(null)
   const settlementModalPersonName = ref<string>('')
-  const settlementModalFocusId = ref<string | null>(null)
+
+  // Single-line settlement modal state
+  const showSingleSettlementModal = ref(false)
+  const singleSettlementReimbursement = ref<ReimbursementDto | null>(null)
 
   // Settlement detail modal state
   const showSettlementDetailModal = ref(false)
@@ -261,18 +265,16 @@
   function openSettlementModal(personId: string, personName: string) {
     settlementModalPersonId.value = personId
     settlementModalPersonName.value = personName
-    settlementModalFocusId.value = null
     showSettlementModal.value = true
   }
 
-  // Open settlement modal seeded on a single transaction line
+  // Settle one line on its own: no allocation to arbitrate, so the modal is a
+  // single step that only has to find the matching receipt.
   function openSettlementModalForReimbursement(
     reimbursement: ReimbursementDto
   ) {
-    settlementModalPersonId.value = reimbursement.personId
-    settlementModalPersonName.value = reimbursement.personName
-    settlementModalFocusId.value = reimbursement.id
-    showSettlementModal.value = true
+    singleSettlementReimbursement.value = reimbursement
+    showSingleSettlementModal.value = true
   }
 
   // Handle settlement created
@@ -1011,8 +1013,15 @@
       :person-id="settlementModalPersonId ?? ''"
       :person-name="settlementModalPersonName"
       :pending-reimbursements="settlementModalPendingReimbursements"
-      :focus-reimbursement-id="settlementModalFocusId"
       @close="showSettlementModal = false"
+      @confirm="handleSettlementCreated"
+    />
+
+    <!-- Single-line Settlement Modal -->
+    <SingleSettlementModal
+      :is-open="showSingleSettlementModal"
+      :reimbursement="singleSettlementReimbursement"
+      @close="showSingleSettlementModal = false"
       @confirm="handleSettlementCreated"
     />
 

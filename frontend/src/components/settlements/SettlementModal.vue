@@ -6,20 +6,17 @@
     type TransactionDto,
     type SettlementDto,
     type SettlementReimbursementItemDto,
-    type CategoryDto,
-    type SubcategoryDto,
   } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
+  import IncomeTransactionPicker from './IncomeTransactionPicker.vue'
   import {
     availableAmountOf,
     byOldestFirst,
     cascadeAllocate,
     prorataAllocate,
     round2,
-    scoreIncomeTransaction,
     toAllocationLine,
     type AllocationLine,
-    type SuggestionReason,
   } from '@/lib/settlements'
 
   const props = defineProps<{
@@ -28,11 +25,6 @@
     personName: string
     /** Every pending reimbursement of this person (amountRemaining > 0). */
     pendingReimbursements: ReimbursementDto[]
-    /**
-     * Seeds the allocation on a single line, for the per-row "Regler" entry
-     * point. Every other line stays visible and selectable.
-     */
-    focusReimbursementId?: string | null
   }>()
 
   const emit = defineEmits<{
@@ -41,35 +33,20 @@
   }>()
 
   interface LineState {
-    selected: boolean
     amount: number
     forceComplete: boolean
   }
 
   const currentStep = ref<1 | 2>(1)
-  const incomeTransactions = ref<TransactionDto[]>([])
-  const selectedTransactionId = ref<string | null>(null)
+  /**
+   * Step 1 answers "which debts", step 2 answers "with what money". Keeping the
+   * two apart is what lets the selection exist before a pot is known — the
+   * amounts below are only ever derived from it.
+   */
+  const selectedIds = ref<Set<string>>(new Set())
+  const selectedTransaction = ref<TransactionDto | null>(null)
   const allocations = ref<Record<string, LineState>>({})
   const expandedCategories = ref<Set<string>>(new Set())
-  const searchQuery = ref('')
-  // Mirrors the transaction list's own filters, because the income being
-  // looked for is often a year old and the modal only ever holds one page.
-  const filterStartDate = ref('')
-  const filterEndDate = ref('')
-  const filterAmountMin = ref('')
-  const filterAmountMax = ref('')
-  const filterCategoryId = ref<string | null>(null)
-  const filterSubcategoryId = ref<string | null>(null)
-  const incomeCategories = ref<CategoryDto[]>([])
-  const allSubcategories = ref<SubcategoryDto[]>([])
-  const showFilters = ref(false)
-  const isLoadingTransactions = ref(false)
-  /** How many suggestions show before "voir plus". */
-  const SUGGESTION_PREVIEW = 3
-  const showAllSuggestions = ref(false)
-  /** The page size the server is asked for; also what "some are missing" means. */
-  const PAGE_SIZE = 100
-  const totalMatching = ref(0)
   const isSubmitting = ref(false)
   const error = ref<string | null>(null)
 
@@ -88,15 +65,19 @@
     categoryId: string | null
     categoryName: string
     lines: AllocationLine[]
+    /** Total owed across the group, selected or not. */
     due: number
+    /** Total owed across the *selected* lines of the group. */
+    selectedDue: number
+    /** Total allocated from the pot, step 2 only. */
     allocated: number
     selectedCount: number
   }
 
-  const groups = computed((): CategoryGroup[] => {
+  function buildGroups(source: AllocationLine[]): CategoryGroup[] {
     const byKey = new Map<string, CategoryGroup>()
 
-    for (const line of lines.value) {
+    for (const line of source) {
       const key = categoryKey(line.categoryId)
       let group = byKey.get(key)
       if (!group) {
@@ -106,6 +87,7 @@
           categoryName: line.categoryName,
           lines: [],
           due: 0,
+          selectedDue: 0,
           allocated: 0,
           selectedCount: 0,
         }
@@ -114,21 +96,80 @@
       group.lines.push(line)
       group.due = round2(group.due + line.amountDue)
 
-      const state = allocations.value[line.reimbursementId]
-      if (state?.selected) {
-        group.allocated = round2(group.allocated + state.amount)
+      if (selectedIds.value.has(line.reimbursementId)) {
+        group.selectedDue = round2(group.selectedDue + line.amountDue)
         group.selectedCount += 1
+        group.allocated = round2(
+          group.allocated +
+            (allocations.value[line.reimbursementId]?.amount ?? 0)
+        )
       }
     }
 
     return Array.from(byKey.values())
-  })
+  }
 
-  // --- The pot -------------------------------------------------------------
+  /** Every pending line, for the step 1 picker. */
+  const groups = computed((): CategoryGroup[] => buildGroups(lines.value))
 
-  const selectedTransaction = computed(() =>
-    incomeTransactions.value.find(t => t.id === selectedTransactionId.value)
+  const selectedLines = computed((): AllocationLine[] =>
+    lines.value.filter(line => selectedIds.value.has(line.reimbursementId))
   )
+
+  /** Only what was retained, for the step 2 recap. */
+  const allocationGroups = computed((): CategoryGroup[] =>
+    buildGroups(selectedLines.value)
+  )
+
+  const selectedDueTotal = computed(() =>
+    round2(selectedLines.value.reduce((sum, line) => sum + line.amountDue, 0))
+  )
+
+  const hasSelection = computed(() => selectedLines.value.length > 0)
+
+  // --- Step 1: selecting the debts -----------------------------------------
+
+  function isSelected(reimbursementId: string): boolean {
+    return selectedIds.value.has(reimbursementId)
+  }
+
+  function setSelected(reimbursementId: string, selected: boolean): void {
+    const next = new Set(selectedIds.value)
+    if (selected) next.add(reimbursementId)
+    else next.delete(reimbursementId)
+    selectedIds.value = next
+  }
+
+  function toggleLineSelection(reimbursementId: string): void {
+    setSelected(reimbursementId, !isSelected(reimbursementId))
+  }
+
+  function toggleCategorySelection(group: CategoryGroup): void {
+    const selectAll = group.selectedCount < group.lines.length
+    const next = new Set(selectedIds.value)
+    for (const line of group.lines) {
+      if (selectAll) next.add(line.reimbursementId)
+      else next.delete(line.reimbursementId)
+    }
+    selectedIds.value = next
+  }
+
+  function selectAllLines(): void {
+    selectedIds.value = new Set(lines.value.map(line => line.reimbursementId))
+  }
+
+  function clearSelection(): void {
+    selectedIds.value = new Set()
+  }
+
+  function toggleExpanded(key: string): void {
+    const next = new Set(expandedCategories.value)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    expandedCategories.value = next
+  }
+
+  // --- Step 2: the pot and its allocation ----------------------------------
 
   const pot = computed(() =>
     selectedTransaction.value ? availableAmountOf(selectedTransaction.value) : 0
@@ -136,9 +177,11 @@
 
   const allocatedTotal = computed(() =>
     round2(
-      Object.values(allocations.value)
-        .filter(state => state.selected)
-        .reduce((sum, state) => sum + state.amount, 0)
+      selectedLines.value.reduce(
+        (sum, line) =>
+          sum + (allocations.value[line.reimbursementId]?.amount ?? 0),
+        0
+      )
     )
   )
 
@@ -150,118 +193,23 @@
 
   const canConfirm = computed(
     () =>
-      allocatedTotal.value > 0 && !isOverAllocated.value && !isSubmitting.value
+      selectedTransaction.value !== null &&
+      allocatedTotal.value > 0 &&
+      !isOverAllocated.value &&
+      !isSubmitting.value
   )
-
-  // --- Step 1: ranking the income transactions -----------------------------
-
-  const suggestionContext = computed(() => {
-    const pendingCategoryIds = new Set(lines.value.map(line => line.categoryId))
-    const categoryTotals = groups.value.map(group => group.due)
-    const lineTotals = lines.value.map(line => line.amountDue)
-    const grandTotal = round2(
-      lines.value.reduce((sum, line) => sum + line.amountDue, 0)
-    )
-    return {
-      personName: props.personName,
-      pendingCategoryIds,
-      pendingTotals: [grandTotal, ...categoryTotals, ...lineTotals],
-    }
-  })
-
-  interface RankedTransaction {
-    transaction: TransactionDto
-    available: number
-    score: number
-    reasons: SuggestionReason[]
-  }
-
-  const rankedTransactions = computed((): RankedTransaction[] =>
-    incomeTransactions.value
-      .map(transaction => {
-        const { score, reasons } = scoreIncomeTransaction(
-          transaction,
-          suggestionContext.value
-        )
-        return {
-          transaction,
-          available: availableAmountOf(transaction),
-          score,
-          reasons,
-        }
-      })
-      .filter(entry => entry.available > 0)
-      .sort(
-        (a, b) =>
-          b.score - a.score ||
-          new Date(b.transaction.date).getTime() -
-            new Date(a.transaction.date).getTime()
-      )
-  )
-
-  // The search is served by the API now: what came back *is* the result, so
-  // filtering it again locally would only re-apply a narrower rule.
-  const allSuggestions = computed(() =>
-    rankedTransactions.value.filter(entry => entry.score > 0)
-  )
-
-  /** Only the strongest few, unless the user asked to see the rest. */
-  const suggestions = computed(() =>
-    showAllSuggestions.value
-      ? allSuggestions.value
-      : allSuggestions.value.slice(0, SUGGESTION_PREVIEW)
-  )
-
-  const hiddenSuggestionCount = computed(() =>
-    Math.max(0, allSuggestions.value.length - suggestions.value.length)
-  )
-
-  const otherTransactions = computed(() =>
-    rankedTransactions.value.filter(entry => entry.score === 0)
-  )
-
-  const REASON_LABELS: Record<SuggestionReason, string> = {
-    name: 'nom',
-    category: 'categorie',
-    amount: 'montant exact',
-  }
-
-  // --- Allocation ----------------------------------------------------------
 
   /**
-   * Narrow the auto-allocation to the most likely intent: the focused line when
-   * the modal was opened from a row, otherwise the category the income
-   * transaction is filed under, otherwise everything.
+   * The selection *is* the scope now, so the pot cascades straight onto it —
+   * no more guessing from the receipt's category which lines were meant.
    */
-  function autoAllocationScope(): AllocationLine[] {
-    if (props.focusReimbursementId) {
-      const focused = lines.value.find(
-        line => line.reimbursementId === props.focusReimbursementId
-      )
-      if (focused) return [focused]
-    }
-
-    const categoryId = selectedTransaction.value?.categoryId
-    if (categoryId) {
-      const matching = lines.value.filter(
-        line => line.categoryId === categoryId
-      )
-      if (matching.length > 0) return matching
-    }
-
-    return lines.value
-  }
-
   function applyAutoAllocation(): void {
-    const scope = autoAllocationScope()
-    const allocated = cascadeAllocate(scope, pot.value)
+    const allocated = cascadeAllocate(selectedLines.value, pot.value)
 
     const next: Record<string, LineState> = {}
-    for (const line of lines.value) {
-      const amount = allocated.get(line.reimbursementId) ?? 0
+    for (const line of selectedLines.value) {
       next[line.reimbursementId] = {
-        selected: amount > 0,
-        amount,
+        amount: allocated.get(line.reimbursementId) ?? 0,
         forceComplete: false,
       }
     }
@@ -271,19 +219,15 @@
     // being paid, and it is the only place the per-line amount and the
     // "solder cette ligne" shortfall control are reachable.
     expandedCategories.value = new Set(
-      groups.value
-        .filter(group => group.selectedCount > 0)
+      allocationGroups.value
+        .filter(group => group.allocated > 0)
         .map(group => group.key)
     )
   }
 
   function stateOf(reimbursementId: string): LineState {
     return (
-      allocations.value[reimbursementId] ?? {
-        selected: false,
-        amount: 0,
-        forceComplete: false,
-      }
+      allocations.value[reimbursementId] ?? { amount: 0, forceComplete: false }
     )
   }
 
@@ -299,7 +243,6 @@
     const amount = round2(Math.min(Math.max(0, rawAmount), due))
     const previous = stateOf(reimbursementId)
     allocations.value[reimbursementId] = {
-      selected: amount > 0,
       amount,
       // Crediting the full due makes the "solder" flag meaningless.
       forceComplete:
@@ -314,17 +257,6 @@
   function onAmountCommit(reimbursementId: string, event: Event): void {
     const value = Number.parseFloat((event.target as HTMLInputElement).value)
     setLineAmount(reimbursementId, Number.isFinite(value) ? value : 0)
-  }
-
-  function toggleLine(reimbursementId: string): void {
-    const state = stateOf(reimbursementId)
-    if (state.selected) {
-      setLineAmount(reimbursementId, 0)
-      return
-    }
-    // Take what is left in the pot, never more than the line owes.
-    const room = Math.max(0, remainingToAllocate.value)
-    setLineAmount(reimbursementId, Math.min(dueOf(reimbursementId), room))
   }
 
   function toggleForceComplete(reimbursementId: string): void {
@@ -345,15 +277,6 @@
     }
   }
 
-  function toggleCategory(group: CategoryGroup): void {
-    if (group.selectedCount > 0) {
-      applyToGroup(group, 0)
-      return
-    }
-    const room = Math.max(0, remainingToAllocate.value)
-    applyToGroup(group, Math.min(group.due, room))
-  }
-
   function onCategoryAmountCommit(group: CategoryGroup, event: Event): void {
     const value = Number.parseFloat((event.target as HTMLInputElement).value)
     applyToGroup(group, Number.isFinite(value) ? Math.max(0, value) : 0)
@@ -369,148 +292,71 @@
     }
   }
 
-  function clearAll(): void {
-    for (const line of lines.value) setLineAmount(line.reimbursementId, 0)
-  }
-
-  function allocateEverything(): void {
-    const allocated = cascadeAllocate(lines.value, pot.value)
-    for (const line of lines.value) {
-      setLineAmount(
-        line.reimbursementId,
-        allocated.get(line.reimbursementId) ?? 0
-      )
+  function clearAmounts(): void {
+    for (const line of selectedLines.value) {
+      setLineAmount(line.reimbursementId, 0)
     }
   }
 
-  function toggleExpanded(key: string): void {
-    const next = new Set(expandedCategories.value)
-    if (next.has(key)) next.delete(key)
-    else next.add(key)
-    expandedCategories.value = next
+  function allocateEverything(): void {
+    applyAutoAllocation()
+  }
+
+  // --- The receipt ---------------------------------------------------------
+
+  /**
+   * Ranked against the *selection* rather than the whole backlog: the total the
+   * user just committed to is the strongest amount signal there is, and it does
+   * not exist until step 1 is done.
+   */
+  const suggestionContext = computed(() => {
+    const scope = hasSelection.value ? selectedLines.value : lines.value
+    const scopeGroups = hasSelection.value
+      ? allocationGroups.value.map(group => group.selectedDue)
+      : groups.value.map(group => group.due)
+
+    return {
+      personName: props.personName,
+      pendingCategoryIds: new Set(scope.map(line => line.categoryId)),
+      pendingTotals: [
+        round2(scope.reduce((sum, line) => sum + line.amountDue, 0)),
+        ...scopeGroups,
+        ...scope.map(line => line.amountDue),
+      ],
+    }
+  })
+
+  function selectTransaction(transaction: TransactionDto): void {
+    selectedTransaction.value = transaction
+    applyAutoAllocation()
   }
 
   // --- Navigation ----------------------------------------------------------
 
   function resetModal(): void {
     currentStep.value = 1
-    incomeTransactions.value = []
-    selectedTransactionId.value = null
+    selectedIds.value = new Set()
+    selectedTransaction.value = null
     allocations.value = {}
-    expandedCategories.value = new Set()
-    clearFilters()
-    showFilters.value = false
-    showAllSuggestions.value = false
-    totalMatching.value = 0
+    expandedCategories.value = new Set(groups.value.map(group => group.key))
     error.value = null
     isSubmitting.value = false
   }
 
-  const hasActiveFilters = computed(
-    () =>
-      searchQuery.value.trim() !== '' ||
-      filterStartDate.value !== '' ||
-      filterEndDate.value !== '' ||
-      filterAmountMin.value !== '' ||
-      filterAmountMax.value !== '' ||
-      filterCategoryId.value !== null
-  )
-
-  /** A subcategory belongs to one category, so the options follow the choice. */
-  const availableSubcategories = computed(() => {
-    if (!filterCategoryId.value) return []
-    return allSubcategories.value
-      .filter(sub => sub.categoryId === filterCategoryId.value)
-      .sort((a, b) => a.name.localeCompare(b.name))
-  })
-
-  function clearFilters(): void {
-    searchQuery.value = ''
-    filterStartDate.value = ''
-    filterEndDate.value = ''
-    filterAmountMin.value = ''
-    filterAmountMax.value = ''
-    filterCategoryId.value = null
-    filterSubcategoryId.value = null
-  }
-
-  /**
-   * Fetched here rather than passed in: the modal already loads its own
-   * transactions, and the page that opens it has no use for these lists.
-   */
-  async function loadFilterOptions(): Promise<void> {
-    try {
-      const [categories, subcategories] = await Promise.all([
-        api.getCategories(),
-        api.getSubcategories(),
-      ])
-      incomeCategories.value = categories
-        .filter(category => category.type === 'INCOME')
-        .sort((a, b) => a.name.localeCompare(b.name))
-      allSubcategories.value = subcategories
-    } catch {
-      // A missing filter list is a smaller problem than a modal that will not
-      // open: the search still works without it.
-    }
-  }
-
-  /**
-   * Ask the server rather than filter what is already loaded.
-   *
-   * The list is one page deep, so a purely local search could only ever find
-   * the most recent hundred receipts — which is exactly the transaction a
-   * year-old expense is *not* repaid by.
-   */
-  async function loadIncomeTransactions(): Promise<void> {
-    isLoadingTransactions.value = true
-    error.value = null
-    try {
-      const parsedMin = Number(filterAmountMin.value)
-      const parsedMax = Number(filterAmountMax.value)
-
-      const response = await api.getTransactions({
-        type: 'INCOME',
-        limit: PAGE_SIZE,
-        search: searchQuery.value.trim() || undefined,
-        categoryId: filterCategoryId.value || undefined,
-        // The API ignores a subcategory sent without its category, and the
-        // select below is disabled until one is picked.
-        subcategoryId: filterSubcategoryId.value || undefined,
-        startDate: filterStartDate.value || undefined,
-        endDate: filterEndDate.value || undefined,
-        amountMin:
-          filterAmountMin.value !== '' &&
-          Number.isFinite(parsedMin) &&
-          parsedMin >= 0
-            ? parsedMin
-            : undefined,
-        amountMax:
-          filterAmountMax.value !== '' &&
-          Number.isFinite(parsedMax) &&
-          parsedMax >= 0
-            ? parsedMax
-            : undefined,
-      })
-      incomeTransactions.value = response.data
-      totalMatching.value = response.meta.total
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Erreur lors du chargement'
-    } finally {
-      isLoadingTransactions.value = false
-    }
-  }
-
-  /** True when the server has more matches than the page we are showing. */
-  const hasMoreThanShown = computed(() => totalMatching.value > PAGE_SIZE)
-
-  function selectTransaction(transactionId: string): void {
-    selectedTransactionId.value = transactionId
-    applyAutoAllocation()
+  function goToReceipt(): void {
+    if (!hasSelection.value) return
     currentStep.value = 2
+    // The selection may have changed since the receipt was picked, which would
+    // leave stale amounts behind.
+    if (selectedTransaction.value) applyAutoAllocation()
   }
 
-  function goBackToTransactions(): void {
+  function goBackToSelection(): void {
     currentStep.value = 1
+    // Reopen everything: the allocation left the categories it did not pay
+    // collapsed, which is exactly where a line the user came back to add is
+    // hiding.
+    expandedCategories.value = new Set(groups.value.map(group => group.key))
   }
 
   function handleClose(): void {
@@ -525,14 +371,15 @@
     error.value = null
 
     try {
-      const reimbursements: SettlementReimbursementItemDto[] = lines.value
-        .map(line => ({ line, state: stateOf(line.reimbursementId) }))
-        .filter(({ state }) => state.selected && state.amount > 0)
-        .map(({ line, state }) => ({
-          reimbursementId: line.reimbursementId,
-          amountSettled: state.amount,
-          ...(state.forceComplete && { forceComplete: true }),
-        }))
+      const reimbursements: SettlementReimbursementItemDto[] =
+        selectedLines.value
+          .map(line => ({ line, state: stateOf(line.reimbursementId) }))
+          .filter(({ state }) => state.amount > 0)
+          .map(({ line, state }) => ({
+            reimbursementId: line.reimbursementId,
+            amountSettled: state.amount,
+            ...(state.forceComplete && { forceComplete: true }),
+          }))
 
       const settlement = await api.createSettlement({
         personId: props.personId,
@@ -552,38 +399,8 @@
 
   watch(
     () => props.isOpen,
-    async isOpen => {
-      if (!isOpen) return
-      resetModal()
-      await Promise.all([loadIncomeTransactions(), loadFilterOptions()])
-    }
-  )
-
-  // Changing the category invalidates a subcategory picked under the previous
-  // one, exactly as it does everywhere else.
-  watch(filterCategoryId, () => {
-    filterSubcategoryId.value = null
-  })
-
-  // Debounced so typing a description does not fire a request per keystroke.
-  let searchDebounce: ReturnType<typeof setTimeout> | undefined
-  watch(
-    [
-      searchQuery,
-      filterStartDate,
-      filterEndDate,
-      filterAmountMin,
-      filterAmountMax,
-      filterCategoryId,
-      filterSubcategoryId,
-    ],
-    () => {
-      if (!props.isOpen) return
-      showAllSuggestions.value = false
-      if (searchDebounce) clearTimeout(searchDebounce)
-      searchDebounce = setTimeout(() => {
-        void loadIncomeTransactions()
-      }, 350)
+    isOpen => {
+      if (isOpen) resetModal()
     }
   )
 
@@ -621,10 +438,10 @@
               <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
                 {{ personName }}
                 <span v-if="currentStep === 1">
-                  &middot; etape 1 sur 2 : d'ou vient l'argent ?</span
+                  &middot; etape 1 sur 2 : que voulez-vous regler ?</span
                 >
                 <span v-else>
-                  &middot; etape 2 sur 2 : sur quoi l'imputer ?</span
+                  &middot; etape 2 sur 2 : d'ou vient l'argent ?</span
                 >
               </p>
             </div>
@@ -658,311 +475,27 @@
               {{ error }}
             </div>
 
-            <!-- ================= Step 1: pick the money ================= -->
-            <div v-if="currentStep === 1">
-              <label
-                class="block text-sm text-gray-600 dark:text-gray-400 mb-3"
-                for="settlement-search"
-              >
-                Quelle transaction correspond au paiement de
-                {{ personName }} ?
-              </label>
-              <div class="relative mb-4">
-                <svg
-                  class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                <input
-                  id="settlement-search"
-                  v-model="searchQuery"
-                  type="text"
-                  placeholder="Rechercher une transaction..."
-                  data-testid="settlement-search"
-                  class="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-              </div>
-
-              <div class="flex flex-wrap items-center gap-3 mb-3 text-sm">
-                <button
-                  type="button"
-                  data-testid="settlement-toggle-filters"
-                  class="text-emerald-600 dark:text-emerald-400 hover:underline"
-                  @click="showFilters = !showFilters"
-                >
-                  {{ showFilters ? 'Masquer les filtres' : 'Plus de filtres' }}
-                </button>
-                <button
-                  v-if="hasActiveFilters"
-                  type="button"
-                  data-testid="settlement-clear-filters"
-                  class="text-gray-500 dark:text-gray-400 hover:underline"
-                  @click="clearFilters"
-                >
-                  Reinitialiser
-                </button>
-              </div>
-
-              <div
-                v-if="showFilters"
-                data-testid="settlement-filters"
-                class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 p-3 border border-gray-200 dark:border-slate-700 rounded-lg"
-              >
-                <label class="text-sm">
-                  <span class="block text-gray-600 dark:text-gray-400 mb-1"
-                    >Du</span
-                  >
-                  <input
-                    v-model="filterStartDate"
-                    type="date"
-                    data-testid="settlement-start-date"
-                    class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                  />
-                </label>
-                <label class="text-sm">
-                  <span class="block text-gray-600 dark:text-gray-400 mb-1"
-                    >Au</span
-                  >
-                  <input
-                    v-model="filterEndDate"
-                    type="date"
-                    data-testid="settlement-end-date"
-                    class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                  />
-                </label>
-                <label class="text-sm">
-                  <span class="block text-gray-600 dark:text-gray-400 mb-1"
-                    >Categorie</span
-                  >
-                  <select
-                    v-model="filterCategoryId"
-                    data-testid="settlement-category"
-                    class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                  >
-                    <option :value="null">Toutes</option>
-                    <option
-                      v-for="category in incomeCategories"
-                      :key="category.id"
-                      :value="category.id"
-                    >
-                      {{ category.name }}
-                    </option>
-                  </select>
-                </label>
-                <label class="text-sm">
-                  <span class="block text-gray-600 dark:text-gray-400 mb-1"
-                    >Sous-categorie</span
-                  >
-                  <select
-                    v-model="filterSubcategoryId"
-                    data-testid="settlement-subcategory"
-                    :disabled="!filterCategoryId"
-                    class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option :value="null">Toutes</option>
-                    <option
-                      v-for="sub in availableSubcategories"
-                      :key="sub.id"
-                      :value="sub.id"
-                    >
-                      {{ sub.name }}
-                    </option>
-                  </select>
-                </label>
-                <label class="text-sm">
-                  <span class="block text-gray-600 dark:text-gray-400 mb-1"
-                    >Montant min</span
-                  >
-                  <input
-                    v-model="filterAmountMin"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    data-testid="settlement-amount-min"
-                    class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                  />
-                </label>
-                <label class="text-sm">
-                  <span class="block text-gray-600 dark:text-gray-400 mb-1"
-                    >Montant max</span
-                  >
-                  <input
-                    v-model="filterAmountMax"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    data-testid="settlement-amount-max"
-                    class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                  />
-                </label>
-              </div>
-
-              <div v-if="isLoadingTransactions" class="py-12 text-center">
-                <div
-                  class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-500 border-t-transparent"
-                />
-                <p class="mt-2 text-gray-600 dark:text-gray-400">
-                  Chargement des transactions...
-                </p>
-              </div>
-
-              <div v-else class="space-y-4">
-                <section v-if="suggestions.length > 0">
-                  <h3
-                    class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-                  >
-                    Suggestions
-                  </h3>
-                  <div class="space-y-2">
-                    <button
-                      v-for="entry in suggestions"
-                      :key="entry.transaction.id"
-                      type="button"
-                      class="w-full flex items-center gap-3 p-3 text-left border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
-                      @click="selectTransaction(entry.transaction.id)"
-                    >
-                      <div class="flex-1 min-w-0">
-                        <div
-                          class="font-medium text-gray-900 dark:text-gray-100 truncate"
-                        >
-                          {{ entry.transaction.description }}
-                        </div>
-                        <div class="text-sm text-gray-500 dark:text-gray-400">
-                          {{ formatDate(entry.transaction.date) }} &middot;
-                          {{ entry.transaction.account }}
-                        </div>
-                        <div class="mt-1 flex flex-wrap gap-1">
-                          <span
-                            v-for="reason in entry.reasons"
-                            :key="reason"
-                            class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
-                          >
-                            {{ REASON_LABELS[reason] }}
-                          </span>
-                        </div>
-                      </div>
-                      <div
-                        class="text-lg font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
-                      >
-                        +{{ formatCurrency(entry.available) }}
-                      </div>
-                    </button>
-                  </div>
-                  <button
-                    v-if="hiddenSuggestionCount > 0"
-                    type="button"
-                    data-testid="settlement-more-suggestions"
-                    class="mt-2 text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
-                    @click="showAllSuggestions = true"
-                  >
-                    Voir les {{ hiddenSuggestionCount }} autres suggestions
-                  </button>
-                </section>
-
-                <section v-if="otherTransactions.length > 0">
-                  <h3
-                    class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-                  >
-                    Toutes les transactions recues
-                  </h3>
-                  <div class="space-y-2 max-h-64 overflow-y-auto">
-                    <button
-                      v-for="entry in otherTransactions"
-                      :key="entry.transaction.id"
-                      type="button"
-                      class="w-full flex items-center gap-3 p-3 text-left border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                      @click="selectTransaction(entry.transaction.id)"
-                    >
-                      <div class="flex-1 min-w-0">
-                        <div
-                          class="font-medium text-gray-900 dark:text-gray-100 truncate"
-                        >
-                          {{ entry.transaction.description }}
-                        </div>
-                        <div class="text-sm text-gray-500 dark:text-gray-400">
-                          {{ formatDate(entry.transaction.date) }} &middot;
-                          {{ entry.transaction.account }}
-                        </div>
-                      </div>
-                      <div
-                        class="text-lg font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
-                      >
-                        +{{ formatCurrency(entry.available) }}
-                      </div>
-                    </button>
-                  </div>
-                </section>
-
-                <p
-                  v-if="rankedTransactions.length === 0"
-                  data-testid="settlement-no-results"
-                  class="py-8 text-center text-gray-500 dark:text-gray-400"
-                >
-                  Aucune transaction recue ne correspond. Affinez la recherche
-                  ou elargissez la periode.
-                </p>
-
-                <!--
-                  The list is one page deep. Saying so beats letting the user
-                  conclude the transaction does not exist.
-                -->
-                <p
-                  v-else-if="hasMoreThanShown"
-                  data-testid="settlement-truncated"
-                  class="pt-2 text-xs text-gray-500 dark:text-gray-400"
-                >
-                  {{ totalMatching }} transactions correspondent, les 100 plus
-                  recentes sont affichees. Affinez la recherche pour atteindre
-                  les autres.
-                </p>
-              </div>
-            </div>
-
-            <!-- ================= Step 2: allocate ================= -->
-            <div v-else>
-              <div
-                v-if="selectedTransaction"
-                class="mb-4 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg flex items-center justify-between gap-3"
-              >
-                <div class="min-w-0">
-                  <div
-                    class="font-medium text-gray-900 dark:text-gray-100 truncate"
-                  >
-                    {{ selectedTransaction.description }}
-                  </div>
-                  <div class="text-sm text-gray-600 dark:text-gray-400">
-                    {{ formatDate(selectedTransaction.date) }} &middot;
-                    {{ selectedTransaction.account }}
-                  </div>
-                </div>
-                <div
-                  class="text-lg font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
-                >
-                  +{{ formatCurrency(pot) }}
-                </div>
-              </div>
+            <!-- ============ Step 1: pick the debts to settle ============ -->
+            <div v-if="currentStep === 1" data-testid="settlement-step-select">
+              <p class="mb-3 text-sm text-gray-600 dark:text-gray-400">
+                Quels remboursements en attente de {{ personName }}
+                souhaitez-vous regler ?
+              </p>
 
               <div class="flex justify-end gap-3 mb-2 text-sm">
                 <button
                   type="button"
+                  data-testid="settlement-select-all"
                   class="text-emerald-600 dark:text-emerald-400 hover:underline"
-                  @click="allocateEverything"
+                  @click="selectAllLines"
                 >
-                  Tout affecter
+                  Tout selectionner
                 </button>
                 <span class="text-gray-300 dark:text-gray-600">|</span>
                 <button
                   type="button"
                   class="text-gray-600 dark:text-gray-400 hover:underline"
-                  @click="clearAll"
+                  @click="clearSelection"
                 >
                   Tout decocher
                 </button>
@@ -1011,7 +544,7 @@
                         group.selectedCount < group.lines.length
                       "
                       :aria-label="`Selectionner ${group.categoryName}`"
-                      @change="toggleCategory(group)"
+                      @change="toggleCategorySelection(group)"
                     />
                     <div class="flex-1 min-w-0">
                       <div
@@ -1024,20 +557,11 @@
                         {{ formatCurrency(group.due) }}
                       </div>
                     </div>
-                    <div class="flex items-center gap-1 shrink-0">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        :max="group.due"
-                        :value="group.allocated"
-                        :aria-label="`Montant affecte a ${group.categoryName}`"
-                        class="w-24 px-2 py-1 text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500"
-                        @change="onCategoryAmountCommit(group, $event)"
-                      />
-                      <span class="text-gray-500 dark:text-gray-400"
-                        >&euro;</span
-                      >
+                    <div
+                      v-if="group.selectedCount > 0"
+                      class="text-sm font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap shrink-0"
+                    >
+                      {{ formatCurrency(group.selectedDue) }}
                     </div>
                   </div>
 
@@ -1046,90 +570,34 @@
                     v-if="expandedCategories.has(group.key)"
                     class="divide-y divide-gray-100 dark:divide-slate-700"
                   >
-                    <div
+                    <label
                       v-for="line in group.lines"
                       :key="line.reimbursementId"
-                      class="p-3 pl-10"
+                      class="flex items-center gap-2 p-3 pl-10 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/50"
                     >
-                      <div class="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 shrink-0"
-                          :checked="stateOf(line.reimbursementId).selected"
-                          :aria-label="`Selectionner ${line.description}`"
-                          @change="toggleLine(line.reimbursementId)"
-                        />
-                        <div class="flex-1 min-w-0">
-                          <div
-                            class="text-sm text-gray-900 dark:text-gray-100 truncate"
+                      <input
+                        type="checkbox"
+                        class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 shrink-0"
+                        :checked="isSelected(line.reimbursementId)"
+                        :aria-label="`Selectionner ${line.description}`"
+                        @change="toggleLineSelection(line.reimbursementId)"
+                      />
+                      <div class="flex-1 min-w-0">
+                        <div
+                          class="text-sm text-gray-900 dark:text-gray-100 truncate"
+                        >
+                          <span class="text-gray-400 dark:text-gray-500"
+                            >[{{ formatDate(line.date) }}]</span
                           >
-                            <span class="text-gray-400 dark:text-gray-500"
-                              >[{{ formatDate(line.date) }}]</span
-                            >
-                            {{ line.description }}
-                          </div>
-                          <div class="text-xs text-gray-500 dark:text-gray-400">
-                            du {{ formatCurrency(line.amountDue) }}
-                          </div>
-                        </div>
-                        <div class="flex items-center gap-1 shrink-0">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            :max="line.amountDue"
-                            :value="stateOf(line.reimbursementId).amount"
-                            :aria-label="`Montant affecte a ${line.description}`"
-                            class="w-24 px-2 py-1 text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500"
-                            @change="
-                              onAmountCommit(line.reimbursementId, $event)
-                            "
-                          />
-                          <span class="text-gray-500 dark:text-gray-400"
-                            >&euro;</span
-                          >
+                          {{ line.description }}
                         </div>
                       </div>
-
-                      <!-- Settle-the-shortfall, only when the line stays short -->
-                      <label
-                        v-if="
-                          stateOf(line.reimbursementId).selected &&
-                          stateOf(line.reimbursementId).amount < line.amountDue
-                        "
-                        class="mt-2 ml-6 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer"
+                      <div
+                        class="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap shrink-0"
                       >
-                        <input
-                          type="checkbox"
-                          class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                          :checked="stateOf(line.reimbursementId).forceComplete"
-                          :aria-label="`Solder ${line.description}`"
-                          @change="toggleForceComplete(line.reimbursementId)"
-                        />
-                        Solder cette ligne malgre l'ecart de
-                        {{
-                          formatCurrency(
-                            round2(
-                              line.amountDue -
-                                stateOf(line.reimbursementId).amount
-                            )
-                          )
-                        }}
-                      </label>
-                    </div>
-
-                    <div
-                      v-if="group.lines.length > 1 && group.allocated > 0"
-                      class="px-3 py-2 pl-10 text-right"
-                    >
-                      <button
-                        type="button"
-                        class="text-xs text-emerald-600 dark:text-emerald-400 hover:underline"
-                        @click="spreadGroupProrata(group)"
-                      >
-                        Repartir au prorata
-                      </button>
-                    </div>
+                        {{ formatCurrency(line.amountDue) }}
+                      </div>
+                    </label>
                   </div>
                 </div>
               </div>
@@ -1141,15 +609,263 @@
                 Aucun remboursement en attente pour {{ personName }}
               </p>
             </div>
+
+            <!-- ====== Step 2: find the receipt, then fine-tune ====== -->
+            <div v-else data-testid="settlement-step-receipt">
+              <div
+                class="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-slate-800 flex items-center justify-between gap-3"
+              >
+                <span class="text-sm text-gray-600 dark:text-gray-400">
+                  {{ selectedLines.length }} remboursement(s) retenu(s)
+                </span>
+                <span
+                  class="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap"
+                  data-testid="settlement-selected-total"
+                >
+                  {{ formatCurrency(selectedDueTotal) }} a couvrir
+                </span>
+              </div>
+
+              <label
+                class="block text-sm text-gray-600 dark:text-gray-400 mb-3"
+                for="settlement-search"
+              >
+                Quelle transaction correspond au paiement de {{ personName }} ?
+              </label>
+
+              <IncomeTransactionPicker
+                :context="suggestionContext"
+                :selected-transaction-id="selectedTransaction?.id ?? null"
+                @select="selectTransaction"
+              />
+
+              <!-- Recap, once the money is known -->
+              <div v-if="selectedTransaction" class="mt-6">
+                <div
+                  class="mb-4 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg flex items-center justify-between gap-3"
+                >
+                  <div class="min-w-0">
+                    <div
+                      class="font-medium text-gray-900 dark:text-gray-100 truncate"
+                    >
+                      {{ selectedTransaction.description }}
+                    </div>
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                      {{ formatDate(selectedTransaction.date) }} &middot;
+                      {{ selectedTransaction.account }}
+                    </div>
+                  </div>
+                  <div
+                    class="text-lg font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
+                  >
+                    +{{ formatCurrency(pot) }}
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between gap-3 mb-2">
+                  <h3
+                    class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                  >
+                    Repartition
+                  </h3>
+                  <div class="flex gap-3 text-sm">
+                    <button
+                      type="button"
+                      class="text-emerald-600 dark:text-emerald-400 hover:underline"
+                      @click="allocateEverything"
+                    >
+                      Tout affecter
+                    </button>
+                    <span class="text-gray-300 dark:text-gray-600">|</span>
+                    <button
+                      type="button"
+                      class="text-gray-600 dark:text-gray-400 hover:underline"
+                      @click="clearAmounts"
+                    >
+                      Tout remettre a zero
+                    </button>
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <div
+                    v-for="group in allocationGroups"
+                    :key="group.key"
+                    class="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden"
+                  >
+                    <!-- Category row -->
+                    <div
+                      class="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800"
+                    >
+                      <button
+                        type="button"
+                        class="p-1 text-gray-400 dark:text-gray-500 shrink-0"
+                        :aria-label="`Deplier ${group.categoryName}`"
+                        :aria-expanded="expandedCategories.has(group.key)"
+                        @click="toggleExpanded(group.key)"
+                      >
+                        <svg
+                          class="w-4 h-4 transition-transform duration-200"
+                          :class="{
+                            'rotate-90': expandedCategories.has(group.key),
+                          }"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </button>
+                      <div class="flex-1 min-w-0">
+                        <div
+                          class="font-medium text-gray-900 dark:text-gray-100 truncate"
+                        >
+                          {{ group.categoryName }}
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                          {{ group.lines.length }} ligne(s) &middot; du
+                          {{ formatCurrency(group.selectedDue) }}
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-1 shrink-0">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          :max="group.selectedDue"
+                          :value="group.allocated"
+                          :aria-label="`Montant affecte a ${group.categoryName}`"
+                          class="w-24 px-2 py-1 text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500"
+                          @change="onCategoryAmountCommit(group, $event)"
+                        />
+                        <span class="text-gray-500 dark:text-gray-400"
+                          >&euro;</span
+                        >
+                      </div>
+                    </div>
+
+                    <!-- Lines -->
+                    <div
+                      v-if="expandedCategories.has(group.key)"
+                      class="divide-y divide-gray-100 dark:divide-slate-700"
+                    >
+                      <div
+                        v-for="line in group.lines"
+                        :key="line.reimbursementId"
+                        class="p-3 pl-10"
+                      >
+                        <div class="flex items-center gap-2">
+                          <div class="flex-1 min-w-0">
+                            <div
+                              class="text-sm text-gray-900 dark:text-gray-100 truncate"
+                            >
+                              <span class="text-gray-400 dark:text-gray-500"
+                                >[{{ formatDate(line.date) }}]</span
+                              >
+                              {{ line.description }}
+                            </div>
+                            <div
+                              class="text-xs text-gray-500 dark:text-gray-400"
+                            >
+                              du {{ formatCurrency(line.amountDue) }}
+                            </div>
+                          </div>
+                          <div class="flex items-center gap-1 shrink-0">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              :max="line.amountDue"
+                              :value="stateOf(line.reimbursementId).amount"
+                              :aria-label="`Montant affecte a ${line.description}`"
+                              class="w-24 px-2 py-1 text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500"
+                              @change="
+                                onAmountCommit(line.reimbursementId, $event)
+                              "
+                            />
+                            <span class="text-gray-500 dark:text-gray-400"
+                              >&euro;</span
+                            >
+                          </div>
+                        </div>
+
+                        <!-- Settle-the-shortfall, only when the line stays short -->
+                        <label
+                          v-if="
+                            stateOf(line.reimbursementId).amount > 0 &&
+                            stateOf(line.reimbursementId).amount <
+                              line.amountDue
+                          "
+                          class="mt-2 ml-6 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                            :checked="
+                              stateOf(line.reimbursementId).forceComplete
+                            "
+                            :aria-label="`Solder ${line.description}`"
+                            @change="toggleForceComplete(line.reimbursementId)"
+                          />
+                          Solder cette ligne malgre l'ecart de
+                          {{
+                            formatCurrency(
+                              round2(
+                                line.amountDue -
+                                  stateOf(line.reimbursementId).amount
+                              )
+                            )
+                          }}
+                        </label>
+                      </div>
+
+                      <div
+                        v-if="group.lines.length > 1 && group.allocated > 0"
+                        class="px-3 py-2 pl-10 text-right"
+                      >
+                        <button
+                          type="button"
+                          class="text-xs text-emerald-600 dark:text-emerald-400 hover:underline"
+                          @click="spreadGroupProrata(group)"
+                        >
+                          Repartir au prorata
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Footer -->
           <div
             class="border-t border-gray-200 dark:border-slate-700 p-6 space-y-3"
           >
+            <!-- Selection total, step 1 only -->
+            <div
+              v-if="currentStep === 1"
+              class="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-slate-800"
+            >
+              <span class="text-sm text-gray-700 dark:text-gray-300">
+                {{ selectedLines.length }} remboursement(s) selectionne(s)
+              </span>
+              <span
+                class="text-sm font-semibold text-gray-900 dark:text-gray-100"
+                data-testid="settlement-selection-total"
+              >
+                {{ formatCurrency(selectedDueTotal) }}
+              </span>
+            </div>
+
             <!-- Running balance, step 2 only -->
             <div
-              v-if="currentStep === 2"
+              v-if="currentStep === 2 && selectedTransaction"
               class="flex items-center justify-between p-3 rounded-lg"
               :class="{
                 'bg-emerald-50 dark:bg-emerald-900/20':
@@ -1187,9 +903,10 @@
               <button
                 v-if="currentStep === 2"
                 type="button"
+                data-testid="settlement-back"
                 class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                 :disabled="isSubmitting"
-                @click="goBackToTransactions"
+                @click="goBackToSelection"
               >
                 Retour
               </button>
@@ -1205,7 +922,17 @@
                   Annuler
                 </button>
                 <button
-                  v-if="currentStep === 2"
+                  v-if="currentStep === 1"
+                  type="button"
+                  data-testid="settlement-continue"
+                  class="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  :disabled="!hasSelection"
+                  @click="goToReceipt"
+                >
+                  Continuer
+                </button>
+                <button
+                  v-else
                   type="button"
                   class="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   :disabled="!canConfirm"
