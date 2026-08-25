@@ -19,6 +19,9 @@ vi.mock('@/lib/api', () => ({
     getSettlements: vi.fn(),
     deleteSettlement: vi.fn(),
   },
+  // Re-exported by the module under test; without it the page's category
+  // fallbacks silently read `undefined`.
+  UNCATEGORIZED_CATEGORY_ID: '__uncategorized__',
 }))
 
 // Mock the filters store
@@ -541,6 +544,108 @@ describe('ReimbursementsPage', () => {
       await flushPromises()
 
       expect(wrapper.text()).toContain('Enregistrer un reglement')
+    })
+
+    /**
+     * The page owns which modal opens and what it is handed. Both are stubbed
+     * here, so these assertions are about the wiring alone — the modals'
+     * own behaviour lives in their specs.
+     */
+    describe('routing a click to the right modal', () => {
+      // Distinct descriptions so a row can be addressed by its button title.
+      const named = [
+        {
+          ...mockReimbursements[0]!,
+          transaction: {
+            id: '1',
+            date: '2024-01-15',
+            description: 'Monoprix',
+            amount: -25,
+          },
+        },
+        {
+          ...mockReimbursements[1]!,
+          transaction: {
+            id: '3',
+            date: '2024-01-20',
+            description: 'Pharmacie',
+            amount: -20,
+          },
+        },
+      ]
+
+      const mountWithDebts = async () => {
+        vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+        vi.mocked(api.getReimbursements).mockResolvedValue(named)
+        vi.mocked(api.getSettlements).mockResolvedValue([])
+
+        const wrapper = mount(ReimbursementsPage, {
+          global: {
+            plugins: [router],
+            stubs: {
+              Teleport: true,
+              SettlementModal: true,
+              SingleSettlementModal: true,
+              SettlementHistorySection: true,
+              SettlementDetailModal: true,
+            },
+          },
+        })
+        await flushPromises()
+        return wrapper
+      }
+
+      const single = (wrapper: ReturnType<typeof mount>) =>
+        wrapper.findComponent({ name: 'SingleSettlementModal' })
+      const multi = (wrapper: ReturnType<typeof mount>) =>
+        wrapper.findComponent({ name: 'SettlementModal' })
+
+      it('hands the clicked line to the single-line modal', async () => {
+        const wrapper = await mountWithDebts()
+
+        await wrapper
+          .get('button[title="Regler uniquement Pharmacie"]')
+          .trigger('click')
+
+        expect(single(wrapper).props('isOpen')).toBe(true)
+        // The whole debt travels, not just its id: the modal shows the
+        // description, the category and what is still due.
+        expect(single(wrapper).props('reimbursement')).toMatchObject({
+          id: 'r2',
+          personId: '1',
+          amountRemaining: 20,
+        })
+        // And the two-step modal stays shut.
+        expect(multi(wrapper).props('isOpen')).toBe(false)
+      })
+
+      it('opens the multi-line modal on the person, with every pending debt', async () => {
+        const wrapper = await mountWithDebts()
+
+        const personButton = wrapper
+          .findAll('button')
+          .find(button => button.text().includes('Enregistrer un reglement'))
+        await personButton?.trigger('click')
+
+        expect(multi(wrapper).props('isOpen')).toBe(true)
+        expect(multi(wrapper).props('personName')).toBe('Alice Dupont')
+        expect(multi(wrapper).props('pendingReimbursements')).toHaveLength(2)
+        expect(single(wrapper).props('isOpen')).toBe(false)
+      })
+
+      it('reloads the reimbursements once a settlement lands', async () => {
+        const wrapper = await mountWithDebts()
+        vi.mocked(api.getReimbursements).mockClear()
+
+        await wrapper
+          .get('button[title="Regler uniquement Monoprix"]')
+          .trigger('click')
+        single(wrapper).vm.$emit('confirm', { id: 'settlement-1' })
+        await flushPromises()
+
+        // Without this the page would keep showing a debt that is now settled.
+        expect(api.getReimbursements).toHaveBeenCalled()
+      })
     })
 
     it('should display PDF export button when reimbursements exist', async () => {
