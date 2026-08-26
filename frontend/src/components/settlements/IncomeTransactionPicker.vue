@@ -102,7 +102,6 @@
 
   const REASON_LABELS: Record<SuggestionReason, string> = {
     name: 'nom',
-    category: 'categorie',
     amount: 'montant exact',
   }
 

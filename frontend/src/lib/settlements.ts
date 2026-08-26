@@ -21,6 +21,10 @@ export function availableAmountOf(transaction: TransactionDto): number {
 /** A pending debt line, flattened out of a ReimbursementDto for allocation. */
 export interface AllocationLine {
   reimbursementId: string
+  /**
+   * Category of the expense being repaid — how the debts are grouped, and the
+   * same axis the reimbursements page displays them on.
+   */
   categoryId: string | null
   categoryName: string
   /** Expense transaction date, drives the cascade order (oldest settled first). */
@@ -36,8 +40,10 @@ export function toAllocationLine(
 ): AllocationLine {
   return {
     reimbursementId: reimbursement.id,
-    categoryId: reimbursement.categoryId,
-    categoryName: reimbursement.categoryName || NO_CATEGORY_LABEL,
+    // The expense, not `categoryId`: the latter is the retired income hint,
+    // null on most debts, which filed every line under "Sans categorie".
+    categoryId: reimbursement.expenseCategoryId,
+    categoryName: reimbursement.expenseCategoryName || NO_CATEGORY_LABEL,
     date: reimbursement.transaction?.date ?? reimbursement.createdAt,
     description: reimbursement.transaction?.description ?? 'Transaction',
     amountDue: reimbursement.amountRemaining,
@@ -115,22 +121,21 @@ function normalize(value: string): string {
 
 export interface SuggestionContext {
   personName: string
-  /**
-   * Category ids with a pending balance for this person, `null` standing for
-   * the uncategorized ones. Ids rather than names: a rename must not quietly
-   * stop the suggestion from firing.
-   */
-  pendingCategoryIds: Set<string | null>
   /** Pending total per category, plus the grand total, for amount matching. */
   pendingTotals: number[]
 }
 
-export type SuggestionReason = 'name' | 'category' | 'amount'
+export type SuggestionReason = 'name' | 'amount'
 
 /**
  * Rank an income transaction against what the person still owes. Purely a
  * sorting aid: nothing is ever hidden from the list, unlike the category
  * pre-filter this replaces.
+ *
+ * There is no category signal: a debt only knows the *expense* it repays, and
+ * comparing that to the category of an incoming transfer means nothing. The
+ * income category it used to be matched against was retired from the debt
+ * flow, so it is null on every debt created since.
  */
 export function scoreIncomeTransaction(
   transaction: TransactionDto,
@@ -146,20 +151,15 @@ export function scoreIncomeTransaction(
     reasons.push('name')
   }
 
-  if (context.pendingCategoryIds.has(transaction.categoryId ?? null)) {
-    reasons.push('category')
-  }
-
   const available = availableAmountOf(transaction)
   if (context.pendingTotals.some(total => Math.abs(total - available) < 0.01)) {
     reasons.push('amount')
   }
 
-  // Name is the strongest signal, then the category convention, then the amount
-  // (which collides easily across small round numbers).
+  // Name is the strongest signal, then the amount (which collides easily
+  // across small round numbers).
   const weights: Record<SuggestionReason, number> = {
     name: 4,
-    category: 2,
     amount: 1,
   }
   const score = reasons.reduce((sum, reason) => sum + weights[reason], 0)

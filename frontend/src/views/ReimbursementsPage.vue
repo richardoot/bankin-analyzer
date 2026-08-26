@@ -250,7 +250,7 @@
       .filter(
         r =>
           !filtersStore.isExpenseCategoryGloballyHidden(
-            r.categoryId ?? UNCATEGORIZED_CATEGORY_ID
+            r.expenseCategoryId ?? UNCATEGORIZED_CATEGORY_ID
           )
       )
   }

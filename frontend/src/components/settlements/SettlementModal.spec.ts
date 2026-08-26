@@ -28,10 +28,12 @@ const monoprix: ReimbursementDto = {
   transactionId: 'tx-monoprix',
   personId: PERSON.id,
   personName: PERSON.name,
-  categoryId: 'cat-courses',
-  categoryName: 'R Courses',
-  expenseCategoryId: null,
-  expenseCategoryName: null,
+  // Mirrors production: the expense category is the one that is set, and the
+  // income hint is almost always null.
+  categoryId: null,
+  categoryName: null,
+  expenseCategoryId: 'cat-courses',
+  expenseCategoryName: 'R Courses',
   amount: 15,
   amountReceived: 0,
   amountRemaining: 15,
@@ -67,10 +69,8 @@ const netflix: ReimbursementDto = {
   ...monoprix,
   id: 'r-netflix',
   transactionId: 'tx-netflix',
-  categoryId: 'cat-abos',
-  categoryName: 'R Abonnements',
-  expenseCategoryId: null,
-  expenseCategoryName: null,
+  expenseCategoryId: 'cat-abos',
+  expenseCategoryName: 'R Abonnements',
   amount: 12,
   amountRemaining: 12,
   createdAt: '2026-08-01T10:00:00.000Z',
@@ -258,9 +258,12 @@ describe('SettlementModal', () => {
     // The receipt search is a step away, so no transaction is fetched yet.
     expect(api.getTransactions).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('que voulez-vous regler')
-    // Grouped by expense category, every line visible and none ticked.
+    // Grouped by expense category, every line visible and none ticked. The
+    // income hint is null on these fixtures, as it is on most real debts:
+    // grouping on it collapsed the whole list under one heading.
     expect(wrapper.text()).toContain('R Courses')
     expect(wrapper.text()).toContain('R Abonnements')
+    expect(wrapper.text()).not.toContain('Sans categorie')
     expect(
       wrapper
         .findAll('input[type="checkbox"]')

@@ -48,7 +48,6 @@
    */
   const suggestionContext = computed(() => ({
     personName: props.reimbursement?.personName ?? '',
-    pendingCategoryIds: new Set([line.value?.categoryId ?? null]),
     pendingTotals: [amountDue.value],
   }))
 

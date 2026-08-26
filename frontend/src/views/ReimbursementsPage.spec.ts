@@ -24,11 +24,14 @@ vi.mock('@/lib/api', () => ({
   UNCATEGORIZED_CATEGORY_ID: '__uncategorized__',
 }))
 
-// Mock the filters store
+// Mock the filters store. Hoisted so a test can decide what is hidden, which
+// is the only way to observe which category id the page actually filters on.
+const filtersMock = vi.hoisted(() => ({ hidden: new Set<string>() }))
+
 vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
-    isExpenseCategoryGloballyHidden: vi.fn(() => false),
-    globalHiddenExpenseCategoryIds: [],
+    isExpenseCategoryGloballyHidden: (id: string) => filtersMock.hidden.has(id),
+    globalHiddenExpenseCategoryIds: [...filtersMock.hidden],
   }),
 }))
 
@@ -62,6 +65,7 @@ describe('ReimbursementsPage', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    filtersMock.hidden.clear()
   })
 
   const mockPersons = [
@@ -553,26 +557,16 @@ describe('ReimbursementsPage', () => {
      */
     describe('routing a click to the right modal', () => {
       // Distinct descriptions so a row can be addressed by its button title.
-      const named = [
-        {
-          ...mockReimbursements[0]!,
-          transaction: {
-            id: '1',
-            date: '2024-01-15',
-            description: 'Monoprix',
-            amount: -25,
-          },
+      const DESCRIPTIONS = ['Monoprix', 'Pharmacie']
+      const named = mockReimbursements.map((reimbursement, index) => ({
+        ...reimbursement,
+        transaction: {
+          id: reimbursement.transactionId,
+          date: reimbursement.createdAt.slice(0, 10),
+          description: DESCRIPTIONS[index] ?? 'Transaction',
+          amount: -reimbursement.amount,
         },
-        {
-          ...mockReimbursements[1]!,
-          transaction: {
-            id: '3',
-            date: '2024-01-20',
-            description: 'Pharmacie',
-            amount: -20,
-          },
-        },
-      ]
+      }))
 
       const mountWithDebts = async () => {
         vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
@@ -631,6 +625,23 @@ describe('ReimbursementsPage', () => {
         expect(multi(wrapper).props('personName')).toBe('Alice Dupont')
         expect(multi(wrapper).props('pendingReimbursements')).toHaveLength(2)
         expect(single(wrapper).props('isOpen')).toBe(false)
+      })
+
+      it('withholds a debt whose expense category the user hid', async () => {
+        // The filter is named after the expense category, and every other
+        // grouping on this page uses it — the modal must not be handed a debt
+        // the user has hidden, nor keep one it has not.
+        filtersMock.hidden.add('cat2')
+        const wrapper = await mountWithDebts()
+
+        const personButton = wrapper
+          .findAll('button')
+          .find(button => button.text().includes('Enregistrer un reglement'))
+        await personButton?.trigger('click')
+
+        expect(multi(wrapper).props('pendingReimbursements')).toEqual([
+          expect.objectContaining({ id: 'r1', expenseCategoryId: 'cat1' }),
+        ])
       })
 
       it('reloads the reimbursements once a settlement lands', async () => {

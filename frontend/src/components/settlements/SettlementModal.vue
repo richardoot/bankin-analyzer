@@ -317,7 +317,6 @@
 
     return {
       personName: props.personName,
-      pendingCategoryIds: new Set(scope.map(line => line.categoryId)),
       pendingTotals: [
         round2(scope.reduce((sum, line) => sum + line.amountDue, 0)),
         ...scopeGroups,

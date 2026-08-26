@@ -149,7 +149,6 @@ describe('prorataAllocate', () => {
 describe('scoreIncomeTransaction', () => {
   const context = {
     personName: 'Alice Martin',
-    pendingCategoryIds: new Set<string | null>(['cat-courses']),
     pendingTotals: [57, 45, 12],
   }
 
@@ -162,13 +161,27 @@ describe('scoreIncomeTransaction', () => {
     expect(reasons).toContain('name')
   })
 
-  it('flags a category and an exact amount match', () => {
+  it('flags an exact amount match', () => {
     const { reasons } = scoreIncomeTransaction(
       income({ description: 'VIREMENT RECU', amount: 45 }),
       context
     )
 
-    expect(reasons).toEqual(expect.arrayContaining(['category', 'amount']))
+    expect(reasons).toContain('amount')
+  })
+
+  it('never scores on the category', () => {
+    // A debt only knows the expense it repays; matching that against the
+    // category of an incoming transfer means nothing. The income category it
+    // used to compare with was retired from the debt flow, and reading it left
+    // every uncategorised receipt scoring as a match on null.
+    const { score, reasons } = scoreIncomeTransaction(
+      income({ description: 'VIREMENT', categoryId: null, amount: 3 }),
+      context
+    )
+
+    expect(score).toBe(0)
+    expect(reasons).toEqual([])
   })
 
   it('scores an unrelated transaction at zero', () => {
@@ -185,27 +198,17 @@ describe('scoreIncomeTransaction', () => {
     expect(reasons).toEqual([])
   })
 
-  it('still flags the category after it has been renamed', () => {
-    const { reasons } = scoreIncomeTransaction(
-      // Same category, new label: the id is what the context matches on.
-      income({ description: 'VIREMENT', categoryName: 'Courses du mois' }),
-      context
-    )
-
-    expect(reasons).toContain('category')
-  })
-
-  it('ranks a name match above a category match', () => {
+  it('ranks a name match above an amount match', () => {
     const withName = scoreIncomeTransaction(
-      income({ description: 'VIR ALICE', categoryId: 'cat-sante', amount: 3 }),
+      income({ description: 'VIR ALICE', amount: 3 }),
       context
     )
-    const withCategory = scoreIncomeTransaction(
-      income({ description: 'VIREMENT', categoryId: 'cat-courses', amount: 3 }),
+    const withAmount = scoreIncomeTransaction(
+      income({ description: 'VIREMENT', amount: 45 }),
       context
     )
 
-    expect(withName.score).toBeGreaterThan(withCategory.score)
+    expect(withName.score).toBeGreaterThan(withAmount.score)
   })
 })
 
@@ -216,10 +219,11 @@ describe('toAllocationLine', () => {
       transactionId: 'tx-9',
       personId: 'p-1',
       personName: 'Alice',
-      categoryId: 'cat-courses',
-      categoryName: 'R Courses',
-      expenseCategoryId: null,
-      expenseCategoryName: null,
+      // Production shape: the income hint is unset, the expense is not.
+      categoryId: null,
+      categoryName: null,
+      expenseCategoryId: 'cat-courses',
+      expenseCategoryName: 'Alimentation',
       amount: 30,
       amountReceived: 10,
       amountRemaining: 20,
@@ -238,11 +242,47 @@ describe('toAllocationLine', () => {
     expect(toAllocationLine(reimbursement)).toEqual({
       reimbursementId: 'r-1',
       categoryId: 'cat-courses',
-      categoryName: 'R Courses',
+      categoryName: 'Alimentation',
       date: '2026-08-12',
       description: 'Carrefour',
       amountDue: 20,
     })
+  })
+
+  it('groups on the expense repaid, not on the income the user hoped for', () => {
+    // The regression that filed every debt under "Sans categorie": the income
+    // hint is null on most rows, so grouping on it collapsed the whole list.
+    const reimbursement = {
+      id: 'r-3',
+      transactionId: 'tx-7',
+      personId: 'p-1',
+      personName: 'Alice',
+      categoryId: 'cat-refunds',
+      categoryName: 'Remboursements',
+      expenseCategoryId: 'cat-resto',
+      expenseCategoryName: 'Restaurant',
+      amount: 20,
+      amountReceived: 0,
+      amountRemaining: 20,
+      status: 'PENDING',
+      note: null,
+      createdAt: '2026-08-13T10:00:00.000Z',
+      updatedAt: '2026-08-13T10:00:00.000Z',
+      transaction: {
+        id: 'tx-7',
+        date: '2026-08-12',
+        description: 'Uber Eats',
+        amount: -20,
+      },
+    } satisfies ReimbursementDto
+
+    const line = toAllocationLine(reimbursement)
+
+    // The income category is loudly set here and must still be ignored: it was
+    // retired from the debt flow, and grouping on it is what collapsed the list.
+    expect(line.categoryId).toBe('cat-resto')
+    expect(line.categoryName).toBe('Restaurant')
+    expect(line).not.toHaveProperty('incomeCategoryId')
   })
 
   it('falls back to a label when the expense transaction was not included', () => {
