@@ -1572,7 +1572,10 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to create settlement')
+      // The server explains *why* it refused — which line overdraws the
+      // receipt, which debt is already credited. Swallowing that left the
+      // modal showing "Failed to create settlement" and nothing to act on.
+      throw new Error(await readErrorMessage(response, 'create settlement'))
     }
 
     return response.json() as Promise<SettlementDto>

@@ -33,6 +33,45 @@ describe('api', () => {
     })
   })
 
+  describe('createSettlement', () => {
+    const dto = {
+      personId: 'p-1',
+      incomeTransactionId: 'tx-1',
+      reimbursements: [{ reimbursementId: 'r-1', amountSettled: 12 }],
+    }
+
+    it('surfaces the reason the server refused', async () => {
+      // A 400 here is always explained — which line overdraws the receipt,
+      // which debt is already credited. A generic string leaves the modal
+      // saying nothing the user can act on.
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () =>
+          Promise.resolve({
+            message:
+              'Insufficient available amount. Available: 12, Requested: 30',
+          }),
+      })
+
+      await expect(api.createSettlement(dto)).rejects.toThrow(
+        'Insufficient available amount'
+      )
+    })
+
+    it('falls back to a generic message when the body is not JSON', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.reject(new Error('not json')),
+      })
+
+      await expect(api.createSettlement(dto)).rejects.toThrow(
+        'Failed to create settlement'
+      )
+    })
+  })
+
   describe('getMe', () => {
     it('should fetch current user with auth headers', async () => {
       const mockUser = {

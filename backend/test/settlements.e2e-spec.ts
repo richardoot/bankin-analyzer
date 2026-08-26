@@ -275,6 +275,39 @@ describe('Settlements payload contract (e2e)', () => {
       expect(response.status).toBe(400)
     })
 
+    it('settles a whole category whose lines sum back to the receipt', async () => {
+      // Nine restaurant debts adding up to exactly what the transfer holds.
+      // Summed as floats these give 125.46000000000000796 against an available
+      // 125.45999999999999375, so a strict `>` refuses a settlement that
+      // balances to the cent.
+      const cents = [12, 9.33, 11, 15.65, 15.85, 8.7, 16.45, 22.8, 13.68]
+      const debts = []
+      for (const [index, amount] of cents.entries()) {
+        debts.push(await pendingDebt(`Restaurant ${index}`, amount))
+      }
+      const receipt = await incomeTransaction(125.46)
+
+      const response = await http()
+        .post('/settlements')
+        .set(ctx.auth(owner))
+        .send({
+          personId,
+          incomeTransactionId: receipt,
+          reimbursements: debts.map(debt => ({
+            reimbursementId: debt.reimbursementId,
+            amountSettled: debt.amount,
+          })),
+        })
+
+      expect(response.status).toBe(201)
+      for (const debt of debts) {
+        expect(await reimbursementById(debt.reimbursementId)).toMatchObject({
+          status: 'COMPLETED',
+          amountRemaining: 0,
+        })
+      }
+    })
+
     it('rejects drawing more than the receipt still holds', async () => {
       // Why the modal blocks on `isOverAllocated` instead of letting the user
       // confirm and discover the failure afterwards.

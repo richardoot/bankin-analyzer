@@ -205,17 +205,22 @@ export class SettlementsService {
       )
     }
 
-    const totalAmount = Number(transaction.amount)
-    const usedAmount = transaction.settlementsAsIncome.reduce(
-      (sum, s) => sum + Number(s.amountUsed),
-      0
+    const totalAmount = round2(Number(transaction.amount))
+    // Rounded, not raw: summing several Decimals through `Number` drifts into
+    // the last binary place, and this figure is compared against a settlement
+    // that balances to the cent.
+    const usedAmount = round2(
+      transaction.settlementsAsIncome.reduce(
+        (sum, s) => sum + Number(s.amountUsed),
+        0
+      )
     )
 
     return {
       transactionId: transaction.id,
       totalAmount,
       usedAmount,
-      availableAmount: totalAmount - usedAmount,
+      availableAmount: round2(totalAmount - usedAmount),
     }
   }
 
@@ -278,9 +283,8 @@ export class SettlementsService {
     }
 
     // 4. Calculate total amount used
-    const totalAmountUsed = dto.reimbursements.reduce(
-      (sum, r) => sum + r.amountSettled,
-      0
+    const totalAmountUsed = round2(
+      dto.reimbursements.reduce((sum, r) => sum + r.amountSettled, 0)
     )
 
     // 5. Verify available amount
@@ -289,7 +293,11 @@ export class SettlementsService {
       userId
     )
 
-    if (totalAmountUsed > availableAmount) {
+    // Compared with the ledger's tolerance rather than `>`: nine debts that
+    // add up to the transfer to the cent sum to 125.46000000000000796 in
+    // binary, and a strict comparison turned that into a refusal whose message
+    // printed the two sides as identical.
+    if (totalAmountUsed - availableAmount > LEDGER_EPSILON) {
       throw new BadRequestException(
         `Insufficient available amount. Available: ${availableAmount}, Requested: ${totalAmountUsed}`
       )
