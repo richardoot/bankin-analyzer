@@ -9,6 +9,7 @@
   import { formatCurrency } from '@/lib/formatters'
   import {
     availableAmountOf,
+    personSearchTerms,
     scoreIncomeTransaction,
     type SuggestionContext,
     type SuggestionReason,
@@ -47,6 +48,10 @@
   /** The page size the server is asked for; also what "some are missing" means. */
   const PAGE_SIZE = 100
   const totalMatching = ref(0)
+  /** True when at least one of the queries had more matches than it returned. */
+  const isTruncated = ref(false)
+  /** Drives the wording: the list is not purely "the most recent" any more. */
+  const searchedByName = ref(false)
   const error = ref<string | null>(null)
 
   interface RankedTransaction {
@@ -159,6 +164,12 @@
    * The list is one page deep, so a purely local search could only ever find
    * the most recent hundred receipts — which is exactly the transaction a
    * year-old expense is *not* repaid by.
+   *
+   * Until the user types something, the recent page is fetched *alongside* one
+   * query per spelling of the person's name, and the results are merged. The
+   * recent page on its own held the receipt being looked for barely half the
+   * time: the money owed on an old expense is repaid by an old transfer, and
+   * ranking cannot promote a candidate that was never fetched.
    */
   async function loadIncomeTransactions(): Promise<void> {
     isLoadingTransactions.value = true
@@ -167,10 +178,9 @@
       const parsedMin = Number(filterAmountMin.value)
       const parsedMax = Number(filterAmountMax.value)
 
-      const response = await api.getTransactions({
-        type: 'INCOME',
+      const filters = {
+        type: 'INCOME' as const,
         limit: PAGE_SIZE,
-        search: searchQuery.value.trim() || undefined,
         categoryId: filterCategoryId.value || undefined,
         // The API ignores a subcategory sent without its category, and the
         // select below is disabled until one is picked.
@@ -189,9 +199,39 @@
           parsedMax >= 0
             ? parsedMax
             : undefined,
-      })
-      incomeTransactions.value = response.data
-      totalMatching.value = response.meta.total
+      }
+
+      // What the user typed *is* the query: widening it with the name would
+      // hand back rows they just excluded.
+      const typedSearch = searchQuery.value.trim()
+      const nameTerms = typedSearch
+        ? []
+        : personSearchTerms(props.context.personName)
+      const searches: (string | undefined)[] = typedSearch
+        ? [typedSearch]
+        : [undefined, ...nameTerms]
+
+      const responses = await Promise.all(
+        searches.map(search => api.getTransactions({ ...filters, search }))
+      )
+
+      // Merged by id: a receipt bearing the name is usually recent too, and
+      // would otherwise appear twice.
+      const byId = new Map<string, TransactionDto>()
+      for (const response of responses) {
+        for (const transaction of response.data) {
+          byId.set(transaction.id, transaction)
+        }
+      }
+      incomeTransactions.value = [...byId.values()]
+
+      // The first response is the unfiltered one, so its total is the honest
+      // denominator; any query hitting the cap means something was left out.
+      totalMatching.value = responses[0]?.meta.total ?? 0
+      isTruncated.value = responses.some(
+        response => response.meta.total > PAGE_SIZE
+      )
+      searchedByName.value = nameTerms.length > 0
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Erreur lors du chargement'
     } finally {
@@ -199,8 +239,8 @@
     }
   }
 
-  /** True when the server has more matches than the page we are showing. */
-  const hasMoreThanShown = computed(() => totalMatching.value > PAGE_SIZE)
+  /** True when the server has more matches than the pages we are showing. */
+  const hasMoreThanShown = computed(() => isTruncated.value)
 
   // Changing the category invalidates a subcategory picked under the previous
   // one, exactly as it does everywhere else.
@@ -411,6 +451,7 @@
             v-for="entry in suggestions"
             :key="entry.transaction.id"
             type="button"
+            data-testid="settlement-transaction"
             class="w-full flex items-center gap-3 p-3 text-left border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
             :class="
               selectedTransactionId === entry.transaction.id
@@ -468,6 +509,7 @@
             v-for="entry in otherTransactions"
             :key="entry.transaction.id"
             type="button"
+            data-testid="settlement-transaction"
             class="w-full flex items-center gap-3 p-3 text-left border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
             :class="
               selectedTransactionId === entry.transaction.id
@@ -506,16 +548,21 @@
       </p>
 
       <!--
-        The list is one page deep. Saying so beats letting the user conclude
-        the transaction does not exist.
+        The list is a few pages deep at most. Saying so beats letting the user
+        conclude the transaction does not exist.
       -->
       <p
         v-else-if="hasMoreThanShown"
         data-testid="settlement-truncated"
         class="pt-2 text-xs text-gray-500 dark:text-gray-400"
       >
-        {{ totalMatching }} transactions correspondent, les 100 plus recentes
-        sont affichees. Affinez la recherche pour atteindre les autres.
+        {{ totalMatching }} transactions correspondent.
+        <template v-if="searchedByName">
+          Les plus recentes et celles au nom de
+          {{ context.personName }} sont affichees.
+        </template>
+        <template v-else>Les 100 plus recentes sont affichees.</template>
+        Affinez la recherche pour atteindre les autres.
       </p>
     </div>
   </div>

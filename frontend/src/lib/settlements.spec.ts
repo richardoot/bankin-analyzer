@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   availableAmountOf,
   cascadeAllocate,
+  personSearchTerms,
   prorataAllocate,
   scoreIncomeTransaction,
   toAllocationLine,
@@ -198,7 +199,9 @@ describe('scoreIncomeTransaction', () => {
     expect(reasons).toEqual([])
   })
 
-  it('ranks a name match above an amount match', () => {
+  it('ranks an amount match above a name match', () => {
+    // A recurring transfer names the same people every month, so the name
+    // matches dozens of receipts; the exact figure usually matches one.
     const withName = scoreIncomeTransaction(
       income({ description: 'VIR ALICE', amount: 3 }),
       context
@@ -208,7 +211,29 @@ describe('scoreIncomeTransaction', () => {
       context
     )
 
-    expect(withName.score).toBeGreaterThan(withAmount.score)
+    expect(withAmount.score).toBeGreaterThan(withName.score)
+  })
+
+  it('ranks a receipt matching both above either signal alone', () => {
+    const both = scoreIncomeTransaction(
+      income({ description: 'VIR ALICE MARTIN', amount: 45 }),
+      context
+    )
+    const withAmount = scoreIncomeTransaction(
+      income({ description: 'VIREMENT', amount: 45 }),
+      context
+    )
+
+    expect(both.score).toBeGreaterThan(withAmount.score)
+  })
+
+  it('lists the amount first so the strongest badge reads first', () => {
+    const { reasons } = scoreIncomeTransaction(
+      income({ description: 'VIR ALICE MARTIN', amount: 45 }),
+      context
+    )
+
+    expect(reasons).toEqual(['amount', 'name'])
   })
 })
 
@@ -308,5 +333,43 @@ describe('toAllocationLine', () => {
     expect(allocationLine.categoryName).toBe('Sans categorie')
     expect(allocationLine.description).toBe('Transaction')
     expect(allocationLine.date).toBe('2026-08-13T10:00:00.000Z')
+  })
+})
+
+describe('personSearchTerms', () => {
+  it('searches each name token on its own', () => {
+    // The server matches a substring, so the name whole finds nothing in a
+    // statement that reorders the words: "Vir Inst Chloe Torres".
+    expect(personSearchTerms('Alice Martin')).toEqual(['Martin', 'Alice'])
+  })
+
+  it('searches the unaccented spelling alongside the original', () => {
+    // The SQL search folds case but not diacritics, and a bank statement
+    // writes the name without them.
+    const terms = personSearchTerms('Chlo\u00e9 TORRES')
+
+    expect(terms).toContain('Chlo\u00e9')
+    expect(terms).toContain('Chloe')
+  })
+
+  it('drops tokens too short to be worth a query', () => {
+    // "Moi" is a real person here, and as a substring it matches "mois" across
+    // half the ledger. The scoring floor is looser because it only re-ranks
+    // rows already fetched; a term here costs a request.
+    expect(personSearchTerms('Moi')).toEqual([])
+    expect(personSearchTerms('Van de Berg')).toEqual(['Berg'])
+  })
+
+  it('puts the longest token first and caps the query count', () => {
+    // These fire in parallel when the modal opens; a long name must not
+    // multiply the requests without bound.
+    const terms = personSearchTerms('Jean Charles \u00c9ric De La Fontaine')
+
+    expect(terms).toHaveLength(4)
+    expect(terms[0]).toBe('Fontaine')
+  })
+
+  it('returns nothing for a person with no usable name', () => {
+    expect(personSearchTerms('')).toEqual([])
   })
 })
