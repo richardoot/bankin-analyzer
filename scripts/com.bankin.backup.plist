@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Daily production dump, via launchd rather than cron.
+
+  Install:
+    cp scripts/com.bankin.backup.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.bankin.backup.plist
+
+  Run once now, to check it before trusting the schedule:
+    launchctl start com.bankin.backup
+    tail ~/Library/Logs/bankin-backup.log
+
+  Uninstall:
+    launchctl unload ~/Library/LaunchAgents/com.bankin.backup.plist
+
+  RunAtLoad catches up when the Mac was asleep at 13:00, which for a laptop is
+  most days — a schedule that only fires when the machine happens to be awake
+  is how a backup quietly stops existing.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.bankin.backup</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/richard.boilley/Projects/bankin-analyzer/scripts/backup-prod-db.sh</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+      <key>Hour</key>
+      <integer>13</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/richard.boilley/Library/Logs/bankin-backup.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/richard.boilley/Library/Logs/bankin-backup.log</string>
+
+    <!-- launchd starts with a bare PATH; podman and node both live in Homebrew. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PATH</key>
+      <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+  </dict>
+</plist>

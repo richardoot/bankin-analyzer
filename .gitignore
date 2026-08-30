@@ -166,3 +166,7 @@ build/
 # Prisma generated client
 backend/src/generated/*
 
+
+# Database dumps — real financial data, and this repository is public.
+backups/
+*.sql.gz
