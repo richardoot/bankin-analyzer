@@ -4,12 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import {
-  Account,
-  AccountType,
-  Prisma,
-  ReimbursementStatus,
-} from '../generated/prisma'
+import { Account, AccountType, Prisma } from '../generated/prisma'
 import {
   AccountDeletionResultDto,
   AccountDeletionSummaryDto,
@@ -146,10 +141,12 @@ export class AccountsService {
    * user-configured entities shared across accounts, so they stay untouched
    * (same rule as deleting an import).
    *
-   * Reimbursement bookkeeping needs care, because reimbursements can straddle
-   * two accounts: an expense advanced on account A can be repaid by an income
-   * received on account B. Both directions are settled before the delete so no
-   * debt is left claiming money that no longer exists.
+   * Reimbursements can straddle two accounts — an expense advanced on account A
+   * repaid by an income received on account B — and the credit has to go when
+   * the money does. Since phase 6 the database sees to it: deleting an income
+   * transaction cascades to the settlement it funded, and from there to the
+   * payments, which is where every figure a debt reports is now read from.
+   * What used to be a hand-written reversal is a foreign key.
    */
   async remove(
     userId: string,
@@ -163,7 +160,6 @@ export class AccountsService {
       })
 
       if (transactionCount > 0) {
-        await this.revertSettlementsFundedBy(tx, accountId)
         const emptiedSettlementIds = await this.settlementsLosingAllDebts(
           tx,
           accountId
@@ -184,48 +180,6 @@ export class AccountsService {
 
       return { deletedTransactions: transactionCount }
     })
-  }
-
-  /**
-   * Give back the credits paid by income transactions of the doomed account.
-   * Debts carried by that same account are skipped: the cascade deletes them
-   * anyway.
-   */
-  private async revertSettlementsFundedBy(
-    tx: Prisma.TransactionClient,
-    accountId: string
-  ): Promise<void> {
-    const settlements = await tx.settlement.findMany({
-      where: { incomeTransaction: { accountId } },
-      include: {
-        reimbursements: {
-          include: {
-            reimbursement: {
-              include: { transaction: { select: { accountId: true } } },
-            },
-          },
-        },
-      },
-    })
-
-    for (const settlement of settlements) {
-      for (const line of settlement.reimbursements) {
-        const debt = line.reimbursement
-        if (debt.transaction.accountId === accountId) continue
-
-        const amountReceived = Math.max(
-          0,
-          Number(debt.amountReceived) - Number(line.amountSettled)
-        )
-        await tx.reimbursementRequest.update({
-          where: { id: debt.id },
-          data: {
-            amountReceived,
-            status: this.statusFor(amountReceived, Number(debt.amount)),
-          },
-        })
-      }
-    }
   }
 
   /**
@@ -268,15 +222,6 @@ export class AccountsService {
         )
       )
       .map(settlement => settlement.id)
-  }
-
-  private statusFor(
-    amountReceived: number,
-    amountDue: number
-  ): ReimbursementStatus {
-    if (amountReceived >= amountDue) return ReimbursementStatus.COMPLETED
-    if (amountReceived > 0) return ReimbursementStatus.PARTIAL
-    return ReimbursementStatus.PENDING
   }
 
   /**

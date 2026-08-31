@@ -244,9 +244,6 @@ describe('toAllocationLine', () => {
       transactionId: 'tx-9',
       personId: 'p-1',
       personName: 'Alice',
-      // Production shape: the income hint is unset, the expense is not.
-      categoryId: null,
-      categoryName: null,
       expenseCategoryId: 'cat-courses',
       expenseCategoryName: 'Alimentation',
       amount: 30,
@@ -274,16 +271,16 @@ describe('toAllocationLine', () => {
     })
   })
 
-  it('groups on the expense repaid, not on the income the user hoped for', () => {
-    // The regression that filed every debt under "Sans categorie": the income
-    // hint is null on most rows, so grouping on it collapsed the whole list.
+  it('groups on the expense repaid', () => {
+    // The regression that filed every debt under "Sans categorie": grouping ran
+    // on an income hint that was null on most rows. That field is gone from the
+    // DTO since the backend dropped its column, so the mistake is no longer
+    // expressible — this pins that the expense is what grouping reads.
     const reimbursement = {
       id: 'r-3',
       transactionId: 'tx-7',
       personId: 'p-1',
       personName: 'Alice',
-      categoryId: 'cat-refunds',
-      categoryName: 'Remboursements',
       expenseCategoryId: 'cat-resto',
       expenseCategoryName: 'Restaurant',
       amount: 20,
@@ -316,8 +313,6 @@ describe('toAllocationLine', () => {
       transactionId: 'tx-9',
       personId: 'p-1',
       personName: 'Alice',
-      categoryId: null,
-      categoryName: null,
       expenseCategoryId: null,
       expenseCategoryName: null,
       amount: 30,

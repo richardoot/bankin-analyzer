@@ -80,12 +80,13 @@ describe('Categories (e2e)', () => {
     const person = await prisma.person.create({
       data: { userId, name: 'Alice' },
     })
+    // Attached through the expense, the only category a debt has since phase
+    // 6 — and the transaction above already carries the one being deleted.
     await prisma.reimbursementRequest.create({
       data: {
         userId,
         transactionId: transaction.id,
         personId: person.id,
-        categoryId,
         amount: 20,
       },
     })
@@ -285,7 +286,9 @@ describe('Categories (e2e)', () => {
           prisma.category.count({ where: { id: categoryId } }),
           prisma.transaction.count({ where: { categoryId } }),
           prisma.subcategory.count({ where: { categoryId } }),
-          prisma.reimbursementRequest.count({ where: { categoryId } }),
+          prisma.reimbursementRequest.count({
+            where: { transaction: { categoryId } },
+          }),
           prisma.budgetPlanEntry.count({ where: { categoryId } }),
         ]),
       ])
@@ -323,9 +326,13 @@ describe('Categories (e2e)', () => {
 
       const reimbursements = await prisma.reimbursementRequest.findMany({
         where: { userId },
+        include: { transaction: { select: { categoryId: true } } },
       })
       expect(reimbursements).toHaveLength(1)
-      expect(reimbursements[0]?.categoryId).toBeNull()
+      // Detached through the expense it hangs off, which is where a debt reads
+      // its category from since phase 6. The debt itself is untouched — losing
+      // the filing must not lose the money owed.
+      expect(reimbursements[0]?.transaction.categoryId).toBeNull()
       expect(reimbursements[0]?.amount.toNumber()).toBe(20)
     })
 

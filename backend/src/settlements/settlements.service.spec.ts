@@ -420,7 +420,7 @@ describe('SettlementsService', () => {
     })
 
     it('should mark reimbursement as COMPLETED when forceComplete is true', async () => {
-      const mockUpdate = vi.fn()
+      const payments = paymentDelegate()
       mockPrismaService.transaction.findFirst.mockResolvedValue(
         mockIncomeTransaction
       )
@@ -430,12 +430,9 @@ describe('SettlementsService', () => {
       ])
       mockPrismaService.$transaction.mockImplementation(async callback => {
         return callback({
-          reimbursementPayment: paymentDelegate(),
+          reimbursementPayment: payments,
           settlement: {
             create: vi.fn().mockResolvedValue(mockSettlement),
-          },
-          reimbursementRequest: {
-            update: mockUpdate,
           },
         })
       })
@@ -449,17 +446,17 @@ describe('SettlementsService', () => {
         forceComplete: true,
       })
 
-      expect(mockUpdate).toHaveBeenCalledWith({
-        where: { id: mockReimbursement.id },
-        data: {
-          amountReceived: 80, // Original full amount, not 50
-          status: ReimbursementStatus.COMPLETED,
-        },
-      })
+      // The credit is the two payments, not a column: 50 of cash and the 30
+      // the user chose to forgive. COMPLETED is what reading them back against
+      // a debt of 80 gives.
+      expect(payments.create.mock.calls.map(([call]) => call.data)).toEqual([
+        expect.objectContaining({ amount: 50, kind: 'CASH' }),
+        expect.objectContaining({ amount: 30, kind: 'WRITE_OFF' }),
+      ])
     })
 
     it('should mark reimbursement as PARTIAL when forceComplete is false and amount is partial', async () => {
-      const mockUpdate = vi.fn()
+      const payments = paymentDelegate()
       mockPrismaService.transaction.findFirst.mockResolvedValue(
         mockIncomeTransaction
       )
@@ -469,12 +466,9 @@ describe('SettlementsService', () => {
       ])
       mockPrismaService.$transaction.mockImplementation(async callback => {
         return callback({
-          reimbursementPayment: paymentDelegate(),
+          reimbursementPayment: payments,
           settlement: {
             create: vi.fn().mockResolvedValue(mockSettlement),
-          },
-          reimbursementRequest: {
-            update: mockUpdate,
           },
         })
       })
@@ -488,13 +482,11 @@ describe('SettlementsService', () => {
         forceComplete: false,
       })
 
-      expect(mockUpdate).toHaveBeenCalledWith({
-        where: { id: mockReimbursement.id },
-        data: {
-          amountReceived: 50, // Partial amount
-          status: ReimbursementStatus.PARTIAL,
-        },
-      })
+      // Cash alone, nothing forgiven: the 30 still owed stay owed, which is
+      // what makes the debt read PARTIAL.
+      expect(payments.create.mock.calls.map(([call]) => call.data)).toEqual([
+        expect.objectContaining({ amount: 50, kind: 'CASH' }),
+      ])
     })
 
     it('should force-complete only the lines that opt in', async () => {
@@ -503,7 +495,7 @@ describe('SettlementsService', () => {
         id: '550e8400-e29b-41d4-a716-446655440041',
         amount: new Decimal(40),
       }
-      const mockUpdate = vi.fn()
+      const payments = paymentDelegate()
       mockPrismaService.transaction.findFirst.mockResolvedValue(
         mockIncomeTransaction
       )
@@ -514,9 +506,8 @@ describe('SettlementsService', () => {
       ])
       mockPrismaService.$transaction.mockImplementation(async callback => {
         return callback({
-          reimbursementPayment: paymentDelegate(),
+          reimbursementPayment: payments,
           settlement: { create: vi.fn().mockResolvedValue(mockSettlement) },
-          reimbursementRequest: { update: mockUpdate },
         })
       })
 
@@ -533,20 +524,18 @@ describe('SettlementsService', () => {
         ],
       })
 
-      expect(mockUpdate).toHaveBeenCalledWith({
-        where: { id: mockReimbursement.id },
-        data: {
-          amountReceived: 80, // forgiven up to the original amount
-          status: ReimbursementStatus.COMPLETED,
-        },
-      })
-      expect(mockUpdate).toHaveBeenCalledWith({
-        where: { id: otherReimbursement.id },
-        data: {
-          amountReceived: 10, // untouched by the sibling's forceComplete
-          status: ReimbursementStatus.PARTIAL,
-        },
-      })
+      const written = payments.create.mock.calls.map(([call]) => call.data)
+      // The opted-in line forgives its remainder; the sibling only records the
+      // cash it actually drew.
+      expect(
+        written.filter(p => p.reimbursementId === mockReimbursement.id)
+      ).toEqual([
+        expect.objectContaining({ amount: 50, kind: 'CASH' }),
+        expect.objectContaining({ amount: 30, kind: 'WRITE_OFF' }),
+      ])
+      expect(
+        written.filter(p => p.reimbursementId === otherReimbursement.id)
+      ).toEqual([expect.objectContaining({ amount: 10, kind: 'CASH' })])
     })
 
     it('should record the credited delta, not the original amount, when force-completing a partially paid reimbursement', async () => {
@@ -601,80 +590,33 @@ describe('SettlementsService', () => {
   })
 
   describe('delete', () => {
-    it('should delete a settlement and reverse amounts', async () => {
-      const settlementWithReimbursement = {
-        ...mockSettlement,
-        reimbursements: [
-          {
-            amountSettled: new Decimal(80),
-            reimbursement: {
-              ...mockReimbursement,
-              amountReceived: new Decimal(80),
-              status: ReimbursementStatus.COMPLETED,
-            },
-          },
-        ],
-      }
-      mockPrismaService.settlement.findFirst.mockResolvedValue(
-        settlementWithReimbursement
-      )
-      mockPrismaService.$transaction.mockImplementation(async callback => {
-        return callback({
-          reimbursementPayment: paymentDelegate(),
-          reimbursementRequest: {
-            update: vi.fn(),
-          },
-          settlement: {
-            delete: vi.fn(),
-          },
-        })
-      })
-
-      await service.delete(mockSettlement.id, mockUserId)
-
-      expect(mockPrismaService.$transaction).toHaveBeenCalled()
-    })
-
-    it('should restore an earlier partial payment when reversing a force-completed settlement', async () => {
-      // The reimbursement had received 30 before being force-completed to 80,
-      // so the settlement credited 50. Reversing must land back on 30, not 0.
-      const mockUpdate = vi.fn()
+    it('reverses a settlement by deleting it, cascade doing the rest', async () => {
+      // Reversing used to mean re-totalling every affected debt by hand. Since
+      // phase 6 nothing stores a total: the settlement's payments go with it
+      // through the foreign key, and what a debt reports is read off whatever
+      // payments remain. An earlier partial payment survives because it was
+      // never touched, not because it was carefully added back.
+      //
+      // What the cascade actually does is not something a mocked Prisma can
+      // show; backend/test/settlement-ledger.e2e-spec.ts checks it for real.
       mockPrismaService.settlement.findFirst.mockResolvedValue({
         ...mockSettlement,
         reimbursements: [
           {
             amountSettled: new Decimal(50),
-            reimbursement: {
-              ...mockReimbursement,
-              amountReceived: new Decimal(80),
-              status: ReimbursementStatus.COMPLETED,
-            },
+            reimbursement: mockReimbursement,
           },
         ],
-      })
-      mockPrismaService.$transaction.mockImplementation(async callback => {
-        return callback({
-          // Once this settlement's own payments are removed, the only credit
-          // left on the debt is the earlier 30 — and re-totalling that is the
-          // whole reversal. Nothing is subtracted, so nothing can be
-          // subtracted twice.
-          reimbursementPayment: paymentDelegate([
-            { amount: new Decimal(30), kind: 'CASH' },
-          ]),
-          reimbursementRequest: { update: mockUpdate },
-          settlement: { delete: vi.fn() },
-        })
       })
 
       await service.delete(mockSettlement.id, mockUserId)
 
-      expect(mockUpdate).toHaveBeenCalledWith({
-        where: { id: mockReimbursement.id },
-        data: {
-          amountReceived: 30,
-          status: ReimbursementStatus.PARTIAL,
-        },
+      expect(mockPrismaService.settlement.delete).toHaveBeenCalledWith({
+        where: { id: mockSettlement.id },
       })
+      expect(
+        mockPrismaService.reimbursementRequest.update
+      ).not.toHaveBeenCalled()
     })
 
     it('should throw NotFoundException when settlement not found', async () => {

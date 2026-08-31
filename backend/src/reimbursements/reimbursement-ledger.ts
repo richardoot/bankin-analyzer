@@ -11,6 +11,10 @@
  * then they are a cache the reconciliation script can check.
  */
 import { ReimbursementStatus } from '../generated/prisma'
+import type { Prisma } from '../generated/prisma'
+
+/** Decimal columns arrive as Prisma decimals; plain numbers in tests. */
+type Decimal = Prisma.Decimal
 
 /** Half a cent: amounts are Decimal(12,2), so anything below this is noise. */
 export const LEDGER_EPSILON = 0.005
@@ -53,6 +57,23 @@ export function derivedStatusOf(
   }
   if (credited > LEDGER_EPSILON) return ReimbursementStatus.PARTIAL
   return ReimbursementStatus.PENDING
+}
+
+/**
+ * Prisma rows to the plain shape the arithmetic above works on.
+ *
+ * Lives here rather than in one service: since phase 6 both the settlement
+ * path and the reimbursement response derive their figures from payments, and
+ * two private copies of this conversion is how the columns it replaces drifted
+ * apart in the first place.
+ */
+export function toLedgerEntries(
+  payments: Array<{ amount: Decimal | number; kind: string }>
+): LedgerEntry[] {
+  return payments.map(payment => ({
+    amount: Number(payment.amount),
+    kind: payment.kind as LedgerEntry['kind'],
+  }))
 }
 
 export interface CreditSplit {

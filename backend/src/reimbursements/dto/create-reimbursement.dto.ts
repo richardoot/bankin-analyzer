@@ -23,11 +23,6 @@ export class CreateReimbursementDto {
   @IsPositive()
   amount!: number
 
-  /** Target category ID for income */
-  @IsOptional()
-  @IsUUID()
-  categoryId?: string
-
   /** Note */
   @IsOptional()
   @IsString()

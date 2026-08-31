@@ -82,7 +82,6 @@ model Category {
   user                        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions                Transaction[]
   subcategories               Subcategory[]
-  reimbursementRequests       ReimbursementRequest[]
   budgetPlanEntries           BudgetPlanEntry[]
 
   @@unique([userId, name, type])
@@ -124,6 +123,9 @@ enum AccountType {
   @@schema("app")
 }
 
+/// The reading of a debt against its ledger. No column stores it since phase 6
+/// — `derivedStatusOf` computes it — but it remains the vocabulary the API and
+/// the frontend share.
 enum ReimbursementStatus {
   PENDING
   PARTIAL
@@ -235,30 +237,36 @@ model Person {
   @@schema("app")
 }
 
+/// A debt: what one person owes on one expense transaction.
+///
+/// It carries no `amountReceived` and no `status`. Both were columns until
+/// phase 6 of the reimbursement rework, kept in step by hand across three code
+/// paths that drifted at least once; both are now read off `payments` through
+/// `creditedTotal` and `derivedStatusOf`. The API still exposes them — what
+/// went away is the second copy, not the notion.
+///
+/// It carries no category either. The category of the expense being repaid is
+/// the transaction's own, so recategorising a transaction can no longer leave
+/// a debt filed under something else.
 model ReimbursementRequest {
-  id             String              @id @default(uuid())
-  userId         String              @map("user_id")
-  transactionId  String              @map("transaction_id")
-  personId       String              @map("person_id")
-  categoryId     String?             @map("category_id")
-  amount         Decimal             @db.Decimal(12, 2)
-  amountReceived Decimal             @default(0) @map("amount_received") @db.Decimal(12, 2)
-  status         ReimbursementStatus @default(PENDING)
-  note           String?
-  createdAt      DateTime            @default(now()) @map("created_at")
-  updatedAt      DateTime            @updatedAt @map("updated_at")
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  transactionId String   @map("transaction_id")
+  personId      String   @map("person_id")
+  amount        Decimal  @db.Decimal(12, 2)
+  note          String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   person      Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
-  category    Category?   @relation(fields: [categoryId], references: [id])
   settlements SettlementReimbursement[]
   payments    ReimbursementPayment[]
 
   @@index([userId])
   @@index([transactionId])
   @@index([personId])
-  @@index([status])
   @@map("reimbursement_requests")
   @@schema("app")
 }

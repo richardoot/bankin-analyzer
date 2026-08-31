@@ -128,8 +128,12 @@ export class CategoriesService {
         },
         orderBy: { budgetPlan: { startDate: 'desc' } },
       }),
+      // Counted through the expense they hang off: a debt no longer carries a
+      // category of its own since phase 6, it reads the transaction's. The
+      // warning it feeds stays true — they remain due, and the filing they
+      // lose is the one they borrow.
       this.prisma.reimbursementRequest.count({
-        where: { categoryId: id, userId },
+        where: { userId, transaction: { categoryId: id } },
       }),
       this.prisma.filterPreferences.findUnique({ where: { userId } }),
     ])

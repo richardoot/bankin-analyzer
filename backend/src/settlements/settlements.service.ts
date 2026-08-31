@@ -13,7 +13,7 @@ import {
   paymentsOf,
   round2,
   splitCredit,
-  type LedgerEntry,
+  toLedgerEntries,
 } from '../reimbursements/reimbursement-ledger'
 import type { CreateSettlementDto } from './dto'
 import type {
@@ -46,16 +46,6 @@ type SettlementWithRelations = Settlement & {
       }
     }
   }>
-}
-
-/** Prisma rows to the plain shape the ledger arithmetic works on. */
-function toLedgerEntries(
-  payments: Array<{ amount: Prisma.Decimal | number; kind: string }>
-): LedgerEntry[] {
-  return payments.map(payment => ({
-    amount: Number(payment.amount),
-    kind: payment.kind as LedgerEntry['kind'],
-  }))
 }
 
 @Injectable()
@@ -423,16 +413,6 @@ export class SettlementsService {
             },
           })
         }
-
-        // Derived, never decided: the column and the status are the ledger
-        // read back. Phase 6 removes them entirely.
-        await tx.reimbursementRequest.update({
-          where: { id: line.reimbursementId },
-          data: {
-            amountReceived: line.creditedAfter,
-            status: line.status,
-          },
-        })
       }
 
       return created
@@ -458,45 +438,16 @@ export class SettlementsService {
       throw new NotFoundException(`Settlement with ID ${id} not found`)
     }
 
-    // Reverse the settlement in a transaction.
+    // Reversing a settlement is deleting it. The cascade takes its payments
+    // with it, and every figure a debt reports is read off the payments that
+    // remain — so there is nothing left to subtract by hand.
     //
-    // Nothing is subtracted here. The settlement's payments are removed and
-    // each affected debt is re-totalled from whatever payments remain, which is
-    // what makes the reversal exact: the previous code subtracted a stored
-    // `amountSettled` that mixed cash and forgiveness, and a force-completed
-    // line therefore gave back more than it had ever taken — silently wiping an
-    // earlier partial payment (see scripts/audit-forced-settlements.ts).
-    await this.prisma.$transaction(async tx => {
-      const affected = settlement.reimbursements.map(sr => sr.reimbursement)
-
-      // Cascade would take these with the settlement, but they have to be gone
-      // *before* the totals below are recomputed.
-      await tx.reimbursementPayment.deleteMany({
-        where: { settlementId: id },
-      })
-
-      for (const reimbursement of affected) {
-        const remaining = await tx.reimbursementPayment.findMany({
-          where: { reimbursementId: reimbursement.id },
-          select: { amount: true, kind: true },
-        })
-
-        const credited = creditedTotal(toLedgerEntries(remaining))
-        const debtAmount = Number(reimbursement.amount)
-
-        await tx.reimbursementRequest.update({
-          where: { id: reimbursement.id },
-          data: {
-            amountReceived: credited,
-            status: derivedStatusOf(debtAmount, credited),
-          },
-        })
-      }
-
-      // Delete the settlement (cascades to SettlementReimbursement)
-      await tx.settlement.delete({
-        where: { id },
-      })
-    })
+    // Subtracting by hand is what used to go wrong: the old code took back a
+    // stored `amountSettled` that mixed cash with forgiveness, so reversing a
+    // force-completed line gave back more than it had ever taken and silently
+    // wiped an earlier partial payment (see scripts/audit-forced-settlements.ts).
+    // Phase 3 fixed that by re-totalling the ledger; phase 6 removes the
+    // re-totalling too, there being no second copy left to correct.
+    await this.prisma.settlement.delete({ where: { id } })
   }
 }

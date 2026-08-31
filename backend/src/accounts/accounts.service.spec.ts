@@ -269,70 +269,43 @@ describe('AccountsService', () => {
       expect(mockPrismaService.account.delete).toHaveBeenCalled()
     })
 
-    it('gives surviving debts back the credits paid by a doomed income', async () => {
+    it('leaves the credit to the cascade instead of rewriting it by hand', async () => {
+      // Deleting an income transaction takes its settlement with it, and the
+      // settlement takes its payments — which is where every figure a debt
+      // reports is read from since phase 6. The 42 lines that used to subtract
+      // `amountSettled` from an `amountReceived` column are gone with the
+      // column; this pins that they do not come back.
+      //
+      // That the foreign keys really cascade is not something a mocked Prisma
+      // can show: backend/test/settlement-ledger.e2e-spec.ts does it against a
+      // real database.
       mockPrismaService.transaction.count.mockResolvedValue(1)
-      mockPrismaService.settlement.findMany
-        // Settlements funded by the doomed income transaction…
-        .mockResolvedValueOnce([
-          {
-            id: 'settlement-1',
-            reimbursements: [
-              {
-                amountSettled: 30,
-                reimbursement: {
-                  id: 'debt-elsewhere',
-                  transaction: { accountId: 'other-account' },
-                  amount: 100,
-                  amountReceived: 100,
-                },
-              },
-              {
-                amountSettled: 20,
-                reimbursement: {
-                  id: 'debt-doomed',
-                  transaction: { accountId: mockAccountId },
-                  amount: 20,
-                  amountReceived: 20,
-                },
-              },
-            ],
-          },
-        ])
-        // …then the emptied-settlement lookup.
-        .mockResolvedValueOnce([])
+      mockPrismaService.settlement.findMany.mockResolvedValueOnce([])
 
       await service.remove(mockUserId, mockAccountId)
 
       expect(
         mockPrismaService.reimbursementRequest.update
-      ).toHaveBeenCalledTimes(1)
-      expect(
-        mockPrismaService.reimbursementRequest.update
-      ).toHaveBeenCalledWith({
-        where: { id: 'debt-elsewhere' },
-        data: { amountReceived: 70, status: 'PARTIAL' },
-      })
+      ).not.toHaveBeenCalled()
     })
 
     it('drops settlements whose every debt disappears with the account', async () => {
       mockPrismaService.transaction.count.mockResolvedValue(1)
-      mockPrismaService.settlement.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          {
-            id: 'fully-orphaned',
-            reimbursements: [
-              { reimbursement: { transaction: { accountId: mockAccountId } } },
-            ],
-          },
-          {
-            id: 'partly-orphaned',
-            reimbursements: [
-              { reimbursement: { transaction: { accountId: mockAccountId } } },
-              { reimbursement: { transaction: { accountId: 'other' } } },
-            ],
-          },
-        ])
+      mockPrismaService.settlement.findMany.mockResolvedValueOnce([
+        {
+          id: 'fully-orphaned',
+          reimbursements: [
+            { reimbursement: { transaction: { accountId: mockAccountId } } },
+          ],
+        },
+        {
+          id: 'partly-orphaned',
+          reimbursements: [
+            { reimbursement: { transaction: { accountId: mockAccountId } } },
+            { reimbursement: { transaction: { accountId: 'other' } } },
+          ],
+        },
+      ])
 
       await service.remove(mockUserId, mockAccountId)
 

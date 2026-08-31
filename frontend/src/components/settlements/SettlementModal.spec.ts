@@ -29,9 +29,6 @@ const monoprix: ReimbursementDto = {
   personId: PERSON.id,
   personName: PERSON.name,
   // Mirrors production: the expense category is the one that is set, and the
-  // income hint is almost always null.
-  categoryId: null,
-  categoryName: null,
   expenseCategoryId: 'cat-courses',
   expenseCategoryName: 'R Courses',
   amount: 15,

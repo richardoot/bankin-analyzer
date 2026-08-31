@@ -28,6 +28,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
 import type { PrismaService } from '../src/prisma/prisma.service'
+import {
+  creditedTotal,
+  derivedStatusOf,
+  toLedgerEntries,
+} from '../src/reimbursements/reimbursement-ledger'
 import { createE2eApp, e2eIdentity } from './e2e-app'
 import type { E2eContext } from './e2e-app'
 
@@ -171,20 +176,31 @@ describe('Reimbursement baseline (e2e)', () => {
   describe('the dataset itself', () => {
     it('records the reimbursement states the master depends on', async () => {
       const requests = await prisma.reimbursementRequest.findMany({
-        where: { categoryId: fixture.remboursementSanteId },
+        // Every debt in the dataset — the database is seeded once for this
+        // suite and holds nothing else. They used to be selected by the income
+        // category all three shared; that hint is gone, and the categories they
+        // now report are the expenses' own, which do not coincide: Bruno's
+        // hangs off Courses, on the halved joint account.
+        include: { payments: { select: { amount: true, kind: true } } },
         orderBy: { amount: 'desc' },
       })
 
       // Alice's two debts, both left partial by the same February transfer,
       // plus Bruno's untouched one — the PENDING line the pending-deduction
-      // toggle bites on. All three carry the income category, as the frontend
-      // writes it.
+      // toggle bites on.
+      //
+      // The credit and the status are derived here because since phase 6 they
+      // are derived everywhere. The figures are unchanged, which is the point:
+      // dropping the columns moved no number.
       expect(
-        requests.map(r => [
-          Number(r.amount),
-          Number(r.amountReceived),
-          r.status,
-        ])
+        requests.map(r => {
+          const credited = creditedTotal(toLedgerEntries(r.payments))
+          return [
+            Number(r.amount),
+            credited,
+            derivedStatusOf(Number(r.amount), credited),
+          ]
+        })
       ).toEqual([
         [600, 560, 'PARTIAL'],
         [150, 0, 'PENDING'],
@@ -482,13 +498,13 @@ async function seed(
     return response.body as { id: string }
   }
 
-  // categoryId holds the *income* category — that is what the frontend writes.
-  // It no longer drives any calculation; it survives as a saisie hint.
+  // No category on the body: a debt reads the expense transaction's own since
+  // phase 6, and the income hint it used to carry is gone from the DTO — the
+  // validation pipe rejects it outright now.
   const dueDentiste = label(
     await post('/reimbursements', {
       transactionId: txDentiste.id,
       personId: alice.id,
-      categoryId: remboursementSante.id,
       amount: 600,
     }),
     'reimbursement:dentiste'
@@ -497,7 +513,6 @@ async function seed(
     await post('/reimbursements', {
       transactionId: txPharmacie.id,
       personId: alice.id,
-      categoryId: remboursementSante.id,
       amount: 100,
     }),
     'reimbursement:pharmacie'
@@ -507,7 +522,6 @@ async function seed(
     await post('/reimbursements', {
       transactionId: txCoursesJoint.id,
       personId: bruno.id,
-      categoryId: remboursementSante.id,
       amount: 150,
     }),
     'reimbursement:courses'

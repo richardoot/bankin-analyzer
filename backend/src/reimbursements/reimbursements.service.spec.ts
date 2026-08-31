@@ -35,15 +35,11 @@ const mockReimbursement = {
   userId: mockUserId,
   transactionId: mockTransaction.id,
   personId: mockPerson.id,
-  categoryId: mockCategory.id,
   amount: new Decimal(30),
-  amountReceived: new Decimal(0),
-  status: ReimbursementStatus.PENDING,
   note: 'Test note',
   createdAt: new Date('2024-01-15T10:30:00.000Z'),
   updatedAt: new Date('2024-01-15T10:30:00.000Z'),
   person: mockPerson,
-  category: mockCategory,
   transaction: { ...mockTransaction, category: null },
   payments: [] as Array<{ amount: Decimal; kind: string }>,
 }
@@ -51,8 +47,8 @@ const mockReimbursement = {
 const mockReimbursementPartial = {
   ...mockReimbursement,
   id: '550e8400-e29b-41d4-a716-446655440002',
-  amountReceived: new Decimal(15),
-  status: ReimbursementStatus.PARTIAL,
+  // 15 of the 30 credited: PARTIAL is read off this, never stored.
+  payments: [{ amount: new Decimal(15), kind: 'CASH' }],
 }
 
 const mockPrismaService = {
@@ -127,12 +123,12 @@ describe('ReimbursementsService', () => {
 
       expect(result).toHaveLength(1)
       expect(result[0].status).toBe(ReimbursementStatus.PARTIAL)
+      // Filtered on the derived reading, not in the WHERE clause: no column
+      // holds the status any more, and Prisma rejects the argument outright.
       expect(
         mockPrismaService.reimbursementRequest.findMany
       ).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { userId: mockUserId, status: ReimbursementStatus.PARTIAL },
-        })
+        expect.objectContaining({ where: { userId: mockUserId } })
       )
     })
 
@@ -204,7 +200,6 @@ describe('ReimbursementsService', () => {
     it('should create a new reimbursement', async () => {
       mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction)
       mockPrismaService.person.findFirst.mockResolvedValue(mockPerson)
-      mockPrismaService.category.findFirst.mockResolvedValue(mockCategory)
       mockPrismaService.reimbursementRequest.create.mockResolvedValue(
         mockReimbursement
       )
@@ -213,7 +208,6 @@ describe('ReimbursementsService', () => {
         transactionId: mockTransaction.id,
         personId: mockPerson.id,
         amount: 30,
-        categoryId: mockCategory.id,
         note: 'Test note',
       })
 
@@ -229,7 +223,6 @@ describe('ReimbursementsService', () => {
             userId: mockUserId,
             transactionId: mockTransaction.id,
             personId: mockPerson.id,
-            categoryId: mockCategory.id,
             amount: 30,
             note: 'Test note',
           },
@@ -321,19 +314,26 @@ describe('ReimbursementsService', () => {
       ).rejects.toThrow(NotFoundException)
     })
 
-    it('should throw NotFoundException when category not found', async () => {
+    it('reads the category off the expense rather than taking one', async () => {
+      // A debt carries no category of its own since phase 6, so there is no
+      // category to look up and none to reject. The one it reports is the
+      // expense transaction's, which is also what makes recategorising a
+      // transaction move its debts with it.
       mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction)
       mockPrismaService.person.findFirst.mockResolvedValue(mockPerson)
-      mockPrismaService.category.findFirst.mockResolvedValue(null)
+      mockPrismaService.reimbursementRequest.create.mockResolvedValue({
+        ...mockReimbursement,
+        transaction: { ...mockTransaction, category: mockCategory },
+      })
 
-      await expect(
-        service.create(mockUserId, {
-          transactionId: mockTransaction.id,
-          personId: mockPerson.id,
-          amount: 30,
-          categoryId: 'non-existent',
-        })
-      ).rejects.toThrow(NotFoundException)
+      const result = await service.create(mockUserId, {
+        transactionId: mockTransaction.id,
+        personId: mockPerson.id,
+        amount: 30,
+      })
+
+      expect(result.expenseCategoryId).toBe(mockCategory.id)
+      expect(mockPrismaService.category.findFirst).not.toHaveBeenCalled()
     })
   })
 

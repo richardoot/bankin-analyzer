@@ -27,8 +27,6 @@ const carrefour: ReimbursementDto = {
   transactionId: 'tx-carrefour',
   personId: PERSON.id,
   personName: PERSON.name,
-  categoryId: null,
-  categoryName: null,
   expenseCategoryId: 'cat-courses',
   expenseCategoryName: 'R Courses',
   amount: 30,

@@ -456,10 +456,11 @@ export interface ReimbursementDto {
   transactionId: string
   personId: string
   personName: string
-  /** Income category the user expected the money back on — a hint, no more. */
-  categoryId: string | null
-  categoryName: string | null
-  /** Category of the expense being repaid: where the credit is deducted. */
+  /**
+   * Category of the expense being repaid — the only one a debt has. It used to
+   * carry an income category alongside; that drove no figure and the backend
+   * dropped the column in phase 6.
+   */
   expenseCategoryId: string | null
   expenseCategoryName: string | null
   amount: number
@@ -476,7 +477,6 @@ export interface CreateReimbursementDto {
   transactionId: string
   personId: string
   amount: number
-  categoryId?: string
   note?: string
 }
 

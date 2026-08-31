@@ -1,11 +1,12 @@
 /**
- * Phase 3: the ledger becomes the source of truth for writes.
+ * The ledger is the only source of truth.
  *
- * Settling a debt now records one row per movement — cash drawn, remainder
- * forgiven — and `amountReceived` / `status` are rewritten as the sum and the
- * reading of those rows in the same transaction. Deleting a settlement removes
- * its payments and re-totals whatever remains, instead of subtracting a stored
- * figure that mixed the two.
+ * Settling a debt records one row per movement — cash drawn, remainder
+ * forgiven — and everything the debt reports is read back from those rows.
+ * Phase 3 made them authoritative while still mirroring them into
+ * `amountReceived` and `status`; phase 6 dropped the mirror, so deleting a
+ * settlement is now nothing but deleting it: the cascade takes the payments,
+ * and what remains is what the debt has.
  *
  * The case that motivates all of it is the last spec here: a debt paid in part,
  * then force-completed, then un-settled. The previous code gave back the whole
@@ -16,6 +17,11 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import request from 'supertest'
 import type { PrismaService } from '../src/prisma/prisma.service'
+import {
+  creditedTotal,
+  derivedStatusOf,
+  toLedgerEntries,
+} from '../src/reimbursements/reimbursement-ledger'
 import { createE2eApp, e2eIdentity } from './e2e-app'
 import type { E2eContext } from './e2e-app'
 
@@ -133,15 +139,24 @@ describe('Settlement ledger (e2e)', () => {
     return (response.body as { id: string }).id
   }
 
+  /**
+   * What the debt reports, read where the application reads it.
+   *
+   * Straight off the ledger since phase 6 dropped the columns — and asserting
+   * on the derivation is the point: these tests are about what a settlement
+   * does to a debt, and the answer no longer lives in a row of its own.
+   */
   async function stateOf(
     reimbursementId: string
   ): Promise<{ amountReceived: number; status: string }> {
     const row = await prisma.reimbursementRequest.findFirstOrThrow({
       where: { id: reimbursementId },
+      include: { payments: { select: { amount: true, kind: true } } },
     })
+    const amountReceived = creditedTotal(toLedgerEntries(row.payments))
     return {
-      amountReceived: Number(row.amountReceived),
-      status: row.status,
+      amountReceived,
+      status: derivedStatusOf(Number(row.amount), amountReceived),
     }
   }
 
@@ -393,6 +408,67 @@ describe('Settlement ledger (e2e)', () => {
         amountReceived: 600,
         status: 'PARTIAL',
       })
+    })
+  })
+
+  describe('deleting the account the money came from', () => {
+    it('takes the credit with it, through the foreign keys alone', async () => {
+      // The claim two unit specs make in a comment and cannot check, mocked
+      // Prisma having no foreign keys: accounts.service no longer gives credits
+      // back by hand, because deleting an income transaction cascades to the
+      // settlement it funded and from there to the payments — which is where a
+      // debt's figures are read from since phase 6.
+      //
+      // The expense and the income sit on different accounts on purpose. That
+      // is the case the 42 deleted lines existed for: the debt survives the
+      // delete, so the credit has to be undone rather than cascade away with
+      // it.
+      const f = await fixture()
+      const elsewhere = await prisma.account.create({
+        data: { userId, name: 'Livret' },
+      })
+      const otherIncome = await prisma.transaction.create({
+        data: {
+          userId,
+          accountId: elsewhere.id,
+          hash: `${userId}-income-livret`,
+          date: new Date('2026-02-20'),
+          description: 'VIR ALICE MARTIN',
+          amount: 800,
+          type: 'INCOME',
+        },
+      })
+
+      const debt = await createReimbursement(f, 600)
+      const response = await http()
+        .post('/settlements')
+        .set(ctx.auth(owner))
+        .send({
+          personId: f.personId,
+          incomeTransactionId: otherIncome.id,
+          reimbursements: [{ reimbursementId: debt, amountSettled: 600 }],
+        })
+      expect(response.status).toBe(201)
+      expect(await stateOf(debt)).toEqual({
+        amountReceived: 600,
+        status: 'COMPLETED',
+      })
+
+      await http()
+        .delete(`/accounts/${elsewhere.id}`)
+        .set(ctx.auth(owner))
+        .expect(200)
+
+      // The debt is still owed in full: the money that repaid it is gone.
+      expect(await stateOf(debt)).toEqual({
+        amountReceived: 0,
+        status: 'PENDING',
+      })
+      expect(await ledgerOf(debt)).toEqual([])
+      // And the expense it hangs off, on the surviving account, is untouched.
+      expect(
+        await prisma.reimbursementRequest.count({ where: { id: debt } })
+      ).toBe(1)
     })
   })
 })

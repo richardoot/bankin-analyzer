@@ -5,12 +5,17 @@ import {
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { ReimbursementStatus, TransactionType } from '../generated/prisma'
-import type { ReimbursementRequest, Prisma } from '../generated/prisma'
+import type {
+  ReimbursementRequest,
+  Prisma,
+  PaymentKind,
+} from '../generated/prisma'
 import {
   LEDGER_EPSILON,
   creditedTotal,
   derivedStatusOf,
   round2,
+  toLedgerEntries,
 } from './reimbursement-ledger'
 import type {
   CreateReimbursementDto,
@@ -20,7 +25,8 @@ import type {
 
 type ReimbursementWithRelations = ReimbursementRequest & {
   person: { name: string }
-  category: { name: string } | null
+  /** The ledger the credit and the status are read from. */
+  payments: { amount: Prisma.Decimal; kind: PaymentKind }[]
   transaction: {
     id: string
     date: Date
@@ -39,7 +45,9 @@ type ReimbursementWithRelations = ReimbursementRequest & {
  */
 const RESPONSE_INCLUDE = {
   person: { select: { name: true } },
-  category: { select: { name: true } },
+  // Not an optional extra: `amountReceived` and `status` are read off these,
+  // so a response without them would report every debt as untouched.
+  payments: { select: { amount: true, kind: true } },
   transaction: {
     select: {
       id: true,
@@ -60,21 +68,23 @@ export class ReimbursementsService {
     includeTransaction = false
   ): ReimbursementResponseDto {
     const amount = Number(reimbursement.amount)
-    const amountReceived = Number(reimbursement.amountReceived)
+    // Read off the ledger, not off a column: since phase 6 there is no second
+    // copy to fall out of step with the payments.
+    const amountReceived = creditedTotal(
+      toLedgerEntries(reimbursement.payments)
+    )
 
     const response: ReimbursementResponseDto = {
       id: reimbursement.id,
       transactionId: reimbursement.transactionId,
       personId: reimbursement.personId,
       personName: reimbursement.person.name,
-      categoryId: reimbursement.categoryId,
-      categoryName: reimbursement.category?.name ?? null,
       expenseCategoryId: reimbursement.transaction.category?.id ?? null,
       expenseCategoryName: reimbursement.transaction.category?.name ?? null,
       amount,
       amountReceived,
-      amountRemaining: amount - amountReceived,
-      status: reimbursement.status,
+      amountRemaining: round2(amount - amountReceived),
+      status: derivedStatusOf(amount, amountReceived),
       note: reimbursement.note,
       createdAt: reimbursement.createdAt,
       updatedAt: reimbursement.updatedAt,
@@ -136,20 +146,26 @@ export class ReimbursementsService {
     }
   ): Promise<ReimbursementResponseDto[]> {
     const reimbursements = await this.prisma.reimbursementRequest.findMany({
-      where: {
-        userId,
-        ...(filters?.status && { status: filters.status }),
-      },
+      where: { userId },
       include: RESPONSE_INCLUDE,
       orderBy: { createdAt: 'desc' },
     })
 
-    return reimbursements.map(r =>
+    // Filtered after the fact, not in the WHERE clause: since phase 6 the
+    // status is a reading of the ledger and no column holds it, so there is
+    // nothing for the database to compare. Sending it anyway is what Prisma
+    // would reject at runtime — the spread that used to do it typechecked
+    // fine.
+    const responses = reimbursements.map(r =>
       this.toResponseDto(
         r as ReimbursementWithRelations,
         filters?.includeTransaction
       )
     )
+
+    return filters?.status
+      ? responses.filter(response => response.status === filters.status)
+      : responses
   }
 
   async findByTransaction(
@@ -243,25 +259,11 @@ export class ReimbursementsService {
       throw new NotFoundException(`Person with ID ${dto.personId} not found`)
     }
 
-    // Verify category exists if provided
-    if (dto.categoryId) {
-      const category = await this.prisma.category.findFirst({
-        where: { id: dto.categoryId, userId },
-      })
-
-      if (!category) {
-        throw new NotFoundException(
-          `Category with ID ${dto.categoryId} not found`
-        )
-      }
-    }
-
     const reimbursement = await this.prisma.reimbursementRequest.create({
       data: {
         userId,
         transactionId: dto.transactionId,
         personId: dto.personId,
-        categoryId: dto.categoryId ?? null,
         amount: dto.amount,
         note: dto.note ?? null,
       },
@@ -302,12 +304,7 @@ export class ReimbursementsService {
       // Lowering a debt below what has already been credited to it would
       // leave the ledger claiming more than the debt was ever for, and the
       // derived status would read COMPLETED on a figure that makes no sense.
-      const credited = creditedTotal(
-        existing.payments.map(payment => ({
-          amount: Number(payment.amount),
-          kind: payment.kind as 'CASH' | 'WRITE_OFF',
-        }))
-      )
+      const credited = creditedTotal(toLedgerEntries(existing.payments))
       if (credited - dto.amount > LEDGER_EPSILON) {
         throw new BadRequestException(
           `Reimbursement already credited ${round2(credited)}, cannot be lowered to ${round2(dto.amount)}`
@@ -326,38 +323,13 @@ export class ReimbursementsService {
       }
     }
 
-    // Verify category if being updated
-    if (dto.categoryId) {
-      const category = await this.prisma.category.findFirst({
-        where: { id: dto.categoryId, userId },
-      })
-
-      if (!category) {
-        throw new NotFoundException(
-          `Category with ID ${dto.categoryId} not found`
-        )
-      }
-    }
-
     const reimbursement = await this.prisma.reimbursementRequest.update({
       where: { id },
       data: {
         ...(dto.personId !== undefined && { personId: dto.personId }),
-        ...(dto.amount !== undefined && {
-          amount: dto.amount,
-          // The status is a reading of the ledger against the debt, so moving
-          // the debt re-reads it: raising a settled one reopens it as PARTIAL.
-          status: derivedStatusOf(
-            dto.amount,
-            creditedTotal(
-              existing.payments.map(payment => ({
-                amount: Number(payment.amount),
-                kind: payment.kind as 'CASH' | 'WRITE_OFF',
-              }))
-            )
-          ),
-        }),
-        ...(dto.categoryId !== undefined && { categoryId: dto.categoryId }),
+        // No status to rewrite alongside the amount: moving the debt moves what
+        // the ledger reads against, and the reading happens on the way out.
+        ...(dto.amount !== undefined && { amount: dto.amount }),
         ...(dto.note !== undefined && { note: dto.note }),
       },
       include: RESPONSE_INCLUDE,

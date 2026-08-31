@@ -2168,12 +2168,6 @@
                       >
                         (recu: {{ formatCurrency(reimb.amountReceived) }})
                       </span>
-                      <span
-                        v-if="reimb.categoryName"
-                        class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded"
-                      >
-                        {{ reimb.categoryName }}
-                      </span>
                     </div>
                     <button
                       v-if="reimb.status !== 'COMPLETED'"

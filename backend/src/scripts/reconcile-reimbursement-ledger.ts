@@ -1,29 +1,24 @@
 /**
- * Read-only reconciliation of the payment ledger against the columns it will
- * replace.
+ * Read-only check of the payment ledger's own invariants.
  *
  * ## Why
  *
- * Phase 2 of the reimbursement rework fills `reimbursement_payments` from the
- * existing settlements without letting anything read it yet. The question that
- * gates phase 3 is narrow: does the ledger reproduce, exactly, what the app
- * shows today?
+ * Until phase 6 this script reconciled `reimbursement_payments` against the
+ * `amount_received` and `status` columns it was replacing, and a clean run on
+ * production is what gated dropping them. Those columns are gone, so the two
+ * comparisons that motivated the script have nothing left to compare.
  *
- * Four things have to line up. The first two are what the migration promises;
- * the last two are invariants the target model will enforce, checked here to
- * confirm the current data already satisfies them.
+ * The two invariants it also checked are not transitional, and nothing else
+ * enforces them:
  *
- *   1. **Credit.** `amount_received` must equal the sum of a request's
- *      payments. A gap means the backfill invented or dropped money.
- *   2. **Status.** The stored `status` must match the one derived from those
- *      same amounts, since phase 3 stops storing it.
- *   3. **Settlement cash.** Per settlement, the CASH payments must add back up
+ *   1. **Settlement cash.** Per settlement, the CASH payments must add back up
  *      to `amount_used` — the write-offs being exactly what does not.
- *   4. **Income not overdrawn.** Per income transaction, the CASH drawn from it
- *      must not exceed its amount. Nothing enforces this today.
+ *   2. **Income not overdrawn.** Per income transaction, the CASH drawn from it
+ *      must not exceed its amount.
  *
- * A clean run means phase 3 can switch the writes over: the ledger is a
- * faithful mirror, and `amountReceived` / `status` can become derived values.
+ * The second is the one worth watching: creating a settlement checks it, but
+ * nothing re-checks it when an income transaction is later edited, re-imported
+ * or has its amount corrected.
  *
  * ## Usage
  *
@@ -59,8 +54,6 @@ export interface LedgerReimbursement {
   /** Description of the expense transaction the request hangs off. */
   description: string
   amount: number
-  amountReceived: number
-  status: string
   payments: LedgerPayment[]
 }
 
@@ -80,26 +73,6 @@ export interface LedgerIncomeTransaction {
   amount: number
   /** CASH recorded against this transaction, all settlements together. */
   cashDrawn: number
-}
-
-export interface CreditMismatch {
-  reimbursementId: string
-  personName: string
-  description: string
-  stored: number
-  derived: number
-  /** `derived - stored`. */
-  difference: number
-}
-
-export interface StatusMismatch {
-  reimbursementId: string
-  personName: string
-  description: string
-  amount: number
-  amountReceived: number
-  stored: string
-  derived: string
 }
 
 export interface SettlementCashMismatch {
@@ -126,8 +99,6 @@ export interface Reconciliation {
     writeOffs: number
     incomeTransactions: number
   }
-  creditMismatches: CreditMismatch[]
-  statusMismatches: StatusMismatch[]
   settlementCashMismatches: SettlementCashMismatch[]
   overdrawnIncome: OverdrawnIncome[]
 }
@@ -141,75 +112,6 @@ function sumOf(payments: LedgerPayment[], kind?: LedgerPaymentKind): number {
 /**
  * Status the target model reads off the amounts. Mirrors the service rules,
  * with the sub-cent tolerance the stored figures deserve.
- */
-export function derivedStatusOf(
-  amount: number,
-  amountReceived: number
-): string {
-  if (amountReceived >= amount - EPSILON) return 'COMPLETED'
-  if (amountReceived > EPSILON) return 'PARTIAL'
-  return 'PENDING'
-}
-
-/** Requests whose ledger does not add back up to `amount_received`. */
-export function findCreditMismatches(
-  reimbursements: LedgerReimbursement[]
-): CreditMismatch[] {
-  const findings: CreditMismatch[] = []
-
-  for (const reimbursement of reimbursements) {
-    const derived = sumOf(reimbursement.payments)
-    const difference = derived - reimbursement.amountReceived
-    if (Math.abs(difference) <= EPSILON) continue
-
-    findings.push({
-      reimbursementId: reimbursement.id,
-      personName: reimbursement.personName,
-      description: reimbursement.description,
-      stored: reimbursement.amountReceived,
-      derived,
-      difference,
-    })
-  }
-
-  return findings.sort(
-    (a, b) => Math.abs(b.difference) - Math.abs(a.difference)
-  )
-}
-
-/**
- * Requests whose stored status contradicts the ledger. Compared against the
- * status the *ledger* implies, not the stored amount: phase 3 derives both from
- * the payments, so this is what will actually show on screen.
- */
-export function findStatusMismatches(
-  reimbursements: LedgerReimbursement[]
-): StatusMismatch[] {
-  const findings: StatusMismatch[] = []
-
-  for (const reimbursement of reimbursements) {
-    const received = sumOf(reimbursement.payments)
-    const derived = derivedStatusOf(reimbursement.amount, received)
-    if (derived === reimbursement.status) continue
-
-    findings.push({
-      reimbursementId: reimbursement.id,
-      personName: reimbursement.personName,
-      description: reimbursement.description,
-      amount: reimbursement.amount,
-      amountReceived: received,
-      stored: reimbursement.status,
-      derived,
-    })
-  }
-
-  return findings
-}
-
-/**
- * Settlements whose CASH payments do not add back up to the cash they drew.
- * The write-offs are deliberately excluded — they are the part that never had
- * cash behind it.
  */
 export function findSettlementCashMismatches(
   settlements: LedgerSettlement[]
@@ -263,18 +165,14 @@ export function buildReconciliation(
       writeOffs: payments.filter(p => p.kind === 'WRITE_OFF').length,
       incomeTransactions: incomeTransactions.length,
     },
-    creditMismatches: findCreditMismatches(reimbursements),
-    statusMismatches: findStatusMismatches(reimbursements),
     settlementCashMismatches: findSettlementCashMismatches(settlements),
     overdrawnIncome: findOverdrawnIncome(incomeTransactions),
   }
 }
 
-/** Everything that must be empty before phase 3 can switch the writes over. */
+/** Everything that must be empty for the ledger to hold together. */
 export function mismatchCount(reconciliation: Reconciliation): number {
   return (
-    reconciliation.creditMismatches.length +
-    reconciliation.statusMismatches.length +
     reconciliation.settlementCashMismatches.length +
     reconciliation.overdrawnIncome.length
   )
@@ -310,7 +208,7 @@ export function formatReport(
   }
 
   const { scanned } = reconciliation
-  push('LEDGER RECONCILIATION — payments vs the columns they replace')
+  push('LEDGER INVARIANTS')
   push()
   push(
     `${scanned.payments} payment(s) (${scanned.writeOffs} write-off) across ` +
@@ -320,52 +218,7 @@ export function formatReport(
   )
   push()
 
-  push('[1] Credit: amount_received vs the sum of payments')
-  if (reconciliation.creditMismatches.length === 0) {
-    push('  OK — every request reconstructs to the cent.')
-  } else {
-    const total = reconciliation.creditMismatches.reduce(
-      (sum, finding) => sum + Math.abs(finding.difference),
-      0
-    )
-    push(
-      `  ${reconciliation.creditMismatches.length} request(s) off by ` +
-        `${money(total)} EUR in total.`
-    )
-    push()
-    sample(reconciliation.creditMismatches, finding => {
-      push(`  ${finding.personName} — ${finding.description}`)
-      push(
-        `    stored ${money(finding.stored)}, ` +
-          `ledger ${money(finding.derived)} ` +
-          `(${finding.difference > 0 ? '+' : ''}${money(finding.difference)})`
-      )
-      push()
-    })
-  }
-  push()
-
-  push('[2] Status: stored vs derived from the ledger')
-  if (reconciliation.statusMismatches.length === 0) {
-    push('  OK — deriving the status changes nothing on screen.')
-  } else {
-    push(
-      `  ${reconciliation.statusMismatches.length} request(s) would display a ` +
-        'different status once it is derived.'
-    )
-    push()
-    sample(reconciliation.statusMismatches, finding => {
-      push(`  ${finding.personName} — ${finding.description}`)
-      push(
-        `    ${money(finding.amountReceived)} of ${money(finding.amount)}: ` +
-          `stored ${finding.stored}, derived ${finding.derived}`
-      )
-      push()
-    })
-  }
-  push()
-
-  push('[3] Settlement cash: CASH payments vs amount_used')
+  push('[1] Settlement cash: CASH payments vs amount_used')
   if (reconciliation.settlementCashMismatches.length === 0) {
     push('  OK — every settlement gave out exactly the cash it drew.')
   } else {
@@ -386,7 +239,7 @@ export function formatReport(
   }
   push()
 
-  push('[4] Income not overdrawn: CASH drawn vs the transaction amount')
+  push('[2] Income not overdrawn: CASH drawn vs the transaction amount')
   if (reconciliation.overdrawnIncome.length === 0) {
     push('  OK — no income transaction gave out more than it carries.')
   } else {
@@ -409,10 +262,7 @@ export function formatReport(
   const mismatches = mismatchCount(reconciliation)
   push('VERDICT')
   if (mismatches === 0) {
-    push(
-      '  The ledger is a faithful mirror. Phase 3 can switch the writes over ' +
-        'and start deriving amountReceived and status from it.'
-    )
+    push('  The ledger holds together.')
   } else {
     push(
       `  ${mismatches} mismatch(es). Resolve them before phase 3 makes the ` +
@@ -432,8 +282,6 @@ export async function main(
       select: {
         id: true,
         amount: true,
-        amountReceived: true,
-        status: true,
         person: { select: { name: true } },
         transaction: { select: { description: true } },
         payments: { select: { amount: true, kind: true } },
@@ -464,8 +312,6 @@ export async function main(
     personName: row.person.name,
     description: row.transaction.description,
     amount: Number(row.amount),
-    amountReceived: Number(row.amountReceived),
-    status: row.status,
     payments: row.payments.map(payment => ({
       amount: Number(payment.amount),
       kind: payment.kind as LedgerPaymentKind,

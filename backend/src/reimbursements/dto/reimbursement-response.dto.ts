@@ -29,18 +29,9 @@ export class ReimbursementResponseDto {
   personName!: string
 
   /**
-   * Income category the user expected the money back on. A saisie hint and
-   * nothing more since the deduction moved onto the expense transaction — it
-   * drives no figure. Kept for the rows that already carry one.
-   */
-  categoryId!: string | null
-
-  categoryName!: string | null
-
-  /**
-   * Category of the expense being repaid. This is the one that matters now:
-   * it is where the credit is deducted, so it is how a debt should be
-   * grouped and read.
+   * Category of the expense being repaid — the only one a debt has. The income
+   * category it used to carry alongside drove no figure and was null on every
+   * row created after 9a1ebc5; phase 6 dropped the column.
    */
   expenseCategoryId!: string | null
 
