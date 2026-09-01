@@ -1,0 +1,486 @@
+/**
+ * Phase 2 spike: open one real session and look at what the bank actually
+ * returns, before any of it is allowed near the database.
+ *
+ * ## What it answers
+ *
+ * Phase 0 established that CIC, Boursorama and Revolut are reachable, grant
+ * 180-day consents, and do not demand the PSU be present. Two questions decide
+ * the shape of everything after it, and neither can be answered without a
+ * session:
+ *
+ *   1. **How far back does each bank let us read?** This is what keeps the
+ *      Bankin CSV import alive: if the API reaches three months, the CSV
+ *      remains the only source of the history, permanently. The fetch uses
+ *      `strategy=longest`, which asks the connector to reach as far as the
+ *      ASPSP allows rather than the default window.
+ *
+ *   2. **Is `entry_reference` actually populated?** The whole identity rework
+ *      of phase 1 rests on it. The spec calls it "unique and immutable […]
+ *      across multiple PSU authentication sessions", which is exactly the
+ *      stable key the CSV never had — but it also says it is optional, and a
+ *      bank that omits it forces the matcher to carry that account on
+ *      heuristics alone. Better to learn that now than in phase 4.
+ *
+ * It also counts what `merchant_category_code` covers: an ISO 18245 code is a
+ * far better categorisation input than a free-text label, and if the coverage
+ * is good it changes how phase 6 should work.
+ *
+ * ## What it does not do
+ *
+ * Write to the database. Nothing here touches Prisma. The fetched
+ * transactions land in a JSON file **outside the repository**, because they
+ * are real bank records and have no business in git.
+ *
+ * ## Usage
+ *
+ * Two steps, because the authorization happens in a browser.
+ *
+ *   # 1. Start it. Prints a URL to open, and the code to come back with.
+ *   pnpm ts-node src/scripts/spike-enable-banking-fetch.ts --aspsp Revolut
+ *
+ *   # 2. Authorize in the browser. The redirect to https://localhost:5173/…
+ *   #    will fail to load — that is expected, nothing is listening there.
+ *   #    Copy the `code` parameter out of the browser's address bar.
+ *   pnpm ts-node src/scripts/spike-enable-banking-fetch.ts --code <code>
+ *
+ * `--country` defaults to FR, `--days` caps the requested consent (default:
+ * the bank's own maximum), `--out` overrides the JSON destination.
+ */
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { readFileSync, writeFileSync } from 'fs'
+import { randomUUID } from 'crypto'
+import { buildJwt } from './probe-enable-banking'
+
+const API_BASE = 'https://api.enablebanking.com'
+
+/** Personal accounts: this project has no business banking in it. */
+const PSU_TYPE = 'personal'
+
+/** One page of transactions is capped by the ASPSP; this bounds the loop. */
+const MAX_PAGES = 50
+
+export interface TransactionAmount {
+  amount?: string
+  currency?: string
+}
+
+/** `Transaction`, narrowed to the fields the spike reports on. */
+export interface BankTransaction {
+  entry_reference?: string
+  transaction_id?: string
+  merchant_category_code?: string
+  transaction_amount?: TransactionAmount
+  credit_debit_indicator?: 'CRDT' | 'DBIT'
+  status?: string
+  booking_date?: string
+  value_date?: string
+  transaction_date?: string
+  remittance_information?: string[]
+  creditor?: { name?: string }
+  debtor?: { name?: string }
+}
+
+export interface AccountResource {
+  uid?: string
+  name?: string
+  product?: string
+  currency?: string
+  account_id?: { iban?: string; other?: { identification?: string } }
+  identification_hash?: string
+}
+
+export interface SessionResponse {
+  session_id: string
+  accounts: AccountResource[]
+  aspsp?: { name?: string; country?: string }
+}
+
+/** What the spike concludes about one account. */
+export interface AccountReport {
+  accountUid: string
+  accountName: string
+  iban: string | null
+  currency: string | null
+  transactionCount: number
+  /** The two dates that measure history depth. */
+  oldest: string | null
+  newest: string | null
+  historyDays: number | null
+  /** The phase 1 question, as a count and a ratio. */
+  withEntryReference: number
+  entryReferenceCoverage: number
+  duplicateEntryReferences: string[]
+  /** The phase 6 bonus. */
+  withMerchantCategoryCode: number
+  statusCounts: Record<string, number>
+  credits: number
+  debits: number
+  sampleLabels: string[]
+}
+
+/**
+ * The date a transaction actually happened, preferring the booking date.
+ *
+ * Three date fields are offered and they disagree. `booking_date` is the one
+ * a bank statement shows and the one the Bankin export lines up with, so it
+ * is what the matcher of phase 3 will have to compare against.
+ */
+export function transactionDate(tx: BankTransaction): string | null {
+  return tx.booking_date ?? tx.transaction_date ?? tx.value_date ?? null
+}
+
+/**
+ * The signed amount, in this project's convention: expenses negative.
+ *
+ * The API states the sign separately from the magnitude
+ * (`credit_debit_indicator`), so a transaction whose indicator is missing
+ * cannot be trusted to be an income just because its amount has no minus in
+ * front of it. Those return null and are counted, never guessed.
+ */
+export function signedAmount(tx: BankTransaction): number | null {
+  const raw = tx.transaction_amount?.amount
+  if (raw === undefined) return null
+  const magnitude = Math.abs(Number(raw))
+  if (Number.isNaN(magnitude)) return null
+  if (tx.credit_debit_indicator === 'CRDT') return magnitude
+  if (tx.credit_debit_indicator === 'DBIT') return -magnitude
+  return null
+}
+
+/** The human-readable label, assembled the way a statement line reads. */
+export function transactionLabel(tx: BankTransaction): string {
+  const remittance = (tx.remittance_information ?? []).join(' ').trim()
+  const party = tx.creditor?.name ?? tx.debtor?.name ?? ''
+  return (remittance || party || '(no label)').slice(0, 80)
+}
+
+/** Whole days between the oldest and newest transaction, inclusive of neither. */
+function daysBetween(oldest: string, newest: string): number {
+  const ms = new Date(newest).getTime() - new Date(oldest).getTime()
+  return Math.round(ms / 86_400_000)
+}
+
+/**
+ * Reduce one account's transactions to the facts phase 1 and phase 2 need.
+ *
+ * Duplicate entry references are collected rather than counted: the spec warns
+ * they are unique per account but not globally, and seeing an actual collision
+ * inside a single account would invalidate the phase 1 unique constraint
+ * before it is written.
+ */
+export function summariseAccount(
+  account: AccountResource,
+  transactions: BankTransaction[]
+): AccountReport {
+  const dates = transactions
+    .map(transactionDate)
+    .filter((d): d is string => d !== null)
+    .sort()
+  const oldest = dates[0] ?? null
+  const newest = dates[dates.length - 1] ?? null
+
+  const references = transactions
+    .map(tx => tx.entry_reference)
+    .filter((r): r is string => r !== undefined && r !== '')
+
+  const seen = new Set<string>()
+  const duplicates = new Set<string>()
+  for (const ref of references) {
+    if (seen.has(ref)) duplicates.add(ref)
+    seen.add(ref)
+  }
+
+  const statusCounts: Record<string, number> = {}
+  for (const tx of transactions) {
+    const status = tx.status ?? 'UNKNOWN'
+    statusCounts[status] = (statusCounts[status] ?? 0) + 1
+  }
+
+  return {
+    accountUid: account.uid ?? '(no uid)',
+    accountName: account.name ?? account.product ?? '(unnamed)',
+    iban: account.account_id?.iban ?? null,
+    currency: account.currency ?? null,
+    transactionCount: transactions.length,
+    oldest,
+    newest,
+    historyDays: oldest && newest ? daysBetween(oldest, newest) : null,
+    withEntryReference: references.length,
+    entryReferenceCoverage:
+      transactions.length === 0 ? 0 : references.length / transactions.length,
+    duplicateEntryReferences: [...duplicates],
+    withMerchantCategoryCode: transactions.filter(
+      tx => tx.merchant_category_code
+    ).length,
+    statusCounts,
+    credits: transactions.filter(tx => tx.credit_debit_indicator === 'CRDT')
+      .length,
+    debits: transactions.filter(tx => tx.credit_debit_indicator === 'DBIT')
+      .length,
+    sampleLabels: transactions.slice(0, 5).map(transactionLabel),
+  }
+}
+
+/**
+ * The consent expiry to request, never beyond what the bank allows.
+ *
+ * Asking for more than `maximum_consent_validity` is rejected outright, and
+ * the ceiling differs per ASPSP, so the request is clamped rather than
+ * hard-coded. One minute is shaved off: the value is compared against the
+ * bank's clock, not ours.
+ */
+export function clampValidUntil(
+  now: Date,
+  maximumConsentValiditySeconds: number,
+  requestedDays?: number
+): string {
+  const ceilingMs = maximumConsentValiditySeconds * 1000 - 60_000
+  const requestedMs =
+    requestedDays === undefined ? ceilingMs : requestedDays * 86_400_000
+  return new Date(
+    now.getTime() + Math.min(requestedMs, ceilingMs)
+  ).toISOString()
+}
+
+async function apiCall<T>(
+  path: string,
+  token: string,
+  init?: { method: string; body: unknown }
+): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: init?.method ?? 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(init ? { 'Content-Type': 'application/json' } : {}),
+    },
+    ...(init ? { body: JSON.stringify(init.body) } : {}),
+  })
+  if (!response.ok) {
+    throw new Error(
+      `${init?.method ?? 'GET'} ${path} → ${response.status} ${response.statusText}\n${await response.text()}`
+    )
+  }
+  return (await response.json()) as T
+}
+
+/** Fetch every page of transactions for one account. */
+async function fetchAllTransactions(
+  accountUid: string,
+  token: string
+): Promise<BankTransaction[]> {
+  const all: BankTransaction[] = []
+  let continuationKey: string | undefined
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const query = new URLSearchParams({ strategy: 'longest' })
+    if (continuationKey) query.set('continuation_key', continuationKey)
+
+    const body = await apiCall<{
+      transactions: BankTransaction[]
+      continuation_key?: string
+    }>(`/accounts/${accountUid}/transactions?${query.toString()}`, token)
+
+    all.push(...(body.transactions ?? []))
+    // A continuation key means "not everything is here yet" — the loop must
+    // keep going until the API stops returning one, not until a page is short.
+    if (!body.continuation_key) return all
+    continuationKey = body.continuation_key
+    process.stdout.write(`    …${all.length} transactions\n`)
+  }
+
+  console.warn(`  ⚠  Stopped after ${MAX_PAGES} pages; more may remain.`)
+  return all
+}
+
+async function startAuthorization(
+  token: string,
+  aspspName: string,
+  country: string,
+  redirectUrl: string,
+  requestedDays: number | undefined
+): Promise<void> {
+  const { aspsps } = await apiCall<{
+    aspsps: {
+      name: string
+      country: string
+      maximum_consent_validity?: number
+    }[]
+  }>(`/aspsps?country=${encodeURIComponent(country)}`, token)
+
+  const aspsp = aspsps.find(
+    a => a.name.toLowerCase() === aspspName.toLowerCase()
+  )
+  if (!aspsp) {
+    const near = aspsps
+      .filter(a => a.name.toLowerCase().includes(aspspName.toLowerCase()))
+      .map(a => a.name)
+    throw new Error(
+      `No ASPSP named exactly "${aspspName}" in ${country}.` +
+        (near.length ? `\nDid you mean: ${near.join(', ')}?` : '')
+    )
+  }
+
+  const validUntil = clampValidUntil(
+    new Date(),
+    aspsp.maximum_consent_validity ?? 90 * 86_400,
+    requestedDays
+  )
+
+  const { url } = await apiCall<{ url: string; authorization_id: string }>(
+    '/auth',
+    token,
+    {
+      method: 'POST',
+      body: {
+        access: { valid_until: validUntil, balances: true, transactions: true },
+        aspsp: { name: aspsp.name, country: aspsp.country },
+        redirect_url: redirectUrl,
+        psu_type: PSU_TYPE,
+        state: randomUUID(),
+      },
+    }
+  )
+
+  console.log(`\nConsent requested until ${validUntil}\n`)
+  console.log('Open this URL and authorize:\n')
+  console.log(`  ${url}\n`)
+  console.log(
+    'The redirect to https://localhost:5173/… will fail to load — nothing is\n' +
+      'listening there, and that is fine. Copy the `code` parameter out of the\n' +
+      'address bar and run:\n\n' +
+      '  pnpm ts-node src/scripts/spike-enable-banking-fetch.ts --code <code>\n'
+  )
+}
+
+function printReport(report: AccountReport): void {
+  const pct = (n: number): string => `${Math.round(n * 100)}%`
+  console.log(`\n  ── ${report.accountName} (${report.iban ?? 'no IBAN'})`)
+  console.log(`     transactions : ${report.transactionCount}`)
+  console.log(
+    `     history      : ${report.oldest ?? '—'} → ${report.newest ?? '—'}` +
+      (report.historyDays === null ? '' : `  (${report.historyDays} days)`)
+  )
+  console.log(
+    `     entry_ref    : ${report.withEntryReference}/${report.transactionCount} (${pct(report.entryReferenceCoverage)})` +
+      (report.duplicateEntryReferences.length
+        ? `  ⚠ ${report.duplicateEntryReferences.length} DUPLICATES`
+        : '')
+  )
+  console.log(
+    `     MCC          : ${report.withMerchantCategoryCode}/${report.transactionCount}`
+  )
+  console.log(
+    `     status       : ${Object.entries(report.statusCounts)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(' ')}`
+  )
+  console.log(
+    `     sign         : ${report.credits} CRDT / ${report.debits} DBIT`
+  )
+  console.log(`     sample       : ${report.sampleLabels.join(' | ')}`)
+}
+
+/**
+ * How the script was invoked. The optionals spell out `| undefined` because
+ * `exactOptionalPropertyTypes` is on: an absent flag and a flag set to
+ * undefined are the same thing here, and the CLI parser produces the latter.
+ */
+export interface SpikeOptions {
+  /** Present on the second step only: the code copied out of the address bar. */
+  code?: string | undefined
+  aspsp?: string | undefined
+  country: string
+  redirectUrl: string
+  days?: number | undefined
+  out: string
+}
+
+export async function main(
+  applicationId: string,
+  privateKeyPem: string,
+  options: SpikeOptions
+): Promise<void> {
+  const token = buildJwt(applicationId, privateKeyPem)
+
+  if (!options.code) {
+    await startAuthorization(
+      token,
+      options.aspsp ?? 'Revolut',
+      options.country,
+      options.redirectUrl,
+      options.days
+    )
+    return
+  }
+
+  const session = await apiCall<SessionResponse>('/sessions', token, {
+    method: 'POST',
+    body: { code: options.code },
+  })
+
+  console.log(`\nSession ${session.session_id}`)
+  console.log(`ASPSP   ${session.aspsp?.name ?? '—'}`)
+  console.log(`Accounts: ${session.accounts.length}`)
+
+  const reports: AccountReport[] = []
+  const dump: Record<string, BankTransaction[]> = {}
+
+  for (const account of session.accounts) {
+    if (!account.uid) continue
+    console.log(`\n  Fetching ${account.name ?? account.uid}…`)
+    const transactions = await fetchAllTransactions(account.uid, token)
+    dump[account.uid] = transactions
+    const report = summariseAccount(account, transactions)
+    reports.push(report)
+    printReport(report)
+  }
+
+  writeFileSync(
+    options.out,
+    JSON.stringify({ session: session.session_id, reports, dump }, null, 2)
+  )
+  console.log(`\nRaw transactions written to:\n  ${options.out}`)
+  console.log(
+    '\nThis file holds real bank records. It is deliberately outside the\n' +
+      'repository — keep it that way, and delete it once phase 3 is done.\n'
+  )
+}
+
+// Run only when executed directly (not when imported by tests).
+if (require.main === module) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('dotenv/config')
+
+  const args = process.argv.slice(2)
+  const flag = (name: string): string | undefined => {
+    const i = args.indexOf(`--${name}`)
+    return i === -1 ? undefined : args[i + 1]
+  }
+
+  const applicationId = process.env.ENABLE_BANKING_APP_ID
+  const keyPath = process.env.ENABLE_BANKING_PRIVATE_KEY_PATH
+  if (!applicationId || !keyPath) {
+    console.error(
+      'ENABLE_BANKING_APP_ID and ENABLE_BANKING_PRIVATE_KEY_PATH must be set.'
+    )
+    process.exit(1)
+  }
+
+  const daysFlag = flag('days')
+  const options = {
+    ...(flag('code') !== undefined && { code: flag('code') }),
+    ...(flag('aspsp') !== undefined && { aspsp: flag('aspsp') }),
+    country: (flag('country') ?? 'FR').toUpperCase(),
+    redirectUrl: flag('redirect') ?? 'https://localhost:5173/bank-callback',
+    ...(daysFlag !== undefined && { days: Number(daysFlag) }),
+    out:
+      flag('out') ?? join(tmpdir(), `enable-banking-spike-${Date.now()}.json`),
+  }
+
+  main(applicationId, readFileSync(keyPath, 'utf8'), options).catch(err => {
+    console.error(err)
+    process.exit(1)
+  })
+}
