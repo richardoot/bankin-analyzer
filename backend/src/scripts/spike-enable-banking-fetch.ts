@@ -472,6 +472,25 @@ export async function main(
   console.log(`ASPSP   ${session.aspsp?.name ?? '—'}`)
   console.log(`Accounts: ${session.accounts.length}`)
 
+  // A successful authorization that yields nothing is the signature of
+  // restricted production: the API compares what the bank returned against the
+  // accounts linked to the application and strips everything else. So an
+  // account the user just authorized is silently removed unless it was also
+  // whitelisted — and the response says none of that, it simply comes back
+  // empty.
+  if (session.accounts.length === 0) {
+    console.log(
+      '\n  The authorization succeeded, so this is not a login problem: in\n' +
+        '  restricted production the API returns only the accounts linked to\n' +
+        '  the application, and strips the rest without comment.\n\n' +
+        `  Link this account first — Control Panel → Applications → your app →\n` +
+        '  "Activate by linking accounts" → choose ' +
+        `${session.aspsp?.name ?? 'the bank'} — then run the\n` +
+        '  authorization again.\n'
+    )
+    return
+  }
+
   const reports: AccountReport[] = []
   const dump: Record<string, BankTransaction[]> = {}
 
