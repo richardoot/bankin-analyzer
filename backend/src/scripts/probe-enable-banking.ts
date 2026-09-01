@@ -194,13 +194,25 @@ export function orderForReport(
   )
 }
 
+/** An API error that kept its status code, so a caller can tell 403 from 500. */
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 async function apiGet<T>(path: string, token: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!response.ok) {
     const body = await response.text()
-    throw new Error(
+    throw new ApiError(
+      response.status,
       `GET ${path} → ${response.status} ${response.statusText}\n${body}`
     )
   }
@@ -260,10 +272,31 @@ export async function main(
   }
 
   // 2. Coverage. The question phase 0 exists to answer.
-  const { aspsps } = await apiGet<{ aspsps: Aspsp[] }>(
-    `/aspsps?country=${encodeURIComponent(country)}`,
-    token
-  )
+  //
+  // `/aspsps` is gated behind activation: an application awaiting its first
+  // linked account gets 403, not an empty list. That is a state to explain,
+  // not an error to throw — the credentials are fine and so is the code.
+  let aspsps: Aspsp[]
+  try {
+    ;({ aspsps } = await apiGet<{ aspsps: Aspsp[] }>(
+      `/aspsps?country=${encodeURIComponent(country)}`,
+      token
+    ))
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 403) {
+      console.log(
+        '\n=== ASPSPs ===\n' +
+          '  Not readable yet: the API refuses the bank list until the\n' +
+          '  application is active (403 "Application is not active").\n\n' +
+          '  Unblock it from the Control Panel → Applications → this app →\n' +
+          '  "Activate by linking accounts", then authorize one of your own\n' +
+          '  accounts at its bank. One account is enough to flip `active`.\n\n' +
+          '  Re-run this probe afterwards for the coverage report.\n'
+      )
+      return
+    }
+    throw err
+  }
 
   const matched = aspsps.filter(a => isWatched(a.name))
   const verdicts = orderForReport(
