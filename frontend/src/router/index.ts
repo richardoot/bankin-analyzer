@@ -32,6 +32,15 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/OAuthConsentPage.vue'),
     meta: { requiresAuth: true },
   },
+  // Where the bank redirects after authorization. Public on purpose: the
+  // request arrives from the bank in whatever session state the browser was
+  // left in, and bouncing it to the login screen would drop the code from the
+  // URL — the only thing the redirect carries.
+  {
+    path: '/bank-callback',
+    name: 'bank-callback',
+    component: () => import('@/views/BankCallbackPage.vue'),
+  },
   {
     path: '/import',
     name: 'import',
