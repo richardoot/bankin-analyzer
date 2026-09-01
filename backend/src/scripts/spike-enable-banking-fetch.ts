@@ -258,11 +258,42 @@ async function apiCall<T>(
     ...(init ? { body: JSON.stringify(init.body) } : {}),
   })
   if (!response.ok) {
+    const body = await response.text()
+    // The redirect URL is whitelisted in the Control Panel, not in the code,
+    // so this failure is about configuration elsewhere and the raw error says
+    // nothing about which URLs *are* allowed. Ask, and show them.
+    if (body.includes('REDIRECT_URI_NOT_ALLOWED')) {
+      throw new RedirectNotAllowedError(await registeredRedirectUrls(token))
+    }
     throw new Error(
-      `${init?.method ?? 'GET'} ${path} → ${response.status} ${response.statusText}\n${await response.text()}`
+      `${init?.method ?? 'GET'} ${path} → ${response.status} ${response.statusText}\n${body}`
     )
   }
   return (await response.json()) as T
+}
+
+/** Raised when the redirect URL was never whitelisted for this application. */
+class RedirectNotAllowedError extends Error {
+  constructor(allowed: string[]) {
+    const list = allowed.map(u => `  - ${u}`).join('\n') || '  (none)'
+    super(
+      'Redirect URL refused: it is not registered for this application.\n\n' +
+        `Registered right now:\n${list}\n\n` +
+        'Either pass one of those with --redirect, or add the one you want in\n' +
+        'the Control Panel → Applications → your app → redirect URLs.'
+    )
+    this.name = 'RedirectNotAllowedError'
+  }
+}
+
+/** The redirect URLs the application currently declares. */
+async function registeredRedirectUrls(token: string): Promise<string[]> {
+  const response = await fetch(`${API_BASE}/application`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) return []
+  const app = (await response.json()) as { redirect_urls?: string[] }
+  return app.redirect_urls ?? []
 }
 
 /** Fetch every page of transactions for one account. */
