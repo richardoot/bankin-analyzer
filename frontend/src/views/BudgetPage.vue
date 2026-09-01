@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { ref, computed, onMounted, watch } from 'vue'
+  import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
   import { api } from '@/lib/api'
   import type {
     BudgetPlanDto,
@@ -16,6 +16,11 @@
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import NewBudgetPlanModal from '@/components/budget/NewBudgetPlanModal.vue'
   import BudgetPlansHistoryModal from '@/components/budget/BudgetPlansHistoryModal.vue'
+  import BudgetMonthlyMatrix from '@/components/budget/BudgetMonthlyMatrix.vue'
+  import type {
+    MatrixMonth,
+    MatrixRow,
+  } from '@/components/budget/BudgetMonthlyMatrix.vue'
   import ComparisonSelector from '@/components/budget/ComparisonSelector.vue'
   import {
     useBudgetComparison,
@@ -23,7 +28,7 @@
     type ComparisonPreset,
     type ComparisonRange,
   } from '@/composables/useBudgetComparison'
-  import { useRouter } from 'vue-router'
+  import { useRouter, onBeforeRouteLeave } from 'vue-router'
 
   const filtersStore = useFiltersStore()
   const router = useRouter()
@@ -73,7 +78,23 @@
   const deductPendingReimbursements = ref(false)
 
   const sortOrder = ref<SortOrder>('amount-desc')
+
+  /**
+   * The envelopes being edited. Until "Enregistrer" is pressed this is a
+   * draft: `savedBudgets` holds what the server actually has, which is what
+   * "Annuler" restores and what the modified-count is measured against.
+   */
   const budgetInputs = ref<Map<string, number>>(new Map())
+  const savedBudgets = ref<Map<string, number>>(new Map())
+  const isEditing = ref(false)
+
+  /**
+   * The plan month the page is reading, or null for the average over every
+   * complete month. Not persisted: which month you want to look at is a
+   * question of the moment, unlike the breakdown mode.
+   */
+  const selectedMonth = ref<string | null>(null)
+
   const expandedCategories = ref<Set<string>>(new Set())
 
   /** Exceptional tags owned by the user, for the events band. */
@@ -86,8 +107,6 @@
   const isHistoryOpen = ref(false)
   /** Total number of plans known to exist — drives the "Voir l'historique" hint on the empty state */
   const planCount = ref(0)
-
-  let saveTimer: ReturnType<typeof setTimeout> | null = null
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   function formatDateLabel(iso: string): string {
@@ -225,13 +244,18 @@
     comparison: comparisonRange,
     statistics,
     mode: breakdownMode,
+    selectedMonth,
   })
 
   /** Show the "Historique" column when a comparison range is selected. */
   const showHistoricalColumn = computed(() => comparisonRange.value !== null)
-  /** Show the "Réel à date" column only when ≥1 plan month is complete. */
+  /**
+   * Show the "Réel" column as soon as there is a month to read. Isolating the
+   * running month counts: it carries real spending even though it would never
+   * qualify as a complete month.
+   */
   const showActualColumn = computed(
-    () => comparison.completePlanMonthsCount.value > 0
+    () => comparison.actualIndices.value.length > 0
   )
 
   /**
@@ -435,6 +459,120 @@
     '12': 'Déc',
   }
 
+  const MONTH_FULL_FR: Record<string, string> = {
+    '01': 'Janvier',
+    '02': 'Février',
+    '03': 'Mars',
+    '04': 'Avril',
+    '05': 'Mai',
+    '06': 'Juin',
+    '07': 'Juillet',
+    '08': 'Août',
+    '09': 'Septembre',
+    '10': 'Octobre',
+    '11': 'Novembre',
+    '12': 'Décembre',
+  }
+
+  /** "2026-08" → "Août 2026". */
+  function monthLabelFor(ym: string): string {
+    const [year, month] = ym.split('-')
+    return `${MONTH_FULL_FR[month ?? ''] ?? ym} ${year ?? ''}`.trim()
+  }
+
+  /**
+   * The months the user can isolate, newest last, each flagged when it is the
+   * one still running — that month is worth offering (it is the one being
+   * lived) but must never be read as a finished month.
+   */
+  const monthOptions = computed(() =>
+    comparison.selectableMonths.value.map(ym => ({
+      ym,
+      short: `${MONTH_LABEL_FR[ym.split('-')[1] ?? ''] ?? ym}`,
+      full: monthLabelFor(ym),
+      isRunning: ym === currentYearMonth(),
+    }))
+  )
+
+  function currentYearMonth(): string {
+    const today = new Date()
+    return `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`
+  }
+
+  function selectMonth(ym: string | null): void {
+    selectedMonth.value = ym
+  }
+
+  /**
+   * A bar was clicked. Comparison and future months are on the same chart and
+   * have no per-month reading to offer, so they are ignored rather than
+   * selected into an empty view. Clicking the month already isolated releases
+   * it — the same click that got you in gets you out.
+   */
+  function onChartMonthSelected(ym: string): void {
+    if (!comparison.selectableMonths.value.includes(ym)) return
+    selectedMonth.value = selectedMonth.value === ym ? null : ym
+  }
+
+  /** Label describing what the "Réel" figures currently cover. */
+  const actualPeriodLabel = computed(() => {
+    const progress = comparison.selectedMonthProgress.value
+    if (selectedMonth.value && comparison.selectedMonthIndex.value !== null) {
+      const label = monthLabelFor(selectedMonth.value)
+      return progress
+        ? `${label} · en cours, ${progress.elapsedDays}/${progress.totalDays} j`
+        : label
+    }
+    const count = comparison.completePlanMonthsCount.value
+    return `Moyenne · ${count} mois complet${count > 1 ? 's' : ''}`
+  })
+
+  /**
+   * A budget's fair share of the running month, shown next to the envelope so
+   * a half-finished month can be judged on pace rather than on a total it was
+   * never going to reach by now. Null whenever the month is complete — there
+   * is nothing to prorate then, and the envelope stands as it is.
+   */
+  function getProratedBudget(categoryId: string): number | null {
+    const progress = comparison.selectedMonthProgress.value
+    if (!progress) return null
+    const budget = getBudgetForCategory(categoryId)
+    if (budget <= 0) return null
+    return (budget * progress.elapsedDays) / progress.totalDays
+  }
+
+  /**
+   * The month-by-month grid. Built here rather than in the component so the
+   * amounts go through the same `seriesFor` as every other figure on the page
+   * — the everyday/real toggle must not stop at the table's edge.
+   */
+  const matrixMonths = computed<MatrixMonth[]>(() =>
+    monthOptions.value.map(option => ({
+      ym: option.ym,
+      label: option.short,
+      isRunning: option.isRunning,
+    }))
+  )
+
+  const matrixRows = computed<MatrixRow[]>(() => {
+    const indices = comparison.selectableMonths.value.map(ym =>
+      comparison.monthLabels.value.indexOf(ym)
+    )
+    return sortedCategories.value.map(cat => {
+      const series = comparison.seriesFor(cat)
+      return {
+        categoryId: cat.categoryId,
+        categoryName: cat.categoryName,
+        categoryIcon: cat.categoryIcon ?? null,
+        budget: getBudgetForCategory(cat.categoryId),
+        amounts: indices.map(i => (i >= 0 ? (series?.[i] ?? 0) : 0)),
+      }
+    })
+  })
+
+  /** One column is just the row list again — the grid earns its space at two. */
+  const showMonthlyMatrix = computed(() => matrixMonths.value.length >= 2)
+
   function categoryChartData(cat: CategoryAverageDto) {
     const labels = (statistics.value?.monthLabels ?? []).map(ym => {
       const [, m] = ym.split('-')
@@ -446,9 +584,7 @@
   // ── Data loading ─────────────────────────────────────────────────────────
   async function fetchPlan() {
     plan.value = await api.getCurrentBudgetPlan()
-    budgetInputs.value = new Map(
-      (plan.value?.entries ?? []).map(e => [e.categoryId, e.amount])
-    )
+    adoptPlanEntries(plan.value)
   }
 
   async function fetchStatistics() {
@@ -564,7 +700,8 @@
     // and try to fall back to whichever plan covers today.
     plan.value = null
     statistics.value = null
-    budgetInputs.value = new Map()
+    adoptPlanEntries(null)
+    selectedMonth.value = null
     expandedCategories.value = new Set()
 
     isLoading.value = true
@@ -590,9 +727,10 @@
     try {
       const loaded = await api.getBudgetPlan(planId)
       plan.value = loaded
-      budgetInputs.value = new Map(
-        loaded.entries.map(e => [e.categoryId, e.amount])
-      )
+      adoptPlanEntries(loaded)
+      // The months on offer belong to the plan that was showing, not to this
+      // one: keep the new plan on its average until the user picks again.
+      selectedMonth.value = null
       isHistoryOpen.value = false
       await Promise.all([fetchStatistics(), checkYearAgoAvailability()])
     } catch (err) {
@@ -610,20 +748,79 @@
 
   async function onPlanCreated(created: BudgetPlanDto) {
     plan.value = created
-    budgetInputs.value = new Map(
-      created.entries.map(e => [e.categoryId, e.amount])
-    )
+    adoptPlanEntries(created)
+    selectedMonth.value = null
     isModalOpen.value = false
     planCount.value++
     await Promise.all([fetchStatistics(), checkYearAgoAvailability()])
   }
 
-  // ── Save (debounced) ─────────────────────────────────────────────────────
-  function triggerAutoSave() {
-    if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
-      void saveBudget()
-    }, 600)
+  // ── Editing ──────────────────────────────────────────────────────────────
+  // Nothing on this page writes on its own any more. Every path that changes
+  // an envelope — the inputs, the bulk buttons, clicking a reference figure —
+  // is only reachable in edit mode, and only reaches the server through
+  // "Enregistrer". That is what makes "Annuler" able to promise anything, and
+  // what stops a stray click on a number in a table from rewriting a plan.
+
+  function enterEditMode(): void {
+    budgetInputs.value = new Map(savedBudgets.value)
+    isEditing.value = true
+  }
+
+  function cancelEdit(): void {
+    budgetInputs.value = new Map(savedBudgets.value)
+    isEditing.value = false
+  }
+
+  /** Categories whose draft envelope differs from what the server holds. */
+  const dirtyCategoryIds = computed(() => {
+    const ids = new Set([
+      ...savedBudgets.value.keys(),
+      ...budgetInputs.value.keys(),
+    ])
+    const changed: string[] = []
+    for (const id of ids) {
+      const before = savedBudgets.value.get(id) ?? 0
+      const after = budgetInputs.value.get(id) ?? 0
+      if (before !== after) changed.push(id)
+    }
+    return changed
+  })
+
+  const hasUnsavedChanges = computed(() => dirtyCategoryIds.value.length > 0)
+
+  /** Envelope the server holds for a category — the "before" of the diff. */
+  function getSavedBudget(categoryId: string): number {
+    return savedBudgets.value.get(categoryId) ?? 0
+  }
+
+  function isCategoryDirty(categoryId: string): boolean {
+    return getSavedBudget(categoryId) !== getBudgetForCategory(categoryId)
+  }
+
+  /**
+   * Totals of the whole plan, saved and draft. Deliberately over every entry
+   * rather than over the visible categories: an envelope on a category that
+   * spent nothing this window is absent from the statistics, and dropping it
+   * from the total would make the figure disagree with the plan itself.
+   */
+  function sumOf(budgets: Map<string, number>): number {
+    let total = 0
+    for (const amount of budgets.values()) total += amount
+    return total
+  }
+
+  const savedPlanTotal = computed(() => sumOf(savedBudgets.value))
+  const draftPlanTotal = computed(() => sumOf(budgetInputs.value))
+  const draftDelta = computed(() => draftPlanTotal.value - savedPlanTotal.value)
+
+  /** Take the entries of a freshly loaded plan as the new saved reference. */
+  function adoptPlanEntries(loaded: BudgetPlanDto | null): void {
+    savedBudgets.value = new Map(
+      (loaded?.entries ?? []).map(e => [e.categoryId, e.amount])
+    )
+    budgetInputs.value = new Map(savedBudgets.value)
+    isEditing.value = false
   }
 
   async function saveBudget() {
@@ -635,11 +832,14 @@
       isSaving.value = true
       const updated = await api.updateBudgetPlan(plan.value.id, { entries })
       plan.value = updated
+      adoptPlanEntries(updated)
       saveSuccess.value = true
       setTimeout(() => {
         saveSuccess.value = false
       }, 2000)
     } catch (err) {
+      // The draft survives on purpose: a failed save must not silently throw
+      // away what the user typed.
       error.value =
         err instanceof Error ? err.message : 'Erreur lors de la sauvegarde'
     } finally {
@@ -650,13 +850,12 @@
   function updateBudgetInput(categoryId: string, value: string) {
     const num = parseFloat(value)
     budgetInputs.value.set(categoryId, Number.isFinite(num) ? num : 0)
-    triggerAutoSave()
   }
 
   /** Apply an arbitrary amount to a category's budget input. */
   function setBudgetValue(categoryId: string, amount: number) {
+    if (!isEditing.value) return
     budgetInputs.value.set(categoryId, Math.round(amount))
-    triggerAutoSave()
   }
 
   /** "Apply all averages" — prefer historical if available, else actual. */
@@ -669,7 +868,6 @@
         budgetInputs.value.set(cat.categoryId, Math.round(ref))
       }
     }
-    triggerAutoSave()
   }
 
   function adjustAllByPercent(percent: number) {
@@ -682,17 +880,41 @@
         )
       }
     }
-    triggerAutoSave()
   }
 
+  // No confirmation needed: emptying the draft is undone by "Annuler", and
+  // nothing has left the browser until "Enregistrer".
   function resetAllBudgets() {
     budgetInputs.value.clear()
-    triggerAutoSave()
   }
 
   // ── Lifecycle ────────────────────────────────────────────────────────────
+
+  /**
+   * A draft only lives in this component, so anything that unmounts it throws
+   * the draft away. The two exits the page cannot disable — closing the tab
+   * and routing away through an event or project chip — get a prompt instead.
+   */
+  function warnOnUnload(event: BeforeUnloadEvent): void {
+    if (!hasUnsavedChanges.value) return
+    event.preventDefault()
+    event.returnValue = ''
+  }
+
   onMounted(() => {
+    window.addEventListener('beforeunload', warnOnUnload)
     void fetchData()
+  })
+
+  onBeforeUnmount(() => {
+    window.removeEventListener('beforeunload', warnOnUnload)
+  })
+
+  onBeforeRouteLeave(() => {
+    if (!hasUnsavedChanges.value) return true
+    return window.confirm(
+      'Des modifications de budget ne sont pas enregistrées. Quitter la page ?'
+    )
   })
 
   watch(
@@ -783,7 +1005,13 @@
             v-if="planCount > 0"
             type="button"
             data-testid="header-history-button"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+            :disabled="isEditing"
+            :title="
+              isEditing
+                ? 'Enregistre ou annule les modifications avant de changer de plan'
+                : undefined
+            "
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             @click="isHistoryOpen = true"
           >
             <svg
@@ -804,7 +1032,13 @@
           <button
             type="button"
             data-testid="header-new-plan-button"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 dark:bg-indigo-500 text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors"
+            :disabled="isEditing"
+            :title="
+              isEditing
+                ? 'Enregistre ou annule les modifications avant de créer un plan'
+                : undefined
+            "
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 dark:bg-indigo-500 text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             @click="openCreateModal"
           >
             <svg
@@ -1054,6 +1288,7 @@
             :plan-end-month="plan.endDate.slice(0, 7)"
             :comparison-start-month="comparisonRange?.startMonth ?? ''"
             :comparison-end-month="comparisonRange?.endMonth ?? ''"
+            @select-month="onChartMonthSelected"
           />
         </div>
 
@@ -1069,9 +1304,20 @@
               comparison.completePlanMonthsCount.value
             "
             :is-plan-finished="comparison.isPlanFinished.value"
+            :actual-period-label="selectedMonth ? actualPeriodLabel : null"
             :comparison="summaryComparisonProps"
           />
         </div>
+
+        <!-- Month-by-month grid: which envelope drifts, and when. The
+             averages above cannot answer that — they average it away. -->
+        <BudgetMonthlyMatrix
+          v-if="showMonthlyMatrix"
+          :months="matrixMonths"
+          :rows="matrixRows"
+          :selected-month="selectedMonth"
+          @select-month="onChartMonthSelected"
+        />
 
         <!-- Expense category list -->
         <div
@@ -1084,6 +1330,28 @@
               Dépenses par catégorie
             </h2>
             <div class="flex items-center gap-2">
+              <button
+                v-if="!isEditing"
+                type="button"
+                data-testid="budget-edit-button"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+                @click="enterEditMode"
+              >
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
+                </svg>
+                Modifier les budgets
+              </button>
               <label class="text-sm text-gray-500 dark:text-gray-400 shrink-0">
                 Trier :
               </label>
@@ -1102,8 +1370,75 @@
             </div>
           </div>
 
-          <!-- Quick actions -->
+          <!-- Month selector: the plan averaged, or one month on its own.
+               A budget is already a monthly figure, so on a single month the
+               comparison needs no averaging at all. -->
           <div
+            v-if="monthOptions.length > 0"
+            data-testid="budget-month-selector"
+            class="flex flex-wrap items-center gap-2 mb-4"
+          >
+            <span class="text-xs text-gray-500 dark:text-gray-400 mr-1">
+              Période :
+            </span>
+            <button
+              type="button"
+              data-testid="budget-month-average"
+              class="px-2.5 py-1 text-xs font-medium rounded-md border transition-colors"
+              :class="
+                selectedMonth === null
+                  ? 'bg-gray-900 text-white border-gray-900 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200'
+                  : 'text-gray-600 dark:text-gray-400 bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700'
+              "
+              @click="selectMonth(null)"
+            >
+              Moyenne
+              <span class="opacity-60">
+                ({{ comparison.completePlanMonthsCount.value }} mois)
+              </span>
+            </button>
+            <button
+              v-for="option in monthOptions"
+              :key="option.ym"
+              type="button"
+              :data-testid="`budget-month-${option.ym}`"
+              class="px-2.5 py-1 text-xs font-medium rounded-md border transition-colors"
+              :class="
+                selectedMonth === option.ym
+                  ? 'bg-gray-900 text-white border-gray-900 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200'
+                  : 'text-gray-600 dark:text-gray-400 bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700'
+              "
+              @click="selectMonth(option.ym)"
+            >
+              {{ option.short }}
+              <span v-if="option.isRunning" class="text-amber-500">●</span>
+            </button>
+            <span
+              data-testid="budget-actual-period"
+              class="text-xs text-gray-400 dark:text-gray-500"
+            >
+              {{ actualPeriodLabel }}
+            </span>
+          </div>
+
+          <!-- Rewriting the envelopes of a closed period moves the gap on a
+               bilan that has already been read. Allowed, but never silent. -->
+          <div
+            v-if="isEditing && currentPlanStatus === 'past'"
+            data-testid="budget-past-plan-warning"
+            class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300"
+          >
+            Ce plan est terminé. Modifier ses enveloppes change le bilan d'une
+            période déjà écoulée.
+          </div>
+
+          <!-- Quick actions — edit mode only. Applying an average or shaving
+               5 % off every envelope is an edit like any other; offering it
+               outside edit mode is what made a budget change a single
+               unannounced click. -->
+          <div
+            v-if="isEditing"
+            data-testid="budget-quick-actions"
             class="flex flex-wrap items-center gap-2 mb-4 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg"
           >
             <span class="text-xs text-gray-500 dark:text-gray-400 mr-1">
@@ -1322,11 +1657,11 @@
               v-if="showActualColumn"
               class="text-right text-red-600 dark:text-red-400"
             >
-              Réel à date
+              {{ selectedMonth ? 'Réel' : 'Réel à date' }}
               <span
                 class="block text-[10px] font-normal normal-case tracking-normal text-red-400 dark:text-red-500"
               >
-                {{ comparison.completePlanMonthsCount.value }} mois plan
+                {{ actualPeriodLabel }}
               </span>
             </span>
             <span class="text-right w-24">Tendance</span>
@@ -1409,7 +1744,7 @@
                     Historique :
                   </span>
                   <button
-                    v-if="getHistoricalAverage(cat) > 0"
+                    v-if="isEditing && getHistoricalAverage(cat) > 0"
                     type="button"
                     class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline decoration-dotted underline-offset-2"
                     :title="`Moyenne sur ${comparisonRange?.label} — cliquer pour appliquer comme budget`"
@@ -1419,12 +1754,18 @@
                   >
                     {{ formatCurrency(getHistoricalAverage(cat)) }}
                   </button>
+                  <span
+                    v-else-if="getHistoricalAverage(cat) > 0"
+                    class="text-indigo-600 dark:text-indigo-400 font-medium"
+                  >
+                    {{ formatCurrency(getHistoricalAverage(cat)) }}
+                  </span>
                   <span v-else class="text-gray-400 dark:text-gray-500">—</span>
                 </div>
 
-                <!-- Budget input (emerald engagement) -->
+                <!-- Budget: read as text, edited only in edit mode -->
                 <div class="sm:text-right">
-                  <div class="relative inline-block">
+                  <div v-if="isEditing" class="relative inline-block">
                     <input
                       type="number"
                       min="0"
@@ -1436,7 +1777,12 @@
                       "
                       placeholder="—"
                       :data-testid="`budget-input-${cat.categoryName}`"
-                      class="w-24 sm:w-28 pl-2 pr-7 py-1.5 text-sm text-right bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900 dark:text-gray-100 tabular-nums font-medium"
+                      class="w-24 sm:w-28 pl-2 pr-7 py-1.5 text-sm text-right bg-white dark:bg-slate-900 border rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900 dark:text-gray-100 tabular-nums font-medium"
+                      :class="
+                        isCategoryDirty(cat.categoryId)
+                          ? 'border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20'
+                          : 'border-emerald-300 dark:border-emerald-800'
+                      "
                       @input="
                         updateBudgetInput(
                           cat.categoryId,
@@ -1448,6 +1794,42 @@
                       class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-emerald-500/70 dark:text-emerald-400/70 pointer-events-none"
                     >
                       €
+                    </span>
+                    <!-- What this envelope was before the draft touched it. -->
+                    <span
+                      v-if="isCategoryDirty(cat.categoryId)"
+                      :data-testid="`budget-was-${cat.categoryName}`"
+                      class="block text-[10px] text-gray-400 dark:text-gray-500 line-through tabular-nums text-right"
+                    >
+                      {{ formatCurrency(getSavedBudget(cat.categoryId)) }}
+                    </span>
+                  </div>
+                  <div v-else class="text-sm tabular-nums leading-tight">
+                    <span class="sm:hidden text-xs text-gray-400 mr-1">
+                      Budget :
+                    </span>
+                    <span
+                      v-if="getBudgetForCategory(cat.categoryId) > 0"
+                      :data-testid="`budget-value-${cat.categoryName}`"
+                      class="font-semibold text-emerald-700 dark:text-emerald-400"
+                    >
+                      {{ formatCurrency(getBudgetForCategory(cat.categoryId)) }}
+                    </span>
+                    <span v-else class="text-gray-400 dark:text-gray-500">
+                      —
+                    </span>
+                    <!-- On a month still running, the envelope's fair share to
+                         date — so a half-finished month is judged on pace. -->
+                    <span
+                      v-if="getProratedBudget(cat.categoryId) !== null"
+                      :data-testid="`budget-prorata-${cat.categoryName}`"
+                      class="block text-[10px] text-gray-400 dark:text-gray-500 tabular-nums"
+                      title="Part du budget correspondant aux jours écoulés"
+                    >
+                      {{
+                        formatCurrency(getProratedBudget(cat.categoryId) ?? 0)
+                      }}
+                      à ce jour
                     </span>
                   </div>
                 </div>
@@ -1461,16 +1843,22 @@
                     Réel :
                   </span>
                   <button
-                    v-if="getPlanActualAverage(cat) > 0"
+                    v-if="isEditing && getPlanActualAverage(cat) > 0"
                     type="button"
                     class="text-red-600 dark:text-red-400 font-medium hover:underline decoration-dotted underline-offset-2"
-                    title="Moyenne réelle sur les mois complets du plan — cliquer pour appliquer comme budget"
+                    :title="`Réel sur ${actualPeriodLabel} — cliquer pour appliquer comme budget`"
                     @click="
                       setBudgetValue(cat.categoryId, getPlanActualAverage(cat))
                     "
                   >
                     {{ formatCurrency(getPlanActualAverage(cat)) }}
                   </button>
+                  <span
+                    v-else-if="getPlanActualAverage(cat) > 0"
+                    class="text-red-600 dark:text-red-400 font-medium"
+                  >
+                    {{ formatCurrency(getPlanActualAverage(cat)) }}
+                  </span>
                   <span v-else class="text-gray-400 dark:text-gray-500">—</span>
                   <span
                     v-if="getExceptionalAverage(cat) > 0.005"
@@ -1650,6 +2038,71 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Edit bar: the only way a budget change reaches the server. Kept
+             on screen so the count of pending changes and the way out are
+             never scrolled away from. -->
+        <div
+          v-if="isEditing"
+          data-testid="budget-edit-bar"
+          class="sticky bottom-0 z-10 mt-4 -mx-4 sm:mx-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-slate-900 border-t sm:border border-gray-200 dark:border-slate-700 sm:rounded-xl shadow-lg dark:shadow-slate-900/40 px-4 py-3"
+        >
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            <span
+              v-if="hasUnsavedChanges"
+              data-testid="budget-dirty-count"
+              class="font-medium text-gray-900 dark:text-gray-100"
+            >
+              {{ dirtyCategoryIds.length }} catégorie{{
+                dirtyCategoryIds.length > 1 ? 's' : ''
+              }}
+              modifiée{{ dirtyCategoryIds.length > 1 ? 's' : '' }}
+            </span>
+            <span v-else>Aucune modification</span>
+            <span class="mx-1.5 text-gray-300 dark:text-gray-600">·</span>
+            <span class="tabular-nums">
+              Total {{ formatCurrency(savedPlanTotal) }}
+              <template v-if="hasUnsavedChanges">
+                →
+                <strong class="text-gray-900 dark:text-gray-100">
+                  {{ formatCurrency(draftPlanTotal) }}
+                </strong>
+                <span
+                  data-testid="budget-draft-delta"
+                  :class="
+                    draftDelta > 0
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-emerald-600 dark:text-emerald-400'
+                  "
+                >
+                  ({{ draftDelta > 0 ? '+' : ''
+                  }}{{ formatCurrency(draftDelta) }})
+                </span>
+              </template>
+              <span class="text-gray-400 dark:text-gray-500">/ mois</span>
+            </span>
+          </p>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              data-testid="budget-cancel-button"
+              :disabled="isSaving"
+              class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+              @click="cancelEdit"
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              data-testid="budget-save-button"
+              :disabled="isSaving || !hasUnsavedChanges"
+              class="px-4 py-1.5 text-sm font-medium bg-emerald-600 dark:bg-emerald-500 text-white rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              @click="saveBudget"
+            >
+              {{ isSaving ? 'Enregistrement…' : 'Enregistrer' }}
+            </button>
           </div>
         </div>
       </template>

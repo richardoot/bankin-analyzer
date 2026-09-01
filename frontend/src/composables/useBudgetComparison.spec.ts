@@ -406,6 +406,81 @@ describe('useBudgetComparison', () => {
     })
   })
 
+  describe('month isolation', () => {
+    // Today = 2026-06-15. Plan runs Apr → Jun: April and May are complete,
+    // June is running.
+    const fakeNow = () => new Date('2026-06-15T12:00:00Z')
+
+    function setup(selectedMonth: string | null) {
+      const category = cat('a', 'A', [100, 200, 50])
+      const income = cat('s', 'S', [1000, 1000, 400])
+      const stats = ref(
+        makeStats(['2026-04', '2026-05', '2026-06'], [category], [income])
+      )
+      const api = useBudgetComparison({
+        plan: ref(makePlan('2026-04-01', '2026-06-30')),
+        comparison: ref(null),
+        statistics: stats,
+        now: fakeNow,
+        selectedMonth: ref(selectedMonth),
+      })
+      return { api, category, income }
+    }
+
+    it('offers the elapsed months plus the running one', () => {
+      const { api } = setup(null)
+      expect(api.selectableMonths.value).toEqual([
+        '2026-04',
+        '2026-05',
+        '2026-06',
+      ])
+    })
+
+    it('averages the complete months when nothing is isolated', () => {
+      const { api, category } = setup(null)
+      expect(api.planActualAverage(category)).toBe(150)
+      expect(api.actualIndices.value).toEqual([0, 1])
+    })
+
+    it('returns the month untouched when one is isolated', () => {
+      const { api, category } = setup('2026-05')
+      expect(api.planActualAverage(category)).toBe(200)
+      expect(api.actualIndices.value).toEqual([1])
+    })
+
+    it('reaches the running month, which no average includes', () => {
+      const { api, category } = setup('2026-06')
+      expect(api.planActualAverage(category)).toBe(50)
+      expect(api.selectedMonthProgress.value).toEqual({
+        elapsedDays: 15,
+        totalDays: 30,
+      })
+    })
+
+    it('reports no progress for a month that is over', () => {
+      const { api } = setup('2026-04')
+      expect(api.selectedMonthProgress.value).toBeNull()
+    })
+
+    it('falls back to the average on a month outside the plan', () => {
+      // A selection left behind by a previous plan must not be honoured.
+      const { api, category } = setup('2026-03')
+      expect(api.selectedMonthIndex.value).toBeNull()
+      expect(api.planActualAverage(category)).toBe(150)
+    })
+
+    it('carries the isolated month into the aggregates', () => {
+      const { api, category, income } = setup('2026-05')
+      expect(api.aggregatesFor([category]).planActualExpenseAvg).toBe(200)
+      expect(api.incomeAggregates([income]).planActualIncomeAvg).toBe(1000)
+    })
+
+    it('leaves completePlanMonthsCount describing the plan, not the selection', () => {
+      const { api } = setup('2026-05')
+      expect(api.completePlanMonthsCount.value).toBe(2)
+    })
+  })
+
   describe('breakdown mode', () => {
     /** Two elapsed months; the second carries an event worth 120. */
     function eventStats() {

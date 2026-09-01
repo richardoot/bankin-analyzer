@@ -57,6 +57,12 @@ interface UseBudgetComparisonDeps {
   now?: () => Date
   /** Active breakdown mode. Defaults to `real`. */
   mode?: Ref<BreakdownMode>
+  /**
+   * A single plan month (YYYY-MM) to read instead of averaging. Null — the
+   * default — keeps the historical behaviour: every complete plan month,
+   * averaged.
+   */
+  selectedMonth?: Ref<string | null>
 }
 
 export function useBudgetComparison({
@@ -65,6 +71,7 @@ export function useBudgetComparison({
   statistics,
   now = () => new Date(),
   mode = ref<BreakdownMode>('real'),
+  selectedMonth = ref<string | null>(null),
 }: UseBudgetComparisonDeps) {
   /** Plan span as YYYY-MM bounds (null when no plan). */
   const planMonthRange = computed<{
@@ -203,6 +210,66 @@ export function useBudgetComparison({
     return out
   })
 
+  /**
+   * Index of the isolated month in `monthLabels`, or null when averaging.
+   * A month outside the plan is ignored rather than honoured: the selector
+   * only ever offers plan months, and a stale selection left behind by a plan
+   * switch must fall back to the average instead of reading someone else's
+   * month.
+   */
+  const selectedMonthIndex = computed<number | null>(() => {
+    const ym = selectedMonth.value
+    if (!ym) return null
+    const index = monthLabels.value.indexOf(ym)
+    if (index < 0 || classifyMonth(ym) !== 'plan') return null
+    return index
+  })
+
+  /**
+   * The indices every "actual" figure reads. One month when the user isolated
+   * one, otherwise every fully-elapsed plan month — which is what the page did
+   * before the selector existed.
+   *
+   * Averaging over a single index returns that month untouched, so the whole
+   * page switches from averages to one month's figures without any of the
+   * callers knowing.
+   */
+  const actualIndices = computed<number[]>(() =>
+    selectedMonthIndex.value !== null
+      ? [selectedMonthIndex.value]
+      : completePlanIndices.value
+  )
+
+  /** Plan months the user may isolate: elapsed ones plus the running one. */
+  const selectableMonths = computed<string[]>(() =>
+    startedPlanIndices.value
+      .map(i => monthLabels.value[i] ?? '')
+      .filter(Boolean)
+  )
+
+  /**
+   * How far into the isolated month we are, when it is the running one. Null
+   * for a complete month — there is nothing to prorate then. Lets the page
+   * show a budget's fair share to date without pretending the month is over.
+   */
+  const selectedMonthProgress = computed<{
+    elapsedDays: number
+    totalDays: number
+  } | null>(() => {
+    const ym = selectedMonth.value
+    if (!ym || selectedMonthIndex.value === null) return null
+    const today = now()
+    const currentYm = `${today.getUTCFullYear()}-${String(
+      today.getUTCMonth() + 1
+    ).padStart(2, '0')}`
+    if (ym !== currentYm) return null
+    const parts = ym.split('-')
+    const totalDays = new Date(
+      Date.UTC(Number(parts[0]), Number(parts[1]), 0)
+    ).getUTCDate()
+    return { elapsedDays: today.getUTCDate(), totalDays }
+  })
+
   /** Average of a per-category `monthlyAmounts` array over given indices. */
   function avgOverIndices(
     monthlyAmounts: number[] | undefined,
@@ -237,11 +304,11 @@ export function useBudgetComparison({
   }
 
   /**
-   * Per-category average over the plan months that have fully elapsed only.
-   * This is the "Réel à date" / "Réel observé" inside the plan.
+   * Per-category "Réel" inside the plan: the isolated month when there is one,
+   * otherwise the average over the fully-elapsed plan months.
    */
   function planActualAverage(cat: CategoryAverageDto): number {
-    return avgOverIndices(seriesFor(cat), completePlanIndices.value)
+    return avgOverIndices(seriesFor(cat), actualIndices.value)
   }
 
   /** Per-category average over the comparison months. */
@@ -256,7 +323,7 @@ export function useBudgetComparison({
    */
   function planActualExceptionalAverage(cat: CategoryAverageDto): number {
     if (!cat.everydayMonthlyAmounts) return 0
-    const indices = completePlanIndices.value
+    const indices = actualIndices.value
     return (
       avgOverIndices(cat.monthlyAmounts, indices) -
       avgOverIndices(cat.everydayMonthlyAmounts, indices)
@@ -307,7 +374,7 @@ export function useBudgetComparison({
       ),
       planActualExpenseAvg: totalAvgOver(
         visibleExpenseCategories,
-        completePlanIndices.value,
+        actualIndices.value,
         seriesFor
       ),
       comparisonExpenseAvg: totalAvgOver(
@@ -327,7 +394,7 @@ export function useBudgetComparison({
       ),
       planActualIncomeAvg: totalAvgOver(
         visibleIncomeCategories,
-        completePlanIndices.value,
+        actualIndices.value,
         rawSeries
       ),
       /** Avg over started plan months (elapsed + current) — not future-diluted. */
@@ -376,6 +443,10 @@ export function useBudgetComparison({
     planIndices,
     comparisonIndices,
     completePlanIndices,
+    selectedMonthIndex,
+    actualIndices,
+    selectableMonths,
+    selectedMonthProgress,
     seriesFor,
     planAverage,
     planActualAverage,

@@ -26,6 +26,11 @@
     comparisonEndMonth?: string
   }>()
 
+  const emit = defineEmits<{
+    /** A bar was clicked — the YYYY-MM it stands for. */
+    (e: 'select-month', yearMonth: string): void
+  }>()
+
   const { isDark, labelColor, chartTheme } = useChartTheme()
 
   const MONTHS_FR = [
@@ -180,6 +185,18 @@
       toolbar: { show: false },
       fontFamily: 'inherit',
       background: 'transparent',
+      events: {
+        // Reading a bar and then hunting for the same month in a selector is
+        // one step too many: the bar IS the month.
+        dataPointSelection: (
+          _event: unknown,
+          _context: unknown,
+          config: { dataPointIndex: number }
+        ) => {
+          const ym = props.monthLabels[config.dataPointIndex]
+          if (ym) emit('select-month', ym)
+        },
+      },
     },
     plotOptions: {
       bar: {

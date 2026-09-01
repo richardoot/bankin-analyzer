@@ -10,6 +10,7 @@ const baseProps = {
   planActualIncomeAvg: 0,
   completePlanMonthsCount: 0,
   isPlanFinished: false,
+  actualPeriodLabel: null,
   comparison: null,
 }
 
@@ -122,6 +123,41 @@ describe('BudgetSavingsSummary', () => {
       })
       expect(wrapper.text()).toContain('Bilan du plan')
       expect(wrapper.text()).toContain('Plan terminé · 3 mois')
+    })
+  })
+
+  describe('isolated month', () => {
+    it('names the month instead of counting elapsed ones', () => {
+      const wrapper = mount(BudgetSavingsSummary, {
+        props: {
+          ...baseProps,
+          planIncomeAvg: 2500,
+          planActualIncomeAvg: 2500,
+          planActualExpenseAvg: 1600,
+          completePlanMonthsCount: 3,
+          actualPeriodLabel: 'Juin 2026',
+        },
+      })
+      expect(wrapper.text()).toContain('Juin 2026')
+      expect(wrapper.text()).not.toContain('3 mois écoulés')
+    })
+
+    it('shows the block on a plan whose first month is still running', () => {
+      // No month has completed, so the average has nothing to say — but the
+      // month being lived does, and it is the one the user is asking about.
+      const wrapper = mount(BudgetSavingsSummary, {
+        props: {
+          ...baseProps,
+          planActualIncomeAvg: 2500,
+          planActualExpenseAvg: 900,
+          completePlanMonthsCount: 0,
+          actualPeriodLabel: 'Août 2026 · en cours, 20/31 j',
+        },
+      })
+      expect(wrapper.find('[data-testid="summary-followup"]').exists()).toBe(
+        true
+      )
+      expect(wrapper.text()).toContain('20/31')
     })
   })
 

@@ -12,8 +12,13 @@ vi.mock('vue3-apexcharts', () => ({
 }))
 
 const routerPush = vi.fn()
+/** The guard the page registers, captured so a test can run it. */
+let routeLeaveGuard: (() => boolean) | null = null
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
+  onBeforeRouteLeave: (guard: () => boolean) => {
+    routeLeaveGuard = guard
+  },
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -206,51 +211,32 @@ describe('BudgetPage', () => {
       ).toBe(true)
     })
 
-    it('prefills the budget input from existing entries', async () => {
+    it('shows the envelope as text until the user asks to edit', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="budget-input-Alimentation"]').exists()
+      ).toBe(false)
+      expect(
+        wrapper.find('[data-testid="budget-value-Alimentation"]').text()
+      ).toContain('250')
+      expect(
+        wrapper.find('[data-testid="budget-quick-actions"]').exists()
+      ).toBe(false)
+      expect(wrapper.find('[data-testid="budget-edit-bar"]').exists()).toBe(
+        false
+      )
+    })
+
+    it('prefills the budget input from existing entries once editing', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      await wrapper.find('[data-testid="budget-edit-button"]').trigger('click')
 
       const input = wrapper.find('[data-testid="budget-input-Alimentation"]')
         .element as HTMLInputElement
       expect(input.value).toBe('250')
-    })
-
-    it('debounces input changes and PATCHes the plan once', async () => {
-      vi.mocked(api.updateBudgetPlan).mockResolvedValue({
-        ...samplePlan,
-        entries: [
-          {
-            id: 'e1',
-            categoryId: 'cat-food',
-            categoryName: 'Alimentation',
-            categoryIcon: '🍽️',
-            amount: 300,
-          },
-        ],
-      })
-
-      vi.useFakeTimers()
-      const wrapper = mount(BudgetPage)
-      await vi.advanceTimersToNextTimerAsync()
-      await flushPromises()
-
-      const input = wrapper.find('[data-testid="budget-input-Alimentation"]')
-      await input.setValue('290')
-      await input.setValue('300')
-
-      // Debounce hasn't fired yet
-      expect(api.updateBudgetPlan).not.toHaveBeenCalled()
-
-      // Advance through the debounce window
-      await vi.advanceTimersByTimeAsync(700)
-      await flushPromises()
-
-      expect(api.updateBudgetPlan).toHaveBeenCalledOnce()
-      expect(vi.mocked(api.updateBudgetPlan).mock.calls[0]?.[0]).toBe('plan-1')
-      const dto = vi.mocked(api.updateBudgetPlan).mock.calls[0]?.[1]
-      expect(dto?.entries).toEqual([{ categoryId: 'cat-food', amount: 300 }])
-
-      vi.useRealTimers()
     })
 
     it('expands a row to show subcategories and chart on click', async () => {
@@ -525,6 +511,510 @@ describe('BudgetPage', () => {
       expect(chart.exists()).toBe(true)
       // Elapsed-month average (June only), not the diluted 352.08.
       expect(chart.props('averageIncome')).toBeCloseTo(1232.28, 2)
+      wrapper.unmount()
+    })
+  })
+
+  describe('editing budgets', () => {
+    beforeEach(() => {
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue(samplePlan)
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStatistics)
+    })
+
+    async function mountEditing() {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      await wrapper.find('[data-testid="budget-edit-button"]').trigger('click')
+      return wrapper
+    }
+
+    it('writes nothing until "Enregistrer" is pressed', async () => {
+      const wrapper = await mountEditing()
+
+      await wrapper
+        .find('[data-testid="budget-input-Alimentation"]')
+        .setValue('300')
+      await wrapper
+        .find('[data-testid="budget-input-Transport"]')
+        .setValue('80')
+
+      expect(api.updateBudgetPlan).not.toHaveBeenCalled()
+
+      vi.mocked(api.updateBudgetPlan).mockResolvedValue(samplePlan)
+      await wrapper.find('[data-testid="budget-save-button"]').trigger('click')
+      await flushPromises()
+
+      expect(api.updateBudgetPlan).toHaveBeenCalledOnce()
+      expect(vi.mocked(api.updateBudgetPlan).mock.calls[0]?.[0]).toBe('plan-1')
+      expect(
+        vi.mocked(api.updateBudgetPlan).mock.calls[0]?.[1]?.entries
+      ).toEqual([
+        { categoryId: 'cat-food', amount: 300 },
+        { categoryId: 'cat-transport', amount: 80 },
+      ])
+    })
+
+    it('restores the saved envelopes on "Annuler" and leaves the server alone', async () => {
+      const wrapper = await mountEditing()
+
+      await wrapper
+        .find('[data-testid="budget-input-Alimentation"]')
+        .setValue('999')
+      await wrapper
+        .find('[data-testid="budget-cancel-button"]')
+        .trigger('click')
+
+      expect(api.updateBudgetPlan).not.toHaveBeenCalled()
+      expect(
+        wrapper.find('[data-testid="budget-value-Alimentation"]').text()
+      ).toContain('250')
+    })
+
+    it('counts what changed and shows the total it would move to', async () => {
+      const wrapper = await mountEditing()
+
+      expect(wrapper.find('[data-testid="budget-dirty-count"]').exists()).toBe(
+        false
+      )
+      // Nothing to save yet.
+      expect(
+        (
+          wrapper.find('[data-testid="budget-save-button"]')
+            .element as HTMLButtonElement
+        ).disabled
+      ).toBe(true)
+
+      await wrapper
+        .find('[data-testid="budget-input-Alimentation"]')
+        .setValue('300')
+
+      expect(
+        wrapper.find('[data-testid="budget-dirty-count"]').text()
+      ).toContain('1 catégorie')
+      expect(
+        wrapper.find('[data-testid="budget-draft-delta"]').text()
+      ).toContain('+')
+      expect(
+        wrapper.find('[data-testid="budget-was-Alimentation"]').text()
+      ).toContain('250')
+      expect(
+        (
+          wrapper.find('[data-testid="budget-save-button"]')
+            .element as HTMLButtonElement
+        ).disabled
+      ).toBe(false)
+    })
+
+    it('empties the draft on "Réinitialiser" without touching the server', async () => {
+      const wrapper = await mountEditing()
+
+      const reset = wrapper
+        .findAll('[data-testid="budget-quick-actions"] button')
+        .find(b => b.text() === 'Réinitialiser')
+      expect(reset).toBeDefined()
+      await reset?.trigger('click')
+
+      expect(api.updateBudgetPlan).not.toHaveBeenCalled()
+      const input = wrapper.find('[data-testid="budget-input-Alimentation"]')
+        .element as HTMLInputElement
+      expect(input.value).toBe('')
+
+      // And it is undoable, which is what removes the need to confirm it.
+      await wrapper
+        .find('[data-testid="budget-cancel-button"]')
+        .trigger('click')
+      expect(
+        wrapper.find('[data-testid="budget-value-Alimentation"]').text()
+      ).toContain('250')
+    })
+
+    it('does not let a reference figure rewrite a budget outside edit mode', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      // The "Réel" figure is plain text in read mode, never a button.
+      const buttons = wrapper
+        .find('[data-testid="budget-row-Alimentation"]')
+        .findAll('button')
+      expect(
+        buttons.some(b => b.attributes('title')?.includes('appliquer'))
+      ).toBe(false)
+
+      await wrapper.find('[data-testid="budget-edit-button"]').trigger('click')
+      const editButtons = wrapper
+        .find('[data-testid="budget-row-Alimentation"]')
+        .findAll('button')
+      expect(
+        editButtons.some(b => b.attributes('title')?.includes('appliquer'))
+      ).toBe(true)
+    })
+
+    it('blocks plan switching while a draft is open', async () => {
+      vi.mocked(api.getBudgetPlans).mockResolvedValue([
+        {
+          id: 'plan-old',
+          name: 'Avril 2026',
+          startDate: '2026-04-01',
+          endDate: '2026-04-30',
+          monthCount: 1,
+          totalAmount: 200,
+          entryCount: 1,
+          createdAt: '2026-03-20T00:00:00Z',
+        },
+      ])
+      const wrapper = await mountEditing()
+
+      expect(
+        (
+          wrapper.find('[data-testid="header-history-button"]')
+            .element as HTMLButtonElement
+        ).disabled
+      ).toBe(true)
+      expect(
+        (
+          wrapper.find('[data-testid="header-new-plan-button"]')
+            .element as HTMLButtonElement
+        ).disabled
+      ).toBe(true)
+    })
+
+    it('asks before routing away from unsaved changes', async () => {
+      const wrapper = await mountEditing()
+      expect(routeLeaveGuard).not.toBeNull()
+
+      // Nothing pending: leaving is never questioned.
+      expect(routeLeaveGuard?.()).toBe(true)
+
+      await wrapper
+        .find('[data-testid="budget-input-Alimentation"]')
+        .setValue('300')
+
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+      expect(routeLeaveGuard?.()).toBe(false)
+      expect(confirmSpy).toHaveBeenCalled()
+      confirmSpy.mockRestore()
+    })
+
+    it('keeps the draft when the save fails', async () => {
+      const wrapper = await mountEditing()
+      await wrapper
+        .find('[data-testid="budget-input-Alimentation"]')
+        .setValue('300')
+
+      vi.mocked(api.updateBudgetPlan).mockRejectedValue(new Error('boom'))
+      await wrapper.find('[data-testid="budget-save-button"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('boom')
+      const input = wrapper.find('[data-testid="budget-input-Alimentation"]')
+        .element as HTMLInputElement
+      expect(input.value).toBe('300')
+    })
+
+    it('warns before editing the envelopes of a finished plan', async () => {
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue({
+        ...samplePlan,
+        startDate: '2020-01-01',
+        endDate: '2020-01-31',
+      })
+      const wrapper = await mountEditing()
+
+      expect(
+        wrapper.find('[data-testid="budget-past-plan-warning"]').exists()
+      ).toBe(true)
+    })
+  })
+
+  describe('month-by-month tracking', () => {
+    /**
+     * Plan June→Dec 2026, read on 20 August. June and July are complete,
+     * August is running: three months on offer, and the average covers two.
+     */
+    const months = [
+      '2026-06',
+      '2026-07',
+      '2026-08',
+      '2026-09',
+      '2026-10',
+      '2026-11',
+      '2026-12',
+    ]
+
+    const planJunDec: BudgetPlanDto = {
+      ...samplePlan,
+      id: 'plan-jun-dec',
+      name: 'Juin–Déc 2026',
+      startDate: '2026-06-01',
+      endDate: '2026-12-31',
+      monthCount: 7,
+      totalAmount: 300,
+      entries: [
+        {
+          id: 'e1',
+          categoryId: 'cat-food',
+          categoryName: 'Alimentation',
+          categoryIcon: '🍽️',
+          amount: 300,
+        },
+      ],
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-08-20T12:00:00Z'))
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue(planJunDec)
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...sampleStatistics,
+        periodMonths: 7,
+        monthLabels: months,
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            categoryIcon: '🍽️',
+            totalAmount: 900,
+            transactionCount: 12,
+            averagePerMonth: 128,
+            //          juin juil août
+            monthlyAmounts: [500, 200, 200, 0, 0, 0, 0],
+          },
+        ],
+        incomeByCategory: [
+          {
+            categoryId: 'cat-salary',
+            categoryName: 'Salaire',
+            totalAmount: 3000,
+            transactionCount: 3,
+            averagePerMonth: 1000,
+            monthlyAmounts: [1000, 1000, 1000, 0, 0, 0, 0],
+          },
+        ],
+      })
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const foodRow = (w: ReturnType<typeof mount>) =>
+      w.find('[data-testid="budget-row-Alimentation"]')
+
+    it('offers every started plan month, and only those', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="budget-month-2026-06"]').exists()
+      ).toBe(true)
+      expect(
+        wrapper.find('[data-testid="budget-month-2026-08"]').exists()
+      ).toBe(true)
+      // September has not started: nothing to look at.
+      expect(
+        wrapper.find('[data-testid="budget-month-2026-09"]').exists()
+      ).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('averages the complete months until a month is picked', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      // (500 + 200) / 2 = 350 — August is still running and stays out.
+      expect(foodRow(wrapper).text()).toMatch(/350/)
+      expect(
+        wrapper.find('[data-testid="budget-actual-period"]').text()
+      ).toContain('2 mois')
+      wrapper.unmount()
+    })
+
+    it('reads a single month untouched once one is picked', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      await wrapper
+        .find('[data-testid="budget-month-2026-06"]')
+        .trigger('click')
+      expect(foodRow(wrapper).text()).toMatch(/500/)
+      expect(foodRow(wrapper).text()).not.toMatch(/350/)
+
+      await wrapper
+        .find('[data-testid="budget-month-2026-07"]')
+        .trigger('click')
+      expect(foodRow(wrapper).text()).toMatch(/200/)
+      wrapper.unmount()
+    })
+
+    it('shows the running month, which the average can never reach', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      await wrapper
+        .find('[data-testid="budget-month-2026-08"]')
+        .trigger('click')
+
+      expect(foodRow(wrapper).text()).toMatch(/200/)
+      const period = wrapper.find('[data-testid="budget-actual-period"]').text()
+      expect(period).toContain('Août 2026')
+      expect(period).toContain('20/31')
+      wrapper.unmount()
+    })
+
+    it('prorates the envelope on the running month only', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      // A complete month is judged against the whole envelope.
+      await wrapper
+        .find('[data-testid="budget-month-2026-06"]')
+        .trigger('click')
+      expect(
+        wrapper.find('[data-testid="budget-prorata-Alimentation"]').exists()
+      ).toBe(false)
+
+      // The running one gets its share to date: 300 × 20/31 ≈ 194.
+      await wrapper
+        .find('[data-testid="budget-month-2026-08"]')
+        .trigger('click')
+      expect(
+        wrapper.find('[data-testid="budget-prorata-Alimentation"]').text()
+      ).toMatch(/19[34]/)
+      wrapper.unmount()
+    })
+
+    it('returns to the average when the month is deselected', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      await wrapper
+        .find('[data-testid="budget-month-2026-06"]')
+        .trigger('click')
+      expect(foodRow(wrapper).text()).toMatch(/500/)
+
+      await wrapper
+        .find('[data-testid="budget-month-average"]')
+        .trigger('click')
+      expect(foodRow(wrapper).text()).toMatch(/350/)
+      wrapper.unmount()
+    })
+
+    it('selects a month when its bar is clicked, and releases it on a second click', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const chart = wrapper.findComponent({ name: 'MonthlyExpensesChart' })
+      chart.vm.$emit('select-month', '2026-06')
+      await flushPromises()
+      expect(foodRow(wrapper).text()).toMatch(/500/)
+
+      chart.vm.$emit('select-month', '2026-06')
+      await flushPromises()
+      expect(foodRow(wrapper).text()).toMatch(/350/)
+      wrapper.unmount()
+    })
+
+    it('ignores a bar that is not a started plan month', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const chart = wrapper.findComponent({ name: 'MonthlyExpensesChart' })
+      chart.vm.$emit('select-month', '2026-11')
+      await flushPromises()
+
+      // Still the average — November carries nothing to read.
+      expect(foodRow(wrapper).text()).toMatch(/350/)
+      wrapper.unmount()
+    })
+
+    it('lays the plan out month by month, envelope beside spending', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const matrix = wrapper.find('[data-testid="budget-monthly-matrix"]')
+      expect(matrix.exists()).toBe(true)
+      expect(
+        wrapper.find('[data-testid="matrix-cell-Alimentation-2026-06"]').text()
+      ).toMatch(/500/)
+      expect(
+        wrapper.find('[data-testid="matrix-cell-Alimentation-2026-08"]').text()
+      ).toMatch(/200/)
+      // September has not started — it is not a column.
+      expect(
+        wrapper
+          .find('[data-testid="matrix-cell-Alimentation-2026-09"]')
+          .exists()
+      ).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('selects a month from the grid header', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      await wrapper
+        .find('[data-testid="matrix-header-2026-06"]')
+        .trigger('click')
+
+      expect(foodRow(wrapper).text()).toMatch(/500/)
+      wrapper.unmount()
+    })
+
+    it('hides the grid on a plan with a single started month', async () => {
+      vi.setSystemTime(new Date('2026-06-10T12:00:00Z'))
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="budget-monthly-matrix"]').exists()
+      ).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('reads the grid through the active breakdown mode', async () => {
+      localStorage.setItem('budget-breakdown-mode', 'everyday')
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...sampleStatistics,
+        periodMonths: 7,
+        monthLabels: months,
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            categoryIcon: '🍽️',
+            totalAmount: 900,
+            transactionCount: 12,
+            averagePerMonth: 128,
+            monthlyAmounts: [500, 200, 200, 0, 0, 0, 0],
+            // June's 500 was mostly a one-off event.
+            everydayMonthlyAmounts: [180, 200, 200, 0, 0, 0, 0],
+          },
+        ],
+        incomeByCategory: [],
+      })
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const june = wrapper.find(
+        '[data-testid="matrix-cell-Alimentation-2026-06"]'
+      )
+      expect(june.text()).toMatch(/180/)
+      expect(june.text()).not.toMatch(/500/)
+      wrapper.unmount()
+    })
+
+    it('names the isolated month in the tracking summary', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      await wrapper
+        .find('[data-testid="budget-month-2026-06"]')
+        .trigger('click')
+
+      const summary = wrapper.findComponent({ name: 'BudgetSavingsSummary' })
+      expect(summary.props('actualPeriodLabel')).toBe('Juin 2026')
+      // And the figures follow the same month rather than the average.
+      expect(summary.props('planActualExpenseAvg')).toBeCloseTo(500, 2)
       wrapper.unmount()
     })
   })

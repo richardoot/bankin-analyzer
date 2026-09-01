@@ -17,6 +17,14 @@
     completePlanMonthsCount: number
     /** True when every plan month is in the past — drives "Bilan du plan" wording. */
     isPlanFinished: boolean
+    /**
+     * What the "Réel" figures actually cover, when it is not the default
+     * average over every complete month — a single month the user isolated.
+     * The block reads whichever period the page reads; saying which one is
+     * the whole difference between a figure and a misreading. Null for the
+     * default average.
+     */
+    actualPeriodLabel: string | null
 
     /** Optional comparison block. */
     comparison: {
@@ -64,17 +72,23 @@
     () => props.planIncomeAvg - props.planBudgetTotal
   )
 
-  const showFollowupBlock = computed(() => props.completePlanMonthsCount > 0)
+  // An isolated month is worth a block even before any month has completed:
+  // the plan's first, still-running month is exactly when the question "am I
+  // on track" is asked, and it is the one month the average cannot answer.
+  const showFollowupBlock = computed(
+    () => props.completePlanMonthsCount > 0 || !!props.actualPeriodLabel
+  )
   const showPlanningBlock = computed(() => props.comparison !== null)
 
   const followupTitle = computed(() =>
     props.isPlanFinished ? 'Bilan du plan' : 'Suivi'
   )
-  const followupHint = computed(() =>
-    props.isPlanFinished
+  const followupHint = computed(() => {
+    if (props.actualPeriodLabel) return props.actualPeriodLabel
+    return props.isPlanFinished
       ? `Plan terminé · ${props.completePlanMonthsCount} mois`
       : `Plan en cours · ${props.completePlanMonthsCount} mois écoulé${props.completePlanMonthsCount > 1 ? 's' : ''}`
-  )
+  })
 
   function colorClass(value: number): string {
     if (value > 0) return 'text-emerald-600 dark:text-emerald-400'
