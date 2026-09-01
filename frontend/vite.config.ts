@@ -19,6 +19,13 @@ import { fileURLToPath, URL } from 'node:url'
  */
 const useHttps = process.env.VITE_HTTPS === '1'
 
+/**
+ * The port is overridable because 5173 is not always free: the podman stack
+ * publishes the built frontend there through nginx. Running the dev server on
+ * another port lets the two coexist instead of forcing the container down.
+ */
+const port = Number(process.env.VITE_PORT ?? 5173)
+
 export default defineConfig({
   plugins: [vue(), tailwindcss(), ...(useHttps ? [basicSsl()] : [])],
   resolve: {
@@ -27,6 +34,10 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port,
+    // Fail rather than hop to the next free port. A silent hop would serve the
+    // app somewhere the bank's registered redirect URL does not point, and the
+    // authorization would come back to nothing.
+    strictPort: true,
   },
 })
