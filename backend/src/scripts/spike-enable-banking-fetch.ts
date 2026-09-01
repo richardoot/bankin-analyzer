@@ -164,6 +164,105 @@ function daysBetween(oldest: string, newest: string): number {
 }
 
 /**
+ * A label stripped of what the bank adds and the merchant does not own.
+ *
+ * Boursorama writes a card line as `CARTE 06/08/26 FITNESS PARK CB*7962`: a
+ * date already carried by `booking_date`, and a card number that identifies
+ * the card rather than the purchase. The same purchase seen from the current
+ * account is worded differently. Removing both is what lets the two be
+ * recognised as one event.
+ */
+export function normalizedLabel(text: string): string {
+  return text
+    .toUpperCase()
+    .replace(/CARTE \d{2}\/\d{2}\/\d{2}/g, '')
+    .replace(/CB\*?\d+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** One purchase reported by two different accounts of the same bank. */
+export interface CrossAccountDuplicate {
+  /** Account names that all report it, in the order the session listed them. */
+  accountNames: string[]
+  date: string
+  amount: number
+  label: string
+}
+
+/**
+ * Purchases that more than one account of the same bank reports.
+ *
+ * This is the finding that decides how phase 4 may ingest a bank. Boursorama
+ * exposes card accounts beside the current accounts they settle onto, and a
+ * card purchase appears in both — with a *different* `entry_reference` in each,
+ * because the spec makes that reference unique per account, not per event.
+ *
+ * So the phase 1 identity key cannot catch this: to the API these are two
+ * distinct transactions, and ingesting every account of the bank would count
+ * every card expense twice. The rule that catches it has to compare across
+ * accounts, on the event rather than on the reference.
+ *
+ * Two genuinely separate purchases can of course share an amount, a day and a
+ * merchant, so a handful of these are real. A systematic pairing between two
+ * accounts is not.
+ */
+export function crossAccountDuplicates(
+  transactionsByAccount: Record<string, BankTransaction[]>,
+  accountNames: Record<string, string>
+): CrossAccountDuplicate[] {
+  const byEvent = new Map<
+    string,
+    { accounts: Set<string>; date: string; amount: number; label: string }
+  >()
+
+  for (const [uid, transactions] of Object.entries(transactionsByAccount)) {
+    for (const tx of transactions) {
+      const date = transactionDate(tx)
+      const amount = signedAmount(tx)
+      if (date === null || amount === null) continue
+
+      const label = normalizedLabel(transactionLabel(tx))
+      const key = `${amount}|${date}|${label}`
+      const existing = byEvent.get(key)
+      if (existing) existing.accounts.add(uid)
+      else byEvent.set(key, { accounts: new Set([uid]), date, amount, label })
+    }
+  }
+
+  return [...byEvent.values()]
+    .filter(event => event.accounts.size > 1)
+    .map(event => ({
+      accountNames: [...event.accounts].map(uid => accountNames[uid] ?? uid),
+      date: event.date,
+      amount: event.amount,
+      label: event.label,
+    }))
+}
+
+/** How often each pair of accounts reports the same purchase. */
+export function duplicatePairCounts(
+  duplicates: CrossAccountDuplicate[]
+): { pair: [string, string]; count: number }[] {
+  // The pair is kept beside its count rather than encoded into the key:
+  // account names carry spaces ("M BOILLEY R OU MLLE TORR"), so splitting a
+  // joined string back apart would cut in the wrong place.
+  const counts = new Map<string, { pair: [string, string]; count: number }>()
+  for (const duplicate of duplicates) {
+    const names = [...duplicate.accountNames].sort()
+    for (let i = 0; i < names.length; i++) {
+      for (let j = i + 1; j < names.length; j++) {
+        const pair: [string, string] = [names[i] ?? '', names[j] ?? '']
+        const existing = counts.get(pair.join('\u0000'))
+        if (existing) existing.count++
+        else counts.set(pair.join('\u0000'), { pair, count: 1 })
+      }
+    }
+  }
+  return [...counts.values()].sort((x, y) => y.count - x.count)
+}
+
+/**
  * Reduce one account's transactions to the facts phase 1 and phase 2 need.
  *
  * Duplicate entry references are collected rather than counted: the spec warns
@@ -504,9 +603,43 @@ export async function main(
     printReport(report)
   }
 
+  // The one check that only makes sense across accounts, and the one that
+  // decides whether this bank can be ingested account by account at all.
+  const namesByUid = Object.fromEntries(
+    session.accounts
+      .filter(a => a.uid)
+      .map(a => [a.uid as string, a.name ?? a.product ?? (a.uid as string)])
+  )
+  const duplicates = crossAccountDuplicates(dump, namesByUid)
+
+  console.log('\n=== Same purchase seen on several accounts ===')
+  if (duplicates.length === 0) {
+    console.log('  none — every account reports its own transactions only')
+  } else {
+    console.log(
+      `  ${duplicates.length} purchases appear on more than one account.\n` +
+        '  `entry_reference` does NOT catch these: it is unique per account,\n' +
+        '  so the same purchase carries a different one on each side.\n'
+    )
+    for (const { pair, count } of duplicatePairCounts(duplicates).slice(0, 6)) {
+      console.log(`    ${String(count).padStart(5)}  ${pair[0]}  ⇄  ${pair[1]}`)
+    }
+    console.log('\n  Examples:')
+    for (const d of duplicates.slice(0, 4)) {
+      console.log(
+        `    ${d.date}  ${d.amount.toFixed(2).padStart(9)}  "${d.label.slice(0, 40)}"`
+      )
+      for (const name of d.accountNames) console.log(`        · ${name}`)
+    }
+  }
+
   writeFileSync(
     options.out,
-    JSON.stringify({ session: session.session_id, reports, dump }, null, 2)
+    JSON.stringify(
+      { session: session.session_id, reports, duplicates, dump },
+      null,
+      2
+    )
   )
   console.log(`\nRaw transactions written to:\n  ${options.out}`)
   console.log(

@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   clampValidUntil,
+  crossAccountDuplicates,
+  duplicatePairCounts,
+  normalizedLabel,
   signedAmount,
   summariseAccount,
   transactionDate,
@@ -207,5 +210,145 @@ describe('summariseAccount', () => {
     const report = summariseAccount({ uid: 'u', product: 'Livret A' }, [tx()])
     expect(report.accountName).toBe('Livret A')
     expect(report.iban).toBeNull()
+  })
+})
+
+describe('normalizedLabel', () => {
+  it('strips the card date and card number Boursorama prepends', () => {
+    expect(normalizedLabel('CARTE 06/08/26 FITNESS PARK      CB*7962')).toBe(
+      'FITNESS PARK'
+    )
+  })
+
+  it('leaves a label that carries neither alone', () => {
+    expect(normalizedLabel('VIR INST M RICHARD ARMAND BOILLEY')).toBe(
+      'VIR INST M RICHARD ARMAND BOILLEY'
+    )
+  })
+
+  it('collapses the whitespace the stripping leaves behind', () => {
+    expect(normalizedLabel('CARTE 01/08/26 TOTAL           4 CB*7962')).toBe(
+      'TOTAL 4'
+    )
+  })
+})
+
+describe('crossAccountDuplicates', () => {
+  const names = { card: 'Carte Visa Ultim', current: 'Compte courant' }
+
+  it('pairs a card purchase with its twin on the current account', () => {
+    // The same purchase, worded differently by each account — which is exactly
+    // how Boursorama reports it.
+    const found = crossAccountDuplicates(
+      {
+        card: [
+          tx({
+            booking_date: '2026-08-25',
+            transaction_amount: { amount: '39.99' },
+            remittance_information: ['CARTE 25/08/26 APPLE.COM/BILL CB*7962'],
+          }),
+        ],
+        current: [
+          tx({
+            booking_date: '2026-08-25',
+            transaction_amount: { amount: '39.99' },
+            remittance_information: ['APPLE.COM/BILL'],
+          }),
+        ],
+      },
+      names
+    )
+
+    expect(found).toHaveLength(1)
+    expect(found[0]?.accountNames.sort()).toEqual([
+      'Carte Visa Ultim',
+      'Compte courant',
+    ])
+  })
+
+  it('is not fooled by a different entry_reference on each side', () => {
+    // The point of the check: the API gives the two copies distinct
+    // references, so the phase 1 identity key cannot see they are one event.
+    const found = crossAccountDuplicates(
+      {
+        card: [tx({ entry_reference: 'CARD-1' })],
+        current: [tx({ entry_reference: 'CURRENT-1' })],
+      },
+      names
+    )
+    expect(found).toHaveLength(1)
+  })
+
+  it('leaves genuinely distinct purchases alone', () => {
+    const found = crossAccountDuplicates(
+      {
+        card: [tx({ transaction_amount: { amount: '10.00' } })],
+        current: [tx({ transaction_amount: { amount: '20.00' } })],
+      },
+      names
+    )
+    expect(found).toEqual([])
+  })
+
+  it('does not pair two transactions of the same account with each other', () => {
+    const found = crossAccountDuplicates({ card: [tx(), tx()] }, names)
+    expect(found).toEqual([])
+  })
+
+  it('skips transactions the bank left undated or unsigned', () => {
+    const found = crossAccountDuplicates(
+      {
+        card: [
+          tx({
+            booking_date: undefined,
+            transaction_date: undefined,
+            value_date: undefined,
+          }),
+        ],
+        current: [tx({ credit_debit_indicator: undefined })],
+      },
+      names
+    )
+    expect(found).toEqual([])
+  })
+})
+
+describe('duplicatePairCounts', () => {
+  it('ranks the account pairs by how often they collide', () => {
+    const counts = duplicatePairCounts([
+      { accountNames: ['A', 'B'], date: '2026-01-01', amount: -1, label: 'x' },
+      { accountNames: ['A', 'B'], date: '2026-01-02', amount: -2, label: 'y' },
+      { accountNames: ['A', 'C'], date: '2026-01-03', amount: -3, label: 'z' },
+    ])
+    expect(counts[0]).toEqual({ pair: ['A', 'B'], count: 2 })
+    expect(counts[1]).toEqual({ pair: ['A', 'C'], count: 1 })
+  })
+
+  it('keeps names containing spaces intact', () => {
+    // "M BOILLEY R OU MLLE TORR" must not be cut at a space on the way back.
+    const counts = duplicatePairCounts([
+      {
+        accountNames: ['M BOILLEY RICHARD', 'Carte Visa Ultim - CHLOE'],
+        date: '2026-01-01',
+        amount: -1,
+        label: 'x',
+      },
+    ])
+    expect(counts[0]?.pair).toEqual([
+      'Carte Visa Ultim - CHLOE',
+      'M BOILLEY RICHARD',
+    ])
+  })
+
+  it('counts every pair when three accounts report one purchase', () => {
+    const counts = duplicatePairCounts([
+      {
+        accountNames: ['A', 'B', 'C'],
+        date: '2026-01-01',
+        amount: -1,
+        label: 'x',
+      },
+    ])
+    expect(counts).toHaveLength(3)
   })
 })
