@@ -39,9 +39,10 @@
  *   # 1. Start it. Prints a URL to open, and the code to come back with.
  *   pnpm ts-node src/scripts/spike-enable-banking-fetch.ts --aspsp Revolut
  *
- *   # 2. Authorize in the browser. The redirect to https://localhost:5173/…
- *   #    will fail to load — that is expected, nothing is listening there.
- *   #    Copy the `code` parameter out of the browser's address bar.
+ *   # 2. Authorize in the browser. The redirect lands on the standalone page
+ *   #    `public/bank-callback.html`, which shows the code — run the frontend
+ *   #    with `VITE_HTTPS=1 VITE_PORT=5174 pnpm dev` to serve it. If it does
+ *   #    not load, the code is still in the address bar.
  *   pnpm ts-node src/scripts/spike-enable-banking-fetch.ts --code <code>
  *
  * `--country` defaults to FR, `--days` caps the requested consent (default:
@@ -378,9 +379,12 @@ async function startAuthorization(
   console.log('Open this URL and authorize:\n')
   console.log(`  ${url}\n`)
   console.log(
-    'The redirect to https://localhost:5173/… will fail to load — nothing is\n' +
-      'listening there, and that is fine. Copy the `code` parameter out of the\n' +
-      'address bar and run:\n\n' +
+    `You will be redirected to ${redirectUrl}, which shows the code and the\n` +
+      'command to run next. Start the dev server first, or the page will not\n' +
+      'load:\n\n' +
+      '  cd frontend && VITE_HTTPS=1 VITE_PORT=5174 pnpm dev\n\n' +
+      'The code is in the address bar either way, so a page that fails to load\n' +
+      'costs nothing — copy `code` out of the URL and run:\n\n' +
       '  pnpm ts-node src/scripts/spike-enable-banking-fetch.ts --code <code>\n'
   )
 }
@@ -504,7 +508,8 @@ if (require.main === module) {
     ...(flag('code') !== undefined && { code: flag('code') }),
     ...(flag('aspsp') !== undefined && { aspsp: flag('aspsp') }),
     country: (flag('country') ?? 'FR').toUpperCase(),
-    redirectUrl: flag('redirect') ?? 'https://localhost:5173/bank-callback',
+    redirectUrl:
+      flag('redirect') ?? 'https://localhost:5174/bank-callback.html',
     ...(daysFlag !== undefined && { days: Number(daysFlag) }),
     out:
       flag('out') ?? join(tmpdir(), `enable-banking-spike-${Date.now()}.json`),
