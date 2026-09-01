@@ -47,8 +47,31 @@ model Transaction {
   subcategory     String?         // Kept for backward compatibility
   note            String?
   isPointed       Boolean         @default(false) @map("is_pointed")
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  /// Where the row came from. Defaults to BANKIN_CSV because that is where
+  /// every row predating the bank sync came from, which is what makes the
+  /// backfill a default rather than an UPDATE over the whole table.
+  source TransactionSource @default(BANKIN_CSV)
+
+  /// The bank's own identifier for the transaction (`entry_reference`), null
+  /// for anything imported from a CSV.
+  ///
+  /// The API describes it as unique and immutable across authentication
+  /// sessions, which is the stable identity `hash` never had — the hash is
+  /// derived from date, amount and description, all of which a bank may
+  /// restate when a transaction settles.
+  ///
+  /// Unique per account, never globally: the API says the same reference is
+  /// likely to reappear on a different account, and phase 2 confirmed it.
+  externalId String? @map("external_id")
+
+  /// The bank's settlement status, ISO 20022: BOOK for an accounted
+  /// transaction, PDNG for one still pending. Null for CSV rows, which say
+  /// nothing on the subject.
+  bookingStatus String? @map("booking_status")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   accountRef            Account                @relation(fields: [accountId], references: [id], onDelete: Restrict)
@@ -60,13 +83,38 @@ model Transaction {
   tags                  TransactionTag[]
   reimbursementPayments ReimbursementPayment[] @relation("ReimbursementPaymentIncome")
 
+  /// One bank reference may only be filed once per account. Postgres treats
+  /// NULLs as distinct in a unique index, so the CSV rows — all of which have
+  /// no reference — are untouched by this and never collide with each other.
+  ///
+  /// It does NOT make double counting impossible. Phase 2 found Boursorama
+  /// reporting one card purchase on both the card account and the current
+  /// account it settles onto, with a different reference on each side: two
+  /// rows this constraint considers perfectly legitimate. Catching that needs
+  /// a rule that compares across accounts, on the event rather than the
+  /// reference.
+  @@unique([accountId, externalId])
   @@index([userId])
   @@index([accountId])
   @@index([subcategoryId])
   @@index([userId, date])
   @@index([type])
   @@index([importHistoryId])
+  @@index([source])
   @@map("transactions")
+  @@schema("app")
+}
+
+/// Where a transaction came from. The two sources are meant to coexist for
+/// good: the API reaches back only as far as each bank allows — 185 days at
+/// CIC, 729 at Boursorama — so the CSV export stays the only way to hold
+/// anything older.
+enum TransactionSource {
+  /// Imported from a Bankin' CSV export.
+  BANKIN_CSV
+  /// Fetched from the bank through the aggregation API.
+  BANK_API
+
   @@schema("app")
 }
 
@@ -154,6 +202,17 @@ enum PaymentKind {
   @@schema("app")
 }
 
+/// A bank account, still identified by its name.
+///
+/// That will not survive the bank sync, and the reason is recorded here rather
+/// than discovered again later: Boursorama returns two distinct card accounts
+/// both named `Carte Visa Ultim - RICHARD BOILLEY`. Under `@@unique([userId,
+/// name])` they are one row, and `upsertByName` — which resolves an account by
+/// its name alone — would merge two years of two cards into a single account.
+///
+/// Phase 4 has to key synced accounts on something the bank owns (IBAN, or the
+/// identification hash for a card account that has none) and relax this
+/// constraint. Nothing does yet, so nothing changes here.
 model Account {
   id        String      @id @default(uuid())
   userId    String      @map("user_id")

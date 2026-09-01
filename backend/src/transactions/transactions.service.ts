@@ -10,6 +10,7 @@ import { CategoriesService } from '../categories/categories.service'
 import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { AccountsService } from '../accounts/accounts.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
+import { TransactionSource } from '../generated/prisma'
 import type { Prisma, Transaction, TransactionType } from '../generated/prisma'
 import {
   buildTransactionWhere,
@@ -492,7 +493,12 @@ export class TransactionsService {
       return id
     }
 
-    // 6. Bulk insert with createMany
+    // 6. Bulk insert with createMany.
+    //
+    // `source` is written out even though the column defaults to it. The
+    // default exists to backfill the rows that predate the bank sync; relying
+    // on it here would leave the one path that definitely produces CSV rows
+    // saying nothing about where its rows come from.
     const dataToCreate = [
       ...toImport.map(({ hash, date, tx }, offset) => {
         const filing = filingOf(offset)
@@ -510,6 +516,7 @@ export class TransactionsService {
           subcategory: filing.subcategory,
           note: tx.note ?? null,
           isPointed: tx.isPointed ?? false,
+          source: TransactionSource.BANKIN_CSV,
         }
       }),
       ...forcedData.map(({ hash, date, tx }, offset) => {
@@ -528,6 +535,7 @@ export class TransactionsService {
           subcategory: filing.subcategory,
           note: tx.note ?? null,
           isPointed: tx.isPointed ?? false,
+          source: TransactionSource.BANKIN_CSV,
         }
       }),
     ]
