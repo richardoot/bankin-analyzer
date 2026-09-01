@@ -266,6 +266,19 @@ async function apiCall<T>(
     if (body.includes('REDIRECT_URI_NOT_ALLOWED')) {
       throw new RedirectNotAllowedError(await registeredRedirectUrls(token))
     }
+    // An authorization code is single-use. Reusing one is easy to do by
+    // accident — they are indistinguishable UUIDs and an old one is one scroll
+    // away — and "Session is already authorized" does not say which mistake
+    // was made, nor that the fix is a whole new authorization rather than a
+    // retry.
+    if (body.includes('ALREADY_AUTHORIZED')) {
+      throw new Error(
+        'This authorization code has already been exchanged.\n\n' +
+          'Codes are single-use, so the fix is a new authorization, not a\n' +
+          'retry: run the script again without --code, open the URL it\n' +
+          'prints, and use the code that comes back from *that* round.'
+      )
+    }
     throw new Error(
       `${init?.method ?? 'GET'} ${path} → ${response.status} ${response.statusText}\n${body}`
     )
