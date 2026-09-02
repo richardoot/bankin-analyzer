@@ -283,20 +283,193 @@ export function findDuplicateGroups(
     }))
 }
 
+/**
+ * The event a staged transaction describes, independent of which account
+ * reported it. Two rows sharing this key are one purchase seen twice.
+ */
+export function eventKey(transaction: StagedTransaction): string {
+  return `${transaction.amount}|${transaction.date}|${normalizeLabel(transaction.label)}`
+}
+
+/**
+ * What the reconciliation concluded about one staged transaction, once every
+ * other staged transaction has had its say.
+ *
+ * `duplicate` is the verdict `reconcileOne` cannot reach on its own: the row
+ * describes a purchase another staged row already describes, so ingesting both
+ * would double it whatever the ledger says.
+ */
+export type AssignedVerdict =
+  | { kind: 'alreadyLinked'; transactionId: string }
+  | { kind: 'matched'; transactionId: string; similarity: number }
+  | { kind: 'duplicate'; ofIndex: number }
+  | { kind: 'ambiguous'; candidates: MatchCandidate[] }
+  | { kind: 'new' }
+
+/**
+ * Reconcile a whole fetch at once, so that no ledger row is claimed twice.
+ *
+ * ## Why one-at-a-time is not enough
+ *
+ * `reconcileOne` answers for a single transaction, and two transactions asked
+ * separately will happily give the same answer. Measured against the real
+ * ledger, that is not a corner case: 759 ledger rows were claimed by more than
+ * one fetched transaction, one of them by six. Written out, each of those is a
+ * duplicate.
+ *
+ * Matching is therefore an assignment, not a series of independent decisions.
+ * Each ledger row may be claimed once, and the claims are settled in order of
+ * confidence: the most convincing pair takes its row, and the rest compete for
+ * what is left.
+ *
+ * ## Why greedy rather than optimal
+ *
+ * A globally optimal assignment (Hungarian) would squeeze out a few more
+ * pairings, at the cost of an algorithm nobody can eyeball when it produces a
+ * surprising link. Greedy-by-confidence is explainable — "this pair scored
+ * highest, so it was taken first" — and a matcher whose output cannot be
+ * argued with is a matcher whose mistakes go unnoticed. What it cannot settle
+ * comes back as `ambiguous`, which is a person's decision anyway.
+ */
+export function reconcileAll(
+  staged: StagedTransaction[],
+  ledger: LedgerTransaction[],
+  options: ReconciliationOptions = {}
+): AssignedVerdict[] {
+  const tolerance = options.dateToleranceDays ?? DEFAULT_DATE_TOLERANCE_DAYS
+  const floor = options.minimumSimilarity ?? DEFAULT_MINIMUM_SIMILARITY
+
+  // One representative per event. The others are duplicates of it and take no
+  // part in the assignment — letting them compete would be letting a purchase
+  // claim two ledger rows.
+  const representativeOf = new Map<string, number>()
+  const duplicateOf = new Map<number, number>()
+  staged.forEach((transaction, index) => {
+    const key = eventKey(transaction)
+    const first = representativeOf.get(key)
+    if (first === undefined) representativeOf.set(key, index)
+    else duplicateOf.set(index, first)
+  })
+
+  const verdicts: AssignedVerdict[] = staged.map(() => ({ kind: 'new' }))
+  const claimed = new Set<string>()
+
+  // Rows the sync already owns are settled before anything competes for them.
+  const ledgerByExternalId = new Map<string, LedgerTransaction>()
+  for (const row of ledger) {
+    if (row.externalId !== null) ledgerByExternalId.set(row.externalId, row)
+  }
+
+  const contenders: number[] = []
+  for (const index of representativeOf.values()) {
+    const transaction = staged[index]
+    if (!transaction) continue
+    const linked =
+      transaction.externalId === null
+        ? undefined
+        : ledgerByExternalId.get(transaction.externalId)
+    if (linked) {
+      verdicts[index] = { kind: 'alreadyLinked', transactionId: linked.id }
+      claimed.add(linked.id)
+    } else {
+      contenders.push(index)
+    }
+  }
+
+  // Every plausible pairing, strongest first. Ties are broken by date distance
+  // and then by position, so the same input always produces the same output —
+  // a matcher that reshuffles between runs cannot be reviewed.
+  interface Pair {
+    stagedIndex: number
+    transactionId: string
+    similarity: number
+    dayGap: number
+  }
+  const pairs: Pair[] = []
+  const candidatesByIndex = new Map<number, MatchCandidate[]>()
+
+  for (const index of contenders) {
+    const transaction = staged[index]
+    if (!transaction) continue
+    const candidates: MatchCandidate[] = []
+    for (const row of ledger) {
+      if (row.externalId !== null) continue
+      if (Math.abs(row.amount - transaction.amount) >= EPSILON) continue
+      if (!withinTolerance(row.date, transaction.date, tolerance)) continue
+
+      const similarity = labelSimilarity(transaction.label, row.description)
+      candidates.push({ transactionId: row.id, similarity })
+      pairs.push({
+        stagedIndex: index,
+        transactionId: row.id,
+        similarity,
+        dayGap: Math.abs(
+          new Date(row.date).getTime() - new Date(transaction.date).getTime()
+        ),
+      })
+    }
+    candidates.sort((a, b) => b.similarity - a.similarity)
+    candidatesByIndex.set(index, candidates)
+  }
+
+  pairs.sort(
+    (a, b) =>
+      b.similarity - a.similarity ||
+      a.dayGap - b.dayGap ||
+      a.stagedIndex - b.stagedIndex ||
+      a.transactionId.localeCompare(b.transactionId)
+  )
+
+  const assigned = new Set<number>()
+  for (const pair of pairs) {
+    if (assigned.has(pair.stagedIndex)) continue
+    if (claimed.has(pair.transactionId)) continue
+    if (pair.similarity < floor) continue
+
+    verdicts[pair.stagedIndex] = {
+      kind: 'matched',
+      transactionId: pair.transactionId,
+      similarity: pair.similarity,
+    }
+    assigned.add(pair.stagedIndex)
+    claimed.add(pair.transactionId)
+  }
+
+  // A contender that found candidates but was outbid for all of them is not
+  // "new": something in the ledger looks like it, and only a person can say
+  // whether the resemblance is the same movement or a coincidence.
+  for (const index of contenders) {
+    if (assigned.has(index)) continue
+    const candidates = candidatesByIndex.get(index) ?? []
+    if (candidates.length > 0)
+      verdicts[index] = { kind: 'ambiguous', candidates }
+  }
+
+  for (const [index, representative] of duplicateOf) {
+    verdicts[index] = { kind: 'duplicate', ofIndex: representative }
+  }
+
+  return verdicts
+}
+
 export interface ReconciliationSummary {
   total: number
   alreadyLinked: number
   matched: number
+  duplicate: number
   ambiguous: number
   new: number
 }
 
 /** Count the verdicts, which is what decides whether a sync is safe to run. */
-export function summarize(verdicts: Verdict[]): ReconciliationSummary {
+export function summarize(
+  verdicts: (Verdict | AssignedVerdict)[]
+): ReconciliationSummary {
   const summary: ReconciliationSummary = {
     total: verdicts.length,
     alreadyLinked: 0,
     matched: 0,
+    duplicate: 0,
     ambiguous: 0,
     new: 0,
   }

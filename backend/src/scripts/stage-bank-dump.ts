@@ -39,11 +39,11 @@ import { Pool } from 'pg'
 import { PrismaClient } from '../generated/prisma'
 import {
   findDuplicateGroups,
-  reconcileOne,
+  reconcileAll,
   summarize,
+  type AssignedVerdict,
   type LedgerTransaction,
   type StagedTransaction,
-  type Verdict,
 } from '../bank-sync/reconciliation'
 import {
   signedAmount,
@@ -231,8 +231,12 @@ export async function main(
       '  restrict candidates to the matching account.\n'
   )
 
-  const verdicts: Verdict[] = rows.map(({ staged }) =>
-    reconcileOne(staged, ledger)
+  // Reconciled as a whole rather than one at a time: asked separately, two
+  // fetched transactions will claim the same ledger row, and against the real
+  // ledger 759 rows were claimed more than once — one of them six times.
+  const verdicts: AssignedVerdict[] = reconcileAll(
+    rows.map(r => r.staged),
+    ledger
   )
   const summary = summarize(verdicts)
 
@@ -244,9 +248,25 @@ export async function main(
   )
   console.log(`  matched        : ${summary.matched} (${pct(summary.matched)})`)
   console.log(
+    `  duplicate      : ${summary.duplicate} (${pct(summary.duplicate)})`
+  )
+  console.log(
     `  ambiguous      : ${summary.ambiguous} (${pct(summary.ambiguous)})`
   )
   console.log(`  new            : ${summary.new} (${pct(summary.new)})`)
+
+  // The invariant the assignment exists to hold, stated rather than assumed:
+  // a silent regression here is a duplicated ledger.
+  const claimed = verdicts.flatMap(verdict =>
+    verdict.kind === 'matched' || verdict.kind === 'alreadyLinked'
+      ? [verdict.transactionId]
+      : []
+  )
+  const distinct = new Set(claimed).size
+  console.log(
+    `\n  ledger rows claimed: ${distinct} by ${claimed.length} transactions` +
+      (distinct === claimed.length ? '  ✓ one each' : '  ⚠ CONTESTED')
+  )
 
   const byId = new Map(ledger.map(row => [row.id, row]))
   const shown = verdicts

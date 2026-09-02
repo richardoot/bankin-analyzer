@@ -3,6 +3,7 @@ import {
   findDuplicateGroups,
   labelSimilarity,
   normalizeLabel,
+  reconcileAll,
   reconcileOne,
   summarize,
   type LedgerTransaction,
@@ -258,6 +259,7 @@ describe('summarize', () => {
       matched: 1,
       alreadyLinked: 1,
       ambiguous: 1,
+      duplicate: 0,
     })
   })
 
@@ -268,6 +270,156 @@ describe('summarize', () => {
       matched: 0,
       alreadyLinked: 0,
       ambiguous: 0,
+      duplicate: 0,
     })
+  })
+})
+
+describe('reconcileAll', () => {
+  it('never lets two staged transactions claim the same ledger row', () => {
+    // The failure measured against the real ledger: 759 rows claimed more than
+    // once, one of them six times. Each extra claim is a duplicate written out.
+    const verdicts = reconcileAll(
+      [
+        staged({
+          externalAccountId: 'card',
+          externalId: 'A',
+          label: 'FITNESS PARK',
+        }),
+        staged({
+          externalAccountId: 'other',
+          externalId: 'B',
+          label: 'FITNESS PARK',
+        }),
+      ],
+      [ledger({ id: 'tx-1', description: 'CB Fitness Park' })]
+    )
+
+    const claimed = verdicts.filter(v => v.kind === 'matched')
+    expect(claimed).toHaveLength(1)
+  })
+
+  it('calls the second copy of one purchase a duplicate, not a match', () => {
+    const verdicts = reconcileAll(
+      [
+        staged({
+          externalAccountId: 'current',
+          externalId: 'A',
+          label: 'APPLE.COM/BILL',
+        }),
+        staged({
+          externalAccountId: 'card',
+          externalId: 'B',
+          label: 'CARTE 25/08/26 APPLE.COM/BILL CB*7962',
+        }),
+      ],
+      [ledger({ id: 'tx-1', description: 'CB Apple.com/bill' })]
+    )
+
+    expect(verdicts[0]).toMatchObject({
+      kind: 'matched',
+      transactionId: 'tx-1',
+    })
+    expect(verdicts[1]).toEqual({ kind: 'duplicate', ofIndex: 0 })
+  })
+
+  it('marks duplicates even when nothing in the ledger matches', () => {
+    // Both would be ingested otherwise, and the purchase counted twice.
+    const verdicts = reconcileAll(
+      [
+        staged({ externalAccountId: 'current', externalId: 'A' }),
+        staged({ externalAccountId: 'card', externalId: 'B' }),
+      ],
+      []
+    )
+    expect(verdicts[0]).toEqual({ kind: 'new' })
+    expect(verdicts[1]).toEqual({ kind: 'duplicate', ofIndex: 0 })
+  })
+
+  it('gives the row to the better match when two purchases compete', () => {
+    const verdicts = reconcileAll(
+      [
+        staged({ externalId: 'A', label: 'CARREFOUR CITY' }),
+        staged({ externalId: 'B', label: 'FITNESS PARK' }),
+      ],
+      [ledger({ id: 'tx-gym', description: 'CB Fitness Park' })]
+    )
+
+    expect(verdicts[1]).toMatchObject({
+      kind: 'matched',
+      transactionId: 'tx-gym',
+    })
+    expect(verdicts[0]?.kind).toBe('ambiguous')
+  })
+
+  it('returns the outbid one as ambiguous rather than new', () => {
+    // Something in the ledger did look like it; only a person can say whether
+    // the resemblance is the same movement or a coincidence.
+    const verdicts = reconcileAll(
+      [
+        staged({ externalId: 'A', label: 'FITNESS PARK' }),
+        staged({ externalId: 'B', label: 'FITNESS PARK GYM' }),
+      ],
+      [ledger({ id: 'tx-1', description: 'CB Fitness Park' })]
+    )
+
+    const kinds = verdicts.map(v => v.kind).sort()
+    expect(kinds).toEqual(['ambiguous', 'matched'])
+  })
+
+  it('settles rows the sync already owns before anything competes for them', () => {
+    const verdicts = reconcileAll(
+      [
+        staged({ externalId: 'A' }),
+        staged({ externalId: 'B', label: 'OTHER SHOP' }),
+      ],
+      [
+        ledger({ id: 'tx-owned', externalId: 'A' }),
+        ledger({ id: 'tx-free', description: 'CB Other Shop' }),
+      ]
+    )
+
+    expect(verdicts[0]).toEqual({
+      kind: 'alreadyLinked',
+      transactionId: 'tx-owned',
+    })
+    expect(verdicts[1]).toMatchObject({
+      kind: 'matched',
+      transactionId: 'tx-free',
+    })
+  })
+
+  it('never offers a row another bank reference already owns', () => {
+    const verdicts = reconcileAll(
+      [staged({ externalId: 'B' })],
+      [ledger({ id: 'tx-owned', externalId: 'A' })]
+    )
+    expect(verdicts[0]).toEqual({ kind: 'new' })
+  })
+
+  it('produces the same answer whatever order the ledger arrives in', () => {
+    // A matcher that reshuffles between runs cannot be reviewed.
+    const rows = [
+      ledger({ id: 'tx-a', description: 'CB Fitness Park' }),
+      ledger({ id: 'tx-b', description: 'CB Fitness Park' }),
+    ]
+    const input = [staged({ externalId: 'A', label: 'FITNESS PARK' })]
+
+    const first = reconcileAll(input, rows)
+    const second = reconcileAll(input, [...rows].reverse())
+
+    expect(first).toEqual(second)
+  })
+
+  it('returns one verdict per staged transaction, in order', () => {
+    const verdicts = reconcileAll(
+      [
+        staged({ externalId: 'A' }),
+        staged({ externalId: 'B', amount: -1 }),
+        staged({ externalId: 'C', amount: -2 }),
+      ],
+      []
+    )
+    expect(verdicts).toHaveLength(3)
   })
 })
