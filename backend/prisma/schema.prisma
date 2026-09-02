@@ -27,6 +27,8 @@ model User {
   budgetPlans           BudgetPlan[]
   tags                  Tag[]
   reimbursementPayments ReimbursementPayment[]
+  bankSyncRuns          BankSyncRun[]
+  bankStagedTransactions BankStagedTransaction[]
 
   @@map("users")
   @@schema("app")
@@ -550,5 +552,91 @@ model TransactionTag {
   @@id([transactionId, tagId])
   @@index([tagId])
   @@map("transaction_tags")
+  @@schema("app")
+}
+
+/// One pass of fetching a bank, kept so the matcher can be re-run without
+/// asking the bank again.
+///
+/// That is not a convenience: most ASPSPs allow four background fetches a day,
+/// so re-fetching to try a different matching rule is not an option. What was
+/// fetched is staged, and the rules are then argued with offline.
+model BankSyncRun {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+
+  /// The bank, as `GET /aspsps` names it.
+  aspspName String @map("aspsp_name")
+
+  /// The Enable Banking session this came from, for tracing a run back to the
+  /// authorization that allowed it. Not a credential: it grants nothing on its
+  /// own and expires with the consent.
+  sessionId String? @map("session_id")
+
+  /// When the bank was asked — distinct from `createdAt`, which is when the
+  /// row was written, and from the transactions' own dates.
+  fetchedAt DateTime @map("fetched_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user         User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions BankStagedTransaction[]
+
+  @@index([userId])
+  @@index([userId, fetchedAt])
+  @@map("bank_sync_runs")
+  @@schema("app")
+}
+
+/// A transaction as the bank sent it, before anything decides what to do with
+/// it.
+///
+/// Staged rather than written straight into `transactions` because the
+/// decision is the hard part and it is reversible only while nothing has been
+/// written: `transactions` is what reimbursements, settlements, tags and
+/// budgets all hang off, and a duplicate there is not a display bug.
+model BankStagedTransaction {
+  id     String @id @default(uuid())
+  runId  String @map("run_id")
+  userId String @map("user_id")
+
+  /// The bank's account identifier, and its label at fetch time. The label is
+  /// stored rather than looked up because it is not unique — Boursorama
+  /// returns two distinct card accounts sharing a name — so it is a hint for a
+  /// human, never a key.
+  externalAccountId String @map("external_account_id")
+  accountName       String @map("account_name")
+
+  /// `entry_reference`. Nullable because the API allows a bank to omit it,
+  /// though none of the three measured in phase 2 ever did.
+  externalId String? @map("external_id")
+
+  /// ISO 20022 settlement status: BOOK, PDNG…
+  bookingStatus String? @map("booking_status")
+
+  /// Day precision, deliberately. Storing a timestamp reintroduces the
+  /// midnight-in-Paris drift the import already had to be repaired for, and a
+  /// booking date has no time of day to begin with.
+  date DateTime @db.Date
+
+  amount Decimal @db.Decimal(12, 2)
+  label  String
+
+  /// The untouched payload. What the matcher ignores today may be exactly what
+  /// it needs tomorrow, and the bank will not serve this window again.
+  raw Json
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  run  BankSyncRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// A run holds one row per bank reference per account. Re-staging the same
+  /// fetch is then an upsert rather than a second copy.
+  @@unique([runId, externalAccountId, externalId], map: "bank_staged_transactions_identity_key")
+  @@index([userId])
+  @@index([runId])
+  @@index([userId, date])
+  @@map("bank_staged_transactions")
   @@schema("app")
 }
