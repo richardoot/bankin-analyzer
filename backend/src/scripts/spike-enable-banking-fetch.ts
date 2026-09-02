@@ -92,12 +92,35 @@ export interface AccountResource {
   identification_hash?: string
 }
 
+/**
+ * A session, from either endpoint that returns one.
+ *
+ * They disagree on shape, and the disagreement is easy to miss because both
+ * have an `accounts` field: `POST /sessions` fills it with account objects,
+ * while `GET /sessions/{id}` fills it with bare ids and puts the objects in
+ * `accounts_data`. Reading the wrong one yields six accounts with no `uid`,
+ * every fetch silently skipped, and a run that reports success having read
+ * nothing at all.
+ */
 export interface SessionResponse {
-  session_id: string
-  accounts: AccountResource[]
+  session_id?: string
+  accounts: (AccountResource | string)[]
+  accounts_data?: AccountResource[]
   aspsp?: { name?: string; country?: string }
   /** The consent as the bank granted it, `valid_until` being when it lapses. */
   access?: { valid_until?: string }
+  /** `AUTHORIZED`, `CLOSED`, `INVALID`… — whether it can still be read from. */
+  status?: string
+}
+
+/** The accounts of a session, whichever endpoint described it. */
+export function accountsOf(session: SessionResponse): AccountResource[] {
+  if (session.accounts_data && session.accounts_data.length > 0) {
+    return session.accounts_data
+  }
+  return session.accounts.filter(
+    (account): account is AccountResource => typeof account !== 'string'
+  )
 }
 
 /** What the spike concludes about one account. */
@@ -539,6 +562,15 @@ function printReport(report: AccountReport): void {
 export interface SpikeOptions {
   /** Present on the second step only: the code copied out of the address bar. */
   code?: string | undefined
+  /**
+   * An existing session to read from, instead of authorizing a new one.
+   *
+   * This is what a background sync does: the consent already exists and lasts
+   * up to 180 days, so asking the user to authenticate again on every fetch
+   * would defeat the point of having a consent at all. Worth being able to
+   * exercise by hand, because a scheduler that cannot do this cannot exist.
+   */
+  session?: string | undefined
   aspsp?: string | undefined
   country: string
   redirectUrl: string
@@ -553,7 +585,7 @@ export async function main(
 ): Promise<void> {
   const token = buildJwt(applicationId, privateKeyPem)
 
-  if (!options.code) {
+  if (!options.code && !options.session) {
     await startAuthorization(
       token,
       options.aspsp ?? 'Revolut',
@@ -564,14 +596,19 @@ export async function main(
     return
   }
 
-  const session = await apiCall<SessionResponse>('/sessions', token, {
-    method: 'POST',
-    body: { code: options.code },
-  })
+  const session = options.session
+    ? await apiCall<SessionResponse>(`/sessions/${options.session}`, token)
+    : await apiCall<SessionResponse>('/sessions', token, {
+        method: 'POST',
+        body: { code: options.code },
+      })
 
-  console.log(`\nSession ${session.session_id}`)
+  const sessionId = session.session_id ?? options.session ?? '(unknown)'
+  const accounts = accountsOf(session)
+  console.log(`\nSession ${sessionId}`)
   console.log(`ASPSP   ${session.aspsp?.name ?? '—'}`)
-  console.log(`Accounts: ${session.accounts.length}`)
+  console.log(`Status  ${session.status ?? 'authorized'}`)
+  console.log(`Accounts: ${accounts.length}`)
 
   // A successful authorization that yields nothing is the signature of
   // restricted production: the API compares what the bank returned against the
@@ -579,7 +616,7 @@ export async function main(
   // account the user just authorized is silently removed unless it was also
   // whitelisted — and the response says none of that, it simply comes back
   // empty.
-  if (session.accounts.length === 0) {
+  if (accounts.length === 0) {
     console.log(
       '\n  The authorization succeeded, so this is not a login problem: in\n' +
         '  restricted production the API returns only the accounts linked to\n' +
@@ -595,7 +632,7 @@ export async function main(
   const reports: AccountReport[] = []
   const dump: Record<string, BankTransaction[]> = {}
 
-  for (const account of session.accounts) {
+  for (const account of accounts) {
     if (!account.uid) continue
     console.log(`\n  Fetching ${account.name ?? account.uid}…`)
     const transactions = await fetchAllTransactions(account.uid, token)
@@ -608,7 +645,7 @@ export async function main(
   // The one check that only makes sense across accounts, and the one that
   // decides whether this bank can be ingested account by account at all.
   const namesByUid = Object.fromEntries(
-    session.accounts
+    accounts
       .filter(a => a.uid)
       .map(a => [a.uid as string, a.name ?? a.product ?? (a.uid as string)])
   )
@@ -643,7 +680,7 @@ export async function main(
     // to warn the user before the consent runs out.
     JSON.stringify(
       {
-        session: session.session_id,
+        session: sessionId,
         aspsp: session.aspsp?.name ?? null,
         aspspCountry: session.aspsp?.country ?? null,
         consentValidUntil: session.access?.valid_until ?? null,
@@ -685,6 +722,7 @@ if (require.main === module) {
   const daysFlag = flag('days')
   const options = {
     ...(flag('code') !== undefined && { code: flag('code') }),
+    ...(flag('session') !== undefined && { session: flag('session') }),
     ...(flag('aspsp') !== undefined && { aspsp: flag('aspsp') }),
     country: (flag('country') ?? 'FR').toUpperCase(),
     redirectUrl:

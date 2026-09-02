@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  accountsOf,
   clampValidUntil,
   crossAccountDuplicates,
   duplicatePairCounts,
@@ -350,5 +351,42 @@ describe('duplicatePairCounts', () => {
       },
     ])
     expect(counts).toHaveLength(3)
+  })
+})
+
+describe('accountsOf', () => {
+  it('reads the accounts POST /sessions returns inline', () => {
+    const accounts = accountsOf({
+      session_id: 's',
+      accounts: [{ uid: 'a', name: 'Compte courant' }],
+    })
+    expect(accounts.map(a => a.uid)).toEqual(['a'])
+  })
+
+  it('reads the accounts GET /sessions/{id} puts aside', () => {
+    // The shape that made a background fetch read nothing: `accounts` holds
+    // bare ids there, and the objects live in `accounts_data`.
+    const accounts = accountsOf({
+      accounts: ['a', 'b'],
+      accounts_data: [
+        { uid: 'a', name: 'Compte courant' },
+        { uid: 'b', name: 'Carte' },
+      ],
+    })
+    expect(accounts.map(a => a.uid)).toEqual(['a', 'b'])
+  })
+
+  it('drops bare ids when nothing describes them', () => {
+    // Better none than six accounts with no uid, every fetch skipped, and a
+    // run reporting success having read nothing.
+    expect(accountsOf({ accounts: ['a', 'b'] })).toEqual([])
+  })
+
+  it('prefers the described accounts over the bare ids', () => {
+    const accounts = accountsOf({
+      accounts: ['a'],
+      accounts_data: [{ uid: 'a', name: 'Compte courant' }],
+    })
+    expect(accounts[0]?.name).toBe('Compte courant')
   })
 })
