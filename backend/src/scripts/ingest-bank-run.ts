@@ -59,6 +59,9 @@ import type { BankTransaction } from './spike-enable-banking-fetch'
 
 interface Dump {
   session?: string
+  aspsp?: string | null
+  aspspCountry?: string | null
+  consentValidUntil?: string | null
   reports: { accountUid: string; accountName: string }[]
   dump: Record<string, BankTransaction[]>
 }
@@ -186,10 +189,18 @@ export async function main(
     create: {
       userId: user.id,
       aspspName: aspspNameOf(parsed),
-      aspspCountry: 'FR',
+      aspspCountry: parsed.aspspCountry ?? 'FR',
       sessionId: parsed.session ?? null,
+      consentValidUntil: parsed.consentValidUntil
+        ? new Date(parsed.consentValidUntil)
+        : null,
     },
-    update: { sessionId: parsed.session ?? null },
+    update: {
+      sessionId: parsed.session ?? null,
+      ...(parsed.consentValidUntil
+        ? { consentValidUntil: new Date(parsed.consentValidUntil) }
+        : {}),
+    },
     select: { id: true },
   })
 
@@ -377,8 +388,15 @@ function buildLinkUpdate(
   return update
 }
 
+/**
+ * The bank a dump came from.
+ *
+ * Falls back to the first account's label only for dumps written before the
+ * name travelled with them; that fallback names a connection after an account,
+ * which is wrong in a way worth noticing rather than hiding.
+ */
 function aspspNameOf(parsed: Dump): string {
-  return parsed.reports[0]?.accountName ?? 'unknown'
+  return parsed.aspsp ?? parsed.reports[0]?.accountName ?? 'unknown'
 }
 
 /** The connection for this bank, if one was already recorded. */

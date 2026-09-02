@@ -96,6 +96,8 @@ export interface SessionResponse {
   session_id: string
   accounts: AccountResource[]
   aspsp?: { name?: string; country?: string }
+  /** The consent as the bank granted it, `valid_until` being when it lapses. */
+  access?: { valid_until?: string }
 }
 
 /** What the spike concludes about one account. */
@@ -635,8 +637,20 @@ export async function main(
 
   writeFileSync(
     options.out,
+    // The bank's name and the consent expiry travel with the transactions.
+    // Without them the ingestion has to guess which bank a dump came from —
+    // it named a connection after its first account — and phase 5 has no date
+    // to warn the user before the consent runs out.
     JSON.stringify(
-      { session: session.session_id, reports, duplicates, dump },
+      {
+        session: session.session_id,
+        aspsp: session.aspsp?.name ?? null,
+        aspspCountry: session.aspsp?.country ?? null,
+        consentValidUntil: session.access?.valid_until ?? null,
+        reports,
+        duplicates,
+        dump,
+      },
       null,
       2
     )

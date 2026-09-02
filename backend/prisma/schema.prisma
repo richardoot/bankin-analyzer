@@ -677,6 +677,11 @@ model BankConnection {
   status     BankConnectionStatus @default(ACTIVE)
   lastSyncAt DateTime?            @map("last_sync_at")
 
+  /// Set when the bank refused for quota reasons. Until it passes, asking
+  /// again only earns another refusal and spends one of the day's few
+  /// permitted requests doing it.
+  retryAfter DateTime? @map("retry_after")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
