@@ -29,6 +29,8 @@ model User {
   reimbursementPayments ReimbursementPayment[]
   bankSyncRuns          BankSyncRun[]
   bankStagedTransactions BankStagedTransaction[]
+  bankConnections       BankConnection[]
+  bankAccountLinks      BankAccountLink[]
 
   @@map("users")
   @@schema("app")
@@ -229,8 +231,9 @@ model Account {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  bankLinks    BankAccountLink[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -638,5 +641,100 @@ model BankStagedTransaction {
   @@index([runId])
   @@index([userId, date])
   @@map("bank_staged_transactions")
+  @@schema("app")
+}
+
+/// Whether a bank connection can still be used.
+enum BankConnectionStatus {
+  ACTIVE
+  /// The consent lapsed. Banks grant at most 180 days, so this is a normal
+  /// end of life rather than a failure, and it needs the user in front of a
+  /// browser to renew — nothing the scheduler can do on its own.
+  EXPIRED
+  /// Withdrawn by the user, here or at the bank.
+  REVOKED
+
+  @@schema("app")
+}
+
+/// One authorised link to one bank.
+model BankConnection {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+
+  aspspName    String @map("aspsp_name")
+  aspspCountry String @map("aspsp_country")
+
+  /// The Enable Banking session. Expires with the consent and grants nothing
+  /// on its own, so it is an identifier to trace a fetch back with, not a
+  /// credential to protect.
+  sessionId String? @map("session_id")
+
+  /// When the bank stops answering. Stored so the user can be warned before
+  /// the sync goes quiet rather than after.
+  consentValidUntil DateTime? @map("consent_valid_until")
+
+  status     BankConnectionStatus @default(ACTIVE)
+  lastSyncAt DateTime?            @map("last_sync_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountLinks BankAccountLink[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@map("bank_connections")
+  @@schema("app")
+}
+
+/// Which account at the bank corresponds to which account here — and whether
+/// anything is taken from it.
+///
+/// The mapping cannot be inferred from names. Boursorama returns two distinct
+/// card accounts both named `Carte Visa Ultim - RICHARD BOILLEY`, and the
+/// names here ("Perso Bourso", "CJ Fixe") are the user's own words, which no
+/// bank has ever heard. It is established once, deliberately, and kept.
+model BankAccountLink {
+  id           String @id @default(uuid())
+  connectionId String @map("connection_id")
+  userId       String @map("user_id")
+
+  /// The account in this application. Null until someone decides which one it
+  /// is — an unmapped link is a known bank account nothing is read from yet,
+  /// which is a legitimate resting state and not an error.
+  accountId String? @map("account_id")
+
+  /// The bank's handle for the account within a session. Refreshed on every
+  /// authorization: the durable identity is the IBAN, or the identification
+  /// hash for a card account that has none.
+  externalAccountId String @map("external_account_id")
+
+  iban               String? 
+  identificationHash String? @map("identification_hash")
+
+  /// What the bank calls it, kept to show a human which account is which.
+  /// Never a key: two of them arrive identical.
+  accountName String @map("account_name")
+
+  /// Whether transactions are taken from this account. Off by default, and
+  /// that default is the defence against double counting: Boursorama reports
+  /// a card purchase on both the card account and the current account it
+  /// settles onto, so enabling everything a bank offers is precisely the
+  /// mistake to avoid.
+  isIngested Boolean @default(false) @map("is_ingested")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  connection BankConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account    Account?       @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@unique([connectionId, externalAccountId])
+  @@index([userId])
+  @@index([accountId])
+  @@map("bank_account_links")
   @@schema("app")
 }

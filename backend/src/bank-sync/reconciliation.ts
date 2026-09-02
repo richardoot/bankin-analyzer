@@ -73,6 +73,17 @@ export interface ReconciliationOptions {
   /** How far apart the two sources may date the same movement. */
   dateToleranceDays?: number
   /**
+   * Bank account → the account here it corresponds to.
+   *
+   * Without it every ledger row is a candidate for every fetched transaction,
+   * which is fine for the pass that *learns* the mapping and wrong for any
+   * pass that acts on it: a purchase would happily match a look-alike filed
+   * under a different account. A bank account absent from the map gets no
+   * candidates at all, so its transactions come back visibly unresolved rather
+   * than quietly mismatched.
+   */
+  accountIdByExternalAccountId?: Record<string, string>
+  /**
    * Below this, a lone candidate is reported as ambiguous rather than matched.
    * Set to 0 to let amount and date decide alone.
    */
@@ -388,11 +399,24 @@ export function reconcileAll(
   const pairs: Pair[] = []
   const candidatesByIndex = new Map<number, MatchCandidate[]>()
 
+  const mapping = options.accountIdByExternalAccountId
   for (const index of contenders) {
     const transaction = staged[index]
     if (!transaction) continue
+    // An unmapped bank account offers nothing: better a transaction that comes
+    // back as new than one matched against another account's look-alike.
+    const expectedAccountId = mapping?.[transaction.externalAccountId]
+    if (mapping !== undefined && expectedAccountId === undefined) {
+      candidatesByIndex.set(index, [])
+      continue
+    }
     const candidates: MatchCandidate[] = []
     for (const row of ledger) {
+      if (
+        expectedAccountId !== undefined &&
+        row.accountId !== expectedAccountId
+      )
+        continue
       if (row.externalId !== null) continue
       if (Math.abs(row.amount - transaction.amount) >= EPSILON) continue
       if (!withinTolerance(row.date, transaction.date, tolerance)) continue

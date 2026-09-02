@@ -423,3 +423,65 @@ describe('reconcileAll', () => {
     expect(verdicts).toHaveLength(3)
   })
 })
+
+describe('reconcileAll with an account mapping', () => {
+  it('only offers rows filed under the mapped account', () => {
+    const verdicts = reconcileAll(
+      [staged({ externalAccountId: 'bank-1', label: 'FITNESS PARK' })],
+      [
+        ledger({
+          id: 'tx-right',
+          accountId: 'acc-A',
+          description: 'CB Fitness Park',
+        }),
+        ledger({
+          id: 'tx-wrong',
+          accountId: 'acc-B',
+          description: 'CB Fitness Park',
+        }),
+      ],
+      { accountIdByExternalAccountId: { 'bank-1': 'acc-A' } }
+    )
+
+    expect(verdicts[0]).toMatchObject({
+      kind: 'matched',
+      transactionId: 'tx-right',
+    })
+  })
+
+  it('gives an unmapped bank account nothing to match against', () => {
+    // Visibly unresolved beats quietly matched against another account.
+    const verdicts = reconcileAll(
+      [staged({ externalAccountId: 'unknown-bank', label: 'FITNESS PARK' })],
+      [
+        ledger({
+          id: 'tx-1',
+          accountId: 'acc-A',
+          description: 'CB Fitness Park',
+        }),
+      ],
+      { accountIdByExternalAccountId: { 'bank-1': 'acc-A' } }
+    )
+
+    expect(verdicts[0]).toEqual({ kind: 'new' })
+  })
+
+  it('still offers the whole ledger when no mapping is supplied', () => {
+    // The pass that learns the mapping has none yet, and needs the candidates.
+    const verdicts = reconcileAll(
+      [staged({ externalAccountId: 'bank-1', label: 'FITNESS PARK' })],
+      [
+        ledger({
+          id: 'tx-1',
+          accountId: 'acc-B',
+          description: 'CB Fitness Park',
+        }),
+      ]
+    )
+
+    expect(verdicts[0]).toMatchObject({
+      kind: 'matched',
+      transactionId: 'tx-1',
+    })
+  })
+})
