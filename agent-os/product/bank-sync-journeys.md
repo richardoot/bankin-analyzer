@@ -73,26 +73,73 @@ lands twice, split across two rows that look like two accounts.
 
 ---
 
-## Journey 3 — setting the accounts up
+## Journey 3 — an account is the user's, and each source has its own name for it
 
-Not a phase of its own so much as the moment both journeys pass through: the
-user is shown what the bank offers and decides what each thing is.
+The sync knows more about an account than the export ever did. `/accounts/{uid}/details`
+returns an IBAN, an ISO 20022 `cash_account_type` and the bank's own product name;
+a Bankin export has one column, `Compte`, holding whatever the user typed.
 
-Three answers must be available for every bank account:
+The conclusion is not that one source should win. It is that **`Account` belongs
+to the user** — their name, their `type`, their `divisor` — and each source keeps
+its own way of pointing at it:
 
-1. **it is this existing account** — proposed from evidence where there is
-   history, chosen from a list where there is not;
-2. **it is new** — create an `Account`, and ask the two questions the CSV
-   import currently guesses: is it joint (`divisor`), is it excluded from
-   stats;
-3. **ignore it** — the right answer for a card account whose purchases are
-   already reported by the current account it settles onto. 597 of them in one
-   Boursorama session.
+|                | how the source names it          | where it is recorded                  |
+| -------------- | -------------------------------- | ------------------------------------- |
+| Bankin CSV     | the label in the `Compte` column | missing — the name _is_ the key today |
+| Enable Banking | IBAN, identification hashes      | `BankAccountLink`                     |
 
-The third is the default (`isIngested` is false) and the interface must never
-offer "enable everything".
+The bank side already exists. The CSV side does not, and its absence is a defect
+that predates the sync entirely: `upsertByName` resolves an import by the account
+name, and renaming an account is offered in the settings. Rename `Perso Bourso`
+to `Bourso`, and the next export — whose column still says `Perso Bourso` —
+silently creates a second account, STANDARD with divisor 1, splitting the
+transactions of one real account across two rows with different arithmetic.
 
----
+So `Account` needs an alias table on the CSV side, holding every label an export
+has ever used for it. The import then resolves label → alias → account, a rename
+changes nothing, and a label nobody has seen becomes a question rather than a
+new account.
+
+### What we can propose, and how sure we are
+
+Three signals, in decreasing order of trust:
+
+1. **IBAN or identification hash** — certain, but only once stored. An export
+   carries neither, so this can never match a _pre-existing_ CSV account; it only
+   keeps a bank account recognisable across sessions and re-authorizations.
+2. **Transaction evidence** — the only bridge between an export account and a
+   bank account. Measured at 100 % on the three current accounts, homonyms
+   included. It needs history to reason from, and says nothing on a fresh ledger.
+3. **`cash_account_type`** — not a match at all, but it decides whether a bank
+   account _should_ be matched. `CARD` accounts have no counterpart in the ledger:
+   they are the same money as the account they settle onto.
+
+Name similarity is not on the list. `CAV - BOURSOBANK` and `Perso Bourso` share
+nothing, and Boursorama returns two accounts with identical names.
+
+### The moments the user is asked
+
+**An import brings an account label nobody has seen.** Today it is conjured.
+It should be shown in the preview, before anything is written, with three
+answers: it is this existing account (proposing the closest by transaction
+evidence), it is new (name it, joint?, excluded from stats?), or skip its rows
+for now.
+
+**A bank is connected and its accounts are listed.** Each one shows what
+`/details` gave — name, product, IBAN — and asks the same three questions, with
+the defaults set by evidence and type: a `CACC` matched with confidence is
+pre-selected on the account it matched; a `CACC` matched by nothing proposes
+creation; a `CARD` whose transactions duplicate an enabled account proposes
+"ignore", and says why.
+
+**A previously answered question is never asked again.** The answer becomes an
+alias or a link, and both survive renames, re-authorizations and new exports.
+
+### What the user must never be asked
+
+Whether two accounts are the same, in the abstract. The question is always
+concrete — "these 560 transactions matched rows filed under Perso Bourso; is
+this that account?" — because that is the evidence they can actually judge.
 
 ## Steps, in order of risk
 
@@ -115,15 +162,17 @@ nothing either way.
 Unblocks journey 2. `ingest-bank-run` gains the ability to create an `Account`
 from a `BankAccountLink`, with the type and divisor asked rather than assumed.
 
-### C. Make the CSV import stop inventing accounts
+### C. Give an account its aliases, and stop inventing accounts
 
-`upsertByName` silently creating `STANDARD` / `divisor: 1` is what turns one
-real account into two rows with different arithmetic. An unknown account name
-in an import should be surfaced — mapped to an existing account or created
-deliberately — not conjured.
+`Account` gains an alias table on the CSV side: every label an export has used
+for it. The import resolves label → alias → account instead of name → account.
 
-This changes existing import behaviour, so it needs the same care as the rest:
-a preview that says what will be created before anything is.
+This closes a defect that has nothing to do with the sync — renaming an account
+today makes the next import create a duplicate — and it is what lets the user
+name an account whatever they like while both sources keep finding it.
+
+An unknown label is then a question in the import preview, not a conjured
+`STANDARD` / `divisor: 1` account.
 
 ### D. Traceability and undo
 
