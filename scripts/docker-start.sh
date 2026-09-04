@@ -163,6 +163,26 @@ if [ "$DATASET" = "demo" ]; then
         bankin-backend node prisma/seed.mjs || echo "⚠️  Seed failed (see logs above)"
 fi
 
+# Le bundle est construit, pas configuré au démarrage : une couche de build en
+# cache peut servir des URLs qu'on croit avoir remplacées, et l'application
+# échoue alors en CORS sur une API qu'elle n'aurait pas dû appeler. On vérifie
+# donc ce qui est réellement servi plutôt que ce qu'on a demandé.
+if [ "${STACK_HTTPS:-false}" = "true" ]; then
+    served="$(podman exec bankin-frontend sh -c \
+        'f=$(grep -oE "assets/index-[A-Za-z0-9_-]+\.js" /usr/share/nginx/html/index.html); \
+         grep -oE "https?://localhost:[0-9]+/?" "/usr/share/nginx/html/$f" 2>/dev/null | sort -u' \
+        2>/dev/null || true)"
+    if ! echo "$served" | grep -q "^${VITE_API_URL}"; then
+        echo ""
+        echo "⚠️  Le bundle servi n'appelle pas ${VITE_API_URL}."
+        echo "    URLs trouvées : $(echo "$served" | tr '\n' ' ')"
+        echo "    L'image a été réutilisée depuis le cache. Forcez la reconstruction :"
+        echo "      podman rmi -f localhost/bankin-analyzer_frontend:latest"
+        echo "      ./scripts/docker-start.sh"
+        echo ""
+    fi
+fi
+
 echo ""
 echo "============================================"
 echo "✅ All services started!"
