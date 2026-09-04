@@ -53,6 +53,28 @@ esac
 
 echo "🗃  Jeu de données : $DATASET"
 
+# TLS de bout en bout dans la stack, via STACK_HTTPS=true dans .env.docker.
+#
+# C'est tout ou rien, délibérément : servir la page en https et laisser ses
+# appels en http est précisément l'échec que ça évite — le navigateur les
+# bloque en contenu mixte, sans rien dire d'utile. Alors le frontend, le
+# backend et Supabase basculent ensemble.
+#
+# Les URLs sont compilées dans le bundle au build, donc elles doivent être
+# connues ici, avant podman-compose.
+if [ "${STACK_HTTPS:-false}" = "true" ]; then
+    if [ ! -f certs/localhost.pem ]; then
+        echo "🔐 Génération du certificat local…"
+        ./scripts/make-local-cert.sh >/dev/null
+    fi
+    export BACKEND_HTTPS=1
+    export VITE_API_URL="${VITE_API_URL_HTTPS:-https://localhost:${BACKEND_HTTPS_PORT:-3443}}"
+    export VITE_SUPABASE_URL="${VITE_SUPABASE_URL_HTTPS:-https://localhost:8443}"
+    # Ce que le backend doit accepter en CORS : l'origine du conteneur nginx.
+    export FRONTEND_URL="${FRONTEND_URL},https://localhost:${FRONTEND_HTTPS_PORT:-5174}"
+    echo "🔒 TLS : https://localhost:${FRONTEND_HTTPS_PORT:-5174} → API ${VITE_API_URL}"
+fi
+
 if [ "$DATASET" = "prod" ] && [ ! -f backend/.env.production.local ]; then
     echo "❌ DATASET=prod exige backend/.env.production.local" >&2
     exit 1
@@ -145,6 +167,7 @@ echo "   podman-compose ps                # List containers"
 echo "   ./scripts/docker-stop.sh         # Stop all services"
 echo ""
 echo "🗃  Jeu de données : DATASET=none|demo|prod dans .env.docker"
+echo "🔒 TLS            : STACK_HTTPS=true dans .env.docker"
 echo "   ./scripts/docker-start.sh --demo  # forcer les données de démonstration"
 echo "   ./scripts/docker-start.sh --prod  # forcer un dump de la production"
 echo ""
