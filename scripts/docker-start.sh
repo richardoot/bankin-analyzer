@@ -67,11 +67,27 @@ if [ "${STACK_HTTPS:-false}" = "true" ]; then
         echo "🔐 Génération du certificat local…"
         ./scripts/make-local-cert.sh >/dev/null
     fi
-    export BACKEND_HTTPS=1
-    export VITE_API_URL="${VITE_API_URL_HTTPS:-https://localhost:${BACKEND_HTTPS_PORT:-3443}}"
-    export VITE_SUPABASE_URL="${VITE_SUPABASE_URL_HTTPS:-https://localhost:8443}"
+    BACKEND_HTTPS=1
+    VITE_API_URL="${VITE_API_URL_HTTPS:-https://localhost:${BACKEND_HTTPS_PORT:-3443}}"
+    VITE_SUPABASE_URL="${VITE_SUPABASE_URL_HTTPS:-https://localhost:8443}"
     # Ce que le backend doit accepter en CORS : l'origine du conteneur nginx.
-    export FRONTEND_URL="${FRONTEND_URL},https://localhost:${FRONTEND_HTTPS_PORT:-5174}"
+    FRONTEND_URL="${FRONTEND_URL},https://localhost:${FRONTEND_HTTPS_PORT:-5174}"
+
+    # Les valeurs passent par une copie du fichier, pas par l'environnement.
+    #
+    # `podman-compose --env-file` résout `${VAR}` depuis le fichier, qui
+    # l'emporte sur une variable exportée. Un export suffisait pour ce qui est
+    # passé en `environment:` — le backend voyait bien FRONTEND_URL — mais pas
+    # pour les `build.args`, qui décident des URLs compilées dans le bundle.
+    # Le symptôme était une page en https appelant une API en http.
+    COMPOSE_ENV_FILE="$(mktemp -t bankin-compose-env)"
+    trap 'rm -f "$COMPOSE_ENV_FILE"' EXIT
+    sed -e "s|^VITE_API_URL=.*|VITE_API_URL=$VITE_API_URL|" \
+        -e "s|^VITE_SUPABASE_URL=.*|VITE_SUPABASE_URL=$VITE_SUPABASE_URL|" \
+        -e "s|^FRONTEND_URL=.*|FRONTEND_URL=$FRONTEND_URL|" \
+        .env.docker >"$COMPOSE_ENV_FILE"
+    echo "BACKEND_HTTPS=1" >>"$COMPOSE_ENV_FILE"
+
     echo "🔒 TLS : https://localhost:${FRONTEND_HTTPS_PORT:-5174} → API ${VITE_API_URL}"
 fi
 
@@ -86,7 +102,7 @@ fi
 # l'image mais laisse tourner le conteneur existant, qui continue de servir
 # l'ancienne couche. Le symptôme est déroutant — du code à jour sur le disque,
 # une image à jour, et une application qui exécute autre chose.
-podman-compose --env-file .env.docker up --build -d --force-recreate
+podman-compose --env-file "${COMPOSE_ENV_FILE:-.env.docker}" up --build -d --force-recreate
 
 echo "⏳ Waiting for database to be ready..."
 sleep 15
