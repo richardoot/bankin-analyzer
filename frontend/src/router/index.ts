@@ -112,6 +112,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/settings/CategoriesSettingsPage.vue'),
       },
       {
+        path: 'banks',
+        name: 'settings-banks',
+        component: () => import('@/views/settings/BanksSettingsPage.vue'),
+      },
+      {
         path: 'general',
         name: 'settings-general',
         component: () => import('@/views/settings/GeneralSettingsPage.vue'),

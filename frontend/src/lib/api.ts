@@ -866,7 +866,142 @@ async function readErrorMessage(
   return `Failed to ${fallbackAction}`
 }
 
+// ---------------------------------------------------------------------------
+// Bank sync
+// ---------------------------------------------------------------------------
+
+/** A bank account, as the bank describes it and the user has decided about it. */
+export interface DiscoveredAccountDto {
+  linkId: string
+  externalAccountId: string
+  accountName: string
+  product: string | null
+  /** ISO 20022: `CACC` current account, `CARD` card account. */
+  cashAccountType: string | null
+  iban: string | null
+  accountId: string | null
+  accountLabel: string | null
+  isIngested: boolean
+  /** What the transactions suggest, when there is history to reason from. */
+  suggestion: {
+    accountId: string
+    accountLabel: string
+    matches: number
+  } | null
+  /** Present when the account should be left alone, and why. */
+  warning: string | null
+}
+
+export interface BankConnectionDto {
+  id: string
+  aspspName: string
+  aspspCountry: string
+  status: string
+  consentValidUntil: string | null
+  lastSyncAt: string | null
+  /** What pressing sync would do right now. */
+  action: 'fetch' | 'skip' | 'reconnect'
+  reason: string
+  daysUntilConsentExpires: number | null
+  accounts: DiscoveredAccountDto[]
+}
+
+export interface SyncOutcomeDto {
+  connectionId: string
+  fetched: number
+  claimed: number
+  inserted: number
+  skippedDuplicates: number
+  skippedAmbiguous: number
+  accountsRead: number
+}
+
 export const api = {
+  // ── Bank sync ─────────────────────────────────────────────────────────────
+
+  /**
+   * Whether this server can sync at all.
+   *
+   * Asked before offering to connect a bank: a backend whose owner never set
+   * up Enable Banking serves everything else normally, and an interface that
+   * offered the button anyway would only produce a puzzling failure.
+   */
+  async getBankSyncStatus(): Promise<{ configured: boolean }> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/bank-sync/status`)
+    if (!response.ok)
+      throw new Error(await readErrorMessage(response, 'read bank sync status'))
+    return response.json() as Promise<{ configured: boolean }>
+  },
+
+  async getBankConnections(): Promise<BankConnectionDto[]> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/connections`
+    )
+    if (!response.ok)
+      throw new Error(await readErrorMessage(response, 'list bank connections'))
+    return response.json() as Promise<BankConnectionDto[]>
+  },
+
+  /** Begin authorising a bank; returns where to send the user. */
+  async startBankAuthorization(input: {
+    aspspName: string
+    country?: string
+    redirectUrl: string
+  }): Promise<{ url: string; state: string }> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/connections`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(response, 'start the authorization')
+      )
+    return response.json() as Promise<{ url: string; state: string }>
+  },
+
+  /** Exchange the code the redirect carried, and discover the accounts. */
+  async completeBankAuthorization(code: string): Promise<BankConnectionDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/connections/callback`,
+      { method: 'POST', body: JSON.stringify({ code }) }
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(response, 'finish the authorization')
+      )
+    return response.json() as Promise<BankConnectionDto>
+  },
+
+  /** Say what a bank account is, and whether to read from it. */
+  async updateBankAccountLink(
+    linkId: string,
+    input: { accountId?: string | null; isIngested?: boolean }
+  ): Promise<DiscoveredAccountDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/links/${linkId}`,
+      { method: 'PATCH', body: JSON.stringify(input) }
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(response, 'update the bank account')
+      )
+    return response.json() as Promise<DiscoveredAccountDto>
+  },
+
+  /** Read the bank now. */
+  async syncBankConnection(connectionId: string): Promise<SyncOutcomeDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/connections/${connectionId}/sync`,
+      { method: 'POST' }
+    )
+    if (!response.ok)
+      throw new Error(await readErrorMessage(response, 'sync this bank'))
+    return response.json() as Promise<SyncOutcomeDto>
+  },
+
   async getMe(): Promise<DbUser> {
     const response = await fetchWithAuth(`${API_BASE_URL}/users/me`)
 
