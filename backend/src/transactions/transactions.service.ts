@@ -16,6 +16,11 @@ import {
   buildTransactionWhere,
   type TransactionFilters,
 } from './transaction-filters'
+import {
+  reconcileAll,
+  type LedgerTransaction,
+  type StagedTransaction,
+} from '../bank-sync/reconciliation'
 import type {
   CreateTransactionDto,
   ImportResultDto,
@@ -269,6 +274,91 @@ export class TransactionsService {
   }
 
   /**
+   * Rows the bank sync already wrote that this import would write again.
+   *
+   * The hash cannot see them. It is computed over the description, and the two
+   * sources word the same transaction differently — `CB Protiming` against
+   * `CARTE 31/08/24 PROTIMING CB*7962` — so a synced month re-imported from an
+   * export arrives looking entirely new. Measured on real rows, wrong every
+   * time.
+   *
+   * So the comparison is the matcher's: same account, same amount to the cent,
+   * a date within three days, and the label to confirm. Only rows carrying a
+   * bank reference are offered as candidates; everything else is the hash's
+   * job, and matching a CSV row against another CSV row on amount and date
+   * alone would invent duplicates that are not there.
+   *
+   * Returns the index of each incoming transaction that already exists,
+   * against the row it duplicates.
+   */
+  private async findSyncedDuplicates(
+    userId: string,
+    candidates: { index: number; tx: CreateTransactionDto; date: Date }[],
+    accountIdByName: Map<string, string>
+  ): Promise<Map<number, Transaction & { accountRef: { name: string } }>> {
+    if (candidates.length === 0) return new Map()
+
+    const accountIds = [...new Set(accountIdByName.values())]
+    const dates = candidates.map(c => c.date.getTime())
+    // The window is widened by the matcher's own tolerance, so a transaction
+    // the two sources date three days apart is still compared.
+    const margin = 4 * 86_400_000
+    const synced = await this.prisma.transaction.findMany({
+      where: {
+        userId,
+        accountId: { in: accountIds },
+        externalId: { not: null },
+        date: {
+          gte: new Date(Math.min(...dates) - margin),
+          lte: new Date(Math.max(...dates) + margin),
+        },
+      },
+      include: { category: true, accountRef: { select: { name: true } } },
+    })
+    if (synced.length === 0) return new Map()
+
+    const ledger: LedgerTransaction[] = synced.map(row => ({
+      id: row.id,
+      accountId: row.accountId,
+      date: row.date.toISOString().slice(0, 10),
+      amount: Number(row.amount),
+      description: row.description,
+      externalId: row.externalId,
+    }))
+
+    // The account an incoming row belongs to is known outright, so it is used
+    // as its own identifier: the matcher then restricts candidates to that
+    // account without a mapping having to be inferred.
+    const incoming: StagedTransaction[] = candidates.map(({ tx, date }) => ({
+      externalAccountId: accountIdByName.get(tx.account) ?? '',
+      externalId: null,
+      date: date.toISOString().slice(0, 10),
+      amount: tx.amount,
+      label: tx.description,
+    }))
+    const identity: Record<string, string> = {}
+    for (const accountId of accountIds) identity[accountId] = accountId
+
+    const verdicts = reconcileAll(incoming, ledger, {
+      candidates: 'linked',
+      accountIdByExternalAccountId: identity,
+    })
+
+    const byId = new Map(synced.map(row => [row.id, row]))
+    const found = new Map<
+      number,
+      Transaction & { accountRef: { name: string } }
+    >()
+    verdicts.forEach((verdict, position) => {
+      if (verdict.kind !== 'matched') return
+      const candidate = candidates[position]
+      const row = byId.get(verdict.transactionId)
+      if (candidate && row) found.set(candidate.index, row)
+    })
+    return found
+  }
+
+  /**
    * Preview import with batch hash lookups for better performance.
    * Reduces N DB queries to 1 single query.
    */
@@ -322,7 +412,20 @@ export class TransactionsService {
     const existingHashSet = new Set(existingInDb.map(t => t.hash))
     const existingByHash = new Map(existingInDb.map(t => [t.hash, t]))
 
-    // 5. Build results
+    // 5. What the hash cannot see: rows the sync already wrote.
+    //
+    // Only the transactions the hash called new are offered — a row already
+    // recognised as an exact duplicate needs no second opinion.
+    const notFoundByHash = hashesData.filter(
+      data => !existingHashSet.has(data.hash)
+    )
+    const syncedDuplicates = await this.findSyncedDuplicates(
+      userId,
+      notFoundByHash,
+      accountIdByName
+    )
+
+    // 6. Build results
     const internalDuplicates: InternalDuplicateDto[] = []
     const externalDuplicates: ExternalDuplicateDto[] = []
     let newCount = 0
@@ -340,6 +443,22 @@ export class TransactionsService {
             hash,
             uploaded: this.toUploadedDto(data),
             existing: this.toExistingDto(existing),
+          })
+        }
+        continue
+      }
+
+      // Case: EXTERNAL duplicate the sync wrote. Reported in the same shape as
+      // a hash duplicate, so the review the user already knows covers it.
+      const synced = indices
+        .map(index => syncedDuplicates.get(index))
+        .find(row => row !== undefined)
+      if (synced) {
+        for (const data of txsData) {
+          externalDuplicates.push({
+            hash,
+            uploaded: this.toUploadedDto(data),
+            existing: this.toExistingDto(synced),
           })
         }
         continue
@@ -419,14 +538,33 @@ export class TransactionsService {
 
     // 4. Filter non-duplicates (keep only first occurrence of each hash)
     const seenHashes = new Set<string>()
-    const toImport: HashData[] = []
+    const survivedHash: HashData[] = []
 
     for (const data of hashesData) {
       if (!existingHashes.has(data.hash) && !seenHashes.has(data.hash)) {
-        toImport.push(data)
+        survivedHash.push(data)
         seenHashes.add(data.hash)
       }
     }
+
+    // 4b. Drop what the sync already wrote.
+    //
+    // The hash is blind to it: it covers the description, and an export words a
+    // transaction differently from the bank. Without this, importing a month
+    // already synced duplicates it in full — and the duplicate carries no bank
+    // reference, so nothing downstream would ever reconcile the two.
+    //
+    // The row is left exactly as it is. It may already carry a category, a
+    // tag, a reimbursement; the import has nothing to add that is worth the
+    // risk of overwriting any of it.
+    const syncedDuplicates = await this.findSyncedDuplicates(
+      userId,
+      survivedHash,
+      accountIdByName
+    )
+    const toImport = survivedHash.filter(
+      data => !syncedDuplicates.has(data.index)
+    )
 
     const duplicates = hashesData.length - toImport.length
 

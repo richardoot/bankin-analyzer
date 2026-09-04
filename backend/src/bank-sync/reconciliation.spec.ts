@@ -485,3 +485,65 @@ describe('reconcileAll with an account mapping', () => {
     })
   })
 })
+
+describe('reconcileAll against already-synced rows', () => {
+  it('finds the synced row a CSV line duplicates', () => {
+    // The direction the import needs: a hash including the description cannot
+    // see it, because the two sources word the transaction differently.
+    const verdicts = reconcileAll(
+      [staged({ externalId: null, label: 'CB Protiming' })],
+      [
+        ledger({
+          id: 'tx-synced',
+          externalId: 'ENTRY-1',
+          description: 'CARTE 25/08/26 PROTIMING CB*7962',
+        }),
+      ],
+      { candidates: 'linked' }
+    )
+
+    expect(verdicts[0]).toMatchObject({
+      kind: 'matched',
+      transactionId: 'tx-synced',
+    })
+  })
+
+  it('ignores rows the sync has never touched', () => {
+    // Those are the hash's job; matching them here would report a CSV row as a
+    // duplicate of another CSV row on nothing but amount and date.
+    const verdicts = reconcileAll(
+      [staged({ externalId: null, label: 'CB Protiming' })],
+      [ledger({ id: 'tx-csv', externalId: null, description: 'CB Protiming' })],
+      { candidates: 'linked' }
+    )
+
+    expect(verdicts[0]).toEqual({ kind: 'new' })
+  })
+
+  it('still offers unlinked rows in the default direction', () => {
+    const verdicts = reconcileAll(
+      [staged({ label: 'CB Protiming' })],
+      [ledger({ id: 'tx-csv', externalId: null, description: 'CB Protiming' })]
+    )
+    expect(verdicts[0]).toMatchObject({ kind: 'matched' })
+  })
+
+  it('never lets two CSV lines claim the same synced row', () => {
+    const verdicts = reconcileAll(
+      [
+        staged({ externalId: null, label: 'CB Protiming' }),
+        staged({ externalId: null, label: 'CB Protiming' }),
+      ],
+      [
+        ledger({
+          id: 'tx-synced',
+          externalId: 'ENTRY-1',
+          description: 'CARTE 25/08/26 PROTIMING CB*7962',
+        }),
+      ],
+      { candidates: 'linked' }
+    )
+
+    expect(verdicts.filter(v => v.kind === 'matched')).toHaveLength(1)
+  })
+})

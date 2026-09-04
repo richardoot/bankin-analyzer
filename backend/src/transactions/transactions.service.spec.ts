@@ -661,13 +661,56 @@ describe('TransactionsService', () => {
       expect(indices).toContain(2)
     })
 
-    it('should perform only one DB query for batch hash lookup', async () => {
+    it('batches its lookups instead of querying per transaction', async () => {
+      // Two queries, both over the whole batch: one asks the hash what already
+      // exists, the other asks what the bank sync already wrote — which the
+      // hash cannot answer, since it covers the description and the two
+      // sources word a transaction differently.
+      //
+      // What this guards is the shape, not the number: a hundred transactions
+      // must still cost two queries, never two hundred.
       mockPrismaService.transaction.findMany.mockResolvedValue([])
 
       await service.previewImport(mockUserId, [
         createTransactionDto,
         createTransactionDto,
       ])
+
+      expect(mockPrismaService.transaction.findMany).toHaveBeenCalledTimes(2)
+    })
+
+    it('does not query the sync when the hash already knows every row', async () => {
+      // Nothing survives the hash, so there is nothing left to ask about.
+      mockPrismaService.transaction.findMany.mockResolvedValue([
+        {
+          id: 'existing-1',
+          hash: 'will-be-replaced',
+          date: new Date('2024-01-15'),
+          description: 'Test',
+          amount: -50,
+          type: 'EXPENSE',
+          createdAt: new Date(),
+          accountRef: { name: 'Compte courant' },
+          category: null,
+        },
+      ])
+      mockPrismaService.transaction.findMany.mockImplementationOnce(
+        async (args: { where: { hash: { in: string[] } } }) => [
+          {
+            id: 'existing-1',
+            hash: args.where.hash.in[0],
+            date: new Date('2024-01-15'),
+            description: 'Test',
+            amount: -50,
+            type: 'EXPENSE',
+            createdAt: new Date(),
+            accountRef: { name: 'Compte courant' },
+            category: null,
+          },
+        ]
+      )
+
+      await service.previewImport(mockUserId, [createTransactionDto])
 
       expect(mockPrismaService.transaction.findMany).toHaveBeenCalledTimes(1)
     })

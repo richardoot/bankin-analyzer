@@ -84,6 +84,19 @@ export interface ReconciliationOptions {
    */
   accountIdByExternalAccountId?: Record<string, string>
   /**
+   * Which ledger rows may be claimed.
+   *
+   * `unlinked` — the default — offers rows no bank reference owns yet, which
+   * is the sync arriving on a ledger built from CSV exports.
+   *
+   * `linked` offers only rows that already carry one, which is the opposite
+   * direction: a CSV export arriving on rows the sync has already written.
+   * The import deduplicates on a hash that includes the description, and the
+   * two sources word a transaction differently, so without this a synced month
+   * is re-imported wholesale.
+   */
+  candidates?: 'unlinked' | 'linked'
+  /**
    * Below this, a lone candidate is reported as ambiguous rather than matched.
    * Set to 0 to let amount and date decide alone.
    */
@@ -400,6 +413,7 @@ export function reconcileAll(
   const candidatesByIndex = new Map<number, MatchCandidate[]>()
 
   const mapping = options.accountIdByExternalAccountId
+  const wanted = options.candidates ?? 'unlinked'
   for (const index of contenders) {
     const transaction = staged[index]
     if (!transaction) continue
@@ -417,7 +431,10 @@ export function reconcileAll(
         row.accountId !== expectedAccountId
       )
         continue
-      if (row.externalId !== null) continue
+      // Which side of the ledger is on offer. See `candidates` for why the
+      // import needs the opposite of what the sync does.
+      const alreadySynced = row.externalId !== null
+      if (wanted === 'unlinked' ? alreadySynced : !alreadySynced) continue
       if (Math.abs(row.amount - transaction.amount) >= EPSILON) continue
       if (!withinTolerance(row.date, transaction.date, tolerance)) continue
 
