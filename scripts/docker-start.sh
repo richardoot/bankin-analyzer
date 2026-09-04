@@ -5,25 +5,24 @@ cd "$(dirname "$0")/.."
 
 # Jeu de données à charger après le démarrage.
 #
-#   (rien)   on ne touche pas aux données déjà présentes
-#   --demo   régénère le jeu de démonstration
-#   --prod   dump la production maintenant et la restaure ici
+#   none   on ne touche pas aux données déjà présentes
+#   demo   régénère le jeu de démonstration
+#   prod   dump la production maintenant et la restaure ici
 #
-# --prod écrase le schéma `app`, donc tout ce que la synchro bancaire y a écrit
+# Se règle par DATASET dans .env.docker, et se force ponctuellement par
+# --demo / --prod, qui l'emportent sur le fichier.
+#
+# `prod` écrase le schéma `app`, donc tout ce que la synchro bancaire y a écrit
 # disparaît. C'est voulu : ces données se refabriquent, un dump frais non.
-DATASET="none"
+DATASET_ARG=""
 for arg in "$@"; do
   case "$arg" in
-    --demo) DATASET="demo" ;;
-    --prod) DATASET="prod" ;;
-    *) echo "Option inconnue : $arg (attendu --demo ou --prod)" >&2; exit 1 ;;
+    --demo) DATASET_ARG="demo" ;;
+    --prod) DATASET_ARG="prod" ;;
+    --none) DATASET_ARG="none" ;;
+    *) echo "Option inconnue : $arg (attendu --demo, --prod ou --none)" >&2; exit 1 ;;
   esac
 done
-
-if [ "$DATASET" = "prod" ] && [ ! -f backend/.env.production.local ]; then
-    echo "❌ --prod exige backend/.env.production.local" >&2
-    exit 1
-fi
 
 echo "🚀 Starting Bankin Analyzer with Podman..."
 
@@ -32,6 +31,31 @@ if [ -f .env.docker ]; then
     set -a
     source .env.docker
     set +a
+fi
+
+# Précédence : l'option de la ligne de commande, puis DATASET du fichier, puis
+# l'ancien SEED_ON_START — conservé pour que les .env.docker existants gardent
+# leur comportement sans être touchés.
+if [ -n "$DATASET_ARG" ]; then
+    DATASET="$DATASET_ARG"
+elif [ -n "${DATASET:-}" ]; then
+    :
+elif [ "${SEED_ON_START:-false}" = "true" ]; then
+    DATASET="demo"
+else
+    DATASET="none"
+fi
+
+case "$DATASET" in
+  none|demo|prod) ;;
+  *) echo "DATASET=\"$DATASET\" invalide (attendu none, demo ou prod)" >&2; exit 1 ;;
+esac
+
+echo "🗃  Jeu de données : $DATASET"
+
+if [ "$DATASET" = "prod" ] && [ ! -f backend/.env.production.local ]; then
+    echo "❌ DATASET=prod exige backend/.env.production.local" >&2
+    exit 1
 fi
 
 # Builder et démarrer.
@@ -88,15 +112,8 @@ fi
 echo "🔗 Linking local identities..."
 node scripts/link-local-identities.mjs || echo "⚠️  Linking failed (see above)"
 
-# Seed de données de démo : --demo, ou SEED_ON_START=true dans .env.docker.
-#
-# --prod l'exclut explicitement : SEED_ON_START vaut true dans .env.docker, et
-# sans cette garde une restauration de production se faisait écraser par le jeu
-# de démonstration dans la foulée.
-#
 # ⚠️  Destructif : efface puis régénère les données de l'utilisateur de démo.
-if [ "$DATASET" = "demo" ] ||
-   { [ "$DATASET" = "none" ] && [ "${SEED_ON_START:-false}" = "true" ]; }; then
+if [ "$DATASET" = "demo" ]; then
     echo "🌱 Seeding demo data..."
     podman exec \
         -e SEED_DATABASE_URL="postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres" \
@@ -127,7 +144,7 @@ echo "   podman-compose logs -f backend   # View backend logs"
 echo "   podman-compose ps                # List containers"
 echo "   ./scripts/docker-stop.sh         # Stop all services"
 echo ""
-echo "🗃  Jeux de données :"
-echo "   ./scripts/docker-start.sh --demo  # données de démonstration"
-echo "   ./scripts/docker-start.sh --prod  # dump de la production, à l'instant"
+echo "🗃  Jeu de données : DATASET=none|demo|prod dans .env.docker"
+echo "   ./scripts/docker-start.sh --demo  # forcer les données de démonstration"
+echo "   ./scripts/docker-start.sh --prod  # forcer un dump de la production"
 echo ""
