@@ -158,6 +158,15 @@ services:
       # The self-signed certificate, made by scripts/make-local-cert.sh.
       # Read-only: the container has no business rewriting a private key.
       - ./certs:/certs:ro
+      # The Enable Banking application key, which lives outside the repository
+      # — it is the sole credential of an application that reads bank
+      # accounts, and it is downloadable exactly once. Read-only, and mounted
+      # as a single file so nothing else of that directory travels.
+      #
+      # The default points at the TLS certificate purely so the mount is always
+      # valid; it is never read, because PRIVATE_KEY_PATH below is only set
+      # when an application id is.
+      - ${ENABLE_BANKING_KEY_FILE:-./certs/localhost.pem}:/enable-banking/key.pem:ro
     environment:
       NODE_ENV: production
       BACKEND_HTTPS: ${BACKEND_HTTPS:-}
@@ -168,6 +177,11 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       FRONTEND_URL: ${FRONTEND_URL}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # Both or neither: the path is set only when an application id is, so a
+      # half-configured server reports itself unconfigured — which is true —
+      # rather than failing later on a key it was never given.
+      ENABLE_BANKING_APP_ID: ${ENABLE_BANKING_APP_ID:-}
+      ENABLE_BANKING_PRIVATE_KEY_PATH: ${ENABLE_BANKING_APP_ID:+/enable-banking/key.pem}
     networks:
       - bankin-network
 
