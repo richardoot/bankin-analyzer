@@ -26,8 +26,29 @@ const useHttps = process.env.VITE_HTTPS === '1'
  */
 const port = Number(process.env.VITE_PORT ?? 5173)
 
+/**
+ * Under TLS the whole stack has to be reachable over TLS.
+ *
+ * A page served over https may not call an http API — the browser blocks it as
+ * mixed content, which is what made the first callback page render nothing at
+ * all. So `VITE_HTTPS=1` also moves the API and Supabase to their TLS ports,
+ * unless the environment says otherwise: Kong already listens on 8443, and the
+ * backend does once started with `BACKEND_HTTPS=1`.
+ */
+const httpsDefines = useHttps
+  ? {
+      'import.meta.env.VITE_API_URL': JSON.stringify(
+        process.env.VITE_API_URL ?? 'https://localhost:3443'
+      ),
+      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(
+        process.env.VITE_SUPABASE_URL ?? 'https://localhost:8443'
+      ),
+    }
+  : {}
+
 export default defineConfig({
   plugins: [vue(), tailwindcss(), ...(useHttps ? [basicSsl()] : [])],
+  define: httpsDefines,
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
