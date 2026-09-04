@@ -933,6 +933,20 @@ export const api = {
     return response.json() as Promise<{ configured: boolean }>
   },
 
+  /** The banks that can be connected, for a person choosing one. */
+  async getBanks(
+    country = 'FR'
+  ): Promise<{ name: string; country: string; beta: boolean }[]> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/aspsps?country=${encodeURIComponent(country)}`
+    )
+    if (!response.ok)
+      throw new Error(await readErrorMessage(response, 'list the banks'))
+    return response.json() as Promise<
+      { name: string; country: string; beta: boolean }[]
+    >
+  },
+
   async getBankConnections(): Promise<BankConnectionDto[]> {
     const response = await fetchWithAuth(
       `${API_BASE_URL}/bank-sync/connections`

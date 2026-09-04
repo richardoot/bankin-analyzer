@@ -8,6 +8,8 @@ vi.mock('@/lib/api', () => ({
   api: {
     getBankSyncStatus: vi.fn(),
     getBankConnections: vi.fn(),
+    getBanks: vi.fn(),
+    startBankAuthorization: vi.fn(),
     updateBankAccountLink: vi.fn(),
     syncBankConnection: vi.fn(),
     getAccounts: vi.fn().mockResolvedValue([]),
@@ -72,6 +74,10 @@ function connection(
 async function mountWith(connections: BankConnectionDto[], configured = true) {
   vi.mocked(api.getBankSyncStatus).mockResolvedValue({ configured })
   vi.mocked(api.getBankConnections).mockResolvedValue(connections)
+  vi.mocked(api.getBanks).mockResolvedValue([
+    { name: 'Boursorama Banque', country: 'FR', beta: false },
+    { name: 'CIC Banque Privée', country: 'FR', beta: true },
+  ])
   const wrapper = mount(BanksSettingsPage)
   await flushPromises()
   return wrapper
@@ -217,5 +223,61 @@ describe('BanksSettingsPage', () => {
     expect(toastError).toHaveBeenCalledWith(
       'its transactions have nowhere to go'
     )
+  })
+})
+
+describe('BanksSettingsPage — connecting a bank', () => {
+  it('offers the banks to choose from, flagging the beta ones', async () => {
+    // Hidden rather than flagged, a missing bank is a mystery; flagged, it is
+    // a caveat.
+    const wrapper = await mountWith([])
+
+    const options = wrapper.get('[data-testid="bank-picker"]').findAll('option')
+    expect(options.map(o => o.text())).toEqual([
+      '— choisir —',
+      'Boursorama Banque',
+      'CIC Banque Privée (beta)',
+    ])
+  })
+
+  it('cannot connect before a bank is chosen', async () => {
+    const wrapper = await mountWith([])
+    expect(
+      wrapper.get('[data-testid="connect-button"]').attributes('disabled')
+    ).toBeDefined()
+  })
+
+  it('sends the user to their bank, coming back to this application', async () => {
+    vi.mocked(api.startBankAuthorization).mockResolvedValue({
+      url: 'https://tilisy.enablebanking.com/ais/start?sessionid=x',
+      state: 'st',
+    })
+    const wrapper = await mountWith([])
+
+    await wrapper
+      .get('[data-testid="bank-picker"]')
+      .setValue('Boursorama Banque')
+    await wrapper.get('[data-testid="connect-button"]').trigger('click')
+    await flushPromises()
+
+    expect(api.startBankAuthorization).toHaveBeenCalledWith({
+      aspspName: 'Boursorama Banque',
+      redirectUrl: expect.stringContaining('/bank-callback'),
+    })
+  })
+
+  it('shows why a bank refused rather than redirecting anyway', async () => {
+    vi.mocked(api.startBankAuthorization).mockRejectedValue(
+      new Error('Redirect URI not allowed')
+    )
+    const wrapper = await mountWith([])
+
+    await wrapper
+      .get('[data-testid="bank-picker"]')
+      .setValue('Boursorama Banque')
+    await wrapper.get('[data-testid="connect-button"]').trigger('click')
+    await flushPromises()
+
+    expect(toastError).toHaveBeenCalledWith('Redirect URI not allowed')
   })
 })

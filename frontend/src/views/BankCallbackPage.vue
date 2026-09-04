@@ -1,168 +1,137 @@
 <script setup lang="ts">
   /**
-   * Where the bank sends the browser back after authorization.
+   * Where the bank sends the browser back, and where the authorization ends.
    *
-   * For now it only surfaces the authorization code so it can be handed to the
-   * phase 2 spike script. It deliberately does not call the backend: no
-   * endpoint exchanges the code yet, and inventing one here would commit to a
-   * shape before the spike has said what the data looks like.
+   * The code it carries is single-use and short-lived, so the exchange happens
+   * on arrival rather than behind a button — a page that waited for a click
+   * would routinely be clicked too late.
    *
-   * The page is public on purpose. The redirect arrives from the bank, in
-   * whatever browser state the user left behind, and bouncing it to the login
-   * screen would drop the code from the URL — the one thing worth keeping.
+   * The page is public. The redirect arrives from the bank in whatever session
+   * state the browser was left in, and bouncing it to the login screen would
+   * drop the code from the URL, which is the one thing the redirect carries.
+   * The request that follows still needs a session; failing on that is a
+   * different message from losing the code before anyone could use it.
    */
-  import { computed, ref } from 'vue'
-  import { useRoute } from 'vue-router'
+  import { onMounted, ref } from 'vue'
+  import { useRoute, useRouter } from 'vue-router'
+  import { api } from '@/lib/api'
 
   const route = useRoute()
+  const router = useRouter()
 
-  const code = computed(() => (route.query.code as string | undefined) ?? null)
-  const errorMessage = computed(
-    () => (route.query.error as string | undefined) ?? null
-  )
+  const state = ref<'working' | 'done' | 'failed' | 'nothing'>('working')
+  const bank = ref<string | null>(null)
+  const message = ref<string | null>(null)
 
-  const command = computed(
-    () =>
-      `pnpm ts-node src/scripts/spike-enable-banking-fetch.ts --code ${code.value}`
-  )
+  onMounted(async () => {
+    const code = route.query.code as string | undefined
+    const bankError = route.query.error as string | undefined
 
-  const copied = ref<'code' | 'command' | null>(null)
+    if (!code) {
+      state.value = 'nothing'
+      message.value = bankError ?? null
+      return
+    }
 
-  async function copy(what: 'code' | 'command'): Promise<void> {
-    const text = what === 'code' ? code.value : command.value
-    if (!text) return
-    await navigator.clipboard.writeText(text)
-    copied.value = what
-    setTimeout(() => {
-      copied.value = null
-    }, 2000)
-  }
+    try {
+      const connection = await api.completeBankAuthorization(code)
+      bank.value = connection.aspspName
+      state.value = 'done'
+      // Long enough to read what happened, short enough not to be a wait.
+      setTimeout(() => void router.push('/settings/banks'), 1500)
+    } catch (err) {
+      state.value = 'failed'
+      message.value =
+        err instanceof Error ? err.message : 'Autorisation impossible'
+    }
+  })
 </script>
 
 <template>
   <div
-    class="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-gray-50 dark:bg-slate-800 px-4 transition-colors"
+    class="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-gray-50 px-4 transition-colors dark:bg-slate-800"
   >
-    <div class="w-full max-w-2xl">
+    <div class="w-full max-w-md text-center">
       <div
-        class="rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
+        class="rounded-2xl bg-white p-8 shadow-lg dark:bg-slate-900 dark:shadow-slate-900/20"
       >
-        <!-- Success: a code came back -->
-        <template v-if="code">
-          <div
-            class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30"
-          >
-            <svg
-              class="h-8 w-8 text-emerald-600 dark:text-emerald-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-          </div>
-
+        <template v-if="state === 'working'">
           <h1
-            class="mt-6 text-center text-2xl font-bold text-gray-900 dark:text-gray-100"
+            class="text-xl font-semibold text-gray-900 dark:text-gray-100"
+            data-testid="callback-working"
           >
-            Banque autorisee
+            Connexion en cours…
           </h1>
-          <p class="mt-2 text-center text-gray-600 dark:text-gray-400">
-            Voici le code d'autorisation. Il est a usage unique et de courte
-            duree : utilisez-le tout de suite.
+          <p class="mt-2 text-gray-600 dark:text-gray-400">
+            Nous terminons l'autorisation auprès de votre banque.
           </p>
-
-          <div class="mt-6">
-            <label
-              class="text-sm font-medium text-gray-700 dark:text-gray-300"
-              for="auth-code"
-            >
-              Code
-            </label>
-            <div class="mt-1 flex gap-2">
-              <input
-                id="auth-code"
-                :value="code"
-                readonly
-                data-testid="bank-callback-code"
-                class="flex-1 rounded-lg border border-gray-300 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 font-mono text-sm text-gray-900 dark:text-gray-100"
-              />
-              <button
-                type="button"
-                aria-label="Copier le code"
-                class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-                @click="copy('code')"
-              >
-                {{ copied === 'code' ? 'Copie !' : 'Copier' }}
-              </button>
-            </div>
-          </div>
-
-          <div class="mt-6">
-            <p class="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Commande a lancer depuis <code>backend/</code>
-            </p>
-            <div class="mt-1 flex gap-2">
-              <pre
-                class="flex-1 overflow-x-auto rounded-lg bg-gray-900 dark:bg-slate-950 px-3 py-2 font-mono text-xs text-gray-100"
-                >{{ command }}</pre
-              >
-              <button
-                type="button"
-                aria-label="Copier la commande"
-                class="shrink-0 rounded-lg bg-gray-700 dark:bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 dark:hover:bg-slate-600"
-                @click="copy('command')"
-              >
-                {{ copied === 'command' ? 'Copie !' : 'Copier' }}
-              </button>
-            </div>
-          </div>
         </template>
 
-        <!-- The bank refused, or the user cancelled -->
-        <template v-else>
-          <div
-            class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30"
-          >
-            <svg
-              class="h-8 w-8 text-red-600 dark:text-red-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </div>
-
+        <template v-else-if="state === 'done'">
           <h1
-            class="mt-6 text-center text-2xl font-bold text-gray-900 dark:text-gray-100"
+            class="text-xl font-semibold text-gray-900 dark:text-gray-100"
+            data-testid="callback-done"
           >
-            Aucun code recu
+            {{ bank }} est connectée
           </h1>
-          <p class="mt-2 text-center text-gray-600 dark:text-gray-400">
-            L'autorisation a ete annulee, a echoue, ou cette page a ete ouverte
+          <p class="mt-2 text-gray-600 dark:text-gray-400">
+            Aucun compte n'est lu pour l'instant : dites lesquels sur la page
+            des banques.
+          </p>
+          <RouterLink
+            to="/settings/banks"
+            class="mt-6 inline-block font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+          >
+            Continuer
+          </RouterLink>
+        </template>
+
+        <template v-else-if="state === 'failed'">
+          <h1
+            class="text-xl font-semibold text-gray-900 dark:text-gray-100"
+            data-testid="callback-failed"
+          >
+            L'autorisation n'a pas abouti
+          </h1>
+          <!-- The server's words: a code already used, a session that expired,
+               a redirect URL the bank does not recognise. Each needs something
+               different, and none of them is guessable from here. -->
+          <p
+            class="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300"
+          >
+            {{ message }}
+          </p>
+          <RouterLink
+            to="/settings/banks"
+            class="mt-6 inline-block font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+          >
+            Revenir aux banques
+          </RouterLink>
+        </template>
+
+        <template v-else>
+          <h1
+            class="text-xl font-semibold text-gray-900 dark:text-gray-100"
+            data-testid="callback-nothing"
+          >
+            Aucun code reçu
+          </h1>
+          <p class="mt-2 text-gray-600 dark:text-gray-400">
+            L'autorisation a été annulée, ou cette page a été ouverte
             directement.
           </p>
           <p
-            v-if="errorMessage"
-            class="mt-4 rounded-lg bg-red-50 dark:bg-red-900/20 p-4 text-center font-mono text-sm text-red-700 dark:text-red-300"
+            v-if="message"
+            class="mt-3 rounded-lg bg-red-50 p-3 font-mono text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300"
           >
-            {{ errorMessage }}
+            {{ message }}
           </p>
-          <p class="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
-            Relancez l'autorisation depuis le script pour obtenir une nouvelle
-            URL.
-          </p>
+          <RouterLink
+            to="/settings/banks"
+            class="mt-6 inline-block font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+          >
+            Revenir aux banques
+          </RouterLink>
         </template>
       </div>
     </div>

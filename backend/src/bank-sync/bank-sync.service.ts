@@ -113,6 +113,26 @@ export class BankSyncService {
   }
 
   /**
+   * The banks available in a country, for a person choosing one.
+   *
+   * Beta implementations are flagged rather than hidden: they work, they are
+   * simply newer, and a bank missing from a list with no explanation is worse
+   * than one shown with a caveat.
+   */
+  async listBanks(
+    country: string
+  ): Promise<{ name: string; country: string; beta: boolean }[]> {
+    const aspsps = await this.client.listAspsps(country)
+    return aspsps
+      .map(aspsp => ({
+        name: aspsp.name,
+        country: aspsp.country,
+        beta: aspsp.beta ?? false,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /**
    * Ask the bank for the URL the user must visit.
    *
    * The consent is clamped to the bank's own maximum: asking for more is

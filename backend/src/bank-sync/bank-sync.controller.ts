@@ -11,6 +11,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common'
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger'
@@ -46,6 +47,20 @@ export class BankSyncController {
   })
   status(): { configured: boolean } {
     return { configured: this.bankSync.isConfigured() }
+  }
+
+  @Get('aspsps')
+  @ApiOperation({
+    summary: 'The banks that can be connected',
+    description:
+      'Beta implementations are flagged rather than withheld: a bank absent ' +
+      'from the list with no explanation is worse than one shown with a ' +
+      'caveat.',
+  })
+  banks(
+    @Query('country') country?: string
+  ): Promise<{ name: string; country: string; beta: boolean }[]> {
+    return this.bankSync.listBanks(country ?? 'FR')
   }
 
   @Get('connections')
