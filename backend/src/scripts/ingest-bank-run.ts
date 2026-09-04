@@ -62,6 +62,15 @@ interface Dump {
   aspsp?: string | null
   aspspCountry?: string | null
   consentValidUntil?: string | null
+  /** What `/accounts/{uid}/details` said about each account, when it was asked. */
+  accounts?: {
+    uid?: string
+    name?: string
+    product?: string
+    cash_account_type?: string
+    account_id?: { iban?: string }
+    identification_hash?: string
+  }[]
   reports: { accountUid: string; accountName: string }[]
   dump: Record<string, BankTransaction[]>
 }
@@ -100,7 +109,8 @@ function buildPrismaClient(): { prisma: PrismaClient; pool: Pool } {
 function printProposals(
   proposals: MappingProposal[],
   accountNameById: Map<string, string>,
-  enabled: Set<string>
+  enabled: Set<string>,
+  typeByUid: Map<string, string | undefined>
 ): void {
   console.log('\n=== Bank accounts ===')
   for (const proposal of proposals) {
@@ -109,11 +119,20 @@ function printProposals(
         ? 'UNRESOLVED'
         : (accountNameById.get(proposal.proposedAccountId) ?? '?')
     const flag = enabled.has(proposal.externalAccountId) ? 'INGESTED' : 'off'
+    const type = typeByUid.get(proposal.externalAccountId) ?? '????'
     console.log(
-      `  ${proposal.accountName.slice(0, 36).padEnd(38)} ${String(proposal.total).padStart(5)} tx` +
+      `  ${type}  ${proposal.accountName.slice(0, 32).padEnd(34)} ${String(proposal.total).padStart(5)} tx` +
         `  →  ${target.padEnd(22)} ${Math.round(proposal.confidence * 100)}% of ${proposal.matched}   [${flag}]`
     )
     console.log(`      id: ${proposal.externalAccountId}`)
+    if (type === 'CARD') {
+      console.log(
+        '      a card account: its purchases are reported by the account it'
+      )
+      console.log(
+        '      settles onto, so ingesting both counts each of them twice'
+      )
+    }
   }
 }
 
@@ -132,6 +151,15 @@ export async function main(
      * an account could never be ingested at all.
      */
     map: string[]
+    /**
+     * Ingest a `CARD` account anyway.
+     *
+     * Right for a deferred-debit card, which posts one monthly total to the
+     * current account rather than each purchase — there, ignoring the card
+     * loses every line of detail. Wrong for an immediate-debit card, which is
+     * what Boursorama returned.
+     */
+    allowCardAccounts: boolean
     apply: boolean
   }
 ): Promise<void> {
@@ -216,8 +244,15 @@ export async function main(
     stated.set(externalAccountId, resolved.id)
   }
 
+  const detailsByUid = new Map(
+    (parsed.accounts ?? [])
+      .filter(account => account.uid)
+      .map(account => [account.uid as string, account])
+  )
+
   const enabled = new Set(options.enable)
   for (const proposal of proposals) {
+    const details = detailsByUid.get(proposal.externalAccountId)
     await prisma.bankAccountLink.upsert({
       where: {
         connectionId_externalAccountId: {
@@ -233,6 +268,10 @@ export async function main(
         accountId:
           stated.get(proposal.externalAccountId) ?? proposal.proposedAccountId,
         isIngested: enabled.has(proposal.externalAccountId),
+        cashAccountType: details?.cash_account_type ?? null,
+        product: details?.product ?? null,
+        iban: details?.account_id?.iban ?? null,
+        identificationHash: details?.identification_hash ?? null,
       },
       // The proposal never overwrites a mapping already made: a person who
       // corrected it outranks the evidence that got it wrong.
@@ -240,10 +279,21 @@ export async function main(
       // undefined value would, under exactOptionalPropertyTypes, offer Prisma
       // an `accountId: undefined` — which reads as "set it to nothing" and
       // would erase a mapping rather than leave it be.
-      update: buildLinkUpdate(
-        enabled.size > 0 ? enabled.has(proposal.externalAccountId) : undefined,
-        stated.get(proposal.externalAccountId)
-      ),
+      update: {
+        ...buildLinkUpdate(
+          enabled.size > 0
+            ? enabled.has(proposal.externalAccountId)
+            : undefined,
+          stated.get(proposal.externalAccountId)
+        ),
+        // Refreshed on every run: a bank may name an account differently, and
+        // the type is what the ingestion default rests on.
+        ...(details?.cash_account_type
+          ? { cashAccountType: details.cash_account_type }
+          : {}),
+        ...(details?.product ? { product: details.product } : {}),
+        ...(details?.account_id?.iban ? { iban: details.account_id.iban } : {}),
+      },
     })
   }
 
@@ -251,11 +301,42 @@ export async function main(
     where: { connectionId: connection.id },
     select: { externalAccountId: true, accountId: true, isIngested: true },
   })
+  const typeByUid = new Map(
+    proposals.map(proposal => [
+      proposal.externalAccountId,
+      detailsByUid.get(proposal.externalAccountId)?.cash_account_type,
+    ])
+  )
   printProposals(
     proposals,
     accountNameById,
-    new Set(links.filter(l => l.isIngested).map(l => l.externalAccountId))
+    new Set(links.filter(l => l.isIngested).map(l => l.externalAccountId)),
+    typeByUid
   )
+
+  // A card account turned on beside the account it settles onto is the one
+  // mistake this whole phase exists to prevent — 597 purchases counted twice
+  // in a single Boursorama session. The type says so outright, where no amount
+  // of transaction matching could: the two genuinely share their transactions.
+  //
+  // Refused rather than warned about. A warning in a wall of output is a
+  // warning nobody reads, and the cost of being wrong here is a ledger that
+  // has to be rebuilt.
+  const cardsEnabled = [...enabled].filter(
+    uid => detailsByUid.get(uid)?.cash_account_type === 'CARD'
+  )
+  if (cardsEnabled.length > 0 && !options.allowCardAccounts) {
+    const names = cardsEnabled
+      .map(uid => detailsByUid.get(uid)?.name ?? uid)
+      .join(', ')
+    throw new Error(
+      `Refusing to ingest a card account: ${names}.\n\n` +
+        'Its purchases are already reported by the current account it settles\n' +
+        'onto, so both together count each of them twice. Ingest the current\n' +
+        'account instead — or pass --allow-card-accounts if this card settles\n' +
+        'monthly rather than per purchase, in which case nothing is repeated.'
+    )
+  }
 
   const ingestable = new Set(
     links.filter(l => l.isIngested && l.accountId).map(l => l.externalAccountId)
@@ -428,7 +509,8 @@ if (require.main === module) {
   if (!dumpPath || dumpPath.startsWith('--') || !email) {
     console.error(
       'Usage: pnpm ts-node src/scripts/ingest-bank-run.ts <dump.json> --email <address>\n' +
-        '       [--enable <id,id>] [--map <bankId>=<account>] [--apply]'
+        '       [--enable <id,id>] [--map <bankId>=<account>]\n' +
+        '       [--allow-card-accounts] [--apply]'
     )
     process.exit(1)
   }
@@ -439,6 +521,7 @@ if (require.main === module) {
     email,
     enable: (flag('enable') ?? '').split(',').filter(Boolean),
     map: args.flatMap((arg, i) => (arg === '--map' ? [args[i + 1] ?? ''] : [])),
+    allowCardAccounts: args.includes('--allow-card-accounts'),
     apply: args.includes('--apply'),
   })
     .catch(err => {

@@ -90,6 +90,9 @@ export interface AccountResource {
   currency?: string
   account_id?: { iban?: string; other?: { identification?: string } }
   identification_hash?: string
+  /** ISO 20022: `CACC` current account, `CARD` card account, `SVGS` savings… */
+  cash_account_type?: string
+  usage?: string
 }
 
 /**
@@ -629,14 +632,41 @@ export async function main(
     return
   }
 
+  // What the session says about an account is thin — often just an id and a
+  // hash. `/details` is where the name, the IBAN and the ISO 20022 account type
+  // live, and the last of those decides whether an account should be ingested
+  // at all: a CARD account reports the same money as the CACC it settles onto,
+  // which no amount of transaction matching can discover.
+  const detailed = new Map<string, AccountResource>()
+  for (const account of accounts) {
+    if (!account.uid) continue
+    try {
+      const details = await apiCall<AccountResource>(
+        `/accounts/${account.uid}/details`,
+        token
+      )
+      detailed.set(account.uid, { ...account, ...details, uid: account.uid })
+    } catch {
+      // A bank that will not describe an account can still be read from it.
+      // Losing the type costs a good default, not the fetch.
+      detailed.set(account.uid, account)
+    }
+  }
+
   const reports: AccountReport[] = []
   const dump: Record<string, BankTransaction[]> = {}
 
-  for (const account of accounts) {
-    if (!account.uid) continue
-    console.log(`\n  Fetching ${account.name ?? account.uid}…`)
-    const transactions = await fetchAllTransactions(account.uid, token)
-    dump[account.uid] = transactions
+  for (const bare of accounts) {
+    if (!bare.uid) continue
+    const account = detailed.get(bare.uid) ?? bare
+    console.log(
+      `\n  Fetching ${account.name ?? account.uid}` +
+        `${account.cash_account_type ? ` [${account.cash_account_type}]` : ''}…`
+    )
+    // `bare.uid` is the one the loop guarded; the detailed copy carries it
+    // through, but only the guarded one is known non-null to the compiler.
+    const transactions = await fetchAllTransactions(bare.uid, token)
+    dump[bare.uid] = transactions
     const report = summariseAccount(account, transactions)
     reports.push(report)
     printReport(report)
@@ -684,6 +714,10 @@ export async function main(
         aspsp: session.aspsp?.name ?? null,
         aspspCountry: session.aspsp?.country ?? null,
         consentValidUntil: session.access?.valid_until ?? null,
+        // The descriptions travel with the transactions: they are not on the
+        // session, and re-reading them later costs a request against a quota
+        // of four a day.
+        accounts: [...detailed.values()],
         reports,
         duplicates,
         dump,
