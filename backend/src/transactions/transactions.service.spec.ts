@@ -103,6 +103,17 @@ const mockPrismaService = {
 
 const mockAccountsService = {
   upsertByName: vi.fn(),
+  /**
+   * Delegates to `upsertByName` so every case that configures the older mock
+   * keeps describing what it meant. What the alias adds — a label surviving a
+   * rename — is a database behaviour, and is proven against real Postgres in
+   * `test/import-account-aliases.e2e-spec.ts` rather than against a stub that
+   * would only echo its own assumptions back.
+   */
+  resolveByImportLabel: vi.fn(async (userId: string, label: string) => ({
+    account: await mockAccountsService.upsertByName(userId, label),
+    created: false,
+  })),
 }
 
 const mockCategoriesService = {
@@ -428,6 +439,7 @@ describe('TransactionsService', () => {
         total: 0,
         internalDuplicates: [],
         externalDuplicates: [],
+        newAccounts: [],
       })
       expect(mockPrismaService.transaction.findMany).not.toHaveBeenCalled()
     })
@@ -447,6 +459,7 @@ describe('TransactionsService', () => {
         total: 2,
         internalDuplicates: [],
         externalDuplicates: [],
+        newAccounts: [],
       })
     })
 
@@ -1133,11 +1146,14 @@ describe('TransactionsService', () => {
       mockPrismaService.category.findMany.mockResolvedValue([mockCategory])
       mockPrismaService.subcategory.findMany.mockResolvedValue([])
       mockAiSuggestionsService.categorizeTransactions.mockResolvedValue([])
-      // Simulate a critical inconsistency: upsert returns a different name
-      // than what was requested, so the Map lookup fails.
+      // A resolved account with no id. The inconsistency this used to describe
+      // — an account coming back under a different name than the one asked for
+      // — stopped being expressible once the map was keyed on the export's
+      // label rather than on the account's name, which is the point of the
+      // aliases. What remains possible is an account that resolves to nothing.
       mockAccountsService.upsertByName.mockResolvedValue({
-        id: 'irrelevant-id',
-        name: 'Unexpected Name',
+        id: '',
+        name: 'Compte Courant',
       })
 
       await expect(

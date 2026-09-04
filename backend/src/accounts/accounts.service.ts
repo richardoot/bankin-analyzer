@@ -242,4 +242,39 @@ export class AccountsService {
       update: {},
     })
   }
+
+  /**
+   * The account an import's `Compte` column refers to.
+   *
+   * Resolved through the aliases rather than the account name, which is what
+   * lets the user rename an account without the next export creating a second
+   * one beside it — a defect that predates the bank sync and cost a joint
+   * account its divisor every time someone renamed it.
+   *
+   * A label nobody has seen still creates an account, exactly as before, and
+   * records the alias so the question is asked once. `created` says which
+   * happened, so a caller can tell the user what an import is about to invent.
+   */
+  async resolveByImportLabel(
+    userId: string,
+    label: string
+  ): Promise<{ account: Account; created: boolean }> {
+    const alias = await this.prisma.accountAlias.findUnique({
+      where: { userId_label: { userId, label } },
+      include: { account: true },
+    })
+    if (alias) return { account: alias.account, created: false }
+
+    // No alias, but an account may still answer to this name — a database that
+    // predates the aliases, or an account created by hand since.
+    const existing = await this.prisma.account.findUnique({
+      where: { userId_name: { userId, name: label } },
+    })
+    const account = existing ?? (await this.upsertByName(userId, label))
+
+    await this.prisma.accountAlias.create({
+      data: { userId, accountId: account.id, label },
+    })
+    return { account, created: existing === null }
+  }
 }

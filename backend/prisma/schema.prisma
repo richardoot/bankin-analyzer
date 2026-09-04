@@ -31,6 +31,7 @@ model User {
   bankStagedTransactions BankStagedTransaction[]
   bankConnections       BankConnection[]
   bankAccountLinks      BankAccountLink[]
+  accountAliases        AccountAlias[]
 
   @@map("users")
   @@schema("app")
@@ -234,6 +235,7 @@ model Account {
   user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   bankLinks    BankAccountLink[]
+  aliases      AccountAlias[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -723,6 +725,20 @@ model BankAccountLink {
   /// Never a key: two of them arrive identical.
   accountName String @map("account_name")
 
+  /// ISO 20022 account type, from `/accounts/{uid}/details`: `CACC` for a
+  /// current account, `CARD` for a card account.
+  ///
+  /// This is the discriminator the double counting needed. A card account has
+  /// no counterpart in the ledger — it reports the same money as the account
+  /// it settles onto — and no amount of transaction matching can find that
+  /// out, precisely because the two genuinely share their transactions.
+  cashAccountType String? @map("cash_account_type")
+
+  /// The bank's own product name (`CAV - BOURSOBANK`, `Carte bancaire à débit
+  /// immédiat`). Shown to a human deciding what an account is; never matched
+  /// on.
+  product String?
+
   /// Whether transactions are taken from this account. Off by default, and
   /// that default is the defence against double counting: Boursorama reports
   /// a card purchase on both the card account and the current account it
@@ -741,5 +757,40 @@ model BankAccountLink {
   @@index([userId])
   @@index([accountId])
   @@map("bank_account_links")
+  @@schema("app")
+}
+
+/// A label an import has used for an account.
+///
+/// The two sources name an account differently and neither name is a key: the
+/// export says whatever the user typed into Bankin, the API says whatever the
+/// bank calls it, and Boursorama says the same thing for two distinct cards.
+/// So the account is the user's — its name theirs to change — and each source
+/// keeps its own way of pointing at it. `BankAccountLink` is that pointer for
+/// the API; this is the one for the CSV.
+///
+/// Its absence was a defect older than the sync. `upsertByName` resolved an
+/// import by the account name while the settings offered to rename an account:
+/// renaming `Perso Bourso` to `Bourso` made the next export — still saying
+/// `Perso Bourso` — create a second account, STANDARD with divisor 1, and one
+/// real account computed two different ways from then on.
+model AccountAlias {
+  id        String @id @default(uuid())
+  userId    String @map("user_id")
+  accountId String @map("account_id")
+
+  /// The `Compte` column of an export, verbatim.
+  label String
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  /// One label resolves to exactly one account. Two accounts claiming the same
+  /// export column is the ambiguity this table exists to prevent.
+  @@unique([userId, label])
+  @@index([accountId])
+  @@map("account_aliases")
   @@schema("app")
 }

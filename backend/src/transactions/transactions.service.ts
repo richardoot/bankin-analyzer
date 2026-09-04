@@ -127,13 +127,41 @@ export class TransactionsService {
     userId: string,
     transactions: CreateTransactionDto[]
   ): Promise<Map<string, string>> {
-    const uniqueAccountNames = [...new Set(transactions.map(tx => tx.account))]
-    const accounts = await Promise.all(
-      uniqueAccountNames.map(name =>
-        this.accountsService.upsertByName(userId, name)
+    const { byLabel } = await this.resolveImportAccounts(userId, transactions)
+    return byLabel
+  }
+
+  /**
+   * Resolve every `Compte` label in an import to an account.
+   *
+   * Keyed by the label the export used, not by the account's current name:
+   * those diverge the moment the user renames an account, and resolving by
+   * name is what used to create a second account beside the first.
+   *
+   * `created` names the labels that had no account at all, so a preview can
+   * say what an import is about to invent rather than inventing it silently.
+   */
+  private async resolveImportAccounts(
+    userId: string,
+    transactions: CreateTransactionDto[]
+  ): Promise<{ byLabel: Map<string, string>; created: string[] }> {
+    const labels = [...new Set(transactions.map(tx => tx.account))]
+    const byLabel = new Map<string, string>()
+    const created: string[] = []
+
+    // Sequential on purpose: two labels resolving at once can both find no
+    // account and both create one, and only one of them survives the unique
+    // constraint.
+    for (const label of labels) {
+      const resolved = await this.accountsService.resolveByImportLabel(
+        userId,
+        label
       )
-    )
-    return new Map(accounts.map(a => [a.name, a.id]))
+      byLabel.set(label, resolved.account.id)
+      if (resolved.created) created.push(label)
+    }
+
+    return { byLabel, created }
   }
 
   /**
@@ -374,6 +402,7 @@ export class TransactionsService {
         total: 0,
         internalDuplicates: [],
         externalDuplicates: [],
+        newAccounts: [],
       }
     }
 
@@ -381,7 +410,8 @@ export class TransactionsService {
     //    The hash formula depends on accountId, not on the legacy `account`
     //    string. Side effect: previewing an import with a new account name
     //    creates the Account row (same behaviour as a confirmed import).
-    const accountIdByName = await this.buildAccountIdMap(userId, transactions)
+    const { byLabel: accountIdByName, created: newAccounts } =
+      await this.resolveImportAccounts(userId, transactions)
 
     // 2. Compute all hashes in memory (no DB queries)
     const hashesData = this.computeHashesWithData(
@@ -485,6 +515,7 @@ export class TransactionsService {
       total: transactions.length,
       internalDuplicates,
       externalDuplicates,
+      newAccounts,
     }
   }
 
