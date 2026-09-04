@@ -32,14 +32,11 @@
  * `--country` selects the market to list (default FR). `--all` prints every
  * ASPSP of that country instead of only the watchlist.
  */
-import { createSign } from 'crypto'
 import { readFileSync } from 'fs'
+import { buildJwt } from '../bank-sync/enable-banking.jwt'
 
 /** Production base URL. `api.tilisy.com` is the deprecated alias. */
 const API_BASE = 'https://api.enablebanking.com'
-
-/** How long the signed JWT stays valid. The API caps this at one hour. */
-const TOKEN_TTL_SECONDS = 3600
 
 /** Market probed unless `--country` says otherwise. */
 const DEFAULT_COUNTRY = 'FR'
@@ -88,57 +85,9 @@ export interface AspspVerdict {
   authMethods: string[]
 }
 
-function base64url(input: Buffer | string): string {
-  return Buffer.from(input)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
-}
-
-/**
- * Assemble the signing input of the RS256 JWT: `base64url(header).base64url(payload)`.
- *
- * Split out from the signing itself so the claim structure can be asserted in
- * a test without a private key. Enable Banking rejects the token unless `kid`
- * is the application id and `iss`/`aud` are exactly these two constants, and
- * every one of those is a silent 401 when wrong.
- */
-export function buildJwtSigningInput(
-  applicationId: string,
-  issuedAt: number,
-  ttlSeconds: number = TOKEN_TTL_SECONDS
-): string {
-  const header = {
-    typ: 'JWT',
-    alg: 'RS256',
-    kid: applicationId,
-  }
-  const payload = {
-    iss: 'enablebanking.com',
-    aud: 'api.enablebanking.com',
-    iat: issuedAt,
-    exp: issuedAt + ttlSeconds,
-  }
-  return `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(payload))}`
-}
-
-/**
- * Sign the JWT the API expects. Uses Node's own crypto rather than a JWT
- * library: RS256 over a dotted string is three lines here, and a probe should
- * not drag a dependency into the backend to answer a yes/no question.
- */
-export function buildJwt(
-  applicationId: string,
-  privateKeyPem: string,
-  issuedAt: number = Math.floor(Date.now() / 1000)
-): string {
-  const signingInput = buildJwtSigningInput(applicationId, issuedAt)
-  const signature = createSign('RSA-SHA256')
-    .update(signingInput)
-    .sign(privateKeyPem)
-  return `${signingInput}.${base64url(signature)}`
-}
+// Re-exported for the spike, which signs the same way, and for the specs that
+// assert the claim structure.
+export { buildJwt, buildJwtSigningInput } from '../bank-sync/enable-banking.jwt'
 
 /** Whether an ASPSP name matches one of the banks we care about. */
 export function isWatched(
