@@ -53,40 +53,37 @@ esac
 
 echo "🗃  Jeu de données : $DATASET"
 
-# TLS de bout en bout dans la stack, via STACK_HTTPS=true dans .env.docker.
+# TLS de bout en bout, via STACK_HTTPS=true dans .env.docker.
 #
-# C'est tout ou rien, délibérément : servir la page en https et laisser ses
-# appels en http est précisément l'échec que ça évite — le navigateur les
-# bloque en contenu mixte, sans rien dire d'utile. Alors le frontend, le
-# backend et Supabase basculent ensemble.
+# Ce bloc ne dérive plus les URLs : il vérifie que le fichier est cohérent.
 #
-# Les URLs sont compilées dans le bundle au build, donc elles doivent être
-# connues ici, avant podman-compose.
+# Les dériver ici marchait, et seulement ici — un fichier d'environnement
+# temporaire disparaît avec le script, et tout ce qui démarre la stack
+# autrement retombait sur .env.docker et ses URLs http. Le symptôme : une page
+# servie en https appelant une API en http, bloquée en contenu mixte que le
+# navigateur rapporte comme une erreur CORS.
+#
+# La configuration vit donc dans le fichier, en entier, où elle se lit.
 if [ "${STACK_HTTPS:-false}" = "true" ]; then
     if [ ! -f certs/localhost.pem ]; then
         echo "🔐 Génération du certificat local…"
         ./scripts/make-local-cert.sh >/dev/null
     fi
-    BACKEND_HTTPS=1
-    VITE_API_URL="${VITE_API_URL_HTTPS:-https://localhost:${BACKEND_HTTPS_PORT:-3443}}"
-    VITE_SUPABASE_URL="${VITE_SUPABASE_URL_HTTPS:-https://localhost:8443}"
-    # Ce que le backend doit accepter en CORS : l'origine du conteneur nginx.
-    FRONTEND_URL="${FRONTEND_URL},https://localhost:${FRONTEND_HTTPS_PORT:-5174}"
 
-    # Les valeurs passent par une copie du fichier, pas par l'environnement.
-    #
-    # `podman-compose --env-file` résout `${VAR}` depuis le fichier, qui
-    # l'emporte sur une variable exportée. Un export suffisait pour ce qui est
-    # passé en `environment:` — le backend voyait bien FRONTEND_URL — mais pas
-    # pour les `build.args`, qui décident des URLs compilées dans le bundle.
-    # Le symptôme était une page en https appelant une API en http.
-    COMPOSE_ENV_FILE="$(mktemp -t bankin-compose-env)"
-    trap 'rm -f "$COMPOSE_ENV_FILE"' EXIT
-    sed -e "s|^VITE_API_URL=.*|VITE_API_URL=$VITE_API_URL|" \
-        -e "s|^VITE_SUPABASE_URL=.*|VITE_SUPABASE_URL=$VITE_SUPABASE_URL|" \
-        -e "s|^FRONTEND_URL=.*|FRONTEND_URL=$FRONTEND_URL|" \
-        .env.docker >"$COMPOSE_ENV_FILE"
-    echo "BACKEND_HTTPS=1" >>"$COMPOSE_ENV_FILE"
+    incoherent=""
+    case "${VITE_API_URL:-}" in https://*) ;; *) incoherent="VITE_API_URL" ;; esac
+    case "${VITE_SUPABASE_URL:-}" in https://*) ;; *) incoherent="$incoherent VITE_SUPABASE_URL" ;; esac
+    [ "${BACKEND_HTTPS:-}" = "1" ] || incoherent="$incoherent BACKEND_HTTPS"
+
+    if [ -n "$incoherent" ]; then
+        echo "❌ STACK_HTTPS=true mais .env.docker n'est pas cohérent :$incoherent" >&2
+        echo "   Attendu dans .env.docker :" >&2
+        echo "     VITE_API_URL=https://localhost:${BACKEND_HTTPS_PORT:-3443}" >&2
+        echo "     VITE_SUPABASE_URL=https://localhost:8443" >&2
+        echo "     BACKEND_HTTPS=1" >&2
+        echo "     FRONTEND_URL=http://localhost:5173,https://localhost:${FRONTEND_HTTPS_PORT:-5174}" >&2
+        exit 1
+    fi
 
     echo "🔒 TLS : https://localhost:${FRONTEND_HTTPS_PORT:-5174} → API ${VITE_API_URL}"
 fi
@@ -102,7 +99,7 @@ fi
 # l'image mais laisse tourner le conteneur existant, qui continue de servir
 # l'ancienne couche. Le symptôme est déroutant — du code à jour sur le disque,
 # une image à jour, et une application qui exécute autre chose.
-podman-compose --env-file "${COMPOSE_ENV_FILE:-.env.docker}" up --build -d --force-recreate
+podman-compose --env-file .env.docker up --build -d --force-recreate
 
 echo "⏳ Waiting for database to be ready..."
 sleep 15
