@@ -60,6 +60,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/bank-sync/history',
+    name: 'bank-sync-history',
+    component: () => import('@/views/BankSyncHistoryPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/dashboard',
     name: 'dashboard',
     component: () => import('@/views/DashboardPage.vue'),
@@ -110,11 +116,6 @@ const routes: RouteRecordRaw[] = [
         path: 'categories',
         name: 'settings-categories',
         component: () => import('@/views/settings/CategoriesSettingsPage.vue'),
-      },
-      {
-        path: 'banks',
-        name: 'settings-banks',
-        component: () => import('@/views/settings/BanksSettingsPage.vue'),
       },
       {
         path: 'general',
