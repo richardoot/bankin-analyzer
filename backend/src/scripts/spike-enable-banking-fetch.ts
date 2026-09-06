@@ -150,14 +150,19 @@ export interface AccountReport {
 }
 
 /**
- * The date a transaction actually happened, preferring the booking date.
+ * The date a transaction actually happened, preferring `transaction_date`.
  *
- * Three date fields are offered and they disagree. `booking_date` is the one
- * a bank statement shows and the one the Bankin export lines up with, so it
- * is what the matcher of phase 3 will have to compare against.
+ * Three date fields are offered and mostly agree — for 123 of 129
+ * transactions measured on real CIC data, `booking_date` and
+ * `transaction_date` are the same day. Where they differ, it was always a
+ * monthly fee the bank books a few days after it is dated, and CIC's own app,
+ * and Bankin, both show the earlier date: "date d'opération", which is
+ * `transaction_date`. `booking_date` was preferred here first, on the
+ * strength of matching Bankin for a card purchase — true, but not the whole
+ * story a recurring fee turned out to tell.
  */
 export function transactionDate(tx: BankTransaction): string | null {
-  return tx.booking_date ?? tx.transaction_date ?? tx.value_date ?? null
+  return tx.transaction_date ?? tx.booking_date ?? tx.value_date ?? null
 }
 
 /**

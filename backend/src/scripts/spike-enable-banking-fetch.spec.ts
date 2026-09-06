@@ -31,22 +31,22 @@ const ACCOUNT: AccountResource = {
 }
 
 describe('transactionDate', () => {
-  it('prefers the booking date, which is what a statement shows', () => {
+  it('prefers the transaction date — "date d\'opération"', () => {
     const t = tx({
       booking_date: '2026-06-15',
       transaction_date: '2026-06-13',
       value_date: '2026-06-16',
     })
-    expect(transactionDate(t)).toBe('2026-06-15')
+    expect(transactionDate(t)).toBe('2026-06-13')
   })
 
-  it('falls back to the transaction date, then the value date', () => {
+  it('falls back to the booking date, then the value date', () => {
     expect(
       transactionDate({
-        transaction_date: '2026-06-13',
+        booking_date: '2026-06-15',
         value_date: '2026-06-16',
       })
-    ).toBe('2026-06-13')
+    ).toBe('2026-06-15')
     expect(transactionDate({ value_date: '2026-06-16' })).toBe('2026-06-16')
   })
 

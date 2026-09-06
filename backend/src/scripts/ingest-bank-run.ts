@@ -399,8 +399,22 @@ export async function main(
     select: { id: true },
   })
 
+  // See `BankSyncService.ingest`: an account with its own history is never
+  // backfilled earlier than the earliest it already has, so a re-run of a
+  // deep fetch cannot revise a month already considered settled. An account
+  // with nothing yet has no such floor — that is exactly where the deep
+  // history is worth having.
+  const earliestByAccount = new Map<string, string>()
+  for (const row of ledger) {
+    const current = earliestByAccount.get(row.accountId)
+    if (!current || row.date < current) {
+      earliestByAccount.set(row.accountId, row.date)
+    }
+  }
+
   let claimed = 0
   let inserted = 0
+  let skippedTooOld = 0
 
   await prisma.$transaction(async tx => {
     for (const [position, verdict] of verdicts.entries()) {
@@ -417,6 +431,7 @@ export async function main(
           data: {
             externalId: s.externalId,
             bookingStatus: entry.row.raw.status ?? null,
+            syncRunId: run.id,
           },
         })
         claimed++
@@ -427,6 +442,13 @@ export async function main(
 
       const accountId = scopedMapping[s.externalAccountId]
       if (!accountId) continue
+
+      const floor = earliestByAccount.get(accountId)
+      if (floor && s.date < floor) {
+        skippedTooOld++
+        continue
+      }
+
       const date = new Date(s.date)
       await tx.transaction.create({
         data: {
@@ -440,6 +462,7 @@ export async function main(
           source: TransactionSource.BANK_API,
           externalId: s.externalId,
           bookingStatus: entry.row.raw.status ?? null,
+          syncRunId: run.id,
         },
       })
       inserted++
@@ -452,8 +475,11 @@ export async function main(
   })
 
   console.log(
-    `\nApplied under run ${run.id}: ${claimed} claimed, ${inserted} inserted.\n` +
-      'Inserted rows are unfiled — the bank sends no category. Phase 6 owes\n' +
+    `\nApplied under run ${run.id}: ${claimed} claimed, ${inserted} inserted` +
+      (skippedTooOld > 0
+        ? `, ${skippedTooOld} skipped (older than the account's own history)`
+        : '') +
+      '.\nInserted rows are unfiled — the bank sends no category. Phase 6 owes\n' +
       'that, and until then they are visible and one click from correct.\n'
   )
 }
