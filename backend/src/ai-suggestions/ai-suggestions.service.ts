@@ -16,6 +16,10 @@ import {
   type ResolvedAssignment,
   type SubcategoryChoice,
 } from './transaction-categorizer'
+import {
+  findSimilarExamples,
+  type CategorizedHistoryRow,
+} from './category-rules'
 
 /**
  * Schéma Zod pour valider la sortie structurée du LLM (icônes)
@@ -176,11 +180,21 @@ export class AiSuggestionsService {
    * A batch that fails is logged and skipped rather than thrown: an import
    * must not be lost because the categorizer was unavailable. Those
    * transactions arrive unfiled, which is visible and one click to fix.
+   *
+   * `history` — this user's own already-filed transactions — is never the
+   * primary answer here: `category-rules.ts`'s `proposeCategoryFromHistory`
+   * is that, cheaper and surer, and a caller filters it out before this ever
+   * runs. What reaches the model is what a plain rule could not agree on
+   * with itself, so history's only role left is grounding: a couple of the
+   * closest labels this user has already filed, next to the transaction
+   * that looks like them, so a guess is informed by this user's own habits
+   * rather than the category names alone.
    */
   async categorizeTransactions(
     transactions: CategorizableTransaction[],
     categories: CategoryChoice[],
-    subcategories: SubcategoryChoice[]
+    subcategories: SubcategoryChoice[],
+    history: CategorizedHistoryRow[] = []
   ): Promise<ResolvedAssignment[]> {
     if (transactions.length === 0 || categories.length === 0) return []
 
@@ -193,9 +207,16 @@ export class AiSuggestionsService {
       const catalog = describeCatalog(categories, subcategories, type)
       if (catalog === '') continue
 
+      const historyOfType = history.filter(row => row.type === type)
+
       for (const batch of chunk(ofType, CATEGORIZATION_BATCH_SIZE)) {
         try {
-          const raw = await this.classifyBatch(batch, catalog, type)
+          const raw = await this.classifyBatch(
+            batch,
+            catalog,
+            type,
+            historyOfType
+          )
           assignments.push(
             ...resolveAssignments(raw, batch, categories, subcategories)
           )
@@ -214,7 +235,8 @@ export class AiSuggestionsService {
   private async classifyBatch(
     batch: CategorizableTransaction[],
     catalog: string,
-    type: 'EXPENSE' | 'INCOME'
+    type: 'EXPENSE' | 'INCOME',
+    history: CategorizedHistoryRow[]
   ): Promise<RawAssignment[]> {
     const label = type === 'EXPENSE' ? 'depenses' : 'revenus'
 
@@ -231,6 +253,19 @@ export class AiSuggestionsService {
       '- Reponds pour chaque transaction avec son index exact.',
     ].join('\n')
 
+    const exampleSuffix = (t: CategorizableTransaction): string => {
+      const examples = findSimilarExamples(t.description, type, history)
+      if (examples.length === 0) return ''
+      const described = examples
+        .map(
+          e =>
+            `"${e.description}" -> ${e.categoryName}` +
+            (e.subcategoryName ? ` / ${e.subcategoryName}` : '')
+        )
+        .join(', ')
+      return ` (deja classe par l'utilisateur : ${described})`
+    }
+
     const userPrompt = [
       `Categories de ${label} disponibles :`,
       catalog,
@@ -238,7 +273,7 @@ export class AiSuggestionsService {
       'Transactions a classer :',
       ...batch.map(
         t =>
-          `${t.index}. ${t.description} (${Math.abs(t.amount).toFixed(2)} EUR)`
+          `${t.index}. ${t.description} (${Math.abs(t.amount).toFixed(2)} EUR)${exampleSuffix(t)}`
       ),
     ].join('\n')
 

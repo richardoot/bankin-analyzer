@@ -909,6 +909,7 @@ describe('BankSyncService — authorization', () => {
           }),
         ],
         [{ id: 'cat-sport', name: 'Sport', type: 'EXPENSE' }],
+        [],
         []
       )
       expect(mockPrisma.transaction.create).toHaveBeenCalledWith({
@@ -952,6 +953,50 @@ describe('BankSyncService — authorization', () => {
       expect(outcome).toMatchObject({ inserted: 1 })
       expect(mockPrisma.transaction.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ categoryId: null }),
+      })
+    })
+
+    it('files a row the user has already filed like this, without ever asking the model', async () => {
+      primeMinimalSync()
+      mockPrisma.category.findMany.mockResolvedValue([
+        { id: 'cat-sport', name: 'Sport', type: 'EXPENSE' },
+      ])
+      mockPrisma.subcategory.findMany.mockResolvedValue([])
+      // First call is the reconciliation ledger (empty, so the row is
+      // 'new'); the second is categorizeInserts's own history read.
+      mockPrisma.transaction.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            description: 'CB Fitness Park',
+            type: 'EXPENSE',
+            categoryId: 'cat-sport',
+            subcategoryId: null,
+          },
+          {
+            description: 'CARTE 06/08/26 FITNESS PARK CB*9999',
+            type: 'EXPENSE',
+            categoryId: 'cat-sport',
+            subcategoryId: null,
+          },
+          {
+            description: 'CARTE 20/08/26 FITNESS PARK CB*9999',
+            type: 'EXPENSE',
+            categoryId: 'cat-sport',
+            subcategoryId: null,
+          },
+        ])
+
+      const outcome = await service.sync(userId, 'connection-1')
+
+      expect(outcome).toMatchObject({ inserted: 1 })
+      expect(mockAiSuggestions.categorizeTransactions).not.toHaveBeenCalled()
+      expect(mockPrisma.transaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          categoryId: 'cat-sport',
+          subcategoryId: null,
+          subcategory: null,
+        }),
       })
     })
   })

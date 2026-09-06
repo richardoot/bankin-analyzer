@@ -588,6 +588,36 @@ and the "Réglages généraux" data-links list — modeled on
 bare delete, since a run's undo can leave a row blocked and that has to be
 said before it's done, not after.
 
+**A rule before the model, requested the same day.** AI categorization
+shipped asking the model about every inserted row; the user asked whether
+the ledger this user already has — years of a CSV import's own filing —
+could answer first, the way `account-mapping.ts`'s `proposeMapping` already
+answers "which account is this" from the same kind of evidence rather than
+asking anyone. It can, on the same terms: `category-rules.ts`'s
+`proposeCategoryFromHistory` gathers this user's own already-filed
+transactions whose label scores at or above 0.5 on `labelSimilarity` (the
+Jaccard word-overlap reconciliation already uses to break a tie) against the
+new one, of the same sign, and proposes their category only when at least
+three agree and they agree at least three times out of four — refusing,
+like `proposeMapping`, a merchant that has genuinely moved between
+categories rather than picking a side.
+
+`categorizeInserts` runs this per row before ever building a model batch;
+what a rule resolves never reaches the model at all. What is left goes to
+`AiSuggestionsService.categorizeTransactions` as before, now grounded with
+this user's own history too — `findSimilarExamples` finds up to two
+already-filed rows close enough to be worth showing (a looser floor, 0.3,
+than the rule's own — near enough to inform a guess without being sure
+enough to make one on its own) and each one's transaction line in the
+prompt carries them inline, so the model reads what this user's own habits
+say about a similar purchase instead of the category names alone.
+
+Left for later, on purpose: the CSV import's own opt-in model path
+(`TransactionsService.filingFromModel`) does not call
+`proposeCategoryFromHistory` yet — `categorizeTransactions`'s new `history`
+parameter defaults to empty, so that path is unchanged. The benefit is the
+same there; nothing in this conversation asked for it yet.
+
 ### Deliberately not now
 
 - **The arbitration screen** for ambiguous matches: 1 case in 1 954 once

@@ -25,6 +25,10 @@ import { PrismaService } from '../prisma/prisma.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import type { ResolvedAssignment } from '../ai-suggestions/transaction-categorizer'
 import {
+  proposeCategoryFromHistory,
+  type CategorizedHistoryRow,
+} from '../ai-suggestions/category-rules'
+import {
   EnableBankingClient,
   type BankAccountResource,
   type BankTransaction,
@@ -1525,10 +1529,19 @@ export class BankSyncService {
 
   /**
    * Place each freshly synced row among the categories the user already
-   * has — the same model, and the same refusal to invent one, that an
-   * import uses once it stops trusting a file's own categories. A bank
-   * states an amount and a counterparty, never what a purchase was for, so
-   * this is the only way a synced row arrives filed rather than blank.
+   * has. A bank states an amount and a counterparty, never what a purchase
+   * was for, so this is the only way a synced row arrives filed rather than
+   * blank — the same problem an import solves once it stops trusting a
+   * file's own categories, answered here the same two ways in order:
+   *
+   * 1. `proposeCategoryFromHistory` — this user has already filed a
+   *    near-identical label before, consistently enough to trust without
+   *    asking anyone. Free, instant, and exactly as sure as the account
+   *    mapping this project already proposes the same way.
+   * 2. The model, for whatever the rule would not commit to — grounded with
+   *    a couple of this user's own closest examples rather than the bare
+   *    category names, but never invited to invent a category that is not
+   *    already there.
    *
    * Never fatal: a batch the model can't reach leaves those rows unfiled —
    * visible, and one click to fix — rather than losing the sync over it.
@@ -1552,41 +1565,96 @@ export class BankSyncService {
     ])
     if (categories.length === 0) return byPosition
 
-    try {
-      // Indexed locally (0..n-1) for the model, then mapped back to this
-      // run's own verdict position — the two only coincide by accident,
-      // since `toInsert` already skipped every matched and skipped-too-old
-      // row `verdicts` also carries.
-      const assignments = await this.aiSuggestions.categorizeTransactions(
-        toInsert.map(({ row }, index) => ({
-          index,
-          description: row.label,
-          amount: row.amount,
-          type: row.amount < 0 ? ('EXPENSE' as const) : ('INCOME' as const),
-        })),
-        categories,
-        subcategories
-      )
-      for (const assignment of assignments) {
-        const entry = toInsert[assignment.index]
-        if (entry) byPosition.set(entry.position, assignment)
-      }
+    const categoryNameById = new Map(categories.map(c => [c.id, c.name]))
+    const subcategoryNameById = new Map(subcategories.map(s => [s.id, s.name]))
+    const historyRows = await this.prisma.transaction.findMany({
+      where: { userId, categoryId: { not: null } },
+      select: {
+        description: true,
+        type: true,
+        categoryId: true,
+        subcategoryId: true,
+      },
+      // Recent habits over old ones: a merchant filed one way for years and
+      // reclassified last month should be read from how it is filed now.
+      orderBy: { date: 'desc' },
+      take: 3000,
+    })
+    const history: CategorizedHistoryRow[] = []
+    for (const row of historyRows) {
+      const categoryName = row.categoryId
+        ? categoryNameById.get(row.categoryId)
+        : undefined
+      if (!row.categoryId || !categoryName) continue
+      history.push({
+        description: row.description,
+        type: row.type,
+        categoryId: row.categoryId,
+        categoryName,
+        subcategoryId: row.subcategoryId,
+        subcategoryName: row.subcategoryId
+          ? (subcategoryNameById.get(row.subcategoryId) ?? null)
+          : null,
+      })
+    }
 
-      const usedCategoryIds = new Set(assignments.map(a => a.categoryId))
-      if (usedCategoryIds.size > 0) {
-        const withoutIcons = await this.prisma.category.findMany({
-          where: { userId, id: { in: [...usedCategoryIds] }, icon: null },
-          select: { id: true, name: true },
+    const remaining: typeof toInsert = []
+    for (const entry of toInsert) {
+      const type = entry.row.amount < 0 ? 'EXPENSE' : 'INCOME'
+      const rule = proposeCategoryFromHistory(entry.row.label, type, history)
+      if (rule) {
+        byPosition.set(entry.position, {
+          index: entry.position,
+          categoryId: rule.categoryId,
+          subcategoryId: rule.subcategoryId,
+          subcategoryName: rule.subcategoryName,
         })
-        if (withoutIcons.length > 0) {
-          void this.aiSuggestions.generateAndSaveIcons(userId, withoutIcons, [])
-        }
+      } else {
+        remaining.push(entry)
       }
-    } catch (error) {
-      this.logger.error(
-        `Categorization failed for ${toInsert.length} synced transaction(s); left unfiled`,
-        error
-      )
+    }
+
+    if (remaining.length > 0) {
+      try {
+        // Indexed locally (0..n-1) for the model, then mapped back to this
+        // run's own verdict position — the two only coincide by accident,
+        // since `toInsert` already skipped every matched and skipped-too-old
+        // row `verdicts` also carries, and a rule may have just resolved
+        // some positions the model never sees.
+        const assignments = await this.aiSuggestions.categorizeTransactions(
+          remaining.map(({ row }, index) => ({
+            index,
+            description: row.label,
+            amount: row.amount,
+            type: row.amount < 0 ? ('EXPENSE' as const) : ('INCOME' as const),
+          })),
+          categories,
+          subcategories,
+          history
+        )
+        for (const assignment of assignments) {
+          const entry = remaining[assignment.index]
+          if (entry) byPosition.set(entry.position, assignment)
+        }
+      } catch (error) {
+        this.logger.error(
+          `Categorization failed for ${remaining.length} synced transaction(s); left unfiled`,
+          error
+        )
+      }
+    }
+
+    const usedCategoryIds = new Set(
+      [...byPosition.values()].map(a => a.categoryId)
+    )
+    if (usedCategoryIds.size > 0) {
+      const withoutIcons = await this.prisma.category.findMany({
+        where: { userId, id: { in: [...usedCategoryIds] }, icon: null },
+        select: { id: true, name: true },
+      })
+      if (withoutIcons.length > 0) {
+        void this.aiSuggestions.generateAndSaveIcons(userId, withoutIcons, [])
+      }
     }
 
     return byPosition
