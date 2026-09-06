@@ -15,9 +15,9 @@ const router = createRouter({
     { path: '/', name: 'home', component: { template: '<div />' } },
     { path: '/bank-callback', component: BankCallbackPage },
     {
-      path: '/settings/banks',
-      name: 'settings-banks',
-      component: { template: '<div>Banques</div>' },
+      path: '/settings/accounts',
+      name: 'settings-accounts',
+      component: { template: '<div>Comptes</div>' },
     },
   ],
 })
@@ -54,7 +54,7 @@ describe('BankCallbackPage', () => {
 
     const wrapper = await arriveWith('?code=abc-123&state=xyz')
 
-    expect(api.completeBankAuthorization).toHaveBeenCalledWith('abc-123')
+    expect(api.completeBankAuthorization).toHaveBeenCalledWith('abc-123', 'xyz')
     expect(wrapper.get('[data-testid="callback-done"]').text()).toContain(
       'Boursorama Banque'
     )
@@ -76,6 +76,10 @@ describe('BankCallbackPage', () => {
 
     const wrapper = await arriveWith('?code=abc-123')
 
+    expect(api.completeBankAuthorization).toHaveBeenCalledWith(
+      'abc-123',
+      undefined
+    )
     expect(wrapper.text()).toContain("Aucun compte n'est lu")
   })
 

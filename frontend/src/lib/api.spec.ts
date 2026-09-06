@@ -283,6 +283,86 @@ describe('api', () => {
       expect(result.data).toHaveLength(1)
       expect(result.data[0]?.description).toBe('Restaurant')
     })
+
+    it('sends needsBankReview as a query param when set', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            data: [],
+            meta: {
+              total: 0,
+              page: 1,
+              limit: 50,
+              totalPages: 0,
+              hasNextPage: false,
+              hasPreviousPage: false,
+            },
+          }),
+      })
+
+      await api.getTransactions({ needsBankReview: true })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/transactions?needsBankReview=true',
+        expect.anything()
+      )
+    })
+  })
+
+  describe('bank sync run history', () => {
+    it('fetches every run for the current user', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'run-1',
+              aspspName: 'CIC',
+              fetchedAt: '2026-09-01T00:00:00.000Z',
+              inserted: 3,
+              claimed: 1,
+              undoneAt: null,
+            },
+          ]),
+      })
+
+      const result = await api.getBankSyncRuns()
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/bank-sync/runs',
+        expect.anything()
+      )
+      expect(result).toHaveLength(1)
+      expect(result[0]?.aspspName).toBe('CIC')
+    })
+
+    it('previews an undo as a POST with no body', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ deleted: 3, unlinked: 1, blocked: 0 }),
+      })
+
+      await api.previewUndoBankSyncRun('run-1')
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/bank-sync/runs/run-1/undo/preview',
+        expect.objectContaining({ method: 'POST' })
+      )
+    })
+
+    it('surfaces the reason a second undo is refused', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: () =>
+          Promise.resolve({ message: 'This run has already been undone.' }),
+      })
+
+      await expect(api.undoBankSyncRun('run-1')).rejects.toThrow(
+        'This run has already been undone.'
+      )
+    })
   })
 
   describe('deleteAccount', () => {

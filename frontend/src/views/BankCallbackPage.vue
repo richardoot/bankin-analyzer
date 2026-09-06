@@ -26,6 +26,10 @@
   onMounted(async () => {
     const code = route.query.code as string | undefined
     const bankError = route.query.error as string | undefined
+    // The same value `startBankAuthorization` returned, echoed back by the
+    // bank alongside `code` — lets the backend recognise a connection already
+    // made even if the bank names itself differently between the two calls.
+    const oauthState = route.query.state as string | undefined
 
     if (!code) {
       state.value = 'nothing'
@@ -34,11 +38,11 @@
     }
 
     try {
-      const connection = await api.completeBankAuthorization(code)
+      const connection = await api.completeBankAuthorization(code, oauthState)
       bank.value = connection.aspspName
       state.value = 'done'
       // Long enough to read what happened, short enough not to be a wait.
-      setTimeout(() => void router.push('/settings/banks'), 1500)
+      setTimeout(() => void router.push('/settings/accounts'), 1500)
     } catch (err) {
       state.value = 'failed'
       message.value =
@@ -76,10 +80,10 @@
           </h1>
           <p class="mt-2 text-gray-600 dark:text-gray-400">
             Aucun compte n'est lu pour l'instant : dites lesquels sur la page
-            des banques.
+            des comptes.
           </p>
           <RouterLink
-            to="/settings/banks"
+            to="/settings/accounts"
             class="mt-6 inline-block font-medium text-emerald-600 hover:underline dark:text-emerald-400"
           >
             Continuer
@@ -102,10 +106,10 @@
             {{ message }}
           </p>
           <RouterLink
-            to="/settings/banks"
+            to="/settings/accounts"
             class="mt-6 inline-block font-medium text-emerald-600 hover:underline dark:text-emerald-400"
           >
-            Revenir aux banques
+            Revenir aux comptes
           </RouterLink>
         </template>
 
@@ -127,10 +131,10 @@
             {{ message }}
           </p>
           <RouterLink
-            to="/settings/banks"
+            to="/settings/accounts"
             class="mt-6 inline-block font-medium text-emerald-600 hover:underline dark:text-emerald-400"
           >
-            Revenir aux banques
+            Revenir aux comptes
           </RouterLink>
         </template>
       </div>

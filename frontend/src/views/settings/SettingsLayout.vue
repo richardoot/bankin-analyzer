@@ -15,11 +15,6 @@
       testId: 'settings-tab-categories',
     },
     {
-      to: '/settings/banks',
-      label: 'Banques',
-      testId: 'settings-tab-banks',
-    },
-    {
       to: '/settings/general',
       label: 'Général',
       testId: 'settings-tab-general',
