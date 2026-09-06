@@ -78,6 +78,18 @@ describe('parseTransactionFilters', () => {
     expect(parseTransactionFilters({ search: '  uber ' }).search).toBe('uber')
     expect(parseTransactionFilters({ search: '   ' }).search).toBeUndefined()
   })
+
+  it('reads needsBankReview from a query string and from JSON alike', () => {
+    expect(
+      parseTransactionFilters({ needsBankReview: 'true' }).needsBankReview
+    ).toBe(true)
+    expect(
+      parseTransactionFilters({ needsBankReview: 'false' }).needsBankReview
+    ).toBe(false)
+    expect(
+      parseTransactionFilters({ needsBankReview: true }).needsBankReview
+    ).toBe(true)
+  })
 })
 
 describe('buildTransactionWhere', () => {
@@ -131,6 +143,20 @@ describe('buildTransactionWhere', () => {
     const where = buildTransactionWhere('user-1', { isPointed: false })
 
     expect(where.isPointed).toBe(false)
+  })
+
+  it('matches an unclaimed synced row when asked to review the bank sync', () => {
+    const where = buildTransactionWhere('user-1', { needsBankReview: true })
+
+    expect(where.source).toBe('BANK_API')
+    expect(where.externalId).toBeNull()
+  })
+
+  it('ignores needsBankReview when false, rather than filtering by it', () => {
+    const where = buildTransactionWhere('user-1', { needsBankReview: false })
+
+    expect(where.source).toBeUndefined()
+    expect(where.externalId).toBeUndefined()
   })
 
   it('reaches accounts by name and tags through the join table', () => {
