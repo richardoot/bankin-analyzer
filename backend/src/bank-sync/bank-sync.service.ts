@@ -22,12 +22,15 @@ import {
 } from '@nestjs/common'
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
+import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
+import type { ResolvedAssignment } from '../ai-suggestions/transaction-categorizer'
 import {
   EnableBankingClient,
   type BankAccountResource,
   type BankTransaction,
 } from './enable-banking.client'
 import {
+  humanizeLabel,
   reconcileAll,
   summarize,
   type AssignedVerdict,
@@ -39,6 +42,7 @@ import {
   decide,
   expiringConnections,
   type ConnectionState,
+  type SyncPolicyOptions,
 } from './sync-policy'
 import { TransactionSource } from '../generated/prisma'
 
@@ -91,7 +95,67 @@ export interface SyncOutcome {
   inserted: number
   skippedDuplicates: number
   skippedAmbiguous: number
+  /** Older than this account's own earliest known transaction — see `ingest`. */
+  skippedTooOld: number
   accountsRead: number
+}
+
+/** What correcting a bank account's mapping did to what an earlier sync wrote. */
+export interface ReassignmentOutcome {
+  /** Inserted under the old account; nothing on the new one matched it. */
+  moved: number
+  /** Inserted under the old account; the new one already had it via CSV. */
+  merged: number
+  /**
+   * Lost its bank reference, kept everything else: a CSV row claimed by
+   * coincidence on the old account, or — when the link is cleared entirely —
+   * an inserted row with nowhere left to belong. Never deleted: the
+   * transaction still happened, whichever account it ends up filed under.
+   */
+  unlinked: number
+  /** Left untouched: gained a tag, reimbursement, settlement or payment since. */
+  blockedByWork: number
+  /** Left untouched: more than one equally good match, or none worth trusting. */
+  ambiguous: number
+}
+
+/** One past sync, and what pressing "Annuler" on it would find. */
+export interface BankSyncRunSummary {
+  id: string
+  aspspName: string
+  fetchedAt: Date
+  /** Still attributed to this run right now — 0 once it's been undone. */
+  inserted: number
+  claimed: number
+  /** Set once this run has been undone. */
+  undoneAt: Date | null
+}
+
+/** What undoing a run did, or would do. */
+export interface UndoRunOutcome {
+  /** Inserted by this run, removed the same way it arrived. */
+  deleted: number
+  /** Claimed by this run, restored to how it stood before — never deleted. */
+  unlinked: number
+  /** Left untouched: gained a reimbursement, tag, settlement or payment since. */
+  blocked: number
+}
+
+/**
+ * Loosen the sync policy for local testing, without touching the bank's own
+ * limits when the environment doesn't ask for it.
+ *
+ * `BANK_SYNC_MIN_INTERVAL_HOURS=0` is what makes repeated manual syncs of the
+ * same connection possible while verifying a fix — the bank's own quota
+ * (`fetchesToday`) still applies, since that one reflects what Enable
+ * Banking will actually refuse, not a local choice.
+ */
+export function syncPolicyOptionsFromEnv(): SyncPolicyOptions {
+  const raw = process.env.BANK_SYNC_MIN_INTERVAL_HOURS
+  if (raw === undefined) return {}
+  const hours = Number(raw)
+  if (Number.isNaN(hours)) return {}
+  return { minimumIntervalHours: hours }
 }
 
 /** A card account repeats its current account; ingesting both counts twice. */
@@ -105,7 +169,8 @@ export class BankSyncService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly client: EnableBankingClient
+    private readonly client: EnableBankingClient,
+    private readonly aiSuggestions: AiSuggestionsService
   ) {}
 
   isConfigured(): boolean {
@@ -119,15 +184,21 @@ export class BankSyncService {
    * simply newer, and a bank missing from a list with no explanation is worse
    * than one shown with a caveat.
    */
-  async listBanks(
-    country: string
-  ): Promise<{ name: string; country: string; beta: boolean }[]> {
+  async listBanks(country: string): Promise<
+    {
+      name: string
+      country: string
+      beta: boolean
+      logo: string | null
+    }[]
+  > {
     const aspsps = await this.client.listAspsps(country)
     return aspsps
       .map(aspsp => ({
         name: aspsp.name,
         country: aspsp.country,
         beta: aspsp.beta ?? false,
+        logo: aspsp.logo ?? null,
       }))
       .sort((a, b) => a.name.localeCompare(b.name))
   }
@@ -167,10 +238,29 @@ export class BankSyncService {
       redirectUrl: input.redirectUrl,
       validUntil,
       state,
-      // Stable per user, so the sessions of one person stay related across the
-      // re-authorizations a lapsing consent forces.
+      // Stable per user, so the sessions of one person stay related across
+      // the re-authorizations a lapsing consent forces.
       psuId: userId,
     })
+
+    // Carries the canonical name to `completeAuthorization`, which otherwise
+    // only sees whatever `session.aspsp` echoes back — not guaranteed to
+    // repeat this string, and once, for real, it did not.
+    //
+    // Opportunistic cleanup rather than a job anything depends on running: an
+    // abandoned attempt is as harmless as an unredeemed CSRF token.
+    await this.prisma.bankAuthorizationAttempt.deleteMany({
+      where: { createdAt: { lt: new Date(Date.now() - 3_600_000) } },
+    })
+    await this.prisma.bankAuthorizationAttempt.create({
+      data: {
+        id: state,
+        userId,
+        aspspName: aspsp.name,
+        aspspCountry: aspsp.country,
+      },
+    })
+
     return { url, state }
   }
 
@@ -183,26 +273,42 @@ export class BankSyncService {
    */
   async completeAuthorization(
     userId: string,
-    code: string
+    code: string,
+    state?: string
   ): Promise<ConnectionView> {
     const session = await this.client.createSession(code)
     const accounts = EnableBankingClient.accountsOf(session)
-    const aspspName = session.aspsp?.name ?? 'unknown'
+
+    // The name this application itself asked with, over the one the session
+    // echoes: they are not guaranteed to agree, and trusting the echo is what
+    // let a bank already connected pass the lookup and get a second
+    // connection. Falls back to the echo only when `state` is missing or the
+    // attempt already expired — the best that is left in that case, and
+    // exactly what ran before this existed. Single use, like the code itself.
+    const attempt = state
+      ? await this.prisma.bankAuthorizationAttempt.findUnique({
+          where: { id: state, userId },
+        })
+      : null
+    if (attempt) {
+      await this.prisma.bankAuthorizationAttempt.delete({
+        where: { id: attempt.id },
+      })
+    }
+    const aspspName = attempt?.aspspName ?? session.aspsp?.name ?? 'unknown'
+    const aspspCountry = attempt?.aspspCountry ?? session.aspsp?.country ?? 'FR'
+
+    const existing = await this.prisma.bankConnection.findFirst({
+      where: { userId, aspspCountry, aspspName },
+      select: { id: true },
+    })
 
     const connection = await this.prisma.bankConnection.upsert({
-      where: {
-        id:
-          (
-            await this.prisma.bankConnection.findFirst({
-              where: { userId, aspspName },
-              select: { id: true },
-            })
-          )?.id ?? '',
-      },
+      where: { id: existing?.id ?? '' },
       create: {
         userId,
         aspspName,
-        aspspCountry: session.aspsp?.country ?? 'FR',
+        aspspCountry,
         sessionId: session.session_id ?? null,
         consentValidUntil: session.access?.valid_until
           ? new Date(session.access.valid_until)
@@ -223,13 +329,29 @@ export class BankSyncService {
     for (const account of accounts) {
       if (!account.uid) continue
       const details = await this.describe(account)
+      const iban = details.account_id?.iban ?? null
+      const identificationHash = details.identification_hash ?? null
+
+      // `externalAccountId` is the bank's handle within a session and is
+      // refreshed on every authorization — looking a link up by it, as this
+      // used to, means a renewal never finds the account it already knew and
+      // doubles it instead. `iban` (or `identificationHash` for the card
+      // account that has none) is what actually survives between sessions,
+      // and is what has to be matched on instead.
+      const existing = iban
+        ? await this.prisma.bankAccountLink.findFirst({
+            where: { connectionId: connection.id, iban },
+            select: { id: true },
+          })
+        : identificationHash
+          ? await this.prisma.bankAccountLink.findFirst({
+              where: { connectionId: connection.id, identificationHash },
+              select: { id: true },
+            })
+          : null
+
       await this.prisma.bankAccountLink.upsert({
-        where: {
-          connectionId_externalAccountId: {
-            connectionId: connection.id,
-            externalAccountId: account.uid,
-          },
-        },
+        where: { id: existing?.id ?? '' },
         create: {
           connectionId: connection.id,
           userId,
@@ -237,21 +359,21 @@ export class BankSyncService {
           accountName: details.name ?? account.uid,
           cashAccountType: details.cash_account_type ?? null,
           product: details.product ?? null,
-          iban: details.account_id?.iban ?? null,
-          identificationHash: details.identification_hash ?? null,
+          iban,
+          identificationHash,
         },
         // A decision already made is never overwritten by a re-authorization.
         // What the bank says about itself is refreshed; what the user said
         // about it is theirs.
         update: {
+          externalAccountId: account.uid,
           accountName: details.name ?? account.uid,
           ...(details.cash_account_type
             ? { cashAccountType: details.cash_account_type }
             : {}),
           ...(details.product ? { product: details.product } : {}),
-          ...(details.account_id?.iban
-            ? { iban: details.account_id.iban }
-            : {}),
+          ...(iban ? { iban } : {}),
+          ...(identificationHash ? { identificationHash } : {}),
         },
       })
     }
@@ -304,7 +426,7 @@ export class BankSyncService {
     if (!connection) throw new NotFoundException('No such bank connection')
 
     const state = await this.stateOf(userId, connection.id)
-    const decision = decide(state, new Date())
+    const decision = decide(state, new Date(), syncPolicyOptionsFromEnv())
     const [warning] = expiringConnections([state], new Date())
 
     const suggestions = await this.suggestAccounts(userId, connection.id)
@@ -332,6 +454,182 @@ export class BankSyncService {
         suggestion: suggestions.get(link.externalAccountId) ?? null,
         warning: link.cashAccountType === 'CARD' ? CARD_ACCOUNT_WARNING : null,
       })),
+    }
+  }
+
+  /**
+   * Local accounts still carrying a row a bank sync inserted or claimed and
+   * then lost the reference to — cleared to "— aucun —", or a correction
+   * still pending on the other side of a swap. Grouped by account rather
+   * than by link, because that is where these rows actually sit; the link
+   * that once claimed them may by now point nowhere; or somewhere else.
+   */
+  async needsReview(
+    userId: string
+  ): Promise<{ accountId: string; accountLabel: string; count: number }[]> {
+    const grouped = await this.prisma.transaction.groupBy({
+      by: ['accountId'],
+      where: { userId, source: TransactionSource.BANK_API, externalId: null },
+      _count: { _all: true },
+    })
+    if (grouped.length === 0) return []
+
+    const accounts = await this.prisma.account.findMany({
+      where: { id: { in: grouped.map(g => g.accountId) } },
+      select: { id: true, name: true },
+    })
+    const nameById = new Map(accounts.map(a => [a.id, a.name]))
+
+    return grouped
+      .map(g => ({
+        accountId: g.accountId,
+        accountLabel: nameById.get(g.accountId) ?? '?',
+        count: g._count._all,
+      }))
+      .sort((a, b) => b.count - a.count)
+  }
+
+  /**
+   * Every run this user's connections have made, most recent first —
+   * counted from what still points back at each one, the same as a CSV
+   * import is counted from `importHistoryId`. An undone run reads 0 and 0
+   * for that reason, not because it never wrote anything; `undoneAt` is
+   * what tells the two apart.
+   */
+  async listRuns(userId: string): Promise<BankSyncRunSummary[]> {
+    const runs = await this.prisma.bankSyncRun.findMany({
+      where: { userId },
+      orderBy: { fetchedAt: 'desc' },
+      select: { id: true, aspspName: true, fetchedAt: true, undoneAt: true },
+    })
+    if (runs.length === 0) return []
+
+    const counts = await this.prisma.transaction.groupBy({
+      by: ['syncRunId', 'source'],
+      where: { userId, syncRunId: { in: runs.map(r => r.id) } },
+      _count: { _all: true },
+    })
+    const insertedByRun = new Map<string, number>()
+    const claimedByRun = new Map<string, number>()
+    for (const c of counts) {
+      if (!c.syncRunId) continue
+      const target =
+        c.source === TransactionSource.BANK_API ? insertedByRun : claimedByRun
+      target.set(c.syncRunId, (target.get(c.syncRunId) ?? 0) + c._count._all)
+    }
+
+    return runs.map(r => ({
+      id: r.id,
+      aspspName: r.aspspName,
+      fetchedAt: r.fetchedAt,
+      inserted: insertedByRun.get(r.id) ?? 0,
+      claimed: claimedByRun.get(r.id) ?? 0,
+      undoneAt: r.undoneAt,
+    }))
+  }
+
+  /**
+   * What a run touched, split the way undoing it treats them: an inserted
+   * row with no work of its own since is deletable, one that has gained a
+   * reimbursement, tag, settlement or payment is blocked, and a CSV row the
+   * run only claimed is always restorable — its own work was never at risk.
+   */
+  private async planUndoRun(
+    userId: string,
+    runId: string
+  ): Promise<{
+    runId: string
+    deletableIds: string[]
+    claimedIds: string[]
+    blockedCount: number
+  }> {
+    const run = await this.prisma.bankSyncRun.findFirst({
+      where: { id: runId, userId },
+      select: { id: true, undoneAt: true },
+    })
+    if (!run) throw new NotFoundException('No such bank sync run')
+    if (run.undoneAt) {
+      throw new BadRequestException('This run has already been undone.')
+    }
+
+    const touched = await this.prisma.transaction.findMany({
+      where: { syncRunId: run.id },
+      select: {
+        id: true,
+        source: true,
+        _count: {
+          select: {
+            reimbursementRequests: true,
+            settlementsAsIncome: true,
+            tags: true,
+            reimbursementPayments: true,
+          },
+        },
+      },
+    })
+
+    const carriesWork = (t: (typeof touched)[number]): boolean =>
+      t._count.reimbursementRequests > 0 ||
+      t._count.settlementsAsIncome > 0 ||
+      t._count.tags > 0 ||
+      t._count.reimbursementPayments > 0
+
+    const inserted = touched.filter(
+      t => t.source === TransactionSource.BANK_API
+    )
+    const claimed = touched.filter(t => t.source !== TransactionSource.BANK_API)
+    const blocked = inserted.filter(carriesWork)
+    const deletable = inserted.filter(t => !carriesWork(t))
+
+    return {
+      runId: run.id,
+      deletableIds: deletable.map(t => t.id),
+      claimedIds: claimed.map(t => t.id),
+      blockedCount: blocked.length,
+    }
+  }
+
+  /** What undoing a run would do, without doing it. */
+  async previewUndoRun(userId: string, runId: string): Promise<UndoRunOutcome> {
+    const plan = await this.planUndoRun(userId, runId)
+    return {
+      deleted: plan.deletableIds.length,
+      unlinked: plan.claimedIds.length,
+      blocked: plan.blockedCount,
+    }
+  }
+
+  /**
+   * Undo one sync run: delete what it inserted, unlink what it only
+   * claimed — never a row that has gained a reimbursement, a tag, a
+   * settlement or a payment since. The same refusal every correction in
+   * this feature makes: work added after the fact is never taken silently.
+   */
+  async undoRun(userId: string, runId: string): Promise<UndoRunOutcome> {
+    const plan = await this.planUndoRun(userId, runId)
+
+    await this.prisma.$transaction(async tx => {
+      if (plan.deletableIds.length > 0) {
+        await tx.transaction.deleteMany({
+          where: { id: { in: plan.deletableIds } },
+        })
+      }
+      if (plan.claimedIds.length > 0) {
+        await tx.transaction.updateMany({
+          where: { id: { in: plan.claimedIds } },
+          data: { externalId: null, bookingStatus: null, syncRunId: null },
+        })
+      }
+      await tx.bankSyncRun.update({
+        where: { id: plan.runId },
+        data: { undoneAt: new Date() },
+      })
+    })
+
+    return {
+      deleted: plan.deletableIds.length,
+      unlinked: plan.claimedIds.length,
+      blocked: plan.blockedCount,
     }
   }
 
@@ -497,6 +795,7 @@ export class BankSyncService {
         select: { id: true },
       })
       if (!owned) throw new NotFoundException('No such account')
+      await this.assertAccountFree(userId, accountId, linkId)
     }
 
     await this.prisma.bankAccountLink.update({
@@ -508,6 +807,449 @@ export class BankSyncService {
     const updated = view.accounts.find(account => account.linkId === linkId)
     if (!updated) throw new NotFoundException('No such bank account')
     return updated
+  }
+
+  /**
+   * One bank account, one local account: two links feeding the same one
+   * would double-count the moment either syncs, and reconciliation would
+   * compare each incoming row against a ledger mixing both banks' rows —
+   * exactly the false-merge risk a plain amount-and-date match already has
+   * to guard against once, not twice over.
+   */
+  private async assertAccountFree(
+    userId: string,
+    accountId: string,
+    exceptLinkId: string
+  ): Promise<void> {
+    const claimedBy = await this.prisma.bankAccountLink.findFirst({
+      where: { userId, accountId, id: { not: exceptLinkId } },
+      select: {
+        accountName: true,
+        connection: { select: { aspspName: true } },
+      },
+    })
+    if (claimedBy) {
+      throw new BadRequestException(
+        `This account is already "${claimedBy.accountName}" from ` +
+          `${claimedBy.connection.aspspName} — swapping two accounts needs ` +
+          'one side cleared to "— aucun —" first, so both are never ' +
+          'claimed at once.'
+      )
+    }
+  }
+
+  /**
+   * Correct which account a bank account is — not just for the next sync,
+   * but for what an earlier, wrong answer already wrote.
+   *
+   * Changing the mapping alone only points a future fetch somewhere else. It
+   * does nothing about a row a past sync already wrote under the wrong
+   * account: an inserted transaction stays there, and a CSV row that
+   * happened to match by date and amount stays wearing a bank reference it
+   * never earned. Both are found the same way — by the bank references
+   * `BankStagedTransaction` recorded for this bank account, wherever a
+   * `Transaction` carrying one of them sits today — and both are put right:
+   * an inserted row is reconciled against the corrected account exactly as a
+   * sync would (claimed if it is already there, moved if it is not); a
+   * wrongly claimed CSV row simply loses the reference, keeping everything
+   * else it carries.
+   *
+   * A row that has since gained a tag, a reimbursement, a settlement or a
+   * payment is left alone rather than merged away — the same refusal
+   * `undo-bank-sync-run.ts` makes, for the same reason: deleting it would
+   * take that work with it, silently.
+   */
+  private async planLinkReassignment(
+    userId: string,
+    linkId: string,
+    newAccountId: string | null
+  ): Promise<{
+    outcome: ReassignmentOutcome
+    toDelete: string[]
+    toMove: {
+      id: string
+      accountId: string
+      hash: string
+      externalId: string | null
+      bookingStatus: string | null
+    }[]
+    toClaim: {
+      transactionId: string
+      externalId: string | null
+      bookingStatus: string | null
+      syncRunId: string | null
+    }[]
+    toUnlink: string[]
+  }> {
+    const link = await this.prisma.bankAccountLink.findFirst({
+      where: { id: linkId, userId },
+    })
+    if (!link) throw new NotFoundException('No such bank account')
+
+    if (newAccountId) {
+      const target = await this.prisma.account.findFirst({
+        where: { id: newAccountId, userId },
+        select: { id: true },
+      })
+      if (!target) throw new NotFoundException('No such account')
+      await this.assertAccountFree(userId, newAccountId, linkId)
+    }
+
+    const empty = {
+      outcome: {
+        moved: 0,
+        merged: 0,
+        unlinked: 0,
+        blockedByWork: 0,
+        ambiguous: 0,
+      },
+      toDelete: [] as string[],
+      toMove: [] as {
+        id: string
+        accountId: string
+        hash: string
+        externalId: string | null
+        bookingStatus: string | null
+      }[],
+      toClaim: [] as {
+        transactionId: string
+        externalId: string | null
+        bookingStatus: string | null
+        syncRunId: string | null
+      }[],
+      toUnlink: [] as string[],
+    }
+
+    const oldAccountId = link.accountId
+    // Both sides the same — including both null — is nothing to do: either a
+    // plain reassignment for a link no sync has touched yet, or a link
+    // already cleared, being cleared again.
+    if (oldAccountId === newAccountId) return empty
+
+    // A link cleared to "— aucun —" no longer says where its rows are — that
+    // was the one thing `accountId` was for. They didn't move on their own,
+    // though: they're still wherever the sync originally put them — which can
+    // be the very account this correction now targets, if that happens to be
+    // where the original, wrong sync landed them too. Search everywhere
+    // instead of refusing for lack of a value the link no longer carries, or
+    // excluding the one account a direct "aucun" → correct-account correction
+    // is likely to name — otherwise that correction finds nothing and leaves
+    // the rows stranded exactly where "à réaffecter" already found them.
+    const accountScope = oldAccountId ? { accountId: oldAccountId } : {}
+
+    const staged = await this.prisma.bankStagedTransaction.findMany({
+      where: { userId, externalAccountId: link.externalAccountId },
+      select: {
+        externalId: true,
+        date: true,
+        amount: true,
+        label: true,
+        bookingStatus: true,
+      },
+    })
+    if (staged.length === 0) return empty
+    const externalIds = staged
+      .map(s => s.externalId)
+      .filter((id): id is string => id !== null)
+
+    // What this bank told `ingest` at the time — date, amount, label — is
+    // what recovers a row that has already lost its reference: by an earlier,
+    // careless use of this same tool, or by "aucun" further up the same
+    // correction. Without this, that row is indistinguishable from any other
+    // plain transaction, and stays on the wrong account forever — which is
+    // exactly the failure a first version of this method had.
+    const signatureOf = (row: {
+      date: Date
+      amount: unknown
+      label: string
+    }): string =>
+      `${row.date.toISOString().slice(0, 10)}|${Number(row.amount)}|${row.label}`
+    const bySignature = new Map<string, (typeof staged)[number][]>()
+    for (const row of staged) {
+      const key = signatureOf(row)
+      const queue = bySignature.get(key)
+      if (queue) queue.push(row)
+      else bySignature.set(key, [row])
+    }
+
+    const selectAffected = {
+      id: true,
+      source: true,
+      date: true,
+      amount: true,
+      description: true,
+      externalId: true,
+      bookingStatus: true,
+      syncRunId: true,
+      _count: {
+        select: {
+          reimbursementRequests: true,
+          settlementsAsIncome: true,
+          tags: true,
+          reimbursementPayments: true,
+        },
+      },
+    } as const
+
+    const stillLinked =
+      externalIds.length > 0
+        ? await this.prisma.transaction.findMany({
+            where: {
+              userId,
+              ...accountScope,
+              externalId: { in: externalIds },
+            },
+            select: selectAffected,
+          })
+        : []
+
+    const orphaned = await this.prisma.transaction.findMany({
+      where: {
+        userId,
+        ...accountScope,
+        externalId: null,
+        source: TransactionSource.BANK_API,
+        OR: [...bySignature.values()].map(queue => {
+          const representative = queue[0]
+          return representative
+            ? {
+                date: representative.date,
+                amount: representative.amount,
+                description: representative.label,
+              }
+            : {}
+        }),
+      },
+      select: selectAffected,
+    })
+
+    const affected = [...stillLinked, ...orphaned]
+    if (affected.length === 0) return empty
+
+    // Each row's true bank reference: its own, where it still carries one;
+    // recovered from the matching staged row otherwise. A queue rather than a
+    // plain map because a signature is not guaranteed unique — two identical
+    // purchases the same day — so each recovery consumes one candidate rather
+    // than handing the same reference to every row that looks like it.
+    const recovered = new Map<
+      string,
+      { externalId: string | null; bookingStatus: string | null }
+    >()
+    for (const t of affected) {
+      if (t.externalId) {
+        recovered.set(t.id, {
+          externalId: t.externalId,
+          bookingStatus: t.bookingStatus,
+        })
+        continue
+      }
+      const queue = bySignature.get(
+        signatureOf({ date: t.date, amount: t.amount, label: t.description })
+      )
+      const match = queue?.shift()
+      recovered.set(t.id, {
+        externalId: match?.externalId ?? null,
+        bookingStatus: match?.bookingStatus ?? null,
+      })
+    }
+
+    const carriesWork = (t: (typeof affected)[number]): boolean =>
+      t._count.reimbursementRequests > 0 ||
+      t._count.settlementsAsIncome > 0 ||
+      t._count.tags > 0 ||
+      t._count.reimbursementPayments > 0
+
+    const inserted = affected.filter(
+      t => t.source === TransactionSource.BANK_API
+    )
+    const claimed = affected.filter(
+      t => t.source !== TransactionSource.BANK_API
+    )
+
+    const result = {
+      outcome: { ...empty.outcome, unlinked: claimed.length },
+      toDelete: [] as string[],
+      toMove: [] as {
+        id: string
+        accountId: string
+        hash: string
+        externalId: string | null
+        bookingStatus: string | null
+      }[],
+      toClaim: empty.toClaim,
+      toUnlink: claimed.map(t => t.id),
+    }
+
+    if (inserted.length === 0) return result
+
+    if (!newAccountId) {
+      // The link is being cleared entirely: there is nowhere left for these
+      // rows to belong, but the transaction still happened — unlinked, same
+      // as a CSV row claimed by coincidence, never deleted. The row is real;
+      // only the sync's claim on it was wrong.
+      result.toUnlink.push(...inserted.map(t => t.id))
+      result.outcome.unlinked += inserted.length
+      return result
+    }
+
+    // A row already sitting on the new account precisely because that is
+    // where the wrong sync originally put it — now searchable account-wide
+    // above — must not also appear as the ledger it's reconciled against:
+    // compared to itself, it would come back "already there" and get deleted
+    // out from under the very correction meant to restore it.
+    const insertedIds = inserted.map(t => t.id)
+    const ledgerRows = await this.prisma.transaction.findMany({
+      where: {
+        userId,
+        accountId: newAccountId,
+        ...(insertedIds.length > 0 && { id: { notIn: insertedIds } }),
+      },
+      select: {
+        id: true,
+        accountId: true,
+        date: true,
+        amount: true,
+        description: true,
+        externalId: true,
+      },
+    })
+    const ledger: LedgerTransaction[] = ledgerRows.map(row => ({
+      id: row.id,
+      accountId: row.accountId,
+      date: row.date.toISOString().slice(0, 10),
+      amount: Number(row.amount),
+      description: row.description,
+      externalId: row.externalId,
+    }))
+
+    const stagedForReconcile: StagedTransaction[] = inserted.map(t => ({
+      externalAccountId: link.externalAccountId,
+      externalId: recovered.get(t.id)?.externalId ?? null,
+      date: t.date.toISOString().slice(0, 10),
+      amount: Number(t.amount),
+      label: t.description,
+    }))
+
+    const verdicts: AssignedVerdict[] = reconcileAll(
+      stagedForReconcile,
+      ledger,
+      {
+        accountIdByExternalAccountId: {
+          [link.externalAccountId]: newAccountId,
+        },
+      }
+    )
+
+    for (const [position, verdict] of verdicts.entries()) {
+      const t = inserted[position]
+      if (!t) continue
+      const ref = recovered.get(t.id) ?? {
+        externalId: null,
+        bookingStatus: null,
+      }
+
+      if (verdict.kind === 'matched' || verdict.kind === 'alreadyLinked') {
+        if (carriesWork(t)) {
+          result.outcome.blockedByWork++
+          continue
+        }
+        result.toDelete.push(t.id)
+        result.toClaim.push({
+          transactionId: verdict.transactionId,
+          externalId: ref.externalId,
+          bookingStatus: ref.bookingStatus,
+          syncRunId: t.syncRunId,
+        })
+        result.outcome.merged++
+        continue
+      }
+
+      if (verdict.kind === 'new') {
+        result.toMove.push({
+          id: t.id,
+          accountId: newAccountId,
+          hash: `${userId}|${t.date.toISOString().slice(0, 10)}|${Number(t.amount)}|${newAccountId}|${ref.externalId ?? t.description}`,
+          externalId: ref.externalId,
+          bookingStatus: ref.bookingStatus,
+        })
+        result.outcome.moved++
+        continue
+      }
+
+      // 'ambiguous', 'duplicate' — more than one equally good account for
+      // this row to belong to, or none at all worth trusting. A person
+      // decides, this does not guess.
+      result.outcome.ambiguous++
+    }
+
+    return result
+  }
+
+  /** What correcting a link's account would do, without doing it. */
+  async previewLinkReassignment(
+    userId: string,
+    linkId: string,
+    newAccountId: string | null
+  ): Promise<ReassignmentOutcome> {
+    const plan = await this.planLinkReassignment(userId, linkId, newAccountId)
+    return plan.outcome
+  }
+
+  /** Correct a link's account, and everything an earlier sync wrote under it. */
+  async reassignLink(
+    userId: string,
+    linkId: string,
+    newAccountId: string | null
+  ): Promise<ReassignmentOutcome> {
+    const plan = await this.planLinkReassignment(userId, linkId, newAccountId)
+
+    await this.prisma.$transaction(async tx => {
+      if (plan.toDelete.length > 0) {
+        await tx.transaction.deleteMany({
+          where: { id: { in: plan.toDelete } },
+        })
+      }
+      for (const claim of plan.toClaim) {
+        await tx.transaction.update({
+          where: { id: claim.transactionId },
+          data: {
+            externalId: claim.externalId,
+            bookingStatus: claim.bookingStatus,
+            syncRunId: claim.syncRunId,
+          },
+        })
+      }
+      for (const move of plan.toMove) {
+        await tx.transaction.update({
+          where: { id: move.id },
+          data: {
+            accountId: move.accountId,
+            hash: move.hash,
+            // A no-op for a row that already carried its own reference;
+            // restores it for one recovered from a signature match instead.
+            externalId: move.externalId,
+            bookingStatus: move.bookingStatus,
+          },
+        })
+      }
+      if (plan.toUnlink.length > 0) {
+        await tx.transaction.updateMany({
+          where: { id: { in: plan.toUnlink } },
+          data: { externalId: null, bookingStatus: null, syncRunId: null },
+        })
+      }
+      await tx.bankAccountLink.update({
+        where: { id: linkId },
+        data: {
+          accountId: newAccountId,
+          // An account arrives switched off; one cleared entirely is no
+          // different — there is nowhere left for it to read into.
+          ...(newAccountId ? {} : { isIngested: false }),
+        },
+      })
+    })
+
+    return plan.outcome
   }
 
   /**
@@ -527,7 +1269,8 @@ export class BankSyncService {
 
     const decision = decide(
       await this.stateOf(userId, connectionId),
-      new Date()
+      new Date(),
+      syncPolicyOptionsFromEnv()
     )
     if (decision.action !== 'fetch') {
       throw new BadRequestException(decision.reason)
@@ -592,8 +1335,15 @@ export class BankSyncService {
     const staged: (StagedTransaction & { raw: BankTransaction })[] = []
     for (const [externalAccountId, transactions] of fetched) {
       for (const raw of transactions) {
+        // `transaction_date` — "date d'opération" — over `booking_date`:
+        // measured on real CIC data, they agree for almost everything
+        // (card purchases), but a monthly fee is booked a few days after it
+        // is dated, and CIC's own app, and Bankin, both show the earlier
+        // date. `booking_date` was the original default, on the strength of
+        // matching Bankin for a card purchase; this is that assumption
+        // overturned by a case it did not cover.
         const date =
-          raw.booking_date ?? raw.transaction_date ?? raw.value_date ?? null
+          raw.transaction_date ?? raw.booking_date ?? raw.value_date ?? null
         const magnitude = Math.abs(Number(raw.transaction_amount?.amount))
         const amount =
           raw.credit_debit_indicator === 'CRDT'
@@ -611,11 +1361,16 @@ export class BankSyncService {
           externalId: raw.entry_reference ?? null,
           date,
           amount,
-          label:
+          // Bankin's own export arrives already stripped of the date, card
+          // number and bank reference codes a raw label carries — humanized
+          // once here so the staging row and the transaction it produces
+          // agree on the same text, exact-match orphan recovery included.
+          label: humanizeLabel(
             (raw.remittance_information ?? []).join(' ').trim() ||
-            raw.creditor?.name ||
-            raw.debtor?.name ||
-            '(no label)',
+              raw.creditor?.name ||
+              raw.debtor?.name ||
+              '(no label)'
+          ),
           raw,
         })
       }
@@ -659,34 +1414,81 @@ export class BankSyncService {
       externalId: row.externalId,
     }))
 
+    // The earliest a given account's own history goes, going only from what
+    // this ledger already has for it — CSV or bank, whichever came first. Not
+    // computed for an account with nothing yet: there is no settled period to
+    // protect from a first backfill, which is exactly where the deep history
+    // is worth having.
+    //
+    // The API reaches further back on a re-authorization than it does on a
+    // routine sync — 729 days against 90, measured — and further back than
+    // the CSV ever did for at least one account, by four months, also
+    // measured. Nothing stops that window from handing back a genuine,
+    // previously unseen transaction dated before it: not a duplicate, so
+    // reconciliation lets it through as `new`, and inserting it would revise
+    // a month the user had already closed the books on. This floor is what
+    // refuses that insert without refusing the claim a matching row still
+    // deserves.
+    const earliestByAccount = new Map<string, string>()
+    for (const row of ledger) {
+      const current = earliestByAccount.get(row.accountId)
+      if (!current || row.date < current) {
+        earliestByAccount.set(row.accountId, row.date)
+      }
+    }
+
     const verdicts: AssignedVerdict[] = reconcileAll(staged, ledger, {
       accountIdByExternalAccountId: accountIdByExternal,
     })
     const summary = summarize(verdicts)
+
+    // Which rows this run will actually insert — 'new', a mapped account,
+    // not older than that account's own settled history — decided up front
+    // so the categorizer, a network call, never runs inside the write
+    // transaction below.
+    const toInsert: {
+      position: number
+      row: (typeof staged)[number]
+      accountId: string
+    }[] = []
+    let skippedTooOld = 0
+    for (const [position, verdict] of verdicts.entries()) {
+      if (verdict.kind !== 'new') continue
+      const row = staged[position]
+      if (!row) continue
+      const accountId = accountIdByExternal[row.externalAccountId]
+      if (!accountId) continue
+      const floor = earliestByAccount.get(accountId)
+      if (floor && row.date < floor) {
+        skippedTooOld++
+        continue
+      }
+      toInsert.push({ position, row, accountId })
+    }
+
+    const filingByPosition = await this.categorizeInserts(userId, toInsert)
 
     let claimed = 0
     let inserted = 0
 
     await this.prisma.$transaction(async tx => {
       for (const [position, verdict] of verdicts.entries()) {
+        if (verdict.kind !== 'matched') continue
         const row = staged[position]
         if (!row) continue
+        await tx.transaction.update({
+          where: { id: verdict.transactionId },
+          data: {
+            externalId: row.externalId,
+            bookingStatus: row.raw.status ?? null,
+            syncRunId: runId,
+          },
+        })
+        claimed++
+      }
 
-        if (verdict.kind === 'matched') {
-          await tx.transaction.update({
-            where: { id: verdict.transactionId },
-            data: {
-              externalId: row.externalId,
-              bookingStatus: row.raw.status ?? null,
-            },
-          })
-          claimed++
-          continue
-        }
-        if (verdict.kind !== 'new') continue
-
-        const accountId = accountIdByExternal[row.externalAccountId]
-        if (!accountId) continue
+      for (const { position, row, accountId } of toInsert) {
+        const filing = filingByPosition.get(position)
         await tx.transaction.create({
           data: {
             userId,
@@ -699,6 +1501,10 @@ export class BankSyncService {
             source: TransactionSource.BANK_API,
             externalId: row.externalId,
             bookingStatus: row.raw.status ?? null,
+            syncRunId: runId,
+            categoryId: filing?.categoryId ?? null,
+            subcategoryId: filing?.subcategoryId ?? null,
+            subcategory: filing?.subcategoryName ?? null,
           },
         })
         inserted++
@@ -712,7 +1518,77 @@ export class BankSyncService {
       inserted,
       skippedDuplicates: summary.duplicate,
       skippedAmbiguous: summary.ambiguous,
+      skippedTooOld,
       accountsRead: fetched.size,
     }
+  }
+
+  /**
+   * Place each freshly synced row among the categories the user already
+   * has — the same model, and the same refusal to invent one, that an
+   * import uses once it stops trusting a file's own categories. A bank
+   * states an amount and a counterparty, never what a purchase was for, so
+   * this is the only way a synced row arrives filed rather than blank.
+   *
+   * Never fatal: a batch the model can't reach leaves those rows unfiled —
+   * visible, and one click to fix — rather than losing the sync over it.
+   */
+  private async categorizeInserts(
+    userId: string,
+    toInsert: { position: number; row: { label: string; amount: number } }[]
+  ): Promise<Map<number, ResolvedAssignment>> {
+    const byPosition = new Map<number, ResolvedAssignment>()
+    if (toInsert.length === 0) return byPosition
+
+    const [categories, subcategories] = await Promise.all([
+      this.prisma.category.findMany({
+        where: { userId },
+        select: { id: true, name: true, type: true },
+      }),
+      this.prisma.subcategory.findMany({
+        where: { userId },
+        select: { id: true, name: true, categoryId: true },
+      }),
+    ])
+    if (categories.length === 0) return byPosition
+
+    try {
+      // Indexed locally (0..n-1) for the model, then mapped back to this
+      // run's own verdict position — the two only coincide by accident,
+      // since `toInsert` already skipped every matched and skipped-too-old
+      // row `verdicts` also carries.
+      const assignments = await this.aiSuggestions.categorizeTransactions(
+        toInsert.map(({ row }, index) => ({
+          index,
+          description: row.label,
+          amount: row.amount,
+          type: row.amount < 0 ? ('EXPENSE' as const) : ('INCOME' as const),
+        })),
+        categories,
+        subcategories
+      )
+      for (const assignment of assignments) {
+        const entry = toInsert[assignment.index]
+        if (entry) byPosition.set(entry.position, assignment)
+      }
+
+      const usedCategoryIds = new Set(assignments.map(a => a.categoryId))
+      if (usedCategoryIds.size > 0) {
+        const withoutIcons = await this.prisma.category.findMany({
+          where: { userId, id: { in: [...usedCategoryIds] }, icon: null },
+          select: { id: true, name: true },
+        })
+        if (withoutIcons.length > 0) {
+          void this.aiSuggestions.generateAndSaveIcons(userId, withoutIcons, [])
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `Categorization failed for ${toInsert.length} synced transaction(s); left unfiled`,
+        error
+      )
+    }
+
+    return byPosition
   }
 }

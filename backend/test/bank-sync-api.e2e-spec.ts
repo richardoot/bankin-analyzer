@@ -96,9 +96,99 @@ describe('Bank sync API (e2e)', () => {
     expect(body[0]?.action).toBe('fetch')
   })
 
+  it('honours BANK_SYNC_MIN_INTERVAL_HOURS on the status a person sees, not just on the sync call itself', async () => {
+    // A connection synced moments ago would normally still say "fetched less
+    // than 8h ago" — the whole point of the override for local testing is
+    // that the button offering to press it isn't disabled on that reason.
+    // `viewConnection` computes this independently of `sync()`'s own check,
+    // so it needs the same override or the button stays disabled regardless
+    // of what the sync endpoint itself would have allowed.
+    await prisma.bankConnection.update({
+      where: { id: connectionId },
+      data: { lastSyncAt: new Date() },
+    })
+
+    const original = process.env.BANK_SYNC_MIN_INTERVAL_HOURS
+    process.env.BANK_SYNC_MIN_INTERVAL_HOURS = '0'
+    try {
+      const response = await request(ctx.server)
+        .get('/bank-sync/connections')
+        .set(ctx.auth(owner))
+        .expect(200)
+
+      const body = response.body as { action: string; reason: string }[]
+      expect(body[0]?.action).toBe('fetch')
+    } finally {
+      if (original === undefined)
+        delete process.env.BANK_SYNC_MIN_INTERVAL_HOURS
+      else process.env.BANK_SYNC_MIN_INTERVAL_HOURS = original
+    }
+  })
+
   it('shows another user nothing', async () => {
     const response = await request(ctx.server)
       .get('/bank-sync/connections')
+      .set(ctx.auth(stranger))
+      .expect(200)
+
+    expect(response.body).toEqual([])
+  })
+
+  it('names which accounts still carry a row a sync lost the reference to', async () => {
+    await prisma.transaction.create({
+      data: {
+        userId,
+        accountId,
+        hash: 'hash-orphaned',
+        date: new Date('2026-08-25'),
+        description: 'CARTE FITNESS PARK',
+        amount: -39.99,
+        type: 'EXPENSE',
+        source: 'BANK_API',
+        externalId: null,
+      },
+    })
+    // A claimed CSV row is a different case entirely — never counted here.
+    await prisma.transaction.create({
+      data: {
+        userId,
+        accountId,
+        hash: 'hash-claimed-csv',
+        date: new Date('2026-08-20'),
+        description: 'AUTRE',
+        amount: -10,
+        type: 'EXPENSE',
+        externalId: 'ENTRY-CLAIMED',
+      },
+    })
+
+    const response = await request(ctx.server)
+      .get('/bank-sync/needs-review')
+      .set(ctx.auth(owner))
+      .expect(200)
+
+    expect(response.body).toEqual([
+      { accountId, accountLabel: 'Perso Bourso', count: 1 },
+    ])
+  })
+
+  it('shows another user none of it', async () => {
+    await prisma.transaction.create({
+      data: {
+        userId,
+        accountId,
+        hash: 'hash-orphaned-2',
+        date: new Date('2026-08-25'),
+        description: 'CARTE FITNESS PARK',
+        amount: -39.99,
+        type: 'EXPENSE',
+        source: 'BANK_API',
+        externalId: null,
+      },
+    })
+
+    const response = await request(ctx.server)
+      .get('/bank-sync/needs-review')
       .set(ctx.auth(stranger))
       .expect(200)
 

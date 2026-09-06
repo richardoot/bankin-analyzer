@@ -5,6 +5,7 @@ import {
   IsString,
   IsUrl,
   MaxLength,
+  ValidateIf,
 } from 'class-validator'
 
 export class StartAuthorizationDto {
@@ -35,6 +36,17 @@ export class CompleteAuthorizationDto {
   @IsString()
   @MaxLength(200)
   code!: string
+
+  /**
+   * The `state` query parameter the redirect carried, the same value
+   * `startAuthorization` returned. Optional so an older client still
+   * completes an authorization, just without the name correlation this
+   * enables.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  state?: string
 }
 
 export class UpdateBankAccountLinkDto {
@@ -48,4 +60,12 @@ export class UpdateBankAccountLinkDto {
   @IsOptional()
   @IsBoolean()
   isIngested?: boolean
+}
+
+export class ReassignLinkDto {
+  /** The account this bank account actually is. `null` clears the mapping. */
+  @ApiProperty({ nullable: true })
+  @ValidateIf((_, value: unknown) => value !== null)
+  @IsString()
+  accountId!: string | null
 }

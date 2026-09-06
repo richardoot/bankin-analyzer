@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   findDuplicateGroups,
+  humanizeLabel,
   labelSimilarity,
   normalizeLabel,
   reconcileAll,
@@ -60,6 +61,59 @@ describe('normalizeLabel', () => {
     expect(normalizeLabel('CARTE 31/08/26 AUCHAN SUP 832')).toBe(
       'AUCHAN SUP 832'
     )
+  })
+})
+
+describe('humanizeLabel', () => {
+  it('replaces the card-line date with Bankin\'s own "CB" marker', () => {
+    expect(humanizeLabel('CARTE 06/08/26 FITNESS PARK      CB*7962')).toBe(
+      'CB Fitness Park'
+    )
+  })
+
+  it('keeps a merchant written like a domain exactly as Bankin already does', () => {
+    expect(humanizeLabel('CARTE 25/08/26 APPLE.COM/BILL    CB*7962')).toBe(
+      'CB Apple.com/bill'
+    )
+  })
+
+  it('title cases a transfer line without inventing a "CB" it never carried', () => {
+    expect(humanizeLabel('VIR EKINO I0000017315071')).toBe('Vir Ekino')
+  })
+
+  it('drops a "Réf :" reference and title cases the rest', () => {
+    expect(
+      humanizeLabel(
+        'VIR Corner - Auchan THE CORNER Réf : SCT406182026090300736145830'
+      )
+    ).toBe('Vir Corner - Auchan The Corner')
+  })
+
+  it('drops a RUM mandate reference and a bare long alphanumeric code', () => {
+    expect(
+      humanizeLabel(
+        'PRLV SEPA ORANGE SA Votre abonnement fibre (facture: XXXXX25 46G2) 3326240EFS53VSDT RUM EPCB202501147925954'
+      )
+    ).toBe('Prlv Sepa Orange Sa Votre Abonnement Fibre (Facture: Xxxxx25 46G2)')
+  })
+
+  it('drops the trailing city/country a card-present line appends after a backslash', () => {
+    expect(humanizeLabel('AUCHAN SUP 832\\MERIGNAC\\ FR')).toBe(
+      'Auchan Sup 832'
+    )
+    expect(humanizeLabel('CBS SERVICES\\ARTIGUES-PRES\\ FR')).toBe(
+      'Cbs Services'
+    )
+  })
+
+  it('keeps a short number that is part of the name', () => {
+    expect(humanizeLabel('CARTE 31/08/26 AUCHAN SUP 832')).toBe(
+      'CB Auchan Sup 832'
+    )
+  })
+
+  it('leaves a code with no leading letter untouched rather than guessing at it', () => {
+    expect(humanizeLabel('46G2')).toBe('46G2')
   })
 })
 

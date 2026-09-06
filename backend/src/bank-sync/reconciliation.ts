@@ -146,6 +146,51 @@ export function normalizeLabel(text: string): string {
   )
 }
 
+/**
+ * The same padding `normalizeLabel` strips, but kept readable rather than
+ * reduced to a match key — what a synced row is shown as, instead of what
+ * the Bankin' export already arrives as.
+ *
+ * `CARTE 06/08/26` becomes the literal `CB`, not simply removed: that is
+ * Bankin's own marker for a card purchase, not a title-cased "Carte". Every
+ * other word is Title Cased on whichever letter comes first in it, so a
+ * token a bank sent as `(FACTURE:` reads `(Facture:` rather than staying
+ * shouted, and a bare code like `46G2` — no letter in the lead position —
+ * passes through untouched rather than guessed at.
+ */
+export function humanizeLabel(text: string): string {
+  const cleaned = text
+    // A card-present line's trailing `\CITY\ COUNTRY`: nothing past the
+    // first backslash is the purchase.
+    .replace(/\\.*$/, '')
+    // Card-line date, replaced with Bankin's own fixed marker rather than
+    // dropped — "CARTE 06/08/26 FITNESS PARK" reads as a card purchase, and
+    // Bankin says so with `CB`, not silence.
+    .replace(/\bCARTE\s+\d{2}\/\d{2}\/\d{2}\b/gi, 'CB')
+    // Card number the marker above already implied: `CB*7962`.
+    .replace(/\bCB\s*\*\s*\d+\b/gi, '')
+    // A reference the bank staples on for its own bookkeeping — never a
+    // word a person reads as part of the label.
+    .replace(/\bR[ée]f\s*:?\s*\S+/gi, '')
+    .replace(/\bRUM\s+\S+/gi, '')
+    .replace(/\b(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{8,}\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return cleaned
+    .split(' ')
+    .map(word =>
+      word.toUpperCase() === 'CB'
+        ? 'CB'
+        : word.replace(
+            /^(\W*)([a-zA-Z])(.*)$/,
+            (_, lead: string, first: string, rest: string) =>
+              lead + first.toUpperCase() + rest.toLowerCase()
+          )
+    )
+    .join(' ')
+}
+
 /** Words worth comparing: short ones carry no signal and inflate the score. */
 function tokensOf(text: string): Set<string> {
   return new Set(

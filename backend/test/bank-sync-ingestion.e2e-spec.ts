@@ -208,15 +208,17 @@ describe('Bank sync ingestion (e2e)', () => {
   })
 
   it('inserts a transaction the ledger does not have', async () => {
-    await csvRow()
+    // After the account's own earliest row — the date floor only holds back
+    // what is older than that, and its own spec covers that case.
+    await csvRow({ date: '2026-06-01' })
 
     await run(
       dumpOf([
         {
           entry_reference: 'ENTRY-NEW',
           amount: '12.50',
-          date: '2024-10-01',
-          label: 'CARTE 01/10/24 BOULANGERIE CB*7962',
+          date: '2026-10-01',
+          label: 'CARTE 01/10/26 BOULANGERIE CB*7962',
         },
       ]),
       true
@@ -233,14 +235,14 @@ describe('Bank sync ingestion (e2e)', () => {
   })
 
   it('writes nothing without --apply', async () => {
-    await csvRow()
+    await csvRow({ date: '2026-06-01' })
 
     await run(
       dumpOf([
         {
           entry_reference: 'ENTRY-NEW',
           amount: '12.50',
-          date: '2024-10-01',
+          date: '2026-10-01',
           label: 'BOULANGERIE',
         },
       ]),
@@ -296,5 +298,90 @@ describe('Bank sync ingestion (e2e)', () => {
     })
     expect(link.externalAccountId).toBe('bank-acc-1')
     expect(link.isIngested).toBe(true)
+  })
+
+  describe('the date floor', () => {
+    it('does not insert a row older than the account already knows', async () => {
+      // The failure this exists to prevent: a re-authorization's deeper
+      // window hands back a genuine, previously unseen transaction from a
+      // month already closed, and inserting it revises a total the user had
+      // already reviewed.
+      await csvRow({ date: '2026-06-01' })
+
+      await run(
+        dumpOf([
+          {
+            entry_reference: 'ENTRY-OLD',
+            amount: '12.50',
+            date: '2026-01-15',
+            label: 'BOULANGERIE',
+          },
+          {
+            entry_reference: 'ENTRY-NEW',
+            amount: '8.00',
+            date: '2026-07-01',
+            label: 'BAR TABAC',
+          },
+        ]),
+        true
+      )
+
+      expect(
+        await prisma.transaction.findFirst({
+          where: { externalId: 'ENTRY-OLD' },
+        })
+      ).toBeNull()
+      expect(
+        await prisma.transaction.findFirst({
+          where: { externalId: 'ENTRY-NEW' },
+        })
+      ).not.toBeNull()
+    })
+
+    it('does not hold back a claim just because the row is old', async () => {
+      // Claiming only adds a reference to a row that already exists — it
+      // cannot revise a total, so the floor has nothing to protect against
+      // here.
+      const existing = await csvRow({ date: '2026-01-15' })
+
+      await run(
+        dumpOf([
+          {
+            entry_reference: 'ENTRY-1',
+            amount: '39.99',
+            date: '2026-01-15',
+            label: 'CARTE 15/01/26 FITNESS PARK CB*7962',
+          },
+        ]),
+        true
+      )
+
+      const row = await prisma.transaction.findUniqueOrThrow({
+        where: { id: existing },
+      })
+      expect(row.externalId).toBe('ENTRY-1')
+    })
+
+    it('applies no floor to an account with no history yet', async () => {
+      // Nothing to protect on a first backfill — this is exactly where the
+      // deep history the bank briefly offers is worth having.
+      await run(
+        dumpOf([
+          {
+            entry_reference: 'ENTRY-DEEP',
+            amount: '12.50',
+            date: '2023-01-15',
+            label: 'BOULANGERIE',
+          },
+        ]),
+        true
+      )
+
+      expect(
+        await prisma.transaction.findFirst({
+          where: { externalId: 'ENTRY-DEEP' },
+        })
+      ).not.toBeNull()
+    })
   })
 })

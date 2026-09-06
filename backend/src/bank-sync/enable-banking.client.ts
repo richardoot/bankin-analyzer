@@ -40,6 +40,12 @@ export interface Aspsp {
   beta?: boolean
   bic?: string
   required_psu_headers?: string[]
+  /**
+   * Public, CORS-open, cacheable — confirmed by fetching one directly rather
+   * than trusting the field description alone. Accepts Uploadcare resize
+   * suffixes (e.g. `-/resize/64x64/`), also confirmed against a real logo.
+   */
+  logo?: string
 }
 
 export interface BankAccountResource {
