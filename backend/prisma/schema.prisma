@@ -31,6 +31,7 @@ model User {
   bankStagedTransactions BankStagedTransaction[]
   bankConnections       BankConnection[]
   bankAccountLinks      BankAccountLink[]
+  bankAuthorizationAttempts BankAuthorizationAttempt[]
   accountAliases        AccountAlias[]
 
   @@map("users")
@@ -75,6 +76,16 @@ model Transaction {
   /// nothing on the subject.
   bookingStatus String? @map("booking_status")
 
+  /// Which run last wrote to this row through the bank sync — inserted it, or
+  /// claimed it. Null for a row a sync has never touched.
+  ///
+  /// A CSV import records `importHistoryId` for the same reason: knowing what
+  /// wrote a row is what makes undoing it possible without guessing. Update it
+  /// only on an actual write; a row a later fetch merely re-recognises
+  /// (`alreadyLinked`) keeps the run that originally touched it, so undoing
+  /// that earlier run still finds it.
+  syncRunId String? @map("sync_run_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -83,6 +94,7 @@ model Transaction {
   category              Category?              @relation(fields: [categoryId], references: [id])
   subcategoryRef        Subcategory?           @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
   importHistory         ImportHistory?         @relation(fields: [importHistoryId], references: [id], onDelete: SetNull)
+  syncRun               BankSyncRun?           @relation(fields: [syncRunId], references: [id], onDelete: SetNull)
   reimbursementRequests ReimbursementRequest[]
   settlementsAsIncome   Settlement[]           @relation("SettlementIncome")
   tags                  TransactionTag[]
@@ -106,6 +118,7 @@ model Transaction {
   @@index([type])
   @@index([importHistoryId])
   @@index([source])
+  @@index([syncRunId])
   @@map("transactions")
   @@schema("app")
 }
@@ -584,8 +597,15 @@ model BankSyncRun {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  user         User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions BankStagedTransaction[]
+  /// Set once this run has been undone: an inserted row deleted, a claimed
+  /// one unlinked. Distinguishes "undone" from "touched nothing" — both
+  /// leave no `Transaction` still pointing at this run — and is what a
+  /// second undo attempt is refused on.
+  undoneAt DateTime? @map("undone_at")
+
+  user                User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions        BankStagedTransaction[]
+  writtenTransactions Transaction[]
 
   @@index([userId])
   @@index([userId, fetchedAt])
@@ -664,6 +684,12 @@ model BankConnection {
   id     String @id @default(uuid())
   userId String @map("user_id")
 
+  /// Set from `BankAuthorizationAttempt` when completing an authorization —
+  /// the name and country this application itself asked for at `POST /auth`,
+  /// from `GET /aspsps` — never from `session.aspsp`, which is the bank's own
+  /// echo and is not guaranteed to repeat itself: a duplicate connection was
+  /// observed for real after it did not. Falls back to the session's echo
+  /// only when no attempt correlates (state missing or expired).
   aspspName    String @map("aspsp_name")
   aspspCountry String @map("aspsp_country")
 
@@ -690,9 +716,47 @@ model BankConnection {
   user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   accountLinks BankAccountLink[]
 
+  /// A backstop, not the fix itself: the fix is `completeAuthorization`
+  /// trusting the name it asked with over the one the session echoes. This
+  /// only turns a would-be duplicate into a loud error rather than silence.
+  @@unique([userId, aspspCountry, aspspName])
   @@index([userId])
   @@index([userId, status])
   @@map("bank_connections")
+  @@schema("app")
+}
+
+/// A `POST /auth` in flight, waiting for the user to come back.
+///
+/// `startAuthorization` resolves the bank against `GET /aspsps` and asks with
+/// that exact name; `completeAuthorization` only sees whatever `session.aspsp`
+/// echoes back, which is not guaranteed to be the same string — and once,
+/// for real, it was not, so the lookup by name missed and a second connection
+/// was created for a bank already connected. This is the canonical name
+/// carried across that gap, addressed by `state`: the one value already
+/// threaded through the whole redirect, sent to `POST /auth` and echoed back
+/// by the bank alongside `code`.
+///
+/// This does not contradict "nothing is recorded until they come back with a
+/// code" (see `BankSyncController.start`) — that promise is about
+/// `BankConnection`, the record a person can see on the banks screen. This
+/// holds no bank data, only a name a country and whose attempt it was, and an
+/// abandoned one is exactly as harmless as a CSRF token nobody redeemed.
+model BankAuthorizationAttempt {
+  /// The `state` sent to, and echoed back by, Enable Banking.
+  id String @id
+
+  userId String @map("user_id")
+
+  aspspName    String @map("aspsp_name")
+  aspspCountry String @map("aspsp_country")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@map("bank_authorization_attempts")
   @@schema("app")
 }
 
@@ -753,7 +817,16 @@ model BankAccountLink {
   user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   account    Account?       @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
+  /// Kept as a lookup key still (a link is fetched by it right after this
+  /// authorization, before anything durable is known), but no longer trusted
+  /// to find a link again on a later one — see `completeAuthorization`.
   @@unique([connectionId, externalAccountId])
+  /// The backstop: once `iban`/`identificationHash` are trusted for the
+  /// lookup, a real duplicate becomes a loud error rather than silence. NULLs
+  /// are distinct in a Postgres unique index, so an account with neither
+  /// known yet is never blocked by another in the same state.
+  @@unique([connectionId, iban])
+  @@unique([connectionId, identificationHash])
   @@index([userId])
   @@index([accountId])
   @@map("bank_account_links")
