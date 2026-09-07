@@ -69,3 +69,10 @@ export class ReassignLinkDto {
   @IsString()
   accountId!: string | null
 }
+
+export class SaveEnableBankingCredentialDto {
+  /** The application id, as shown in the Enable Banking Control Panel. */
+  @IsString()
+  @MaxLength(200)
+  applicationId!: string
+}

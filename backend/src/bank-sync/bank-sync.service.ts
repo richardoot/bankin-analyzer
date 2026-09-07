@@ -19,6 +19,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common'
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
@@ -32,7 +33,9 @@ import {
   EnableBankingClient,
   type BankAccountResource,
   type BankTransaction,
+  type EnableBankingCredentials,
 } from './enable-banking.client'
+import { EnableBankingCredentialsService } from './enable-banking-credentials.service'
 import {
   humanizeLabel,
   reconcileAll,
@@ -174,11 +177,25 @@ export class BankSyncService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly client: EnableBankingClient,
+    private readonly credentialsService: EnableBankingCredentialsService,
     private readonly aiSuggestions: AiSuggestionsService
   ) {}
 
-  isConfigured(): boolean {
-    return this.client.isConfigured()
+  isConfigured(userId: string): Promise<boolean> {
+    return this.credentialsService.isConfigured(userId)
+  }
+
+  private async credentialsOf(
+    userId: string
+  ): Promise<EnableBankingCredentials> {
+    const credentials = await this.credentialsService.resolve(userId)
+    if (!credentials) {
+      throw new ServiceUnavailableException(
+        'Bank sync is not configured: add your Enable Banking application in ' +
+          'Settings first.'
+      )
+    }
+    return credentials
   }
 
   /**
@@ -188,7 +205,10 @@ export class BankSyncService {
    * simply newer, and a bank missing from a list with no explanation is worse
    * than one shown with a caveat.
    */
-  async listBanks(country: string): Promise<
+  async listBanks(
+    userId: string,
+    country: string
+  ): Promise<
     {
       name: string
       country: string
@@ -196,7 +216,8 @@ export class BankSyncService {
       logo: string | null
     }[]
   > {
-    const aspsps = await this.client.listAspsps(country)
+    const credentials = await this.credentialsOf(userId)
+    const aspsps = await this.client.listAspsps(credentials, country)
     return aspsps
       .map(aspsp => ({
         name: aspsp.name,
@@ -218,7 +239,8 @@ export class BankSyncService {
     userId: string,
     input: { aspspName: string; country: string; redirectUrl: string }
   ): Promise<{ url: string; state: string }> {
-    const aspsps = await this.client.listAspsps(input.country)
+    const credentials = await this.credentialsOf(userId)
+    const aspsps = await this.client.listAspsps(credentials, input.country)
     const aspsp = aspsps.find(
       candidate =>
         candidate.name.toLowerCase() === input.aspspName.toLowerCase()
@@ -236,7 +258,7 @@ export class BankSyncService {
     const validUntil = new Date(Date.now() + ceiling - 60_000).toISOString()
     const state = randomUUID()
 
-    const { url } = await this.client.startAuthorization({
+    const { url } = await this.client.startAuthorization(credentials, {
       aspspName: aspsp.name,
       aspspCountry: aspsp.country,
       redirectUrl: input.redirectUrl,
@@ -280,7 +302,8 @@ export class BankSyncService {
     code: string,
     state?: string
   ): Promise<ConnectionView> {
-    const session = await this.client.createSession(code)
+    const credentials = await this.credentialsOf(userId)
+    const session = await this.client.createSession(credentials, code)
     const accounts = EnableBankingClient.accountsOf(session)
 
     // The name this application itself asked with, over the one the session
@@ -332,7 +355,7 @@ export class BankSyncService {
 
     for (const account of accounts) {
       if (!account.uid) continue
-      const details = await this.describe(account)
+      const details = await this.describe(credentials, account)
       const iban = details.account_id?.iban ?? null
       const identificationHash = details.identification_hash ?? null
 
@@ -387,11 +410,15 @@ export class BankSyncService {
 
   /** What `/details` says, falling back to the session when it will not say. */
   private async describe(
+    credentials: EnableBankingCredentials,
     account: BankAccountResource
   ): Promise<BankAccountResource> {
     if (!account.uid) return account
     try {
-      const details = await this.client.getAccountDetails(account.uid)
+      const details = await this.client.getAccountDetails(
+        credentials,
+        account.uid
+      )
       return { ...account, ...details, uid: account.uid }
     } catch (error) {
       // A bank that will not describe an account can still be read from. What
@@ -1304,11 +1331,12 @@ export class BankSyncService {
       select: { id: true },
     })
 
+    const credentials = await this.credentialsOf(userId)
     const fetched = new Map<string, BankTransaction[]>()
     for (const link of ingestable) {
       fetched.set(
         link.externalAccountId,
-        await this.client.listTransactions(link.externalAccountId)
+        await this.client.listTransactions(credentials, link.externalAccountId)
       )
     }
 

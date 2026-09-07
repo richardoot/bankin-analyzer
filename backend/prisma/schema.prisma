@@ -33,6 +33,7 @@ model User {
   bankAccountLinks      BankAccountLink[]
   bankAuthorizationAttempts BankAuthorizationAttempt[]
   accountAliases        AccountAlias[]
+  enableBankingCredential EnableBankingCredential?
 
   @@map("users")
   @@schema("app")
@@ -757,6 +758,38 @@ model BankAuthorizationAttempt {
 
   @@index([createdAt])
   @@map("bank_authorization_attempts")
+  @@schema("app")
+}
+
+/// One user's own Enable Banking application — the credential every call to
+/// Enable Banking signs with, so this user's bank sync answers to their own
+/// application rather than whichever one this server's operator registered.
+///
+/// The private key is the sole credential of an application that reads bank
+/// accounts, downloadable exactly once from Enable Banking's own Control
+/// Panel, so it is stored encrypted rather than in the clear — the same
+/// reasoning `enable-banking.client.ts` already applies to the operator's
+/// own key, read from disk on each use rather than held anywhere.
+model EnableBankingCredential {
+  id     String @id @default(uuid())
+  userId String @unique @map("user_id")
+
+  /// Shown back to this user to confirm which application is active; not a
+  /// secret on its own — Enable Banking's own Control Panel already shows it
+  /// in plain text.
+  applicationId String @map("application_id")
+
+  /// AES-256-GCM ciphertext of the .pem content: a random IV, the GCM auth
+  /// tag, and the ciphertext, concatenated and base64-encoded. Never read
+  /// back by any endpoint this application exposes.
+  encryptedPrivateKey String @map("encrypted_private_key")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("enable_banking_credentials")
   @@schema("app")
 }
 

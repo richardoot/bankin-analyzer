@@ -5,6 +5,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common'
 import { BankSyncService, syncPolicyOptionsFromEnv } from './bank-sync.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { EnableBankingClient } from './enable-banking.client'
+import { EnableBankingCredentialsService } from './enable-banking-credentials.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 
 const userId = 'user-1'
@@ -86,12 +87,16 @@ const mockPrisma = {
 }
 
 const mockClient = {
-  isConfigured: vi.fn(),
   listAspsps: vi.fn(),
   startAuthorization: vi.fn(),
   createSession: vi.fn(),
   getAccountDetails: vi.fn(),
   listTransactions: vi.fn(),
+}
+
+const mockCredentialsService = {
+  resolve: vi.fn(),
+  isConfigured: vi.fn(),
 }
 
 const mockAiSuggestions = {
@@ -110,6 +115,10 @@ describe('BankSyncService — authorization', () => {
         BankSyncService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: EnableBankingClient, useValue: mockClient },
+        {
+          provide: EnableBankingCredentialsService,
+          useValue: mockCredentialsService,
+        },
         { provide: AiSuggestionsService, useValue: mockAiSuggestions },
       ],
     }).compile()
@@ -126,6 +135,10 @@ describe('BankSyncService — authorization', () => {
     mockPrisma.bankAccountLink.findFirst.mockResolvedValue(null)
     mockPrisma.bankAccountLink.upsert.mockResolvedValue({ id: 'link-1' })
     mockClient.getAccountDetails.mockResolvedValue({})
+    mockCredentialsService.resolve.mockResolvedValue({
+      applicationId: 'app-1',
+      privateKey: 'test-key',
+    })
   })
 
   describe('startAuthorization', () => {

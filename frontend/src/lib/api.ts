@@ -855,6 +855,34 @@ async function fetchWithAuth(
 }
 
 /**
+ * Same retry-on-401 behaviour as `fetchWithAuth`, but without forcing
+ * `Content-Type: application/json` — a `FormData` body needs the browser's
+ * own multipart boundary, and setting the header by hand loses it.
+ */
+async function fetchWithAuthForFormData(
+  url: string,
+  options: RequestInit
+): Promise<Response> {
+  async function authHeader(): Promise<HeadersInit> {
+    const session = await getSessionWithTimeout()
+    if (!session?.access_token) throw new AuthError('No active session')
+    return { Authorization: `Bearer ${session.access_token}` }
+  }
+
+  let response = await fetch(url, { ...options, headers: await authHeader() })
+
+  if (response.status === 401) {
+    const { error } = await supabase.auth.refreshSession()
+    if (error) {
+      throw new AuthError('Session expiree, veuillez vous reconnecter')
+    }
+    response = await fetch(url, { ...options, headers: await authHeader() })
+  }
+
+  return response
+}
+
+/**
  * Try to extract a NestJS error message from a non-OK response. Falls back
  * to a generic message if the body is empty or not JSON.
  */
@@ -980,6 +1008,55 @@ export const api = {
     if (!response.ok)
       throw new Error(await readErrorMessage(response, 'read bank sync status'))
     return response.json() as Promise<{ configured: boolean }>
+  },
+
+  /** This user's own Enable Banking application, if they have set one up. */
+  async getEnableBankingCredential(): Promise<{
+    applicationId: string | null
+  }> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/credentials`
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(response, 'read your Enable Banking application')
+      )
+    return response.json() as Promise<{ applicationId: string | null }>
+  },
+
+  /** Save this user's Enable Banking application id and .pem private key. */
+  async saveEnableBankingCredential(
+    applicationId: string,
+    pemFile: File
+  ): Promise<{ applicationId: string | null }> {
+    const body = new FormData()
+    body.append('applicationId', applicationId)
+    body.append('file', pemFile)
+
+    const response = await fetchWithAuthForFormData(
+      `${API_BASE_URL}/bank-sync/credentials`,
+      { method: 'PUT', body }
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(response, 'save your Enable Banking application')
+      )
+    return response.json() as Promise<{ applicationId: string | null }>
+  },
+
+  /** Remove this user's own Enable Banking application. */
+  async removeEnableBankingCredential(): Promise<void> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/credentials`,
+      { method: 'DELETE' }
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(
+          response,
+          'remove your Enable Banking application'
+        )
+      )
   },
 
   /** The banks that can be connected, for a person choosing one. */

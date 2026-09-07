@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { EnableBankingClient } from './enable-banking.client'
 import type { BankSession } from './enable-banking.client'
 
@@ -33,47 +33,18 @@ describe('EnableBankingClient.accountsOf', () => {
   })
 })
 
-describe('EnableBankingClient configuration', () => {
-  const client = new EnableBankingClient()
-  const saved = {
-    id: process.env.ENABLE_BANKING_APP_ID,
-    key: process.env.ENABLE_BANKING_PRIVATE_KEY_PATH,
-  }
+describe('EnableBankingClient signing', () => {
+  it('cannot sign a call with a key that is not actually a key', async () => {
+    // Whether the credentials are even usable is validated once, at save
+    // time, by EnableBankingCredentialsService. This class trusts what it is
+    // handed and simply fails to sign if that trust was misplaced.
+    const client = new EnableBankingClient()
 
-  beforeEach(() => {
-    delete process.env.ENABLE_BANKING_APP_ID
-    delete process.env.ENABLE_BANKING_PRIVATE_KEY_PATH
-  })
-
-  afterEach(() => {
-    if (saved.id) process.env.ENABLE_BANKING_APP_ID = saved.id
-    if (saved.key) process.env.ENABLE_BANKING_PRIVATE_KEY_PATH = saved.key
-  })
-
-  it('reports itself unconfigured rather than failing at startup', () => {
-    // A backend whose owner never set up a bank sync must still serve
-    // everything else.
-    expect(client.isConfigured()).toBe(false)
-  })
-
-  it('needs both halves of the credential', () => {
-    process.env.ENABLE_BANKING_APP_ID = 'an-id'
-    expect(client.isConfigured()).toBe(false)
-
-    process.env.ENABLE_BANKING_PRIVATE_KEY_PATH = '/somewhere/key.pem'
-    expect(client.isConfigured()).toBe(true)
-  })
-
-  it('refuses a call rather than signing with nothing', async () => {
-    await expect(client.listAspsps('FR')).rejects.toThrow(/not configured/)
-  })
-
-  it('says so when the key cannot be used', async () => {
-    process.env.ENABLE_BANKING_APP_ID = 'an-id'
-    process.env.ENABLE_BANKING_PRIVATE_KEY_PATH = '/nowhere/missing.pem'
-
-    await expect(client.listAspsps('FR')).rejects.toThrow(
-      /private key cannot be used/
-    )
+    await expect(
+      client.listAspsps(
+        { applicationId: 'an-id', privateKey: 'not-a-pem' },
+        'FR'
+      )
+    ).rejects.toThrow()
   })
 })

@@ -5,20 +5,30 @@
  * all belong to one user, and none of them is reachable by id alone.
  */
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
   Post,
+  Put,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger'
 import { SupabaseGuard } from '../auth/guards/supabase.guard'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import type { User } from '../generated/prisma'
 import { BankSyncService } from './bank-sync.service'
+import {
+  EnableBankingCredentialsService,
+  InvalidEnableBankingCredentialsError,
+} from './enable-banking-credentials.service'
 import type {
   BankSyncRunSummary,
   ConnectionView,
@@ -30,27 +40,104 @@ import type {
 import {
   CompleteAuthorizationDto,
   ReassignLinkDto,
+  SaveEnableBankingCredentialDto,
   StartAuthorizationDto,
   UpdateBankAccountLinkDto,
 } from './dto/bank-sync.dto'
+
+/**
+ * The shape of what `FileInterceptor` hands a handler. `@types/multer` is not
+ * a dependency of this backend, and a `.pem` upload needs nothing else it
+ * would provide.
+ */
+interface UploadedPemFile {
+  buffer: Buffer
+  originalname: string
+  size: number
+}
 
 @ApiTags('bank-sync')
 @ApiBearerAuth()
 @Controller('bank-sync')
 @UseGuards(SupabaseGuard)
 export class BankSyncController {
-  constructor(private readonly bankSync: BankSyncService) {}
+  constructor(
+    private readonly bankSync: BankSyncService,
+    private readonly credentials: EnableBankingCredentialsService
+  ) {}
 
   @Get('status')
   @ApiOperation({
-    summary: 'Whether this server can sync at all',
+    summary: 'Whether this user can sync at all',
     description:
-      'A backend whose owner has not configured Enable Banking serves ' +
-      'everything else normally; the interface asks this before offering to ' +
-      'connect a bank.',
+      'False until this user has configured their own Enable Banking ' +
+      'application; the interface asks this before offering to connect a ' +
+      'bank.',
   })
-  status(): { configured: boolean } {
-    return { configured: this.bankSync.isConfigured() }
+  async status(@CurrentUser() user: User): Promise<{ configured: boolean }> {
+    return { configured: await this.bankSync.isConfigured(user.id) }
+  }
+
+  @Get('credentials')
+  @ApiOperation({
+    summary: "This user's own Enable Banking application, if any",
+    description:
+      'Never returns the private key — only whether one is set up, and the ' +
+      'application id, which the Control Panel already shows in plain text.',
+  })
+  async credentialStatus(
+    @CurrentUser() user: User
+  ): Promise<{ applicationId: string | null }> {
+    const own = await this.credentials.hasOwnCredentials(user.id)
+    return { applicationId: own?.applicationId ?? null }
+  }
+
+  @Put('credentials')
+  // Kept in memory, never written to disk — and bounded: an RSA .pem is
+  // ~2 KB, so 16 KB is generous, and without a ceiling any authenticated
+  // caller could buffer gigabytes into this process's memory.
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 16 * 1024, files: 1 } })
+  )
+  @ApiOperation({
+    summary: 'Save this user’s Enable Banking application',
+    description:
+      'The application id, plus the .pem private key downloaded once from ' +
+      'the Control Panel. Rejected outright if the key cannot actually sign ' +
+      'a request, before anything is stored.',
+  })
+  async saveCredentials(
+    @CurrentUser() user: User,
+    @Body() dto: SaveEnableBankingCredentialDto,
+    @UploadedFile() file?: UploadedPemFile
+  ): Promise<{ applicationId: string | null }> {
+    if (!file) {
+      throw new BadRequestException('The .pem private key file is required.')
+    }
+    try {
+      await this.credentials.save(
+        user.id,
+        dto.applicationId,
+        file.buffer.toString('utf8')
+      )
+    } catch (error) {
+      if (error instanceof InvalidEnableBankingCredentialsError) {
+        throw new BadRequestException(error.message)
+      }
+      throw error
+    }
+    return { applicationId: dto.applicationId }
+  }
+
+  @Delete('credentials')
+  @ApiOperation({
+    summary: 'Remove this user’s Enable Banking application',
+    description:
+      'This user cannot sync again until they configure another one — ' +
+      'there is no server default to fall back to.',
+  })
+  async removeCredentials(@CurrentUser() user: User): Promise<void> {
+    await this.credentials.remove(user.id)
   }
 
   @Get('aspsps')
@@ -61,7 +148,10 @@ export class BankSyncController {
       'from the list with no explanation is worse than one shown with a ' +
       'caveat.',
   })
-  banks(@Query('country') country?: string): Promise<
+  banks(
+    @CurrentUser() user: User,
+    @Query('country') country?: string
+  ): Promise<
     {
       name: string
       country: string
@@ -69,7 +159,7 @@ export class BankSyncController {
       logo: string | null
     }[]
   > {
-    return this.bankSync.listBanks(country ?? 'FR')
+    return this.bankSync.listBanks(user.id, country ?? 'FR')
   }
 
   @Get('connections')

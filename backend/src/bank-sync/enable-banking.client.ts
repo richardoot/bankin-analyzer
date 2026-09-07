@@ -1,25 +1,25 @@
 /**
  * Everything this application says to Enable Banking.
  *
- * ## Configuration, and its absence
+ * ## Credentials
  *
- * The application id and the private key come from the environment. A backend
- * whose owner has not set them up must still start and serve everything else,
- * so nothing is read at construction and nothing throws until a bank sync is
- * actually asked for. `isConfigured` lets a caller answer "not set up" rather
- * than fail mid-request.
- *
- * The key is read from disk on each use rather than held in memory. It is the
- * sole credential for an application that reads bank accounts, and a value
- * that never sits in a long-lived object is a value that never turns up in a
- * heap dump or a crash report.
+ * The application id and private key belong to whoever is asking — each
+ * call takes them explicitly rather than this class reading them from the
+ * environment or disk itself. Resolving "which credentials for this user,
+ * falling back to what?" is `EnableBankingCredentialsService`'s job, not
+ * this one's; this class only ever signs with what it is handed.
  */
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
-import { readFileSync } from 'fs'
+import { Injectable, Logger } from '@nestjs/common'
 import { buildJwt } from './enable-banking.jwt'
 
 /** Production base URL. `api.tilisy.com` is the deprecated alias. */
 const API_BASE = 'https://api.enablebanking.com'
+
+export interface EnableBankingCredentials {
+  applicationId: string
+  /** Raw PEM content, not a file path. */
+  privateKey: string
+}
 
 /** An API error that kept its status, so a caller can tell 403 from 500. */
 export class EnableBankingError extends Error {
@@ -95,44 +95,19 @@ const MAX_PAGES = 50
 export class EnableBankingClient {
   private readonly logger = new Logger(EnableBankingClient.name)
 
-  /** Whether a bank sync can be attempted at all. */
-  isConfigured(): boolean {
-    return Boolean(
-      process.env.ENABLE_BANKING_APP_ID &&
-      process.env.ENABLE_BANKING_PRIVATE_KEY_PATH
-    )
-  }
-
-  private token(): string {
-    const applicationId = process.env.ENABLE_BANKING_APP_ID
-    const keyPath = process.env.ENABLE_BANKING_PRIVATE_KEY_PATH
-    if (!applicationId || !keyPath) {
-      throw new ServiceUnavailableException(
-        'Bank sync is not configured on this server: ENABLE_BANKING_APP_ID ' +
-          'and ENABLE_BANKING_PRIVATE_KEY_PATH must both be set.'
-      )
-    }
-    try {
-      return buildJwt(applicationId, readFileSync(keyPath, 'utf8'))
-    } catch (error) {
-      // The key is downloaded once from the Control Panel and is not
-      // retrievable afterwards, so "cannot read it" and "it is not a key" both
-      // mean the same thing to whoever has to fix this.
-      this.logger.error(`Cannot sign with ${keyPath}`, error as Error)
-      throw new ServiceUnavailableException(
-        'Bank sync is configured but its private key cannot be used.'
-      )
-    }
+  private token(credentials: EnableBankingCredentials): string {
+    return buildJwt(credentials.applicationId, credentials.privateKey)
   }
 
   private async call<T>(
+    credentials: EnableBankingCredentials,
     path: string,
     init?: { method: string; body: unknown }
   ): Promise<T> {
     const response = await fetch(`${API_BASE}${path}`, {
       method: init?.method ?? 'GET',
       headers: {
-        Authorization: `Bearer ${this.token()}`,
+        Authorization: `Bearer ${this.token(credentials)}`,
         ...(init ? { 'Content-Type': 'application/json' } : {}),
       },
       ...(init ? { body: JSON.stringify(init.body) } : {}),
@@ -148,8 +123,12 @@ export class EnableBankingClient {
     return (await response.json()) as T
   }
 
-  async listAspsps(country: string): Promise<Aspsp[]> {
+  async listAspsps(
+    credentials: EnableBankingCredentials,
+    country: string
+  ): Promise<Aspsp[]> {
     const { aspsps } = await this.call<{ aspsps: Aspsp[] }>(
+      credentials,
       `/aspsps?country=${encodeURIComponent(country)}`
     )
     return aspsps
@@ -165,15 +144,18 @@ export class EnableBankingClient {
    * purpose is matching the sessions of one user across the
    * re-authorizations a lapsing consent forces.
    */
-  async startAuthorization(input: {
-    aspspName: string
-    aspspCountry: string
-    redirectUrl: string
-    validUntil: string
-    state: string
-    psuId: string
-  }): Promise<{ url: string; authorization_id?: string }> {
-    return this.call('/auth', {
+  async startAuthorization(
+    credentials: EnableBankingCredentials,
+    input: {
+      aspspName: string
+      aspspCountry: string
+      redirectUrl: string
+      validUntil: string
+      state: string
+      psuId: string
+    }
+  ): Promise<{ url: string; authorization_id?: string }> {
+    return this.call(credentials, '/auth', {
       method: 'POST',
       body: {
         access: {
@@ -191,13 +173,22 @@ export class EnableBankingClient {
   }
 
   /** Exchange the code the redirect carried for a session. */
-  async createSession(code: string): Promise<BankSession> {
-    return this.call('/sessions', { method: 'POST', body: { code } })
+  async createSession(
+    credentials: EnableBankingCredentials,
+    code: string
+  ): Promise<BankSession> {
+    return this.call(credentials, '/sessions', {
+      method: 'POST',
+      body: { code },
+    })
   }
 
   /** Read a session already authorised — what a sync does. */
-  async getSession(sessionId: string): Promise<BankSession> {
-    return this.call(`/sessions/${sessionId}`)
+  async getSession(
+    credentials: EnableBankingCredentials,
+    sessionId: string
+  ): Promise<BankSession> {
+    return this.call(credentials, `/sessions/${sessionId}`)
   }
 
   /**
@@ -226,8 +217,11 @@ export class EnableBankingClient {
    * account should be ingested at all — a `CARD` account reports the same
    * money as the `CACC` it settles onto.
    */
-  async getAccountDetails(uid: string): Promise<BankAccountResource> {
-    return this.call(`/accounts/${uid}/details`)
+  async getAccountDetails(
+    credentials: EnableBankingCredentials,
+    uid: string
+  ): Promise<BankAccountResource> {
+    return this.call(credentials, `/accounts/${uid}/details`)
   }
 
   /**
@@ -235,8 +229,12 @@ export class EnableBankingClient {
    * bank's most recent booked transaction. Comparing it to our own latest row
    * answers "is there anything new?" without paginating anything.
    */
-  async getBalances(uid: string): Promise<BankBalance[]> {
+  async getBalances(
+    credentials: EnableBankingCredentials,
+    uid: string
+  ): Promise<BankBalance[]> {
     const { balances } = await this.call<{ balances: BankBalance[] }>(
+      credentials,
       `/accounts/${uid}/balances`
     )
     return balances ?? []
@@ -250,6 +248,7 @@ export class EnableBankingClient {
    * reaches. A routine sync passes `dateFrom` instead and asks for what is new.
    */
   async listTransactions(
+    credentials: EnableBankingCredentials,
     uid: string,
     options: { strategy?: 'default' | 'longest'; dateFrom?: string } = {}
   ): Promise<BankTransaction[]> {
@@ -265,7 +264,7 @@ export class EnableBankingClient {
       const body = await this.call<{
         transactions: BankTransaction[]
         continuation_key?: string
-      }>(`/accounts/${uid}/transactions?${query.toString()}`)
+      }>(credentials, `/accounts/${uid}/transactions?${query.toString()}`)
 
       all.push(...(body.transactions ?? []))
       // A continuation key means "not everything is here yet". The loop ends

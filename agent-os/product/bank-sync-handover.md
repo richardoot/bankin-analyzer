@@ -201,9 +201,20 @@ call an http API, and the request never reaches the server.
 
 ### Enable Banking, for a real authorization
 
-`.env.docker` carries `ENABLE_BANKING_APP_ID` and `ENABLE_BANKING_KEY_FILE`
-(host path to the `.pem`, mounted read-only into the container). The key is
-downloadable exactly once and lives outside the repository.
+Since 2026-09-07 each user brings their own application from `Réglages →
+Comptes` (App ID + `.pem` upload, see the per-user credentials section
+below) — there is no server-wide default any more; a user with nothing
+configured of their own simply cannot sync. (A first cut of this fell back
+to `.env.docker`'s `ENABLE_BANKING_APP_ID`/`ENABLE_BANKING_KEY_FILE` for
+whoever had configured nothing, which let a sync go through without the
+user ever touching the new screen — surprising enough, caught the same day,
+that the fallback was removed outright rather than made more obvious.)
+`ENABLE_BANKING_APP_ID`/`ENABLE_BANKING_PRIVATE_KEY_PATH` in `backend/.env`
+still matter for the two standalone operator scripts
+(`probe-enable-banking.ts`, `spike-enable-banking-fetch.ts`), which read
+them directly via `dotenv` — never through the server. The key is
+downloadable exactly once from the Control Panel and lives outside the
+repository.
 
 Redirect URLs must be registered in the Control Panel. Registered so far:
 `https://localhost:5174/bank-callback.html`. **The screen uses
@@ -618,13 +629,90 @@ Left for later, on purpose: the CSV import's own opt-in model path
 parameter defaults to empty, so that path is unchanged. The benefit is the
 same there; nothing in this conversation asked for it yet.
 
+**Per-user Enable Banking credentials, 2026-09-07.** The question above —
+whether one application could cover a handful of friends' accounts — was
+never answered by Enable Banking support; the user decided not to wait and
+asked for per-user credentials instead, entered by uploading the `.pem`
+file. `EnableBankingCredential` (migration
+`20260906222814_add_enable_banking_credentials`) holds one row per user:
+`applicationId` in the clear (the Control Panel already shows it in plain
+text) and `encryptedPrivateKey`, AES-256-GCM via the new
+`credential-encryption.ts` (`encryptSecret`/`decryptSecret`, keyed by
+`CREDENTIALS_ENCRYPTION_KEY` — 32 random bytes, base64, generated with
+`openssl rand -base64 32` and already sitting in the local
+`.env.docker`, gitignored). IV and auth tag travel concatenated with the
+ciphertext in one base64 string, so the row stays one column rather than
+three kept in step by hand.
+
+`EnableBankingClient` no longer reads `process.env` or a file path itself —
+every method takes an explicit `{ applicationId, privateKey }` now, and
+`isConfigured()` moved off it entirely. `EnableBankingCredentialsService`
+resolves those per-user, decrypting the stored row, and returns `null` when
+a user has none — the first cut fell back to the server's own
+`ENABLE_BANKING_APP_ID`/`ENABLE_BANKING_PRIVATE_KEY_PATH` there, which let a
+sync run without the user ever visiting the new screen. Caught the same
+day (`resolve` gained a regression test asserting the env vars are never
+even read); there is now no server-wide default at all, deliberately —
+`ENABLE_BANKING_APP_ID`/`ENABLE_BANKING_PRIVATE_KEY_PATH` are read only by
+the two standalone operator scripts. `save()` validates by attempting
+`buildJwt` before encrypting anything: the `.pem` is downloadable exactly
+once from the Control Panel, so a typo caught only at the next sync would
+be a typo the user could no longer fix by re-reading it.
+
+`BankSyncService` threads the resolved credentials through its six calls
+into the client (`listBanks`, `startAuthorization`, `completeAuthorization`,
+`sync`); `listBanks`/`isConfigured` gained a `userId` parameter to resolve
+by. `BankSyncController` gained `GET/PUT/DELETE /bank-sync/credentials` —
+`PUT` takes multipart (`applicationId` field, `.pem` as `file`) via
+`FileInterceptor`; `@types/multer` is not a dependency, so the handler
+types the uploaded file with a small local interface instead of adding one,
+the same call made earlier for JWT signing. Frontend:
+`EnableBankingCredentialCard.vue`, embedded at the top of `Réglages →
+Comptes`, shows the configured application id (never the key) with a
+"Supprimer", or the upload form with an inline `<details>` tutorial
+covering the Control Panel steps and the redirect URL to register
+(`window.location.origin + '/bank-callback'`, computed rather than
+hardcoded so it is correct on every environment).
+
+A security pass the same day tightened three things. The upload gained a
+ceiling — `FileInterceptor('file', { limits: { fileSize: 16 * 1024, files:
+1 } })` — because multer's default is memory storage with no size limit,
+which let any authenticated caller buffer gigabytes into the process
+(NestJS maps the multer LIMIT_FILE_SIZE error to a 413, confirmed by test).
+`isConfigured()` now checks row existence via `hasOwnCredentials` instead
+of calling `resolve()` — the old path decrypted the private key on every
+settings-page load just to answer a boolean, and turned a missing
+`CREDENTIALS_ENCRYPTION_KEY` into a 500 on `GET /bank-sync/status` instead
+of a failure at the one call that actually signs. And the routes gained
+real HTTP coverage: `test/enable-banking-credentials.e2e-spec.ts` (9 cases)
+exercises the multipart path through the actual interceptor — valid save
+lands encrypted in PostgreSQL, garbage pem → 400 with nothing stored,
+missing file → 400, oversized → 413, per-user scoping, upsert-not-
+duplicate, delete, and `POST /connections` → 503 while unconfigured.
+
+Still not done: the container has not been rebuilt with this code, so
+nothing above has been exercised through a real browser — the local
+Postgres already has the migration applied and the Prisma client
+regenerated, and `.env.docker` already carries a generated
+`CREDENTIALS_ENCRYPTION_KEY` (`DATASET` is back to `none`, so a restart no
+longer re-dumps production). Known gaps kept for later, from the 2026-09-07
+review: `save()` only proves the key can sign, not that it matches the App
+ID — Enable Banking's `GET /application` (already used by
+`probe-enable-banking.ts`) could validate the pair for real; "Supprimer"
+does not warn when active connections exist; `sync()` never passes
+`dateFrom` (nor consults `getBalances`'s `last_committed_transaction`), so
+every sync re-fetches the full ~90-day window and spends quota the client
+API could save; the encryption key has no rotation story and the GCM
+ciphertext is not bound to its `userId` (no AAD). Before production:
+generate a fresh `CREDENTIALS_ENCRYPTION_KEY` for the prod environment
+(the local one appeared in a terminal session), register
+`https://<prod-domain>/bank-callback` in the Control Panel, and re-run the
+`--prod` rehearsal — the credentials migration postdates the last one.
+
 ### Deliberately not now
 
 - **The arbitration screen** for ambiguous matches: 1 case in 1 954 once
   accounts are mapped. Building it before that number moves is speculation.
-- **Per-user encrypted credentials**: still waiting on Enable Banking support,
-  who were asked whether one application may cover a handful of friends'
-  accounts. A yes removes the work entirely. Worth chasing.
 
 ### Unrelated but overdue
 

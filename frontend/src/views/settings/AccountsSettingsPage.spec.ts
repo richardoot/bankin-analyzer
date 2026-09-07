@@ -21,6 +21,9 @@ vi.mock('@/lib/api', () => ({
     previewLinkReassignment: vi.fn(),
     reassignLink: vi.fn(),
     syncBankConnection: vi.fn(),
+    getEnableBankingCredential: vi.fn(),
+    saveEnableBankingCredential: vi.fn(),
+    removeEnableBankingCredential: vi.fn(),
   },
 }))
 
@@ -117,6 +120,9 @@ async function mountPage(
     options.needsReview ?? []
   )
   vi.mocked(api.getBanks).mockResolvedValue(options.banks ?? [])
+  vi.mocked(api.getEnableBankingCredential).mockResolvedValue({
+    applicationId: null,
+  })
   // Most tests care about the reassignment itself, not the preview step in
   // front of it — a trivial outcome lets a change go straight through.
   vi.mocked(api.previewLinkReassignment).mockResolvedValue(
@@ -174,9 +180,10 @@ describe('AccountsSettingsPage — accounts', () => {
       account({ name: 'Compte perso' })
     )
 
-    await wrapper.find('[data-testid="account-card"] button').trigger('click')
-    await wrapper.find('input[type="text"]').setValue('Compte perso')
-    await wrapper.find('form').trigger('submit')
+    const card = wrapper.find('[data-testid="account-card"]')
+    await card.find('button').trigger('click')
+    await card.find('input[type="text"]').setValue('Compte perso')
+    await card.find('form').trigger('submit')
     await flushPromises()
 
     expect(api.updateAccount).toHaveBeenCalledWith('acc-1', {
@@ -193,9 +200,10 @@ describe('AccountsSettingsPage — accounts', () => {
       new Error('An account named "Livret A" already exists.')
     )
 
-    await wrapper.find('[data-testid="account-card"] button').trigger('click')
-    await wrapper.find('input[type="text"]').setValue('Livret A')
-    await wrapper.find('form').trigger('submit')
+    const card = wrapper.find('[data-testid="account-card"]')
+    await card.find('button').trigger('click')
+    await card.find('input[type="text"]').setValue('Livret A')
+    await card.find('form').trigger('submit')
     await flushPromises()
 
     expect(wrapper.find('[data-testid="rename-error"]').text()).toContain(
@@ -256,7 +264,7 @@ describe('AccountsSettingsPage — accounts', () => {
     expect(wrapper.text()).toContain('Aucun compte disponible')
   })
 
-  it('offers nothing bank-related when the server cannot sync', async () => {
+  it('offers nothing bank-related when this user has no Enable Banking application', async () => {
     // A button that only produces a puzzling failure is worse than no button.
     // The accounts themselves stay fully manageable either way.
     const wrapper = await mountPage({
@@ -265,7 +273,7 @@ describe('AccountsSettingsPage — accounts', () => {
     })
 
     expect(
-      wrapper.find('[data-testid="bank-sync-unconfigured"]').exists()
+      wrapper.find('[data-testid="enable-banking-credential-card"]').exists()
     ).toBe(true)
     expect(wrapper.find('[data-testid="bank-picker"]').exists()).toBe(false)
     expect(api.getBankConnections).not.toHaveBeenCalled()

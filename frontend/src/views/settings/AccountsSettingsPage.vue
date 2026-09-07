@@ -35,6 +35,7 @@
   import DeleteBankAccountModal from '@/components/settings/DeleteBankAccountModal.vue'
   import ReassignAccountModal from '@/components/settings/ReassignAccountModal.vue'
   import type { PendingReassignment } from '@/components/settings/ReassignAccountModal.vue'
+  import EnableBankingCredentialCard from '@/components/settings/EnableBankingCredentialCard.vue'
 
   const accountsStore = useAccountsStore()
   const toast = useToast()
@@ -331,23 +332,12 @@
       </p>
 
       <template v-else>
-        <!-- Nothing bank-related is offered when the server cannot sync: a
-             button that only produces a puzzling failure is worse than no
-             button. The accounts themselves are still fully manageable. -->
-        <div
-          v-if="configured === false"
-          class="mb-8 rounded-lg bg-amber-50 p-4 dark:bg-amber-900/20"
-          data-testid="bank-sync-unconfigured"
-        >
-          <p class="text-amber-800 dark:text-amber-200">
-            La synchronisation bancaire n'est pas configurée sur ce serveur.
-          </p>
-          <p class="mt-2 text-sm text-amber-700 dark:text-amber-300">
-            Il lui faut les identifiants d'une application Enable Banking (<code
-              >ENABLE_BANKING_APP_ID</code
-            >
-            et <code>ENABLE_BANKING_PRIVATE_KEY_PATH</code>).
-          </p>
+        <!-- Nothing else bank-related is offered until this user has their
+             own application: a "Connecter" button that only produces a
+             puzzling failure is worse than no button. The accounts
+             themselves are still fully manageable either way. -->
+        <div class="mb-8">
+          <EnableBankingCredentialCard @changed="load" />
         </div>
 
         <template v-if="configured">
