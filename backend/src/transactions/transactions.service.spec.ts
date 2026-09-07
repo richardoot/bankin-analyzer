@@ -103,6 +103,17 @@ const mockPrismaService = {
 
 const mockAccountsService = {
   upsertByName: vi.fn(),
+  /**
+   * Delegates to `upsertByName` so every case that configures the older mock
+   * keeps describing what it meant. What the alias adds — a label surviving a
+   * rename — is a database behaviour, and is proven against real Postgres in
+   * `test/import-account-aliases.e2e-spec.ts` rather than against a stub that
+   * would only echo its own assumptions back.
+   */
+  resolveByImportLabel: vi.fn(async (userId: string, label: string) => ({
+    account: await mockAccountsService.upsertByName(userId, label),
+    created: false,
+  })),
 }
 
 const mockCategoriesService = {
@@ -428,6 +439,7 @@ describe('TransactionsService', () => {
         total: 0,
         internalDuplicates: [],
         externalDuplicates: [],
+        newAccounts: [],
       })
       expect(mockPrismaService.transaction.findMany).not.toHaveBeenCalled()
     })
@@ -447,6 +459,7 @@ describe('TransactionsService', () => {
         total: 2,
         internalDuplicates: [],
         externalDuplicates: [],
+        newAccounts: [],
       })
     })
 
@@ -661,13 +674,56 @@ describe('TransactionsService', () => {
       expect(indices).toContain(2)
     })
 
-    it('should perform only one DB query for batch hash lookup', async () => {
+    it('batches its lookups instead of querying per transaction', async () => {
+      // Two queries, both over the whole batch: one asks the hash what already
+      // exists, the other asks what the bank sync already wrote — which the
+      // hash cannot answer, since it covers the description and the two
+      // sources word a transaction differently.
+      //
+      // What this guards is the shape, not the number: a hundred transactions
+      // must still cost two queries, never two hundred.
       mockPrismaService.transaction.findMany.mockResolvedValue([])
 
       await service.previewImport(mockUserId, [
         createTransactionDto,
         createTransactionDto,
       ])
+
+      expect(mockPrismaService.transaction.findMany).toHaveBeenCalledTimes(2)
+    })
+
+    it('does not query the sync when the hash already knows every row', async () => {
+      // Nothing survives the hash, so there is nothing left to ask about.
+      mockPrismaService.transaction.findMany.mockResolvedValue([
+        {
+          id: 'existing-1',
+          hash: 'will-be-replaced',
+          date: new Date('2024-01-15'),
+          description: 'Test',
+          amount: -50,
+          type: 'EXPENSE',
+          createdAt: new Date(),
+          accountRef: { name: 'Compte courant' },
+          category: null,
+        },
+      ])
+      mockPrismaService.transaction.findMany.mockImplementationOnce(
+        async (args: { where: { hash: { in: string[] } } }) => [
+          {
+            id: 'existing-1',
+            hash: args.where.hash.in[0],
+            date: new Date('2024-01-15'),
+            description: 'Test',
+            amount: -50,
+            type: 'EXPENSE',
+            createdAt: new Date(),
+            accountRef: { name: 'Compte courant' },
+            category: null,
+          },
+        ]
+      )
+
+      await service.previewImport(mockUserId, [createTransactionDto])
 
       expect(mockPrismaService.transaction.findMany).toHaveBeenCalledTimes(1)
     })
@@ -1090,11 +1146,14 @@ describe('TransactionsService', () => {
       mockPrismaService.category.findMany.mockResolvedValue([mockCategory])
       mockPrismaService.subcategory.findMany.mockResolvedValue([])
       mockAiSuggestionsService.categorizeTransactions.mockResolvedValue([])
-      // Simulate a critical inconsistency: upsert returns a different name
-      // than what was requested, so the Map lookup fails.
+      // A resolved account with no id. The inconsistency this used to describe
+      // — an account coming back under a different name than the one asked for
+      // — stopped being expressible once the map was keyed on the export's
+      // label rather than on the account's name, which is the point of the
+      // aliases. What remains possible is an account that resolves to nothing.
       mockAccountsService.upsertByName.mockResolvedValue({
-        id: 'irrelevant-id',
-        name: 'Unexpected Name',
+        id: '',
+        name: 'Compte Courant',
       })
 
       await expect(

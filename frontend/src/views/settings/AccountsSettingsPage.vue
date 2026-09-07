@@ -1,38 +1,97 @@
 <script setup lang="ts">
   /**
-   * Everything about one bank account lives in one expandable card: its name,
-   * its type, the divisor applied to its amounts, and whether it counts in
-   * statistics and budgets. Previously the name and the type were edited in
-   * two separate sections of the preferences page.
+   * Every account, wherever it comes from — one place instead of two.
+   *
+   * This used to be two tabs: "Comptes" for an account's own settings (name,
+   * type, divisor, exclusions), "Banques" for which bank account feeds it and
+   * whether to read from it. Both pages were already looking at the same
+   * accounts — the bank tab only offered a bare dropdown of them — so managing
+   * one meant visiting both. Here, an account linked to a bank shows its full
+   * card grouped under the connection that reads it; an account no bank has
+   * ever heard of shows the same card under "Comptes sans banque".
+   *
+   * Which account here a bank account corresponds to, and whether anything is
+   * read from it, both start unanswered — an account arrives switched off,
+   * because the alternative is a card account read beside the account it
+   * settles onto, which counts every purchase twice.
+   *
+   * The synchronisation is a button, not a schedule. The server says what
+   * pressing it would do right now, so a lapsed consent or an exhausted daily
+   * quota is shown before it is met rather than as a failure afterwards.
    */
   import { computed, onMounted, ref } from 'vue'
+  import { api } from '@/lib/api'
+  import type {
+    AccountDto,
+    BankConnectionDto,
+    DiscoveredAccountDto,
+  } from '@/lib/api'
   import { useAccountsStore } from '@/stores/accounts'
   import { useToast } from '@/composables/useToast'
-  import type { AccountDto, AccountType } from '@/lib/api'
+  import { useAsyncAction } from '@/composables/useAsyncAction'
   import SettingsCard from '@/components/settings/SettingsCard.vue'
+  import AccountCard from '@/components/settings/AccountCard.vue'
+  import BankAccountLink from '@/components/settings/BankAccountLink.vue'
   import DeleteBankAccountModal from '@/components/settings/DeleteBankAccountModal.vue'
-  import ToggleSwitch from '@/components/ToggleSwitch.vue'
+  import ReassignAccountModal from '@/components/settings/ReassignAccountModal.vue'
+  import type { PendingReassignment } from '@/components/settings/ReassignAccountModal.vue'
+  import EnableBankingCredentialCard from '@/components/settings/EnableBankingCredentialCard.vue'
 
   const accountsStore = useAccountsStore()
   const toast = useToast()
 
-  const ACCOUNT_TYPES: { value: AccountType; label: string; hint: string }[] = [
-    { value: 'STANDARD', label: 'Courant', hint: 'Montants pris tels quels' },
-    {
-      value: 'JOINT',
-      label: 'Joint',
-      hint: 'Montants divisés (÷2 par défaut)',
-    },
-    {
-      value: 'INVESTMENT',
-      label: 'Investissement',
-      hint: 'Exclu du budget par défaut',
-    },
-  ]
+  const configured = ref<boolean | null>(null)
+  const connections = ref<BankConnectionDto[]>([])
+  const banks = ref<{ name: string; beta: boolean; logo: string | null }[]>([])
+  const chosenBank = ref('')
+  const connecting = ref(false)
+  const syncing = ref<string | null>(null)
+  const savingLink = ref<string | null>(null)
+  const needsReview = ref<
+    { accountId: string; accountLabel: string; count: number }[]
+  >([])
 
-  onMounted(() => accountsStore.load())
+  const { isLoading, error, run } = useAsyncAction()
 
-  // ── Expand / collapse ─────────────────────────────────────────────────────
+  async function load(): Promise<void> {
+    await run(async () => {
+      await accountsStore.load()
+      const status = await api.getBankSyncStatus()
+      configured.value = status.configured
+      if (!status.configured) return
+      connections.value = await api.getBankConnections()
+      needsReview.value = await api.getBankSyncNeedsReview()
+      // Only once: the list is long and does not change between two loads.
+      if (banks.value.length === 0) banks.value = await api.getBanks()
+    }, 'Impossible de charger les comptes')
+  }
+
+  onMounted(load)
+
+  /** How many rows on this account are still waiting for the right one. */
+  const needsReviewByAccount = computed(
+    () => new Map(needsReview.value.map(r => [r.accountId, r.count]))
+  )
+
+  // ── Grouping: which account belongs under which bank, and which belongs to
+  // none ────────────────────────────────────────────────────────────────────
+  const accountById = computed(
+    () => new Map(accountsStore.sortedAccounts.map(a => [a.id, a]))
+  )
+  const linkedAccountIds = computed(
+    () =>
+      new Set(
+        connections.value
+          .flatMap(c => c.accounts)
+          .map(a => a.accountId)
+          .filter((id): id is string => id !== null)
+      )
+  )
+  const unlinkedAccounts = computed(() =>
+    accountsStore.sortedAccounts.filter(a => !linkedAccountIds.value.has(a.id))
+  )
+
+  // ── Expand / collapse, shared by every card on the page ─────────────────────
   const expanded = ref<Set<string>>(new Set())
 
   function isExpanded(accountId: string): boolean {
@@ -46,180 +105,188 @@
     expanded.value = next
   }
 
-  // ── Rename ────────────────────────────────────────────────────────────────
-  const renameDrafts = ref<Record<string, string>>({})
-  const renameErrors = ref<Record<string, string | null>>({})
-  const renameSaving = ref<Record<string, boolean>>({})
-
-  function draftFor(account: AccountDto): string {
-    return renameDrafts.value[account.id] ?? account.name
-  }
-
-  function onDraftChange(accountId: string, value: string): void {
-    renameDrafts.value[accountId] = value
-    renameErrors.value[accountId] = null
-  }
-
-  function isDraftDirty(account: AccountDto): boolean {
-    const draft = renameDrafts.value[account.id]
-    if (draft === undefined) return false
-    const trimmed = draft.trim()
-    return trimmed !== account.name && trimmed.length > 0
-  }
-
-  async function submitRename(account: AccountDto): Promise<void> {
-    const draft = renameDrafts.value[account.id]?.trim() ?? ''
-    if (draft.length === 0 || draft === account.name) return
-
-    renameSaving.value[account.id] = true
-    renameErrors.value[account.id] = null
-    try {
-      await accountsStore.rename(account.id, draft)
-      delete renameDrafts.value[account.id]
-      toast.success(`Compte renommé en « ${draft} »`)
-    } catch (err) {
-      renameErrors.value[account.id] =
-        err instanceof Error ? err.message : 'Erreur lors du renommage'
-    } finally {
-      renameSaving.value[account.id] = false
-    }
-  }
-
-  function cancelRename(accountId: string): void {
-    delete renameDrafts.value[accountId]
-    renameErrors.value[accountId] = null
-  }
-
-  // ── Type, divisor, exclusions ─────────────────────────────────────────────
-  // One in-flight flag per account: every control in a card writes through the
-  // same store, so they are disabled together while a write is pending.
-  const saving = ref<Set<string>>(new Set())
-
-  function isSaving(accountId: string): boolean {
-    return saving.value.has(accountId)
-  }
-
-  async function withSaving(
-    accountId: string,
-    action: () => Promise<boolean>,
-    successMessage: string
-  ): Promise<void> {
-    if (saving.value.has(accountId)) return
-    const next = new Set(saving.value)
-    next.add(accountId)
-    saving.value = next
-    try {
-      const ok = await action()
-      if (ok) toast.success(successMessage)
-      else toast.error('Erreur lors de la mise à jour du compte')
-    } finally {
-      const after = new Set(saving.value)
-      after.delete(accountId)
-      saving.value = after
-    }
-  }
-
-  async function setType(
-    account: AccountDto,
-    type: AccountType
-  ): Promise<void> {
-    if (account.type === type) return
-    const label = ACCOUNT_TYPES.find(t => t.value === type)?.label ?? type
-    await withSaving(
-      account.id,
-      () => accountsStore.updateType(account.id, type),
-      `« ${account.name} » passé en compte ${label.toLowerCase()}`
-    )
+  // ── Bank accounts: which local account they are, and whether to read them ──
+  /** Read from a card account and every purchase is counted twice. */
+  function isCard(account: DiscoveredAccountDto): boolean {
+    return account.cashAccountType === 'CARD'
   }
 
   /**
-   * The divisor is committed on change (blur or Enter) rather than on every
-   * keystroke — an intermediate "1" while typing "12" would otherwise be
-   * saved. Out-of-range values are rejected by the backend, so clamp here.
+   * A card account is always ignored — the toggle is disabled from the
+   * moment it appears, since reading it counts every purchase twice, already
+   * reported by the account it settles onto. Showing it inline the same way
+   * as an account someone might actually act on overstates what needs
+   * attention, so it starts folded under "Comptes masqués" instead.
    */
-  async function setDivisor(account: AccountDto, raw: string): Promise<void> {
-    const parsed = Number.parseInt(raw, 10)
-    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 10) {
-      toast.error('Le diviseur doit être compris entre 1 et 10')
-      return
-    }
-    if (parsed === account.divisor) return
-    await withSaving(
-      account.id,
-      () => accountsStore.updateSettings(account.id, { divisor: parsed }),
-      `Montants de « ${account.name} » divisés par ${parsed}`
-    )
+  function visibleAccounts(
+    connection: BankConnectionDto
+  ): DiscoveredAccountDto[] {
+    return connection.accounts.filter(a => !isCard(a))
   }
 
-  async function setExcludedFromStats(
-    account: AccountDto,
-    included: boolean
+  function hiddenAccounts(
+    connection: BankConnectionDto
+  ): DiscoveredAccountDto[] {
+    return connection.accounts.filter(isCard)
+  }
+
+  const hiddenAccountsShown = ref<Set<string>>(new Set())
+
+  function areHiddenAccountsShown(connectionId: string): boolean {
+    return hiddenAccountsShown.value.has(connectionId)
+  }
+
+  function toggleHiddenAccounts(connectionId: string): void {
+    const next = new Set(hiddenAccountsShown.value)
+    if (next.has(connectionId)) next.delete(connectionId)
+    else next.add(connectionId)
+    hiddenAccountsShown.value = next
+  }
+
+  function consentLabel(connection: BankConnectionDto): string {
+    if (connection.daysUntilConsentExpires === null)
+      return 'Sans échéance connue'
+    const days = connection.daysUntilConsentExpires
+    if (days < 0) return `Expiré depuis ${-days} jours`
+    return `Expire dans ${days} jours`
+  }
+
+  // ── Logos ─────────────────────────────────────────────────────────────────
+  // `GET /aspsps` gives one per bank, already loaded for the picker — reused
+  // here rather than fetched again. Public and CORS-open, confirmed by
+  // fetching one directly rather than trusting the field description alone.
+  const logoByBankName = computed(
+    () => new Map(banks.value.map(b => [b.name, b.logo]))
+  )
+
+  /**
+   * Resized through Uploadcare's suffix rather than shipped full-size — a
+   * bank's logo can arrive well over a thousand pixels wide for a 32px icon.
+   *
+   * `preview`, not `resize`: measured against the real logos, `resize/64x64`
+   * stretches to fill the exact box — CIC's, landscape, came back squashed
+   * flat; Boursorama's, portrait, came back stretched tall. `preview` fits
+   * within the box on the longest side instead, which is what `object-contain`
+   * on the `<img>` already expects.
+   */
+  function logoUrl(aspspName: string): string | null {
+    const logo = logoByBankName.value.get(aspspName)
+    return logo ? `${logo}-/preview/64x64/` : null
+  }
+
+  const pendingReassignment = ref<PendingReassignment | null>(null)
+
+  /**
+   * Change which account a bank account is.
+   *
+   * A plain reassignment when nothing was ever written under the old one —
+   * which is every first-time pick, and the common case. Previewed first
+   * regardless, because that is the only way to know which case it is: a
+   * link a sync has already touched needs a person to see what correcting it
+   * would move, merge, unlink or leave alone before it happens.
+   */
+  async function assign(
+    account: DiscoveredAccountDto,
+    accountId: string
   ): Promise<void> {
-    await withSaving(
-      account.id,
-      () =>
-        accountsStore.updateSettings(account.id, {
-          isExcludedFromStats: !included,
-        }),
-      included
-        ? `« ${account.name} » compté dans les statistiques`
-        : `« ${account.name} » retiré des statistiques`
-    )
+    const targetAccountId = accountId === '' ? null : accountId
+    savingLink.value = account.linkId
+    try {
+      const preview = await api.previewLinkReassignment(
+        account.linkId,
+        targetAccountId
+      )
+      const isTrivial = Object.values(preview).every(n => n === 0)
+      if (isTrivial) {
+        await api.reassignLink(account.linkId, targetAccountId)
+        await load()
+        return
+      }
+      pendingReassignment.value = {
+        linkId: account.linkId,
+        bankAccountName: account.accountName,
+        currentAccountLabel: account.accountLabel,
+        targetAccountId,
+        targetAccountLabel:
+          accountsStore.sortedAccounts.find(a => a.id === targetAccountId)
+            ?.name ?? '— aucun —',
+        preview,
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Association impossible')
+    } finally {
+      savingLink.value = null
+    }
   }
 
-  async function setExcludedFromBudget(
-    account: AccountDto,
-    included: boolean
-  ): Promise<void> {
-    await withSaving(
-      account.id,
-      () =>
-        accountsStore.updateSettings(account.id, {
-          isExcludedFromBudget: !included,
-        }),
-      included
-        ? `« ${account.name} » compté dans les budgets`
-        : `« ${account.name} » retiré des budgets`
-    )
+  async function onReassigned(): Promise<void> {
+    pendingReassignment.value = null
+    toast.success('Compte corrigé')
+    await load()
   }
 
-  // ── Badges ────────────────────────────────────────────────────────────────
-  // Small summary shown on the collapsed header so the card is readable
-  // without opening it.
-  function badgesFor(account: AccountDto): { label: string; tone: string }[] {
-    const badges: { label: string; tone: string }[] = []
-    if (account.type === 'JOINT') {
-      badges.push({
-        label: `Joint ÷${account.divisor}`,
-        tone: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+  async function toggleIngestion(account: DiscoveredAccountDto): Promise<void> {
+    savingLink.value = account.linkId
+    try {
+      await api.updateBankAccountLink(account.linkId, {
+        isIngested: !account.isIngested,
       })
-    } else if (account.type === 'INVESTMENT') {
-      badges.push({
-        label: 'Investissement',
-        tone: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
-      })
-    } else if (account.divisor !== 1) {
-      badges.push({
-        label: `÷${account.divisor}`,
-        tone: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
-      })
+      await load()
+    } catch (err) {
+      // The server refuses a card account and an unidentified one, and says
+      // why. Showing its words beats inventing our own.
+      toast.error(
+        err instanceof Error ? err.message : 'Modification impossible'
+      )
+    } finally {
+      savingLink.value = null
     }
-    if (account.isExcludedFromStats) {
-      badges.push({
-        label: 'Hors statistiques',
-        tone: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-      })
-    }
-    if (account.isExcludedFromBudget) {
-      badges.push({
-        label: 'Hors budget',
-        tone: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-      })
-    }
-    return badges
   }
 
-  const accounts = computed(() => accountsStore.sortedAccounts)
+  /**
+   * Send the user to their bank.
+   *
+   * The redirect URL is this application's own callback, and it must already
+   * be registered in the Enable Banking Control Panel — a bank refuses every
+   * other, and says so without naming what it would accept.
+   */
+  async function connect(): Promise<void> {
+    if (!chosenBank.value) return
+    connecting.value = true
+    try {
+      const { url } = await api.startBankAuthorization({
+        aspspName: chosenBank.value,
+        redirectUrl: `${window.location.origin}/bank-callback`,
+      })
+      window.location.href = url
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Connexion impossible')
+      connecting.value = false
+    }
+  }
+
+  async function synchronise(connection: BankConnectionDto): Promise<void> {
+    syncing.value = connection.id
+    try {
+      const outcome = await api.syncBankConnection(connection.id)
+      toast.success(
+        `${outcome.inserted} nouvelle(s), ${outcome.claimed} déjà connue(s)` +
+          (outcome.skippedAmbiguous > 0
+            ? `, ${outcome.skippedAmbiguous} à trancher`
+            : '') +
+          (outcome.skippedTooOld > 0
+            ? `, ${outcome.skippedTooOld} ignorée(s) (antérieure(s) à l'historique connu)`
+            : '')
+      )
+      await load()
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Synchronisation impossible'
+      )
+    } finally {
+      syncing.value = null
+    }
+  }
 
   // ── Deletion ──────────────────────────────────────────────────────────────
   // The modal owns the whole safety sequence (impact preview, name
@@ -245,292 +312,292 @@
       })`
     )
   }
-
-  /** Merging still needs an endpoint the API does not expose yet. */
-  const UNAVAILABLE_HINT =
-    'Pas encore disponible : cette action nécessite un nouvel endpoint côté serveur.'
 </script>
 
 <template>
   <div class="space-y-8">
     <SettingsCard
-      title="Comptes bancaires"
-      description="Renommez un compte, choisissez comment ses montants sont comptés, et excluez-le des statistiques ou des budgets."
+      title="Comptes"
+      description="Vos comptes, comment leurs montants sont comptés, et la banque qui les alimente."
     >
-      <div v-if="accountsStore.isLoading && accounts.length === 0" class="py-8">
-        <p class="text-center text-sm text-gray-500 dark:text-gray-400">
-          Chargement…
-        </p>
-      </div>
-
-      <p
-        v-else-if="accounts.length === 0"
-        class="rounded-lg bg-gray-50 p-4 text-sm italic text-gray-500 dark:bg-slate-800 dark:text-gray-400"
-      >
-        Aucun compte disponible. Importez des transactions pour voir vos
-        comptes.
+      <p v-if="isLoading" class="text-gray-500 dark:text-gray-400">
+        Chargement…
       </p>
 
-      <ul v-else class="space-y-3">
-        <li
-          v-for="account in accounts"
-          :key="account.id"
-          class="overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700"
-          data-testid="account-card"
-        >
-          <!-- Collapsed header: name + badges, click to open -->
-          <button
-            type="button"
-            class="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/50"
-            :aria-expanded="isExpanded(account.id)"
-            @click="toggleExpanded(account.id)"
-          >
-            <span
-              class="min-w-0 flex-1 truncate font-medium text-gray-900 dark:text-gray-100"
-            >
-              {{ account.name }}
-            </span>
-            <span class="flex shrink-0 flex-wrap justify-end gap-1">
-              <span
-                v-for="badge in badgesFor(account)"
-                :key="badge.label"
-                class="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                :class="badge.tone"
-              >
-                {{ badge.label }}
-              </span>
-            </span>
-            <svg
-              class="h-4 w-4 shrink-0 text-gray-400 transition-transform"
-              :class="isExpanded(account.id) ? 'rotate-180' : ''"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </button>
+      <p
+        v-else-if="error"
+        class="rounded-lg bg-red-50 p-4 text-red-700 dark:bg-red-900/20 dark:text-red-300"
+      >
+        {{ error }}
+      </p>
 
+      <template v-else>
+        <!-- Nothing else bank-related is offered until this user has their
+             own application: a "Connecter" button that only produces a
+             puzzling failure is worse than no button. The accounts
+             themselves are still fully manageable either way. -->
+        <div class="mb-8">
+          <EnableBankingCredentialCard @changed="load" />
+        </div>
+
+        <template v-if="configured">
           <div
-            v-show="isExpanded(account.id)"
-            class="space-y-5 border-t border-gray-200 px-4 py-4 dark:border-slate-700"
+            class="mb-8 flex flex-wrap items-end gap-3 rounded-xl bg-gray-50 p-4 dark:bg-slate-800"
           >
-            <!-- Name -->
-            <div>
+            <div class="min-w-56 flex-1">
               <label
-                class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                :for="`account-name-${account.id}`"
+                for="bank-picker"
+                class="text-sm font-medium text-gray-700 dark:text-gray-300"
               >
-                Nom du compte
+                Connecter une banque
               </label>
-              <form
-                class="flex flex-col gap-2 sm:flex-row sm:items-center"
-                @submit.prevent="submitRename(account)"
+              <select
+                id="bank-picker"
+                v-model="chosenBank"
+                data-testid="bank-picker"
+                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100"
               >
-                <input
-                  :id="`account-name-${account.id}`"
-                  type="text"
-                  :value="draftFor(account)"
-                  :disabled="renameSaving[account.id]"
-                  maxlength="100"
-                  class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                  @input="
-                    onDraftChange(
-                      account.id,
-                      ($event.target as HTMLInputElement).value
-                    )
-                  "
-                />
-                <div class="flex gap-2">
+                <option value="">— choisir —</option>
+                <option
+                  v-for="bank in banks"
+                  :key="bank.name"
+                  :value="bank.name"
+                >
+                  {{ bank.name }}{{ bank.beta ? ' (beta)' : '' }}
+                </option>
+              </select>
+            </div>
+            <button
+              type="button"
+              data-testid="connect-button"
+              :disabled="!chosenBank || connecting"
+              class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-slate-700"
+              @click="connect"
+            >
+              {{ connecting ? 'Redirection…' : 'Connecter' }}
+            </button>
+          </div>
+
+          <p
+            v-if="connections.length === 0"
+            class="mb-8 text-gray-500 dark:text-gray-400"
+            data-testid="bank-sync-empty"
+          >
+            Aucune banque connectée pour l'instant.
+          </p>
+
+          <div v-else class="mb-8 space-y-8">
+            <section
+              v-for="connection in connections"
+              :key="connection.id"
+              data-testid="bank-connection"
+              class="rounded-xl border border-gray-200 p-5 dark:border-slate-700"
+            >
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div class="flex items-center gap-3">
+                  <img
+                    v-if="logoUrl(connection.aspspName)"
+                    :src="logoUrl(connection.aspspName)!"
+                    :alt="`Logo ${connection.aspspName}`"
+                    class="h-8 w-8 shrink-0 rounded-md object-contain"
+                  />
+                  <div>
+                    <h3
+                      class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+                    >
+                      {{ connection.aspspName }}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {{ consentLabel(connection) }}
+                      <span v-if="connection.lastSyncAt">
+                        · dernière synchro
+                        {{
+                          new Date(connection.lastSyncAt).toLocaleDateString(
+                            'fr-FR'
+                          )
+                        }}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div class="text-right">
                   <button
-                    type="submit"
+                    type="button"
+                    data-testid="sync-button"
                     :disabled="
-                      !isDraftDirty(account) || renameSaving[account.id]
+                      connection.action !== 'fetch' || syncing === connection.id
                     "
-                    class="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-slate-700"
+                    @click="synchronise(connection)"
                   >
                     {{
-                      renameSaving[account.id] ? 'Enregistrement…' : 'Renommer'
+                      syncing === connection.id
+                        ? 'Synchronisation…'
+                        : 'Synchroniser'
                     }}
                   </button>
-                  <button
-                    v-if="isDraftDirty(account)"
-                    type="button"
-                    :disabled="renameSaving[account.id]"
-                    class="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600"
-                    @click="cancelRename(account.id)"
+                  <!-- The server's own words for why the button is off: a
+                     lapsed consent needs the user at their bank, an exhausted
+                     quota needs tomorrow. -->
+                  <p
+                    v-if="connection.action !== 'fetch'"
+                    class="mt-2 max-w-xs text-xs text-gray-500 dark:text-gray-400"
+                    data-testid="sync-reason"
                   >
-                    Annuler
-                  </button>
+                    {{ connection.reason }}
+                  </p>
                 </div>
-              </form>
-              <p
-                v-if="renameErrors[account.id]"
-                class="mt-2 text-sm text-red-600 dark:text-red-400"
-                data-testid="rename-error"
-              >
-                {{ renameErrors[account.id] }}
-              </p>
-            </div>
+              </div>
 
-            <!-- Type -->
-            <div>
-              <span
-                class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-              >
-                Type de compte
-              </span>
-              <div
-                class="inline-flex flex-wrap gap-1 rounded-lg border border-gray-200 p-1 dark:border-slate-700"
-                role="group"
-                :aria-label="`Type du compte ${account.name}`"
-              >
+              <ul class="mt-6 space-y-3">
+                <BankAccountLink
+                  v-for="discovered in visibleAccounts(connection)"
+                  :key="discovered.linkId"
+                  :discovered="discovered"
+                  :account="
+                    discovered.accountId
+                      ? (accountById.get(discovered.accountId) ?? null)
+                      : null
+                  "
+                  :bank-name="connection.aspspName"
+                  :expanded="
+                    discovered.accountId
+                      ? isExpanded(discovered.accountId)
+                      : false
+                  "
+                  :saving="savingLink === discovered.linkId"
+                  :account-options="accountsStore.sortedAccounts"
+                  :needs-review-count="
+                    discovered.accountId
+                      ? needsReviewByAccount.get(discovered.accountId)
+                      : undefined
+                  "
+                  @toggle="
+                    discovered.accountId && toggleExpanded(discovered.accountId)
+                  "
+                  @ask-delete="
+                    discovered.accountId &&
+                    askDeletion(accountById.get(discovered.accountId)!)
+                  "
+                  @assign="value => assign(discovered, value)"
+                  @toggle-ingestion="toggleIngestion(discovered)"
+                />
+              </ul>
+
+              <!-- A card account is always ignored, so folded here rather
+                   than shown the same way as an account someone might act
+                   on. -->
+              <div v-if="hiddenAccounts(connection).length > 0" class="mt-4">
                 <button
-                  v-for="option in ACCOUNT_TYPES"
-                  :key="option.value"
                   type="button"
-                  :aria-pressed="account.type === option.value"
-                  :disabled="isSaving(account.id)"
-                  :title="option.hint"
-                  class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
-                  :class="
-                    account.type === option.value
-                      ? 'bg-emerald-600 text-white'
-                      : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
-                  "
-                  @click="setType(account, option.value)"
+                  data-testid="hidden-accounts-toggle"
+                  class="text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  @click="toggleHiddenAccounts(connection.id)"
                 >
-                  {{ option.label }}
+                  {{
+                    areHiddenAccountsShown(connection.id) ? 'Masquer' : 'Voir'
+                  }}
+                  les comptes masqués ({{ hiddenAccounts(connection).length }})
                 </button>
-              </div>
-            </div>
 
-            <!-- Divisor -->
-            <div>
-              <label
-                class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                :for="`account-divisor-${account.id}`"
-              >
-                Diviseur des montants
-              </label>
-              <div class="flex items-center gap-3">
-                <input
-                  :id="`account-divisor-${account.id}`"
-                  type="number"
-                  min="1"
-                  max="10"
-                  :value="account.divisor"
-                  :disabled="isSaving(account.id)"
-                  class="w-20 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                  @change="
-                    setDivisor(
-                      account,
-                      ($event.target as HTMLInputElement).value
-                    )
-                  "
-                />
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                  Chaque montant de ce compte est divisé par cette valeur dans
-                  le tableau de bord, le budget et les remboursements. Passer le
-                  compte en joint le règle sur 2.
-                </p>
+                <ul
+                  v-if="areHiddenAccountsShown(connection.id)"
+                  data-testid="hidden-accounts"
+                  class="mt-3 space-y-3"
+                >
+                  <BankAccountLink
+                    v-for="discovered in hiddenAccounts(connection)"
+                    :key="discovered.linkId"
+                    :discovered="discovered"
+                    :account="
+                      discovered.accountId
+                        ? (accountById.get(discovered.accountId) ?? null)
+                        : null
+                    "
+                    :bank-name="connection.aspspName"
+                    :expanded="
+                      discovered.accountId
+                        ? isExpanded(discovered.accountId)
+                        : false
+                    "
+                    :saving="savingLink === discovered.linkId"
+                    :account-options="accountsStore.sortedAccounts"
+                    @toggle="
+                      discovered.accountId &&
+                      toggleExpanded(discovered.accountId)
+                    "
+                    @ask-delete="
+                      discovered.accountId &&
+                      askDeletion(accountById.get(discovered.accountId)!)
+                    "
+                    @assign="value => assign(discovered, value)"
+                    @toggle-ingestion="toggleIngestion(discovered)"
+                  />
+                </ul>
               </div>
-            </div>
-
-            <!-- Exclusions -->
-            <div class="space-y-3">
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <p
-                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >
-                    Compter dans les statistiques
-                  </p>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Décochez pour sortir ce compte du tableau de bord.
-                  </p>
-                </div>
-                <ToggleSwitch
-                  :checked="!account.isExcludedFromStats"
-                  :loading="isSaving(account.id)"
-                  :label="
-                    account.isExcludedFromStats
-                      ? `Compter ${account.name} dans les statistiques`
-                      : `Retirer ${account.name} des statistiques`
-                  "
-                  @change="setExcludedFromStats(account, $event)"
-                />
-              </div>
-
-              <div class="flex items-center justify-between gap-3">
-                <div>
-                  <p
-                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >
-                    Compter dans les budgets
-                  </p>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Décochez pour sortir ce compte des budgets et des moyennes.
-                  </p>
-                </div>
-                <ToggleSwitch
-                  :checked="!account.isExcludedFromBudget"
-                  :loading="isSaving(account.id)"
-                  :label="
-                    account.isExcludedFromBudget
-                      ? `Compter ${account.name} dans les budgets`
-                      : `Retirer ${account.name} des budgets`
-                  "
-                  @change="setExcludedFromBudget(account, $event)"
-                />
-              </div>
-            </div>
-
-            <div
-              class="flex flex-wrap gap-2 border-t border-gray-100 pt-4 dark:border-slate-700/60"
-            >
-              <!-- Merging still needs a backend endpoint -->
-              <button
-                type="button"
-                disabled
-                :title="UNAVAILABLE_HINT"
-                class="cursor-not-allowed rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-400 dark:border-slate-700 dark:text-gray-500"
-              >
-                Fusionner avec un autre compte…
-              </button>
-              <button
-                type="button"
-                :disabled="isSaving(account.id)"
-                class="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-                data-testid="delete-account"
-                @click="askDeletion(account)"
-              >
-                Supprimer le compte…
-              </button>
-            </div>
+            </section>
           </div>
-        </li>
-      </ul>
+        </template>
 
-      <div
-        class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
-      >
-        <strong>Doublons :</strong> la fusion de comptes n'est pas encore
-        branchée, et renommer un compte avec le nom exact d'un autre échoue.
-        Pour résorber un doublon, supprimez le compte en trop — ses transactions
-        partiront avec lui, réimportez-les ensuite sur le bon compte.
-      </div>
+        <!-- Every account not spoken for by a bank above — the whole list
+             when there is no bank sync at all. -->
+        <div>
+          <h3
+            v-if="configured"
+            class="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+          >
+            Comptes sans banque
+          </h3>
+
+          <p
+            v-if="accountsStore.sortedAccounts.length === 0"
+            class="rounded-lg bg-gray-50 p-4 text-sm italic text-gray-500 dark:bg-slate-800 dark:text-gray-400"
+          >
+            Aucun compte disponible. Importez des transactions pour voir vos
+            comptes.
+          </p>
+
+          <ul
+            v-else-if="!configured || unlinkedAccounts.length > 0"
+            class="space-y-3"
+          >
+            <AccountCard
+              v-for="account in configured
+                ? unlinkedAccounts
+                : accountsStore.sortedAccounts"
+              :key="account.id"
+              :account="account"
+              :expanded="isExpanded(account.id)"
+              :needs-review-count="needsReviewByAccount.get(account.id)"
+              @toggle="toggleExpanded(account.id)"
+              @ask-delete="askDeletion(account)"
+            />
+          </ul>
+        </div>
+
+        <div
+          class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
+        >
+          <strong>Doublons :</strong> la fusion de comptes n'est pas encore
+          branchée, et renommer un compte avec le nom exact d'un autre échoue.
+          Pour résorber un doublon, supprimez le compte en trop — ses
+          transactions partiront avec lui, réimportez-les ensuite sur le bon
+          compte.
+        </div>
+      </template>
     </SettingsCard>
 
     <DeleteBankAccountModal
       :account="accountPendingDeletion"
       @close="accountPendingDeletion = null"
       @deleted="onDeleted"
+    />
+
+    <ReassignAccountModal
+      :pending="pendingReassignment"
+      @close="pendingReassignment = null"
+      @reassigned="onReassigned"
     />
   </div>
 </template>

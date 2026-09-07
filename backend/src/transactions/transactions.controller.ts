@@ -174,6 +174,14 @@ export class TransactionsController {
     type: Number,
     description: 'Maximum absolute amount',
   })
+  @ApiQuery({
+    name: 'needsBankReview',
+    required: false,
+    type: Boolean,
+    description:
+      'Only rows a bank sync inserted or claimed and then lost the ' +
+      'reference to — cleared to "aucun", or a correction still pending.',
+  })
   async findAll(
     @CurrentUser() user: User,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
@@ -188,7 +196,8 @@ export class TransactionsController {
     @Query('tagId') tagId?: string,
     @Query('search') search?: string,
     @Query('amountMin') amountMin?: string,
-    @Query('amountMax') amountMax?: string
+    @Query('amountMax') amountMax?: string,
+    @Query('needsBankReview') needsBankReview?: string
   ): Promise<PaginatedTransactionsResponseDto> {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
@@ -205,6 +214,7 @@ export class TransactionsController {
       ...(search && { search }),
       ...(amountMin !== undefined && { amountMin }),
       ...(amountMax !== undefined && { amountMax }),
+      ...(needsBankReview !== undefined && { needsBankReview }),
     })
 
     const { data: transactions, total } =

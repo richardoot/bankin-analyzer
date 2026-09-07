@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Code d'autorisation bancaire</title>
+    <!--
+      A standalone page, deliberately outside the Vue application.
+
+      The bank only redirects to an https URL, but the local stack is http:
+      Supabase on :54321, the API on :3000. A page served over https cannot
+      call either — the browser blocks it as mixed content — and `main.ts`
+      mounts the app only after `authStore.initialize()` has spoken to
+      Supabase. The result is a blank screen exactly where the authorization
+      code lands.
+
+      This page depends on nothing: no framework, no network, no auth. It
+      reads the query string and shows what is in it.
+
+      The Vue route at /bank-callback stays for phase 4, where the deployed
+      app is https end to end and the conflict disappears.
+    -->
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f9fafb;
+        --card: #ffffff;
+        --text: #111827;
+        --muted: #6b7280;
+        --accent: #059669;
+        --border: #d1d5db;
+        --code-bg: #111827;
+        --code-text: #f3f4f6;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1e293b;
+          --card: #0f172a;
+          --text: #f1f5f9;
+          --muted: #94a3b8;
+          --accent: #10b981;
+          --border: #334155;
+          --code-bg: #020617;
+          --code-text: #e2e8f0;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      .card {
+        width: 100%;
+        max-width: 44rem;
+        background: var(--card);
+        border-radius: 1rem;
+        padding: 2rem;
+        box-shadow: 0 10px 25px rgb(0 0 0 / 0.08);
+      }
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.5rem;
+      }
+      p {
+        color: var(--muted);
+        margin: 0 0 1.5rem;
+        line-height: 1.5;
+      }
+      label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+      }
+      .row {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+      }
+      input,
+      pre {
+        flex: 1;
+        min-width: 0;
+        margin: 0;
+        padding: 0.6rem 0.75rem;
+        border-radius: 0.5rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.8rem;
+      }
+      input {
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+      }
+      pre {
+        background: var(--code-bg);
+        color: var(--code-text);
+        overflow-x: auto;
+        white-space: pre;
+      }
+      button {
+        flex-shrink: 0;
+        padding: 0.6rem 1rem;
+        border: 0;
+        border-radius: 0.5rem;
+        background: var(--accent);
+        color: #fff;
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover {
+        filter: brightness(1.1);
+      }
+      .error {
+        color: #dc2626;
+        font-family: ui-monospace, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div id="content"></div>
+    </div>
+
+    <script>
+      const params = new URLSearchParams(location.search)
+      const code = params.get('code')
+      const error = params.get('error')
+      const content = document.getElementById('content')
+
+      const escape = s => String(s).replace(/[<>&"]/g, c => `&#${c.charCodeAt(0)};`)
+
+      if (code) {
+        const command =
+          'pnpm ts-node src/scripts/spike-enable-banking-fetch.ts --code ' + code
+        content.innerHTML = `
+          <h1>Banque autorisée</h1>
+          <p>Code d'autorisation à usage unique et de courte durée&nbsp;:
+             utilisez-le tout de suite.</p>
+          <label for="code">Code</label>
+          <div class="row">
+            <input id="code" value="${escape(code)}" readonly />
+            <button data-copy="code">Copier</button>
+          </div>
+          <label for="cmd">Commande, depuis <code>backend/</code></label>
+          <div class="row">
+            <pre id="cmd">${escape(command)}</pre>
+            <button data-copy="cmd">Copier</button>
+          </div>`
+
+        for (const button of content.querySelectorAll('[data-copy]')) {
+          button.addEventListener('click', async () => {
+            const target = document.getElementById(button.dataset.copy)
+            await navigator.clipboard.writeText(target.value ?? target.textContent)
+            const original = button.textContent
+            button.textContent = 'Copié !'
+            setTimeout(() => (button.textContent = original), 2000)
+          })
+        }
+      } else {
+        content.innerHTML = `
+          <h1>Aucun code reçu</h1>
+          <p>L'autorisation a été annulée, a échoué, ou cette page a été
+             ouverte directement.</p>
+          ${error ? `<p class="error">${escape(error)}</p>` : ''}
+          <p>Relancez l'autorisation depuis le script pour obtenir une
+             nouvelle URL.</p>`
+      }
+    </script>
+  </body>
+</html>

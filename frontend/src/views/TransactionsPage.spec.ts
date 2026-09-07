@@ -515,6 +515,20 @@ describe('TransactionsPage — optimistic updates', () => {
       )
     })
 
+    it('filters to rows a bank sync lost the reference to', async () => {
+      const wrapper = await mountPage()
+      vi.mocked(api.getTransactions).mockClear()
+
+      await wrapper
+        .find('[data-testid="needs-bank-review-toggle"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ needsBankReview: true })
+      )
+    })
+
     it('debounces the keyword search before calling the API', async () => {
       vi.useFakeTimers()
       try {

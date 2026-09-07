@@ -170,3 +170,8 @@ backend/src/generated/*
 # Database dumps — real financial data, and this repository is public.
 backups/
 *.sql.gz
+
+# Private keys. The Enable Banking Control Panel hands over a `<app-id>.pem`
+# once and never again: committing it would leak the application's identity.
+*.pem
+*.key

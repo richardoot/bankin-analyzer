@@ -15,7 +15,11 @@
  * has to cover the whole day, a subcategory that means nothing without its
  * category.
  */
-import type { Prisma, TransactionType } from '../generated/prisma'
+import {
+  TransactionSource,
+  type Prisma,
+  type TransactionType,
+} from '../generated/prisma'
 
 /** A filter, parsed and typed. */
 export interface TransactionFilters {
@@ -30,6 +34,13 @@ export interface TransactionFilters {
   search?: string
   amountMin?: number
   amountMax?: number
+  /**
+   * A row a sync inserted or claimed, then lost its bank reference to —
+   * cleared to "— aucun —", or by a correction still pending on the other
+   * side of a swap. Still real, still wherever it landed; just waiting for a
+   * person to say where it actually belongs.
+   */
+  needsBankReview?: boolean
 }
 
 /**
@@ -49,6 +60,7 @@ export interface RawTransactionFilters {
   search?: string
   amountMin?: string | number
   amountMax?: string | number
+  needsBankReview?: string | boolean
 }
 
 /**
@@ -93,6 +105,11 @@ export function parseTransactionFilters(
   if (raw.account) filters.account = raw.account
   if (raw.tagId) filters.tagId = raw.tagId
   if (raw.search && raw.search.trim()) filters.search = raw.search.trim()
+  if (raw.needsBankReview !== undefined)
+    filters.needsBankReview =
+      typeof raw.needsBankReview === 'boolean'
+        ? raw.needsBankReview
+        : raw.needsBankReview === 'true'
 
   const min = parseAmountBound(raw.amountMin)
   if (min !== null) filters.amountMin = min
@@ -154,6 +171,10 @@ export function buildTransactionWhere(
     }),
     ...(filters?.tagId && {
       tags: { some: { tagId: filters.tagId } },
+    }),
+    ...(filters?.needsBankReview && {
+      source: TransactionSource.BANK_API,
+      externalId: null,
     }),
     ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
     ...(and.length > 0 && { AND: and }),

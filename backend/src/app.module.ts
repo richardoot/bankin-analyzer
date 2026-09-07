@@ -21,6 +21,7 @@ import { BudgetsModule } from './budgets/budgets.module'
 import { AccountsModule } from './accounts/accounts.module'
 import { McpModule } from './mcp/mcp.module'
 import { TagsModule } from './tags/tags.module'
+import { BankSyncModule } from './bank-sync/bank-sync.module'
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { TagsModule } from './tags/tags.module'
     DashboardModule,
     BudgetsModule,
     TagsModule,
+    BankSyncModule,
     McpModule,
   ],
   controllers: [AppController],

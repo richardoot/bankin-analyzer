@@ -118,6 +118,13 @@
   const selectedAccount = ref<string | null>(savedFilters.selectedAccount)
   const selectedTag = ref<string | null>(savedFilters.selectedTag)
   const showOnlyNotPointed = ref(savedFilters.showOnlyNotPointed)
+  /**
+   * Rows a bank sync inserted or claimed and then lost the reference to —
+   * cleared to "aucun", or a correction still pending on the other side of a
+   * swap. Not saved to localStorage: this is a one-off "where did they go"
+   * check, not a filter meant to stay on across visits.
+   */
+  const needsBankReview = ref(false)
   // Advanced search filters (keyword, date window, amount range)
   const searchKeyword = ref(savedFilters.searchKeyword)
   const filterStartDate = ref(savedFilters.filterStartDate)
@@ -179,6 +186,7 @@
     filterEndDate.value = ''
     amountMin.value = ''
     amountMax.value = ''
+    needsBankReview.value = false
     localStorage.removeItem(FILTERS_STORAGE_KEY)
   }
 
@@ -195,7 +203,8 @@
       filterStartDate.value !== '' ||
       filterEndDate.value !== '' ||
       amountMin.value !== '' ||
-      amountMax.value !== ''
+      amountMax.value !== '' ||
+      needsBankReview.value
     )
   })
 
@@ -362,6 +371,7 @@
         Number.isFinite(parsedMin) && parsedMin >= 0 ? parsedMin : undefined,
       amountMax:
         Number.isFinite(parsedMax) && parsedMax >= 0 ? parsedMax : undefined,
+      needsBankReview: needsBankReview.value || undefined,
     }
   })
 
@@ -710,6 +720,7 @@
       selectedAccount,
       selectedTag,
       showOnlyNotPointed,
+      needsBankReview,
       filterStartDate,
       filterEndDate,
     ],
@@ -1160,6 +1171,30 @@
               <span
                 class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-300"
                 >Non pointees</span
+              >
+            </div>
+          </div>
+
+          <!-- A row a bank sync inserted or claimed and then lost the
+               reference to: cleared to "aucun", or a correction still
+               pending on the other side of a swap. -->
+          <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
+            <span
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              >Synchro bancaire</span
+            >
+            <div
+              class="inline-flex h-11 md:h-9 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 dark:border-slate-600 dark:bg-slate-800"
+            >
+              <ToggleSwitch
+                :checked="needsBankReview"
+                label="Afficher uniquement les transactions a reaffecter"
+                data-testid="needs-bank-review-toggle"
+                @change="needsBankReview = $event"
+              />
+              <span
+                class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-300"
+                >A reaffecter</span
               >
             </div>
           </div>

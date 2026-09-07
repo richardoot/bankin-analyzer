@@ -135,4 +135,15 @@ export class ImportPreviewResultDto {
     type: [ExternalDuplicateDto],
   })
   externalDuplicates!: ExternalDuplicateDto[]
+
+  @ApiProperty({
+    description:
+      'Account labels this import had never seen, and for which it created ' +
+      'an account. Surfaced so the interface can ask which existing account ' +
+      'they are — or confirm the new one — rather than have the import decide ' +
+      'alone, which is how a joint account acquires a second row with the ' +
+      'wrong divisor.',
+    type: [String],
+  })
+  newAccounts!: string[]
 }

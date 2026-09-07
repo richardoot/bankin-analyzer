@@ -149,16 +149,29 @@ services:
         condition: service_started
     ports:
       - '${BACKEND_PORT:-3001}:3000'
+      # Published only so the browser can reach the API over TLS. Unused when
+      # STACK_HTTPS is off — the container then serves plain HTTP on 3000.
+      - '${BACKEND_HTTPS_PORT:-3443}:3443'
     env_file:
       - .env.docker
+    volumes:
+      # The self-signed certificate, made by scripts/make-local-cert.sh.
+      # Read-only: the container has no business rewriting a private key.
+      - ./certs:/certs:ro
     environment:
       NODE_ENV: production
+      BACKEND_HTTPS: ${BACKEND_HTTPS:-}
+      LOCAL_TLS_DIR: /certs
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
       DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
       SUPABASE_URL: http://kong:8000
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       FRONTEND_URL: ${FRONTEND_URL}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # CREDENTIALS_ENCRYPTION_KEY reaches the container through env_file
+      # above, not here — each user brings their own Enable Banking
+      # application from Settings > Comptes, so there is nothing of that
+      # kind left to forward as a server-wide default.
     networks:
       - bankin-network
 
@@ -175,6 +188,13 @@ services:
       - backend
     ports:
       - '${FRONTEND_PORT:-5173}:80'
+      # 5174 rather than a port of its own: it is the origin already registered
+      # as a redirect URL with Enable Banking, and a bank refuses any other.
+      # It collides with the Vite dev server, which is fine — the two are
+      # alternatives, never both.
+      - '${FRONTEND_HTTPS_PORT:-5174}:443'
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
     networks:
       - bankin-network
 

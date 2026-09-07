@@ -283,6 +283,148 @@ describe('api', () => {
       expect(result.data).toHaveLength(1)
       expect(result.data[0]?.description).toBe('Restaurant')
     })
+
+    it('sends needsBankReview as a query param when set', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            data: [],
+            meta: {
+              total: 0,
+              page: 1,
+              limit: 50,
+              totalPages: 0,
+              hasNextPage: false,
+              hasPreviousPage: false,
+            },
+          }),
+      })
+
+      await api.getTransactions({ needsBankReview: true })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/transactions?needsBankReview=true',
+        expect.anything()
+      )
+    })
+  })
+
+  describe('bank sync run history', () => {
+    it('fetches every run for the current user', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: 'run-1',
+              aspspName: 'CIC',
+              fetchedAt: '2026-09-01T00:00:00.000Z',
+              inserted: 3,
+              claimed: 1,
+              undoneAt: null,
+            },
+          ]),
+      })
+
+      const result = await api.getBankSyncRuns()
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/bank-sync/runs',
+        expect.anything()
+      )
+      expect(result).toHaveLength(1)
+      expect(result[0]?.aspspName).toBe('CIC')
+    })
+
+    it('previews an undo as a POST with no body', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ deleted: 3, unlinked: 1, blocked: 0 }),
+      })
+
+      await api.previewUndoBankSyncRun('run-1')
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/bank-sync/runs/run-1/undo/preview',
+        expect.objectContaining({ method: 'POST' })
+      )
+    })
+
+    it('surfaces the reason a second undo is refused', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: () =>
+          Promise.resolve({ message: 'This run has already been undone.' }),
+      })
+
+      await expect(api.undoBankSyncRun('run-1')).rejects.toThrow(
+        'This run has already been undone.'
+      )
+    })
+  })
+
+  describe('Enable Banking credentials', () => {
+    it('reads this user’s own application id', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ applicationId: 'app-1' }),
+      })
+
+      const result = await api.getEnableBankingCredential()
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/bank-sync/credentials',
+        expect.anything()
+      )
+      expect(result).toEqual({ applicationId: 'app-1' })
+    })
+
+    it('uploads the application id and pem as multipart, without forcing a JSON content type', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ applicationId: 'app-1' }),
+      })
+      const file = new File(['pem-content'], 'key.pem')
+
+      await api.saveEnableBankingCredential('app-1', file)
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/bank-sync/credentials',
+        expect.objectContaining({ method: 'PUT', body: expect.any(FormData) })
+      )
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit]
+      const headers = options.headers as Record<string, string>
+      expect(headers['Content-Type']).toBeUndefined()
+      expect(headers.Authorization).toBe('Bearer test-token')
+    })
+
+    it('surfaces the reason a bad key is refused', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: () =>
+          Promise.resolve({
+            message: 'This private key cannot be used to sign a request.',
+          }),
+      })
+
+      await expect(
+        api.saveEnableBankingCredential('app-1', new File(['x'], 'key.pem'))
+      ).rejects.toThrow('This private key cannot be used to sign a request.')
+    })
+
+    it('removes the stored application', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true })
+
+      await api.removeEnableBankingCredential()
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:3000/bank-sync/credentials',
+        expect.objectContaining({ method: 'DELETE' })
+      )
+    })
   })
 
   describe('deleteAccount', () => {

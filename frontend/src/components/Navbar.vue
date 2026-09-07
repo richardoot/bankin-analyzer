@@ -39,6 +39,7 @@
     { to: '/profile', label: 'Mon profil' },
     { to: '/settings', label: 'Réglages' },
     { to: '/import/history', label: 'Historique des imports' },
+    { to: '/bank-sync/history', label: 'Historique des synchronisations' },
   ]
 
   const isActiveRoute = (path: string): boolean => {

@@ -261,6 +261,12 @@ export interface TransactionQueryParams {
   search?: string | undefined
   amountMin?: number | undefined
   amountMax?: number | undefined
+  /**
+   * Only rows a bank sync inserted or claimed and then lost the reference
+   * to — cleared to "aucun", or a correction still pending on the other
+   * side of a swap.
+   */
+  needsBankReview?: boolean | undefined
 }
 
 /** Hidden categories are addressed by Category id, never by name. */
@@ -849,6 +855,34 @@ async function fetchWithAuth(
 }
 
 /**
+ * Same retry-on-401 behaviour as `fetchWithAuth`, but without forcing
+ * `Content-Type: application/json` — a `FormData` body needs the browser's
+ * own multipart boundary, and setting the header by hand loses it.
+ */
+async function fetchWithAuthForFormData(
+  url: string,
+  options: RequestInit
+): Promise<Response> {
+  async function authHeader(): Promise<HeadersInit> {
+    const session = await getSessionWithTimeout()
+    if (!session?.access_token) throw new AuthError('No active session')
+    return { Authorization: `Bearer ${session.access_token}` }
+  }
+
+  let response = await fetch(url, { ...options, headers: await authHeader() })
+
+  if (response.status === 401) {
+    const { error } = await supabase.auth.refreshSession()
+    if (error) {
+      throw new AuthError('Session expiree, veuillez vous reconnecter')
+    }
+    response = await fetch(url, { ...options, headers: await authHeader() })
+  }
+
+  return response
+}
+
+/**
  * Try to extract a NestJS error message from a non-OK response. Falls back
  * to a generic message if the body is empty or not JSON.
  */
@@ -866,7 +900,341 @@ async function readErrorMessage(
   return `Failed to ${fallbackAction}`
 }
 
+// ---------------------------------------------------------------------------
+// Bank sync
+// ---------------------------------------------------------------------------
+
+/** A bank account, as the bank describes it and the user has decided about it. */
+export interface DiscoveredAccountDto {
+  linkId: string
+  externalAccountId: string
+  accountName: string
+  product: string | null
+  /** ISO 20022: `CACC` current account, `CARD` card account. */
+  cashAccountType: string | null
+  iban: string | null
+  accountId: string | null
+  accountLabel: string | null
+  isIngested: boolean
+  /** What the transactions suggest, when there is history to reason from. */
+  suggestion: {
+    accountId: string
+    accountLabel: string
+    matches: number
+  } | null
+  /** Present when the account should be left alone, and why. */
+  warning: string | null
+}
+
+export interface BankConnectionDto {
+  id: string
+  aspspName: string
+  aspspCountry: string
+  status: string
+  consentValidUntil: string | null
+  lastSyncAt: string | null
+  /** What pressing sync would do right now. */
+  action: 'fetch' | 'skip' | 'reconnect'
+  reason: string
+  daysUntilConsentExpires: number | null
+  accounts: DiscoveredAccountDto[]
+}
+
+export interface SyncOutcomeDto {
+  connectionId: string
+  fetched: number
+  claimed: number
+  inserted: number
+  skippedDuplicates: number
+  skippedAmbiguous: number
+  /** Older than the account's own earliest known transaction — never inserted. */
+  skippedTooOld: number
+  accountsRead: number
+}
+
+/** What correcting a bank account's mapping did to what an earlier sync wrote. */
+export interface ReassignmentOutcomeDto {
+  /** Inserted under the old account; nothing on the new one matched it. */
+  moved: number
+  /** Inserted under the old account; the new one already had it via CSV. */
+  merged: number
+  /**
+   * Lost its bank reference, kept everything else: a CSV row claimed by
+   * coincidence on the old account, or — when the link is cleared entirely —
+   * an inserted row with nowhere left to belong. Never deleted: the
+   * transaction still happened, whichever account it ends up filed under.
+   */
+  unlinked: number
+  /** Left untouched: gained a tag, reimbursement, settlement or payment since. */
+  blockedByWork: number
+  /** Left untouched: more than one equally good match, or none worth trusting. */
+  ambiguous: number
+}
+
+/** One past sync, and what pressing "Annuler" on it would find. */
+export interface BankSyncRunDto {
+  id: string
+  aspspName: string
+  fetchedAt: string
+  /** Still attributed to this run right now — 0 once it's been undone. */
+  inserted: number
+  claimed: number
+  /** Set once this run has been undone. */
+  undoneAt: string | null
+}
+
+/** What undoing a run did, or would do. */
+export interface UndoRunOutcomeDto {
+  /** Inserted by this run, removed the same way it arrived. */
+  deleted: number
+  /** Claimed by this run, restored to how it stood before — never deleted. */
+  unlinked: number
+  /** Left untouched: gained a reimbursement, tag, settlement or payment since. */
+  blocked: number
+}
+
 export const api = {
+  // ── Bank sync ─────────────────────────────────────────────────────────────
+
+  /**
+   * Whether this server can sync at all.
+   *
+   * Asked before offering to connect a bank: a backend whose owner never set
+   * up Enable Banking serves everything else normally, and an interface that
+   * offered the button anyway would only produce a puzzling failure.
+   */
+  async getBankSyncStatus(): Promise<{ configured: boolean }> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/bank-sync/status`)
+    if (!response.ok)
+      throw new Error(await readErrorMessage(response, 'read bank sync status'))
+    return response.json() as Promise<{ configured: boolean }>
+  },
+
+  /** This user's own Enable Banking application, if they have set one up. */
+  async getEnableBankingCredential(): Promise<{
+    applicationId: string | null
+  }> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/credentials`
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(response, 'read your Enable Banking application')
+      )
+    return response.json() as Promise<{ applicationId: string | null }>
+  },
+
+  /** Save this user's Enable Banking application id and .pem private key. */
+  async saveEnableBankingCredential(
+    applicationId: string,
+    pemFile: File
+  ): Promise<{ applicationId: string | null }> {
+    const body = new FormData()
+    body.append('applicationId', applicationId)
+    body.append('file', pemFile)
+
+    const response = await fetchWithAuthForFormData(
+      `${API_BASE_URL}/bank-sync/credentials`,
+      { method: 'PUT', body }
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(response, 'save your Enable Banking application')
+      )
+    return response.json() as Promise<{ applicationId: string | null }>
+  },
+
+  /** Remove this user's own Enable Banking application. */
+  async removeEnableBankingCredential(): Promise<void> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/credentials`,
+      { method: 'DELETE' }
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(
+          response,
+          'remove your Enable Banking application'
+        )
+      )
+  },
+
+  /** The banks that can be connected, for a person choosing one. */
+  async getBanks(
+    country = 'FR'
+  ): Promise<
+    { name: string; country: string; beta: boolean; logo: string | null }[]
+  > {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/aspsps?country=${encodeURIComponent(country)}`
+    )
+    if (!response.ok)
+      throw new Error(await readErrorMessage(response, 'list the banks'))
+    return response.json() as Promise<
+      { name: string; country: string; beta: boolean; logo: string | null }[]
+    >
+  },
+
+  async getBankConnections(): Promise<BankConnectionDto[]> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/connections`
+    )
+    if (!response.ok)
+      throw new Error(await readErrorMessage(response, 'list bank connections'))
+    return response.json() as Promise<BankConnectionDto[]>
+  },
+
+  /**
+   * Accounts still carrying a row a sync claimed and then lost the
+   * reference to — cleared to "aucun", or a correction still pending on the
+   * other side of a swap.
+   */
+  async getBankSyncNeedsReview(): Promise<
+    { accountId: string; accountLabel: string; count: number }[]
+  > {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/needs-review`
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(response, 'list accounts needing review')
+      )
+    return response.json() as Promise<
+      { accountId: string; accountLabel: string; count: number }[]
+    >
+  },
+
+  /** Every sync this user has run, most recent first. */
+  async getBankSyncRuns(): Promise<BankSyncRunDto[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/bank-sync/runs`)
+    if (!response.ok)
+      throw new Error(await readErrorMessage(response, 'list sync runs'))
+    return response.json() as Promise<BankSyncRunDto[]>
+  },
+
+  /** What undoing a run would do, without doing it. */
+  async previewUndoBankSyncRun(runId: string): Promise<UndoRunOutcomeDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/runs/${runId}/undo/preview`,
+      { method: 'POST' }
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(response, 'preview undoing this sync')
+      )
+    return response.json() as Promise<UndoRunOutcomeDto>
+  },
+
+  /** Undo a sync run: delete what it inserted, unlink what it only claimed. */
+  async undoBankSyncRun(runId: string): Promise<UndoRunOutcomeDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/runs/${runId}/undo`,
+      { method: 'POST' }
+    )
+    if (!response.ok)
+      throw new Error(await readErrorMessage(response, 'undo this sync'))
+    return response.json() as Promise<UndoRunOutcomeDto>
+  },
+
+  /** Begin authorising a bank; returns where to send the user. */
+  async startBankAuthorization(input: {
+    aspspName: string
+    country?: string
+    redirectUrl: string
+  }): Promise<{ url: string; state: string }> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/connections`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(response, 'start the authorization')
+      )
+    return response.json() as Promise<{ url: string; state: string }>
+  },
+
+  /** Exchange the code the redirect carried, and discover the accounts. */
+  async completeBankAuthorization(
+    code: string,
+    state?: string
+  ): Promise<BankConnectionDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/connections/callback`,
+      { method: 'POST', body: JSON.stringify({ code, state }) }
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(response, 'finish the authorization')
+      )
+    return response.json() as Promise<BankConnectionDto>
+  },
+
+  /** Say what a bank account is, and whether to read from it. */
+  async updateBankAccountLink(
+    linkId: string,
+    input: { accountId?: string | null; isIngested?: boolean }
+  ): Promise<DiscoveredAccountDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/links/${linkId}`,
+      { method: 'PATCH', body: JSON.stringify(input) }
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(response, 'update the bank account')
+      )
+    return response.json() as Promise<DiscoveredAccountDto>
+  },
+
+  /**
+   * What correcting a link's account would do, without doing it.
+   *
+   * Only worth calling before showing anything: when every count comes back
+   * zero, the link never wrote anything under the old account and the change
+   * can go straight through.
+   */
+  async previewLinkReassignment(
+    linkId: string,
+    accountId: string | null
+  ): Promise<ReassignmentOutcomeDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/links/${linkId}/reassignment/preview`,
+      { method: 'POST', body: JSON.stringify({ accountId }) }
+    )
+    if (!response.ok)
+      throw new Error(
+        await readErrorMessage(response, 'preview this correction')
+      )
+    return response.json() as Promise<ReassignmentOutcomeDto>
+  },
+
+  /** Correct a link's account, and everything an earlier sync wrote under it. */
+  async reassignLink(
+    linkId: string,
+    accountId: string | null
+  ): Promise<ReassignmentOutcomeDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/links/${linkId}/reassignment`,
+      { method: 'POST', body: JSON.stringify({ accountId }) }
+    )
+    if (!response.ok)
+      throw new Error(await readErrorMessage(response, 'correct this account'))
+    return response.json() as Promise<ReassignmentOutcomeDto>
+  },
+
+  /** Read the bank now. */
+  async syncBankConnection(connectionId: string): Promise<SyncOutcomeDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/bank-sync/connections/${connectionId}/sync`,
+      { method: 'POST' }
+    )
+    if (!response.ok)
+      throw new Error(await readErrorMessage(response, 'sync this bank'))
+    return response.json() as Promise<SyncOutcomeDto>
+  },
+
   async getMe(): Promise<DbUser> {
     const response = await fetchWithAuth(`${API_BASE_URL}/users/me`)
 
@@ -1111,6 +1479,8 @@ export const api = {
       searchParams.set('amountMin', params.amountMin.toString())
     if (params?.amountMax !== undefined)
       searchParams.set('amountMax', params.amountMax.toString())
+    if (params?.needsBankReview !== undefined)
+      searchParams.set('needsBankReview', params.needsBankReview.toString())
 
     const queryString = searchParams.toString()
     const url = queryString

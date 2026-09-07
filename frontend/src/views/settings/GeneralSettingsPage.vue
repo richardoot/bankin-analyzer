@@ -71,6 +71,11 @@
       description: 'Consulter et annuler un import passé.',
     },
     {
+      to: '/bank-sync/history',
+      label: 'Historique des synchronisations',
+      description: 'Consulter et annuler une synchronisation bancaire passée.',
+    },
+    {
       to: '/profile',
       label: 'Mon profil',
       description: 'Votre compte utilisateur et sa suppression.',

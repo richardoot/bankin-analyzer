@@ -29,6 +29,11 @@
       label: 'Historique des imports',
       icon: 'history',
     },
+    {
+      to: '/bank-sync/history',
+      label: 'Historique des synchros',
+      icon: 'history',
+    },
   ]
 
   function toggle() {
@@ -134,7 +139,7 @@
             <!-- User icon -->
             <svg
               v-if="item.icon === 'user'"
-              class="h-4 w-4 text-slate-400 dark:text-slate-500"
+              class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -149,7 +154,7 @@
             <!-- Settings icon -->
             <svg
               v-else-if="item.icon === 'settings'"
-              class="h-4 w-4 text-slate-400 dark:text-slate-500"
+              class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -170,7 +175,7 @@
             <!-- History icon -->
             <svg
               v-else-if="item.icon === 'history'"
-              class="h-4 w-4 text-slate-400 dark:text-slate-500"
+              class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -182,7 +187,7 @@
                 d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            {{ item.label }}
+            <span class="min-w-0 flex-1 text-left">{{ item.label }}</span>
           </button>
         </div>
 
@@ -196,7 +201,7 @@
             @click="handleSignOut"
           >
             <svg
-              class="h-4 w-4"
+              class="h-4 w-4 shrink-0"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
