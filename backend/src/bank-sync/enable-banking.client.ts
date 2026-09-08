@@ -8,6 +8,23 @@
  * environment or disk itself. Resolving "which credentials for this user,
  * falling back to what?" is `EnableBankingCredentialsService`'s job, not
  * this one's; this class only ever signs with what it is handed.
+ *
+ * ## PSU headers, and the four-a-day limit
+ *
+ * PSD2 caps unattended account reads at four per account per day, and a
+ * request with no PSU headers is an unattended request — even one a person
+ * triggered by pressing a button. Every sync here IS that button press, so
+ * data-reading methods take the caller's `PsuContext` (IP and user agent,
+ * lifted from the HTTP request) and forward it as `Psu-Ip-Address` /
+ * `Psu-User-Agent`, which tells the bank the user is present and lifts the
+ * cap.
+ *
+ * A bank may require PSU headers this application cannot supply
+ * (`required_psu_headers` — geolocation, say), and the rule is all-or-none:
+ * a partial set is refused as `PSU_HEADER_NOT_PROVIDED`. That refusal is
+ * retried once with no headers at all, which is exactly the request this
+ * client made before PSU headers existed — counted against the quota, but
+ * counted, not failed.
  */
 import { Injectable, Logger } from '@nestjs/common'
 import { buildJwt } from './enable-banking.jwt'
@@ -19,6 +36,12 @@ export interface EnableBankingCredentials {
   applicationId: string
   /** Raw PEM content, not a file path. */
   privateKey: string
+}
+
+/** Who is at the keyboard, as the banks want it said. */
+export interface PsuContext {
+  ipAddress?: string
+  userAgent?: string
 }
 
 /** An API error that kept its status, so a caller can tell 403 from 500. */
@@ -99,21 +122,45 @@ export class EnableBankingClient {
     return buildJwt(credentials.applicationId, credentials.privateKey)
   }
 
+  private psuHeaders(psu?: PsuContext): Record<string, string> {
+    if (!psu) return {}
+    return {
+      ...(psu.ipAddress ? { 'Psu-Ip-Address': psu.ipAddress } : {}),
+      ...(psu.userAgent ? { 'Psu-User-Agent': psu.userAgent } : {}),
+    }
+  }
+
   private async call<T>(
     credentials: EnableBankingCredentials,
     path: string,
-    init?: { method: string; body: unknown }
+    init?: { method: string; body: unknown },
+    psu?: PsuContext
   ): Promise<T> {
+    const psuHeaders = this.psuHeaders(psu)
     const response = await fetch(`${API_BASE}${path}`, {
       method: init?.method ?? 'GET',
       headers: {
         Authorization: `Bearer ${this.token(credentials)}`,
         ...(init ? { 'Content-Type': 'application/json' } : {}),
+        ...psuHeaders,
       },
       ...(init ? { body: JSON.stringify(init.body) } : {}),
     })
     if (!response.ok) {
       const body = await response.text()
+      // The bank wanted PSU headers this application cannot supply — the
+      // set is all-or-none, so fall back to none: the same unattended
+      // request this client always made, counted against the quota rather
+      // than failed.
+      if (
+        Object.keys(psuHeaders).length > 0 &&
+        body.includes('PSU_HEADER_NOT_PROVIDED')
+      ) {
+        this.logger.warn(
+          `${path} refused our PSU headers; retrying as an unattended call`
+        )
+        return this.call(credentials, path, init)
+      }
       throw new EnableBankingError(
         response.status,
         body,
@@ -186,9 +233,10 @@ export class EnableBankingClient {
   /** Read a session already authorised — what a sync does. */
   async getSession(
     credentials: EnableBankingCredentials,
-    sessionId: string
+    sessionId: string,
+    psu?: PsuContext
   ): Promise<BankSession> {
-    return this.call(credentials, `/sessions/${sessionId}`)
+    return this.call(credentials, `/sessions/${sessionId}`, undefined, psu)
   }
 
   /**
@@ -219,9 +267,10 @@ export class EnableBankingClient {
    */
   async getAccountDetails(
     credentials: EnableBankingCredentials,
-    uid: string
+    uid: string,
+    psu?: PsuContext
   ): Promise<BankAccountResource> {
-    return this.call(credentials, `/accounts/${uid}/details`)
+    return this.call(credentials, `/accounts/${uid}/details`, undefined, psu)
   }
 
   /**
@@ -231,11 +280,14 @@ export class EnableBankingClient {
    */
   async getBalances(
     credentials: EnableBankingCredentials,
-    uid: string
+    uid: string,
+    psu?: PsuContext
   ): Promise<BankBalance[]> {
     const { balances } = await this.call<{ balances: BankBalance[] }>(
       credentials,
-      `/accounts/${uid}/balances`
+      `/accounts/${uid}/balances`,
+      undefined,
+      psu
     )
     return balances ?? []
   }
@@ -250,7 +302,11 @@ export class EnableBankingClient {
   async listTransactions(
     credentials: EnableBankingCredentials,
     uid: string,
-    options: { strategy?: 'default' | 'longest'; dateFrom?: string } = {}
+    options: {
+      strategy?: 'default' | 'longest'
+      dateFrom?: string
+      psu?: PsuContext
+    } = {}
   ): Promise<BankTransaction[]> {
     const all: BankTransaction[] = []
     let continuationKey: string | undefined
@@ -264,7 +320,12 @@ export class EnableBankingClient {
       const body = await this.call<{
         transactions: BankTransaction[]
         continuation_key?: string
-      }>(credentials, `/accounts/${uid}/transactions?${query.toString()}`)
+      }>(
+        credentials,
+        `/accounts/${uid}/transactions?${query.toString()}`,
+        undefined,
+        options.psu
+      )
 
       all.push(...(body.transactions ?? []))
       // A continuation key means "not everything is here yet". The loop ends

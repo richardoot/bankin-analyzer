@@ -34,6 +34,7 @@ import {
   type BankAccountResource,
   type BankTransaction,
   type EnableBankingCredentials,
+  type PsuContext,
 } from './enable-banking.client'
 import { EnableBankingCredentialsService } from './enable-banking-credentials.service'
 import {
@@ -300,7 +301,8 @@ export class BankSyncService {
   async completeAuthorization(
     userId: string,
     code: string,
-    state?: string
+    state?: string,
+    psu?: PsuContext
   ): Promise<ConnectionView> {
     const credentials = await this.credentialsOf(userId)
     const session = await this.client.createSession(credentials, code)
@@ -355,7 +357,7 @@ export class BankSyncService {
 
     for (const account of accounts) {
       if (!account.uid) continue
-      const details = await this.describe(credentials, account)
+      const details = await this.describe(credentials, account, psu)
       const iban = details.account_id?.iban ?? null
       const identificationHash = details.identification_hash ?? null
 
@@ -411,13 +413,15 @@ export class BankSyncService {
   /** What `/details` says, falling back to the session when it will not say. */
   private async describe(
     credentials: EnableBankingCredentials,
-    account: BankAccountResource
+    account: BankAccountResource,
+    psu?: PsuContext
   ): Promise<BankAccountResource> {
     if (!account.uid) return account
     try {
       const details = await this.client.getAccountDetails(
         credentials,
-        account.uid
+        account.uid,
+        psu
       )
       return { ...account, ...details, uid: account.uid }
     } catch (error) {
@@ -1291,7 +1295,11 @@ export class BankSyncService {
    * unfiled, because the bank sends no category and a wrong one is invisible
    * where a missing one is a click from correct.
    */
-  async sync(userId: string, connectionId: string): Promise<SyncOutcome> {
+  async sync(
+    userId: string,
+    connectionId: string,
+    psu?: PsuContext
+  ): Promise<SyncOutcome> {
     const connection = await this.prisma.bankConnection.findFirst({
       where: { id: connectionId, userId },
       include: { accountLinks: true },
@@ -1336,7 +1344,14 @@ export class BankSyncService {
     for (const link of ingestable) {
       fetched.set(
         link.externalAccountId,
-        await this.client.listTransactions(credentials, link.externalAccountId)
+        // `psu` says a person pressed the button — which is the only way a
+        // sync starts here. Without it the bank counts this read against
+        // PSD2's four-unattended-a-day; with it, it does not.
+        await this.client.listTransactions(
+          credentials,
+          link.externalAccountId,
+          psu ? { psu } : {}
+        )
       )
     }
 

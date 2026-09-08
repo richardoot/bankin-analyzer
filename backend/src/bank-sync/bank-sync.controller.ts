@@ -15,10 +15,12 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common'
+import type { Request } from 'express'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger'
 import { SupabaseGuard } from '../auth/guards/supabase.guard'
@@ -37,6 +39,7 @@ import type {
   SyncOutcome,
   UndoRunOutcome,
 } from './bank-sync.service'
+import type { PsuContext } from './enable-banking.client'
 import {
   CompleteAuthorizationDto,
   ReassignLinkDto,
@@ -54,6 +57,23 @@ interface UploadedPemFile {
   buffer: Buffer
   originalname: string
   size: number
+}
+
+/**
+ * Who is at the keyboard, told to the bank as `Psu-*` headers.
+ *
+ * A data read carrying them is "the user is present" and escapes PSD2's
+ * four-unattended-reads-a-day; without them, even a button press counts as a
+ * background fetch. `req.ip` is the real client behind the proxy — main.ts
+ * sets `trust proxy`.
+ */
+function psuOf(req: Request): PsuContext {
+  return {
+    ...(req.ip ? { ipAddress: req.ip } : {}),
+    ...(req.headers['user-agent']
+      ? { userAgent: req.headers['user-agent'] }
+      : {}),
+  }
 }
 
 @ApiTags('bank-sync')
@@ -259,9 +279,15 @@ export class BankSyncController {
   })
   complete(
     @CurrentUser() user: User,
-    @Body() dto: CompleteAuthorizationDto
+    @Body() dto: CompleteAuthorizationDto,
+    @Req() req: Request
   ): Promise<ConnectionView> {
-    return this.bankSync.completeAuthorization(user.id, dto.code, dto.state)
+    return this.bankSync.completeAuthorization(
+      user.id,
+      dto.code,
+      dto.state,
+      psuOf(req)
+    )
   }
 
   @Patch('links/:id')
@@ -322,8 +348,9 @@ export class BankSyncController {
   })
   sync(
     @CurrentUser() user: User,
-    @Param('id') id: string
+    @Param('id') id: string,
+    @Req() req: Request
   ): Promise<SyncOutcome> {
-    return this.bankSync.sync(user.id, id)
+    return this.bankSync.sync(user.id, id, psuOf(req))
   }
 }

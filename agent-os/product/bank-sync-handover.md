@@ -709,6 +709,24 @@ generate a fresh `CREDENTIALS_ENCRYPTION_KEY` for the prod environment
 `https://<prod-domain>/bank-callback` in the Control Panel, and re-run the
 `--prod` rehearsal — the credentials migration postdates the last one.
 
+**PSU headers, 2026-09-09.** The user asked what the real call ceiling is;
+Enable Banking's FAQ answered: the binding limit is the banks' PSD2 one —
+four _unattended_ reads per account per day (429 +
+`ASPSP_RATE_LIMIT_EXCEEDED`, retry after ~6 h) — and a request with no PSU
+headers is an unattended request even when a person pressed the button.
+Every sync here is that button, so `PsuContext` (IP + user agent, read from
+the HTTP request — `trust proxy` is set, so `req.ip` is the real client)
+now travels controller → service → client and lands as
+`Psu-Ip-Address`/`Psu-User-Agent` on the data reads (`listTransactions`,
+`getAccountDetails`, plus `getSession`/`getBalances` for when they get
+used). That tells the bank the user is present and lifts the cap. The set
+is all-or-none per bank (`required_psu_headers`): a bank demanding a header
+we cannot supply refuses with `PSU_HEADER_NOT_PROVIDED`, and the client
+retries that once with no headers at all — the exact unattended request it
+always made, counted against the quota rather than failed. The 3-a-day
+guard in `sync-policy.ts` stays as-is: it is now belt-and-braces for the
+banks that honour PSU presence, and the real guard for any that do not.
+
 ### Deliberately not now
 
 - **The arbitration screen** for ambiguous matches: 1 case in 1 954 once
