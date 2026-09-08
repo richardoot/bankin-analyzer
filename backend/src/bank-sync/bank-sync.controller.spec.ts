@@ -10,12 +10,15 @@ import {
 } from './enable-banking-credentials.service'
 import { SupabaseGuard } from '../auth/guards/supabase.guard'
 import type { User } from '../generated/prisma'
+import type { Request } from 'express'
 
 const mockUser = { id: 'user-1' } as User
 
 const mockBankSync = {
   isConfigured: vi.fn(),
   listBanks: vi.fn(),
+  sync: vi.fn(),
+  completeAuthorization: vi.fn(),
 }
 
 const mockCredentials = {
@@ -140,6 +143,58 @@ describe('BankSyncController — credentials', () => {
       await expect(
         controller.saveCredentials(mockUser, { applicationId: 'app-1' }, file)
       ).rejects.toThrow('db is down')
+    })
+  })
+
+  describe('PSU context — who is at the keyboard', () => {
+    function fakeRequest(overrides: Partial<Request> = {}): Request {
+      return {
+        ip: '203.0.113.7',
+        headers: { 'user-agent': 'Mozilla/5.0 (test)' },
+        ...overrides,
+      } as Request
+    }
+
+    it('forwards the caller’s IP and user agent into a sync', async () => {
+      mockBankSync.sync.mockResolvedValue({})
+
+      await controller.sync(mockUser, 'conn-1', fakeRequest())
+
+      expect(mockBankSync.sync).toHaveBeenCalledWith('user-1', 'conn-1', {
+        ipAddress: '203.0.113.7',
+        userAgent: 'Mozilla/5.0 (test)',
+      })
+    })
+
+    it('forwards it when finishing an authorization too', async () => {
+      mockBankSync.completeAuthorization.mockResolvedValue({})
+
+      await controller.complete(
+        mockUser,
+        { code: 'code-1', state: 'state-1' },
+        fakeRequest()
+      )
+
+      expect(mockBankSync.completeAuthorization).toHaveBeenCalledWith(
+        'user-1',
+        'code-1',
+        'state-1',
+        { ipAddress: '203.0.113.7', userAgent: 'Mozilla/5.0 (test)' }
+      )
+    })
+
+    it('sends an empty context rather than inventing one', async () => {
+      // No IP, no user agent → the client will send no PSU headers at all,
+      // the valid unattended shape — never a fabricated address.
+      mockBankSync.sync.mockResolvedValue({})
+
+      await controller.sync(
+        mockUser,
+        'conn-1',
+        fakeRequest({ ip: undefined, headers: {} } as Partial<Request>)
+      )
+
+      expect(mockBankSync.sync).toHaveBeenCalledWith('user-1', 'conn-1', {})
     })
   })
 

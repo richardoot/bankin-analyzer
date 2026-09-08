@@ -894,6 +894,22 @@ describe('BankSyncService — authorization', () => {
       )
     })
 
+    it('tells the bank the user is present, when the caller says who that is', async () => {
+      // The PSU context is what keeps a button-press sync outside PSD2's
+      // four-unattended-reads-a-day.
+      primeMinimalSync()
+      mockPrisma.category.findMany.mockResolvedValue([])
+      const psu = { ipAddress: '203.0.113.7', userAgent: 'UA' }
+
+      await service.sync(userId, 'connection-1', psu)
+
+      expect(mockClient.listTransactions).toHaveBeenCalledWith(
+        expect.anything(),
+        'ext-1',
+        { psu }
+      )
+    })
+
     it('files a new row among the categories the user already has', async () => {
       primeMinimalSync()
       mockPrisma.category.findMany.mockResolvedValue([
