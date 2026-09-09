@@ -153,17 +153,33 @@ export interface UndoRunOutcome {
  * Loosen the sync policy for local testing, without touching the bank's own
  * limits when the environment doesn't ask for it.
  *
- * `BANK_SYNC_MIN_INTERVAL_HOURS=0` is what makes repeated manual syncs of the
- * same connection possible while verifying a fix — the bank's own quota
- * (`fetchesToday`) still applies, since that one reflects what Enable
- * Banking will actually refuse, not a local choice.
+ * `BANK_SYNC_MIN_INTERVAL_HOURS=0` lifts the 8 h gap between two syncs of
+ * one connection; `BANK_SYNC_MAX_FETCHES_PER_DAY` raises the local 3-a-day
+ * ceiling. Both only relax what THIS application decided for itself:
+ * whatever the bank refuses (`ASPSP_RATE_LIMIT_EXCEEDED`) it refuses
+ * regardless of anything set here — although a sync carrying PSU headers is
+ * exempted from the four-a-day rule by most banks, being an attended read.
  */
 export function syncPolicyOptionsFromEnv(): SyncPolicyOptions {
-  const raw = process.env.BANK_SYNC_MIN_INTERVAL_HOURS
-  if (raw === undefined) return {}
-  const hours = Number(raw)
-  if (Number.isNaN(hours)) return {}
-  return { minimumIntervalHours: hours }
+  const options: SyncPolicyOptions = {}
+
+  const interval = Number(process.env.BANK_SYNC_MIN_INTERVAL_HOURS)
+  if (
+    process.env.BANK_SYNC_MIN_INTERVAL_HOURS !== undefined &&
+    !Number.isNaN(interval)
+  ) {
+    options.minimumIntervalHours = interval
+  }
+
+  const perDay = Number(process.env.BANK_SYNC_MAX_FETCHES_PER_DAY)
+  if (
+    process.env.BANK_SYNC_MAX_FETCHES_PER_DAY !== undefined &&
+    !Number.isNaN(perDay)
+  ) {
+    options.maxFetchesPerDay = perDay
+  }
+
+  return options
 }
 
 /** A card account repeats its current account; ingesting both counts twice. */
