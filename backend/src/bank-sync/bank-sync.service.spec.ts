@@ -1032,15 +1032,23 @@ describe('BankSyncService — authorization', () => {
 })
 
 describe('syncPolicyOptionsFromEnv', () => {
-  const original = process.env.BANK_SYNC_MIN_INTERVAL_HOURS
+  const original = {
+    interval: process.env.BANK_SYNC_MIN_INTERVAL_HOURS,
+    perDay: process.env.BANK_SYNC_MAX_FETCHES_PER_DAY,
+  }
 
   afterEach(() => {
-    if (original === undefined) delete process.env.BANK_SYNC_MIN_INTERVAL_HOURS
-    else process.env.BANK_SYNC_MIN_INTERVAL_HOURS = original
+    if (original.interval === undefined)
+      delete process.env.BANK_SYNC_MIN_INTERVAL_HOURS
+    else process.env.BANK_SYNC_MIN_INTERVAL_HOURS = original.interval
+    if (original.perDay === undefined)
+      delete process.env.BANK_SYNC_MAX_FETCHES_PER_DAY
+    else process.env.BANK_SYNC_MAX_FETCHES_PER_DAY = original.perDay
   })
 
   it('leaves the policy untouched when unset', () => {
     delete process.env.BANK_SYNC_MIN_INTERVAL_HOURS
+    delete process.env.BANK_SYNC_MAX_FETCHES_PER_DAY
     expect(syncPolicyOptionsFromEnv()).toEqual({})
   })
 
@@ -1052,8 +1060,23 @@ describe('syncPolicyOptionsFromEnv', () => {
     expect(syncPolicyOptionsFromEnv()).toEqual({ minimumIntervalHours: 2.5 })
   })
 
+  it('raises the local daily ceiling when set', () => {
+    process.env.BANK_SYNC_MAX_FETCHES_PER_DAY = '20'
+    expect(syncPolicyOptionsFromEnv()).toEqual({ maxFetchesPerDay: 20 })
+  })
+
+  it('can relax both guards at once', () => {
+    process.env.BANK_SYNC_MIN_INTERVAL_HOURS = '0'
+    process.env.BANK_SYNC_MAX_FETCHES_PER_DAY = '20'
+    expect(syncPolicyOptionsFromEnv()).toEqual({
+      minimumIntervalHours: 0,
+      maxFetchesPerDay: 20,
+    })
+  })
+
   it('ignores a value that is not a number', () => {
     process.env.BANK_SYNC_MIN_INTERVAL_HOURS = 'soon'
+    process.env.BANK_SYNC_MAX_FETCHES_PER_DAY = 'many'
     expect(syncPolicyOptionsFromEnv()).toEqual({})
   })
 })
