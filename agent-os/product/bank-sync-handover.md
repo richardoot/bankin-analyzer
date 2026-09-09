@@ -727,6 +727,35 @@ always made, counted against the quota rather than failed. The 3-a-day
 guard in `sync-policy.ts` stays as-is: it is now belt-and-braces for the
 banks that honour PSU presence, and the real guard for any that do not.
 
+**Dates per bank, and the pending-row duplicates, 2026-09-09.** The user
+noticed synced Boursorama rows wearing a different date than their Bankin
+history. The raw payloads — kept as JSON on `bank_staged_transactions.raw`,
+which is what made this diagnosable at all — settled it: Boursorama's
+`transaction_date` is the operation date (it equals the date printed inside
+the raw label, `CARTE 29/08/26 …`) and `booking_date` the debit date, 1–3
+days later. Bankin filed Boursorama under the DEBIT date, and CIC under the
+operation date — the banks' own conventions differ, and years of imported
+CSV embody each. So the date rule went per-bank: `staging.ts`'s
+`pickTransactionDate` prefers `booking_date` for Boursorama and
+`transaction_date` elsewhere, keeping every account internally consistent
+with its own history rather than globally consistent and locally wrong.
+
+The same payloads exposed something worse: Boursorama references a pending
+(`PDNG`) row by a fabricated `avis-…` hash that does not survive booking,
+so an inserted pending row is never claimed by its booked twin — four
+actual duplicate pairs sat in the real ledger. `staging.ts`'s `isBookable`
+now keeps anything not `BOOK` out of the ledger (still staged, for the
+audit trail), and `ingest` purges previously-inserted pending rows for the
+accounts it syncs — sparing, as every destructive path here does, any that
+gained a reimbursement, tag, settlement or payment. Existing
+Boursorama-dated rows are NOT migrated in place: undoing the recent runs
+from `/bank-sync/history` and re-syncing rebuilds them under the new rule,
+hashes recomputed, which is exactly what that feature was built for. The
+offline scripts (`spike-enable-banking-fetch`'s `transactionDate`,
+`stage-bank-dump`) still use the uniform old rule — deliberate for now:
+they are measurement tools, and the dump they read does not carry the
+ASPSP name per row.
+
 ### Deliberately not now
 
 - **The arbitration screen** for ambiguous matches: 1 case in 1 954 once
