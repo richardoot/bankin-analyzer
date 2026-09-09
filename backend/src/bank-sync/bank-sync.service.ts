@@ -1364,13 +1364,23 @@ export class BankSyncService {
     for (const link of ingestable) {
       fetched.set(
         link.externalAccountId,
+        // `strategy: 'longest'` asks for the deepest window the bank will
+        // serve — ~90 days on a routine sync, measured. Omit it and the
+        // bank picks its own default: Boursorama's is the current calendar
+        // month, which silently dropped a late-August purchase from a
+        // September fetch. Every measurement this module was built on was
+        // taken WITH this parameter; the app's client just never sent it.
+        //
         // `psu` says a person pressed the button — which is the only way a
         // sync starts here. Without it the bank counts this read against
         // PSD2's four-unattended-a-day; with it, it does not.
         await this.client.listTransactions(
           credentials,
           link.externalAccountId,
-          psu ? { psu } : {}
+          {
+            strategy: 'longest',
+            ...(psu ? { psu } : {}),
+          }
         )
       )
     }

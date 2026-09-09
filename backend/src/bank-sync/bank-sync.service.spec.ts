@@ -1038,7 +1038,23 @@ describe('BankSyncService — authorization', () => {
       expect(mockClient.listTransactions).toHaveBeenCalledWith(
         expect.anything(),
         'ext-1',
-        { psu }
+        { strategy: 'longest', psu }
+      )
+    })
+
+    it('always asks for the deepest window the bank will serve', async () => {
+      // Omitting `strategy` lets each bank pick its own default window —
+      // Boursorama's is the current calendar month, which silently dropped
+      // a late-August purchase from a September fetch.
+      primeMinimalSync()
+      mockPrisma.category.findMany.mockResolvedValue([])
+
+      await service.sync(userId, 'connection-1')
+
+      expect(mockClient.listTransactions).toHaveBeenCalledWith(
+        expect.anything(),
+        'ext-1',
+        expect.objectContaining({ strategy: 'longest' })
       )
     })
 
