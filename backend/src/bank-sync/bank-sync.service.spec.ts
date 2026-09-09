@@ -135,6 +135,7 @@ describe('BankSyncService — authorization', () => {
     mockPrisma.bankAccountLink.findFirst.mockResolvedValue(null)
     mockPrisma.bankAccountLink.findMany.mockResolvedValue([])
     mockPrisma.bankAccountLink.upsert.mockResolvedValue({ id: 'link-1' })
+    mockPrisma.transaction.deleteMany.mockResolvedValue({ count: 0 })
     mockClient.getAccountDetails.mockResolvedValue({})
     mockCredentialsService.resolve.mockResolvedValue({
       applicationId: 'app-1',
@@ -945,6 +946,84 @@ describe('BankSyncService — authorization', () => {
           ],
         })
       )
+    })
+
+    it('stages a pending row for the audit trail but never writes it to the ledger', async () => {
+      // A pending reference is a fabricated hash that does not survive
+      // booking — insert the row and its booked twin arrives as a duplicate.
+      primeMinimalSync()
+      mockPrisma.category.findMany.mockResolvedValue([])
+      mockClient.listTransactions.mockResolvedValue([
+        {
+          entry_reference: 'avis-abc123',
+          transaction_amount: { amount: '5.00' },
+          credit_debit_indicator: 'DBIT',
+          transaction_date: '2026-09-06',
+          status: 'PDNG',
+          remittance_information: ['CBS SERVICES\\ARTIGUES-PRES\\ FR'],
+        },
+      ])
+
+      const outcome = await service.sync(userId, 'connection-1')
+
+      expect(mockPrisma.bankStagedTransaction.createMany).toHaveBeenCalled()
+      expect(mockPrisma.transaction.create).not.toHaveBeenCalled()
+      expect(outcome).toMatchObject({ fetched: 1, inserted: 0 })
+    })
+
+    it('purges the pending rows an earlier sync wrote, sparing any that gained work', async () => {
+      primeMinimalSync()
+      mockPrisma.category.findMany.mockResolvedValue([])
+
+      await service.sync(userId, 'connection-1')
+
+      expect(mockPrisma.transaction.deleteMany).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          userId,
+          accountId: { in: ['account-1'] },
+          source: 'BANK_API',
+          bookingStatus: 'PDNG',
+          reimbursementRequests: { none: {} },
+          settlementsAsIncome: { none: {} },
+          tags: { none: {} },
+          reimbursementPayments: { none: {} },
+        }),
+      })
+    })
+
+    it('files a Boursorama row under its debit date, the one Bankin always used', async () => {
+      primeMinimalSync()
+      mockPrisma.bankConnection.findFirst.mockResolvedValue(
+        connectionRow({
+          aspspName: 'Boursorama Banque',
+          sessionId: 'session-1',
+          accountLinks: [
+            {
+              isIngested: true,
+              accountId: 'account-1',
+              externalAccountId: 'ext-1',
+            },
+          ],
+        })
+      )
+      mockPrisma.category.findMany.mockResolvedValue([])
+      mockClient.listTransactions.mockResolvedValue([
+        {
+          entry_reference: 'ENTRY-2',
+          transaction_amount: { amount: '9.99' },
+          credit_debit_indicator: 'DBIT',
+          transaction_date: '2026-08-29',
+          booking_date: '2026-09-01',
+          status: 'BOOK',
+          remittance_information: ['CARTE 29/08/26 Swile CB*7962'],
+        },
+      ])
+
+      await service.sync(userId, 'connection-1')
+
+      expect(mockPrisma.transaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ date: new Date('2026-09-01') }),
+      })
     })
 
     it('tells the bank the user is present, when the caller says who that is', async () => {

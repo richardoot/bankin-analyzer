@@ -46,6 +46,7 @@ import {
   type StagedTransaction,
 } from './reconciliation'
 import { proposeMapping, type MappingProposal } from './account-mapping'
+import { isBookable, pickTransactionDate } from './staging'
 import {
   decide,
   expiringConnections,
@@ -1374,7 +1375,13 @@ export class BankSyncService {
       )
     }
 
-    const outcome = await this.ingest(userId, connection.id, run.id, fetched)
+    const outcome = await this.ingest(
+      userId,
+      connection.id,
+      connection.aspspName,
+      run.id,
+      fetched
+    )
     await this.prisma.bankConnection.update({
       where: { id: connection.id },
       data: { lastSyncAt: new Date() },
@@ -1386,6 +1393,7 @@ export class BankSyncService {
   private async ingest(
     userId: string,
     connectionId: string,
+    aspspName: string,
     runId: string,
     fetched: Map<string, BankTransaction[]>
   ): Promise<SyncOutcome> {
@@ -1401,15 +1409,11 @@ export class BankSyncService {
     const staged: (StagedTransaction & { raw: BankTransaction })[] = []
     for (const [externalAccountId, transactions] of fetched) {
       for (const raw of transactions) {
-        // `transaction_date` — "date d'opération" — over `booking_date`:
-        // measured on real CIC data, they agree for almost everything
-        // (card purchases), but a monthly fee is booked a few days after it
-        // is dated, and CIC's own app, and Bankin, both show the earlier
-        // date. `booking_date` was the original default, on the strength of
-        // matching Bankin for a card purchase; this is that assumption
-        // overturned by a case it did not cover.
-        const date =
-          raw.transaction_date ?? raw.booking_date ?? raw.value_date ?? null
+        // Which of the three dates, and per bank — Bankin filed Boursorama
+        // under the debit date and CIC under the operation date, and years
+        // of imported history hold whichever their bank got. The reasoning
+        // and the measurements live with the rule, in `staging.ts`.
+        const date = pickTransactionDate(raw, aspspName)
         const magnitude = Math.abs(Number(raw.transaction_amount?.amount))
         const amount =
           raw.credit_debit_indicator === 'CRDT'
@@ -1460,6 +1464,39 @@ export class BankSyncService {
       skipDuplicates: true,
     })
 
+    // Everything the bank sent is staged above — the audit trail keeps the
+    // pending rows too — but only booked rows go any further: a pending
+    // row's reference does not survive booking (see `isBookable`), so
+    // writing it guarantees a duplicate when its booked twin arrives.
+    const bookable = staged.filter(row => isBookable(row.raw))
+
+    // And the pending rows a previous sync DID write, before this rule
+    // existed or while it briefly held them: delete them here rather than
+    // leave them doubled forever — their booked twin is in this very fetch,
+    // or will be in one soon. A pending row that has since gained a
+    // reimbursement, tag, settlement or payment is left alone, the same
+    // refusal every other destructive path in this module makes.
+    const mappedAccountIds = [...new Set(Object.values(accountIdByExternal))]
+    if (mappedAccountIds.length > 0) {
+      const purged = await this.prisma.transaction.deleteMany({
+        where: {
+          userId,
+          accountId: { in: mappedAccountIds },
+          source: TransactionSource.BANK_API,
+          bookingStatus: 'PDNG',
+          reimbursementRequests: { none: {} },
+          settlementsAsIncome: { none: {} },
+          tags: { none: {} },
+          reimbursementPayments: { none: {} },
+        },
+      })
+      if (purged.count > 0) {
+        this.logger.log(
+          `Removed ${purged.count} pending row(s) superseded by booked ones`
+        )
+      }
+    }
+
     const ledgerRows = await this.prisma.transaction.findMany({
       where: { userId },
       select: {
@@ -1503,7 +1540,7 @@ export class BankSyncService {
       }
     }
 
-    const verdicts: AssignedVerdict[] = reconcileAll(staged, ledger, {
+    const verdicts: AssignedVerdict[] = reconcileAll(bookable, ledger, {
       accountIdByExternalAccountId: accountIdByExternal,
     })
     const summary = summarize(verdicts)
@@ -1520,7 +1557,7 @@ export class BankSyncService {
     let skippedTooOld = 0
     for (const [position, verdict] of verdicts.entries()) {
       if (verdict.kind !== 'new') continue
-      const row = staged[position]
+      const row = bookable[position]
       if (!row) continue
       const accountId = accountIdByExternal[row.externalAccountId]
       if (!accountId) continue
@@ -1540,7 +1577,7 @@ export class BankSyncService {
     await this.prisma.$transaction(async tx => {
       for (const [position, verdict] of verdicts.entries()) {
         if (verdict.kind !== 'matched') continue
-        const row = staged[position]
+        const row = bookable[position]
         if (!row) continue
         await tx.transaction.update({
           where: { id: verdict.transactionId },
