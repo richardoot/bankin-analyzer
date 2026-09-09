@@ -756,6 +756,18 @@ offline scripts (`spike-enable-banking-fetch`'s `transactionDate`,
 they are measurement tools, and the dump they read does not carry the
 ASPSP name per row.
 
+**`strategy=longest` on every sync, 2026-09-10.** After wiping and
+re-syncing production, late-August rows the Boursorama app still shows never
+came back. The staging audit dated everything the bank sent at `>= 09-01`:
+the app's client sent no `strategy` at all, so Boursorama fell back to its
+own default window — the current calendar month. Invisible until then,
+because the ledger already held everything older; the wipe exposed it.
+Every measurement this module was built on ("90 days on a routine fetch,
+729 around an authorization") was taken WITH `strategy=longest` — the spike
+script always sent it, the app never did. `sync()` now sends it on every
+fetch. The `date_from` optimisation for routine syncs stays on the
+later-list; `longest` is the correct, measured baseline.
+
 ### Deliberately not now
 
 - **The arbitration screen** for ambiguous matches: 1 case in 1 954 once
