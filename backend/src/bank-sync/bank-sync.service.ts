@@ -726,6 +726,16 @@ export class BankSyncService {
   ): Promise<
     Map<string, { accountId: string; accountLabel: string; matches: number }>
   > {
+    // A suggestion is only ever shown for a link nobody has mapped yet, and
+    // in steady state there is none — checked before touching the staged
+    // rows and the full ledger, because this runs on every display of the
+    // settings page, not just the one where a decision is pending.
+    const links = await this.prisma.bankAccountLink.findMany({
+      where: { connectionId },
+      select: { externalAccountId: true, accountId: true },
+    })
+    if (links.every(link => link.accountId !== null)) return new Map()
+
     const staged = await this.prisma.bankStagedTransaction.findMany({
       where: { userId },
       select: {
@@ -739,14 +749,7 @@ export class BankSyncService {
     })
     if (staged.length === 0) return new Map()
 
-    const known = new Set(
-      (
-        await this.prisma.bankAccountLink.findMany({
-          where: { connectionId },
-          select: { externalAccountId: true },
-        })
-      ).map(link => link.externalAccountId)
-    )
+    const known = new Set(links.map(link => link.externalAccountId))
     const relevant = staged.filter(row => known.has(row.externalAccountId))
     if (relevant.length === 0) return new Map()
 

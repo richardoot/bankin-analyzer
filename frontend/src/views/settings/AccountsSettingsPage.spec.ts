@@ -612,6 +612,65 @@ describe('AccountsSettingsPage — grouped under a bank connection', () => {
     )
   })
 
+  it('flips the toggle in place, without tearing the page down to reload it', async () => {
+    // The PATCH answers with the link as it now stands — swapping it in is
+    // the whole update. A full reload here is what made the page blank out
+    // on every switch between "Ignoré" and "Lu".
+    vi.mocked(api.updateBankAccountLink).mockResolvedValue(
+      discoveredAccount({ accountId: 'acc-1', isIngested: true })
+    )
+    const wrapper = await mountPage({
+      accounts: [account({ id: 'acc-1', name: 'Perso Bourso' })],
+      configured: true,
+      connections: [
+        connection({
+          accounts: [
+            discoveredAccount({ accountId: 'acc-1', isIngested: false }),
+          ],
+        }),
+      ],
+    })
+
+    await wrapper.get('[data-testid="ingest-toggle"]').trigger('click')
+    await flushPromises()
+
+    expect(api.updateBankAccountLink).toHaveBeenCalledWith('link-1', {
+      isIngested: true,
+    })
+    expect(wrapper.text()).toContain('Lu')
+    // One fetch at mount, none after: nothing else on the page changed.
+    expect(api.getBankConnections).toHaveBeenCalledTimes(1)
+  })
+
+  it('refreshes after a sync without blanking the page, and without refetching the bank list', async () => {
+    vi.mocked(api.syncBankConnection).mockResolvedValue({
+      connectionId: 'conn-1',
+      fetched: 3,
+      claimed: 1,
+      inserted: 2,
+      skippedDuplicates: 0,
+      skippedAmbiguous: 0,
+      skippedTooOld: 0,
+      accountsRead: 1,
+    })
+    const wrapper = await mountPage({
+      configured: true,
+      connections: [connection()],
+      banks: [
+        { name: 'Boursorama Banque', country: 'FR', beta: false, logo: null },
+      ],
+    })
+
+    await wrapper.get('[data-testid="sync-button"]').trigger('click')
+    await flushPromises()
+
+    // The data is re-fetched (mount + refresh)…
+    expect(api.getBankConnections).toHaveBeenCalledTimes(2)
+    // …but the long bank list is not, and the content never unmounted.
+    expect(api.getBanks).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="bank-connection"]').exists()).toBe(true)
+  })
+
   it('lists an account no bank has linked under "Comptes sans banque"', async () => {
     const wrapper = await mountPage({
       accounts: [
