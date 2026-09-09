@@ -53,17 +53,51 @@
 
   const { isLoading, error, run } = useAsyncAction()
 
-  async function load(): Promise<void> {
-    await run(async () => {
-      await accountsStore.load()
-      const status = await api.getBankSyncStatus()
-      configured.value = status.configured
-      if (!status.configured) return
-      connections.value = await api.getBankConnections()
-      needsReview.value = await api.getBankSyncNeedsReview()
+  /**
+   * One round of fetching, shared by the first load and every refresh.
+   *
+   * Independent requests go together: the account list and the sync status
+   * have nothing to wait on each other for, and neither do the connections,
+   * the review counts and the bank list once the status is known.
+   */
+  async function fetchAll(): Promise<void> {
+    const [, status] = await Promise.all([
+      accountsStore.load(),
+      api.getBankSyncStatus(),
+    ])
+    configured.value = status.configured
+    if (!status.configured) return
+    const [freshConnections, freshNeedsReview] = await Promise.all([
+      api.getBankConnections(),
+      api.getBankSyncNeedsReview(),
       // Only once: the list is long and does not change between two loads.
-      if (banks.value.length === 0) banks.value = await api.getBanks()
-    }, 'Impossible de charger les comptes')
+      banks.value.length === 0
+        ? api.getBanks().then(list => {
+            banks.value = list
+          })
+        : Promise.resolve(),
+    ])
+    connections.value = freshConnections
+    needsReview.value = freshNeedsReview
+  }
+
+  async function load(): Promise<void> {
+    await run(fetchAll, 'Impossible de charger les comptes')
+  }
+
+  /**
+   * Re-fetch without touching `isLoading` — after an action, the page keeps
+   * showing what it has and the fresh data slides in, instead of the whole
+   * content being torn down for a "Chargement…" flash.
+   */
+  async function refresh(): Promise<void> {
+    try {
+      await fetchAll()
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Impossible de recharger'
+      )
+    }
   }
 
   onMounted(load)
@@ -199,7 +233,7 @@
       const isTrivial = Object.values(preview).every(n => n === 0)
       if (isTrivial) {
         await api.reassignLink(account.linkId, targetAccountId)
-        await load()
+        await refresh()
         return
       }
       pendingReassignment.value = {
@@ -222,16 +256,27 @@
   async function onReassigned(): Promise<void> {
     pendingReassignment.value = null
     toast.success('Compte corrigé')
-    await load()
+    await refresh()
   }
 
   async function toggleIngestion(account: DiscoveredAccountDto): Promise<void> {
     savingLink.value = account.linkId
     try {
-      await api.updateBankAccountLink(account.linkId, {
+      const updated = await api.updateBankAccountLink(account.linkId, {
         isIngested: !account.isIngested,
       })
-      await load()
+      // The server answers with the link as it now stands — swapping it in
+      // place is the whole update. Nothing else on the page changed, so
+      // nothing else is re-fetched.
+      for (const connection of connections.value) {
+        const index = connection.accounts.findIndex(
+          candidate => candidate.linkId === updated.linkId
+        )
+        if (index !== -1) {
+          connection.accounts[index] = updated
+          break
+        }
+      }
     } catch (err) {
       // The server refuses a card account and an unidentified one, and says
       // why. Showing its words beats inventing our own.
@@ -278,7 +323,7 @@
             ? `, ${outcome.skippedTooOld} ignorée(s) (antérieure(s) à l'historique connu)`
             : '')
       )
-      await load()
+      await refresh()
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : 'Synchronisation impossible'
@@ -337,7 +382,7 @@
              puzzling failure is worse than no button. The accounts
              themselves are still fully manageable either way. -->
         <div class="mb-8">
-          <EnableBankingCredentialCard @changed="load" />
+          <EnableBankingCredentialCard @changed="refresh" />
         </div>
 
         <template v-if="configured">

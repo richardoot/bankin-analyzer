@@ -133,6 +133,7 @@ describe('BankSyncService — authorization', () => {
     mockPrisma.bankSyncRun.count.mockResolvedValue(0)
     mockPrisma.bankStagedTransaction.findMany.mockResolvedValue([])
     mockPrisma.bankAccountLink.findFirst.mockResolvedValue(null)
+    mockPrisma.bankAccountLink.findMany.mockResolvedValue([])
     mockPrisma.bankAccountLink.upsert.mockResolvedValue({ id: 'link-1' })
     mockClient.getAccountDetails.mockResolvedValue({})
     mockCredentialsService.resolve.mockResolvedValue({
@@ -369,6 +370,58 @@ describe('BankSyncService — authorization', () => {
           }),
         })
       )
+    })
+  })
+
+  describe('viewConnection — suggestions', () => {
+    it('never opens the ledger when every bank account is already mapped', async () => {
+      // This runs on every display of the settings page; in steady state no
+      // suggestion will be shown, so nothing heavy should be read either.
+      mockPrisma.bankConnection.findFirst.mockResolvedValue(
+        connectionRow({
+          accountLinks: [
+            {
+              id: 'link-1',
+              externalAccountId: 'ext-1',
+              accountId: 'account-1',
+              accountName: 'M BOILLEY RICHARD',
+              isIngested: true,
+              account: { id: 'account-1', name: 'Perso' },
+            },
+          ],
+        })
+      )
+      mockPrisma.bankAccountLink.findMany.mockResolvedValue([
+        { externalAccountId: 'ext-1', accountId: 'account-1' },
+      ])
+
+      await service.viewConnection(userId, 'connection-1')
+
+      expect(mockPrisma.bankStagedTransaction.findMany).not.toHaveBeenCalled()
+    })
+
+    it('still reads the evidence while a link waits for a decision', async () => {
+      mockPrisma.bankConnection.findFirst.mockResolvedValue(
+        connectionRow({
+          accountLinks: [
+            {
+              id: 'link-1',
+              externalAccountId: 'ext-1',
+              accountId: null,
+              accountName: 'M BOILLEY RICHARD',
+              isIngested: false,
+              account: null,
+            },
+          ],
+        })
+      )
+      mockPrisma.bankAccountLink.findMany.mockResolvedValue([
+        { externalAccountId: 'ext-1', accountId: null },
+      ])
+
+      await service.viewConnection(userId, 'connection-1')
+
+      expect(mockPrisma.bankStagedTransaction.findMany).toHaveBeenCalled()
     })
   })
 
