@@ -403,12 +403,16 @@ describe('reconcileAll', () => {
       kind: 'matched',
       transactionId: 'tx-gym',
     })
-    expect(verdicts[0]?.kind).toBe('ambiguous')
+    // The one look-alike is now identified as the gym purchase — the
+    // resemblance is resolved, and the Carrefour row is genuinely absent
+    // from the ledger.
+    expect(verdicts[0]).toEqual({ kind: 'new' })
   })
 
-  it('returns the outbid one as ambiguous rather than new', () => {
-    // Something in the ledger did look like it; only a person can say whether
-    // the resemblance is the same movement or a coincidence.
+  it('returns the outbid one as new once its only candidate is claimed', () => {
+    // Both resemble the one ledger row, but the row can only be one of
+    // them. Once the better pair takes it, the other describes a purchase
+    // the ledger does not have — calling it ambiguous made it vanish.
     const verdicts = reconcileAll(
       [
         staged({ externalId: 'A', label: 'FITNESS PARK' }),
@@ -418,7 +422,49 @@ describe('reconcileAll', () => {
     )
 
     const kinds = verdicts.map(v => v.kind).sort()
-    expect(kinds).toEqual(['ambiguous', 'matched'])
+    expect(kinds).toEqual(['matched', 'new'])
+  })
+
+  it('inserts the second of two twin charges bracketing one CSV row', () => {
+    // The production case: two Swile charges of the same amount one day
+    // apart, and a CSV history holding exactly one of them. The exact-date
+    // pair claims the CSV row; the other charge is real money and must
+    // enter the ledger rather than be skipped as ambiguous.
+    const verdicts = reconcileAll(
+      [
+        staged({
+          externalId: '31591741821',
+          label: 'CARTE 27/08/26 Swile',
+          date: '2026-08-31',
+        }),
+        staged({
+          externalId: '31643297588',
+          label: 'CARTE 29/08/26 Swile',
+          date: '2026-09-01',
+        }),
+      ],
+      [ledger({ id: 'csv-swile', description: 'CB Swile', date: '2026-08-31' })]
+    )
+
+    expect(verdicts[0]).toMatchObject({
+      kind: 'matched',
+      transactionId: 'csv-swile',
+    })
+    expect(verdicts[1]).toEqual({ kind: 'new' })
+  })
+
+  it('keeps ambiguity when a candidate remains unclaimed', () => {
+    // A weak resemblance nothing in this fetch explains: under a similarity
+    // floor the candidate is claimed by nobody, and whether it is the same
+    // movement stays a person's decision. (The default floor is 0, where
+    // amount and date alone decide and this cannot arise.)
+    const verdicts = reconcileAll(
+      [staged({ externalId: 'A', label: 'CARREFOUR CITY' })],
+      [ledger({ id: 'tx-1', description: 'CB Fitness Park' })],
+      { minimumSimilarity: 0.2 }
+    )
+
+    expect(verdicts[0]?.kind).toBe('ambiguous')
   })
 
   it('settles rows the sync already owns before anything competes for them', () => {
