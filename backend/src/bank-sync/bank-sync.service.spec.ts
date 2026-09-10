@@ -74,6 +74,7 @@ const mockPrisma = {
     findMany: vi.fn(),
     groupBy: vi.fn(),
     create: vi.fn(),
+    createMany: vi.fn(),
     update: vi.fn(),
     deleteMany: vi.fn(),
     updateMany: vi.fn(),
@@ -926,7 +927,7 @@ describe('BankSyncService — authorization', () => {
         count: 1,
       })
       mockPrisma.transaction.findMany.mockResolvedValue([]) // empty ledger
-      mockPrisma.transaction.create.mockResolvedValue({})
+      mockPrisma.transaction.createMany.mockResolvedValue({ count: 1 })
       mockPrisma.bankConnection.update.mockResolvedValue({})
     }
 
@@ -967,7 +968,7 @@ describe('BankSyncService — authorization', () => {
       const outcome = await service.sync(userId, 'connection-1')
 
       expect(mockPrisma.bankStagedTransaction.createMany).toHaveBeenCalled()
-      expect(mockPrisma.transaction.create).not.toHaveBeenCalled()
+      expect(mockPrisma.transaction.createMany).not.toHaveBeenCalled()
       expect(outcome).toMatchObject({ fetched: 1, inserted: 0 })
     })
 
@@ -1021,8 +1022,8 @@ describe('BankSyncService — authorization', () => {
 
       await service.sync(userId, 'connection-1')
 
-      expect(mockPrisma.transaction.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ date: new Date('2026-09-01') }),
+      expect(mockPrisma.transaction.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ date: new Date('2026-09-01') })],
       })
     })
 
@@ -1089,12 +1090,14 @@ describe('BankSyncService — authorization', () => {
         [],
         []
       )
-      expect(mockPrisma.transaction.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          categoryId: 'cat-sport',
-          subcategoryId: null,
-          subcategory: null,
-        }),
+      expect(mockPrisma.transaction.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            categoryId: 'cat-sport',
+            subcategoryId: null,
+            subcategory: null,
+          }),
+        ],
       })
     })
 
@@ -1106,12 +1109,14 @@ describe('BankSyncService — authorization', () => {
       await service.sync(userId, 'connection-1')
 
       expect(mockAiSuggestions.categorizeTransactions).not.toHaveBeenCalled()
-      expect(mockPrisma.transaction.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          categoryId: null,
-          subcategoryId: null,
-          subcategory: null,
-        }),
+      expect(mockPrisma.transaction.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            categoryId: null,
+            subcategoryId: null,
+            subcategory: null,
+          }),
+        ],
       })
     })
 
@@ -1128,8 +1133,8 @@ describe('BankSyncService — authorization', () => {
       const outcome = await service.sync(userId, 'connection-1')
 
       expect(outcome).toMatchObject({ inserted: 1 })
-      expect(mockPrisma.transaction.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ categoryId: null }),
+      expect(mockPrisma.transaction.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ categoryId: null })],
       })
     })
 
@@ -1168,12 +1173,14 @@ describe('BankSyncService — authorization', () => {
 
       expect(outcome).toMatchObject({ inserted: 1 })
       expect(mockAiSuggestions.categorizeTransactions).not.toHaveBeenCalled()
-      expect(mockPrisma.transaction.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          categoryId: 'cat-sport',
-          subcategoryId: null,
-          subcategory: null,
-        }),
+      expect(mockPrisma.transaction.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            categoryId: 'cat-sport',
+            subcategoryId: null,
+            subcategory: null,
+          }),
+        ],
       })
     })
   })

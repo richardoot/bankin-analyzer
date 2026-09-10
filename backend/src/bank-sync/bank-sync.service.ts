@@ -1584,45 +1584,58 @@ export class BankSyncService {
     let claimed = 0
     let inserted = 0
 
-    await this.prisma.$transaction(async tx => {
-      for (const [position, verdict] of verdicts.entries()) {
-        if (verdict.kind !== 'matched') continue
-        const row = bookable[position]
-        if (!row) continue
-        await tx.transaction.update({
-          where: { id: verdict.transactionId },
-          data: {
-            externalId: row.externalId,
-            bookingStatus: row.raw.status ?? null,
-            syncRunId: runId,
-          },
-        })
-        claimed++
-      }
+    await this.prisma.$transaction(
+      async tx => {
+        for (const [position, verdict] of verdicts.entries()) {
+          if (verdict.kind !== 'matched') continue
+          const row = bookable[position]
+          if (!row) continue
+          await tx.transaction.update({
+            where: { id: verdict.transactionId },
+            data: {
+              externalId: row.externalId,
+              bookingStatus: row.raw.status ?? null,
+              syncRunId: runId,
+            },
+          })
+          claimed++
+        }
 
-      for (const { position, row, accountId } of toInsert) {
-        const filing = filingByPosition.get(position)
-        await tx.transaction.create({
-          data: {
-            userId,
-            accountId,
-            hash: `${userId}|${row.date}|${row.amount}|${accountId}|${row.externalId ?? row.label}`,
-            date: new Date(row.date),
-            description: row.label,
-            amount: row.amount,
-            type: row.amount < 0 ? 'EXPENSE' : 'INCOME',
-            source: TransactionSource.BANK_API,
-            externalId: row.externalId,
-            bookingStatus: row.raw.status ?? null,
-            syncRunId: runId,
-            categoryId: filing?.categoryId ?? null,
-            subcategoryId: filing?.subcategoryId ?? null,
-            subcategory: filing?.subcategoryName ?? null,
-          },
+        // One statement for every insert, not one statement each: a first
+        // sync writes ~80 rows, and 80 sequential round trips from a
+        // serverless function to the pooler overran the interactive
+        // transaction's 5 s default — the whole write rolled back and the
+        // sync answered 500, twice, in production. Nothing reads the created
+        // rows back, so createMany loses nothing.
+        if (toInsert.length === 0) return
+        const { count } = await tx.transaction.createMany({
+          data: toInsert.map(({ position, row, accountId }) => {
+            const filing = filingByPosition.get(position)
+            return {
+              userId,
+              accountId,
+              hash: `${userId}|${row.date}|${row.amount}|${accountId}|${row.externalId ?? row.label}`,
+              date: new Date(row.date),
+              description: row.label,
+              amount: row.amount,
+              type: row.amount < 0 ? 'EXPENSE' : 'INCOME',
+              source: TransactionSource.BANK_API,
+              externalId: row.externalId,
+              bookingStatus: row.raw.status ?? null,
+              syncRunId: runId,
+              categoryId: filing?.categoryId ?? null,
+              subcategoryId: filing?.subcategoryId ?? null,
+              subcategory: filing?.subcategoryName ?? null,
+            }
+          }),
         })
-        inserted++
-      }
-    })
+        inserted = count
+      },
+      // The claims above are still one update per row — few in practice, but
+      // enough of them plus network latency deserve more than the 5 s
+      // default before Prisma expires the transaction under the writes.
+      { timeout: 30_000 }
+    )
 
     return {
       connectionId,
