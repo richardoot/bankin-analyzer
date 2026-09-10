@@ -521,14 +521,20 @@ export function reconcileAll(
     claimed.add(pair.transactionId)
   }
 
-  // A contender that found candidates but was outbid for all of them is not
-  // "new": something in the ledger looks like it, and only a person can say
-  // whether the resemblance is the same movement or a coincidence.
+  // A contender whose candidates were all won by OTHER rows is 'new', not
+  // ambiguous: each of those ledger rows is now positively identified as a
+  // different bank transaction, so the resemblance is resolved — this row
+  // describes a purchase the ledger does not have. Two Swile charges one day
+  // apart, one CSV twin: the exact-date pair claims it, and the other charge
+  // must still enter the ledger rather than silently vanish. Ambiguity only
+  // remains when a candidate is still unclaimed — a resemblance nothing in
+  // this fetch explains, which stays a person's decision.
   for (const index of contenders) {
     if (assigned.has(index)) continue
     const candidates = candidatesByIndex.get(index) ?? []
-    if (candidates.length > 0)
-      verdicts[index] = { kind: 'ambiguous', candidates }
+    const unresolved = candidates.filter(c => !claimed.has(c.transactionId))
+    if (unresolved.length > 0)
+      verdicts[index] = { kind: 'ambiguous', candidates: unresolved }
   }
 
   for (const [index, representative] of duplicateOf) {

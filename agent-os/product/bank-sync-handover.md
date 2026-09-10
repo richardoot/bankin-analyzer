@@ -768,6 +768,18 @@ script always sent it, the app never did. `sync()` now sends it on every
 fetch. The `date_from` optimisation for routine syncs stays on the
 later-list; `longest` is the correct, measured baseline.
 
+**An outbid twin is new, not ambiguous, 2026-09-10.** After the full
+reset and a clean 90-day resync, one of two same-amount Swile charges a
+day apart never appeared: both resembled the single CSV row, the
+exact-date pair claimed it, and `reconcileAll` filed the loser as
+`ambiguous` — skipped, on the theory that only a person can judge a
+resemblance. But a candidate claimed by ANOTHER staged row of the same
+fetch is a resolved resemblance: that ledger row is positively identified
+as a different bank transaction, so the outbid row describes money the
+ledger does not have and must insert. Ambiguity now survives only while a
+candidate remains unclaimed (reachable only under a non-zero similarity
+floor — the default floor is 0, where amount and date decide alone).
+
 ### Deliberately not now
 
 - **The arbitration screen** for ambiguous matches: 1 case in 1 954 once
