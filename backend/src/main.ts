@@ -7,6 +7,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
 import helmet from 'helmet'
 import { AppModule } from './app.module'
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter'
+import { apiDocsEnabled, helmetOptions } from './common/http-hardening'
 
 /**
  * TLS for local development, opt-in through `BACKEND_HTTPS=1`.
@@ -54,14 +55,11 @@ async function bootstrap(): Promise<void> {
   // discovery endpoints advertise https:// URLs instead of http://.
   app.set('trust proxy', 1)
 
-  // Security headers (configured to allow Swagger UI and OAuth popups)
-  app.use(
-    helmet({
-      contentSecurityPolicy: false,
-      crossOriginOpenerPolicy: false,
-      crossOriginEmbedderPolicy: false,
-    })
-  )
+  // Security headers. Strict when the docs are off (production), relaxed
+  // while they are on — Swagger UI is the one page that cannot live under a
+  // deny-all CSP. Both decisions come from common/http-hardening.ts.
+  const docsEnabled = apiDocsEnabled(process.env)
+  app.use(helmet(helmetOptions(docsEnabled)))
 
   // Global validation pipe
   app.useGlobalPipes(
@@ -89,19 +87,25 @@ async function bootstrap(): Promise<void> {
     credentials: true,
   })
 
-  // Swagger configuration
-  const config = new DocumentBuilder()
-    .setTitle('Finance Analyzer API')
-    .setDescription('API pour la gestion des finances personnelles')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .addTag('users', 'Gestion des utilisateurs')
-    .build()
+  // Swagger — development only. `/api/docs` hands the complete route and DTO
+  // map to anyone unauthenticated, which is a feature at a desk and a
+  // reconnaissance report on the open internet. `API_DOCS=1` re-enables it
+  // deliberately if a production instance ever needs to show its contract.
+  if (docsEnabled) {
+    const config = new DocumentBuilder()
+      .setTitle('Finance Analyzer API')
+      .setDescription('API pour la gestion des finances personnelles')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .addTag('users', 'Gestion des utilisateurs')
+      .build()
 
-  const documentFactory = (): ReturnType<typeof SwaggerModule.createDocument> =>
-    SwaggerModule.createDocument(app, config)
+    const documentFactory = (): ReturnType<
+      typeof SwaggerModule.createDocument
+    > => SwaggerModule.createDocument(app, config)
 
-  SwaggerModule.setup('api/docs', app, documentFactory)
+    SwaggerModule.setup('api/docs', app, documentFactory)
+  }
 
   // A different port under TLS, so the plain-HTTP stack — the podman
   // containers among them — keeps 3000 and the two can run side by side.
