@@ -10,6 +10,7 @@
    * row left alone because it carries work since.
    */
   import { ref } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import { api } from '@/lib/api'
   import type { ReassignmentOutcomeDto } from '@/lib/api'
 
@@ -31,6 +32,14 @@
     close: []
     reassigned: [ReassignmentOutcomeDto]
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.pending !== null,
+    onClose: () => emit('close'),
+    panel: modalPanelRef,
+  })
 
   const applying = ref(false)
   const error = ref<string | null>(null)
@@ -97,6 +106,9 @@
     data-testid="reassign-modal"
   >
     <div
+      ref="modalPanelRef"
+      role="dialog"
+      aria-modal="true"
       class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900"
     >
       <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">

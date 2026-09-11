@@ -9,6 +9,7 @@
    * decided nothing and only asked the user to guess.
    */
   import { ref, watch } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import { api } from '@/lib/api'
   import type { TransactionDto, PersonDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
@@ -26,6 +27,14 @@
       reimbursement: Awaited<ReturnType<typeof api.createReimbursement>>,
     ]
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.isOpen,
+    onClose: () => emit('close'),
+    panel: modalPanelRef,
+  })
 
   const form = ref({
     personId: '',
@@ -111,7 +120,9 @@
       <div class="absolute inset-0 bg-black/50" @click="emit('close')" />
 
       <div
+        ref="modalPanelRef"
         role="dialog"
+        aria-modal="true"
         aria-labelledby="reimbursement-modal-title"
         class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
       >

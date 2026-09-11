@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { ref, watch, computed } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import { api, type CategoryDto, type SubcategoryDto } from '@/lib/api'
 
   const props = defineProps<{
@@ -13,6 +14,14 @@
     close: []
     select: [categoryId: string | null, subcategoryId: string | null]
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.isOpen,
+    onClose: () => handleClose(),
+    panel: modalPanelRef,
+  })
 
   const categories = ref<CategoryDto[]>([])
   const subcategories = ref<SubcategoryDto[]>([])
@@ -215,7 +224,9 @@
         <!-- Modal -->
         <Transition name="modal-content" appear>
           <div
+            ref="modalPanelRef"
             role="dialog"
+            aria-modal="true"
             aria-labelledby="category-modal-title"
             class="relative z-10 w-full max-w-md h-[85vh] sm:h-[75vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-2xl dark:shadow-black/40 flex flex-col"
           >

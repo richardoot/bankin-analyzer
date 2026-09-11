@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { ref, computed, watch } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import type { ImportPreviewResultDto } from '@/lib/api'
 
   const props = defineProps<{
@@ -12,6 +13,14 @@
     close: []
     confirm: [selectedIndices: Set<number>]
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.isOpen,
+    onClose: () => handleClose(),
+    panel: modalPanelRef,
+  })
 
   // Track selected indices for internal duplicates (which ones to import)
   const selectedInternalIndices = ref<Set<number>>(new Set())
@@ -197,6 +206,9 @@
         <div class="fixed inset-0 bg-black/50" @click="handleClose" />
 
         <div
+          ref="modalPanelRef"
+          role="dialog"
+          aria-modal="true"
           class="relative z-10 w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-xl dark:shadow-slate-900/30 flex flex-col"
         >
           <!-- Header -->

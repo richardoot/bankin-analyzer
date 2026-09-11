@@ -436,7 +436,8 @@
               sur {{ partialImportError.details.total }}.
             </p>
             <p class="text-xs text-amber-600 dark:text-amber-500 mt-2">
-              Vous pouvez réessayer sans risque de dupliquer les transactions déjà importées.
+              Vous pouvez réessayer sans risque de dupliquer les transactions
+              déjà importées.
             </p>
             <div class="mt-3 flex gap-2">
               <button

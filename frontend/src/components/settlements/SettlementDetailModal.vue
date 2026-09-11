@@ -1,5 +1,6 @@
 <script setup lang="ts">
-  import { computed } from 'vue'
+  import { ref, computed } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import type { SettlementDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
 
@@ -16,6 +17,14 @@
     close: []
     delete: []
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.isOpen,
+    onClose: () => emit('close'),
+    panel: modalPanelRef,
+  })
 
   const totalSettled = computed(() => {
     if (!props.settlement) return 0
@@ -56,6 +65,9 @@
 
         <!-- Modal -->
         <div
+          ref="modalPanelRef"
+          role="dialog"
+          aria-modal="true"
           class="relative z-10 w-full max-w-lg max-h-[90vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-xl dark:shadow-slate-900/30 flex flex-col"
         >
           <!-- Header -->

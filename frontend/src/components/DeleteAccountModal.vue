@@ -1,7 +1,8 @@
 <script setup lang="ts">
   import { ref, computed } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
 
-  defineProps<{
+  const props = defineProps<{
     isOpen: boolean
     loading: boolean
   }>()
@@ -10,6 +11,14 @@
     close: []
     confirm: []
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.isOpen,
+    onClose: () => handleClose(),
+    panel: modalPanelRef,
+  })
 
   const confirmationText = ref('')
   const CONFIRMATION_WORD = 'SUPPRIMER'
@@ -40,7 +49,9 @@
         <div class="fixed inset-0 bg-black/50" @click="handleClose" />
 
         <div
+          ref="modalPanelRef"
           role="dialog"
+          aria-modal="true"
           aria-labelledby="delete-account-modal-title"
           class="relative z-10 w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-xl dark:shadow-slate-900/30"
         >

@@ -11,6 +11,7 @@
    */
   import { computed, onMounted, ref } from 'vue'
   import { useFiltersStore } from '@/stores/filters'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import { api, type CategoryDto, type SubcategoryDto } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
   import CategoryIcon from '@/components/CategoryIcon.vue'
@@ -306,6 +307,14 @@
 
   // ── Create a category ─────────────────────────────────────────────────────
   const isCreateModalOpen = ref(false)
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const createModalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => isCreateModalOpen.value,
+    onClose: () => closeCreateModal(),
+    panel: createModalPanelRef,
+  })
   const newCategoryName = ref('')
   const newCategoryType = ref<'EXPENSE' | 'INCOME'>('EXPENSE')
   const isCreatingCategory = ref(false)
@@ -877,6 +886,9 @@
           <div class="fixed inset-0 bg-black/50" @click="closeCreateModal" />
 
           <div
+            ref="createModalPanelRef"
+            role="dialog"
+            aria-modal="true"
             class="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900"
           >
             <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">

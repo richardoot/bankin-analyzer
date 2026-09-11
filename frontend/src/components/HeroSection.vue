@@ -47,8 +47,8 @@
         <p
           class="mx-auto mt-6 max-w-2xl text-lg text-gray-600 dark:text-gray-400 sm:text-xl"
         >
-          Importez vos exports CSV Bankin ou synchronisez vos comptes
-          bancaires, puis suivez vos dépenses, vos revenus, votre budget et vos
+          Importez vos exports CSV Bankin ou synchronisez vos comptes bancaires,
+          puis suivez vos dépenses, vos revenus, votre budget et vos
           remboursements partagés.
         </p>
 
@@ -75,7 +75,9 @@
               />
             </svg>
             {{
-              isAuthenticated ? 'Accéder au dashboard' : 'Commencer gratuitement'
+              isAuthenticated
+                ? 'Accéder au dashboard'
+                : 'Commencer gratuitement'
             }}
           </RouterLink>
           <a

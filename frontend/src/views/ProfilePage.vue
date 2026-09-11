@@ -195,7 +195,8 @@
           Zone de danger
         </h3>
         <p class="mb-6 text-sm text-red-600 dark:text-red-400/80">
-          Les actions dans cette zone sont irréversibles. Procédez avec précaution.
+          Les actions dans cette zone sont irréversibles. Procédez avec
+          précaution.
         </p>
         <button
           type="button"

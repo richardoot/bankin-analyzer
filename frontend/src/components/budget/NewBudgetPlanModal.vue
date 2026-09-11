@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { computed, ref, watch } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import { api } from '@/lib/api'
   import type {
     BudgetPlanDto,
@@ -20,6 +21,14 @@
     (e: 'close'): void
     (e: 'created', plan: BudgetPlanDto): void
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.open,
+    onClose: () => onClose(),
+    panel: modalPanelRef,
+  })
 
   const filtersStore = useFiltersStore()
 
@@ -703,6 +712,7 @@
       v-if="open"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
       data-testid="new-budget-plan-modal"
+      ref="modalPanelRef"
       role="dialog"
       aria-modal="true"
       @click.self="onClose"
@@ -1238,8 +1248,8 @@
                 v-if="initSource === 'copy' && !copyFromPlanId"
                 class="mb-2 text-xs text-gray-500 dark:text-gray-400 italic"
               >
-                Choisissez un plan à copier — en attendant, toutes les catégories
-                sont affichées vides.
+                Choisissez un plan à copier — en attendant, toutes les
+                catégories sont affichées vides.
               </p>
               <div
                 v-if="previewCategories.length === 0 && !isLoadingPreview"

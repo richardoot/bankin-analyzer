@@ -1,5 +1,6 @@
 <script setup lang="ts">
-  import { computed, watch } from 'vue'
+  import { ref, computed, watch } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import type { CategoryDto, SubcategoryDto } from '@/lib/api'
 
   const props = defineProps<{
@@ -14,6 +15,14 @@
     close: []
     apply: [categoryId: string, subcategoryId: string | null]
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.isOpen,
+    onClose: () => emit('close'),
+    panel: modalPanelRef,
+  })
 
   const selectedCategoryId = defineModel<string | null>('categoryId', {
     default: null,
@@ -53,7 +62,9 @@
       <div class="absolute inset-0 bg-black/50" @click="emit('close')" />
 
       <div
+        ref="modalPanelRef"
         role="dialog"
+        aria-modal="true"
         aria-labelledby="bulk-category-modal-title"
         class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
       >

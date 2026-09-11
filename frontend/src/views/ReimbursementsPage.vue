@@ -6,6 +6,7 @@
   import { api, UNCATEGORIZED_CATEGORY_ID } from '@/lib/api'
   import type { ReimbursementDto, SettlementDto } from '@/lib/api'
   import { usePdfExport } from '@/composables/usePdfExport'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import SettlementModal from '@/components/settlements/SettlementModal.vue'
   import SingleSettlementModal from '@/components/settlements/SingleSettlementModal.vue'
   import SettlementHistorySection from '@/components/settlements/SettlementHistorySection.vue'
@@ -54,6 +55,20 @@
 
   // Settlement delete confirmation
   const settlementToDelete = ref<string | null>(null)
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const personDeletePanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => personToDelete.value !== null,
+    onClose: () => cancelDelete(),
+    panel: personDeletePanelRef,
+  })
+  const settlementDeletePanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => settlementToDelete.value !== null,
+    onClose: () => cancelDeleteSettlement(),
+    panel: settlementDeletePanelRef,
+  })
 
   // Summary by person
   interface CategorySummary {
@@ -949,6 +964,9 @@
 
         <!-- Modal -->
         <div
+          ref="personDeletePanelRef"
+          role="dialog"
+          aria-modal="true"
           class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
         >
           <!-- Icon -->
@@ -1047,6 +1065,9 @@
 
         <!-- Modal -->
         <div
+          ref="settlementDeletePanelRef"
+          role="dialog"
+          aria-modal="true"
           class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
         >
           <!-- Icon -->
