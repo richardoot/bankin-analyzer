@@ -28,6 +28,14 @@ import { BankSyncModule } from './bank-sync/bank-sync.module'
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    // The counters live in process memory. On a long-lived server that is a
+    // real limit; on serverless (Vercel) each instance counts alone, so this
+    // is best-effort damage limiting, not a guarantee. The routes that spend
+    // money — AI categorization, AI icons, the bank fetch — carry their own
+    // tighter @Throttle, and the bank sync's true gate is sync-policy.ts,
+    // which counts in the database and therefore across instances. Moving
+    // this to a shared store (ThrottlerStorageRedisService + Upstash) is the
+    // upgrade path when a guarantee is wanted.
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: 60000, limit: 100 }],
     }),
