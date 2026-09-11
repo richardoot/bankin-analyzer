@@ -51,12 +51,12 @@ export function usePdfExport() {
 
     // Titre
     doc.setFontSize(18)
-    doc.text('Recapitulatif des Remboursements', 20, y)
+    doc.text('Récapitulatif des remboursements', 20, y)
     y += 10
 
     // Date de generation
     doc.setFontSize(10)
-    doc.text(`Genere le ${new Date().toLocaleDateString('fr-FR')}`, 20, y)
+    doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, 20, y)
     y += 15
 
     // Pour chaque personne
@@ -148,7 +148,7 @@ export function usePdfExport() {
     doc.setFont('helvetica', 'bold')
     doc.line(20, y, 190, y)
     y += 8
-    doc.text('Total General', 20, y)
+    doc.text('Total général', 20, y)
     doc.text(formatCurrency(totalDue), 190, y, { align: 'right' })
 
     // Telecharger

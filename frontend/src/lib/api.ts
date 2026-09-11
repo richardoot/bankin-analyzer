@@ -1393,7 +1393,7 @@ export const api = {
       const message = Array.isArray(detail?.message)
         ? detail.message.join(', ')
         : detail?.message
-      throw new Error(message ?? 'Echec du deplacement')
+      throw new Error(message ?? 'Échec du déplacement')
     }
 
     return response.json() as Promise<CategoryMigrationResultDto>

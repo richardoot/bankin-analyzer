@@ -63,7 +63,7 @@
   })
 
   const getStatusLabel = (run: BankSyncRunDto): string =>
-    run.undoneAt ? 'Annulee' : 'Active'
+    run.undoneAt ? 'Annulée' : 'Active'
 
   const getStatusClass = (
     run: BankSyncRunDto
@@ -128,10 +128,10 @@
           v-if="formatLatestSyncDate"
           class="mt-2 text-gray-600 dark:text-gray-400"
         >
-          Derniere synchronisation : {{ formatLatestSyncDate }}
+          Dernière synchronisation : {{ formatLatestSyncDate }}
         </p>
         <p v-else-if="!isLoading" class="mt-2 text-gray-600 dark:text-gray-400">
-          Aucune synchronisation effectuee pour le moment
+          Aucune synchronisation effectuée pour le moment
         </p>
       </div>
 
@@ -197,7 +197,7 @@
           />
         </svg>
         <h3 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Aucune synchronisation effectuee
+          Aucune synchronisation effectuée
         </h3>
         <p class="mt-2 text-gray-600 dark:text-gray-400">
           Connectez une banque depuis les reglages pour commencer.

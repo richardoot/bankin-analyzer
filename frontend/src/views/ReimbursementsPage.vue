@@ -156,7 +156,7 @@
         // where a refund found its way back to an expense through a category
         // pairing — it now says nothing about what the debt repays.
         const catKey = r.expenseCategoryId || 'none'
-        const catName = r.expenseCategoryName || 'Sans categorie'
+        const catName = r.expenseCategoryName || 'Sans catégorie'
         if (!person.byCategory.has(catKey)) {
           person.byCategory.set(catKey, {
             categoryId: r.expenseCategoryId,
@@ -416,7 +416,7 @@
           <p
             class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400"
           >
-            Gerez les personnes et suivez les remboursements en cours
+            Gérez les personnes et suivez les remboursements en cours
           </p>
         </div>
         <RouterLink
@@ -642,7 +642,7 @@
 
         <!-- Empty state -->
         <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
-          Aucune personne ajoutee. Commencez par ajouter une personne ci-dessus.
+          Aucune personne ajoutée. Commencez par ajouter une personne ci-dessus.
         </div>
       </div>
 
@@ -653,7 +653,7 @@
       >
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Recapitulatif des Remboursements
+            Récapitulatif des remboursements
           </h2>
           <button
             class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
@@ -699,7 +699,7 @@
                     {{ person.personName }}
                   </h3>
                   <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Recu: {{ formatCurrency(person.totalReceived) }} | En
+                    Reçu : {{ formatCurrency(person.totalReceived) }} | En
                     attente: {{ formatCurrency(person.totalRemaining) }}
                   </p>
                 </div>

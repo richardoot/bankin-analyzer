@@ -336,7 +336,7 @@
         class="text-gray-500 dark:text-gray-400 hover:underline"
         @click="clearFilters"
       >
-        Reinitialiser
+        Réinitialiser
       </button>
     </div>
 
@@ -365,7 +365,7 @@
       </label>
       <label class="text-sm">
         <span class="block text-gray-600 dark:text-gray-400 mb-1"
-          >Categorie</span
+          >Catégorie</span
         >
         <select
           v-model="filterCategoryId"
@@ -384,7 +384,7 @@
       </label>
       <label class="text-sm">
         <span class="block text-gray-600 dark:text-gray-400 mb-1"
-          >Sous-categorie</span
+          >Sous-catégorie</span
         >
         <select
           v-model="filterSubcategoryId"

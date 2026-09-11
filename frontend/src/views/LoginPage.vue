@@ -59,7 +59,7 @@
     }
 
     if (password.value.length < 6) {
-      localError.value = 'Le mot de passe doit contenir au moins 6 caracteres'
+      localError.value = 'Le mot de passe doit contenir au moins 6 caractères'
       return
     }
 
@@ -93,13 +93,13 @@
         <!-- Header -->
         <div class="mb-8 text-center">
           <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {{ isSignUp ? 'Creer un compte' : 'Se connecter' }}
+            {{ isSignUp ? 'Créer un compte' : 'Se connecter' }}
           </h1>
           <p class="mt-2 text-gray-600 dark:text-gray-400">
             {{
               isSignUp
                 ? 'Rejoignez Finance Analyzer gratuitement'
-                : 'Accedez a votre tableau de bord'
+                : 'Accédez à votre tableau de bord'
             }}
           </p>
         </div>
@@ -238,7 +238,7 @@
           >
             {{
               isSignUp
-                ? 'Deja un compte ? Se connecter'
+                ? 'Déjà un compte ? Se connecter'
                 : "Pas de compte ? S'inscrire"
             }}
           </button>
@@ -251,7 +251,7 @@
           to="/"
           class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
         >
-          &larr; Retour a l'accueil
+          &larr; Retour à l'accueil
         </RouterLink>
       </div>
     </div>

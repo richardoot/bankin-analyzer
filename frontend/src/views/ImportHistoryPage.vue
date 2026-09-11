@@ -42,7 +42,7 @@
   const getStatusLabel = (status: string): string => {
     switch (status) {
       case 'COMPLETED':
-        return 'Termine'
+        return 'Terminé'
       case 'IN_PROGRESS':
         return 'En cours'
       case 'FAILED':
@@ -144,10 +144,10 @@
           v-if="formatLatestDate"
           class="mt-2 text-gray-600 dark:text-gray-400"
         >
-          Derniere transaction importee : {{ formatLatestDate }}
+          Dernière transaction importée : {{ formatLatestDate }}
         </p>
         <p v-else-if="!isLoading" class="mt-2 text-gray-600 dark:text-gray-400">
-          Aucun import effectue pour le moment
+          Aucun import effectué pour le moment
         </p>
       </div>
 
@@ -212,7 +212,7 @@
           />
         </svg>
         <h3 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Aucun import effectue
+          Aucun import effectué
         </h3>
         <p class="mt-2 text-gray-600 dark:text-gray-400">
           Commencez par importer vos transactions depuis un fichier CSV.
@@ -345,7 +345,7 @@
                 {{ history.transactionsImported.toLocaleString('fr-FR') }}
               </p>
               <p class="text-sm text-emerald-600 dark:text-emerald-500">
-                transactions importees
+                transactions importées
               </p>
             </div>
 

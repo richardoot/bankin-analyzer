@@ -75,36 +75,36 @@ describe('CategorySubcategoryModal — create category', () => {
   it('renders the create category input with the right placeholder for EXPENSE', async () => {
     const wrapper = await mountModal({ transactionType: 'EXPENSE' })
 
-    const input = wrapper.find('input[placeholder^="Nouvelle categorie"]')
+    const input = wrapper.find('input[placeholder^="Nouvelle catégorie"]')
     expect(input.exists()).toBe(true)
-    expect(input.attributes('placeholder')).toContain('depense')
+    expect(input.attributes('placeholder')).toContain('dépense')
   })
 
   it('renders the create category input with the right placeholder for INCOME', async () => {
     const wrapper = await mountModal({ transactionType: 'INCOME' })
 
-    const input = wrapper.find('input[placeholder^="Nouvelle categorie"]')
+    const input = wrapper.find('input[placeholder^="Nouvelle catégorie"]')
     expect(input.exists()).toBe(true)
     expect(input.attributes('placeholder')).toContain('revenu')
   })
 
-  it('disables the Creer button when input is empty', async () => {
+  it('disables the Créer button when input is empty', async () => {
     const wrapper = await mountModal()
     const createBtn = wrapper
       .findAll('button')
-      .find(b => b.text() === 'Creer' && b.attributes('type') === 'button')
+      .find(b => b.text() === 'Créer' && b.attributes('type') === 'button')
 
     expect(createBtn?.attributes('disabled')).toBeDefined()
   })
 
-  it('enables the Creer button when input has a value', async () => {
+  it('enables the Créer button when input has a value', async () => {
     const wrapper = await mountModal()
-    const input = wrapper.find('input[placeholder^="Nouvelle categorie"]')
+    const input = wrapper.find('input[placeholder^="Nouvelle catégorie"]')
     await input.setValue('Sante')
 
     const createBtn = wrapper
       .findAll('button')
-      .find(b => b.text() === 'Creer' && b.attributes('type') === 'button')
+      .find(b => b.text() === 'Créer' && b.attributes('type') === 'button')
     expect(createBtn?.attributes('disabled')).toBeUndefined()
   })
 
@@ -119,12 +119,12 @@ describe('CategorySubcategoryModal — create category', () => {
     })
 
     const wrapper = await mountModal({ transactionType: 'EXPENSE' })
-    const input = wrapper.find('input[placeholder^="Nouvelle categorie"]')
+    const input = wrapper.find('input[placeholder^="Nouvelle catégorie"]')
     await input.setValue('  Sante  ')
 
     const createBtn = wrapper
       .findAll('button')
-      .find(b => b.text() === 'Creer' && b.attributes('type') === 'button')
+      .find(b => b.text() === 'Créer' && b.attributes('type') === 'button')
     await createBtn?.trigger('click')
     await flushPromises()
 
@@ -136,12 +136,12 @@ describe('CategorySubcategoryModal — create category', () => {
 
   it('does not call api.createCategory when input is empty', async () => {
     const wrapper = await mountModal()
-    const input = wrapper.find('input[placeholder^="Nouvelle categorie"]')
+    const input = wrapper.find('input[placeholder^="Nouvelle catégorie"]')
     await input.setValue('   ')
 
     const createBtn = wrapper
       .findAll('button')
-      .find(b => b.text() === 'Creer' && b.attributes('type') === 'button')
+      .find(b => b.text() === 'Créer' && b.attributes('type') === 'button')
     await createBtn?.trigger('click')
     await flushPromises()
 
@@ -150,13 +150,13 @@ describe('CategorySubcategoryModal — create category', () => {
 
   it('selects existing category instead of creating a duplicate (case-insensitive)', async () => {
     const wrapper = await mountModal({ transactionType: 'EXPENSE' })
-    const input = wrapper.find('input[placeholder^="Nouvelle categorie"]')
+    const input = wrapper.find('input[placeholder^="Nouvelle catégorie"]')
     // "courses" already exists as "Courses"
     await input.setValue('courses')
 
     const createBtn = wrapper
       .findAll('button')
-      .find(b => b.text() === 'Creer' && b.attributes('type') === 'button')
+      .find(b => b.text() === 'Créer' && b.attributes('type') === 'button')
     await createBtn?.trigger('click')
     await flushPromises()
 
@@ -178,12 +178,12 @@ describe('CategorySubcategoryModal — create category', () => {
 
     // We're on EXPENSE; "Salaire" exists as INCOME → should still allow creating EXPENSE/Salaire
     const wrapper = await mountModal({ transactionType: 'EXPENSE' })
-    const input = wrapper.find('input[placeholder^="Nouvelle categorie"]')
+    const input = wrapper.find('input[placeholder^="Nouvelle catégorie"]')
     await input.setValue('Salaire')
 
     const createBtn = wrapper
       .findAll('button')
-      .find(b => b.text() === 'Creer' && b.attributes('type') === 'button')
+      .find(b => b.text() === 'Créer' && b.attributes('type') === 'button')
     await createBtn?.trigger('click')
     await flushPromises()
 
@@ -205,12 +205,12 @@ describe('CategorySubcategoryModal — create category', () => {
     vi.mocked(api.createCategory).mockResolvedValue(newCategory)
 
     const wrapper = await mountModal({ transactionType: 'EXPENSE' })
-    const input = wrapper.find('input[placeholder^="Nouvelle categorie"]')
+    const input = wrapper.find('input[placeholder^="Nouvelle catégorie"]')
     await input.setValue('Sante')
 
     const createBtn = wrapper
       .findAll('button')
-      .find(b => b.text() === 'Creer' && b.attributes('type') === 'button')
+      .find(b => b.text() === 'Créer' && b.attributes('type') === 'button')
     await createBtn?.trigger('click')
     await flushPromises()
 
@@ -225,12 +225,12 @@ describe('CategorySubcategoryModal — create category', () => {
     vi.mocked(api.createCategory).mockRejectedValue(new Error('Server error'))
 
     const wrapper = await mountModal()
-    const input = wrapper.find('input[placeholder^="Nouvelle categorie"]')
+    const input = wrapper.find('input[placeholder^="Nouvelle catégorie"]')
     await input.setValue('Sante')
 
     const createBtn = wrapper
       .findAll('button')
-      .find(b => b.text().trim() === 'Creer')
+      .find(b => b.text().trim() === 'Créer')
     await createBtn?.trigger('click')
     await flushPromises()
 
@@ -252,7 +252,7 @@ describe('CategorySubcategoryModal — create category', () => {
     })
 
     const wrapper = await mountModal()
-    const inputs = wrapper.findAll('input[placeholder^="Nouvelle categorie"]')
+    const inputs = wrapper.findAll('input[placeholder^="Nouvelle catégorie"]')
     const input = inputs[inputs.length - 1]
     if (!input) throw new Error('input not found')
     await input.setValue('Sante')

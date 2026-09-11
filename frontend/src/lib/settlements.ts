@@ -33,7 +33,7 @@ export interface AllocationLine {
   amountDue: number
 }
 
-export const NO_CATEGORY_LABEL = 'Sans categorie'
+export const NO_CATEGORY_LABEL = 'Sans catégorie'
 
 export function toAllocationLine(
   reimbursement: ReimbursementDto
@@ -41,7 +41,7 @@ export function toAllocationLine(
   return {
     reimbursementId: reimbursement.id,
     // The expense, not `categoryId`: the latter is the retired income hint,
-    // null on most debts, which filed every line under "Sans categorie".
+    // null on most debts, which filed every line under "Sans catégorie".
     categoryId: reimbursement.expenseCategoryId,
     categoryName: reimbursement.expenseCategoryName || NO_CATEGORY_LABEL,
     date: reimbursement.transaction?.date ?? reimbursement.createdAt,

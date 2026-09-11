@@ -31,7 +31,7 @@
       testId: 'nav-reimbursements-link',
     },
     { to: '/budget', label: 'Budget', testId: 'nav-budget-link' },
-    { to: '/tags', label: 'Etiquettes', testId: 'nav-tags-link' },
+    { to: '/tags', label: 'Étiquettes', testId: 'nav-tags-link' },
   ]
 
   // Liens supplémentaires pour le menu mobile (inclus dans le dropdown sur desktop)
@@ -122,7 +122,7 @@
           <button
             type="button"
             class="rounded-md p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
-            aria-label="Changer le theme"
+            aria-label="Changer le thème"
             @click="themeStore.toggle()"
           >
             <!-- Sun icon (shown in dark mode) -->
@@ -184,7 +184,7 @@
           <button
             type="button"
             class="rounded-md p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            aria-label="Changer le theme"
+            aria-label="Changer le thème"
             @click="themeStore.toggle()"
           >
             <svg
@@ -269,7 +269,7 @@
             class="border-b border-slate-100 dark:border-slate-800 px-3 py-3 mb-2"
           >
             <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
-              Connecte en tant que
+              Connecté en tant que
             </p>
             <p class="truncate text-sm text-slate-500 dark:text-slate-400">
               {{ userEmail }}
@@ -328,7 +328,7 @@
             class="mt-4 w-full rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-base font-medium text-red-600 dark:text-red-400 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
             @click="handleSignOut"
           >
-            Deconnexion
+            Déconnexion
           </button>
         </template>
         <template v-else>

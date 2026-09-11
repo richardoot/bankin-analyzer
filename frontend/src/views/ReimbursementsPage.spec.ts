@@ -159,7 +159,7 @@ describe('ReimbursementsPage', () => {
       const wrapper = await mountComponent()
 
       expect(wrapper.text()).toContain(
-        'Gerez les personnes et suivez les remboursements en cours'
+        'Gérez les personnes et suivez les remboursements en cours'
       )
     })
 
@@ -188,7 +188,7 @@ describe('ReimbursementsPage', () => {
     it('should display empty state when no persons', async () => {
       const wrapper = await mountComponent()
 
-      expect(wrapper.text()).toContain('Aucune personne ajoutee')
+      expect(wrapper.text()).toContain('Aucune personne ajoutée')
     })
 
     it('should display person cards when persons exist', async () => {
@@ -461,7 +461,7 @@ describe('ReimbursementsPage', () => {
       })
       await flushPromises()
 
-      expect(wrapper.text()).toContain('Recapitulatif des Remboursements')
+      expect(wrapper.text()).toContain('Récapitulatif des remboursements')
       expect(wrapper.text()).toContain('Total General')
     })
 
@@ -512,7 +512,7 @@ describe('ReimbursementsPage', () => {
     it('should not display summary when no reimbursements', async () => {
       const wrapper = await mountComponent()
 
-      expect(wrapper.text()).not.toContain('Recapitulatif des Remboursements')
+      expect(wrapper.text()).not.toContain('Récapitulatif des remboursements')
     })
 
     it('should display empty state message when no reimbursements', async () => {

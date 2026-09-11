@@ -79,7 +79,7 @@ describe('MonthlyExpensesChart', () => {
     const chart = wrapper.findComponent({ name: 'VueApexCharts' })
     const series = chart.props('series')
     expect(series).toEqual([
-      { name: 'Depenses', data: defaultProps.monthlyTotals },
+      { name: 'Dépenses', data: defaultProps.monthlyTotals },
     ])
   })
 
@@ -187,7 +187,7 @@ describe('MonthlyExpensesChart', () => {
     // November 2025, val=2500, budget diff=0, savings=4200-2500=1700
     expect(html).toContain('Novembre 2025')
     expect(html).toContain('2500.00')
-    expect(html).toContain('Depenses')
+    expect(html).toContain('Dépenses')
     expect(html).toContain('vs Budget')
     expect(html).toContain('Epargne')
   })

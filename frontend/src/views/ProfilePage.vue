@@ -53,7 +53,7 @@
           Mon Profil
         </h1>
         <p class="mt-2 text-gray-600 dark:text-gray-400">
-          Gerez vos informations personnelles
+          Gérez vos informations personnelles
         </p>
       </div>
 
@@ -127,7 +127,7 @@
               <span
                 class="inline-flex h-2 w-2 rounded-full bg-emerald-500"
               ></span>
-              Email verifie
+              Email vérifié
             </p>
           </div>
         </div>
@@ -140,8 +140,8 @@
             class="rounded-lg border border-red-300 dark:border-red-700 px-6 py-3 text-base font-medium text-red-700 dark:text-red-400 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
             @click="handleSignOut"
           >
-            <span v-if="loading">Deconnexion...</span>
-            <span v-else>Se deconnecter</span>
+            <span v-if="loading">Déconnexion...</span>
+            <span v-else>Se déconnecter</span>
           </button>
         </div>
       </div>
@@ -151,7 +151,7 @@
         class="mt-8 rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
       >
         <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Acces rapide
+          Accès rapide
         </h3>
         <div class="grid gap-4 sm:grid-cols-2">
           <RouterLink
@@ -195,8 +195,7 @@
           Zone de danger
         </h3>
         <p class="mb-6 text-sm text-red-600 dark:text-red-400/80">
-          Les actions dans cette zone sont irreversibles. Procedez avec
-          precaution.
+          Les actions dans cette zone sont irréversibles. Procédez avec précaution.
         </p>
         <button
           type="button"

@@ -260,7 +260,7 @@ describe('SettlementModal', () => {
     // grouping on it collapsed the whole list under one heading.
     expect(wrapper.text()).toContain('R Courses')
     expect(wrapper.text()).toContain('R Abonnements')
-    expect(wrapper.text()).not.toContain('Sans categorie')
+    expect(wrapper.text()).not.toContain('Sans catégorie')
     expect(
       wrapper
         .findAll('input[type="checkbox"]')

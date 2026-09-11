@@ -318,7 +318,7 @@
         // The import history stays in IN_PROGRESS status
         // User can delete it from the history page if needed
         partialImportError.value = err
-        error.value = `Import echoue au chunk ${err.details.failedAtChunk + 1}/${err.details.chunksTotal}. ${err.details.imported} transactions importees sur ${err.details.total}.`
+        error.value = `Import échoué au chunk ${err.details.failedAtChunk + 1}/${err.details.chunksTotal}. ${err.details.imported} transactions importées sur ${err.details.total}.`
       } else {
         error.value =
           err instanceof Error ? err.message : "Erreur lors de l'import"
@@ -432,19 +432,18 @@
               Import partiel
             </h3>
             <p class="text-sm text-amber-700 dark:text-amber-400/80 mt-1">
-              {{ partialImportError.details.imported }} transactions importees
+              {{ partialImportError.details.imported }} transactions importées
               sur {{ partialImportError.details.total }}.
             </p>
             <p class="text-xs text-amber-600 dark:text-amber-500 mt-2">
-              Vous pouvez reessayer sans risque de dupliquer les transactions
-              deja importees.
+              Vous pouvez réessayer sans risque de dupliquer les transactions déjà importées.
             </p>
             <div class="mt-3 flex gap-2">
               <button
                 class="px-3 py-1.5 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 transition-colors"
                 @click="retryImport"
               >
-                Reessayer l'import
+                Réessayer l'import
               </button>
               <button
                 class="px-3 py-1.5 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 text-sm rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
@@ -479,7 +478,7 @@
           {{ skippedRows.length }} ligne{{
             skippedRows.length > 1 ? 's' : ''
           }}
-          du fichier {{ skippedRows.length > 1 ? 'ont' : 'a' }} ete ignoree{{
+          du fichier {{ skippedRows.length > 1 ? 'ont' : 'a' }} été ignorée{{
             skippedRows.length > 1 ? 's' : ''
           }}
         </p>

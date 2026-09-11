@@ -1008,7 +1008,7 @@
             :disabled="isEditing"
             :title="
               isEditing
-                ? 'Enregistre ou annule les modifications avant de changer de plan'
+                ? 'Enregistrez ou annulez les modifications avant de changer de plan'
                 : undefined
             "
             class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1035,7 +1035,7 @@
             :disabled="isEditing"
             :title="
               isEditing
-                ? 'Enregistre ou annule les modifications avant de créer un plan'
+                ? 'Enregistrez ou annulez les modifications avant de créer un plan'
                 : undefined
             "
             class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 dark:bg-indigo-500 text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1160,7 +1160,7 @@
           Aucun budget en cours
         </h2>
         <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          Crée un budget pour commencer à suivre tes dépenses prévues.
+          Créez un budget pour commencer à suivre vos dépenses prévues.
         </p>
         <div class="mt-5 flex flex-wrap items-center justify-center gap-3">
           <button

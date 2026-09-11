@@ -119,7 +119,7 @@
         <!-- User email header -->
         <div class="border-b border-slate-100 dark:border-slate-700 px-4 py-3">
           <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
-            Connecte en tant que
+            Connecté en tant que
           </p>
           <p class="truncate text-sm text-slate-500 dark:text-slate-400">
             {{ userEmail }}
@@ -213,7 +213,7 @@
                 d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
               />
             </svg>
-            Deconnexion
+            Déconnexion
           </button>
         </div>
       </div>

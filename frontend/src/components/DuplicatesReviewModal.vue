@@ -319,7 +319,7 @@
                     @change="toggleAllInternalDuplicates"
                   />
                   <span class="text-sm text-gray-600 dark:text-gray-400"
-                    >Tout selectionner</span
+                    >Tout sélectionner</span
                   >
                 </label>
               </div>
@@ -407,7 +407,7 @@
                       d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
                     />
                   </svg>
-                  Deja en base de donnees
+                  Déjà en base de données
                 </h3>
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input
@@ -418,7 +418,7 @@
                     @change="toggleAllExternalDuplicates"
                   />
                   <span class="text-sm text-gray-600 dark:text-gray-400"
-                    >Tout selectionner</span
+                    >Tout sélectionner</span
                   >
                 </label>
               </div>
@@ -480,7 +480,7 @@
                       </div>
                       <div>
                         <span class="text-gray-500 dark:text-gray-400"
-                          >Categorie:</span
+                          >Catégorie:</span
                         >
                         {{ dup.uploaded.category }}
                       </div>
@@ -523,7 +523,7 @@
                       </div>
                       <div>
                         <span class="text-gray-500 dark:text-gray-400"
-                          >Categorie:</span
+                          >Catégorie:</span
                         >
                         {{ dup.existing.categoryName || '-' }}
                       </div>

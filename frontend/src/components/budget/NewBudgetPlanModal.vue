@@ -186,7 +186,7 @@
 
   // ── Computed validation for step 1 ───────────────────────────────────────
   const step1Error = computed<string | null>(() => {
-    if (!startMonth.value || !endMonth.value) return 'Renseigne la plage'
+    if (!startMonth.value || !endMonth.value) return 'Renseignez la plage'
     const s = ymToParts(startMonth.value)
     const e = ymToParts(endMonth.value)
     if (!s || !e) return 'Format de mois invalide'
@@ -1238,7 +1238,7 @@
                 v-if="initSource === 'copy' && !copyFromPlanId"
                 class="mb-2 text-xs text-gray-500 dark:text-gray-400 italic"
               >
-                Choisis un plan à copier — en attendant, toutes les catégories
+                Choisissez un plan à copier — en attendant, toutes les catégories
                 sont affichées vides.
               </p>
               <div

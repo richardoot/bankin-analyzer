@@ -41,7 +41,7 @@
     'Mai',
     'Juin',
     'Juil',
-    'Aout',
+    'Août',
     'Sep',
     'Oct',
     'Nov',
@@ -264,17 +264,17 @@
         // Full month name
         const fullMonths = [
           'Janvier',
-          'Fevrier',
+          'Février',
           'Mars',
           'Avril',
           'Mai',
           'Juin',
           'Juillet',
-          'Aout',
+          'Août',
           'Septembre',
           'Octobre',
           'Novembre',
-          'Decembre',
+          'Décembre',
         ]
         const parts = ym.split('-')
         const monthIdx = parseInt(parts[1] ?? '1', 10)
@@ -296,7 +296,7 @@
         else if (hasPlanRange.value && hasComparisonRange.value)
           html += ` <span style="opacity:0.5;font-weight:400">(intermédiaire)</span>`
         html += `</div>`
-        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">Depenses</span><strong>${formatCurrency(val)}</strong></div>`
+        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">Dépenses</span><strong>${formatCurrency(val)}</strong></div>`
         if (diffBudget !== null) {
           const color = diffBudget > 0 ? '#f87171' : '#34d399'
           html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">vs Budget</span><span style="color:${color};font-weight:600">${diffBudget > 0 ? '+' : ''}${formatCurrency(diffBudget)}</span></div>`
@@ -313,7 +313,7 @@
 
   const series = computed(() => [
     {
-      name: 'Depenses',
+      name: 'Dépenses',
       data: props.monthlyTotals,
     },
   ])

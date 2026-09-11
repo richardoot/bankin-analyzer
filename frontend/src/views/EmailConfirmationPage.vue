@@ -34,7 +34,7 @@
 
         <!-- Title -->
         <h1 class="mt-6 text-2xl font-bold text-gray-900 dark:text-gray-100">
-          Verifiez votre boite mail
+          Vérifiez votre boîte mail
         </h1>
 
         <!-- Description -->

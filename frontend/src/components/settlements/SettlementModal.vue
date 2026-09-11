@@ -390,7 +390,7 @@
       handleClose()
     } catch (e) {
       error.value =
-        e instanceof Error ? e.message : 'Erreur lors de la creation'
+        e instanceof Error ? e.message : 'Erreur lors de la création'
     } finally {
       isSubmitting.value = false
     }
@@ -488,7 +488,7 @@
                   class="text-emerald-600 dark:text-emerald-400 hover:underline"
                   @click="selectAllLines"
                 >
-                  Tout selectionner
+                  Tout sélectionner
                 </button>
                 <span class="text-gray-300 dark:text-gray-600">|</span>
                 <button
@@ -852,7 +852,7 @@
               class="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-slate-800"
             >
               <span class="text-sm text-gray-700 dark:text-gray-300">
-                {{ selectedLines.length }} remboursement(s) selectionne(s)
+                {{ selectedLines.length }} remboursement(s) sélectionné(s)
               </span>
               <span
                 class="text-sm font-semibold text-gray-900 dark:text-gray-100"

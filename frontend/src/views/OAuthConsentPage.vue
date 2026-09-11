@@ -17,7 +17,7 @@
     const id = route.query.authorization_id as string
 
     if (!id) {
-      error.value = 'Parametre authorization_id manquant'
+      error.value = 'Paramètre authorization_id manquant'
       isLoading.value = false
       return
     }
@@ -193,7 +193,7 @@
               />
             </svg>
             <span class="text-sm text-gray-700 dark:text-gray-300"
-              >Lecture seule de vos donnees financieres</span
+              >Lecture seule de vos données financières</span
             >
           </div>
         </div>
@@ -217,7 +217,7 @@
           </svg>
           <p class="text-xs text-amber-700 dark:text-amber-400">
             Cette application pourra consulter vos transactions, categories,
-            budgets et statistiques. Elle ne pourra pas modifier vos donnees.
+            budgets et statistiques. Elle ne pourra pas modifier vos données.
           </p>
         </div>
 

@@ -524,7 +524,7 @@
           note: previousNote ?? null,
         }
       }
-      toast.error('Echec de la mise a jour de la note')
+      toast.error('Échec de la mise à jour de la note')
     }
   }
 
@@ -594,7 +594,7 @@
       if (found) {
         transactions.value[found.index] = previousTx
       }
-      toast.error('Echec de la mise a jour de la categorie')
+      toast.error('Échec de la mise à jour de la catégorie')
     }
   }
 
@@ -622,7 +622,7 @@
           isPointed: previousPointed,
         }
       }
-      toast.error('Echec de la mise a jour du pointage')
+      toast.error('Échec de la mise à jour du pointage')
     }
   }
 
@@ -686,7 +686,7 @@
       console.error('Failed to bulk update category:', err)
       // Carries the server's message when the selection went stale, which the
       // user can act on: refresh and try again.
-      toast.error(err instanceof Error ? err.message : 'Echec du deplacement')
+      toast.error(err instanceof Error ? err.message : 'Échec du déplacement')
     } finally {
       isBulkUpdating.value = false
     }
@@ -925,7 +925,7 @@
           Transactions
         </h1>
         <p class="mt-2 text-gray-600 dark:text-gray-400">
-          Gerez vos transactions, modifiez les categories et assignez des
+          Gérez vos transactions, modifiez les catégories et assignez des
           remboursements
         </p>
       </div>
@@ -954,7 +954,7 @@
             v-model="searchKeyword"
             type="search"
             data-testid="transactions-search-input"
-            placeholder="Rechercher par mot-cle (libelle, note, sous-categorie)..."
+            placeholder="Rechercher par mot-clé (libellé, note, sous-catégorie)..."
             class="w-full pl-10 pr-3 py-3 md:py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
           />
         </div>
@@ -978,7 +978,7 @@
               class="h-11 md:h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
             >
               <option value="ALL">Toutes</option>
-              <option value="EXPENSE">Depenses</option>
+              <option value="EXPENSE">Dépenses</option>
               <option value="INCOME">Revenus</option>
             </select>
           </div>
@@ -987,7 +987,7 @@
           <div class="flex flex-col gap-1">
             <span
               class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-              >Categorie</span
+              >Catégorie</span
             >
             <select
               v-model="selectedCategory"
@@ -1014,7 +1014,7 @@
                   ? 'text-gray-400 dark:text-gray-500'
                   : 'text-gray-300 dark:text-gray-600'
               "
-              >Sous-categorie</span
+              >Sous-catégorie</span
             >
             <select
               v-model="selectedSubcategory"
@@ -1023,12 +1023,12 @@
               :title="
                 selectedCategory
                   ? undefined
-                  : 'Selectionnez d\'abord une categorie'
+                  : 'Selectionnez d\'abord une catégorie'
               "
               class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/60 dark:disabled:text-gray-500"
             >
               <option :value="null">
-                {{ selectedCategory ? 'Toutes' : 'Choisir une categorie' }}
+                {{ selectedCategory ? 'Toutes' : 'Choisir une catégorie' }}
               </option>
               <option
                 v-for="sub in filteredSubcategories"
@@ -1066,7 +1066,7 @@
           <div class="flex flex-col gap-1">
             <span
               class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-              >Etiquette</span
+              >Étiquette</span
             >
             <select
               v-model="selectedTag"
@@ -1094,7 +1094,7 @@
           <div class="col-span-2 flex flex-col gap-1">
             <span
               class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-              >Periode</span
+              >Période</span
             >
             <div class="flex items-center gap-1.5">
               <input
@@ -1228,7 +1228,7 @@
                   d="M6 18L18 6M6 6l12 12"
                 />
               </svg>
-              <span class="hidden md:inline md:ml-1.5">Reinitialiser</span>
+              <span class="hidden md:inline md:ml-1.5">Réinitialiser</span>
             </button>
             <!-- Selection mode toggle -->
             <button
@@ -1255,7 +1255,7 @@
                 />
               </svg>
               <span class="hidden md:inline md:ml-1.5">{{
-                isSelectionMode ? 'Mode selection actif' : 'Selection multiple'
+                isSelectionMode ? 'Mode sélection actif' : 'Sélection multiple'
               }}</span>
             </button>
           </div>
@@ -1274,7 +1274,7 @@
       >
         <span>
           Les <strong>{{ selectedIds.size }}</strong> transactions de cette page
-          sont selectionnees.
+          sont sélectionnées.
         </span>
         <button
           type="button"
@@ -1293,7 +1293,7 @@
       >
         <span>
           Les <strong>{{ matchingCount }}</strong> transactions du filtre sont
-          selectionnees, au-dela de cette page.
+          sélectionnées, au-delà de cette page.
         </span>
         <button
           type="button"
@@ -1321,7 +1321,7 @@
             <span
               class="text-sm font-medium text-indigo-700 dark:text-indigo-300"
             >
-              {{ selectedCount }} transaction(s) selectionnee(s)
+              {{ selectedCount }} transaction(s) sélectionnée(s)
             </span>
             <button
               class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200"
@@ -1379,7 +1379,7 @@
                   d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"
                 />
               </svg>
-              Changer categorie
+              Changer de catégorie
             </button>
           </div>
         </div>
@@ -1446,7 +1446,7 @@
                 <button
                   :disabled="isBulkUpdating"
                   class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-indigo-700 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/30 border border-indigo-300 dark:border-indigo-700 rounded-lg disabled:opacity-50"
-                  title="Changer categorie"
+                  title="Changer de catégorie"
                   @click="openBulkCategoryModal"
                 >
                   <svg
@@ -1512,7 +1512,7 @@
             v-if="transactions.length === 0"
             class="text-center py-12 text-gray-500 dark:text-gray-400"
           >
-            Aucune transaction trouvee avec les filtres actuels.
+            Aucune transaction trouvée avec les filtres actuels.
           </div>
 
           <div v-else>
@@ -1535,8 +1535,8 @@
               <div class="col-span-3">Description</div>
               <div class="col-span-2">Note</div>
               <div class="col-span-1 text-right">Montant</div>
-              <div class="col-span-2">Categorie</div>
-              <div class="col-span-1 text-center">Pointe</div>
+              <div class="col-span-2">Catégorie</div>
+              <div class="col-span-1 text-center">Pointé</div>
               <div class="col-span-1 text-center">Actions</div>
             </div>
 
@@ -1621,7 +1621,7 @@
                             class="text-xs text-gray-400 dark:text-gray-500 truncate hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                             @click="openCategoryModal(tx)"
                           >
-                            {{ tx.categoryName || 'Sans categorie' }}
+                            {{ tx.categoryName || 'Sans catégorie' }}
                           </button>
                           <!-- Reimbursement inline badge -->
                           <template
@@ -1670,7 +1670,7 @@
                                 v-if="
                                   getReimbursementSummary(tx.id).allCompleted
                                 "
-                                >Rembourse</span
+                                >Remboursé</span
                               >
                               <template v-else>
                                 {{
@@ -2018,7 +2018,7 @@
                       @click="openCategoryModal(tx)"
                     >
                       {{ tx.categoryIcon ? tx.categoryIcon + ' ' : ''
-                      }}{{ tx.categoryName || 'Sans categorie' }}
+                      }}{{ tx.categoryName || 'Sans catégorie' }}
                       <svg
                         class="h-3 w-3 opacity-50"
                         fill="none"

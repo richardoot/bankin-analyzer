@@ -231,7 +231,7 @@ describe('TransactionsPage — optimistic updates', () => {
 
       // Should show error toast
       expect(mockToast.error).toHaveBeenCalledWith(
-        'Echec de la mise a jour du pointage'
+        'Échec de la mise à jour du pointage'
       )
     })
 
@@ -315,7 +315,7 @@ describe('TransactionsPage — optimistic updates', () => {
       await flushPromises()
 
       expect(mockToast.error).toHaveBeenCalledWith(
-        'Echec de la mise a jour de la note'
+        'Échec de la mise à jour de la note'
       )
     })
 
@@ -430,7 +430,7 @@ describe('TransactionsPage — optimistic updates', () => {
       )
 
       expect(select.attributes('disabled')).toBeDefined()
-      expect(select.text()).toContain('Choisir une categorie')
+      expect(select.text()).toContain('Choisir une catégorie')
     })
 
     it('lists only the subcategories of the selected category', async () => {

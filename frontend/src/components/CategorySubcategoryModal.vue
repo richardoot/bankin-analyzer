@@ -141,7 +141,7 @@
       // Auto-select the new category
       await selectCategory(created.id)
     } catch (e) {
-      error.value = 'Erreur lors de la creation de la categorie'
+      error.value = 'Erreur lors de la création de la catégorie'
       console.error(e)
     } finally {
       isCreatingCategory.value = false
@@ -165,7 +165,7 @@
       selectedSubcategoryId.value = created.id
       newSubcategoryName.value = ''
     } catch (e) {
-      error.value = 'Erreur lors de la creation de la sous-categorie'
+      error.value = 'Erreur lors de la création de la sous-catégorie'
       console.error(e)
     } finally {
       isCreatingSubcategory.value = false
@@ -227,10 +227,10 @@
                     id="category-modal-title"
                     class="text-lg font-semibold text-gray-900 dark:text-white"
                   >
-                    Modifier la categorie
+                    Modifier la catégorie
                   </h2>
                   <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                    {{ transactionType === 'EXPENSE' ? 'Depense' : 'Revenu' }}
+                    {{ transactionType === 'EXPENSE' ? 'Dépense' : 'Revenu' }}
                   </p>
                 </div>
                 <button
@@ -272,8 +272,8 @@
                 <input
                   v-model="searchQuery"
                   type="text"
-                  aria-label="Rechercher une categorie"
-                  placeholder="Rechercher une categorie..."
+                  aria-label="Rechercher une catégorie"
+                  placeholder="Rechercher une catégorie..."
                   class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow"
                 />
               </div>
@@ -297,8 +297,8 @@
                   <input
                     v-model="newCategoryName"
                     type="text"
-                    :aria-label="`Creer une nouvelle categorie ${transactionType === 'EXPENSE' ? 'de depense' : 'de revenu'}`"
-                    :placeholder="`Nouvelle categorie ${transactionType === 'EXPENSE' ? 'de depense' : 'de revenu'}...`"
+                    :aria-label="`Créer une nouvelle catégorie ${transactionType === 'EXPENSE' ? 'de dépense' : 'de revenu'}`"
+                    :placeholder="`Nouvelle catégorie ${transactionType === 'EXPENSE' ? 'de dépense' : 'de revenu'}...`"
                     class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow"
                     @keyup.enter="createCategory"
                   />
@@ -329,7 +329,7 @@
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  <span>Creer</span>
+                  <span>Créer</span>
                 </button>
               </div>
             </div>
@@ -360,7 +360,7 @@
                   <span
                     class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
                   >
-                    Categorie
+                    Catégorie
                   </span>
                   <span class="text-xs text-gray-400 dark:text-gray-500">
                     {{ filteredCategories.length }} option{{
@@ -465,7 +465,7 @@
                       class="col-span-2 text-center py-6"
                     >
                       <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Aucune categorie trouvee pour "{{ searchQuery }}"
+                        Aucune catégorie trouvée pour "{{ searchQuery }}"
                       </p>
                     </div>
                   </div>
@@ -484,7 +484,7 @@
                     <div class="flex items-center gap-2">
                       <span
                         class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                        >Sous-categorie</span
+                        >Sous-catégorie</span
                       >
                       <span
                         class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
@@ -575,7 +575,7 @@
                         <input
                           v-model="newSubcategoryName"
                           type="text"
-                          placeholder="Nouvelle sous-categorie..."
+                          placeholder="Nouvelle sous-catégorie..."
                           class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow"
                           @keyup.enter="createSubcategory"
                         />
@@ -608,7 +608,7 @@
                             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                           />
                         </svg>
-                        <span>Creer</span>
+                        <span>Créer</span>
                       </button>
                     </div>
                   </div>
@@ -617,7 +617,7 @@
                   <p
                     class="text-sm text-gray-400 dark:text-gray-500 text-center"
                   >
-                    Selectionnez une categorie pour voir les sous-categories
+                    Sélectionnez une catégorie pour voir les sous-categories
                   </p>
                 </div>
               </div>
@@ -645,7 +645,7 @@
                         }}
                       </template>
                     </template>
-                    <template v-else> Aucune categorie </template>
+                    <template v-else> Aucune catégorie </template>
                   </p>
                 </div>
 

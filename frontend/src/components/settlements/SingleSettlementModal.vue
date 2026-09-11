@@ -125,7 +125,7 @@
       handleClose()
     } catch (e) {
       error.value =
-        e instanceof Error ? e.message : 'Erreur lors de la creation'
+        e instanceof Error ? e.message : 'Erreur lors de la création'
     } finally {
       isSubmitting.value = false
     }
