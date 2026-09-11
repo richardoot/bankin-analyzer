@@ -149,6 +149,10 @@ describe('TransactionsPage — optimistic updates', () => {
 
   const mountPage = async () => {
     setupDefaultMocks()
+    // The page mirrors its filters into the URL and lets a URL override
+    // localStorage; the shared test router must not leak one test's query
+    // into the next mount.
+    await router.replace({ query: {} })
     const wrapper = mount(TransactionsPage, {
       global: {
         plugins: [router],
@@ -712,6 +716,9 @@ describe('TransactionsPage — optimistic updates', () => {
         savedFiltersWithAccount(savedAccount)
       )
       setupDefaultMocks()
+      // Same reset as mountPage: a query left by a previous test would
+      // override the localStorage filters this suite is exercising.
+      await router.replace({ query: {} })
       vi.mocked(api.getAccounts).mockResolvedValue(accounts)
       const wrapper = mount(TransactionsPage, {
         global: {

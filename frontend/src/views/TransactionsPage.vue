@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { ref, computed, onMounted, watch } from 'vue'
+  import { useRoute, useRouter } from 'vue-router'
   import { usePersonsStore } from '@/stores/persons'
   import { useAccountsStore } from '@/stores/accounts'
   import { useTagsStore } from '@/stores/tags'
@@ -107,30 +108,88 @@
 
   const savedFilters = loadSavedFilters()
 
+  const route = useRoute()
+  const router = useRouter()
+
+  /**
+   * The URL is the shareable form of the filters: pasting a link restores
+   * the exact view, and the Back button returns to the page that was left.
+   * A link that names any filter wins over localStorage — the sender's
+   * intent beats this browser's leftovers.
+   */
+  const QUERY_KEYS = [
+    'type',
+    'category',
+    'subcategory',
+    'account',
+    'tag',
+    'notPointed',
+    'review',
+    'q',
+    'from',
+    'to',
+    'min',
+    'max',
+    'page',
+  ] as const
+
+  function firstParam(value: unknown): string | null {
+    const single = Array.isArray(value) ? value[0] : value
+    return typeof single === 'string' && single !== '' ? single : null
+  }
+
+  const hasQueryFilters = QUERY_KEYS.some(
+    key => firstParam(route.query[key]) !== null
+  )
+
+  function filtersFromQuery(): typeof savedFilters {
+    const q = route.query
+    const type = firstParam(q.type)
+    const category = firstParam(q.category)
+    return {
+      typeFilter: type === 'EXPENSE' || type === 'INCOME' ? type : 'ALL',
+      selectedCategory: category,
+      // A subcategory is meaningless without its parent category.
+      selectedSubcategory: category ? firstParam(q.subcategory) : null,
+      selectedAccount: firstParam(q.account),
+      selectedTag: firstParam(q.tag),
+      showOnlyNotPointed: firstParam(q.notPointed) === '1',
+      searchKeyword: firstParam(q.q) ?? '',
+      filterStartDate: firstParam(q.from) ?? '',
+      filterEndDate: firstParam(q.to) ?? '',
+      amountMin: firstParam(q.min) ?? '',
+      amountMax: firstParam(q.max) ?? '',
+    }
+  }
+
+  const initialFilters = hasQueryFilters ? filtersFromQuery() : savedFilters
+
   // Filters
-  const typeFilter = ref<'ALL' | 'EXPENSE' | 'INCOME'>(savedFilters.typeFilter)
-  const selectedCategory = ref<string | null>(savedFilters.selectedCategory)
+  const typeFilter = ref<'ALL' | 'EXPENSE' | 'INCOME'>(
+    initialFilters.typeFilter
+  )
+  const selectedCategory = ref<string | null>(initialFilters.selectedCategory)
   // Only selectable once a category is chosen: its options are the
   // subcategories of that category.
   const selectedSubcategory = ref<string | null>(
-    savedFilters.selectedSubcategory
+    initialFilters.selectedSubcategory
   )
-  const selectedAccount = ref<string | null>(savedFilters.selectedAccount)
-  const selectedTag = ref<string | null>(savedFilters.selectedTag)
-  const showOnlyNotPointed = ref(savedFilters.showOnlyNotPointed)
+  const selectedAccount = ref<string | null>(initialFilters.selectedAccount)
+  const selectedTag = ref<string | null>(initialFilters.selectedTag)
+  const showOnlyNotPointed = ref(initialFilters.showOnlyNotPointed)
   /**
    * Rows a bank sync inserted or claimed and then lost the reference to —
    * cleared to "aucun", or a correction still pending on the other side of a
    * swap. Not saved to localStorage: this is a one-off "where did they go"
    * check, not a filter meant to stay on across visits.
    */
-  const needsBankReview = ref(false)
+  const needsBankReview = ref(firstParam(route.query.review) === '1')
   // Advanced search filters (keyword, date window, amount range)
-  const searchKeyword = ref(savedFilters.searchKeyword)
-  const filterStartDate = ref(savedFilters.filterStartDate)
-  const filterEndDate = ref(savedFilters.filterEndDate)
-  const amountMin = ref(savedFilters.amountMin)
-  const amountMax = ref(savedFilters.amountMax)
+  const searchKeyword = ref(initialFilters.searchKeyword)
+  const filterStartDate = ref(initialFilters.filterStartDate)
+  const filterEndDate = ref(initialFilters.filterEndDate)
+  const amountMin = ref(initialFilters.amountMin)
+  const amountMax = ref(initialFilters.amountMax)
 
   // Save filters to localStorage
   function saveFilters() {
@@ -209,7 +268,9 @@
   })
 
   // Pagination
-  const currentPage = ref(1)
+  const currentPage = ref(
+    Math.max(1, parseInt(firstParam(route.query.page) ?? '1', 10) || 1)
+  )
   const pageSize = 20
 
   // Inline editing state
@@ -692,11 +753,34 @@
     }
   }
 
+  // Mirror the active filters into the URL. replace, not push: a keystroke
+  // in the search box must not add a history entry. Reading happens once at
+  // setup, so this cannot loop.
+  function syncQuery(): void {
+    const query: Record<string, string> = {}
+    if (typeFilter.value !== 'ALL') query.type = typeFilter.value
+    if (selectedCategory.value) query.category = selectedCategory.value
+    if (selectedCategory.value && selectedSubcategory.value)
+      query.subcategory = selectedSubcategory.value
+    if (selectedAccount.value) query.account = selectedAccount.value
+    if (selectedTag.value) query.tag = selectedTag.value
+    if (showOnlyNotPointed.value) query.notPointed = '1'
+    if (needsBankReview.value) query.review = '1'
+    if (searchKeyword.value.trim()) query.q = searchKeyword.value.trim()
+    if (filterStartDate.value) query.from = filterStartDate.value
+    if (filterEndDate.value) query.to = filterEndDate.value
+    if (amountMin.value !== '') query.min = amountMin.value
+    if (amountMax.value !== '') query.max = amountMax.value
+    if (currentPage.value > 1) query.page = String(currentPage.value)
+    void router.replace({ query })
+  }
+
   // Apply a filter change: persist, jump back to page 1 and refetch. Setting
   // currentPage triggers its own watch (which fetches); when already on page 1
   // that watch won't fire, so we fetch manually.
   function applyFilterChange() {
     saveFilters()
+    syncQuery()
     const wasOnPage1 = currentPage.value === 1
     currentPage.value = 1
     if (wasOnPage1) {
@@ -737,6 +821,7 @@
   // Refetch when page changes
   watch(currentPage, (newPage, oldPage) => {
     if (newPage !== oldPage) {
+      syncQuery()
       fetchTransactions()
     }
   })
@@ -909,6 +994,7 @@
     // corrected fetch.
     void accountsStore.load().then(dropUnknownAccountFilter)
     tagsStore.fetchTags()
+    syncQuery()
     fetchTransactions()
     fetchCategories()
     fetchSubcategories()
@@ -1508,11 +1594,30 @@
 
         <!-- Table -->
         <template v-else-if="!transactionsError">
-          <div
-            v-if="transactions.length === 0"
-            class="text-center py-12 text-gray-500 dark:text-gray-400"
-          >
-            Aucune transaction trouvée avec les filtres actuels.
+          <div v-if="transactions.length === 0" class="text-center py-12">
+            <p class="text-gray-500 dark:text-gray-400">
+              {{
+                hasActiveFilters
+                  ? 'Aucune transaction ne correspond aux filtres actifs.'
+                  : 'Aucune transaction pour le moment.'
+              }}
+            </p>
+            <button
+              v-if="hasActiveFilters"
+              type="button"
+              data-testid="empty-state-reset-filters"
+              class="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+              @click="resetFilters"
+            >
+              Réinitialiser les filtres
+            </button>
+            <RouterLink
+              v-else
+              to="/import"
+              class="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 dark:bg-emerald-500 rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors"
+            >
+              Importer des transactions
+            </RouterLink>
           </div>
 
           <div v-else>
