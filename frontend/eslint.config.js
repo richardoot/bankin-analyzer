@@ -16,7 +16,7 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url))
 export default [
   // Ignore config files for TypeScript parsing
   {
-    ignores: ['eslint.config.js', 'vite.config.ts'],
+    ignores: ['eslint.config.js', 'vite.config.ts', 'public/**'],
   },
 
   // Import shared configurations
