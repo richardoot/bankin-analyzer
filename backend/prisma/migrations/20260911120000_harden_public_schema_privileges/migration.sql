@@ -10,15 +10,28 @@
 -- holding it could read — and DELETE from — the migrations ledger, after
 -- which the next `prisma migrate deploy` believes nothing was ever applied.
 --
--- Idempotent throughout, because production has already run the manual
--- script and will replay this on top of it. Guarded on role existence,
--- because a bare CI database has no `anon` or `authenticated` to revoke
--- from, and an unguarded REVOKE would fail the whole deploy there.
+-- Everything is guarded, twice over, because this file runs in three very
+-- different places:
+--
+--   * `prisma migrate deploy` (prod, local Docker): the table exists — Prisma
+--     creates it before applying anything — and the Supabase roles exist.
+--   * replayed on top of the manual script (prod): every statement is a
+--     no-op, which is the point.
+--   * the e2e harness (test/e2e-database.ts): it replays each migration.sql
+--     directly into a scratch database where neither the table nor the
+--     Supabase roles exist. There is nothing to harden there, and this file
+--     must say "fine" rather than fail the suite.
 
--- RLS governs SELECT/INSERT/UPDATE/DELETE but never TRUNCATE, so the grant
--- has to go regardless. Owner (`postgres`, BYPASSRLS) is unaffected.
 DO $$
 BEGIN
+  -- No ledger table means no Prisma-managed deployment — a scratch database.
+  IF to_regclass('public._prisma_migrations') IS NULL THEN
+    RETURN;
+  END IF;
+
+  -- RLS governs SELECT/INSERT/UPDATE/DELETE but never TRUNCATE, so the
+  -- grants have to go regardless. Owner (`postgres`, BYPASSRLS) keeps
+  -- everything.
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     REVOKE ALL ON TABLE public._prisma_migrations FROM anon;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon;
@@ -27,9 +40,9 @@ BEGIN
     REVOKE ALL ON TABLE public._prisma_migrations FROM authenticated;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM authenticated;
   END IF;
+
+  -- With no policy attached, enabling RLS denies every row to every role
+  -- that does not bypass it. Prisma connects as the owner and is unaffected.
+  ALTER TABLE public._prisma_migrations ENABLE ROW LEVEL SECURITY;
 END
 $$;
-
--- With no policy attached, enabling RLS denies every row to every role that
--- does not bypass it. Prisma connects as the owner and is unaffected.
-ALTER TABLE public._prisma_migrations ENABLE ROW LEVEL SECURITY;
