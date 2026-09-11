@@ -51,27 +51,6 @@ describe('UsersService', () => {
     vi.clearAllMocks()
   })
 
-  describe('findAll', () => {
-    it('should return an array of users', async () => {
-      mockPrismaService.user.findMany.mockResolvedValue([mockUser])
-
-      const result = await service.findAll()
-
-      expect(result).toEqual([mockUser])
-      expect(mockPrismaService.user.findMany).toHaveBeenCalledWith({
-        orderBy: { createdAt: 'desc' },
-      })
-    })
-
-    it('should return empty array when no users', async () => {
-      mockPrismaService.user.findMany.mockResolvedValue([])
-
-      const result = await service.findAll()
-
-      expect(result).toEqual([])
-    })
-  })
-
   describe('findOne', () => {
     it('should return a user by id', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser)

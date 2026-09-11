@@ -21,6 +21,18 @@ import { SupabaseGuard } from '../auth/guards/supabase.guard'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import type { User } from '../generated/prisma'
 
+/**
+ * The account routes — and only ever the caller's own account.
+ *
+ * There is deliberately no way to read another user from here. A `GET /users`
+ * and a `GET /users/:id` used to sit in this file, guarded by authentication
+ * and nothing else: any valid token listed every account's id, supabaseId and
+ * email. Nothing ever called them — the frontend has only ever asked for
+ * `/users/me` — so they exposed without serving, and they are gone.
+ *
+ * `DELETE /users/:id` stays because it checks ownership before acting, and an
+ * older client may still call it.
+ */
 @ApiTags('users')
 @ApiBearerAuth()
 @UseGuards(SupabaseGuard)
@@ -38,32 +50,6 @@ export class UsersController {
   @ApiResponse({ status: 401, description: 'Non authentifie' })
   getMe(@CurrentUser() user: User): UserResponseDto {
     return user
-  }
-
-  @Get()
-  @ApiOperation({ summary: 'Liste tous les utilisateurs' })
-  @ApiResponse({
-    status: 200,
-    description: 'Liste des utilisateurs',
-    type: [UserResponseDto],
-  })
-  @ApiResponse({ status: 401, description: 'Non authentifie' })
-  async findAll(): Promise<UserResponseDto[]> {
-    return this.usersService.findAll()
-  }
-
-  @Get(':id')
-  @ApiOperation({ summary: 'Recupere un utilisateur par son ID' })
-  @ApiParam({ name: 'id', description: "L'identifiant de l'utilisateur" })
-  @ApiResponse({
-    status: 200,
-    description: "L'utilisateur trouve",
-    type: UserResponseDto,
-  })
-  @ApiResponse({ status: 401, description: 'Non authentifie' })
-  @ApiResponse({ status: 404, description: 'Utilisateur non trouve' })
-  async findOne(@Param('id') id: string): Promise<UserResponseDto> {
-    return this.usersService.findOne(id)
   }
 
   @Delete('me')
