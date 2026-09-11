@@ -380,29 +380,29 @@
       <!-- Progress bar during chunking -->
       <div
         v-if="showProgressBar"
-        class="mb-6 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4"
+        class="mb-6 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4"
       >
         <div class="flex items-center justify-between mb-2">
           <span
-            class="text-sm font-medium text-indigo-700 dark:text-indigo-400"
+            class="text-sm font-medium text-emerald-700 dark:text-emerald-400"
           >
             {{ progress.message }}
           </span>
-          <span class="text-sm text-indigo-600 dark:text-indigo-400"
+          <span class="text-sm text-emerald-600 dark:text-emerald-400"
             >{{ progress.percent }}%</span
           >
         </div>
         <div
-          class="w-full bg-indigo-100 dark:bg-indigo-900/30 rounded-full h-2.5"
+          class="w-full bg-emerald-100 dark:bg-emerald-900/30 rounded-full h-2.5"
         >
           <div
-            class="bg-indigo-600 dark:bg-indigo-500 h-2.5 rounded-full transition-all duration-300"
+            class="bg-emerald-600 dark:bg-emerald-500 h-2.5 rounded-full transition-all duration-300"
             :style="{ width: `${progress.percent}%` }"
           ></div>
         </div>
         <div
           v-if="progress.totalChunks > 1"
-          class="mt-2 text-xs text-indigo-500 dark:text-indigo-400"
+          class="mt-2 text-xs text-emerald-500 dark:text-emerald-400"
         >
           Chunk {{ progress.completedChunks }}/{{ progress.totalChunks }}
         </div>
@@ -504,7 +504,7 @@
         class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border-2 border-dashed transition-colors"
         :class="
           isDragOver
-            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
             : 'border-gray-300 dark:border-slate-600'
         "
         @dragover="handleDragOver"
@@ -579,14 +579,12 @@
         <!-- Stats -->
         <div class="grid grid-cols-3 gap-4 mb-6">
           <div
-            class="bg-indigo-50 dark:bg-indigo-900/30 rounded-lg p-4 text-center"
+            class="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 text-center"
           >
-            <div
-              class="text-2xl font-bold text-indigo-600 dark:text-indigo-400"
-            >
+            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
               {{ parsedTransactions.length }}
             </div>
-            <div class="text-sm text-indigo-800 dark:text-indigo-300">
+            <div class="text-sm text-blue-800 dark:text-blue-300">
               Transactions
             </div>
           </div>
@@ -664,7 +662,7 @@
           </button>
           <button
             :disabled="isUploading || isPreviewLoading"
-            class="flex-1 px-4 py-3 bg-indigo-600 dark:bg-indigo-500 text-white rounded-lg font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            class="flex-1 px-4 py-3 bg-emerald-600 dark:bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             @click="submitImport"
           >
             <span v-if="isPreviewLoading">Analyse en cours...</span>

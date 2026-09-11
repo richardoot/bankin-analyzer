@@ -80,16 +80,14 @@
 
           <!-- Catégories -->
           <div
-            class="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-6 text-center"
+            class="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6 text-center"
           >
             <div
-              class="text-4xl font-bold text-indigo-600 dark:text-indigo-400 mb-1"
+              class="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-1"
             >
               {{ categories }}
             </div>
-            <div
-              class="text-sm font-medium text-indigo-800 dark:text-indigo-300"
-            >
+            <div class="text-sm font-medium text-blue-800 dark:text-blue-300">
               Catégories
             </div>
           </div>

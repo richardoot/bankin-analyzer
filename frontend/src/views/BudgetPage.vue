@@ -1038,7 +1038,7 @@
                 ? 'Enregistrez ou annulez les modifications avant de créer un plan'
                 : undefined
             "
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 dark:bg-indigo-500 text-white rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-emerald-600 dark:bg-emerald-500 text-white rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             @click="openCreateModal"
           >
             <svg
@@ -1166,7 +1166,7 @@
           <button
             type="button"
             data-testid="empty-create-button"
-            class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors"
+            class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 dark:bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors"
             @click="openCreateModal"
           >
             Créer un budget

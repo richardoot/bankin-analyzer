@@ -442,7 +442,7 @@
                 <span
                   v-if="tag.budgetAmount !== null"
                   :data-testid="`tag-budget-${tag.name}`"
-                  class="inline-flex items-center rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-2 py-0.5 text-[11px] font-medium text-indigo-700 dark:text-indigo-400 tabular-nums"
+                  class="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 tabular-nums"
                   title="Enveloppe allouée au projet"
                 >
                   {{ formatCurrency(tag.budgetAmount) }}
@@ -473,7 +473,7 @@
               class="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <button
-                class="p-1 text-gray-400 hover:text-indigo-500 rounded"
+                class="p-1 text-gray-400 hover:text-emerald-500 rounded"
                 aria-label="Modifier"
                 @click.stop="startEdit(tag)"
               >

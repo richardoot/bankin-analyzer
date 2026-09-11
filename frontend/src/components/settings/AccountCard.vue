@@ -181,7 +181,7 @@
     if (props.account.type === 'JOINT') {
       list.push({
         label: `Joint ÷${props.account.divisor}`,
-        tone: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+        tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
       })
     } else if (props.account.type === 'INVESTMENT') {
       list.push({
@@ -191,7 +191,7 @@
     } else if (props.account.divisor !== 1) {
       list.push({
         label: `÷${props.account.divisor}`,
-        tone: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+        tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
       })
     }
     if (props.account.isExcludedFromStats) {

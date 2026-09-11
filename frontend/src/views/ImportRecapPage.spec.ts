@@ -226,7 +226,7 @@ describe('ImportRecapPage', () => {
 
     // Check color classes
     expect(wrapper.find('.bg-green-50').exists()).toBe(true) // imported
-    expect(wrapper.find('.bg-indigo-50').exists()).toBe(true) // categories
+    expect(wrapper.find('.bg-blue-50').exists()).toBe(true) // categories
     expect(wrapper.find('.bg-amber-50').exists()).toBe(true) // duplicates
   })
 })

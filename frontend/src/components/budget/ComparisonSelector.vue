@@ -207,7 +207,7 @@
             :class="
               preset === 'none'
                 ? 'bg-gray-300 dark:bg-slate-600'
-                : 'bg-indigo-500'
+                : 'bg-emerald-500'
             "
           />
           <span>{{ currentLabel }}</span>

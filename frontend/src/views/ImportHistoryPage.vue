@@ -370,13 +370,13 @@
             </div>
 
             <!-- Categories Created -->
-            <div class="rounded-lg bg-indigo-50 dark:bg-indigo-900/30 p-3">
+            <div class="rounded-lg bg-emerald-50 dark:bg-emerald-900/30 p-3">
               <p
-                class="text-2xl font-bold text-indigo-700 dark:text-indigo-400"
+                class="text-2xl font-bold text-emerald-700 dark:text-emerald-400"
               >
                 {{ history.categoriesCreated.toLocaleString('fr-FR') }}
               </p>
-              <p class="text-sm text-indigo-600 dark:text-indigo-500">
+              <p class="text-sm text-emerald-600 dark:text-emerald-500">
                 nouvelles categories
               </p>
             </div>

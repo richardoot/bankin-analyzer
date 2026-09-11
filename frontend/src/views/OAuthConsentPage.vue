@@ -85,10 +85,10 @@
       <!-- Header -->
       <div class="px-8 pt-8 pb-4 text-center">
         <div
-          class="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4"
+          class="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-4"
         >
           <svg
-            class="w-8 h-8 text-indigo-600 dark:text-indigo-400"
+            class="w-8 h-8 text-emerald-600 dark:text-emerald-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -109,7 +109,7 @@
       <!-- Loading -->
       <div v-if="isLoading" class="px-8 py-12 text-center">
         <div
-          class="w-8 h-8 border-3 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin mx-auto"
+          class="w-8 h-8 border-3 border-emerald-200 dark:border-emerald-800 border-t-emerald-600 dark:border-t-emerald-400 rounded-full animate-spin mx-auto"
         />
         <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">
           Chargement...
@@ -232,7 +232,7 @@
           </button>
           <button
             :disabled="isSubmitting"
-            class="flex-1 px-4 py-3 text-sm font-medium text-white bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 rounded-xl transition-colors disabled:opacity-50"
+            class="flex-1 px-4 py-3 text-sm font-medium text-white bg-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700 dark:hover:bg-emerald-600 rounded-xl transition-colors disabled:opacity-50"
             @click="approve"
           >
             <span v-if="isSubmitting">Autorisation...</span>

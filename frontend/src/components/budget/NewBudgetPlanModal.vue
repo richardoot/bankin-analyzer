@@ -1377,7 +1377,7 @@
               v-if="step === 1"
               type="button"
               data-testid="next-step-button"
-              class="px-4 py-1.5 text-sm font-medium bg-indigo-600 dark:bg-indigo-500 text-white rounded-md hover:bg-indigo-700 dark:hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              class="px-4 py-1.5 text-sm font-medium bg-emerald-600 dark:bg-emerald-500 text-white rounded-md hover:bg-emerald-700 dark:hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               @click="goToStep2"
             >
               Suivant →
@@ -1386,7 +1386,7 @@
               v-else
               type="button"
               data-testid="create-plan-button"
-              class="px-4 py-1.5 text-sm font-medium bg-indigo-600 dark:bg-indigo-500 text-white rounded-md hover:bg-indigo-700 dark:hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+              class="px-4 py-1.5 text-sm font-medium bg-emerald-600 dark:bg-emerald-500 text-white rounded-md hover:bg-emerald-700 dark:hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
               :disabled="isSubmitting"
               @click="submit"
             >

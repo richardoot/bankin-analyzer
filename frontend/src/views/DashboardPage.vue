@@ -392,7 +392,7 @@
                   v-if="availableExpenseCategories.length > 0"
                   data-testid="expense-category-filter"
                   :value="selectedCategory ?? ''"
-                  class="text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400"
+                  class="text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400 focus:border-emerald-500 dark:focus:border-emerald-400"
                   @change="handleCategoryChange"
                 >
                   <option value="">Toutes les catégories</option>
@@ -566,7 +566,7 @@
                   v-if="availableIncomeCategories.length > 0"
                   data-testid="income-category-filter"
                   :value="selectedIncomeCategory ?? ''"
-                  class="text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400"
+                  class="text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400 focus:border-emerald-500 dark:focus:border-emerald-400"
                   @change="handleIncomeCategoryChange"
                 >
                   <option value="">Toutes les catégories</option>
@@ -642,7 +642,7 @@
           </p>
           <RouterLink
             to="/import"
-            class="mt-4 inline-flex items-center px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-lg font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors"
+            class="mt-4 inline-flex items-center px-4 py-2 bg-emerald-600 dark:bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors"
           >
             Importer des transactions
           </RouterLink>

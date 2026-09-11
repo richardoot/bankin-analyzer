@@ -955,7 +955,7 @@
             type="search"
             data-testid="transactions-search-input"
             placeholder="Rechercher par mot-clé (libellé, note, sous-catégorie)..."
-            class="w-full pl-10 pr-3 py-3 md:py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+            class="w-full pl-10 pr-3 py-3 md:py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400"
           />
         </div>
 
@@ -975,7 +975,7 @@
             <select
               v-model="typeFilter"
               data-testid="transactions-type-filter"
-              class="h-11 md:h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              class="h-11 md:h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400"
             >
               <option value="ALL">Toutes</option>
               <option value="EXPENSE">Dépenses</option>
@@ -992,7 +992,7 @@
             <select
               v-model="selectedCategory"
               data-testid="transactions-category-filter"
-              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400"
             >
               <option :value="null">Toutes</option>
               <option
@@ -1025,7 +1025,7 @@
                   ? undefined
                   : 'Selectionnez d\'abord une catégorie'
               "
-              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/60 dark:disabled:text-gray-500"
+              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/60 dark:disabled:text-gray-500"
             >
               <option :value="null">
                 {{ selectedCategory ? 'Toutes' : 'Choisir une catégorie' }}
@@ -1049,7 +1049,7 @@
             <select
               v-model="selectedAccount"
               data-testid="transactions-account-filter"
-              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400"
             >
               <option :value="null">Tous</option>
               <option
@@ -1071,7 +1071,7 @@
             <select
               v-model="selectedTag"
               data-testid="transactions-tag-filter"
-              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400"
             >
               <option :value="null">Toutes</option>
               <option
@@ -1102,7 +1102,7 @@
                 type="date"
                 aria-label="Date de debut"
                 data-testid="transactions-start-date-filter"
-                class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400"
               />
               <span class="shrink-0 text-gray-400 dark:text-gray-500">→</span>
               <input
@@ -1110,7 +1110,7 @@
                 type="date"
                 aria-label="Date de fin"
                 data-testid="transactions-end-date-filter"
-                class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400"
               />
             </div>
           </div>
@@ -1131,7 +1131,7 @@
                 placeholder="min"
                 aria-label="Montant minimum"
                 data-testid="transactions-amount-min-filter"
-                class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400"
               />
               <span class="shrink-0 text-gray-400 dark:text-gray-500">–</span>
               <input
@@ -1143,7 +1143,7 @@
                 placeholder="max"
                 aria-label="Montant maximum"
                 data-testid="transactions-amount-max-filter"
-                class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400"
               />
             </div>
           </div>
@@ -1235,7 +1235,7 @@
               class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium rounded-lg transition-colors"
               :class="
                 isSelectionMode
-                  ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-300 dark:border-indigo-700'
+                  ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 border border-emerald-300 dark:border-emerald-700'
                   : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600'
               "
               data-testid="toggle-selection-mode"
@@ -1315,16 +1315,16 @@
       >
         <div
           v-if="isSelectionMode"
-          class="hidden md:flex bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 rounded-xl p-4 mb-6 items-center justify-between"
+          class="hidden md:flex bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700 rounded-xl p-4 mb-6 items-center justify-between"
         >
           <div class="flex items-center gap-4">
             <span
-              class="text-sm font-medium text-indigo-700 dark:text-indigo-300"
+              class="text-sm font-medium text-emerald-700 dark:text-emerald-300"
             >
               {{ selectedCount }} transaction(s) sélectionnée(s)
             </span>
             <button
-              class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200"
+              class="text-sm text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-200"
               @click="exitSelectionMode"
             >
               Quitter la selection
@@ -1363,7 +1363,7 @@
             </button>
             <button
               :disabled="isBulkUpdating"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/30 border border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors disabled:opacity-50"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-300 dark:border-emerald-700 rounded-lg hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors disabled:opacity-50"
               @click="openBulkCategoryModal"
             >
               <svg
@@ -1397,17 +1397,17 @@
         >
           <div
             v-if="isSelectionMode"
-            class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-indigo-50 dark:bg-indigo-900/50 border-t border-indigo-200 dark:border-indigo-700 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+            class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-emerald-50 dark:bg-emerald-900/50 border-t border-emerald-200 dark:border-emerald-700 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
           >
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <span
-                  class="text-sm font-medium text-indigo-700 dark:text-indigo-300"
+                  class="text-sm font-medium text-emerald-700 dark:text-emerald-300"
                 >
                   {{ selectedCount }} select.
                 </span>
                 <button
-                  class="text-sm text-indigo-600 dark:text-indigo-400 underline"
+                  class="text-sm text-emerald-600 dark:text-emerald-400 underline"
                   @click="exitSelectionMode"
                 >
                   Annuler
@@ -1445,7 +1445,7 @@
                 </button>
                 <button
                   :disabled="isBulkUpdating"
-                  class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-indigo-700 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/30 border border-indigo-300 dark:border-indigo-700 rounded-lg disabled:opacity-50"
+                  class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-300 dark:border-emerald-700 rounded-lg disabled:opacity-50"
                   title="Changer de catégorie"
                   @click="openBulkCategoryModal"
                 >
@@ -1526,7 +1526,7 @@
                   type="checkbox"
                   :checked="isAllSelected"
                   :indeterminate="isPartiallySelected"
-                  class="h-4 w-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-slate-600 rounded focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
+                  class="h-4 w-4 text-emerald-600 dark:text-emerald-500 border-gray-300 dark:border-slate-600 rounded focus:ring-emerald-500 dark:focus:ring-emerald-400 dark:bg-slate-700"
                   data-testid="select-all"
                   @change="toggleSelectAll"
                 />
@@ -1547,7 +1547,7 @@
                 :key="tx.id"
                 class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                 :class="{
-                  'bg-indigo-50/50 dark:bg-indigo-900/10':
+                  'bg-emerald-50/50 dark:bg-emerald-900/10':
                     isSelectionMode && selectedIds.has(tx.id),
                 }"
               >
@@ -1563,7 +1563,7 @@
                       <input
                         type="checkbox"
                         :checked="selectedIds.has(tx.id)"
-                        class="h-5 w-5 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-slate-600 rounded focus:ring-indigo-500 dark:bg-slate-700"
+                        class="h-5 w-5 text-emerald-600 dark:text-emerald-500 border-gray-300 dark:border-slate-600 rounded focus:ring-emerald-500 dark:bg-slate-700"
                         @change="toggleSelection(tx.id)"
                       />
                     </div>
@@ -1729,7 +1729,7 @@
                       <input
                         v-model="editingNoteValue"
                         type="text"
-                        class="flex-1 px-2.5 py-1.5 text-xs border border-indigo-300 dark:border-indigo-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-indigo-500"
+                        class="flex-1 px-2.5 py-1.5 text-xs border border-emerald-300 dark:border-emerald-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-emerald-500"
                         placeholder="Ajouter une note..."
                         @keyup.enter="saveNote(tx)"
                         @keyup.escape="cancelEditNote"
@@ -1908,7 +1908,7 @@
                     <input
                       type="checkbox"
                       :checked="selectedIds.has(tx.id)"
-                      class="h-4 w-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-slate-600 rounded focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
+                      class="h-4 w-4 text-emerald-600 dark:text-emerald-500 border-gray-300 dark:border-slate-600 rounded focus:ring-emerald-500 dark:focus:ring-emerald-400 dark:bg-slate-700"
                       data-testid="select-row-desktop"
                       @change="toggleSelection(tx.id)"
                     />
@@ -1935,7 +1935,7 @@
                         <input
                           v-model="editingNoteValue"
                           type="text"
-                          class="flex-1 px-2 py-1 text-sm border border-indigo-300 dark:border-indigo-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-indigo-500"
+                          class="flex-1 px-2 py-1 text-sm border border-emerald-300 dark:border-emerald-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-emerald-500"
                           @keyup.enter="saveNote(tx)"
                           @keyup.escape="cancelEditNote"
                         />
@@ -2285,7 +2285,7 @@
                     class="px-3 py-1.5 text-sm rounded-lg transition-colors"
                     :class="
                       page === currentPage
-                        ? 'bg-indigo-600 dark:bg-indigo-500 text-white'
+                        ? 'bg-emerald-600 dark:bg-emerald-500 text-white'
                         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
                     "
                     @click="goToPage(page)"

@@ -285,7 +285,7 @@
                   type="text"
                   aria-label="Rechercher une catégorie"
                   placeholder="Rechercher une catégorie..."
-                  class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow"
+                  class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400 transition-shadow"
                 />
               </div>
 
@@ -310,13 +310,13 @@
                     type="text"
                     :aria-label="`Créer une nouvelle catégorie ${transactionType === 'EXPENSE' ? 'de dépense' : 'de revenu'}`"
                     :placeholder="`Nouvelle catégorie ${transactionType === 'EXPENSE' ? 'de dépense' : 'de revenu'}...`"
-                    class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow"
+                    class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400 transition-shadow"
                     @keyup.enter="createCategory"
                   />
                 </div>
                 <button
                   type="button"
-                  class="px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  class="px-4 py-2 bg-emerald-600 dark:bg-emerald-500 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   :disabled="isCreatingCategory || !newCategoryName.trim()"
                   @click="createCategory"
                 >
@@ -353,7 +353,7 @@
                 class="flex-1 flex flex-col items-center justify-center py-12"
               >
                 <div
-                  class="w-10 h-10 border-3 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin"
+                  class="w-10 h-10 border-3 border-emerald-200 dark:border-emerald-800 border-t-emerald-600 dark:border-t-emerald-400 rounded-full animate-spin"
                 />
                 <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">
                   Chargement...
@@ -387,7 +387,7 @@
                       class="group relative flex items-center gap-2 p-3 rounded-xl text-left transition-all duration-150"
                       :class="
                         selectedCategoryId === null
-                          ? 'bg-indigo-50 dark:bg-indigo-500/10 ring-2 ring-indigo-500 dark:ring-indigo-400'
+                          ? 'bg-emerald-50 dark:bg-emerald-500/10 ring-2 ring-emerald-500 dark:ring-emerald-400'
                           : 'bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700'
                       "
                       @click="selectCategory(null)"
@@ -396,7 +396,7 @@
                         class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center"
                         :class="
                           selectedCategoryId === null
-                            ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400'
+                            ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
                             : 'bg-gray-200 dark:bg-slate-700 text-gray-400 dark:text-gray-500'
                         "
                       >
@@ -418,7 +418,7 @@
                         class="text-sm font-medium truncate"
                         :class="
                           selectedCategoryId === null
-                            ? 'text-indigo-700 dark:text-indigo-300'
+                            ? 'text-emerald-700 dark:text-emerald-300'
                             : 'text-gray-600 dark:text-gray-400'
                         "
                       >
@@ -426,7 +426,7 @@
                       </span>
                       <span
                         v-if="selectedCategoryId === null"
-                        class="absolute top-2 right-2 w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400"
+                        class="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400"
                       />
                     </button>
 
@@ -438,7 +438,7 @@
                       class="group relative flex items-center gap-2 p-3 rounded-xl text-left transition-all duration-150"
                       :class="
                         selectedCategoryId === cat.id
-                          ? 'bg-indigo-50 dark:bg-indigo-500/10 ring-2 ring-indigo-500 dark:ring-indigo-400'
+                          ? 'bg-emerald-50 dark:bg-emerald-500/10 ring-2 ring-emerald-500 dark:ring-emerald-400'
                           : 'bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700'
                       "
                       @click="selectCategory(cat.id)"
@@ -468,7 +468,7 @@
                       </span>
                       <span
                         v-if="selectedCategoryId === cat.id"
-                        class="absolute top-2 right-2 w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400"
+                        class="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400"
                       />
                     </button>
                     <div
@@ -517,7 +517,7 @@
                     class="flex-1 flex justify-center items-center"
                   >
                     <div
-                      class="w-6 h-6 border-2 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin"
+                      class="w-6 h-6 border-2 border-emerald-200 dark:border-emerald-800 border-t-emerald-600 dark:border-t-emerald-400 rounded-full animate-spin"
                     />
                   </div>
                   <div
@@ -530,7 +530,7 @@
                         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150"
                         :class="
                           selectedSubcategoryId === null
-                            ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-1 dark:ring-offset-slate-900'
+                            ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500 dark:ring-emerald-400 ring-offset-1 dark:ring-offset-slate-900'
                             : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700'
                         "
                         @click="selectSubcategory(null)"
@@ -557,7 +557,7 @@
                         class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150"
                         :class="
                           selectedSubcategoryId === sub.id
-                            ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-1 dark:ring-offset-slate-900'
+                            ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500 dark:ring-emerald-400 ring-offset-1 dark:ring-offset-slate-900'
                             : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700'
                         "
                         @click="selectSubcategory(sub.id)"
@@ -587,13 +587,13 @@
                           v-model="newSubcategoryName"
                           type="text"
                           placeholder="Nouvelle sous-catégorie..."
-                          class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow"
+                          class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400 transition-shadow"
                           @keyup.enter="createSubcategory"
                         />
                       </div>
                       <button
                         type="button"
-                        class="px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        class="px-4 py-2 bg-emerald-600 dark:bg-emerald-500 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         :disabled="
                           isCreatingSubcategory || !newSubcategoryName.trim()
                         "
@@ -671,7 +671,7 @@
                   </button>
                   <button
                     type="button"
-                    class="px-5 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
+                    class="px-5 py-2 bg-emerald-600 dark:bg-emerald-500 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
                     :disabled="!hasChanges"
                     @click="confirmSelection"
                   >
