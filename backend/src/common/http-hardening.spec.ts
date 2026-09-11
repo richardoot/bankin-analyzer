@@ -15,9 +15,7 @@ describe('apiDocsEnabled', () => {
   })
 
   it('API_DOCS=1 overrides production, explicitly and nothing else', () => {
-    expect(apiDocsEnabled({ NODE_ENV: 'production', API_DOCS: '1' })).toBe(
-      true
-    )
+    expect(apiDocsEnabled({ NODE_ENV: 'production', API_DOCS: '1' })).toBe(true)
     expect(apiDocsEnabled({ NODE_ENV: 'production', API_DOCS: 'true' })).toBe(
       false
     )

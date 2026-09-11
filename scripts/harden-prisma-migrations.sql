@@ -1,5 +1,11 @@
 -- Close public._prisma_migrations to the API roles.
 --
+-- SUPERSEDED as of 2026-09-11: this now runs as a Prisma migration
+-- (backend/prisma/migrations/20260911120000_harden_public_schema_privileges),
+-- so every environment that migrates is hardened without anyone remembering
+-- this file. Kept for the Supabase SQL editor — it carries the verification
+-- queries at the bottom, which the migration cannot show.
+--
 -- Run in the Supabase SQL editor (it connects as `postgres`, which owns the
 -- table). Safe to run twice.
 --
