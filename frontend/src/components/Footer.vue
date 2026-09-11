@@ -24,31 +24,15 @@
             />
           </svg>
           <span class="text-sm text-gray-600 dark:text-gray-400">
-            &copy; {{ currentYear }} Finance Analyzer. Tous droits reserves.
+            &copy; {{ currentYear }} Finance Analyzer. Tous droits réservés.
           </span>
         </div>
 
-        <!-- Links -->
-        <div class="flex items-center gap-6">
-          <a
-            href="#"
-            class="text-sm text-gray-600 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-500 transition-colors"
-          >
-            Confidentialite
-          </a>
-          <a
-            href="#"
-            class="text-sm text-gray-600 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-500 transition-colors"
-          >
-            Conditions
-          </a>
-          <a
-            href="#"
-            class="text-sm text-gray-600 dark:text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-500 transition-colors"
-          >
-            Contact
-          </a>
-        </div>
+        <!--
+          The three placeholder links (Confidentialité / Conditions / Contact,
+          all href="#") are gone: a dead legal link on a tool that handles bank
+          data reads worse than no link. They come back when the pages exist.
+        -->
       </div>
     </div>
   </footer>

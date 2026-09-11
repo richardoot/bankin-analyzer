@@ -1,5 +1,12 @@
 <script setup lang="ts">
-  // No logic needed for now
+  import { computed } from 'vue'
+  import { useAuthStore } from '@/stores/auth'
+
+  const authStore = useAuthStore()
+
+  // A visitor signs up; a signed-in user goes straight to their data. The
+  // same button doing nothing for both is what this replaces.
+  const isAuthenticated = computed(() => authStore.isAuthenticated)
 </script>
 
 <template>
@@ -32,7 +39,7 @@
           <span
             class="block bg-gradient-to-r from-emerald-500 to-emerald-600 dark:from-emerald-400 dark:to-emerald-500 bg-clip-text text-transparent"
           >
-            en toute simplicite
+            en toute simplicité
           </span>
         </h1>
 
@@ -40,17 +47,18 @@
         <p
           class="mx-auto mt-6 max-w-2xl text-lg text-gray-600 dark:text-gray-400 sm:text-xl"
         >
-          Importez vos exports CSV Bankin et visualisez instantanement vos
-          depenses, revenus et remboursements. Aucune connexion bancaire
-          requise.
+          Importez vos exports CSV Bankin ou synchronisez vos comptes
+          bancaires, puis suivez vos dépenses, vos revenus, votre budget et vos
+          remboursements partagés.
         </p>
 
         <!-- CTA Buttons -->
         <div
           class="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row"
         >
-          <button
-            type="button"
+          <RouterLink
+            :to="isAuthenticated ? '/dashboard' : '/login?signup=true'"
+            data-testid="hero-primary-cta"
             class="flex items-center gap-2 rounded-lg bg-emerald-500 dark:bg-emerald-600 px-6 py-3 text-base font-medium text-white shadow-lg shadow-emerald-500/30 dark:shadow-emerald-600/20 hover:bg-emerald-600 dark:hover:bg-emerald-500 transition-all hover:shadow-emerald-500/40 dark:hover:shadow-emerald-500/30"
           >
             <svg
@@ -66,10 +74,13 @@
                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
               />
             </svg>
-            Commencer gratuitement
-          </button>
-          <button
-            type="button"
+            {{
+              isAuthenticated ? 'Accéder au dashboard' : 'Commencer gratuitement'
+            }}
+          </RouterLink>
+          <a
+            href="#fonctionnalites"
+            data-testid="hero-secondary-cta"
             class="flex items-center gap-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-6 py-3 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
           >
             <svg
@@ -86,7 +97,7 @@
               />
             </svg>
             En savoir plus
-          </button>
+          </a>
         </div>
 
         <!-- Stats -->
@@ -95,10 +106,10 @@
             <p
               class="text-3xl font-bold text-emerald-500 dark:text-emerald-400"
             >
-              100%
+              2
             </p>
             <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Donnees locales
+              Sources : CSV ou synchro bancaire
             </p>
           </div>
           <div>
@@ -118,7 +129,7 @@
               30s
             </p>
             <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Pour demarrer
+              Pour un premier import
             </p>
           </div>
         </div>
