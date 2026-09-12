@@ -43,10 +43,15 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Connexion bancaire' },
   },
   {
+    path: '/accounts',
+    name: 'accounts',
+    component: () => import('@/views/AccountsPage.vue'),
+    meta: { title: 'Comptes', requiresAuth: true },
+  },
+  // « Données » a été absorbée par la page Comptes ; les liens survivent.
+  {
     path: '/data',
-    name: 'data',
-    component: () => import('@/views/DataPage.vue'),
-    meta: { title: 'Données', requiresAuth: true },
+    redirect: '/accounts',
   },
   {
     path: '/import',

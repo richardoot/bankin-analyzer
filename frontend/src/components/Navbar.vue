@@ -19,10 +19,9 @@
   // Navigation principale (réduite - les autres liens sont dans le dropdown profil)
   const navLinks = [
     { to: '/dashboard', label: 'Dashboard', testId: 'nav-dashboard-link' },
-    // « Données » couvre les deux modes d'alimentation (import CSV, synchro
-    // bancaire) et leurs historiques — l'import n'est plus une entrée
-    // permanente à lui seul.
-    { to: '/data', label: 'Données', testId: 'nav-data-link' },
+    // « Comptes » : consulter ses comptes et synchroniser — couvre aussi
+    // l'import CSV et les historiques, qui alimentent ces mêmes comptes.
+    { to: '/accounts', label: 'Comptes', testId: 'nav-accounts-link' },
     {
       to: '/transactions',
       label: 'Transactions',
@@ -45,10 +44,10 @@
   ]
 
   const isActiveRoute = (path: string): boolean => {
-    // Données couvre aussi ses pages profondes : import et historiques.
-    if (path === '/data') {
+    // Comptes couvre aussi ses pages profondes : import et historiques.
+    if (path === '/accounts') {
       return (
-        route.path.startsWith('/data') ||
+        route.path.startsWith('/accounts') ||
         route.path.startsWith('/import') ||
         route.path.startsWith('/bank-sync')
       )
