@@ -12,12 +12,11 @@
   import { formatCurrency } from '@/lib/formatters'
   import BudgetSavingsSummary from '@/components/budget/BudgetSavingsSummary.vue'
   import MonthlyExpensesChart from '@/components/budget/MonthlyExpensesChart.vue'
-  import SparklineChart from '@/components/budget/SparklineChart.vue'
-  import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import NewBudgetPlanModal from '@/components/budget/NewBudgetPlanModal.vue'
   import BudgetPlansHistoryModal from '@/components/budget/BudgetPlansHistoryModal.vue'
   import BudgetPlanHeader from '@/components/budget/BudgetPlanHeader.vue'
   import BudgetProjectsSection from '@/components/budget/BudgetProjectsSection.vue'
+  import BudgetCategoryRow from '@/components/budget/BudgetCategoryRow.vue'
   import { planStatus } from '@/components/budget/planStatus'
   import BudgetMonthlyMatrix from '@/components/budget/BudgetMonthlyMatrix.vue'
   import type {
@@ -1383,367 +1382,34 @@
 
           <!-- Category rows -->
           <div v-else class="divide-y divide-gray-100 dark:divide-slate-700">
-            <div
+            <BudgetCategoryRow
               v-for="cat in sortedCategories"
               :key="cat.categoryId"
-              :data-testid="`budget-row-${cat.categoryName}`"
-            >
-              <!-- Row -->
-              <div
-                class="grid grid-cols-2 sm:[grid-template-columns:var(--row-grid)] sm:gap-x-6 gap-x-4 gap-y-2 sm:gap-y-0 items-center py-4 px-4 hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors"
-                :style="{ '--row-grid': rowGridTemplate }"
-              >
-                <!-- Name + chevron + status badge -->
-                <button
-                  type="button"
-                  class="col-span-2 sm:col-span-1 flex items-center gap-2 min-w-0 text-left"
-                  :aria-expanded="isCategoryExpanded(cat.categoryId)"
-                  @click="toggleCategoryExpanded(cat.categoryId)"
-                >
-                  <svg
-                    class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
-                    :class="{
-                      'rotate-90': isCategoryExpanded(cat.categoryId),
-                    }"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                  <span v-if="cat.categoryIcon" class="text-lg shrink-0">
-                    {{ cat.categoryIcon }}
-                  </span>
-                  <span
-                    class="font-medium text-gray-900 dark:text-gray-100 truncate"
-                  >
-                    {{ cat.categoryName }}
-                  </span>
-                  <!-- Status badge: over budget ⚠ or budget covers history ✓ -->
-                  <span
-                    v-if="getRowStatus(cat) === 'over'"
-                    class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
-                    title="Dépassement par rapport au budget"
-                  >
-                    ⚠ Dépassé
-                  </span>
-                  <span
-                    v-else-if="getRowStatus(cat) === 'covered'"
-                    class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400"
-                    title="Le budget couvre la moyenne historique"
-                  >
-                    ✓ Couvert
-                  </span>
-                </button>
-
-                <!-- Historique (conditional) -->
-                <div
-                  v-if="showHistoricalColumn"
-                  class="sm:text-right text-sm tabular-nums leading-tight"
-                >
-                  <span class="sm:hidden text-xs text-gray-400 mr-1">
-                    Historique :
-                  </span>
-                  <button
-                    v-if="isEditing && getHistoricalAverage(cat) > 0"
-                    type="button"
-                    class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline decoration-dotted underline-offset-2"
-                    :title="`Moyenne sur ${comparisonRange?.label} — cliquer pour appliquer comme budget`"
-                    @click="
-                      setBudgetValue(cat.categoryId, getHistoricalAverage(cat))
-                    "
-                  >
-                    {{ formatCurrency(getHistoricalAverage(cat)) }}
-                  </button>
-                  <span
-                    v-else-if="getHistoricalAverage(cat) > 0"
-                    class="text-indigo-600 dark:text-indigo-400 font-medium"
-                  >
-                    {{ formatCurrency(getHistoricalAverage(cat)) }}
-                  </span>
-                  <span v-else class="text-gray-500 dark:text-gray-400">—</span>
-                </div>
-
-                <!-- Budget: read as text, edited only in edit mode -->
-                <div class="sm:text-right">
-                  <div v-if="isEditing" class="relative inline-block">
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      :value="
-                        getBudgetForCategory(cat.categoryId) > 0
-                          ? getBudgetForCategory(cat.categoryId)
-                          : ''
-                      "
-                      placeholder="—"
-                      :data-testid="`budget-input-${cat.categoryName}`"
-                      class="w-24 sm:w-28 pl-2 pr-7 py-1.5 text-sm text-right bg-white dark:bg-slate-900 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900 dark:text-gray-100 tabular-nums font-medium"
-                      :class="
-                        isCategoryDirty(cat.categoryId)
-                          ? 'border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20'
-                          : 'border-primary-300 dark:border-primary-800'
-                      "
-                      @input="
-                        updateBudgetInput(
-                          cat.categoryId,
-                          ($event.target as HTMLInputElement).value
-                        )
-                      "
-                    />
-                    <span
-                      class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-primary-500/70 dark:text-primary-400/70 pointer-events-none"
-                    >
-                      €
-                    </span>
-                    <!-- What this envelope was before the draft touched it. -->
-                    <span
-                      v-if="isCategoryDirty(cat.categoryId)"
-                      :data-testid="`budget-was-${cat.categoryName}`"
-                      class="block text-[10px] text-gray-500 dark:text-gray-400 line-through tabular-nums text-right"
-                    >
-                      {{ formatCurrency(getSavedBudget(cat.categoryId)) }}
-                    </span>
-                  </div>
-                  <div v-else class="text-sm tabular-nums leading-tight">
-                    <span class="sm:hidden text-xs text-gray-400 mr-1">
-                      Budget :
-                    </span>
-                    <span
-                      v-if="getBudgetForCategory(cat.categoryId) > 0"
-                      :data-testid="`budget-value-${cat.categoryName}`"
-                      class="font-semibold text-primary-700 dark:text-primary-400"
-                    >
-                      {{ formatCurrency(getBudgetForCategory(cat.categoryId)) }}
-                    </span>
-                    <span v-else class="text-gray-500 dark:text-gray-400">
-                      —
-                    </span>
-                    <!-- On a month still running, the envelope's fair share to
-                         date — so a half-finished month is judged on pace. -->
-                    <span
-                      v-if="getProratedBudget(cat.categoryId) !== null"
-                      :data-testid="`budget-prorata-${cat.categoryName}`"
-                      class="block text-[10px] text-gray-500 dark:text-gray-400 tabular-nums"
-                      title="Part du budget correspondant aux jours écoulés"
-                    >
-                      {{
-                        formatCurrency(getProratedBudget(cat.categoryId) ?? 0)
-                      }}
-                      à ce jour
-                    </span>
-                  </div>
-                </div>
-
-                <!-- Réel à date (conditional) -->
-                <div
-                  v-if="showActualColumn"
-                  class="sm:text-right text-sm tabular-nums leading-tight"
-                >
-                  <span class="sm:hidden text-xs text-gray-400 mr-1">
-                    Réel :
-                  </span>
-                  <button
-                    v-if="isEditing && getPlanActualAverage(cat) > 0"
-                    type="button"
-                    class="text-red-600 dark:text-red-400 font-medium hover:underline decoration-dotted underline-offset-2"
-                    :title="`Réel sur ${actualPeriodLabel} — cliquer pour appliquer comme budget`"
-                    @click="
-                      setBudgetValue(cat.categoryId, getPlanActualAverage(cat))
-                    "
-                  >
-                    {{ formatCurrency(getPlanActualAverage(cat)) }}
-                  </button>
-                  <span
-                    v-else-if="getPlanActualAverage(cat) > 0"
-                    class="text-red-600 dark:text-red-400 font-medium"
-                  >
-                    {{ formatCurrency(getPlanActualAverage(cat)) }}
-                  </span>
-                  <span v-else class="text-gray-500 dark:text-gray-400">—</span>
-                  <span
-                    v-if="getExceptionalAverage(cat) > 0.005"
-                    :data-testid="`budget-exceptional-${cat.categoryName}`"
-                    class="block text-[10px] text-amber-600 dark:text-amber-500"
-                    :title="
-                      breakdownMode === 'everyday'
-                        ? 'Part portée par un événement, exclue de ce réel'
-                        : 'Part portée par un événement, incluse dans ce réel'
-                    "
-                  >
-                    {{ breakdownMode === 'everyday' ? 'hors' : 'dont' }}
-                    {{ formatCurrency(getExceptionalAverage(cat)) }}
-                  </span>
-                </div>
-
-                <!-- Sparkline -->
-                <div class="hidden sm:flex justify-end items-center w-24">
-                  <SparklineChart
-                    v-if="(comparison.seriesFor(cat)?.length ?? 0) >= 2"
-                    :data="comparison.seriesFor(cat) ?? []"
-                    color="#ef4444"
-                  />
-                </div>
-              </div>
-
-              <!-- Drill-down panel -->
-              <div
-                v-if="isCategoryExpanded(cat.categoryId)"
-                class="bg-gray-50 dark:bg-slate-800/40 px-4 py-5 border-t border-gray-100 dark:border-slate-700 space-y-5"
-              >
-                <!-- Margin / remaining quick summary -->
-                <div
-                  v-if="
-                    getBudgetForCategory(cat.categoryId) > 0 &&
-                    (showHistoricalColumn || showActualColumn)
-                  "
-                  class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm"
-                  :data-testid="`budget-row-detail-${cat.categoryName}`"
-                >
-                  <div
-                    v-if="showHistoricalColumn"
-                    class="rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-3"
-                  >
-                    <div
-                      class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
-                    >
-                      Marge vs historique
-                    </div>
-                    <div
-                      class="text-lg font-bold tabular-nums"
-                      :class="
-                        getMarginVsHistorical(cat) > 0
-                          ? 'text-primary-600 dark:text-primary-400'
-                          : getMarginVsHistorical(cat) < 0
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-gray-500'
-                      "
-                    >
-                      {{ getMarginVsHistorical(cat) > 0 ? '+' : ''
-                      }}{{ formatCurrency(getMarginVsHistorical(cat)) }}
-                    </div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      <template v-if="getMarginVsHistorical(cat) > 0">
-                        Budget plus généreux que la moyenne passée
-                      </template>
-                      <template v-else-if="getMarginVsHistorical(cat) < 0">
-                        Budget plus serré que la moyenne passée
-                      </template>
-                      <template v-else>
-                        Budget aligné sur la moyenne passée
-                      </template>
-                    </p>
-                  </div>
-                  <div
-                    v-if="showActualColumn"
-                    class="rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-3"
-                  >
-                    <div
-                      class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
-                    >
-                      Reste à dépenser
-                    </div>
-                    <div
-                      class="text-lg font-bold tabular-nums"
-                      :class="
-                        getRemainingVsActual(cat) > 0
-                          ? 'text-primary-600 dark:text-primary-400'
-                          : getRemainingVsActual(cat) < 0
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-gray-500'
-                      "
-                    >
-                      {{ getRemainingVsActual(cat) > 0 ? '+' : ''
-                      }}{{ formatCurrency(getRemainingVsActual(cat)) }}
-                    </div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      <template v-if="getRemainingVsActual(cat) > 0">
-                        Marge disponible vs la moyenne réelle
-                      </template>
-                      <template v-else-if="getRemainingVsActual(cat) < 0">
-                        Dépassement par rapport au budget
-                      </template>
-                      <template v-else>Budget pile consommé</template>
-                    </p>
-                  </div>
-                </div>
-
-                <!-- Subcategories -->
-                <div v-if="cat.subcategories && cat.subcategories.length > 0">
-                  <h3
-                    class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-                  >
-                    Sous-catégories
-                  </h3>
-                  <div class="space-y-1">
-                    <div
-                      v-for="sub in cat.subcategories"
-                      :key="sub.subcategory || '(sans sous-catégorie)'"
-                      class="flex items-center gap-3 px-3 py-1.5 rounded text-sm bg-white dark:bg-slate-900"
-                    >
-                      <span
-                        class="flex-1 truncate text-gray-700 dark:text-gray-300"
-                      >
-                        {{ sub.subcategory || '(sans sous-catégorie)' }}
-                      </span>
-                      <span
-                        class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0"
-                      >
-                        {{ sub.transactionCount }} tx
-                      </span>
-                      <span
-                        class="font-medium text-gray-900 dark:text-gray-100 tabular-nums shrink-0"
-                      >
-                        {{ formatCurrency(sub.totalAmount) }}
-                      </span>
-                      <span
-                        class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0 hidden sm:inline"
-                      >
-                        {{ formatCurrency(sub.averagePerMonth) }}/mois
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Monthly evolution chart -->
-                <div v-if="(cat.monthlyAmounts?.length ?? 0) >= 2">
-                  <h3
-                    class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-                  >
-                    Évolution mensuelle
-                  </h3>
-                  <MonthlyBarChart
-                    :data="categoryChartData(cat)"
-                    :title="cat.categoryName"
-                    color="#ef4444"
-                  />
-                </div>
-
-                <!-- Reimbursement info -->
-                <div
-                  v-if="cat.reimbursement || cat.pendingReimbursement"
-                  class="mt-3 flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400"
-                >
-                  <span v-if="cat.reimbursement">
-                    Remboursements reçus déduits :
-                    <strong class="text-gray-700 dark:text-gray-300">
-                      {{ formatCurrency(cat.reimbursement) }}
-                    </strong>
-                  </span>
-                  <span v-if="cat.pendingReimbursement">
-                    En attente déduits :
-                    <strong class="text-gray-700 dark:text-gray-300">
-                      {{ formatCurrency(cat.pendingReimbursement) }}
-                    </strong>
-                  </span>
-                </div>
-              </div>
-            </div>
+              :category="cat"
+              :row-grid="rowGridTemplate"
+              :expanded="isCategoryExpanded(cat.categoryId)"
+              :editing="isEditing"
+              :show-historical="showHistoricalColumn"
+              :show-actual="showActualColumn"
+              :historical-average="getHistoricalAverage(cat)"
+              :actual-average="getPlanActualAverage(cat)"
+              :exceptional-average="getExceptionalAverage(cat)"
+              :budget="getBudgetForCategory(cat.categoryId)"
+              :saved-budget="getSavedBudget(cat.categoryId)"
+              :dirty="isCategoryDirty(cat.categoryId)"
+              :prorated-budget="getProratedBudget(cat.categoryId)"
+              :row-status="getRowStatus(cat)"
+              :margin-vs-historical="getMarginVsHistorical(cat)"
+              :remaining-vs-actual="getRemainingVsActual(cat)"
+              :sparkline="comparison.seriesFor(cat) ?? []"
+              :chart-data="categoryChartData(cat)"
+              :comparison-label="comparisonRange?.label"
+              :actual-period-label="actualPeriodLabel"
+              :breakdown-mode="breakdownMode"
+              @toggle-expand="toggleCategoryExpanded(cat.categoryId)"
+              @update-budget="value => updateBudgetInput(cat.categoryId, value)"
+              @apply-budget="amount => setBudgetValue(cat.categoryId, amount)"
+            />
           </div>
         </div>
 
