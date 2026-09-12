@@ -974,7 +974,7 @@
                     class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
                     :class="
                       deductReimbursements
-                        ? 'bg-emerald-500'
+                        ? 'bg-primary-500'
                         : 'bg-gray-300 dark:bg-slate-600'
                     "
                   >
@@ -1008,7 +1008,7 @@
                     class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
                     :class="
                       deductPendingReimbursements
-                        ? 'bg-emerald-500'
+                        ? 'bg-primary-500'
                         : 'bg-gray-300 dark:bg-slate-600'
                     "
                   >
@@ -1130,7 +1130,7 @@
                     class="text-sm tabular-nums"
                     :class="
                       projectedSavings > 0
-                        ? 'text-emerald-600 dark:text-emerald-400'
+                        ? 'text-primary-600 dark:text-primary-400'
                         : projectedSavings < 0
                           ? 'text-red-600 dark:text-red-400'
                           : 'text-gray-500 dark:text-gray-400'
@@ -1222,7 +1222,7 @@
                   :class="
                     reserveGap < 0
                       ? 'text-red-700 dark:text-red-400'
-                      : 'text-emerald-700 dark:text-emerald-400'
+                      : 'text-primary-700 dark:text-primary-400'
                   "
                 >
                   <template v-if="reserveGap < 0">
@@ -1279,7 +1279,7 @@
                   <span
                     v-if="cat.reimbursement && cat.reimbursement > 0"
                     :data-testid="`preview-reimbursement-${cat.categoryName}`"
-                    class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                    class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400"
                     :title="`Remboursements reçus déduits : ${formatCurrency(cat.reimbursement)}`"
                   >
                     −{{ formatCurrency(cat.reimbursement) }} reçus
@@ -1377,7 +1377,7 @@
               v-if="step === 1"
               type="button"
               data-testid="next-step-button"
-              class="px-4 py-1.5 text-sm font-medium bg-emerald-600 dark:bg-emerald-500 text-white rounded-md hover:bg-emerald-700 dark:hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              class="px-4 py-1.5 text-sm font-medium bg-primary-600 dark:bg-primary-500 text-white rounded-md hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               @click="goToStep2"
             >
               Suivant →
@@ -1386,7 +1386,7 @@
               v-else
               type="button"
               data-testid="create-plan-button"
-              class="px-4 py-1.5 text-sm font-medium bg-emerald-600 dark:bg-emerald-500 text-white rounded-md hover:bg-emerald-700 dark:hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+              class="px-4 py-1.5 text-sm font-medium bg-primary-600 dark:bg-primary-500 text-white rounded-md hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
               :disabled="isSubmitting"
               @click="submit"
             >

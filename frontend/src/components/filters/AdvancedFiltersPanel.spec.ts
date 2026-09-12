@@ -153,7 +153,7 @@ describe('AdvancedFiltersPanel', () => {
     })
 
     // Badge shows count + plural suffix (e.g. "2 actifs")
-    const badge = wrapper.find('.bg-emerald-100.text-emerald-700')
+    const badge = wrapper.find('.bg-primary-100.text-primary-700')
     expect(badge.exists()).toBe(true)
     expect(badge.text()).toBe('2 actifs')
   })

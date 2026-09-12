@@ -62,7 +62,7 @@
   function statusClass(s: Status): string {
     switch (s) {
       case 'current':
-        return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+        return 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
       case 'future':
         return 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400'
       case 'past':

@@ -221,7 +221,7 @@
       return {
         label: 'En cours',
         class:
-          'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
+          'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400',
       }
     if (s === 'future')
       return {
@@ -1038,7 +1038,7 @@
                 ? 'Enregistrez ou annulez les modifications avant de créer un plan'
                 : undefined
             "
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-emerald-600 dark:bg-emerald-500 text-white rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary-600 dark:bg-primary-500 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             @click="openCreateModal"
           >
             <svg
@@ -1088,7 +1088,7 @@
           </template>
           <template v-else>
             <svg
-              class="h-4 w-4 text-emerald-600 dark:text-emerald-400"
+              class="h-4 w-4 text-primary-600 dark:text-primary-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -1100,7 +1100,7 @@
                 d="M5 13l4 4L19 7"
               />
             </svg>
-            <span class="text-emerald-600 dark:text-emerald-400">
+            <span class="text-primary-600 dark:text-primary-400">
               Sauvegardé
             </span>
           </template>
@@ -1166,7 +1166,7 @@
           <button
             type="button"
             data-testid="empty-create-button"
-            class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 dark:bg-emerald-500 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors"
+            class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 dark:bg-primary-500 text-white text-sm font-medium rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
             @click="openCreateModal"
           >
             Créer un budget
@@ -1217,7 +1217,7 @@
                   class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
                   :class="
                     deductReimbursements
-                      ? 'bg-emerald-500'
+                      ? 'bg-primary-500'
                       : 'bg-gray-300 dark:bg-slate-600'
                   "
                 >
@@ -1245,7 +1245,7 @@
                   class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
                   :class="
                     deductPendingReimbursements
-                      ? 'bg-emerald-500'
+                      ? 'bg-primary-500'
                       : 'bg-gray-300 dark:bg-slate-600'
                   "
                 >
@@ -1334,7 +1334,7 @@
                 v-if="!isEditing"
                 type="button"
                 data-testid="budget-edit-button"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
                 @click="enterEditMode"
               >
                 <svg
@@ -1645,7 +1645,7 @@
                 {{ comparisonRange?.label }}
               </span>
             </span>
-            <span class="text-right text-emerald-700 dark:text-emerald-400">
+            <span class="text-right text-primary-700 dark:text-primary-400">
               Budget
               <span
                 class="block text-[10px] font-normal normal-case tracking-normal text-gray-400 dark:text-gray-500"
@@ -1728,7 +1728,7 @@
                   </span>
                   <span
                     v-else-if="getRowStatus(cat) === 'covered'"
-                    class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                    class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400"
                     title="Le budget couvre la moyenne historique"
                   >
                     ✓ Couvert
@@ -1777,11 +1777,11 @@
                       "
                       placeholder="—"
                       :data-testid="`budget-input-${cat.categoryName}`"
-                      class="w-24 sm:w-28 pl-2 pr-7 py-1.5 text-sm text-right bg-white dark:bg-slate-900 border rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900 dark:text-gray-100 tabular-nums font-medium"
+                      class="w-24 sm:w-28 pl-2 pr-7 py-1.5 text-sm text-right bg-white dark:bg-slate-900 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900 dark:text-gray-100 tabular-nums font-medium"
                       :class="
                         isCategoryDirty(cat.categoryId)
                           ? 'border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20'
-                          : 'border-emerald-300 dark:border-emerald-800'
+                          : 'border-primary-300 dark:border-primary-800'
                       "
                       @input="
                         updateBudgetInput(
@@ -1791,7 +1791,7 @@
                       "
                     />
                     <span
-                      class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-emerald-500/70 dark:text-emerald-400/70 pointer-events-none"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-primary-500/70 dark:text-primary-400/70 pointer-events-none"
                     >
                       €
                     </span>
@@ -1811,7 +1811,7 @@
                     <span
                       v-if="getBudgetForCategory(cat.categoryId) > 0"
                       :data-testid="`budget-value-${cat.categoryName}`"
-                      class="font-semibold text-emerald-700 dark:text-emerald-400"
+                      class="font-semibold text-primary-700 dark:text-primary-400"
                     >
                       {{ formatCurrency(getBudgetForCategory(cat.categoryId)) }}
                     </span>
@@ -1912,7 +1912,7 @@
                       class="text-lg font-bold tabular-nums"
                       :class="
                         getMarginVsHistorical(cat) > 0
-                          ? 'text-emerald-600 dark:text-emerald-400'
+                          ? 'text-primary-600 dark:text-primary-400'
                           : getMarginVsHistorical(cat) < 0
                             ? 'text-red-600 dark:text-red-400'
                             : 'text-gray-500'
@@ -1946,7 +1946,7 @@
                       class="text-lg font-bold tabular-nums"
                       :class="
                         getRemainingVsActual(cat) > 0
-                          ? 'text-emerald-600 dark:text-emerald-400'
+                          ? 'text-primary-600 dark:text-primary-400'
                           : getRemainingVsActual(cat) < 0
                             ? 'text-red-600 dark:text-red-400'
                             : 'text-gray-500'
@@ -2074,7 +2074,7 @@
                   :class="
                     draftDelta > 0
                       ? 'text-red-600 dark:text-red-400'
-                      : 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-primary-600 dark:text-primary-400'
                   "
                 >
                   ({{ draftDelta > 0 ? '+' : ''
@@ -2098,7 +2098,7 @@
               type="button"
               data-testid="budget-save-button"
               :disabled="isSaving || !hasUnsavedChanges"
-              class="px-4 py-1.5 text-sm font-medium bg-emerald-600 dark:bg-emerald-500 text-white rounded-lg hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              class="px-4 py-1.5 text-sm font-medium bg-primary-600 dark:bg-primary-500 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               @click="saveBudget"
             >
               {{ isSaving ? 'Enregistrement…' : 'Enregistrer' }}

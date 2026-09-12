@@ -50,8 +50,8 @@
               :to="tab.to"
               :data-testid="tab.testId"
               class="block whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-              active-class="bg-emerald-600 text-white dark:bg-emerald-600"
-              exact-active-class="bg-emerald-600 text-white dark:bg-emerald-600"
+              active-class="bg-primary-600 text-white dark:bg-primary-600"
+              exact-active-class="bg-primary-600 text-white dark:bg-primary-600"
               :class="
                 $route.path.startsWith(tab.to)
                   ? ''

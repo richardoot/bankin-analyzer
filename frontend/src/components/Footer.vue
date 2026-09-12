@@ -11,7 +11,7 @@
         <!-- Logo and copyright -->
         <div class="flex items-center gap-2">
           <svg
-            class="h-6 w-6 text-emerald-500"
+            class="h-6 w-6 text-primary-500"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"

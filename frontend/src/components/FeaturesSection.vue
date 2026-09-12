@@ -98,7 +98,7 @@
         >
           <!-- Step number -->
           <div
-            class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-2xl font-bold text-emerald-600 dark:text-emerald-400"
+            class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30 text-2xl font-bold text-primary-600 dark:text-primary-400"
           >
             {{ step.number }}
           </div>
@@ -156,7 +156,7 @@
                 'bg-blue-100 dark:bg-blue-900/30': feature.color === 'blue',
                 'bg-purple-100 dark:bg-purple-900/30':
                   feature.color === 'purple',
-                'bg-emerald-100 dark:bg-emerald-900/30':
+                'bg-primary-100 dark:bg-primary-900/30':
                   feature.color === 'emerald',
                 'bg-amber-100 dark:bg-amber-900/30': feature.color === 'amber',
               }"
@@ -194,7 +194,7 @@
               <!-- Target icon (budget) -->
               <svg
                 v-if="feature.icon === 'target'"
-                class="h-6 w-6 text-emerald-600 dark:text-emerald-400"
+                class="h-6 w-6 text-primary-600 dark:text-primary-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"

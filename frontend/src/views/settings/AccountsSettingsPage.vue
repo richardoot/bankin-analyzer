@@ -416,7 +416,7 @@
               type="button"
               data-testid="connect-button"
               :disabled="!chosenBank || connecting"
-              class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-slate-700"
+              class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-slate-700"
               @click="connect"
             >
               {{ connecting ? 'Redirection…' : 'Connecter' }}
@@ -473,7 +473,7 @@
                     :disabled="
                       connection.action !== 'fetch' || syncing === connection.id
                     "
-                    class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-slate-700"
+                    class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-slate-700"
                     @click="synchronise(connection)"
                   >
                     {{

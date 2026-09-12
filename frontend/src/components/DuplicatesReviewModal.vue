@@ -327,7 +327,7 @@
                     type="checkbox"
                     :checked="allInternalSelected"
                     :indeterminate="someInternalSelected"
-                    class="h-4 w-4 text-emerald-600 dark:text-emerald-500 rounded border-gray-300 dark:border-slate-600 focus:ring-emerald-500 dark:focus:ring-emerald-400 dark:bg-slate-700"
+                    class="h-4 w-4 text-primary-600 dark:text-primary-500 rounded border-gray-300 dark:border-slate-600 focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
                     @change="toggleAllInternalDuplicates"
                   />
                   <span class="text-sm text-gray-600 dark:text-gray-400"
@@ -364,7 +364,7 @@
                     <input
                       type="checkbox"
                       :checked="selectedInternalIndices.has(tx.index)"
-                      class="h-4 w-4 text-emerald-600 dark:text-emerald-500 rounded border-gray-300 dark:border-slate-600 focus:ring-emerald-500 dark:focus:ring-emerald-400 dark:bg-slate-700"
+                      class="h-4 w-4 text-primary-600 dark:text-primary-500 rounded border-gray-300 dark:border-slate-600 focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
                       @change="toggleInternalIndex(tx.index)"
                     />
                     <div class="flex-1 min-w-0">
@@ -426,7 +426,7 @@
                     type="checkbox"
                     :checked="allExternalSelected"
                     :indeterminate="someExternalSelected"
-                    class="h-4 w-4 text-emerald-600 dark:text-emerald-500 rounded border-gray-300 dark:border-slate-600 focus:ring-emerald-500 dark:focus:ring-emerald-400 dark:bg-slate-700"
+                    class="h-4 w-4 text-primary-600 dark:text-primary-500 rounded border-gray-300 dark:border-slate-600 focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
                     @change="toggleAllExternalDuplicates"
                   />
                   <span class="text-sm text-gray-600 dark:text-gray-400"
@@ -554,7 +554,7 @@
                     <input
                       type="checkbox"
                       :checked="selectedExternalIndices.has(dup.uploaded.index)"
-                      class="h-4 w-4 text-emerald-600 dark:text-emerald-500 rounded border-gray-300 dark:border-slate-600 focus:ring-emerald-500 dark:focus:ring-emerald-400 dark:bg-slate-700"
+                      class="h-4 w-4 text-primary-600 dark:text-primary-500 rounded border-gray-300 dark:border-slate-600 focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
                       @change="toggleExternalIndex(dup.uploaded.index)"
                     />
                     <span class="text-sm text-gray-700 dark:text-gray-300"
@@ -591,7 +591,7 @@
               </button>
               <button
                 type="button"
-                class="px-4 py-2 bg-emerald-600 dark:bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-4 py-2 bg-primary-600 dark:bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="loading || totalToImport === 0"
                 @click="handleConfirm"
               >

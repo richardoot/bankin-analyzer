@@ -94,7 +94,7 @@
         </span>
         <span
           v-if="filtersStore.activeFiltersCount > 0"
-          class="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-medium rounded-full tabular-nums"
+          class="px-2 py-0.5 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 text-xs font-medium rounded-full tabular-nums"
         >
           {{ filtersStore.activeFiltersCount }} actif{{
             filtersStore.activeFiltersCount > 1 ? 's' : ''
@@ -112,7 +112,7 @@
               ? 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-wait'
               : saveSuccess
                 ? 'bg-green-500 text-white'
-                : 'bg-emerald-600 dark:bg-emerald-500 text-white hover:bg-emerald-700 dark:hover:bg-emerald-600'
+                : 'bg-primary-600 dark:bg-primary-500 text-white hover:bg-primary-700 dark:hover:bg-primary-600'
           "
           :disabled="filtersStore.isSyncing"
           @click="handleSave"

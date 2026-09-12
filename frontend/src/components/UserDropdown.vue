@@ -81,7 +81,7 @@
     >
       <!-- Avatar with initial -->
       <div
-        class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-sm font-medium text-white"
+        class="flex h-8 w-8 items-center justify-center rounded-full bg-primary-600 text-sm font-medium text-white"
       >
         {{ userInitial }}
       </div>

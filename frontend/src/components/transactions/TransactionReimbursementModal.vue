@@ -237,7 +237,7 @@
                   />
                   <button
                     type="button"
-                    class="px-2 py-1 text-xs font-medium rounded border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30"
+                    class="px-2 py-1 text-xs font-medium rounded border border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/30"
                     @click="applyCustomDivisor"
                   >
                     Appliquer

@@ -110,10 +110,10 @@
             <!-- Person info -->
             <div class="flex items-center gap-3 mb-6">
               <div
-                class="h-12 w-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center"
+                class="h-12 w-12 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center"
               >
                 <span
-                  class="text-xl font-semibold text-emerald-700 dark:text-emerald-400"
+                  class="text-xl font-semibold text-primary-700 dark:text-primary-400"
                 >
                   {{ settlement.personName.charAt(0).toUpperCase() }}
                 </span>
@@ -130,10 +130,10 @@
 
             <!-- Income transaction -->
             <div
-              class="mb-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg"
+              class="mb-6 p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg"
             >
               <h4
-                class="text-sm font-medium text-emerald-700 dark:text-emerald-400 mb-2 flex items-center gap-2"
+                class="text-sm font-medium text-primary-700 dark:text-primary-400 mb-2 flex items-center gap-2"
               >
                 <svg
                   class="h-4 w-4"
@@ -157,12 +157,12 @@
                 {{ formatDate(settlement.incomeTransactionDate) }}
               </div>
               <div
-                class="flex justify-between items-center mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-800"
+                class="flex justify-between items-center mt-2 pt-2 border-t border-primary-200 dark:border-primary-800"
               >
                 <span class="text-sm text-gray-600 dark:text-gray-400"
                   >Montant total</span
                 >
-                <span class="font-bold text-emerald-600 dark:text-emerald-400">
+                <span class="font-bold text-primary-600 dark:text-primary-400">
                   +{{ formatCurrency(settlement.incomeTransactionAmount) }}
                 </span>
               </div>
@@ -250,7 +250,7 @@
                   >Total regle</span
                 >
                 <span
-                  class="text-lg font-bold text-emerald-600 dark:text-emerald-400"
+                  class="text-lg font-bold text-primary-600 dark:text-primary-400"
                 >
                   {{ formatCurrency(totalSettled) }}
                 </span>

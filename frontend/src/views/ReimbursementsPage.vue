@@ -436,7 +436,7 @@
         </div>
         <RouterLink
           to="/transactions"
-          class="inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors min-h-[44px] sm:min-h-0 w-full sm:w-auto"
+          class="inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors min-h-[44px] sm:min-h-0 w-full sm:w-auto"
         >
           <svg
             class="h-4 w-4"
@@ -770,7 +770,7 @@
                     <!-- Status badge -->
                     <span
                       v-if="cat.status === 'COMPLETED'"
-                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 shrink-0"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 shrink-0"
                     >
                       Regle
                     </span>
@@ -827,14 +827,14 @@
                           {{ formatCurrency(r.amountRemaining) }}
                           <span
                             v-if="r.amountReceived > 0"
-                            class="text-emerald-600 dark:text-emerald-400 ml-1"
+                            class="text-primary-600 dark:text-primary-400 ml-1"
                           >
                             (recu: {{ formatCurrency(r.amountReceived) }})
                           </span>
                         </span>
                         <button
                           type="button"
-                          class="px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                          class="px-2 py-1 text-xs font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
                           :title="`Regler uniquement ${r.transaction?.description || 'cette transaction'}`"
                           @click="openSettlementModalForReimbursement(r)"
                         >
@@ -854,7 +854,7 @@
             >
               <button
                 type="button"
-                class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
                 @click="openSettlementModal(person.personId, person.personName)"
               >
                 <svg

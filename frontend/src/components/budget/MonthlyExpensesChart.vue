@@ -330,7 +330,7 @@
         Plan budgétaire
       </span>
       <span v-if="hasComparisonRange" class="flex items-center gap-1.5">
-        <span class="inline-block w-3 h-2 rounded-sm bg-emerald-500"></span>
+        <span class="inline-block w-3 h-2 rounded-sm bg-primary-500"></span>
         Comparaison
       </span>
       <span class="flex items-center gap-1.5">
@@ -351,7 +351,7 @@
         Mois en cours
       </span>
       <span v-if="averageIncome > 0" class="flex items-center gap-1.5">
-        <span class="inline-block w-3 h-0.5 bg-emerald-400"></span>
+        <span class="inline-block w-3 h-0.5 bg-primary-400"></span>
         Revenus
       </span>
       <span v-if="totalBudget > 0" class="flex items-center gap-1.5">

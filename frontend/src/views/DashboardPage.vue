@@ -214,7 +214,7 @@
                 class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
                 :class="
                   deductReimbursements
-                    ? 'bg-emerald-500'
+                    ? 'bg-primary-500'
                     : 'bg-gray-300 dark:bg-slate-600'
                 "
               >
@@ -243,7 +243,7 @@
                 class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
                 :class="
                   deductPendingReimbursements
-                    ? 'bg-emerald-500'
+                    ? 'bg-primary-500'
                     : 'bg-gray-300 dark:bg-slate-600'
                 "
               >
@@ -392,7 +392,7 @@
                   v-if="availableExpenseCategories.length > 0"
                   data-testid="expense-category-filter"
                   :value="selectedCategory ?? ''"
-                  class="text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400 focus:border-emerald-500 dark:focus:border-emerald-400"
+                  class="text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
                   @change="handleCategoryChange"
                 >
                   <option value="">Toutes les catégories</option>
@@ -566,7 +566,7 @@
                   v-if="availableIncomeCategories.length > 0"
                   data-testid="income-category-filter"
                   :value="selectedIncomeCategory ?? ''"
-                  class="text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400 focus:border-emerald-500 dark:focus:border-emerald-400"
+                  class="text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
                   @change="handleIncomeCategoryChange"
                 >
                   <option value="">Toutes les catégories</option>
@@ -642,7 +642,7 @@
           </p>
           <RouterLink
             to="/import"
-            class="mt-4 inline-flex items-center px-4 py-2 bg-emerald-600 dark:bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors"
+            class="mt-4 inline-flex items-center px-4 py-2 bg-primary-600 dark:bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
           >
             Importer des transactions
           </RouterLink>

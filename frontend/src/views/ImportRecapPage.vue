@@ -155,7 +155,7 @@
             Nouvel import
           </button>
           <button
-            class="flex-1 px-4 py-3 bg-emerald-600 dark:bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors"
+            class="flex-1 px-4 py-3 bg-primary-600 dark:bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
             @click="goToDashboard"
           >
             Voir le dashboard

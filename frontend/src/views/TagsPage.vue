@@ -191,7 +191,7 @@
             v-model="newName"
             type="text"
             placeholder="Nom de l'étiquette (ex : Vacances Italie)"
-            class="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500"
+            class="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
             @keyup.enter="createTag"
           />
           <div class="flex items-center gap-1.5">
@@ -212,7 +212,7 @@
           </div>
           <button
             type="button"
-            class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
             :disabled="!newName.trim() || creating"
             @click="createTag"
           >
@@ -228,7 +228,7 @@
             <input
               v-model="newIsExceptional"
               type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               data-testid="new-tag-exceptional"
             />
             Dépense exceptionnelle
@@ -311,7 +311,7 @@
         <div
           v-for="tag in tagsStore.tags"
           :key="tag.id"
-          class="group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4 dark:shadow-slate-900/20 border border-transparent hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors"
+          class="group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4 dark:shadow-slate-900/20 border border-transparent hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
         >
           <!-- Edit mode -->
           <div v-if="editingId === tag.id" class="space-y-2">
@@ -343,7 +343,7 @@
               <input
                 v-model="editIsExceptional"
                 type="checkbox"
-                class="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
               />
               Dépense exceptionnelle
             </label>
@@ -394,7 +394,7 @@
                 Annuler
               </button>
               <button
-                class="px-2 py-1 text-xs font-medium text-white bg-emerald-600 rounded hover:bg-emerald-700"
+                class="px-2 py-1 text-xs font-medium text-white bg-primary-600 rounded hover:bg-primary-700"
                 @click="saveEdit(tag.id)"
               >
                 Enregistrer
@@ -442,14 +442,14 @@
                 <span
                   v-if="tag.budgetAmount !== null"
                   :data-testid="`tag-budget-${tag.name}`"
-                  class="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 tabular-nums"
+                  class="inline-flex items-center rounded-full bg-primary-100 dark:bg-primary-900/40 px-2 py-0.5 text-[11px] font-medium text-primary-700 dark:text-primary-400 tabular-nums"
                   title="Enveloppe allouée au projet"
                 >
                   {{ formatCurrency(tag.budgetAmount) }}
                 </span>
               </div>
               <span
-                class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400"
+                class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-600 dark:text-primary-400"
               >
                 Analyser
                 <svg
@@ -473,7 +473,7 @@
               class="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <button
-                class="p-1 text-gray-400 hover:text-emerald-500 rounded"
+                class="p-1 text-gray-400 hover:text-primary-500 rounded"
                 aria-label="Modifier"
                 @click.stop="startEdit(tag)"
               >

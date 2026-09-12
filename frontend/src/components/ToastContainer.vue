@@ -16,7 +16,7 @@
         :class="[
           'flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg min-w-72 max-w-sm text-sm font-medium',
           toast.type === 'success' &&
-            'bg-emerald-50 dark:bg-emerald-900/80 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-700',
+            'bg-primary-50 dark:bg-primary-900/80 text-primary-800 dark:text-primary-200 border border-primary-200 dark:border-primary-700',
           toast.type === 'error' &&
             'bg-red-50 dark:bg-red-900/80 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-700',
           toast.type === 'info' &&

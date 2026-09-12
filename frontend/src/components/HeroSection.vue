@@ -18,7 +18,7 @@
         <!-- Badge -->
         <div class="mb-6">
           <span
-            class="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-900/30 px-4 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400"
+            class="inline-flex items-center rounded-full bg-primary-50 dark:bg-primary-900/30 px-4 py-1.5 text-sm font-medium text-primary-700 dark:text-primary-400"
           >
             <svg class="mr-1.5 h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
               <path
@@ -37,7 +37,7 @@
         >
           <span class="block">Analysez vos finances</span>
           <span
-            class="block bg-gradient-to-r from-emerald-500 to-emerald-600 dark:from-emerald-400 dark:to-emerald-500 bg-clip-text text-transparent"
+            class="block bg-gradient-to-r from-primary-500 to-primary-600 dark:from-primary-400 dark:to-primary-500 bg-clip-text text-transparent"
           >
             en toute simplicité
           </span>
@@ -59,7 +59,7 @@
           <RouterLink
             :to="isAuthenticated ? '/dashboard' : '/login?signup=true'"
             data-testid="hero-primary-cta"
-            class="flex items-center gap-2 rounded-lg bg-emerald-500 dark:bg-emerald-600 px-6 py-3 text-base font-medium text-white shadow-lg shadow-emerald-500/30 dark:shadow-emerald-600/20 hover:bg-emerald-600 dark:hover:bg-emerald-500 transition-all hover:shadow-emerald-500/40 dark:hover:shadow-emerald-500/30"
+            class="flex items-center gap-2 rounded-lg bg-primary-500 dark:bg-primary-600 px-6 py-3 text-base font-medium text-white shadow-lg shadow-primary-500/30 dark:shadow-primary-600/20 hover:bg-primary-600 dark:hover:bg-primary-500 transition-all hover:shadow-primary-500/40 dark:hover:shadow-primary-500/30"
           >
             <svg
               class="h-5 w-5"
@@ -106,7 +106,7 @@
         <div class="mt-16 grid grid-cols-2 gap-8 sm:grid-cols-3">
           <div>
             <p
-              class="text-3xl font-bold text-emerald-500 dark:text-emerald-400"
+              class="text-3xl font-bold text-primary-500 dark:text-primary-400"
             >
               2
             </p>
@@ -116,7 +116,7 @@
           </div>
           <div>
             <p
-              class="text-3xl font-bold text-emerald-500 dark:text-emerald-400"
+              class="text-3xl font-bold text-primary-500 dark:text-primary-400"
             >
               0 €
             </p>
@@ -126,7 +126,7 @@
           </div>
           <div class="col-span-2 sm:col-span-1">
             <p
-              class="text-3xl font-bold text-emerald-500 dark:text-emerald-400"
+              class="text-3xl font-bold text-primary-500 dark:text-primary-400"
             >
               30s
             </p>

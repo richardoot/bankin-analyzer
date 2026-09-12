@@ -181,7 +181,7 @@
     if (props.account.type === 'JOINT') {
       list.push({
         label: `Joint ÷${props.account.divisor}`,
-        tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+        tone: 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
       })
     } else if (props.account.type === 'INVESTMENT') {
       list.push({
@@ -191,7 +191,7 @@
     } else if (props.account.divisor !== 1) {
       list.push({
         label: `÷${props.account.divisor}`,
-        tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+        tone: 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
       })
     }
     if (props.account.isExcludedFromStats) {
@@ -287,14 +287,14 @@
             :value="draft()"
             :disabled="renameSaving"
             maxlength="100"
-            class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+            class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
             @input="onDraftChange(($event.target as HTMLInputElement).value)"
           />
           <div class="flex gap-2">
             <button
               type="submit"
               :disabled="!isDraftDirty() || renameSaving"
-              class="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              class="rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {{ renameSaving ? 'Enregistrement…' : 'Renommer' }}
             </button>
@@ -345,7 +345,7 @@
             class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
             :class="
               account.type === option.value
-                ? 'bg-emerald-600 text-white'
+                ? 'bg-primary-600 text-white'
                 : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
             "
             @click="setType(option.value)"
@@ -371,7 +371,7 @@
             max="10"
             :value="account.divisor"
             :disabled="saving"
-            class="w-20 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+            class="w-20 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
             @change="setDivisor(($event.target as HTMLInputElement).value)"
           />
           <p class="text-xs text-gray-500 dark:text-gray-400">

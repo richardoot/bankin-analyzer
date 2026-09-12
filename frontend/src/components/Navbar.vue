@@ -79,7 +79,7 @@
             @click="closeMobileMenu"
           >
             <svg
-              class="h-8 w-8 text-emerald-600 dark:text-emerald-500"
+              class="h-8 w-8 text-primary-600 dark:text-primary-500"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -107,7 +107,7 @@
               class="rounded-md px-3 py-2 text-sm font-medium transition-colors"
               :class="
                 isActiveRoute(link.to)
-                  ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                  ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
               "
             >
@@ -171,7 +171,7 @@
             <RouterLink
               to="/login?signup=true"
               data-testid="nav-sign-up-link"
-              class="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+              class="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
             >
               S'inscrire
             </RouterLink>
@@ -285,7 +285,7 @@
               class="block rounded-md px-3 py-2 text-base font-medium transition-colors"
               :class="
                 isActiveRoute(link.to)
-                  ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                  ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
               "
               @click="closeMobileMenu"
@@ -311,7 +311,7 @@
                 class="block rounded-md px-3 py-2 text-base font-medium transition-colors"
                 :class="
                   isActiveRoute(link.to)
-                    ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
                 "
                 @click="closeMobileMenu"
@@ -341,7 +341,7 @@
           </RouterLink>
           <RouterLink
             to="/login?signup=true"
-            class="mt-2 block rounded-md bg-emerald-600 px-3 py-2 text-center text-base font-medium text-white transition-colors hover:bg-emerald-700"
+            class="mt-2 block rounded-md bg-primary-600 px-3 py-2 text-center text-base font-medium text-white transition-colors hover:bg-primary-700"
             @click="closeMobileMenu"
           >
             S'inscrire

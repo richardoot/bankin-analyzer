@@ -58,8 +58,8 @@
     switch (status) {
       case 'COMPLETED':
         return {
-          bg: 'bg-emerald-100',
-          text: 'text-emerald-600',
+          bg: 'bg-primary-100',
+          text: 'text-primary-600',
           icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
         }
       case 'IN_PROGRESS':
@@ -158,7 +158,7 @@
       >
         <div class="text-center">
           <div
-            class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-emerald-200 dark:border-emerald-800 border-t-emerald-600 dark:border-t-emerald-500"
+            class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-500"
           ></div>
           <p class="mt-4 text-gray-600 dark:text-gray-400">
             Chargement de l'historique...
@@ -219,7 +219,7 @@
         </p>
         <RouterLink
           to="/import"
-          class="mt-6 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-white transition-colors hover:bg-emerald-700"
+          class="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-white transition-colors hover:bg-primary-700"
         >
           <svg
             class="h-5 w-5"
@@ -338,13 +338,13 @@
           <!-- Stats Grid -->
           <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <!-- Transactions Imported -->
-            <div class="rounded-lg bg-emerald-50 dark:bg-emerald-900/30 p-3">
+            <div class="rounded-lg bg-primary-50 dark:bg-primary-900/30 p-3">
               <p
-                class="text-2xl font-bold text-emerald-700 dark:text-emerald-400"
+                class="text-2xl font-bold text-primary-700 dark:text-primary-400"
               >
                 {{ history.transactionsImported.toLocaleString('fr-FR') }}
               </p>
-              <p class="text-sm text-emerald-600 dark:text-emerald-500">
+              <p class="text-sm text-primary-600 dark:text-primary-500">
                 transactions importées
               </p>
             </div>
@@ -370,13 +370,13 @@
             </div>
 
             <!-- Categories Created -->
-            <div class="rounded-lg bg-emerald-50 dark:bg-emerald-900/30 p-3">
+            <div class="rounded-lg bg-primary-50 dark:bg-primary-900/30 p-3">
               <p
-                class="text-2xl font-bold text-emerald-700 dark:text-emerald-400"
+                class="text-2xl font-bold text-primary-700 dark:text-primary-400"
               >
                 {{ history.categoriesCreated.toLocaleString('fr-FR') }}
               </p>
-              <p class="text-sm text-emerald-600 dark:text-emerald-500">
+              <p class="text-sm text-primary-600 dark:text-primary-500">
                 nouvelles categories
               </p>
             </div>
@@ -443,7 +443,7 @@
       <div v-if="hasHistories" class="mt-8 text-center">
         <RouterLink
           to="/import"
-          class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-white transition-colors hover:bg-emerald-700"
+          class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-white transition-colors hover:bg-primary-700"
         >
           <svg
             class="h-5 w-5"

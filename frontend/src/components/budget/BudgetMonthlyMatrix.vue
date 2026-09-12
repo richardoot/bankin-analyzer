@@ -65,7 +65,7 @@
   const CELL_TONE: Record<'over' | 'under' | 'none', string> = {
     over: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 font-semibold',
     under:
-      'bg-emerald-50/60 dark:bg-emerald-900/15 text-emerald-700 dark:text-emerald-400',
+      'bg-primary-50/60 dark:bg-primary-900/15 text-primary-700 dark:text-primary-400',
     none: 'text-gray-600 dark:text-gray-400',
   }
 
@@ -111,7 +111,7 @@
               Catégorie
             </th>
             <th
-              class="text-right text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400 pb-2 px-3 whitespace-nowrap"
+              class="text-right text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-400 pb-2 px-3 whitespace-nowrap"
             >
               Budget
             </th>
@@ -157,7 +157,7 @@
               </span>
             </td>
             <td
-              class="py-1.5 px-3 text-right tabular-nums whitespace-nowrap text-emerald-700 dark:text-emerald-400"
+              class="py-1.5 px-3 text-right tabular-nums whitespace-nowrap text-primary-700 dark:text-primary-400"
             >
               <span v-if="row.budget > 0">
                 {{ formatCurrency(row.budget) }}
@@ -184,7 +184,7 @@
               Total
             </td>
             <td
-              class="py-2 px-3 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400 whitespace-nowrap"
+              class="py-2 px-3 text-right tabular-nums font-semibold text-primary-700 dark:text-primary-400 whitespace-nowrap"
             >
               {{ formatCurrency(budgetTotal) }}
             </td>

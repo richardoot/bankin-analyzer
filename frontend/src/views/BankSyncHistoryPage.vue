@@ -76,8 +76,8 @@
           icon: 'M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3',
         }
       : {
-          bg: 'bg-emerald-100',
-          text: 'text-emerald-600',
+          bg: 'bg-primary-100',
+          text: 'text-primary-600',
           icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
         }
 
@@ -142,7 +142,7 @@
       >
         <div class="text-center">
           <div
-            class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-emerald-200 dark:border-emerald-800 border-t-emerald-600 dark:border-t-emerald-500"
+            class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-500"
           ></div>
           <p class="mt-4 text-gray-600 dark:text-gray-400">
             Chargement de l'historique...
@@ -204,7 +204,7 @@
         </p>
         <RouterLink
           to="/settings/accounts"
-          class="mt-6 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-white transition-colors hover:bg-emerald-700"
+          class="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-white transition-colors hover:bg-primary-700"
         >
           <svg
             class="h-5 w-5"
@@ -336,13 +336,13 @@
           <!-- Stats Grid -->
           <div class="grid grid-cols-2 gap-4">
             <!-- Inserted -->
-            <div class="rounded-lg bg-emerald-50 dark:bg-emerald-900/30 p-3">
+            <div class="rounded-lg bg-primary-50 dark:bg-primary-900/30 p-3">
               <p
-                class="text-2xl font-bold text-emerald-700 dark:text-emerald-400"
+                class="text-2xl font-bold text-primary-700 dark:text-primary-400"
               >
                 {{ run.inserted.toLocaleString('fr-FR') }}
               </p>
-              <p class="text-sm text-emerald-600 dark:text-emerald-500">
+              <p class="text-sm text-primary-600 dark:text-primary-500">
                 nouvelles transactions
               </p>
             </div>
@@ -364,7 +364,7 @@
       <div v-if="hasRuns" class="mt-8 text-center">
         <RouterLink
           to="/settings/accounts"
-          class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-white transition-colors hover:bg-emerald-700"
+          class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-white transition-colors hover:bg-primary-700"
         >
           <svg
             class="h-5 w-5"

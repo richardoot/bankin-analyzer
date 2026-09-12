@@ -91,7 +91,7 @@
   })
 
   function colorClass(value: number): string {
-    if (value > 0) return 'text-emerald-600 dark:text-emerald-400'
+    if (value > 0) return 'text-primary-600 dark:text-primary-400'
     if (value < 0) return 'text-red-600 dark:text-red-400'
     return 'text-gray-500 dark:text-gray-400'
   }
@@ -138,7 +138,7 @@
             Budget alloué
           </span>
           <span
-            class="text-lg font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums"
+            class="text-lg font-semibold text-primary-600 dark:text-primary-400 tabular-nums"
           >
             {{ formatCurrency(planBudgetTotal) }}
           </span>
@@ -246,7 +246,7 @@
             Budget alloué
           </span>
           <span
-            class="text-lg font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums"
+            class="text-lg font-semibold text-primary-600 dark:text-primary-400 tabular-nums"
           >
             {{ formatCurrency(planBudgetTotal) }}
           </span>

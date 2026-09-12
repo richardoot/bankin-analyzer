@@ -284,7 +284,7 @@
               class="flex-1 px-4 py-2.5 text-sm font-medium text-white rounded-lg"
               :class="
                 targetId && !isLoading
-                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  ? 'bg-primary-600 hover:bg-primary-700'
                   : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
               "
               @click="loadPreview"
@@ -418,7 +418,7 @@
 
           <div
             data-testid="migrate-summary"
-            class="text-sm bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3 py-2 mb-3"
+            class="text-sm bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg px-3 py-2 mb-3"
             aria-live="polite"
           >
             <p class="text-gray-900 dark:text-gray-100">
@@ -466,7 +466,7 @@
               class="flex-1 px-4 py-2.5 text-sm font-medium text-white rounded-lg"
               :class="
                 !isMigrating && summary.moved > 0
-                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  ? 'bg-primary-600 hover:bg-primary-700'
                   : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
               "
               @click="confirm"
