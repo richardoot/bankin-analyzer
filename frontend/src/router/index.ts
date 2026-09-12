@@ -135,6 +135,17 @@ const routes: RouteRecordRaw[] = [
   },
 ]
 
+// The design reference documents the system; it ships to developers, not
+// to the product. Dev builds only.
+if (import.meta.env.DEV) {
+  routes.push({
+    path: '/design',
+    name: 'design',
+    component: () => import('@/views/DesignReferencePage.vue'),
+    meta: { title: 'Référence design' },
+  })
+}
+
 const router = createRouter({
   history: createWebHistory(),
   routes,
