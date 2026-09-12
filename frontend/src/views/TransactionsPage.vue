@@ -392,11 +392,35 @@
     }
   }
 
+  // Sort + page size, both shareable via the URL.
+  const querySort = firstParam(route.query.sort)
+  const sortBy = ref<'date' | 'amount'>(
+    querySort === 'amount' ? 'amount' : 'date'
+  )
+  const sortOrder = ref<'asc' | 'desc'>(
+    firstParam(route.query.dir) === 'asc' ? 'asc' : 'desc'
+  )
+
+  /** Toggle on the active column, switch column otherwise (desc first). */
+  function toggleSort(column: 'date' | 'amount'): void {
+    if (sortBy.value === column) {
+      sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
+    } else {
+      sortBy.value = column
+      sortOrder.value = 'desc'
+    }
+  }
+
+  const PAGE_SIZES = [20, 50, 100] as const
+  const querySize = Number(firstParam(route.query.size))
+  const pageSize = ref<number>(
+    (PAGE_SIZES as readonly number[]).includes(querySize) ? querySize : 20
+  )
+
   // Pagination
   const currentPage = ref(
     Math.max(1, parseInt(firstParam(route.query.page) ?? '1', 10) || 1)
   )
-  const pageSize = 20
 
   // Inline editing state
   const editingNoteId = ref<string | null>(null)
@@ -896,6 +920,9 @@
     if (filterEndDate.value) query.to = filterEndDate.value
     if (amountMin.value !== '') query.min = amountMin.value
     if (amountMax.value !== '') query.max = amountMax.value
+    if (sortBy.value !== 'date') query.sort = sortBy.value
+    if (sortOrder.value !== 'desc') query.dir = sortOrder.value
+    if (pageSize.value !== 20) query.size = String(pageSize.value)
     if (currentPage.value > 1) query.page = String(currentPage.value)
     void router.replace({ query })
   }
@@ -944,6 +971,9 @@
       needsBankReview,
       filterStartDate,
       filterEndDate,
+      sortBy,
+      sortOrder,
+      pageSize,
     ],
     applyFilterChange
   )
@@ -971,7 +1001,9 @@
 
       const response = await api.getTransactions({
         page: currentPage.value,
-        limit: pageSize,
+        limit: pageSize.value,
+        sortBy: sortBy.value,
+        sortOrder: sortOrder.value,
         ...currentFilters.value,
       })
       transactions.value = response.data
@@ -1761,10 +1793,36 @@
                   @change="toggleSelectAll"
                 />
               </div>
-              <div class="col-span-1">Date</div>
+              <div class="col-span-1">
+                <button
+                  type="button"
+                  data-testid="sort-by-date"
+                  class="inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                  :aria-label="`Trier par date, ${sortBy === 'date' && sortOrder === 'desc' ? 'croissant' : 'décroissant'}`"
+                  @click="toggleSort('date')"
+                >
+                  Date
+                  <span v-if="sortBy === 'date'" aria-hidden="true">{{
+                    sortOrder === 'desc' ? '↓' : '↑'
+                  }}</span>
+                </button>
+              </div>
               <div class="col-span-3">Description</div>
               <div class="col-span-2">Note</div>
-              <div class="col-span-1 text-right">Montant</div>
+              <div class="col-span-1 text-right">
+                <button
+                  type="button"
+                  data-testid="sort-by-amount"
+                  class="inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                  :aria-label="`Trier par montant, ${sortBy === 'amount' && sortOrder === 'desc' ? 'croissant' : 'décroissant'}`"
+                  @click="toggleSort('amount')"
+                >
+                  Montant
+                  <span v-if="sortBy === 'amount'" aria-hidden="true">{{
+                    sortOrder === 'desc' ? '↓' : '↑'
+                  }}</span>
+                </button>
+              </div>
               <div class="col-span-2">Catégorie</div>
               <div class="col-span-1 text-center">Pointé</div>
               <div class="col-span-1 text-center">Actions</div>
@@ -2471,8 +2529,26 @@
               v-if="totalPages > 1"
               class="flex items-center justify-between px-4 py-4 border-t dark:border-slate-700"
             >
-              <div class="text-sm text-gray-500 dark:text-gray-400">
-                Page {{ currentPage }} sur {{ totalPages }}
+              <div
+                class="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400"
+              >
+                <span>Page {{ currentPage }} sur {{ totalPages }}</span>
+                <label class="inline-flex items-center gap-1.5">
+                  <span class="sr-only">Transactions par page</span>
+                  <select
+                    v-model.number="pageSize"
+                    data-testid="page-size-select"
+                    class="h-8 rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 focus:ring-2 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300"
+                  >
+                    <option
+                      v-for="size in PAGE_SIZES"
+                      :key="size"
+                      :value="size"
+                    >
+                      {{ size }} / page
+                    </option>
+                  </select>
+                </label>
               </div>
 
               <div class="flex items-center gap-1">

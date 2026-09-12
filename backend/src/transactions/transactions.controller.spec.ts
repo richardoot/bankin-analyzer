@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { BadRequestException } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
 import { TransactionsController } from './transactions.controller'
@@ -449,7 +450,8 @@ describe('TransactionsController', () => {
       ).toHaveBeenCalledWith(
         mockUser.id,
         { page: 1, limit: 20 },
-        expect.objectContaining({ type: TransactionType.EXPENSE })
+        expect.objectContaining({ type: TransactionType.EXPENSE }),
+        undefined
       )
     })
 
@@ -475,7 +477,8 @@ describe('TransactionsController', () => {
       ).toHaveBeenCalledWith(
         mockUser.id,
         { page: 1, limit: 20 },
-        expect.objectContaining({ categoryId: 'cat-1', subcategoryId: 'sub-1' })
+        expect.objectContaining({ categoryId: 'cat-1', subcategoryId: 'sub-1' }),
+        undefined
       )
     })
 
@@ -498,7 +501,12 @@ describe('TransactionsController', () => {
 
       expect(
         mockTransactionsService.findAllByUserPaginated
-      ).toHaveBeenCalledWith(mockUser.id, { page: 1, limit: 20 }, undefined)
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 20 },
+        undefined,
+        undefined
+      )
     })
 
     it('should filter by date range', async () => {
@@ -524,7 +532,8 @@ describe('TransactionsController', () => {
         expect.objectContaining({
           startDate: expect.any(Date),
           endDate: expect.any(Date),
-        })
+        }),
+        undefined
       )
     })
 
@@ -582,7 +591,8 @@ describe('TransactionsController', () => {
           search: 'uber',
           amountMin: 100,
           amountMax: 500,
-        })
+        }),
+        undefined
       )
     })
 
@@ -611,7 +621,12 @@ describe('TransactionsController', () => {
 
       expect(
         mockTransactionsService.findAllByUserPaginated
-      ).toHaveBeenCalledWith(mockUser.id, { page: 1, limit: 20 }, undefined)
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 20 },
+        undefined,
+        undefined
+      )
     })
 
     it('should return empty data when no transactions', async () => {
@@ -637,7 +652,12 @@ describe('TransactionsController', () => {
 
       expect(
         mockTransactionsService.findAllByUserPaginated
-      ).toHaveBeenCalledWith(mockUser.id, { page: 2, limit: 10 }, undefined)
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 2, limit: 10 },
+        undefined,
+        undefined
+      )
       expect(result.meta.page).toBe(2)
       expect(result.meta.limit).toBe(10)
       expect(result.meta.totalPages).toBe(5)
@@ -655,7 +675,70 @@ describe('TransactionsController', () => {
 
       expect(
         mockTransactionsService.findAllByUserPaginated
-      ).toHaveBeenCalledWith(mockUser.id, { page: 1, limit: 100 }, undefined)
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 100 },
+        undefined,
+        undefined
+      )
+    })
+
+    it('passes the sort through, defaulting the order to desc', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
+
+      await controller.findAll(
+        mockUser,
+        1,
+        20,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'amount'
+      )
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 20 },
+        undefined,
+        { by: 'amount', order: 'desc' }
+      )
+    })
+
+    it('rejects a sort column outside the allowlist', async () => {
+      await expect(
+        controller.findAll(
+          mockUser,
+          1,
+          20,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          'userId'
+        )
+      ).rejects.toThrow(BadRequestException)
     })
   })
 

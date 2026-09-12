@@ -267,6 +267,8 @@ export interface TransactionQueryParams {
    * side of a swap.
    */
   needsBankReview?: boolean | undefined
+  sortBy?: 'date' | 'amount' | undefined
+  sortOrder?: 'asc' | 'desc' | undefined
 }
 
 /** Hidden categories are addressed by Category id, never by name. */
@@ -1481,6 +1483,8 @@ export const api = {
       searchParams.set('amountMax', params.amountMax.toString())
     if (params?.needsBankReview !== undefined)
       searchParams.set('needsBankReview', params.needsBankReview.toString())
+    if (params?.sortBy) searchParams.set('sortBy', params.sortBy)
+    if (params?.sortOrder) searchParams.set('sortOrder', params.sortOrder)
 
     const queryString = searchParams.toString()
     const url = queryString
