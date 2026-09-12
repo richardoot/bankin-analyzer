@@ -8,6 +8,7 @@
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import CategoryBreakdownList from '@/components/dashboard/CategoryBreakdownList.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
+  import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import { useDashboardData } from '@/composables/useDashboardData'
   import { formatCurrency } from '@/lib/formatters'
 
@@ -152,25 +153,15 @@
         {{ error }}
       </div>
 
-      <!-- Initial loading state (only shown when no data yet) -->
-      <div v-if="showFullLoader" class="flex justify-center items-center py-20">
-        <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
-          <svg class="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
-            />
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-          <span>Chargement des données...</span>
+      <!-- Initial load: the page's own shape, not a spinner. -->
+      <div v-if="showFullLoader" class="space-y-6" aria-busy="true">
+        <SkeletonBlock class="h-24 rounded-xl" />
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+          <SkeletonBlock v-for="n in 3" :key="n" class="h-28 rounded-xl" />
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <SkeletonBlock class="h-80 rounded-xl" />
+          <SkeletonBlock class="h-80 rounded-xl" />
         </div>
       </div>
 

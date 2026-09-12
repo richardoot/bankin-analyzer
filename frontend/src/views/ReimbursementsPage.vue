@@ -8,6 +8,7 @@
   import { usePdfExport } from '@/composables/usePdfExport'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+  import EmptyState from '@/components/ui/EmptyState.vue'
   import SettlementModal from '@/components/settlements/SettlementModal.vue'
   import SingleSettlementModal from '@/components/settlements/SingleSettlementModal.vue'
   import SettlementHistorySection from '@/components/settlements/SettlementHistorySection.vue'
@@ -872,51 +873,36 @@
       <!-- Empty state for reimbursements -->
       <div
         v-else-if="!isLoadingReimbursements && reimbursements.length === 0"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-8 mt-8 text-center"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 mt-8"
       >
-        <div
-          class="h-16 w-16 bg-amber-50 dark:bg-amber-900/20 rounded-full flex items-center justify-center mx-auto mb-4"
+        <EmptyState
+          title="Aucun remboursement en cours"
+          description="Assignez des remboursements aux transactions depuis la page Transactions."
         >
-          <svg
-            class="h-8 w-8 text-amber-600 dark:text-amber-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-            />
-          </svg>
-        </div>
-        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-          Aucun remboursement en cours
-        </h3>
-        <p class="text-gray-500 dark:text-gray-400 mb-4">
-          Assignez des remboursements aux transactions depuis la page
-          Transactions.
-        </p>
-        <RouterLink
-          to="/transactions"
-          class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-amber-600 dark:bg-amber-500 hover:bg-amber-700 dark:hover:bg-amber-600 rounded-lg transition-colors"
-        >
-          <svg
-            class="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          Aller aux transactions
-        </RouterLink>
+          <template #icon>
+            <svg
+              class="h-8 w-8"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
+            </svg>
+          </template>
+          <template #action>
+            <RouterLink
+              to="/transactions"
+              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 hover:bg-primary-700 dark:hover:bg-primary-600 rounded-lg transition-colors"
+            >
+              Aller aux transactions
+            </RouterLink>
+          </template>
+        </EmptyState>
       </div>
 
       <!-- Settlement History Section -->

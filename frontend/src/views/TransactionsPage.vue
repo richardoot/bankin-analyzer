@@ -23,6 +23,9 @@
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
   import ToggleSwitch from '@/components/ToggleSwitch.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
+  import EmptyState from '@/components/ui/EmptyState.vue'
+  import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
   import { formatCurrency } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
 
@@ -1565,55 +1568,40 @@
         <!-- Loading state -->
         <div
           v-if="isLoadingTransactions"
-          class="flex justify-center items-center py-12"
+          class="space-y-3 p-4"
+          aria-busy="true"
         >
-          <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
-            <svg class="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
-              <circle
-                class="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                stroke-width="4"
-              />
-              <path
-                class="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            <span>Chargement des transactions...</span>
-          </div>
+          <SkeletonBlock v-for="n in 8" :key="n" class="h-12" />
         </div>
 
         <!-- Table -->
         <template v-else-if="!transactionsError">
-          <div v-if="transactions.length === 0" class="text-center py-12">
-            <p class="text-gray-500 dark:text-gray-400">
-              {{
-                hasActiveFilters
-                  ? 'Aucune transaction ne correspond aux filtres actifs.'
-                  : 'Aucune transaction pour le moment.'
-              }}
-            </p>
-            <button
-              v-if="hasActiveFilters"
-              type="button"
-              data-testid="empty-state-reset-filters"
-              class="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
-              @click="resetFilters"
-            >
-              Réinitialiser les filtres
-            </button>
-            <RouterLink
-              v-else
-              to="/import"
-              class="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
-            >
-              Importer des transactions
-            </RouterLink>
-          </div>
+          <EmptyState
+            v-if="transactions.length === 0"
+            :title="
+              hasActiveFilters
+                ? 'Aucune transaction ne correspond aux filtres actifs'
+                : 'Aucune transaction pour le moment'
+            "
+          >
+            <template #action>
+              <BaseButton
+                v-if="hasActiveFilters"
+                variant="secondary"
+                data-testid="empty-state-reset-filters"
+                @click="resetFilters"
+              >
+                Réinitialiser les filtres
+              </BaseButton>
+              <RouterLink
+                v-else
+                to="/import"
+                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
+              >
+                Importer des transactions
+              </RouterLink>
+            </template>
+          </EmptyState>
 
           <div v-else>
             <!-- Table header -->
