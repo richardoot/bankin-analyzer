@@ -145,7 +145,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       loading.value = true
       error.value = null
-      const target = redirectPath?.startsWith('/') ? redirectPath : '/profile'
+      const target = redirectPath?.startsWith('/') ? redirectPath : '/dashboard'
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

@@ -74,7 +74,7 @@
         })
       } else {
         await authStore.signIn(email.value, password.value)
-        const redirectPath = (route.query.redirect as string) || '/profile'
+        const redirectPath = (route.query.redirect as string) || '/dashboard'
         await router.push(redirectPath)
       }
     } catch {

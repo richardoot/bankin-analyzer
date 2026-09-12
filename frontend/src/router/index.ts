@@ -174,9 +174,10 @@ router.beforeEach(async to => {
     }
   }
 
-  // Redirect to profile if route is guest-only and user is authenticated
+  // A signed-in user landing on a guest page goes to their data, not to an
+  // administrative profile screen.
   if (to.meta.guestOnly && authStore.isAuthenticated) {
-    return { name: 'profile' }
+    return { name: 'dashboard' }
   }
 
   // Nothing to redirect to: let the navigation through. Said explicitly, since
