@@ -710,9 +710,9 @@
   <Teleport to="body">
     <div
       v-if="open"
+      ref="modalPanelRef"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
       data-testid="new-budget-plan-modal"
-      ref="modalPanelRef"
       role="dialog"
       aria-modal="true"
       @click.self="onClose"
