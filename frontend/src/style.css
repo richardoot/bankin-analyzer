@@ -2,3 +2,63 @@
 
 /* Enable class-based dark mode for Tailwind v4 */
 @custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens — the one place a color decision is made.
+ *
+ * Roles, as applied across the app:
+ *
+ *   primary-*  the action color: primary buttons, focus rings, selected
+ *              states, progress, active navigation. Today it aliases the
+ *              emerald scale; a rebrand edits these eleven lines and
+ *              nothing else.
+ *   red        expenses, destructive actions, errors.
+ *   green      income, success states.
+ *   amber      warnings — and, historically, the reimbursements accent;
+ *              separating those two meanings is still open.
+ *   blue       informational tints (info toasts, import stat tiles).
+ *   indigo     data only: the savings KPI and the budget comparison
+ *              reference. Never an action.
+ *
+ * Components must reach for `primary-*` (or a semantic hue above), never
+ * for a raw palette name when styling an action.
+ */
+/*
+ * The system said « less motion » : spinners stop spinning, skeletons stop
+ * pulsing, toasts and modals appear instead of sliding. One rule, because
+ * per-component opt-ins are exactly the kind of discipline that erodes.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Keyboard focus is always visible. Components that draw their own focus
+ * ring (Tailwind's focus:ring-* with focus:outline-none) keep it — this
+ * only catches the elements that declared nothing.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
+@theme {
+  --color-primary-50: #ecfdf5;
+  --color-primary-100: #d1fae5;
+  --color-primary-200: #a7f3d0;
+  --color-primary-300: #6ee7b7;
+  --color-primary-400: #34d399;
+  --color-primary-500: #10b981;
+  --color-primary-600: #059669;
+  --color-primary-700: #047857;
+  --color-primary-800: #065f46;
+  --color-primary-900: #064e3b;
+  --color-primary-950: #022c22;
+}

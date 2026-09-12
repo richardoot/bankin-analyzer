@@ -149,6 +149,10 @@ describe('TransactionsPage — optimistic updates', () => {
 
   const mountPage = async () => {
     setupDefaultMocks()
+    // The page mirrors its filters into the URL and lets a URL override
+    // localStorage; the shared test router must not leak one test's query
+    // into the next mount.
+    await router.replace({ query: {} })
     const wrapper = mount(TransactionsPage, {
       global: {
         plugins: [router],
@@ -231,7 +235,7 @@ describe('TransactionsPage — optimistic updates', () => {
 
       // Should show error toast
       expect(mockToast.error).toHaveBeenCalledWith(
-        'Echec de la mise a jour du pointage'
+        'Échec de la mise à jour du pointage'
       )
     })
 
@@ -315,7 +319,7 @@ describe('TransactionsPage — optimistic updates', () => {
       await flushPromises()
 
       expect(mockToast.error).toHaveBeenCalledWith(
-        'Echec de la mise a jour de la note'
+        'Échec de la mise à jour de la note'
       )
     })
 
@@ -376,12 +380,12 @@ describe('TransactionsPage — optimistic updates', () => {
     it('renders one link per settlement for an income transaction', async () => {
       const wrapper = await mountWith([incomeWithSettlements])
 
-      const links = wrapper.findAll('button[title^="Voir le reglement de"]')
+      const links = wrapper.findAll('button[title^="Voir le règlement de"]')
       // One button per settlement, rendered in both mobile and desktop layouts
       expect(links.length).toBeGreaterThanOrEqual(2)
       const titles = links.map(l => l.attributes('title'))
-      expect(titles).toContain('Voir le reglement de Marie')
-      expect(titles).toContain('Voir le reglement de Paul')
+      expect(titles).toContain('Voir le règlement de Marie')
+      expect(titles).toContain('Voir le règlement de Paul')
     })
 
     it('fetches the settlement detail when a link is clicked', async () => {
@@ -401,7 +405,7 @@ describe('TransactionsPage — optimistic updates', () => {
 
       const wrapper = await mountWith([incomeWithSettlements])
       const marieLink = nth(
-        wrapper.findAll('button[title="Voir le reglement de Marie"]'),
+        wrapper.findAll('button[title="Voir le règlement de Marie"]'),
         0
       )
       await marieLink.trigger('click')
@@ -413,7 +417,7 @@ describe('TransactionsPage — optimistic updates', () => {
     it('does not render settlement links for expense transactions', async () => {
       const wrapper = await mountWith([makeTx()])
       expect(
-        wrapper.findAll('button[title^="Voir le reglement de"]').length
+        wrapper.findAll('button[title^="Voir le règlement de"]').length
       ).toBe(0)
     })
   })
@@ -430,7 +434,7 @@ describe('TransactionsPage — optimistic updates', () => {
       )
 
       expect(select.attributes('disabled')).toBeDefined()
-      expect(select.text()).toContain('Choisir une categorie')
+      expect(select.text()).toContain('Choisir une catégorie')
     })
 
     it('lists only the subcategories of the selected category', async () => {
@@ -712,6 +716,9 @@ describe('TransactionsPage — optimistic updates', () => {
         savedFiltersWithAccount(savedAccount)
       )
       setupDefaultMocks()
+      // Same reset as mountPage: a query left by a previous test would
+      // override the localStorage filters this suite is exercising.
+      await router.replace({ query: {} })
       vi.mocked(api.getAccounts).mockResolvedValue(accounts)
       const wrapper = mount(TransactionsPage, {
         global: {

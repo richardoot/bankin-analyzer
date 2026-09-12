@@ -63,7 +63,7 @@
   })
 
   const getStatusLabel = (run: BankSyncRunDto): string =>
-    run.undoneAt ? 'Annulee' : 'Active'
+    run.undoneAt ? 'Annulée' : 'Active'
 
   const getStatusClass = (
     run: BankSyncRunDto
@@ -76,8 +76,8 @@
           icon: 'M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3',
         }
       : {
-          bg: 'bg-emerald-100',
-          text: 'text-emerald-600',
+          bg: 'bg-primary-100',
+          text: 'text-primary-600',
           icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
         }
 
@@ -121,17 +121,19 @@
     <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
       <!-- Header -->
       <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
+        <h1
+          class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
+        >
           Historique des synchronisations
         </h1>
         <p
           v-if="formatLatestSyncDate"
           class="mt-2 text-gray-600 dark:text-gray-400"
         >
-          Derniere synchronisation : {{ formatLatestSyncDate }}
+          Dernière synchronisation : {{ formatLatestSyncDate }}
         </p>
         <p v-else-if="!isLoading" class="mt-2 text-gray-600 dark:text-gray-400">
-          Aucune synchronisation effectuee pour le moment
+          Aucune synchronisation effectuée pour le moment
         </p>
       </div>
 
@@ -142,7 +144,7 @@
       >
         <div class="text-center">
           <div
-            class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-emerald-200 dark:border-emerald-800 border-t-emerald-600 dark:border-t-emerald-500"
+            class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-500"
           ></div>
           <p class="mt-4 text-gray-600 dark:text-gray-400">
             Chargement de l'historique...
@@ -184,7 +186,7 @@
         data-testid="bank-sync-history-empty"
       >
         <svg
-          class="mx-auto h-16 w-16 text-gray-400 dark:text-gray-500"
+          class="mx-auto h-16 w-16 text-gray-500 dark:text-gray-400"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -197,14 +199,14 @@
           />
         </svg>
         <h3 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Aucune synchronisation effectuee
+          Aucune synchronisation effectuée
         </h3>
         <p class="mt-2 text-gray-600 dark:text-gray-400">
           Connectez une banque depuis les reglages pour commencer.
         </p>
         <RouterLink
           to="/settings/accounts"
-          class="mt-6 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-white transition-colors hover:bg-emerald-700"
+          class="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-white transition-colors hover:bg-primary-700"
         >
           <svg
             class="h-5 w-5"
@@ -336,13 +338,13 @@
           <!-- Stats Grid -->
           <div class="grid grid-cols-2 gap-4">
             <!-- Inserted -->
-            <div class="rounded-lg bg-emerald-50 dark:bg-emerald-900/30 p-3">
+            <div class="rounded-lg bg-primary-50 dark:bg-primary-900/30 p-3">
               <p
-                class="text-2xl font-bold text-emerald-700 dark:text-emerald-400"
+                class="text-2xl font-bold text-primary-700 dark:text-primary-400"
               >
                 {{ run.inserted.toLocaleString('fr-FR') }}
               </p>
-              <p class="text-sm text-emerald-600 dark:text-emerald-500">
+              <p class="text-sm text-primary-600 dark:text-primary-500">
                 nouvelles transactions
               </p>
             </div>
@@ -364,7 +366,7 @@
       <div v-if="hasRuns" class="mt-8 text-center">
         <RouterLink
           to="/settings/accounts"
-          class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-3 text-white transition-colors hover:bg-emerald-700"
+          class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-white transition-colors hover:bg-primary-700"
         >
           <svg
             class="h-5 w-5"

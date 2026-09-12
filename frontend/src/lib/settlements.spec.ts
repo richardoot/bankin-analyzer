@@ -272,7 +272,7 @@ describe('toAllocationLine', () => {
   })
 
   it('groups on the expense repaid', () => {
-    // The regression that filed every debt under "Sans categorie": grouping ran
+    // The regression that filed every debt under "Sans catégorie": grouping ran
     // on an income hint that was null on most rows. That field is gone from the
     // DTO since the backend dropped its column, so the mistake is no longer
     // expressible — this pins that the expense is what grouping reads.
@@ -325,7 +325,7 @@ describe('toAllocationLine', () => {
     } satisfies ReimbursementDto
 
     const allocationLine = toAllocationLine(reimbursement)
-    expect(allocationLine.categoryName).toBe('Sans categorie')
+    expect(allocationLine.categoryName).toBe('Sans catégorie')
     expect(allocationLine.description).toBe('Transaction')
     expect(allocationLine.date).toBe('2026-08-13T10:00:00.000Z')
   })

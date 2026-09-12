@@ -229,7 +229,7 @@ async function setAmount(
 
 /** The only emerald call-to-action on screen at the step it is called from. */
 async function confirmSettlement(wrapper: VueWrapper): Promise<void> {
-  await wrapper.find('button[class*="bg-emerald-600"]').trigger('click')
+  await wrapper.find('button[class*="bg-primary-600"]').trigger('click')
   await flushPromises()
 }
 
@@ -260,7 +260,7 @@ describe('SettlementModal', () => {
     // grouping on it collapsed the whole list under one heading.
     expect(wrapper.text()).toContain('R Courses')
     expect(wrapper.text()).toContain('R Abonnements')
-    expect(wrapper.text()).not.toContain('Sans categorie')
+    expect(wrapper.text()).not.toContain('Sans catégorie')
     expect(
       wrapper
         .findAll('input[type="checkbox"]')
@@ -656,7 +656,7 @@ describe('SettlementModal', () => {
 
     expect(wrapper.text()).toContain('Depassement')
     expect(
-      wrapper.find('button[class*="bg-emerald-600"]').attributes('disabled')
+      wrapper.find('button[class*="bg-primary-600"]').attributes('disabled')
     ).toBeDefined()
   })
 

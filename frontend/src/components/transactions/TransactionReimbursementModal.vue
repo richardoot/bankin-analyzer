@@ -9,6 +9,7 @@
    * decided nothing and only asked the user to guess.
    */
   import { ref, watch } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import { api } from '@/lib/api'
   import type { TransactionDto, PersonDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
@@ -26,6 +27,14 @@
       reimbursement: Awaited<ReturnType<typeof api.createReimbursement>>,
     ]
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.isOpen,
+    onClose: () => emit('close'),
+    panel: modalPanelRef,
+  })
 
   const form = ref({
     personId: '',
@@ -111,7 +120,9 @@
       <div class="absolute inset-0 bg-black/50" @click="emit('close')" />
 
       <div
+        ref="modalPanelRef"
         role="dialog"
+        aria-modal="true"
         aria-labelledby="reimbursement-modal-title"
         class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
       >
@@ -171,7 +182,7 @@
               v-model="form.personId"
               class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
             >
-              <option value="">Selectionnez une personne</option>
+              <option value="">Sélectionnez une personne</option>
               <option
                 v-for="person in persons"
                 :key="person.id"
@@ -226,7 +237,7 @@
                   />
                   <button
                     type="button"
-                    class="px-2 py-1 text-xs font-medium rounded border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30"
+                    class="px-2 py-1 text-xs font-medium rounded border border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/30"
                     @click="applyCustomDivisor"
                   >
                     Appliquer

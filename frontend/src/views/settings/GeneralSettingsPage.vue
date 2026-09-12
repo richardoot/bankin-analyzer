@@ -134,7 +134,7 @@
           class="rounded-md px-4 py-2 text-sm font-medium transition-colors"
           :class="
             themeStore.mode === mode.value
-              ? 'bg-emerald-600 text-white'
+              ? 'bg-primary-600 text-white'
               : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
           "
           @click="themeStore.setMode(mode.value)"

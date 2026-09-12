@@ -190,7 +190,9 @@
             class="inline-block h-4 w-4 rounded-full shrink-0"
             :style="{ backgroundColor: analysis.tag.color ?? '#9ca3af' }"
           ></span>
-          <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          <h1
+            class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
+          >
             {{ analysis.tag.name }}
           </h1>
         </div>
@@ -273,11 +275,11 @@
         <div
           v-if="analysis.tag.budgetAmount !== null"
           data-testid="tag-envelope"
-          class="mb-6 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 p-4"
+          class="mb-6 rounded-xl border border-primary-200 dark:border-primary-800 bg-primary-50 dark:bg-primary-900/20 p-4"
         >
           <div class="flex flex-wrap items-baseline justify-between gap-2">
             <p
-              class="text-xs font-medium text-indigo-800 dark:text-indigo-300 uppercase tracking-wide"
+              class="text-xs font-medium text-primary-800 dark:text-primary-300 uppercase tracking-wide"
             >
               Enveloppe du projet
             </p>
@@ -286,7 +288,7 @@
               :class="
                 envelopeRemaining !== null && envelopeRemaining < 0
                   ? 'text-red-600 dark:text-red-400 font-semibold'
-                  : 'text-indigo-700 dark:text-indigo-400'
+                  : 'text-primary-700 dark:text-primary-400'
               "
             >
               <template
@@ -301,20 +303,20 @@
           </div>
 
           <div
-            class="mt-2 h-2 w-full overflow-hidden rounded-full bg-indigo-100 dark:bg-indigo-950"
+            class="mt-2 h-2 w-full overflow-hidden rounded-full bg-primary-100 dark:bg-primary-950"
           >
             <div
               class="h-full rounded-full transition-all"
               :class="
                 envelopeRatio > 1
                   ? 'bg-red-500'
-                  : 'bg-indigo-500 dark:bg-indigo-400'
+                  : 'bg-primary-500 dark:bg-primary-400'
               "
               :style="{ width: `${Math.min(envelopeRatio, 1) * 100}%` }"
             ></div>
           </div>
 
-          <p class="mt-2 text-xs text-indigo-700 dark:text-indigo-400">
+          <p class="mt-2 text-xs text-primary-700 dark:text-primary-400">
             Dépensé
             <strong class="tabular-nums">
               {{ formatCurrency(analysis.totalExpenses) }}
@@ -332,7 +334,7 @@
           </p>
           <p
             v-if="analysis.totalSurplus !== null"
-            class="mt-1 text-[11px] leading-relaxed text-indigo-600/80 dark:text-indigo-400/80"
+            class="mt-1 text-[11px] leading-relaxed text-primary-600/80 dark:text-primary-400/80"
           >
             L'enveloppe est comparée au montant dépensé. Le surcoût réel est
             plus bas : pendant l'événement, vos dépenses habituelles n'ont pas
@@ -467,7 +469,7 @@
                           ? 'text-gray-400'
                           : cat.surplusAmount >= 0
                             ? 'text-amber-600 dark:text-amber-500'
-                            : 'text-emerald-600 dark:text-emerald-500'
+                            : 'text-primary-600 dark:text-primary-500'
                       "
                     >
                       {{
@@ -520,7 +522,7 @@
                 >
                   {{ tx.description }}
                 </p>
-                <p class="text-xs text-gray-400 dark:text-gray-500">
+                <p class="text-xs text-gray-500 dark:text-gray-400">
                   {{ formatDate(tx.date) }} ·
                   {{ tx.categoryName || 'Sans catégorie' }}
                 </p>

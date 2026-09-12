@@ -42,7 +42,7 @@
   function getCategoryNames(settlement: SettlementDto): string {
     const uniqueCategories = new Set(
       settlement.reimbursements.map(
-        r => r.expenseCategoryName || 'Sans categorie'
+        r => r.expenseCategoryName || 'Sans catégorie'
       )
     )
     return Array.from(uniqueCategories).join(', ')
@@ -57,7 +57,7 @@
       class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4"
     >
       <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        Historique des Reglements
+        Historique des Règlements
       </h2>
 
       <!-- Person filter -->
@@ -67,7 +67,7 @@
         >
         <select
           v-model="selectedPersonId"
-          class="flex-1 sm:flex-initial px-3 py-2 sm:py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 dark:focus:ring-emerald-400 focus:border-emerald-500 dark:focus:border-emerald-400 min-h-[44px] sm:min-h-0"
+          class="flex-1 sm:flex-initial px-3 py-2 sm:py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400 min-h-[44px] sm:min-h-0"
         >
           <option :value="null">Tous</option>
           <option v-for="person in persons" :key="person.id" :value="person.id">
@@ -105,7 +105,7 @@
       class="text-center py-8 text-gray-500 dark:text-gray-400"
     >
       <svg
-        class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-3"
+        class="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400 mb-3"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -117,8 +117,8 @@
           d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
         />
       </svg>
-      <p class="text-sm">Aucun reglement enregistre</p>
-      <p class="text-xs mt-1">Les reglements apparaitront ici une fois crees</p>
+      <p class="text-sm">Aucun règlement enregistré</p>
+      <p class="text-xs mt-1">Les règlements apparaîtront ici une fois créés</p>
     </div>
 
     <!-- Settlements list -->
@@ -136,7 +136,7 @@
               {{ formatDate(settlement.createdAt) }}
             </span>
             <span
-              class="text-lg font-bold text-emerald-600 dark:text-emerald-400"
+              class="text-lg font-bold text-primary-600 dark:text-primary-400"
             >
               {{ formatCurrency(settlement.amountUsed) }}
             </span>
@@ -145,10 +145,10 @@
           <!-- Row 2: Person -->
           <div class="flex items-center gap-2 mb-2">
             <div
-              class="h-6 w-6 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center shrink-0"
+              class="h-6 w-6 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center shrink-0"
             >
               <span
-                class="text-xs font-semibold text-emerald-700 dark:text-emerald-400"
+                class="text-xs font-semibold text-primary-700 dark:text-primary-400"
               >
                 {{ settlement.personName.charAt(0).toUpperCase() }}
               </span>
@@ -195,7 +195,7 @@
             <div class="flex gap-1 shrink-0">
               <button
                 type="button"
-                class="p-2.5 min-h-[44px] min-w-[44px] text-gray-400 dark:text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
+                class="p-2.5 min-h-[44px] min-w-[44px] text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
                 title="Voir les details"
                 @click="emit('viewDetails', settlement)"
               >
@@ -221,8 +221,8 @@
               </button>
               <button
                 type="button"
-                class="p-2.5 min-h-[44px] min-w-[44px] text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                title="Annuler le reglement"
+                class="p-2.5 min-h-[44px] min-w-[44px] text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                title="Annuler le règlement"
                 @click="emit('delete', settlement.id)"
               >
                 <svg
@@ -254,13 +254,13 @@
               >
                 {{ formatDate(settlement.createdAt) }}
               </span>
-              <span class="text-gray-400 dark:text-gray-500">-</span>
+              <span class="text-gray-500 dark:text-gray-400">-</span>
               <div class="flex items-center gap-2">
                 <div
-                  class="h-6 w-6 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center"
+                  class="h-6 w-6 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center"
                 >
                   <span
-                    class="text-xs font-semibold text-emerald-700 dark:text-emerald-400"
+                    class="text-xs font-semibold text-primary-700 dark:text-primary-400"
                   >
                     {{ settlement.personName.charAt(0).toUpperCase() }}
                   </span>
@@ -303,7 +303,7 @@
           <div class="flex items-center gap-3">
             <div class="text-right">
               <div
-                class="text-lg font-bold text-emerald-600 dark:text-emerald-400"
+                class="text-lg font-bold text-primary-600 dark:text-primary-400"
               >
                 {{ formatCurrency(settlement.amountUsed) }}
               </div>
@@ -316,7 +316,7 @@
             <div class="flex gap-1">
               <button
                 type="button"
-                class="p-2 text-gray-400 dark:text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
+                class="p-2 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
                 title="Voir les details"
                 @click="emit('viewDetails', settlement)"
               >
@@ -342,8 +342,8 @@
               </button>
               <button
                 type="button"
-                class="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                title="Annuler le reglement"
+                class="p-2 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                title="Annuler le règlement"
                 @click="emit('delete', settlement.id)"
               >
                 <svg
@@ -370,7 +370,7 @@
         v-if="filteredSettlements.length === 0 && settlements.length > 0"
         class="text-center py-6 text-gray-500 dark:text-gray-400 text-sm"
       >
-        Aucun reglement pour cette personne
+        Aucun règlement pour cette personne
       </div>
     </div>
   </div>

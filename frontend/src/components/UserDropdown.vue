@@ -13,6 +13,8 @@
   const userInitial = computed(() => userEmail.value.charAt(0).toUpperCase())
   const loading = computed(() => authStore.loading)
 
+  // Les historiques ont rejoint la page Données, à côté de leurs sources —
+  // ils n'ont rien à faire entre le profil et la déconnexion.
   const menuItems = [
     {
       to: '/profile',
@@ -23,16 +25,6 @@
       to: '/settings',
       label: 'Réglages',
       icon: 'settings',
-    },
-    {
-      to: '/import/history',
-      label: 'Historique des imports',
-      icon: 'history',
-    },
-    {
-      to: '/bank-sync/history',
-      label: 'Historique des synchros',
-      icon: 'history',
     },
   ]
 
@@ -81,7 +73,7 @@
     >
       <!-- Avatar with initial -->
       <div
-        class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-sm font-medium text-white"
+        class="flex h-8 w-8 items-center justify-center rounded-full bg-primary-600 text-sm font-medium text-white"
       >
         {{ userInitial }}
       </div>
@@ -119,7 +111,7 @@
         <!-- User email header -->
         <div class="border-b border-slate-100 dark:border-slate-700 px-4 py-3">
           <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
-            Connecte en tant que
+            Connecté en tant que
           </p>
           <p class="truncate text-sm text-slate-500 dark:text-slate-400">
             {{ userEmail }}
@@ -213,7 +205,7 @@
                 d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
               />
             </svg>
-            Deconnexion
+            Déconnexion
           </button>
         </div>
       </div>

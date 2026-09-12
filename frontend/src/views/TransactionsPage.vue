@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { ref, computed, onMounted, watch } from 'vue'
+  import { useRoute, useRouter } from 'vue-router'
   import { usePersonsStore } from '@/stores/persons'
   import { useAccountsStore } from '@/stores/accounts'
   import { useTagsStore } from '@/stores/tags'
@@ -21,6 +22,12 @@
   import BulkCategoryModal from '@/components/transactions/BulkCategoryModal.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
   import ToggleSwitch from '@/components/ToggleSwitch.vue'
+  import PageHeader from '@/components/ui/PageHeader.vue'
+  import EmptyState from '@/components/ui/EmptyState.vue'
+  import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import FilterChips from '@/components/ui/FilterChips.vue'
+  import type { FilterChip } from '@/components/ui/FilterChips.vue'
   import { formatCurrency } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
 
@@ -107,30 +114,88 @@
 
   const savedFilters = loadSavedFilters()
 
+  const route = useRoute()
+  const router = useRouter()
+
+  /**
+   * The URL is the shareable form of the filters: pasting a link restores
+   * the exact view, and the Back button returns to the page that was left.
+   * A link that names any filter wins over localStorage — the sender's
+   * intent beats this browser's leftovers.
+   */
+  const QUERY_KEYS = [
+    'type',
+    'category',
+    'subcategory',
+    'account',
+    'tag',
+    'notPointed',
+    'review',
+    'q',
+    'from',
+    'to',
+    'min',
+    'max',
+    'page',
+  ] as const
+
+  function firstParam(value: unknown): string | null {
+    const single = Array.isArray(value) ? value[0] : value
+    return typeof single === 'string' && single !== '' ? single : null
+  }
+
+  const hasQueryFilters = QUERY_KEYS.some(
+    key => firstParam(route.query[key]) !== null
+  )
+
+  function filtersFromQuery(): typeof savedFilters {
+    const q = route.query
+    const type = firstParam(q.type)
+    const category = firstParam(q.category)
+    return {
+      typeFilter: type === 'EXPENSE' || type === 'INCOME' ? type : 'ALL',
+      selectedCategory: category,
+      // A subcategory is meaningless without its parent category.
+      selectedSubcategory: category ? firstParam(q.subcategory) : null,
+      selectedAccount: firstParam(q.account),
+      selectedTag: firstParam(q.tag),
+      showOnlyNotPointed: firstParam(q.notPointed) === '1',
+      searchKeyword: firstParam(q.q) ?? '',
+      filterStartDate: firstParam(q.from) ?? '',
+      filterEndDate: firstParam(q.to) ?? '',
+      amountMin: firstParam(q.min) ?? '',
+      amountMax: firstParam(q.max) ?? '',
+    }
+  }
+
+  const initialFilters = hasQueryFilters ? filtersFromQuery() : savedFilters
+
   // Filters
-  const typeFilter = ref<'ALL' | 'EXPENSE' | 'INCOME'>(savedFilters.typeFilter)
-  const selectedCategory = ref<string | null>(savedFilters.selectedCategory)
+  const typeFilter = ref<'ALL' | 'EXPENSE' | 'INCOME'>(
+    initialFilters.typeFilter
+  )
+  const selectedCategory = ref<string | null>(initialFilters.selectedCategory)
   // Only selectable once a category is chosen: its options are the
   // subcategories of that category.
   const selectedSubcategory = ref<string | null>(
-    savedFilters.selectedSubcategory
+    initialFilters.selectedSubcategory
   )
-  const selectedAccount = ref<string | null>(savedFilters.selectedAccount)
-  const selectedTag = ref<string | null>(savedFilters.selectedTag)
-  const showOnlyNotPointed = ref(savedFilters.showOnlyNotPointed)
+  const selectedAccount = ref<string | null>(initialFilters.selectedAccount)
+  const selectedTag = ref<string | null>(initialFilters.selectedTag)
+  const showOnlyNotPointed = ref(initialFilters.showOnlyNotPointed)
   /**
    * Rows a bank sync inserted or claimed and then lost the reference to —
    * cleared to "aucun", or a correction still pending on the other side of a
    * swap. Not saved to localStorage: this is a one-off "where did they go"
    * check, not a filter meant to stay on across visits.
    */
-  const needsBankReview = ref(false)
+  const needsBankReview = ref(firstParam(route.query.review) === '1')
   // Advanced search filters (keyword, date window, amount range)
-  const searchKeyword = ref(savedFilters.searchKeyword)
-  const filterStartDate = ref(savedFilters.filterStartDate)
-  const filterEndDate = ref(savedFilters.filterEndDate)
-  const amountMin = ref(savedFilters.amountMin)
-  const amountMax = ref(savedFilters.amountMax)
+  const searchKeyword = ref(initialFilters.searchKeyword)
+  const filterStartDate = ref(initialFilters.filterStartDate)
+  const filterEndDate = ref(initialFilters.filterEndDate)
+  const amountMin = ref(initialFilters.amountMin)
+  const amountMax = ref(initialFilters.amountMax)
 
   // Save filters to localStorage
   function saveFilters() {
@@ -208,9 +273,134 @@
     )
   })
 
+  /**
+   * The active filters as removable chips: what the list is currently NOT
+   * showing, named in one line under the controls that caused it.
+   */
+  const activeFilterChips = computed<FilterChip[]>(() => {
+    const chips: FilterChip[] = []
+    if (typeFilter.value !== 'ALL') {
+      chips.push({
+        key: 'type',
+        label: typeFilter.value === 'EXPENSE' ? 'Dépenses' : 'Revenus',
+      })
+    }
+    if (selectedCategory.value) {
+      const name = allCategories.value.find(
+        c => c.id === selectedCategory.value
+      )?.name
+      chips.push({ key: 'category', label: `Catégorie : ${name ?? '…'}` })
+    }
+    if (selectedSubcategory.value) {
+      const name = allSubcategories.value.find(
+        sc => sc.id === selectedSubcategory.value
+      )?.name
+      chips.push({
+        key: 'subcategory',
+        label: `Sous-catégorie : ${name ?? '…'}`,
+      })
+    }
+    if (selectedAccount.value) {
+      chips.push({ key: 'account', label: `Compte : ${selectedAccount.value}` })
+    }
+    if (selectedTag.value) {
+      const name = tagsStore.tags.find(t => t.id === selectedTag.value)?.name
+      chips.push({ key: 'tag', label: `Étiquette : ${name ?? '…'}` })
+    }
+    if (showOnlyNotPointed.value) {
+      chips.push({ key: 'notPointed', label: 'Non pointées' })
+    }
+    if (needsBankReview.value) {
+      chips.push({ key: 'review', label: 'À vérifier (banque)' })
+    }
+    if (searchKeyword.value.trim()) {
+      chips.push({ key: 'q', label: `« ${searchKeyword.value.trim()} »` })
+    }
+    if (filterStartDate.value) {
+      chips.push({ key: 'from', label: `Du ${filterStartDate.value}` })
+    }
+    if (filterEndDate.value) {
+      chips.push({ key: 'to', label: `Au ${filterEndDate.value}` })
+    }
+    if (amountMin.value !== '') {
+      chips.push({ key: 'min', label: `≥ ${amountMin.value} €` })
+    }
+    if (amountMax.value !== '') {
+      chips.push({ key: 'max', label: `≤ ${amountMax.value} €` })
+    }
+    return chips
+  })
+
+  function removeFilterChip(key: string): void {
+    switch (key) {
+      case 'type':
+        typeFilter.value = 'ALL'
+        break
+      case 'category':
+        selectedCategory.value = null
+        break
+      case 'subcategory':
+        selectedSubcategory.value = null
+        break
+      case 'account':
+        selectedAccount.value = null
+        break
+      case 'tag':
+        selectedTag.value = null
+        break
+      case 'notPointed':
+        showOnlyNotPointed.value = false
+        break
+      case 'review':
+        needsBankReview.value = false
+        break
+      case 'q':
+        searchKeyword.value = ''
+        break
+      case 'from':
+        filterStartDate.value = ''
+        break
+      case 'to':
+        filterEndDate.value = ''
+        break
+      case 'min':
+        amountMin.value = ''
+        break
+      case 'max':
+        amountMax.value = ''
+        break
+    }
+  }
+
+  // Sort + page size, both shareable via the URL.
+  const querySort = firstParam(route.query.sort)
+  const sortBy = ref<'date' | 'amount'>(
+    querySort === 'amount' ? 'amount' : 'date'
+  )
+  const sortOrder = ref<'asc' | 'desc'>(
+    firstParam(route.query.dir) === 'asc' ? 'asc' : 'desc'
+  )
+
+  /** Toggle on the active column, switch column otherwise (desc first). */
+  function toggleSort(column: 'date' | 'amount'): void {
+    if (sortBy.value === column) {
+      sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
+    } else {
+      sortBy.value = column
+      sortOrder.value = 'desc'
+    }
+  }
+
+  const PAGE_SIZES = [20, 50, 100] as const
+  const querySize = Number(firstParam(route.query.size))
+  const pageSize = ref<number>(
+    (PAGE_SIZES as readonly number[]).includes(querySize) ? querySize : 20
+  )
+
   // Pagination
-  const currentPage = ref(1)
-  const pageSize = 20
+  const currentPage = ref(
+    Math.max(1, parseInt(firstParam(route.query.page) ?? '1', 10) || 1)
+  )
 
   // Inline editing state
   const editingNoteId = ref<string | null>(null)
@@ -245,7 +435,7 @@
       selectedSettlement.value = await api.getSettlement(summary.id)
       showSettlementDetailModal.value = true
     } catch {
-      toast.error('Impossible de charger le detail du reglement')
+      toast.error('Impossible de charger le detail du règlement')
     } finally {
       isLoadingSettlement.value = false
     }
@@ -524,7 +714,7 @@
           note: previousNote ?? null,
         }
       }
-      toast.error('Echec de la mise a jour de la note')
+      toast.error('Échec de la mise à jour de la note')
     }
   }
 
@@ -594,7 +784,7 @@
       if (found) {
         transactions.value[found.index] = previousTx
       }
-      toast.error('Echec de la mise a jour de la categorie')
+      toast.error('Échec de la mise à jour de la catégorie')
     }
   }
 
@@ -622,7 +812,7 @@
           isPointed: previousPointed,
         }
       }
-      toast.error('Echec de la mise a jour du pointage')
+      toast.error('Échec de la mise à jour du pointage')
     }
   }
 
@@ -686,10 +876,35 @@
       console.error('Failed to bulk update category:', err)
       // Carries the server's message when the selection went stale, which the
       // user can act on: refresh and try again.
-      toast.error(err instanceof Error ? err.message : 'Echec du deplacement')
+      toast.error(err instanceof Error ? err.message : 'Échec du déplacement')
     } finally {
       isBulkUpdating.value = false
     }
+  }
+
+  // Mirror the active filters into the URL. replace, not push: a keystroke
+  // in the search box must not add a history entry. Reading happens once at
+  // setup, so this cannot loop.
+  function syncQuery(): void {
+    const query: Record<string, string> = {}
+    if (typeFilter.value !== 'ALL') query.type = typeFilter.value
+    if (selectedCategory.value) query.category = selectedCategory.value
+    if (selectedCategory.value && selectedSubcategory.value)
+      query.subcategory = selectedSubcategory.value
+    if (selectedAccount.value) query.account = selectedAccount.value
+    if (selectedTag.value) query.tag = selectedTag.value
+    if (showOnlyNotPointed.value) query.notPointed = '1'
+    if (needsBankReview.value) query.review = '1'
+    if (searchKeyword.value.trim()) query.q = searchKeyword.value.trim()
+    if (filterStartDate.value) query.from = filterStartDate.value
+    if (filterEndDate.value) query.to = filterEndDate.value
+    if (amountMin.value !== '') query.min = amountMin.value
+    if (amountMax.value !== '') query.max = amountMax.value
+    if (sortBy.value !== 'date') query.sort = sortBy.value
+    if (sortOrder.value !== 'desc') query.dir = sortOrder.value
+    if (pageSize.value !== 20) query.size = String(pageSize.value)
+    if (currentPage.value > 1) query.page = String(currentPage.value)
+    void router.replace({ query })
   }
 
   // Apply a filter change: persist, jump back to page 1 and refetch. Setting
@@ -697,6 +912,7 @@
   // that watch won't fire, so we fetch manually.
   function applyFilterChange() {
     saveFilters()
+    syncQuery()
     const wasOnPage1 = currentPage.value === 1
     currentPage.value = 1
     if (wasOnPage1) {
@@ -723,6 +939,9 @@
       needsBankReview,
       filterStartDate,
       filterEndDate,
+      sortBy,
+      sortOrder,
+      pageSize,
     ],
     applyFilterChange
   )
@@ -737,6 +956,7 @@
   // Refetch when page changes
   watch(currentPage, (newPage, oldPage) => {
     if (newPage !== oldPage) {
+      syncQuery()
       fetchTransactions()
     }
   })
@@ -749,7 +969,9 @@
 
       const response = await api.getTransactions({
         page: currentPage.value,
-        limit: pageSize,
+        limit: pageSize.value,
+        sortBy: sortBy.value,
+        sortOrder: sortOrder.value,
         ...currentFilters.value,
       })
       transactions.value = response.data
@@ -909,6 +1131,7 @@
     // corrected fetch.
     void accountsStore.load().then(dropUnknownAccountFilter)
     tagsStore.fetchTags()
+    syncQuery()
     fetchTransactions()
     fetchCategories()
     fetchSubcategories()
@@ -919,16 +1142,10 @@
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <!-- Header -->
-      <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
-          Transactions
-        </h1>
-        <p class="mt-2 text-gray-600 dark:text-gray-400">
-          Gerez vos transactions, modifiez les categories et assignez des
-          remboursements
-        </p>
-      </div>
+      <PageHeader
+        title="Transactions"
+        subtitle="Gérez vos transactions, modifiez les catégories et assignez des remboursements"
+      />
 
       <!-- Filters -->
       <div
@@ -938,7 +1155,7 @@
         <!-- Keyword search bar -->
         <div class="relative">
           <svg
-            class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-gray-500 pointer-events-none"
+            class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 dark:text-gray-400 pointer-events-none"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -954,8 +1171,8 @@
             v-model="searchKeyword"
             type="search"
             data-testid="transactions-search-input"
-            placeholder="Rechercher par mot-cle (libelle, note, sous-categorie)..."
-            class="w-full pl-10 pr-3 py-3 md:py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+            placeholder="Rechercher par mot-clé (libellé, note, sous-catégorie)..."
+            class="w-full pl-10 pr-3 py-3 md:py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
           />
         </div>
 
@@ -969,16 +1186,16 @@
           <!-- Type -->
           <div class="flex flex-col gap-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
               >Type</span
             >
             <select
               v-model="typeFilter"
               data-testid="transactions-type-filter"
-              class="h-11 md:h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              class="h-11 md:h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
             >
               <option value="ALL">Toutes</option>
-              <option value="EXPENSE">Depenses</option>
+              <option value="EXPENSE">Dépenses</option>
               <option value="INCOME">Revenus</option>
             </select>
           </div>
@@ -986,13 +1203,13 @@
           <!-- Category -->
           <div class="flex flex-col gap-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-              >Categorie</span
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+              >Catégorie</span
             >
             <select
               v-model="selectedCategory"
               data-testid="transactions-category-filter"
-              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
             >
               <option :value="null">Toutes</option>
               <option
@@ -1011,10 +1228,10 @@
               class="text-[11px] font-semibold uppercase tracking-wide"
               :class="
                 selectedCategory
-                  ? 'text-gray-400 dark:text-gray-500'
+                  ? 'text-gray-500 dark:text-gray-400'
                   : 'text-gray-300 dark:text-gray-600'
               "
-              >Sous-categorie</span
+              >Sous-catégorie</span
             >
             <select
               v-model="selectedSubcategory"
@@ -1023,12 +1240,12 @@
               :title="
                 selectedCategory
                   ? undefined
-                  : 'Selectionnez d\'abord une categorie'
+                  : 'Selectionnez d\'abord une catégorie'
               "
-              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/60 dark:disabled:text-gray-500"
+              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/60 dark:disabled:text-gray-500"
             >
               <option :value="null">
-                {{ selectedCategory ? 'Toutes' : 'Choisir une categorie' }}
+                {{ selectedCategory ? 'Toutes' : 'Choisir une catégorie' }}
               </option>
               <option
                 v-for="sub in filteredSubcategories"
@@ -1043,13 +1260,13 @@
           <!-- Account -->
           <div class="flex flex-col gap-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
               >Compte</span
             >
             <select
               v-model="selectedAccount"
               data-testid="transactions-account-filter"
-              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
             >
               <option :value="null">Tous</option>
               <option
@@ -1065,13 +1282,13 @@
           <!-- Tag -->
           <div class="flex flex-col gap-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-              >Etiquette</span
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+              >Étiquette</span
             >
             <select
               v-model="selectedTag"
               data-testid="transactions-tag-filter"
-              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
             >
               <option :value="null">Toutes</option>
               <option
@@ -1093,8 +1310,8 @@
           <!-- Date window -->
           <div class="col-span-2 flex flex-col gap-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
-              >Periode</span
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+              >Période</span
             >
             <div class="flex items-center gap-1.5">
               <input
@@ -1102,15 +1319,15 @@
                 type="date"
                 aria-label="Date de debut"
                 data-testid="transactions-start-date-filter"
-                class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
               />
-              <span class="shrink-0 text-gray-400 dark:text-gray-500">→</span>
+              <span class="shrink-0 text-gray-500 dark:text-gray-400">→</span>
               <input
                 v-model="filterEndDate"
                 type="date"
                 aria-label="Date de fin"
                 data-testid="transactions-end-date-filter"
-                class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
               />
             </div>
           </div>
@@ -1118,7 +1335,7 @@
           <!-- Amount range -->
           <div class="col-span-2 flex flex-col gap-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
               >Montant (€)</span
             >
             <div class="flex items-center gap-1.5">
@@ -1131,9 +1348,9 @@
                 placeholder="min"
                 aria-label="Montant minimum"
                 data-testid="transactions-amount-min-filter"
-                class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
               />
-              <span class="shrink-0 text-gray-400 dark:text-gray-500">–</span>
+              <span class="shrink-0 text-gray-500 dark:text-gray-400">–</span>
               <input
                 v-model="amountMax"
                 type="number"
@@ -1143,7 +1360,7 @@
                 placeholder="max"
                 aria-label="Montant maximum"
                 data-testid="transactions-amount-max-filter"
-                class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
               />
             </div>
           </div>
@@ -1157,7 +1374,7 @@
           <!-- State toggle -->
           <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
               >Etat</span
             >
             <div
@@ -1180,7 +1397,7 @@
                pending on the other side of a swap. -->
           <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
               >Synchro bancaire</span
             >
             <div
@@ -1204,7 +1421,10 @@
         <div
           class="mt-4 flex items-center justify-between gap-2 border-t border-gray-200 pt-3 dark:border-slate-700"
         >
-          <span class="text-sm text-gray-500 dark:text-gray-400">
+          <span
+            aria-live="polite"
+            class="text-sm text-gray-500 dark:text-gray-400"
+          >
             {{ totalTransactions }} transaction(s)
           </span>
 
@@ -1228,14 +1448,14 @@
                   d="M6 18L18 6M6 6l12 12"
                 />
               </svg>
-              <span class="hidden md:inline md:ml-1.5">Reinitialiser</span>
+              <span class="hidden md:inline md:ml-1.5">Réinitialiser</span>
             </button>
             <!-- Selection mode toggle -->
             <button
               class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium rounded-lg transition-colors"
               :class="
                 isSelectionMode
-                  ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-300 dark:border-indigo-700'
+                  ? 'text-primary-700 dark:text-primary-300 bg-primary-100 dark:bg-primary-900/40 border border-primary-300 dark:border-primary-700'
                   : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600'
               "
               data-testid="toggle-selection-mode"
@@ -1255,12 +1475,21 @@
                 />
               </svg>
               <span class="hidden md:inline md:ml-1.5">{{
-                isSelectionMode ? 'Mode selection actif' : 'Selection multiple'
+                isSelectionMode ? 'Mode sélection actif' : 'Sélection multiple'
               }}</span>
             </button>
           </div>
         </div>
       </div>
+
+      <!-- What the list is currently filtered on, each chip removable -->
+      <FilterChips
+        v-if="activeFilterChips.length > 0"
+        :chips="activeFilterChips"
+        class="mb-4 -mt-2"
+        @remove="removeFilterChip"
+        @clear="resetFilters"
+      />
 
       <!--
         Ticking every box selects the page, not the filter. Saying so — and
@@ -1274,7 +1503,7 @@
       >
         <span>
           Les <strong>{{ selectedIds.size }}</strong> transactions de cette page
-          sont selectionnees.
+          sont sélectionnées.
         </span>
         <button
           type="button"
@@ -1293,7 +1522,7 @@
       >
         <span>
           Les <strong>{{ matchingCount }}</strong> transactions du filtre sont
-          selectionnees, au-dela de cette page.
+          sélectionnées, au-delà de cette page.
         </span>
         <button
           type="button"
@@ -1315,16 +1544,16 @@
       >
         <div
           v-if="isSelectionMode"
-          class="hidden md:flex bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 rounded-xl p-4 mb-6 items-center justify-between"
+          class="hidden md:flex bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-700 rounded-xl p-4 mb-6 items-center justify-between"
         >
           <div class="flex items-center gap-4">
             <span
-              class="text-sm font-medium text-indigo-700 dark:text-indigo-300"
+              class="text-sm font-medium text-primary-700 dark:text-primary-300"
             >
-              {{ selectedCount }} transaction(s) selectionnee(s)
+              {{ selectedCount }} transaction(s) sélectionnée(s)
             </span>
             <button
-              class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200"
+              class="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-200"
               @click="exitSelectionMode"
             >
               Quitter la selection
@@ -1363,7 +1592,7 @@
             </button>
             <button
               :disabled="isBulkUpdating"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/30 border border-indigo-300 dark:border-indigo-700 rounded-lg hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors disabled:opacity-50"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-100 dark:bg-primary-900/30 border border-primary-300 dark:border-primary-700 rounded-lg hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-colors disabled:opacity-50"
               @click="openBulkCategoryModal"
             >
               <svg
@@ -1379,7 +1608,7 @@
                   d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"
                 />
               </svg>
-              Changer categorie
+              Changer de catégorie
             </button>
           </div>
         </div>
@@ -1397,17 +1626,17 @@
         >
           <div
             v-if="isSelectionMode"
-            class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-indigo-50 dark:bg-indigo-900/50 border-t border-indigo-200 dark:border-indigo-700 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+            class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-primary-50 dark:bg-primary-900/50 border-t border-primary-200 dark:border-primary-700 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
           >
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <span
-                  class="text-sm font-medium text-indigo-700 dark:text-indigo-300"
+                  class="text-sm font-medium text-primary-700 dark:text-primary-300"
                 >
                   {{ selectedCount }} select.
                 </span>
                 <button
-                  class="text-sm text-indigo-600 dark:text-indigo-400 underline"
+                  class="text-sm text-primary-600 dark:text-primary-400 underline"
                   @click="exitSelectionMode"
                 >
                   Annuler
@@ -1445,8 +1674,8 @@
                 </button>
                 <button
                   :disabled="isBulkUpdating"
-                  class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-indigo-700 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/30 border border-indigo-300 dark:border-indigo-700 rounded-lg disabled:opacity-50"
-                  title="Changer categorie"
+                  class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-primary-700 dark:text-primary-400 bg-primary-100 dark:bg-primary-900/30 border border-primary-300 dark:border-primary-700 rounded-lg disabled:opacity-50"
+                  title="Changer de catégorie"
                   @click="openBulkCategoryModal"
                 >
                   <svg
@@ -1476,6 +1705,7 @@
         <!-- Error state -->
         <div
           v-if="transactionsError"
+          role="alert"
           class="p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 text-red-700 dark:text-red-400"
         >
           {{ transactionsError }}
@@ -1484,36 +1714,40 @@
         <!-- Loading state -->
         <div
           v-if="isLoadingTransactions"
-          class="flex justify-center items-center py-12"
+          class="space-y-3 p-4"
+          aria-busy="true"
         >
-          <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
-            <svg class="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
-              <circle
-                class="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                stroke-width="4"
-              />
-              <path
-                class="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            <span>Chargement des transactions...</span>
-          </div>
+          <SkeletonBlock v-for="n in 8" :key="n" class="h-12" />
         </div>
 
         <!-- Table -->
         <template v-else-if="!transactionsError">
-          <div
+          <EmptyState
             v-if="transactions.length === 0"
-            class="text-center py-12 text-gray-500 dark:text-gray-400"
+            :title="
+              hasActiveFilters
+                ? 'Aucune transaction ne correspond aux filtres actifs'
+                : 'Aucune transaction pour le moment'
+            "
           >
-            Aucune transaction trouvee avec les filtres actuels.
-          </div>
+            <template #action>
+              <BaseButton
+                v-if="hasActiveFilters"
+                variant="secondary"
+                data-testid="empty-state-reset-filters"
+                @click="resetFilters"
+              >
+                Réinitialiser les filtres
+              </BaseButton>
+              <RouterLink
+                v-else
+                to="/import"
+                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
+              >
+                Importer des transactions
+              </RouterLink>
+            </template>
+          </EmptyState>
 
           <div v-else>
             <!-- Table header -->
@@ -1526,17 +1760,43 @@
                   type="checkbox"
                   :checked="isAllSelected"
                   :indeterminate="isPartiallySelected"
-                  class="h-4 w-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-slate-600 rounded focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
+                  class="h-4 w-4 text-primary-600 dark:text-primary-500 border-gray-300 dark:border-slate-600 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
                   data-testid="select-all"
                   @change="toggleSelectAll"
                 />
               </div>
-              <div class="col-span-1">Date</div>
+              <div class="col-span-1">
+                <button
+                  type="button"
+                  data-testid="sort-by-date"
+                  class="inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                  :aria-label="`Trier par date, ${sortBy === 'date' && sortOrder === 'desc' ? 'croissant' : 'décroissant'}`"
+                  @click="toggleSort('date')"
+                >
+                  Date
+                  <span v-if="sortBy === 'date'" aria-hidden="true">{{
+                    sortOrder === 'desc' ? '↓' : '↑'
+                  }}</span>
+                </button>
+              </div>
               <div class="col-span-3">Description</div>
               <div class="col-span-2">Note</div>
-              <div class="col-span-1 text-right">Montant</div>
-              <div class="col-span-2">Categorie</div>
-              <div class="col-span-1 text-center">Pointe</div>
+              <div class="col-span-1 text-right">
+                <button
+                  type="button"
+                  data-testid="sort-by-amount"
+                  class="inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                  :aria-label="`Trier par montant, ${sortBy === 'amount' && sortOrder === 'desc' ? 'croissant' : 'décroissant'}`"
+                  @click="toggleSort('amount')"
+                >
+                  Montant
+                  <span v-if="sortBy === 'amount'" aria-hidden="true">{{
+                    sortOrder === 'desc' ? '↓' : '↑'
+                  }}</span>
+                </button>
+              </div>
+              <div class="col-span-2">Catégorie</div>
+              <div class="col-span-1 text-center">Pointé</div>
               <div class="col-span-1 text-center">Actions</div>
             </div>
 
@@ -1547,7 +1807,7 @@
                 :key="tx.id"
                 class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                 :class="{
-                  'bg-indigo-50/50 dark:bg-indigo-900/10':
+                  'bg-primary-50/50 dark:bg-primary-900/10':
                     isSelectionMode && selectedIds.has(tx.id),
                 }"
               >
@@ -1563,7 +1823,7 @@
                       <input
                         type="checkbox"
                         :checked="selectedIds.has(tx.id)"
-                        class="h-5 w-5 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-slate-600 rounded focus:ring-indigo-500 dark:bg-slate-700"
+                        class="h-5 w-5 text-primary-600 dark:text-primary-500 border-gray-300 dark:border-slate-600 rounded focus:ring-primary-500 dark:bg-slate-700"
                         @change="toggleSelection(tx.id)"
                       />
                     </div>
@@ -1577,7 +1837,7 @@
                           ? tx.type === 'EXPENSE'
                             ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
                             : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-                          : 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500'
+                          : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
                       "
                       @click="openCategoryModal(tx)"
                     >
@@ -1609,7 +1869,7 @@
                       <div class="flex items-center justify-between mt-0.5">
                         <div class="flex items-center gap-1.5 min-w-0">
                           <span
-                            class="text-xs text-gray-400 dark:text-gray-500 shrink-0"
+                            class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
                           >
                             {{ formatDate(tx.date) }}
                           </span>
@@ -1618,10 +1878,10 @@
                             >&middot;</span
                           >
                           <button
-                            class="text-xs text-gray-400 dark:text-gray-500 truncate hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                            class="text-xs text-gray-500 dark:text-gray-400 truncate hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                             @click="openCategoryModal(tx)"
                           >
-                            {{ tx.categoryName || 'Sans categorie' }}
+                            {{ tx.categoryName || 'Sans catégorie' }}
                           </button>
                           <!-- Reimbursement inline badge -->
                           <template
@@ -1670,7 +1930,7 @@
                                 v-if="
                                   getReimbursementSummary(tx.id).allCompleted
                                 "
-                                >Rembourse</span
+                                >Remboursé</span
                               >
                               <template v-else>
                                 {{
@@ -1688,8 +1948,8 @@
                           class="shrink-0 ml-2 -mr-1 flex items-center justify-center w-7 h-7 rounded-full transition-colors"
                           :class="
                             tx.isPointed
-                              ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-                              : 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500'
+                              ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
+                              : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
                           "
                           :title="tx.isPointed ? 'Depointer' : 'Pointer'"
                           @click="togglePointed(tx)"
@@ -1716,7 +1976,7 @@
                     class="ml-12 mt-0.5"
                   >
                     <button
-                      class="text-xs text-gray-400 dark:text-gray-500 italic truncate max-w-full text-left"
+                      class="text-xs text-gray-500 dark:text-gray-400 italic truncate max-w-full text-left"
                       @click="startEditNote(tx)"
                     >
                       {{ tx.note }}
@@ -1729,13 +1989,13 @@
                       <input
                         v-model="editingNoteValue"
                         type="text"
-                        class="flex-1 px-2.5 py-1.5 text-xs border border-indigo-300 dark:border-indigo-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-indigo-500"
+                        class="flex-1 px-2.5 py-1.5 text-xs border border-primary-300 dark:border-primary-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-primary-500"
                         placeholder="Ajouter une note..."
                         @keyup.enter="saveNote(tx)"
                         @keyup.escape="cancelEditNote"
                       />
                       <button
-                        class="p-1.5 text-emerald-600 dark:text-emerald-400 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                        class="p-1.5 text-primary-600 dark:text-primary-400 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20"
                         title="Sauvegarder"
                         @click="saveNote(tx)"
                       >
@@ -1752,7 +2012,7 @@
                         </svg>
                       </button>
                       <button
-                        class="p-1.5 text-gray-400 dark:text-gray-500 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
+                        class="p-1.5 text-gray-500 dark:text-gray-400 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
                         title="Annuler"
                         @click="cancelEditNote"
                       >
@@ -1779,7 +2039,7 @@
                     <!-- Add note -->
                     <button
                       v-if="!tx.note && editingNoteId !== tx.id"
-                      class="px-2 py-1 text-[11px] text-gray-400 dark:text-gray-500 rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                      class="px-2 py-1 text-[11px] text-gray-500 dark:text-gray-400 rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                       @click="startEditNote(tx)"
                     >
                       + Note
@@ -1808,9 +2068,9 @@
                         v-for="settlement in tx.settlements"
                         :key="settlement.id"
                         type="button"
-                        class="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-emerald-600 dark:text-emerald-400 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors disabled:opacity-50"
+                        class="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-primary-600 dark:text-primary-400 rounded hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors disabled:opacity-50"
                         :disabled="isLoadingSettlement"
-                        :title="`Voir le reglement de ${settlement.personName}`"
+                        :title="`Voir le règlement de ${settlement.personName}`"
                         @click="openSettlementDetail(settlement)"
                       >
                         <svg
@@ -1873,7 +2133,7 @@
                       </div>
                       <button
                         v-if="reimb.status !== 'COMPLETED'"
-                        class="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded"
+                        class="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded"
                         title="Supprimer"
                         @click.stop="handleDeleteReimbursement(reimb.id)"
                       >
@@ -1908,7 +2168,7 @@
                     <input
                       type="checkbox"
                       :checked="selectedIds.has(tx.id)"
-                      class="h-4 w-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-slate-600 rounded focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
+                      class="h-4 w-4 text-primary-600 dark:text-primary-500 border-gray-300 dark:border-slate-600 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
                       data-testid="select-row-desktop"
                       @change="toggleSelection(tx.id)"
                     />
@@ -1935,7 +2195,7 @@
                         <input
                           v-model="editingNoteValue"
                           type="text"
-                          class="flex-1 px-2 py-1 text-sm border border-indigo-300 dark:border-indigo-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-indigo-500"
+                          class="flex-1 px-2 py-1 text-sm border border-primary-300 dark:border-primary-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-primary-500"
                           @keyup.enter="saveNote(tx)"
                           @keyup.escape="cancelEditNote"
                         />
@@ -1956,7 +2216,7 @@
                           </svg>
                         </button>
                         <button
-                          class="p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
+                          class="p-1 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
                           @click="cancelEditNote"
                         >
                           <svg
@@ -2018,7 +2278,7 @@
                       @click="openCategoryModal(tx)"
                     >
                       {{ tx.categoryIcon ? tx.categoryIcon + ' ' : ''
-                      }}{{ tx.categoryName || 'Sans categorie' }}
+                      }}{{ tx.categoryName || 'Sans catégorie' }}
                       <svg
                         class="h-3 w-3 opacity-50"
                         fill="none"
@@ -2042,7 +2302,7 @@
                       :class="
                         tx.isPointed
                           ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
-                          : 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-slate-600'
+                          : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
                       "
                       :title="tx.isPointed ? 'Depointer' : 'Pointer'"
                       @click="togglePointed(tx)"
@@ -2111,9 +2371,9 @@
                         v-for="settlement in tx.settlements"
                         :key="settlement.id"
                         type="button"
-                        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-50"
+                        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors disabled:opacity-50"
                         :disabled="isLoadingSettlement"
-                        :title="`Voir le reglement de ${settlement.personName}`"
+                        :title="`Voir le règlement de ${settlement.personName}`"
                         @click="openSettlementDetail(settlement)"
                       >
                         <svg
@@ -2206,7 +2466,7 @@
                     </div>
                     <button
                       v-if="reimb.status !== 'COMPLETED'"
-                      class="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                      class="p-1 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                       title="Supprimer"
                       @click="handleDeleteReimbursement(reimb.id)"
                     >
@@ -2241,8 +2501,26 @@
               v-if="totalPages > 1"
               class="flex items-center justify-between px-4 py-4 border-t dark:border-slate-700"
             >
-              <div class="text-sm text-gray-500 dark:text-gray-400">
-                Page {{ currentPage }} sur {{ totalPages }}
+              <div
+                class="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400"
+              >
+                <span>Page {{ currentPage }} sur {{ totalPages }}</span>
+                <label class="inline-flex items-center gap-1.5">
+                  <span class="sr-only">Transactions par page</span>
+                  <select
+                    v-model.number="pageSize"
+                    data-testid="page-size-select"
+                    class="h-8 rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 focus:ring-2 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300"
+                  >
+                    <option
+                      v-for="size in PAGE_SIZES"
+                      :key="size"
+                      :value="size"
+                    >
+                      {{ size }} / page
+                    </option>
+                  </select>
+                </label>
               </div>
 
               <div class="flex items-center gap-1">
@@ -2276,7 +2554,7 @@
                 <template v-for="page in visiblePages" :key="page">
                   <span
                     v-if="page < 0"
-                    class="px-2 py-1.5 text-sm text-gray-400 dark:text-gray-500"
+                    class="px-2 py-1.5 text-sm text-gray-500 dark:text-gray-400"
                   >
                     ...
                   </span>
@@ -2285,7 +2563,7 @@
                     class="px-3 py-1.5 text-sm rounded-lg transition-colors"
                     :class="
                       page === currentPage
-                        ? 'bg-indigo-600 dark:bg-indigo-500 text-white'
+                        ? 'bg-primary-600 dark:bg-primary-500 text-white'
                         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
                     "
                     @click="goToPage(page)"

@@ -192,6 +192,18 @@ export class TransactionsController {
       'Only rows a bank sync inserted or claimed and then lost the ' +
       'reference to — cleared to "aucun", or a correction still pending.',
   })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['date', 'amount'],
+    description: 'Sort column (default: date)',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['asc', 'desc'],
+    description: 'Sort direction (default: desc)',
+  })
   async findAll(
     @CurrentUser() user: User,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
@@ -207,10 +219,34 @@ export class TransactionsController {
     @Query('search') search?: string,
     @Query('amountMin') amountMin?: string,
     @Query('amountMax') amountMax?: string,
-    @Query('needsBankReview') needsBankReview?: string
+    @Query('needsBankReview') needsBankReview?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string
   ): Promise<PaginatedTransactionsResponseDto> {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
+
+    // Sortable columns are an allowlist, not a passthrough: a column name
+    // reaching Prisma unchecked would let any caller order by (and thereby
+    // probe) arbitrary fields.
+    if (sortBy !== undefined && sortBy !== 'date' && sortBy !== 'amount') {
+      throw new BadRequestException(
+        `sortBy must be 'date' or 'amount', got '${sortBy}'`
+      )
+    }
+    if (
+      sortOrder !== undefined &&
+      sortOrder !== 'asc' &&
+      sortOrder !== 'desc'
+    ) {
+      throw new BadRequestException(
+        `sortOrder must be 'asc' or 'desc', got '${sortOrder}'`
+      )
+    }
+    const sort: { by: 'date' | 'amount'; order: 'asc' | 'desc' } | undefined =
+      sortBy === 'date' || sortBy === 'amount'
+        ? { by: sortBy, order: sortOrder === 'asc' ? 'asc' : 'desc' }
+        : undefined
 
     const filters = parseTransactionFilters({
       ...(type && { type }),
@@ -231,7 +267,8 @@ export class TransactionsController {
       await this.transactionsService.findAllByUserPaginated(
         user.id,
         { page, limit: clampedLimit },
-        Object.keys(filters).length > 0 ? filters : undefined
+        Object.keys(filters).length > 0 ? filters : undefined,
+        sort
       )
 
     const data = transactions.map(tx =>

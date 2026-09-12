@@ -13,6 +13,7 @@
    * and removing are separate intentions.
    */
   import { computed, ref, watch } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import { api } from '@/lib/api'
   import type {
     CategoryDto,
@@ -31,6 +32,14 @@
     close: []
     migrated: []
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.isOpen,
+    onClose: () => emit('close'),
+    panel: modalPanelRef,
+  })
 
   const toast = useToast()
 
@@ -174,7 +183,7 @@
     }
     const parts = [`${summary.value.kept} transaction(s)`]
     if (summary.value.keptSubcategories > 0) {
-      parts.push(`${summary.value.keptSubcategories} sous-categorie(s)`)
+      parts.push(`${summary.value.keptSubcategories} sous-catégorie(s)`)
     }
     return `« ${name} » est conservee, avec ${parts.join(' dans ')}.`
   })
@@ -195,7 +204,7 @@
       emit('migrated')
       emit('close')
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Echec du deplacement'
+      error.value = err instanceof Error ? err.message : 'Échec du déplacement'
     } finally {
       isMigrating.value = false
     }
@@ -211,7 +220,9 @@
       <div class="absolute inset-0 bg-black/50" @click="emit('close')" />
 
       <div
+        ref="modalPanelRef"
         role="dialog"
+        aria-modal="true"
         aria-labelledby="migrate-category-title"
         class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6"
       >
@@ -225,7 +236,7 @@
         <!-- Step 1: destination -->
         <template v-if="!preview">
           <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Les transactions et leurs sous-categories rejoindront la categorie
+            Les transactions et leurs sous-categories rejoindront la catégorie
             choisie. « {{ source.name }} » sera conservee.
           </p>
 
@@ -233,7 +244,7 @@
             for="migrate-target"
             class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
           >
-            Categorie de destination
+            Catégorie de destination
           </label>
           <select
             id="migrate-target"
@@ -241,19 +252,20 @@
             data-testid="migrate-target-select"
             class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 mb-2"
           >
-            <option :value="null" disabled>Selectionnez une categorie</option>
+            <option :value="null" disabled>Sélectionnez une catégorie</option>
             <option v-for="cat in destinations" :key="cat.id" :value="cat.id">
               {{ cat.name }}
             </option>
           </select>
           <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
             Seules les categories de
-            {{ source.type === 'EXPENSE' ? 'depenses' : 'revenus' }} sont
+            {{ source.type === 'EXPENSE' ? 'dépenses' : 'revenus' }} sont
             proposees.
           </p>
 
           <p
             v-if="error"
+            role="alert"
             data-testid="migrate-error"
             class="text-sm text-red-600 dark:text-red-400 mb-4"
           >
@@ -273,7 +285,7 @@
               class="flex-1 px-4 py-2.5 text-sm font-medium text-white rounded-lg"
               :class="
                 targetId && !isLoading
-                  ? 'bg-indigo-600 hover:bg-indigo-700'
+                  ? 'bg-primary-600 hover:bg-primary-700'
                   : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
               "
               @click="loadPreview"
@@ -341,7 +353,7 @@
                 "
               >
                 <option v-if="!sub.nameTakenInTarget" value="MOVE">
-                  Creer « {{ sub.name }} » dans {{ preview.targetCategoryName }}
+                  Créer « {{ sub.name }} » dans {{ preview.targetCategoryName }}
                 </option>
                 <option
                   v-for="target in preview.targetSubcategories"
@@ -371,7 +383,7 @@
               <span
                 class="text-sm font-medium text-gray-900 dark:text-gray-100 flex-1 min-w-[8rem]"
               >
-                Sans sous-categorie
+                Sans sous-catégorie
                 <span
                   class="text-xs font-normal text-gray-500 dark:text-gray-400"
                 >
@@ -380,7 +392,7 @@
               </span>
               <select
                 :value="encode(actionFor(null))"
-                aria-label="Destination des transactions sans sous-categorie"
+                aria-label="Destination des transactions sans sous-catégorie"
                 data-testid="migrate-action-uncategorized"
                 class="text-sm px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
                 @change="
@@ -389,7 +401,7 @@
               >
                 <option value="MOVE">
                   Deplacer dans {{ preview.targetCategoryName }}, sans
-                  sous-categorie
+                  sous-catégorie
                 </option>
                 <option
                   v-for="target in preview.targetSubcategories"
@@ -407,13 +419,13 @@
 
           <div
             data-testid="migrate-summary"
-            class="text-sm bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg px-3 py-2 mb-3"
+            class="text-sm bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg px-3 py-2 mb-3"
             aria-live="polite"
           >
             <p class="text-gray-900 dark:text-gray-100">
               {{ summary.moved }} transaction(s) deplacee(s)
               <template v-if="summary.created > 0">
-                · {{ summary.created }} sous-categorie(s) creee(s)
+                · {{ summary.created }} sous-catégorie(s) créée(s)
               </template>
               <template v-if="summary.merged > 0">
                 · {{ summary.merged }} fusion(s)
@@ -430,12 +442,13 @@
             <p v-for="entry in preview.budgetPlanEntries" :key="entry.planName">
               Budget « {{ entry.planName }} » : la ligne
               {{ preview.sourceCategoryName }} ({{ entry.amount }} €) n'aura
-              plus de depenses en face.
+              plus de dépenses en face.
             </p>
           </div>
 
           <p
             v-if="error"
+            role="alert"
             data-testid="migrate-error"
             class="text-sm text-red-600 dark:text-red-400 mb-3"
           >
@@ -455,7 +468,7 @@
               class="flex-1 px-4 py-2.5 text-sm font-medium text-white rounded-lg"
               :class="
                 !isMigrating && summary.moved > 0
-                  ? 'bg-indigo-600 hover:bg-indigo-700'
+                  ? 'bg-primary-600 hover:bg-primary-700'
                   : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
               "
               @click="confirm"

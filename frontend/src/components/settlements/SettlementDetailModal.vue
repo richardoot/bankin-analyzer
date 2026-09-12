@@ -1,5 +1,6 @@
 <script setup lang="ts">
-  import { computed } from 'vue'
+  import { ref, computed } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import type { SettlementDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
 
@@ -16,6 +17,14 @@
     close: []
     delete: []
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.isOpen,
+    onClose: () => emit('close'),
+    panel: modalPanelRef,
+  })
 
   const totalSettled = computed(() => {
     if (!props.settlement) return 0
@@ -56,6 +65,9 @@
 
         <!-- Modal -->
         <div
+          ref="modalPanelRef"
+          role="dialog"
+          aria-modal="true"
           class="relative z-10 w-full max-w-lg max-h-[90vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-xl dark:shadow-slate-900/30 flex flex-col"
         >
           <!-- Header -->
@@ -66,7 +78,7 @@
               <h2
                 class="text-xl font-semibold text-gray-900 dark:text-gray-100"
               >
-                Details du reglement
+                Détails du règlement
               </h2>
               <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
                 Cree le {{ formatDateTime(settlement.createdAt) }}
@@ -98,10 +110,10 @@
             <!-- Person info -->
             <div class="flex items-center gap-3 mb-6">
               <div
-                class="h-12 w-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center"
+                class="h-12 w-12 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center"
               >
                 <span
-                  class="text-xl font-semibold text-emerald-700 dark:text-emerald-400"
+                  class="text-xl font-semibold text-primary-700 dark:text-primary-400"
                 >
                   {{ settlement.personName.charAt(0).toUpperCase() }}
                 </span>
@@ -118,10 +130,10 @@
 
             <!-- Income transaction -->
             <div
-              class="mb-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg"
+              class="mb-6 p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg"
             >
               <h4
-                class="text-sm font-medium text-emerald-700 dark:text-emerald-400 mb-2 flex items-center gap-2"
+                class="text-sm font-medium text-primary-700 dark:text-primary-400 mb-2 flex items-center gap-2"
               >
                 <svg
                   class="h-4 w-4"
@@ -136,7 +148,7 @@
                     d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
                   />
                 </svg>
-                Transaction de reglement
+                Transaction de règlement
               </h4>
               <div class="text-gray-900 dark:text-gray-100 font-medium">
                 {{ settlement.incomeTransactionDescription }}
@@ -145,12 +157,12 @@
                 {{ formatDate(settlement.incomeTransactionDate) }}
               </div>
               <div
-                class="flex justify-between items-center mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-800"
+                class="flex justify-between items-center mt-2 pt-2 border-t border-primary-200 dark:border-primary-800"
               >
                 <span class="text-sm text-gray-600 dark:text-gray-400"
                   >Montant total</span
                 >
-                <span class="font-bold text-emerald-600 dark:text-emerald-400">
+                <span class="font-bold text-primary-600 dark:text-primary-400">
                   +{{ formatCurrency(settlement.incomeTransactionAmount) }}
                 </span>
               </div>
@@ -238,7 +250,7 @@
                   >Total regle</span
                 >
                 <span
-                  class="text-lg font-bold text-emerald-600 dark:text-emerald-400"
+                  class="text-lg font-bold text-primary-600 dark:text-primary-400"
                 >
                   {{ formatCurrency(totalSettled) }}
                 </span>
@@ -285,7 +297,7 @@
                   d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                 />
               </svg>
-              Annuler ce reglement
+              Annuler ce règlement
             </button>
             <button
               type="button"

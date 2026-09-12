@@ -89,7 +89,7 @@
   <div ref="root" class="relative inline-block">
     <button
       type="button"
-      class="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-[10px] font-medium text-gray-500 hover:border-emerald-400 hover:text-emerald-600 focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-400 dark:border-slate-600 dark:text-slate-400 dark:hover:border-emerald-500"
+      class="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-[10px] font-medium text-gray-500 hover:border-primary-400 hover:text-primary-600 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-400 dark:border-slate-600 dark:text-slate-400 dark:hover:border-primary-500"
       aria-label="Ajouter une étiquette"
       @click="open = !open"
     >
@@ -110,7 +110,7 @@
         v-model="search"
         type="text"
         placeholder="Rechercher ou créer…"
-        class="mb-2 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 focus:border-emerald-400 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+        class="mb-2 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 focus:border-primary-400 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
         @keydown.enter.prevent="canCreate ? create() : null"
       />
 
@@ -131,7 +131,7 @@
             }}</span>
             <svg
               v-if="selectedSet.has(tag.id)"
-              class="h-3.5 w-3.5 text-emerald-500"
+              class="h-3.5 w-3.5 text-primary-500"
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -152,7 +152,7 @@
       <button
         v-if="canCreate"
         type="button"
-        class="mt-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-400 dark:hover:bg-slate-700"
+        class="mt-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium text-primary-600 hover:bg-primary-50 disabled:opacity-50 dark:text-primary-400 dark:hover:bg-slate-700"
         :disabled="busy"
         @click="create"
       >

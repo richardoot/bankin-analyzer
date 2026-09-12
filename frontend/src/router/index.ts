@@ -12,25 +12,25 @@ const routes: RouteRecordRaw[] = [
     path: '/login',
     name: 'login',
     component: () => import('@/views/LoginPage.vue'),
-    meta: { guestOnly: true },
+    meta: { title: 'Connexion', guestOnly: true },
   },
   {
     path: '/profile',
     name: 'profile',
     component: () => import('@/views/ProfilePage.vue'),
-    meta: { requiresAuth: true },
+    meta: { title: 'Mon profil', requiresAuth: true },
   },
   {
     path: '/email-confirmation',
     name: 'email-confirmation',
     component: () => import('@/views/EmailConfirmationPage.vue'),
-    meta: { guestOnly: true },
+    meta: { title: 'Confirmation d’e-mail', guestOnly: true },
   },
   {
     path: '/oauth/consent',
     name: 'oauth-consent',
     component: () => import('@/views/OAuthConsentPage.vue'),
-    meta: { requiresAuth: true },
+    meta: { title: 'Autorisation', requiresAuth: true },
   },
   // Where the bank redirects after authorization. Public on purpose: the
   // request arrives from the bank in whatever session state the browser was
@@ -40,66 +40,73 @@ const routes: RouteRecordRaw[] = [
     path: '/bank-callback',
     name: 'bank-callback',
     component: () => import('@/views/BankCallbackPage.vue'),
+    meta: { title: 'Connexion bancaire' },
+  },
+  {
+    path: '/data',
+    name: 'data',
+    component: () => import('@/views/DataPage.vue'),
+    meta: { title: 'Données', requiresAuth: true },
   },
   {
     path: '/import',
     name: 'import',
     component: () => import('@/views/ImportPage.vue'),
-    meta: { requiresAuth: true },
+    meta: { title: 'Import de transactions', requiresAuth: true },
   },
   {
     path: '/import/recap',
     name: 'import-recap',
     component: () => import('@/views/ImportRecapPage.vue'),
-    meta: { requiresAuth: true },
+    meta: { title: 'Récapitulatif d’import', requiresAuth: true },
   },
   {
     path: '/import/history',
     name: 'import-history',
     component: () => import('@/views/ImportHistoryPage.vue'),
-    meta: { requiresAuth: true },
+    meta: { title: 'Historique des imports', requiresAuth: true },
   },
   {
     path: '/bank-sync/history',
     name: 'bank-sync-history',
     component: () => import('@/views/BankSyncHistoryPage.vue'),
-    meta: { requiresAuth: true },
+    meta: { title: 'Historique des synchronisations', requiresAuth: true },
   },
   {
     path: '/dashboard',
     name: 'dashboard',
     component: () => import('@/views/DashboardPage.vue'),
-    meta: { requiresAuth: true },
+    meta: { title: 'Dashboard', requiresAuth: true },
   },
   {
     path: '/transactions',
     name: 'transactions',
     component: () => import('@/views/TransactionsPage.vue'),
-    meta: { requiresAuth: true },
+    meta: { title: 'Transactions', requiresAuth: true },
   },
   {
     path: '/reimbursements',
     name: 'reimbursements',
     component: () => import('@/views/ReimbursementsPage.vue'),
-    meta: { requiresAuth: true },
+    meta: { title: 'Remboursements', requiresAuth: true },
   },
   {
     path: '/budget',
     name: 'budget',
     component: () => import('@/views/BudgetPage.vue'),
-    meta: { requiresAuth: true },
+    meta: { title: 'Budget', requiresAuth: true },
   },
   {
     path: '/tags',
     name: 'tags',
     component: () => import('@/views/TagsPage.vue'),
-    meta: { requiresAuth: true },
+    meta: { title: 'Étiquettes', requiresAuth: true },
   },
   {
     path: '/tags/:id',
     name: 'tag-analysis',
     component: () => import('@/views/TagAnalysisPage.vue'),
-    meta: { requiresAuth: true },
+    meta: { title: 'Analyse d’étiquette', requiresAuth: true },
   },
   {
     path: '/settings',
@@ -110,16 +117,19 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'accounts',
         name: 'settings-accounts',
+        meta: { title: 'Réglages · Comptes' },
         component: () => import('@/views/settings/AccountsSettingsPage.vue'),
       },
       {
         path: 'categories',
         name: 'settings-categories',
+        meta: { title: 'Réglages · Catégories' },
         component: () => import('@/views/settings/CategoriesSettingsPage.vue'),
       },
       {
         path: 'general',
         name: 'settings-general',
+        meta: { title: 'Réglages · Général' },
         component: () => import('@/views/settings/GeneralSettingsPage.vue'),
       },
     ],
@@ -130,6 +140,17 @@ const routes: RouteRecordRaw[] = [
     redirect: '/settings',
   },
 ]
+
+// The design reference documents the system; it ships to developers, not
+// to the product. Dev builds only.
+if (import.meta.env.DEV) {
+  routes.push({
+    path: '/design',
+    name: 'design',
+    component: () => import('@/views/DesignReferencePage.vue'),
+    meta: { title: 'Référence design' },
+  })
+}
 
 const router = createRouter({
   history: createWebHistory(),
@@ -159,14 +180,23 @@ router.beforeEach(async to => {
     }
   }
 
-  // Redirect to profile if route is guest-only and user is authenticated
+  // A signed-in user landing on a guest page goes to their data, not to an
+  // administrative profile screen.
   if (to.meta.guestOnly && authStore.isAuthenticated) {
-    return { name: 'profile' }
+    return { name: 'dashboard' }
   }
 
   // Nothing to redirect to: let the navigation through. Said explicitly, since
   // falling off the end and returning a redirect are different instructions.
   return true
+})
+
+// One place names every page: the tab, the browser history and screen
+// readers all read document.title, so a single afterEach keeps the routes
+// from each remembering (or forgetting) to set it.
+router.afterEach(to => {
+  const title = to.meta.title
+  document.title = title ? `${title} — Finance Analyzer` : 'Finance Analyzer'
 })
 
 export default router
@@ -175,5 +205,7 @@ declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
     guestOnly?: boolean
+    /** Page name shown in the tab; the product name is appended once. */
+    title?: string
   }
 }

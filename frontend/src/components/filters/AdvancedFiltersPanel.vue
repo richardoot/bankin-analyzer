@@ -94,7 +94,7 @@
         </span>
         <span
           v-if="filtersStore.activeFiltersCount > 0"
-          class="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-xs font-medium rounded-full tabular-nums"
+          class="px-2 py-0.5 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 text-xs font-medium rounded-full tabular-nums"
         >
           {{ filtersStore.activeFiltersCount }} actif{{
             filtersStore.activeFiltersCount > 1 ? 's' : ''
@@ -109,10 +109,10 @@
           class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150"
           :class="
             filtersStore.isSyncing
-              ? 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500 cursor-wait'
+              ? 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 cursor-wait'
               : saveSuccess
                 ? 'bg-green-500 text-white'
-                : 'bg-indigo-600 dark:bg-indigo-500 text-white hover:bg-indigo-700 dark:hover:bg-indigo-600'
+                : 'bg-primary-600 dark:bg-primary-500 text-white hover:bg-primary-700 dark:hover:bg-primary-600'
           "
           :disabled="filtersStore.isSyncing"
           @click="handleSave"
@@ -174,7 +174,7 @@
 
         <!-- Chevron -->
         <svg
-          class="w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200"
+          class="w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform duration-200"
           :class="{ 'rotate-180': filtersStore.isPanelExpanded }"
           fill="none"
           stroke="currentColor"
@@ -221,7 +221,7 @@
             <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
               Catégories de dépenses masquées
             </h3>
-            <span class="text-xs text-gray-400 dark:text-gray-500"
+            <span class="text-xs text-gray-500 dark:text-gray-400"
               >(exclues des calculs)</span
             >
           </div>
@@ -288,7 +288,7 @@
             <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
               Catégories de revenus masquées
             </h3>
-            <span class="text-xs text-gray-400 dark:text-gray-500"
+            <span class="text-xs text-gray-500 dark:text-gray-400"
               >(exclues des calculs)</span
             >
           </div>

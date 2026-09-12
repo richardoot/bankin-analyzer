@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { ref, computed, watch } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import {
     api,
     type ReimbursementDto,
@@ -25,6 +26,14 @@
     close: []
     confirm: [settlement: SettlementDto]
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.isOpen,
+    onClose: () => handleClose(),
+    panel: modalPanelRef,
+  })
 
   const selectedTransaction = ref<TransactionDto | null>(null)
   const amount = ref(0)
@@ -125,7 +134,7 @@
       handleClose()
     } catch (e) {
       error.value =
-        e instanceof Error ? e.message : 'Erreur lors de la creation'
+        e instanceof Error ? e.message : 'Erreur lors de la création'
     } finally {
       isSubmitting.value = false
     }
@@ -157,6 +166,9 @@
         <div class="fixed inset-0 bg-black/50" @click="handleClose" />
 
         <div
+          ref="modalPanelRef"
+          role="dialog"
+          aria-modal="true"
           class="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-xl dark:shadow-slate-900/30 flex flex-col"
         >
           <!-- Header -->
@@ -213,7 +225,7 @@
                 <div
                   class="font-medium text-gray-900 dark:text-gray-100 truncate"
                 >
-                  <span class="text-gray-400 dark:text-gray-500"
+                  <span class="text-gray-500 dark:text-gray-400"
                     >[{{ formatDate(line.date) }}]</span
                   >
                   {{ line.description }}
@@ -246,7 +258,7 @@
             <!-- What will be credited, once the receipt is known -->
             <div v-if="selectedTransaction" class="mt-6">
               <div
-                class="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg flex items-center justify-between gap-3"
+                class="p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg flex items-center justify-between gap-3"
               >
                 <div class="min-w-0">
                   <div
@@ -260,7 +272,7 @@
                   </div>
                 </div>
                 <div
-                  class="text-lg font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
+                  class="text-lg font-bold text-primary-600 dark:text-primary-400 whitespace-nowrap"
                 >
                   +{{ formatCurrency(pot) }}
                 </div>
@@ -284,7 +296,7 @@
                     :max="Math.min(amountDue, pot)"
                     :value="amount"
                     :aria-label="`Montant affecte a ${line.description}`"
-                    class="w-28 px-2 py-1 text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500"
+                    class="w-28 px-2 py-1 text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
                     @change="onAmountCommit"
                   />
                   <span class="text-gray-500 dark:text-gray-400">&euro;</span>
@@ -299,7 +311,7 @@
                 <input
                   v-model="forceComplete"
                   type="checkbox"
-                  class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                   :aria-label="`Solder ${line.description}`"
                 />
                 Solder cette ligne malgre l'ecart de
@@ -323,7 +335,7 @@
             <button
               type="button"
               data-testid="single-settlement-confirm"
-              class="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               :disabled="!canConfirm"
               @click="handleConfirm"
             >
@@ -333,7 +345,7 @@
                 />
                 Creation...
               </span>
-              <span v-else>Confirmer le reglement</span>
+              <span v-else>Confirmer le règlement</span>
             </button>
           </div>
         </div>

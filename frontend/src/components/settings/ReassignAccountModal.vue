@@ -10,6 +10,7 @@
    * row left alone because it carries work since.
    */
   import { ref } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import { api } from '@/lib/api'
   import type { ReassignmentOutcomeDto } from '@/lib/api'
 
@@ -31,6 +32,14 @@
     close: []
     reassigned: [ReassignmentOutcomeDto]
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.pending !== null,
+    onClose: () => emit('close'),
+    panel: modalPanelRef,
+  })
 
   const applying = ref(false)
   const error = ref<string | null>(null)
@@ -97,6 +106,9 @@
     data-testid="reassign-modal"
   >
     <div
+      ref="modalPanelRef"
+      role="dialog"
+      aria-modal="true"
       class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900"
     >
       <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -135,6 +147,7 @@
 
       <p
         v-if="error"
+        role="alert"
         class="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300"
       >
         {{ error }}
@@ -154,7 +167,7 @@
           type="button"
           data-testid="reassign-confirm"
           :disabled="applying"
-          class="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
           @click="confirm"
         >
           {{ applying ? 'Correction…' : 'Corriger' }}

@@ -128,7 +128,7 @@
       >
         <!-- Chevron -->
         <svg
-          class="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0 transition-transform"
+          class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
           :class="{ 'rotate-90': isExpanded(rowKey(cat)) }"
           fill="none"
           stroke="currentColor"
@@ -149,7 +149,7 @@
             {{ cat.category }}
           </span>
           <span
-            class="text-xs text-gray-400 dark:text-gray-500 shrink-0 hidden sm:inline"
+            class="text-xs text-gray-500 dark:text-gray-400 shrink-0 hidden sm:inline"
           >
             {{ getPercent(cat).toFixed(1) }}%
           </span>
@@ -227,7 +227,7 @@
                 {{ sub.subcategory || '(sans sous-catégorie)' }}
               </span>
               <span
-                class="text-xs text-gray-400 dark:text-gray-500 tabular-nums shrink-0"
+                class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0"
               >
                 {{ sub.transactionCount }} tx
               </span>

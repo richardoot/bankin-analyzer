@@ -41,7 +41,7 @@
     'Mai',
     'Juin',
     'Juil',
-    'Aout',
+    'Août',
     'Sep',
     'Oct',
     'Nov',
@@ -264,17 +264,17 @@
         // Full month name
         const fullMonths = [
           'Janvier',
-          'Fevrier',
+          'Février',
           'Mars',
           'Avril',
           'Mai',
           'Juin',
           'Juillet',
-          'Aout',
+          'Août',
           'Septembre',
           'Octobre',
           'Novembre',
-          'Decembre',
+          'Décembre',
         ]
         const parts = ym.split('-')
         const monthIdx = parseInt(parts[1] ?? '1', 10)
@@ -296,7 +296,7 @@
         else if (hasPlanRange.value && hasComparisonRange.value)
           html += ` <span style="opacity:0.5;font-weight:400">(intermédiaire)</span>`
         html += `</div>`
-        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">Depenses</span><strong>${formatCurrency(val)}</strong></div>`
+        html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">Dépenses</span><strong>${formatCurrency(val)}</strong></div>`
         if (diffBudget !== null) {
           const color = diffBudget > 0 ? '#f87171' : '#34d399'
           html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">vs Budget</span><span style="color:${color};font-weight:600">${diffBudget > 0 ? '+' : ''}${formatCurrency(diffBudget)}</span></div>`
@@ -313,7 +313,7 @@
 
   const series = computed(() => [
     {
-      name: 'Depenses',
+      name: 'Dépenses',
       data: props.monthlyTotals,
     },
   ])
@@ -323,14 +323,14 @@
   <div v-if="monthlyTotals.length >= 2" class="w-full">
     <!-- Legend -->
     <div
-      class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-400 dark:text-gray-500 mb-1"
+      class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400 mb-1"
     >
       <span v-if="hasPlanRange" class="flex items-center gap-1.5">
         <span class="inline-block w-3 h-2 rounded-sm bg-red-500"></span>
         Plan budgétaire
       </span>
       <span v-if="hasComparisonRange" class="flex items-center gap-1.5">
-        <span class="inline-block w-3 h-2 rounded-sm bg-indigo-500"></span>
+        <span class="inline-block w-3 h-2 rounded-sm bg-primary-500"></span>
         Comparaison
       </span>
       <span class="flex items-center gap-1.5">
@@ -351,7 +351,7 @@
         Mois en cours
       </span>
       <span v-if="averageIncome > 0" class="flex items-center gap-1.5">
-        <span class="inline-block w-3 h-0.5 bg-emerald-400"></span>
+        <span class="inline-block w-3 h-0.5 bg-primary-400"></span>
         Revenus
       </span>
       <span v-if="totalBudget > 0" class="flex items-center gap-1.5">

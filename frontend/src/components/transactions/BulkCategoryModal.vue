@@ -1,5 +1,6 @@
 <script setup lang="ts">
-  import { computed, watch } from 'vue'
+  import { ref, computed, watch } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import type { CategoryDto, SubcategoryDto } from '@/lib/api'
 
   const props = defineProps<{
@@ -14,6 +15,14 @@
     close: []
     apply: [categoryId: string, subcategoryId: string | null]
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.isOpen,
+    onClose: () => emit('close'),
+    panel: modalPanelRef,
+  })
 
   const selectedCategoryId = defineModel<string | null>('categoryId', {
     default: null,
@@ -53,7 +62,9 @@
       <div class="absolute inset-0 bg-black/50" @click="emit('close')" />
 
       <div
+        ref="modalPanelRef"
         role="dialog"
+        aria-modal="true"
         aria-labelledby="bulk-category-modal-title"
         class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
       >
@@ -70,17 +81,17 @@
           for="bulk-category"
           class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
         >
-          Categorie
+          Catégorie
         </label>
         <select
           id="bulk-category"
           v-model="selectedCategoryId"
           data-testid="bulk-category-select"
-          class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 mb-4"
+          class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 mb-4"
         >
-          <option :value="null" disabled>Selectionnez une categorie</option>
+          <option :value="null" disabled>Sélectionnez une catégorie</option>
           <option v-for="cat in categories" :key="cat.id" :value="cat.id">
-            {{ cat.name }} ({{ cat.type === 'EXPENSE' ? 'Depense' : 'Revenu' }})
+            {{ cat.name }} ({{ cat.type === 'EXPENSE' ? 'Dépense' : 'Revenu' }})
           </option>
         </select>
 
@@ -88,14 +99,14 @@
           for="bulk-subcategory"
           class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
         >
-          Sous-categorie
+          Sous-catégorie
         </label>
         <select
           id="bulk-subcategory"
           v-model="selectedSubcategoryId"
           data-testid="bulk-subcategory-select"
           :disabled="!selectedCategoryId"
-          class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 disabled:cursor-not-allowed disabled:opacity-50 mb-3"
+          class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 disabled:cursor-not-allowed disabled:opacity-50 mb-3"
         >
           <option :value="null">Aucune</option>
           <option
@@ -123,7 +134,7 @@
           </template>
           <template v-else>
             Les sous-categories actuelles seront retirees : elles
-            n'appartiennent pas a la categorie choisie.
+            n'appartiennent pas à la catégorie choisie.
           </template>
         </p>
 
@@ -140,7 +151,7 @@
             class="flex-1 px-4 py-2.5 text-sm font-medium text-white rounded-lg transition-colors"
             :class="
               selectedCategoryId && !isUpdating
-                ? 'bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600'
+                ? 'bg-primary-600 dark:bg-primary-500 hover:bg-primary-700 dark:hover:bg-primary-600'
                 : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
             "
             @click="handleApply"

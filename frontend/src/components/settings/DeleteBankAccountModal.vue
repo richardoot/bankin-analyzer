@@ -9,6 +9,7 @@
    * hard.
    */
   import { computed, ref, watch } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import { useAccountsStore } from '@/stores/accounts'
   import type { AccountDeletionSummaryDto, AccountDto } from '@/lib/api'
 
@@ -20,6 +21,14 @@
     close: []
     deleted: [{ account: AccountDto; deletedTransactions: number }]
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.account !== null,
+    onClose: () => close(),
+    panel: modalPanelRef,
+  })
 
   const accountsStore = useAccountsStore()
 
@@ -114,6 +123,7 @@
         <div class="fixed inset-0 bg-black/50" @click="close" />
 
         <div
+          ref="modalPanelRef"
           role="dialog"
           aria-modal="true"
           aria-labelledby="delete-bank-account-title"

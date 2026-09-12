@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { computed } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
+  import StepIndicator from '@/components/ui/StepIndicator.vue'
 
   const route = useRoute()
   const router = useRouter()
@@ -28,6 +29,11 @@
     class="min-h-screen bg-gray-50 dark:bg-slate-800 py-12 transition-colors"
   >
     <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+      <StepIndicator
+        class="mb-8"
+        :steps="['Dépôt', 'Aperçu', 'Doublons', 'Récapitulatif']"
+        :current="4"
+      />
       <div
         class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-8"
       >
@@ -80,16 +86,14 @@
 
           <!-- Catégories -->
           <div
-            class="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-6 text-center"
+            class="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6 text-center"
           >
             <div
-              class="text-4xl font-bold text-indigo-600 dark:text-indigo-400 mb-1"
+              class="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-1"
             >
               {{ categories }}
             </div>
-            <div
-              class="text-sm font-medium text-indigo-800 dark:text-indigo-300"
-            >
+            <div class="text-sm font-medium text-blue-800 dark:text-blue-300">
               Catégories
             </div>
           </div>
@@ -157,7 +161,7 @@
             Nouvel import
           </button>
           <button
-            class="flex-1 px-4 py-3 bg-emerald-600 dark:bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors"
+            class="flex-1 px-4 py-3 bg-primary-600 dark:bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
             @click="goToDashboard"
           >
             Voir le dashboard

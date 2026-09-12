@@ -112,7 +112,7 @@ describe('MigrateCategoryModal', () => {
       .get('[data-testid="migrate-target-select"]')
       .findAll('option')
       .map(o => o.text())
-    expect(options).toEqual(['Selectionnez une categorie', 'Loisirs'])
+    expect(options).toEqual(['Sélectionnez une catégorie', 'Loisirs'])
   })
 
   it('says the source survives the move', () => {
@@ -164,7 +164,7 @@ describe('MigrateCategoryModal', () => {
     await openMapping(wrapper)
 
     const row = wrapper.get('[data-testid="migrate-row-uncategorized"]')
-    expect(row.text()).toContain('Sans sous-categorie')
+    expect(row.text()).toContain('Sans sous-catégorie')
     expect(row.text()).toContain('3')
   })
 

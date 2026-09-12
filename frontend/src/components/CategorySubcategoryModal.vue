@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { ref, watch, computed } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import { api, type CategoryDto, type SubcategoryDto } from '@/lib/api'
 
   const props = defineProps<{
@@ -13,6 +14,14 @@
     close: []
     select: [categoryId: string | null, subcategoryId: string | null]
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.isOpen,
+    onClose: () => handleClose(),
+    panel: modalPanelRef,
+  })
 
   const categories = ref<CategoryDto[]>([])
   const subcategories = ref<SubcategoryDto[]>([])
@@ -141,7 +150,7 @@
       // Auto-select the new category
       await selectCategory(created.id)
     } catch (e) {
-      error.value = 'Erreur lors de la creation de la categorie'
+      error.value = 'Erreur lors de la création de la catégorie'
       console.error(e)
     } finally {
       isCreatingCategory.value = false
@@ -165,7 +174,7 @@
       selectedSubcategoryId.value = created.id
       newSubcategoryName.value = ''
     } catch (e) {
-      error.value = 'Erreur lors de la creation de la sous-categorie'
+      error.value = 'Erreur lors de la création de la sous-catégorie'
       console.error(e)
     } finally {
       isCreatingSubcategory.value = false
@@ -215,7 +224,9 @@
         <!-- Modal -->
         <Transition name="modal-content" appear>
           <div
+            ref="modalPanelRef"
             role="dialog"
+            aria-modal="true"
             aria-labelledby="category-modal-title"
             class="relative z-10 w-full max-w-md h-[85vh] sm:h-[75vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-2xl dark:shadow-black/40 flex flex-col"
           >
@@ -227,10 +238,10 @@
                     id="category-modal-title"
                     class="text-lg font-semibold text-gray-900 dark:text-white"
                   >
-                    Modifier la categorie
+                    Modifier la catégorie
                   </h2>
                   <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                    {{ transactionType === 'EXPENSE' ? 'Depense' : 'Revenu' }}
+                    {{ transactionType === 'EXPENSE' ? 'Dépense' : 'Revenu' }}
                   </p>
                 </div>
                 <button
@@ -257,7 +268,7 @@
               <!-- Search -->
               <div class="mt-4 relative">
                 <svg
-                  class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500"
+                  class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -272,9 +283,9 @@
                 <input
                   v-model="searchQuery"
                   type="text"
-                  aria-label="Rechercher une categorie"
-                  placeholder="Rechercher une categorie..."
-                  class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow"
+                  aria-label="Rechercher une catégorie"
+                  placeholder="Rechercher une catégorie..."
+                  class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 transition-shadow"
                 />
               </div>
 
@@ -282,7 +293,7 @@
               <div class="mt-2 flex gap-2">
                 <div class="relative flex-1">
                   <svg
-                    class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500"
+                    class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -297,15 +308,15 @@
                   <input
                     v-model="newCategoryName"
                     type="text"
-                    :aria-label="`Creer une nouvelle categorie ${transactionType === 'EXPENSE' ? 'de depense' : 'de revenu'}`"
-                    :placeholder="`Nouvelle categorie ${transactionType === 'EXPENSE' ? 'de depense' : 'de revenu'}...`"
-                    class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow"
+                    :aria-label="`Créer une nouvelle catégorie ${transactionType === 'EXPENSE' ? 'de dépense' : 'de revenu'}`"
+                    :placeholder="`Nouvelle catégorie ${transactionType === 'EXPENSE' ? 'de dépense' : 'de revenu'}...`"
+                    class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 transition-shadow"
                     @keyup.enter="createCategory"
                   />
                 </div>
                 <button
                   type="button"
-                  class="px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  class="px-4 py-2 bg-primary-600 dark:bg-primary-500 text-white rounded-xl text-sm font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   :disabled="isCreatingCategory || !newCategoryName.trim()"
                   @click="createCategory"
                 >
@@ -329,7 +340,7 @@
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  <span>Creer</span>
+                  <span>Créer</span>
                 </button>
               </div>
             </div>
@@ -342,7 +353,7 @@
                 class="flex-1 flex flex-col items-center justify-center py-12"
               >
                 <div
-                  class="w-10 h-10 border-3 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin"
+                  class="w-10 h-10 border-3 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-400 rounded-full animate-spin"
                 />
                 <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">
                   Chargement...
@@ -360,9 +371,9 @@
                   <span
                     class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
                   >
-                    Categorie
+                    Catégorie
                   </span>
-                  <span class="text-xs text-gray-400 dark:text-gray-500">
+                  <span class="text-xs text-gray-500 dark:text-gray-400">
                     {{ filteredCategories.length }} option{{
                       filteredCategories.length > 1 ? 's' : ''
                     }}
@@ -376,7 +387,7 @@
                       class="group relative flex items-center gap-2 p-3 rounded-xl text-left transition-all duration-150"
                       :class="
                         selectedCategoryId === null
-                          ? 'bg-indigo-50 dark:bg-indigo-500/10 ring-2 ring-indigo-500 dark:ring-indigo-400'
+                          ? 'bg-primary-50 dark:bg-primary-500/10 ring-2 ring-primary-500 dark:ring-primary-400'
                           : 'bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700'
                       "
                       @click="selectCategory(null)"
@@ -385,8 +396,8 @@
                         class="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center"
                         :class="
                           selectedCategoryId === null
-                            ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400'
-                            : 'bg-gray-200 dark:bg-slate-700 text-gray-400 dark:text-gray-500'
+                            ? 'bg-primary-100 dark:bg-primary-500/20 text-primary-600 dark:text-primary-400'
+                            : 'bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
                         "
                       >
                         <svg
@@ -407,7 +418,7 @@
                         class="text-sm font-medium truncate"
                         :class="
                           selectedCategoryId === null
-                            ? 'text-indigo-700 dark:text-indigo-300'
+                            ? 'text-primary-700 dark:text-primary-300'
                             : 'text-gray-600 dark:text-gray-400'
                         "
                       >
@@ -415,7 +426,7 @@
                       </span>
                       <span
                         v-if="selectedCategoryId === null"
-                        class="absolute top-2 right-2 w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400"
+                        class="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary-500 dark:bg-primary-400"
                       />
                     </button>
 
@@ -427,7 +438,7 @@
                       class="group relative flex items-center gap-2 p-3 rounded-xl text-left transition-all duration-150"
                       :class="
                         selectedCategoryId === cat.id
-                          ? 'bg-indigo-50 dark:bg-indigo-500/10 ring-2 ring-indigo-500 dark:ring-indigo-400'
+                          ? 'bg-primary-50 dark:bg-primary-500/10 ring-2 ring-primary-500 dark:ring-primary-400'
                           : 'bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700'
                       "
                       @click="selectCategory(cat.id)"
@@ -439,7 +450,7 @@
                           selectedCategoryId === cat.id
                             ? transactionType === 'EXPENSE'
                               ? 'bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400'
-                              : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                              : 'bg-primary-100 dark:bg-primary-500/20 text-primary-600 dark:text-primary-400'
                             : 'bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400',
                         ]"
                       >
@@ -457,7 +468,7 @@
                       </span>
                       <span
                         v-if="selectedCategoryId === cat.id"
-                        class="absolute top-2 right-2 w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400"
+                        class="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary-500 dark:bg-primary-400"
                       />
                     </button>
                     <div
@@ -465,7 +476,7 @@
                       class="col-span-2 text-center py-6"
                     >
                       <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Aucune categorie trouvee pour "{{ searchQuery }}"
+                        Aucune catégorie trouvée pour "{{ searchQuery }}"
                       </p>
                     </div>
                   </div>
@@ -484,14 +495,14 @@
                     <div class="flex items-center gap-2">
                       <span
                         class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                        >Sous-categorie</span
+                        >Sous-catégorie</span
                       >
                       <span
                         class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
                         :class="
                           transactionType === 'EXPENSE'
                             ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400'
-                            : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-primary-50 dark:bg-primary-500/10 text-primary-600 dark:text-primary-400'
                         "
                       >
                         <span v-if="selectedCategory?.icon" class="mr-0.5">{{
@@ -506,7 +517,7 @@
                     class="flex-1 flex justify-center items-center"
                   >
                     <div
-                      class="w-6 h-6 border-2 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin"
+                      class="w-6 h-6 border-2 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-400 rounded-full animate-spin"
                     />
                   </div>
                   <div
@@ -519,7 +530,7 @@
                         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150"
                         :class="
                           selectedSubcategoryId === null
-                            ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-1 dark:ring-offset-slate-900'
+                            ? 'bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-300 ring-2 ring-primary-500 dark:ring-primary-400 ring-offset-1 dark:ring-offset-slate-900'
                             : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700'
                         "
                         @click="selectSubcategory(null)"
@@ -546,7 +557,7 @@
                         class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150"
                         :class="
                           selectedSubcategoryId === sub.id
-                            ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-1 dark:ring-offset-slate-900'
+                            ? 'bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-300 ring-2 ring-primary-500 dark:ring-primary-400 ring-offset-1 dark:ring-offset-slate-900'
                             : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700'
                         "
                         @click="selectSubcategory(sub.id)"
@@ -560,7 +571,7 @@
                     <div class="flex gap-2 mt-3">
                       <div class="relative flex-1">
                         <svg
-                          class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500"
+                          class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -575,14 +586,14 @@
                         <input
                           v-model="newSubcategoryName"
                           type="text"
-                          placeholder="Nouvelle sous-categorie..."
-                          class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-shadow"
+                          placeholder="Nouvelle sous-catégorie..."
+                          class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-slate-800 border-0 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 transition-shadow"
                           @keyup.enter="createSubcategory"
                         />
                       </div>
                       <button
                         type="button"
-                        class="px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        class="px-4 py-2 bg-primary-600 dark:bg-primary-500 text-white rounded-xl text-sm font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         :disabled="
                           isCreatingSubcategory || !newSubcategoryName.trim()
                         "
@@ -608,16 +619,16 @@
                             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                           />
                         </svg>
-                        <span>Creer</span>
+                        <span>Créer</span>
                       </button>
                     </div>
                   </div>
                 </template>
                 <div v-else class="flex-1 flex items-center justify-center">
                   <p
-                    class="text-sm text-gray-400 dark:text-gray-500 text-center"
+                    class="text-sm text-gray-500 dark:text-gray-400 text-center"
                   >
-                    Selectionnez une categorie pour voir les sous-categories
+                    Sélectionnez une catégorie pour voir les sous-categories
                   </p>
                 </div>
               </div>
@@ -645,7 +656,7 @@
                         }}
                       </template>
                     </template>
-                    <template v-else> Aucune categorie </template>
+                    <template v-else> Aucune catégorie </template>
                   </p>
                 </div>
 
@@ -660,7 +671,7 @@
                   </button>
                   <button
                     type="button"
-                    class="px-5 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
+                    class="px-5 py-2 bg-primary-600 dark:bg-primary-500 text-white rounded-xl text-sm font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
                     :disabled="!hasChanges"
                     @click="confirmSelection"
                   >

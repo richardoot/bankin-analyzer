@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The navbar's bar-chart mark, on the brand emerald, so the tab matches the app. -->
+  <rect width="32" height="32" rx="7" fill="#059669" />
+  <path
+    d="M9 22v-6M16 22V10M23 22v-9"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="3.2"
+    stroke-linecap="round"
+  />
+</svg>
