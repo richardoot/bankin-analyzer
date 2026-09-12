@@ -4,6 +4,7 @@
   import { usePersonsStore } from '@/stores/persons'
   import { useAccountsStore } from '@/stores/accounts'
   import { useTagsStore } from '@/stores/tags'
+  import { useFiltersStore } from '@/stores/filters'
   import { api } from '@/lib/api'
   import type {
     TransactionDto,
@@ -36,6 +37,7 @@
   const personsStore = usePersonsStore()
   const accountsStore = useAccountsStore()
   const tagsStore = useTagsStore()
+  const filtersStore = useFiltersStore()
 
   // Transactions state
   const transactions = ref<TransactionDto[]>([])
@@ -88,8 +90,9 @@
           selectedTag: parsed.selectedTag ?? null,
           showOnlyNotPointed: parsed.showOnlyNotPointed ?? false,
           searchKeyword: parsed.searchKeyword ?? '',
-          filterStartDate: parsed.filterStartDate ?? '',
-          filterEndDate: parsed.filterEndDate ?? '',
+          // The date window lives in the shared filters store now.
+          filterStartDate: '',
+          filterEndDate: '',
           amountMin: parsed.amountMin ?? '',
           amountMax: parsed.amountMax ?? '',
         }
@@ -170,6 +173,25 @@
 
   const initialFilters = hasQueryFilters ? filtersFromQuery() : savedFilters
 
+  /**
+   * The date window is the same period the dashboard shows. Without an URL
+   * override it derives from the shared store; with one, the URL's dates are
+   * pushed back into the store so the two pages keep agreeing.
+   */
+  const storedRange = filtersStore.getDateRangeFromPeriod(
+    filtersStore.timePeriod
+  )
+  if (!hasQueryFilters) {
+    initialFilters.filterStartDate = storedRange.startDate ?? ''
+    initialFilters.filterEndDate = storedRange.endDate ?? ''
+  } else if (initialFilters.filterStartDate && initialFilters.filterEndDate) {
+    filtersStore.setCustomDateRange(
+      initialFilters.filterStartDate,
+      initialFilters.filterEndDate
+    )
+    filtersStore.setTimePeriod('custom')
+  }
+
   // Filters
   const typeFilter = ref<'ALL' | 'EXPENSE' | 'INCOME'>(
     initialFilters.typeFilter
@@ -209,8 +231,6 @@
         selectedTag: selectedTag.value,
         showOnlyNotPointed: showOnlyNotPointed.value,
         searchKeyword: searchKeyword.value,
-        filterStartDate: filterStartDate.value,
-        filterEndDate: filterEndDate.value,
         amountMin: amountMin.value,
         amountMax: amountMax.value,
       })
@@ -892,6 +912,18 @@
       fetchTransactions()
     }
   }
+
+  // Editing the window makes it the shared custom period; clearing it goes
+  // back to « tout ». The store never writes back into these refs, so there
+  // is no loop.
+  watch([filterStartDate, filterEndDate], ([start, end]) => {
+    if (start && end) {
+      filtersStore.setCustomDateRange(start, end)
+      filtersStore.setTimePeriod('custom')
+    } else if (!start && !end && filtersStore.timePeriod !== 'all') {
+      filtersStore.setTimePeriod('all')
+    }
+  })
 
   // A subcategory belongs to one category, so changing the category drops the
   // previous subcategory. Declared before the refetch watcher below so both
