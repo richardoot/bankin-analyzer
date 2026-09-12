@@ -212,7 +212,7 @@
           />
           <span>{{ currentLabel }}</span>
           <svg
-            class="w-4 h-4 text-gray-400 dark:text-gray-500"
+            class="w-4 h-4 text-gray-500 dark:text-gray-400"
             :class="{ 'rotate-180': open }"
             fill="none"
             stroke="currentColor"
@@ -251,7 +251,7 @@
 
       <span
         v-if="resolvedRange"
-        class="text-xs text-gray-400 dark:text-gray-500"
+        class="text-xs text-gray-500 dark:text-gray-400"
       >
         {{ formatMonth(resolvedRange.startDate) }} →
         {{ formatMonth(resolvedRange.endDate) }}

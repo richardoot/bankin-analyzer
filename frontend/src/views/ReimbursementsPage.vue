@@ -516,7 +516,7 @@
                     class="text-gray-600 dark:text-gray-400 flex items-center gap-1.5 sm:gap-2 flex-wrap"
                   >
                     <svg
-                      class="w-3 h-3 text-gray-400 dark:text-gray-500 transition-transform duration-200 shrink-0"
+                      class="w-3 h-3 text-gray-500 dark:text-gray-400 transition-transform duration-200 shrink-0"
                       :class="{
                         'rotate-90': isCategoryExpanded(
                           person.personId,
@@ -536,7 +536,7 @@
                     </svg>
                     <span class="truncate">{{ cat.categoryName }}</span>
                     <span
-                      class="text-xs text-gray-400 dark:text-gray-500 shrink-0"
+                      class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
                       >({{ cat.reimbursements.length }})</span
                     >
                     <!-- Status badge -->
@@ -585,7 +585,7 @@
                       class="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-amber-200 dark:border-amber-700"
                     >
                       <span class="truncate">
-                        <span class="text-gray-400 dark:text-gray-500"
+                        <span class="text-gray-500 dark:text-gray-400"
                           >[{{
                             formatTransactionDate(r.transaction?.date)
                           }}]</span
@@ -828,7 +828,7 @@
                   </svg>
                 </button>
                 <button
-                  class="p-1.5 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                  class="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
                   @click="cancelEditPerson"
                 >
                   <svg
@@ -877,7 +877,7 @@
                 </div>
                 <!-- Delete button -->
                 <button
-                  class="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
+                  class="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
                   title="Supprimer"
                   @click="showDeleteConfirmation(person.id, person.name)"
                 >

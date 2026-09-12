@@ -1031,7 +1031,7 @@
               </div>
 
               <p
-                class="text-xs text-gray-400 dark:text-gray-500 leading-relaxed"
+                class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed"
               >
                 Les pastilles colorées sur chaque ligne indiquent le montant
                 réellement déduit par catégorie. Sans pastille, rien n'a été
@@ -1075,7 +1075,7 @@
                   Montants
                   <span
                     v-if="isLoadingPreview"
-                    class="flex items-center gap-1.5 text-[10px] font-normal normal-case tracking-normal text-gray-400 dark:text-gray-500"
+                    class="flex items-center gap-1.5 text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
                     data-testid="preview-loading"
                   >
                     <svg
@@ -1118,7 +1118,7 @@
                   <span class="text-gray-700 dark:text-gray-300 tabular-nums">
                     {{ formatCurrency(referenceIncomeAvg) }}
                   </span>
-                  <span class="text-gray-400 dark:text-gray-500">
+                  <span class="text-gray-500 dark:text-gray-400">
                     · {{ referenceIncomeLabel }}
                   </span>
                 </span>
@@ -1303,7 +1303,7 @@
                     −{{ formatCurrency(excludedFromSeed(cat)) }} exceptionnel
                   </span>
                   <span
-                    class="text-xs text-gray-400 dark:text-gray-500 tabular-nums hidden sm:inline shrink-0"
+                    class="text-xs text-gray-500 dark:text-gray-400 tabular-nums hidden sm:inline shrink-0"
                   >
                     <template v-if="seedBasisAmount(cat) > 0">
                       Moy. {{ formatCurrency(seedBasisAmount(cat)) }}

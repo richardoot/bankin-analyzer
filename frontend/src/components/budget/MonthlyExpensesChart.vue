@@ -323,7 +323,7 @@
   <div v-if="monthlyTotals.length >= 2" class="w-full">
     <!-- Legend -->
     <div
-      class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-400 dark:text-gray-500 mb-1"
+      class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400 mb-1"
     >
       <span v-if="hasPlanRange" class="flex items-center gap-1.5">
         <span class="inline-block w-3 h-2 rounded-sm bg-red-500"></span>

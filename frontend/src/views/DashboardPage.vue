@@ -489,7 +489,7 @@
                   </button>
                 </div>
               </div>
-              <p class="text-xs text-gray-400 dark:text-gray-500 mb-4">
+              <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
                 <template v-if="breakdownMode === 'everyday'">
                   Moyennes hors dépenses étiquetées comme exceptionnelles.
                   Seules les catégories concernées par un événement changent de

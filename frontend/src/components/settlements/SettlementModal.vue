@@ -524,7 +524,7 @@
                   >
                     <button
                       type="button"
-                      class="p-1 text-gray-400 dark:text-gray-500 shrink-0"
+                      class="p-1 text-gray-500 dark:text-gray-400 shrink-0"
                       :aria-label="`Deplier ${group.categoryName}`"
                       :aria-expanded="expandedCategories.has(group.key)"
                       @click="toggleExpanded(group.key)"
@@ -597,7 +597,7 @@
                         <div
                           class="text-sm text-gray-900 dark:text-gray-100 truncate"
                         >
-                          <span class="text-gray-400 dark:text-gray-500"
+                          <span class="text-gray-500 dark:text-gray-400"
                             >[{{ formatDate(line.date) }}]</span
                           >
                           {{ line.description }}
@@ -710,7 +710,7 @@
                     >
                       <button
                         type="button"
-                        class="p-1 text-gray-400 dark:text-gray-500 shrink-0"
+                        class="p-1 text-gray-500 dark:text-gray-400 shrink-0"
                         :aria-label="`Deplier ${group.categoryName}`"
                         :aria-expanded="expandedCategories.has(group.key)"
                         @click="toggleExpanded(group.key)"
@@ -775,7 +775,7 @@
                             <div
                               class="text-sm text-gray-900 dark:text-gray-100 truncate"
                             >
-                              <span class="text-gray-400 dark:text-gray-500"
+                              <span class="text-gray-500 dark:text-gray-400"
                                 >[{{ formatDate(line.date) }}]</span
                               >
                               {{ line.description }}

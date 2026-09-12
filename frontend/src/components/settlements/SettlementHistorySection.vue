@@ -105,7 +105,7 @@
       class="text-center py-8 text-gray-500 dark:text-gray-400"
     >
       <svg
-        class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-3"
+        class="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400 mb-3"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -195,7 +195,7 @@
             <div class="flex gap-1 shrink-0">
               <button
                 type="button"
-                class="p-2.5 min-h-[44px] min-w-[44px] text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
+                class="p-2.5 min-h-[44px] min-w-[44px] text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
                 title="Voir les details"
                 @click="emit('viewDetails', settlement)"
               >
@@ -221,7 +221,7 @@
               </button>
               <button
                 type="button"
-                class="p-2.5 min-h-[44px] min-w-[44px] text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                class="p-2.5 min-h-[44px] min-w-[44px] text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                 title="Annuler le règlement"
                 @click="emit('delete', settlement.id)"
               >
@@ -254,7 +254,7 @@
               >
                 {{ formatDate(settlement.createdAt) }}
               </span>
-              <span class="text-gray-400 dark:text-gray-500">-</span>
+              <span class="text-gray-500 dark:text-gray-400">-</span>
               <div class="flex items-center gap-2">
                 <div
                   class="h-6 w-6 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center"
@@ -316,7 +316,7 @@
             <div class="flex gap-1">
               <button
                 type="button"
-                class="p-2 text-gray-400 dark:text-gray-500 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
+                class="p-2 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
                 title="Voir les details"
                 @click="emit('viewDetails', settlement)"
               >
@@ -342,7 +342,7 @@
               </button>
               <button
                 type="button"
-                class="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                class="p-2 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                 title="Annuler le règlement"
                 @click="emit('delete', settlement.id)"
               >

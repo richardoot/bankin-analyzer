@@ -240,7 +240,7 @@
               </h2>
             </div>
             <button
-              class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+              class="text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               @click="handleClose"
             >
               <svg
@@ -369,7 +369,7 @@
                     />
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center justify-between">
-                        <span class="text-xs text-gray-400 dark:text-gray-500"
+                        <span class="text-xs text-gray-500 dark:text-gray-400"
                           >#{{ tx.index + 1 }}</span
                         >
                         <span
@@ -539,7 +539,7 @@
                         >
                         {{ dup.existing.categoryName || '-' }}
                       </div>
-                      <div class="text-xs text-gray-400 dark:text-gray-500">
+                      <div class="text-xs text-gray-500 dark:text-gray-400">
                         Importe le {{ formatDate(dup.existing.createdAt) }}
                       </div>
                     </div>

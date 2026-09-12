@@ -93,7 +93,7 @@
       <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
         Mois par mois
       </h2>
-      <p class="text-xs text-gray-400 dark:text-gray-500">
+      <p class="text-xs text-gray-500 dark:text-gray-400">
         Rouge : l'enveloppe du mois est dépassée. Clique un mois pour n'afficher
         que celui-là.
       </p>

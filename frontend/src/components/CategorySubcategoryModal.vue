@@ -268,7 +268,7 @@
               <!-- Search -->
               <div class="mt-4 relative">
                 <svg
-                  class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500"
+                  class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -293,7 +293,7 @@
               <div class="mt-2 flex gap-2">
                 <div class="relative flex-1">
                   <svg
-                    class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500"
+                    class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -373,7 +373,7 @@
                   >
                     Catégorie
                   </span>
-                  <span class="text-xs text-gray-400 dark:text-gray-500">
+                  <span class="text-xs text-gray-500 dark:text-gray-400">
                     {{ filteredCategories.length }} option{{
                       filteredCategories.length > 1 ? 's' : ''
                     }}
@@ -397,7 +397,7 @@
                         :class="
                           selectedCategoryId === null
                             ? 'bg-primary-100 dark:bg-primary-500/20 text-primary-600 dark:text-primary-400'
-                            : 'bg-gray-200 dark:bg-slate-700 text-gray-400 dark:text-gray-500'
+                            : 'bg-gray-200 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
                         "
                       >
                         <svg
@@ -571,7 +571,7 @@
                     <div class="flex gap-2 mt-3">
                       <div class="relative flex-1">
                         <svg
-                          class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500"
+                          class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -626,7 +626,7 @@
                 </template>
                 <div v-else class="flex-1 flex items-center justify-center">
                   <p
-                    class="text-sm text-gray-400 dark:text-gray-500 text-center"
+                    class="text-sm text-gray-500 dark:text-gray-400 text-center"
                   >
                     Sélectionnez une catégorie pour voir les sous-categories
                   </p>

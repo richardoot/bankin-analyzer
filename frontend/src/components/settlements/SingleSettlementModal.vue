@@ -225,7 +225,7 @@
                 <div
                   class="font-medium text-gray-900 dark:text-gray-100 truncate"
                 >
-                  <span class="text-gray-400 dark:text-gray-500"
+                  <span class="text-gray-500 dark:text-gray-400"
                     >[{{ formatDate(line.date) }}]</span
                   >
                   {{ line.description }}

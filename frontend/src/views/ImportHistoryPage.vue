@@ -201,7 +201,7 @@
         class="rounded-2xl bg-white dark:bg-slate-900 p-12 text-center shadow-lg dark:shadow-slate-900/20"
       >
         <svg
-          class="mx-auto h-16 w-16 text-gray-400 dark:text-gray-500"
+          class="mx-auto h-16 w-16 text-gray-500 dark:text-gray-400"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"

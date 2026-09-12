@@ -1155,7 +1155,7 @@
         <!-- Keyword search bar -->
         <div class="relative">
           <svg
-            class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 dark:text-gray-500 pointer-events-none"
+            class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 dark:text-gray-400 pointer-events-none"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -1186,7 +1186,7 @@
           <!-- Type -->
           <div class="flex flex-col gap-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
               >Type</span
             >
             <select
@@ -1203,7 +1203,7 @@
           <!-- Category -->
           <div class="flex flex-col gap-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
               >Catégorie</span
             >
             <select
@@ -1228,7 +1228,7 @@
               class="text-[11px] font-semibold uppercase tracking-wide"
               :class="
                 selectedCategory
-                  ? 'text-gray-400 dark:text-gray-500'
+                  ? 'text-gray-500 dark:text-gray-400'
                   : 'text-gray-300 dark:text-gray-600'
               "
               >Sous-catégorie</span
@@ -1260,7 +1260,7 @@
           <!-- Account -->
           <div class="flex flex-col gap-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
               >Compte</span
             >
             <select
@@ -1282,7 +1282,7 @@
           <!-- Tag -->
           <div class="flex flex-col gap-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
               >Étiquette</span
             >
             <select
@@ -1310,7 +1310,7 @@
           <!-- Date window -->
           <div class="col-span-2 flex flex-col gap-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
               >Période</span
             >
             <div class="flex items-center gap-1.5">
@@ -1321,7 +1321,7 @@
                 data-testid="transactions-start-date-filter"
                 class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
               />
-              <span class="shrink-0 text-gray-400 dark:text-gray-500">→</span>
+              <span class="shrink-0 text-gray-500 dark:text-gray-400">→</span>
               <input
                 v-model="filterEndDate"
                 type="date"
@@ -1335,7 +1335,7 @@
           <!-- Amount range -->
           <div class="col-span-2 flex flex-col gap-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
               >Montant (€)</span
             >
             <div class="flex items-center gap-1.5">
@@ -1350,7 +1350,7 @@
                 data-testid="transactions-amount-min-filter"
                 class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
               />
-              <span class="shrink-0 text-gray-400 dark:text-gray-500">–</span>
+              <span class="shrink-0 text-gray-500 dark:text-gray-400">–</span>
               <input
                 v-model="amountMax"
                 type="number"
@@ -1374,7 +1374,7 @@
           <!-- State toggle -->
           <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
               >Etat</span
             >
             <div
@@ -1397,7 +1397,7 @@
                pending on the other side of a swap. -->
           <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
             <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
               >Synchro bancaire</span
             >
             <div
@@ -1837,7 +1837,7 @@
                           ? tx.type === 'EXPENSE'
                             ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
                             : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-                          : 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500'
+                          : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
                       "
                       @click="openCategoryModal(tx)"
                     >
@@ -1869,7 +1869,7 @@
                       <div class="flex items-center justify-between mt-0.5">
                         <div class="flex items-center gap-1.5 min-w-0">
                           <span
-                            class="text-xs text-gray-400 dark:text-gray-500 shrink-0"
+                            class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
                           >
                             {{ formatDate(tx.date) }}
                           </span>
@@ -1878,7 +1878,7 @@
                             >&middot;</span
                           >
                           <button
-                            class="text-xs text-gray-400 dark:text-gray-500 truncate hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                            class="text-xs text-gray-500 dark:text-gray-400 truncate hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                             @click="openCategoryModal(tx)"
                           >
                             {{ tx.categoryName || 'Sans catégorie' }}
@@ -1949,7 +1949,7 @@
                           :class="
                             tx.isPointed
                               ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
-                              : 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500'
+                              : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
                           "
                           :title="tx.isPointed ? 'Depointer' : 'Pointer'"
                           @click="togglePointed(tx)"
@@ -1976,7 +1976,7 @@
                     class="ml-12 mt-0.5"
                   >
                     <button
-                      class="text-xs text-gray-400 dark:text-gray-500 italic truncate max-w-full text-left"
+                      class="text-xs text-gray-500 dark:text-gray-400 italic truncate max-w-full text-left"
                       @click="startEditNote(tx)"
                     >
                       {{ tx.note }}
@@ -2012,7 +2012,7 @@
                         </svg>
                       </button>
                       <button
-                        class="p-1.5 text-gray-400 dark:text-gray-500 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
+                        class="p-1.5 text-gray-500 dark:text-gray-400 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
                         title="Annuler"
                         @click="cancelEditNote"
                       >
@@ -2039,7 +2039,7 @@
                     <!-- Add note -->
                     <button
                       v-if="!tx.note && editingNoteId !== tx.id"
-                      class="px-2 py-1 text-[11px] text-gray-400 dark:text-gray-500 rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                      class="px-2 py-1 text-[11px] text-gray-500 dark:text-gray-400 rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                       @click="startEditNote(tx)"
                     >
                       + Note
@@ -2133,7 +2133,7 @@
                       </div>
                       <button
                         v-if="reimb.status !== 'COMPLETED'"
-                        class="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded"
+                        class="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded"
                         title="Supprimer"
                         @click.stop="handleDeleteReimbursement(reimb.id)"
                       >
@@ -2216,7 +2216,7 @@
                           </svg>
                         </button>
                         <button
-                          class="p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
+                          class="p-1 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
                           @click="cancelEditNote"
                         >
                           <svg
@@ -2302,7 +2302,7 @@
                       :class="
                         tx.isPointed
                           ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
-                          : 'bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-slate-600'
+                          : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
                       "
                       :title="tx.isPointed ? 'Depointer' : 'Pointer'"
                       @click="togglePointed(tx)"
@@ -2466,7 +2466,7 @@
                     </div>
                     <button
                       v-if="reimb.status !== 'COMPLETED'"
-                      class="p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                      class="p-1 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                       title="Supprimer"
                       @click="handleDeleteReimbursement(reimb.id)"
                     >
@@ -2554,7 +2554,7 @@
                 <template v-for="page in visiblePages" :key="page">
                   <span
                     v-if="page < 0"
-                    class="px-2 py-1.5 text-sm text-gray-400 dark:text-gray-500"
+                    class="px-2 py-1.5 text-sm text-gray-500 dark:text-gray-400"
                   >
                     ...
                   </span>

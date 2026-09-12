@@ -536,7 +536,7 @@
           class="flex flex-col items-center justify-center py-16 cursor-pointer"
         >
           <svg
-            class="w-16 h-16 text-gray-400 dark:text-gray-500 mb-4"
+            class="w-16 h-16 text-gray-500 dark:text-gray-400 mb-4"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

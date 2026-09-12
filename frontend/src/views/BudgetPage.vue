@@ -959,7 +959,7 @@
               {{ formatDateLabel(plan.startDate) }} →
               {{ formatDateLabel(plan.endDate) }}
             </span>
-            <span class="text-gray-400 dark:text-gray-500">
+            <span class="text-gray-500 dark:text-gray-400">
               ({{ plan.monthCount }} mois)
             </span>
           </p>
@@ -1145,7 +1145,7 @@
         class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-8 text-center"
       >
         <svg
-          class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
+          class="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -1277,7 +1277,7 @@
           >
             Évolution des dépenses mensuelles
           </h2>
-          <p class="text-xs text-gray-400 dark:text-gray-500 mb-3">
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
             Lignes de référence : revenus moyens et budget total alloué.
           </p>
           <MonthlyExpensesChart
@@ -1416,7 +1416,7 @@
             </button>
             <span
               data-testid="budget-actual-period"
-              class="text-xs text-gray-400 dark:text-gray-500"
+              class="text-xs text-gray-500 dark:text-gray-400"
             >
               {{ actualPeriodLabel }}
             </span>
@@ -1614,11 +1614,11 @@
                 </span>
                 <span
                   v-if="item.budgetAmount !== null"
-                  class="text-gray-400 dark:text-gray-500 tabular-nums"
+                  class="text-gray-500 dark:text-gray-400 tabular-nums"
                 >
                   / {{ formatCurrency(item.budgetAmount) }}
                 </span>
-                <span v-else class="text-gray-400 dark:text-gray-500 italic">
+                <span v-else class="text-gray-500 dark:text-gray-400 italic">
                   sans enveloppe
                 </span>
               </button>
@@ -1649,7 +1649,7 @@
             <span class="text-right text-primary-700 dark:text-primary-400">
               Budget
               <span
-                class="block text-[10px] font-normal normal-case tracking-normal text-gray-400 dark:text-gray-500"
+                class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
               >
                 /mois
               </span>
@@ -1696,7 +1696,7 @@
                   @click="toggleCategoryExpanded(cat.categoryId)"
                 >
                   <svg
-                    class="h-4 w-4 text-gray-400 dark:text-gray-500 shrink-0 transition-transform"
+                    class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
                     :class="{
                       'rotate-90': isCategoryExpanded(cat.categoryId),
                     }"
@@ -1761,7 +1761,7 @@
                   >
                     {{ formatCurrency(getHistoricalAverage(cat)) }}
                   </span>
-                  <span v-else class="text-gray-400 dark:text-gray-500">—</span>
+                  <span v-else class="text-gray-500 dark:text-gray-400">—</span>
                 </div>
 
                 <!-- Budget: read as text, edited only in edit mode -->
@@ -1800,7 +1800,7 @@
                     <span
                       v-if="isCategoryDirty(cat.categoryId)"
                       :data-testid="`budget-was-${cat.categoryName}`"
-                      class="block text-[10px] text-gray-400 dark:text-gray-500 line-through tabular-nums text-right"
+                      class="block text-[10px] text-gray-500 dark:text-gray-400 line-through tabular-nums text-right"
                     >
                       {{ formatCurrency(getSavedBudget(cat.categoryId)) }}
                     </span>
@@ -1816,7 +1816,7 @@
                     >
                       {{ formatCurrency(getBudgetForCategory(cat.categoryId)) }}
                     </span>
-                    <span v-else class="text-gray-400 dark:text-gray-500">
+                    <span v-else class="text-gray-500 dark:text-gray-400">
                       —
                     </span>
                     <!-- On a month still running, the envelope's fair share to
@@ -1824,7 +1824,7 @@
                     <span
                       v-if="getProratedBudget(cat.categoryId) !== null"
                       :data-testid="`budget-prorata-${cat.categoryName}`"
-                      class="block text-[10px] text-gray-400 dark:text-gray-500 tabular-nums"
+                      class="block text-[10px] text-gray-500 dark:text-gray-400 tabular-nums"
                       title="Part du budget correspondant aux jours écoulés"
                     >
                       {{
@@ -1860,7 +1860,7 @@
                   >
                     {{ formatCurrency(getPlanActualAverage(cat)) }}
                   </span>
-                  <span v-else class="text-gray-400 dark:text-gray-500">—</span>
+                  <span v-else class="text-gray-500 dark:text-gray-400">—</span>
                   <span
                     v-if="getExceptionalAverage(cat) > 0.005"
                     :data-testid="`budget-exceptional-${cat.categoryName}`"
@@ -1922,7 +1922,7 @@
                       {{ getMarginVsHistorical(cat) > 0 ? '+' : ''
                       }}{{ formatCurrency(getMarginVsHistorical(cat)) }}
                     </div>
-                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       <template v-if="getMarginVsHistorical(cat) > 0">
                         Budget plus généreux que la moyenne passée
                       </template>
@@ -1956,7 +1956,7 @@
                       {{ getRemainingVsActual(cat) > 0 ? '+' : ''
                       }}{{ formatCurrency(getRemainingVsActual(cat)) }}
                     </div>
-                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       <template v-if="getRemainingVsActual(cat) > 0">
                         Marge disponible vs la moyenne réelle
                       </template>
@@ -1987,7 +1987,7 @@
                         {{ sub.subcategory || '(sans sous-catégorie)' }}
                       </span>
                       <span
-                        class="text-xs text-gray-400 dark:text-gray-500 tabular-nums shrink-0"
+                        class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0"
                       >
                         {{ sub.transactionCount }} tx
                       </span>
@@ -2082,7 +2082,7 @@
                   }}{{ formatCurrency(draftDelta) }})
                 </span>
               </template>
-              <span class="text-gray-400 dark:text-gray-500">/ mois</span>
+              <span class="text-gray-500 dark:text-gray-400">/ mois</span>
             </span>
           </p>
           <div class="flex items-center gap-2 shrink-0">
