@@ -433,216 +433,10 @@
         </template>
       </PageHeader>
 
-      <!-- Persons Section -->
-      <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
-      >
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          Personnes
-        </h2>
-
-        <!-- Error state for persons -->
-        <div
-          v-if="personsStore.error"
-          class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 mb-4"
-        >
-          {{ personsStore.error }}
-        </div>
-
-        <!-- Add person form -->
-        <form
-          class="flex flex-wrap gap-3 mb-6"
-          @submit.prevent="handleAddPerson"
-        >
-          <div class="flex-1 min-w-[200px]">
-            <input
-              v-model="newPersonName"
-              type="text"
-              placeholder="Nom de la personne"
-              class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-              :disabled="isAddingPerson"
-            />
-          </div>
-          <div class="flex-1 min-w-[200px]">
-            <input
-              v-model="newPersonEmail"
-              type="email"
-              placeholder="Email (optionnel)"
-              class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-              :disabled="isAddingPerson"
-            />
-          </div>
-          <button
-            type="submit"
-            :disabled="!newPersonName.trim() || isAddingPerson"
-            class="px-6 py-2 text-sm font-medium text-white rounded-lg transition-colors"
-            :class="
-              newPersonName.trim() && !isAddingPerson
-                ? 'bg-amber-600 dark:bg-amber-500 hover:bg-amber-700 dark:hover:bg-amber-600'
-                : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
-            "
-          >
-            <span v-if="isAddingPerson">Ajout...</span>
-            <span v-else>Ajouter</span>
-          </button>
-        </form>
-
-        <!-- Persons list -->
-        <div
-          v-if="personsStore.isLoading"
-          class="flex justify-center items-center py-8"
-        >
-          <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
-            <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-              <circle
-                class="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                stroke-width="4"
-              />
-              <path
-                class="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            <span>Chargement...</span>
-          </div>
-        </div>
-
-        <!-- Person cards grid -->
-        <div
-          v-else-if="personsStore.persons.length > 0"
-          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-        >
-          <div
-            v-for="person in personsStore.persons"
-            :key="person.id"
-            class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700"
-          >
-            <!-- Edit mode -->
-            <template v-if="editingPersonId === person.id">
-              <div class="flex items-center gap-2">
-                <!-- Avatar with first letter -->
-                <div
-                  class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center shrink-0"
-                >
-                  <span
-                    class="text-lg font-semibold text-amber-700 dark:text-amber-400"
-                  >
-                    {{ person.name.charAt(0).toUpperCase() }}
-                  </span>
-                </div>
-                <input
-                  v-model="editingPersonName"
-                  type="text"
-                  class="flex-1 px-3 py-1.5 border border-amber-300 dark:border-amber-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
-                  @keyup.enter="saveEditPerson(person.id)"
-                  @keyup.escape="cancelEditPerson"
-                />
-                <button
-                  class="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
-                  @click="saveEditPerson(person.id)"
-                >
-                  <svg
-                    class="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </button>
-                <button
-                  class="p-1.5 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
-                  @click="cancelEditPerson"
-                >
-                  <svg
-                    class="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </template>
-            <!-- Display mode -->
-            <template v-else>
-              <div class="flex items-start gap-3">
-                <!-- Avatar with first letter -->
-                <div
-                  class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center shrink-0"
-                >
-                  <span
-                    class="text-lg font-semibold text-amber-700 dark:text-amber-400"
-                  >
-                    {{ person.name.charAt(0).toUpperCase() }}
-                  </span>
-                </div>
-                <!-- Name and email -->
-                <div class="flex-1 min-w-0">
-                  <button
-                    class="text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-amber-600 dark:hover:text-amber-400 truncate block w-full"
-                    @click="startEditPerson(person.id, person.name)"
-                  >
-                    {{ person.name }}
-                  </button>
-                  <p
-                    class="text-xs text-gray-500 dark:text-gray-400 truncate"
-                    :title="person.email || 'Pas d\'email'"
-                  >
-                    {{ person.email || "Pas d'email" }}
-                  </p>
-                </div>
-                <!-- Delete button -->
-                <button
-                  class="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
-                  title="Supprimer"
-                  @click="showDeleteConfirmation(person.id, person.name)"
-                >
-                  <svg
-                    class="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </template>
-          </div>
-        </div>
-
-        <!-- Empty state -->
-        <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
-          Aucune personne ajoutée. Commencez par ajouter une personne ci-dessus.
-        </div>
-      </div>
-
-      <!-- Summary Section -->
+      <!-- Summary Section: the balances are what the page is opened for -->
       <div
         v-if="reimbursements.length > 0"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6 mt-8"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
       >
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -873,7 +667,7 @@
       <!-- Empty state for reimbursements -->
       <div
         v-else-if="!isLoadingReimbursements && reimbursements.length === 0"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 mt-8"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
       >
         <EmptyState
           title="Aucun remboursement en cours"
@@ -903,6 +697,212 @@
             </RouterLink>
           </template>
         </EmptyState>
+      </div>
+
+      <!-- Persons Section: configuration, below the balances it serves -->
+      <div
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6 mt-8"
+      >
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          Personnes
+        </h2>
+
+        <!-- Error state for persons -->
+        <div
+          v-if="personsStore.error"
+          class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 mb-4"
+        >
+          {{ personsStore.error }}
+        </div>
+
+        <!-- Add person form -->
+        <form
+          class="flex flex-wrap gap-3 mb-6"
+          @submit.prevent="handleAddPerson"
+        >
+          <div class="flex-1 min-w-[200px]">
+            <input
+              v-model="newPersonName"
+              type="text"
+              placeholder="Nom de la personne"
+              class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+              :disabled="isAddingPerson"
+            />
+          </div>
+          <div class="flex-1 min-w-[200px]">
+            <input
+              v-model="newPersonEmail"
+              type="email"
+              placeholder="Email (optionnel)"
+              class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+              :disabled="isAddingPerson"
+            />
+          </div>
+          <button
+            type="submit"
+            :disabled="!newPersonName.trim() || isAddingPerson"
+            class="px-6 py-2 text-sm font-medium text-white rounded-lg transition-colors"
+            :class="
+              newPersonName.trim() && !isAddingPerson
+                ? 'bg-amber-600 dark:bg-amber-500 hover:bg-amber-700 dark:hover:bg-amber-600'
+                : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
+            "
+          >
+            <span v-if="isAddingPerson">Ajout...</span>
+            <span v-else>Ajouter</span>
+          </button>
+        </form>
+
+        <!-- Persons list -->
+        <div
+          v-if="personsStore.isLoading"
+          class="flex justify-center items-center py-8"
+        >
+          <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+            <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              />
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+            <span>Chargement...</span>
+          </div>
+        </div>
+
+        <!-- Person cards grid -->
+        <div
+          v-else-if="personsStore.persons.length > 0"
+          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+        >
+          <div
+            v-for="person in personsStore.persons"
+            :key="person.id"
+            class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700"
+          >
+            <!-- Edit mode -->
+            <template v-if="editingPersonId === person.id">
+              <div class="flex items-center gap-2">
+                <!-- Avatar with first letter -->
+                <div
+                  class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center shrink-0"
+                >
+                  <span
+                    class="text-lg font-semibold text-amber-700 dark:text-amber-400"
+                  >
+                    {{ person.name.charAt(0).toUpperCase() }}
+                  </span>
+                </div>
+                <input
+                  v-model="editingPersonName"
+                  type="text"
+                  class="flex-1 px-3 py-1.5 border border-amber-300 dark:border-amber-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
+                  @keyup.enter="saveEditPerson(person.id)"
+                  @keyup.escape="cancelEditPerson"
+                />
+                <button
+                  class="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                  @click="saveEditPerson(person.id)"
+                >
+                  <svg
+                    class="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                </button>
+                <button
+                  class="p-1.5 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                  @click="cancelEditPerson"
+                >
+                  <svg
+                    class="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </template>
+            <!-- Display mode -->
+            <template v-else>
+              <div class="flex items-start gap-3">
+                <!-- Avatar with first letter -->
+                <div
+                  class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center shrink-0"
+                >
+                  <span
+                    class="text-lg font-semibold text-amber-700 dark:text-amber-400"
+                  >
+                    {{ person.name.charAt(0).toUpperCase() }}
+                  </span>
+                </div>
+                <!-- Name and email -->
+                <div class="flex-1 min-w-0">
+                  <button
+                    class="text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-amber-600 dark:hover:text-amber-400 truncate block w-full"
+                    @click="startEditPerson(person.id, person.name)"
+                  >
+                    {{ person.name }}
+                  </button>
+                  <p
+                    class="text-xs text-gray-500 dark:text-gray-400 truncate"
+                    :title="person.email || 'Pas d\'email'"
+                  >
+                    {{ person.email || "Pas d'email" }}
+                  </p>
+                </div>
+                <!-- Delete button -->
+                <button
+                  class="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
+                  title="Supprimer"
+                  @click="showDeleteConfirmation(person.id, person.name)"
+                >
+                  <svg
+                    class="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
+          Aucune personne ajoutée. Commencez par ajouter une personne ci-dessus.
+        </div>
       </div>
 
       <!-- Settlement History Section -->
