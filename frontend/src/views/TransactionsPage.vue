@@ -16,10 +16,9 @@
     TransactionQueryParams,
   } from '@/lib/api'
   import CategorySubcategoryModal from '@/components/CategorySubcategoryModal.vue'
-  import TagChip from '@/components/tags/TagChip.vue'
-  import TagSelector from '@/components/tags/TagSelector.vue'
   import TransactionReimbursementModal from '@/components/transactions/TransactionReimbursementModal.vue'
   import BulkCategoryModal from '@/components/transactions/BulkCategoryModal.vue'
+  import TransactionRow from '@/components/transactions/TransactionRow.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
   import ToggleSwitch from '@/components/ToggleSwitch.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
@@ -28,7 +27,6 @@
   import BaseButton from '@/components/ui/BaseButton.vue'
   import FilterChips from '@/components/ui/FilterChips.vue'
   import type { FilterChip } from '@/components/ui/FilterChips.vue'
-  import { formatCurrency } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
 
   const toast = useToast()
@@ -403,8 +401,8 @@
   )
 
   // Inline editing state
+  // Which row edits its note — the draft itself lives in the row.
   const editingNoteId = ref<string | null>(null)
-  const editingNoteValue = ref('')
 
   // Bulk category change modal
   const showBulkCategoryModal = ref(false)
@@ -458,23 +456,6 @@
   }
 
   // Get reimbursement summary for compact display
-  function getReimbursementSummary(txId: string): {
-    count: number
-    totalAmount: number
-    allCompleted: boolean
-    firstPersonName: string
-  } {
-    const reimbs = getReimbursementsForTransaction(txId)
-    const totalAmount = reimbs.reduce((sum, r) => sum + r.amount, 0)
-    const allCompleted = reimbs.every(r => r.status === 'COMPLETED')
-    return {
-      count: reimbs.length,
-      totalAmount,
-      allCompleted,
-      firstPersonName: reimbs[0]?.personName ?? '',
-    }
-  }
-
   // Computed: filtered categories based on type filter
   const filteredCategories = computed(() => {
     if (typeFilter.value === 'ALL') {
@@ -674,16 +655,13 @@
 
   function startEditNote(tx: TransactionDto) {
     editingNoteId.value = tx.id
-    editingNoteValue.value = tx.note ?? ''
   }
 
   function cancelEditNote() {
     editingNoteId.value = null
-    editingNoteValue.value = ''
   }
 
-  async function saveNote(tx: TransactionDto) {
-    const newNote = editingNoteValue.value
+  async function saveNote(tx: TransactionDto, newNote: string) {
     if (newNote === (tx.note ?? '')) {
       cancelEditNote()
       return
@@ -1036,16 +1014,6 @@
     }
   }
 
-  // Format date
-  function formatDate(dateStr: string): string {
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
-
   // Go to page
   function goToPage(page: number) {
     if (page >= 1 && page <= totalPages.value) {
@@ -1054,10 +1022,6 @@
   }
 
   // ── Tag attach/detach on a single transaction (optimistic) ──
-  function txTagIds(tx: TransactionDto): string[] {
-    return (tx.tags ?? []).map(t => t.id)
-  }
-
   async function handleAttachTag(
     tx: TransactionDto,
     tagId: string
@@ -1802,698 +1766,32 @@
 
             <!-- Transactions rows -->
             <div class="divide-y dark:divide-slate-700">
-              <div
+              <TransactionRow
                 v-for="tx in transactions"
                 :key="tx.id"
-                class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                :class="{
-                  'bg-primary-50/50 dark:bg-primary-900/10':
-                    isSelectionMode && selectedIds.has(tx.id),
-                }"
-              >
-                <!-- ==================== MOBILE CARD LAYOUT ==================== -->
-                <div class="block md:hidden">
-                  <!-- ── Compact row: icon + description + amount ── -->
-                  <div class="flex items-center gap-3 min-h-[52px]">
-                    <!-- Selection checkbox (replaces icon in selection mode) -->
-                    <div
-                      v-if="isSelectionMode"
-                      class="flex items-center justify-center w-9 h-9 shrink-0"
-                    >
-                      <input
-                        type="checkbox"
-                        :checked="selectedIds.has(tx.id)"
-                        class="h-5 w-5 text-primary-600 dark:text-primary-500 border-gray-300 dark:border-slate-600 rounded focus:ring-primary-500 dark:bg-slate-700"
-                        @change="toggleSelection(tx.id)"
-                      />
-                    </div>
-
-                    <!-- Category icon -->
-                    <button
-                      v-else
-                      class="flex items-center justify-center w-9 h-9 rounded-xl text-sm shrink-0 transition-colors"
-                      :class="
-                        tx.categoryName
-                          ? tx.type === 'EXPENSE'
-                            ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-                            : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-                          : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
-                      "
-                      @click="openCategoryModal(tx)"
-                    >
-                      {{
-                        tx.categoryIcon ||
-                        (tx.categoryName ? tx.categoryName.charAt(0) : '?')
-                      }}
-                    </button>
-
-                    <!-- Description + meta line -->
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-baseline justify-between gap-2">
-                        <span
-                          class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
-                        >
-                          {{ tx.description }}
-                        </span>
-                        <span
-                          class="text-sm font-semibold shrink-0"
-                          :class="
-                            tx.type === 'EXPENSE'
-                              ? 'text-red-600 dark:text-red-500'
-                              : 'text-green-600 dark:text-green-500'
-                          "
-                        >
-                          {{ formatCurrency(tx.amount) }}
-                        </span>
-                      </div>
-                      <div class="flex items-center justify-between mt-0.5">
-                        <div class="flex items-center gap-1.5 min-w-0">
-                          <span
-                            class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
-                          >
-                            {{ formatDate(tx.date) }}
-                          </span>
-                          <span
-                            class="text-xs text-gray-300 dark:text-gray-600 shrink-0"
-                            >&middot;</span
-                          >
-                          <button
-                            class="text-xs text-gray-500 dark:text-gray-400 truncate hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                            @click="openCategoryModal(tx)"
-                          >
-                            {{ tx.categoryName || 'Sans catégorie' }}
-                          </button>
-                          <!-- Reimbursement inline badge -->
-                          <template
-                            v-if="
-                              tx.type === 'EXPENSE' &&
-                              getReimbursementsForTransaction(tx.id).length > 0
-                            "
-                          >
-                            <span
-                              class="text-xs text-gray-300 dark:text-gray-600 shrink-0"
-                              >&middot;</span
-                            >
-                            <button
-                              class="inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded-full text-[11px] font-medium transition-colors"
-                              :class="
-                                getReimbursementSummary(tx.id).allCompleted
-                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                                  : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                              "
-                              @click="toggleReimbursementsExpand(tx.id)"
-                            >
-                              <svg
-                                class="w-3 h-3"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  v-if="
-                                    getReimbursementSummary(tx.id).allCompleted
-                                  "
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2.5"
-                                  d="M5 13l4 4L19 7"
-                                />
-                                <path
-                                  v-else
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                                />
-                              </svg>
-                              <span
-                                v-if="
-                                  getReimbursementSummary(tx.id).allCompleted
-                                "
-                                >Remboursé</span
-                              >
-                              <template v-else>
-                                {{
-                                  formatCurrency(
-                                    getReimbursementSummary(tx.id).totalAmount
-                                  )
-                                }}
-                                <span class="opacity-70">en attente</span>
-                              </template>
-                            </button>
-                          </template>
-                        </div>
-                        <!-- Pointed toggle -->
-                        <button
-                          class="shrink-0 ml-2 -mr-1 flex items-center justify-center w-7 h-7 rounded-full transition-colors"
-                          :class="
-                            tx.isPointed
-                              ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
-                              : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
-                          "
-                          :title="tx.isPointed ? 'Depointer' : 'Pointer'"
-                          @click="togglePointed(tx)"
-                        >
-                          <svg
-                            class="w-4 h-4"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fill-rule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clip-rule="evenodd"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- ── Inline note (shown only if exists or editing) ── -->
-                  <div
-                    v-if="tx.note && editingNoteId !== tx.id"
-                    class="ml-12 mt-0.5"
-                  >
-                    <button
-                      class="text-xs text-gray-500 dark:text-gray-400 italic truncate max-w-full text-left"
-                      @click="startEditNote(tx)"
-                    >
-                      {{ tx.note }}
-                    </button>
-                  </div>
-
-                  <!-- Note editor -->
-                  <div v-if="editingNoteId === tx.id" class="ml-12 mt-1.5">
-                    <div class="flex items-center gap-1.5">
-                      <input
-                        v-model="editingNoteValue"
-                        type="text"
-                        class="flex-1 px-2.5 py-1.5 text-xs border border-primary-300 dark:border-primary-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-primary-500"
-                        placeholder="Ajouter une note..."
-                        @keyup.enter="saveNote(tx)"
-                        @keyup.escape="cancelEditNote"
-                      />
-                      <button
-                        class="p-1.5 text-primary-600 dark:text-primary-400 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20"
-                        title="Sauvegarder"
-                        @click="saveNote(tx)"
-                      >
-                        <svg
-                          class="h-4 w-4"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fill-rule="evenodd"
-                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                            clip-rule="evenodd"
-                          />
-                        </svg>
-                      </button>
-                      <button
-                        class="p-1.5 text-gray-500 dark:text-gray-400 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
-                        title="Annuler"
-                        @click="cancelEditNote"
-                      >
-                        <svg
-                          class="h-4 w-4"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fill-rule="evenodd"
-                            d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                            clip-rule="evenodd"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- ── Quick action bar (contextual, compact) ── -->
-                  <div
-                    v-if="!isSelectionMode"
-                    class="flex items-center gap-1 ml-12 mt-1"
-                  >
-                    <!-- Add note -->
-                    <button
-                      v-if="!tx.note && editingNoteId !== tx.id"
-                      class="px-2 py-1 text-[11px] text-gray-500 dark:text-gray-400 rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                      @click="startEditNote(tx)"
-                    >
-                      + Note
-                    </button>
-                    <!-- Assign reimbursement -->
-                    <button
-                      v-if="tx.type === 'EXPENSE' && getRemainingAmount(tx) > 0"
-                      class="px-2 py-1 text-[11px] text-amber-600 dark:text-amber-400 rounded hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
-                      @click="openReimbursementModal(tx)"
-                    >
-                      + Remb.
-                    </button>
-                    <span
-                      v-else-if="
-                        tx.type === 'EXPENSE' &&
-                        getReimbursementsForTransaction(tx.id).length > 0 &&
-                        getRemainingAmount(tx) <= 0
-                      "
-                      class="px-2 py-1 text-[11px] text-green-500 dark:text-green-400"
-                    >
-                      Assigne
-                    </span>
-                    <!-- Settlement links (one per person settled by this income) -->
-                    <template v-if="tx.type === 'INCOME' && tx.settlements">
-                      <button
-                        v-for="settlement in tx.settlements"
-                        :key="settlement.id"
-                        type="button"
-                        class="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-primary-600 dark:text-primary-400 rounded hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors disabled:opacity-50"
-                        :disabled="isLoadingSettlement"
-                        :title="`Voir le règlement de ${settlement.personName}`"
-                        @click="openSettlementDetail(settlement)"
-                      >
-                        <svg
-                          class="h-3 w-3"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.828-6.828l3-3a4 4 0 015.656 5.656l-1.5 1.5m-9.9 4.244a4 4 0 010-5.656"
-                          />
-                        </svg>
-                        {{ settlement.personName }}
-                      </button>
-                    </template>
-                  </div>
-
-                  <!-- ── Expanded reimbursements ── -->
-                  <div
-                    v-if="
-                      tx.type === 'EXPENSE' &&
-                      expandedReimbursementsTxId === tx.id &&
-                      getReimbursementsForTransaction(tx.id).length > 0
-                    "
-                    class="ml-12 mt-1.5 pl-3 border-l-2 border-amber-200 dark:border-amber-700 space-y-1"
-                  >
-                    <div
-                      v-for="reimb in getReimbursementsForTransaction(tx.id)"
-                      :key="reimb.id"
-                      class="flex items-center justify-between py-0.5"
-                    >
-                      <div class="flex items-center gap-1.5">
-                        <span
-                          class="inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-medium"
-                          :class="
-                            reimb.status === 'COMPLETED'
-                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                              : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                          "
-                        >
-                          {{ reimb.personName.charAt(0).toUpperCase() }}
-                        </span>
-                        <span
-                          class="text-xs text-gray-700 dark:text-gray-300"
-                          >{{ reimb.personName }}</span
-                        >
-                        <span
-                          class="text-xs font-medium"
-                          :class="
-                            reimb.status === 'COMPLETED'
-                              ? 'text-green-600 dark:text-green-400'
-                              : 'text-amber-600 dark:text-amber-400'
-                          "
-                        >
-                          {{ formatCurrency(reimb.amount) }}
-                        </span>
-                      </div>
-                      <button
-                        v-if="reimb.status !== 'COMPLETED'"
-                        class="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded"
-                        title="Supprimer"
-                        @click.stop="handleDeleteReimbursement(reimb.id)"
-                      >
-                        <svg
-                          class="h-3.5 w-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- ==================== DESKTOP GRID LAYOUT ==================== -->
-                <div
-                  class="hidden md:grid gap-2 items-center"
-                  :class="isSelectionMode ? 'grid-cols-12' : 'grid-cols-11'"
-                >
-                  <!-- Checkbox -->
-                  <div
-                    v-if="isSelectionMode"
-                    class="col-span-1 flex items-center"
-                  >
-                    <input
-                      type="checkbox"
-                      :checked="selectedIds.has(tx.id)"
-                      class="h-4 w-4 text-primary-600 dark:text-primary-500 border-gray-300 dark:border-slate-600 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
-                      data-testid="select-row-desktop"
-                      @change="toggleSelection(tx.id)"
-                    />
-                  </div>
-
-                  <!-- Date -->
-                  <div
-                    class="col-span-1 text-sm text-gray-600 dark:text-gray-400"
-                  >
-                    {{ formatDate(tx.date) }}
-                  </div>
-
-                  <!-- Description -->
-                  <div
-                    class="col-span-3 text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
-                  >
-                    {{ tx.description }}
-                  </div>
-
-                  <!-- Note (editable) -->
-                  <div class="col-span-2">
-                    <template v-if="editingNoteId === tx.id">
-                      <div class="flex items-center gap-1">
-                        <input
-                          v-model="editingNoteValue"
-                          type="text"
-                          class="flex-1 px-2 py-1 text-sm border border-primary-300 dark:border-primary-600 rounded bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-primary-500"
-                          @keyup.enter="saveNote(tx)"
-                          @keyup.escape="cancelEditNote"
-                        />
-                        <button
-                          class="p-1 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded"
-                          @click="saveNote(tx)"
-                        >
-                          <svg
-                            class="h-4 w-4"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fill-rule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clip-rule="evenodd"
-                            />
-                          </svg>
-                        </button>
-                        <button
-                          class="p-1 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
-                          @click="cancelEditNote"
-                        >
-                          <svg
-                            class="h-4 w-4"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fill-rule="evenodd"
-                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                              clip-rule="evenodd"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                    </template>
-                    <template v-else>
-                      <button
-                        class="w-full text-left text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 truncate group"
-                        :title="tx.note ?? 'Cliquer pour ajouter une note'"
-                        @click="startEditNote(tx)"
-                      >
-                        <span v-if="tx.note" class="block truncate">{{
-                          tx.note
-                        }}</span>
-                        <span
-                          v-else
-                          class="text-gray-300 dark:text-gray-600 group-hover:text-gray-400 dark:group-hover:text-gray-500"
-                          >+ Note</span
-                        >
-                      </button>
-                    </template>
-                  </div>
-
-                  <!-- Amount -->
-                  <div class="col-span-1 text-sm font-semibold text-right">
-                    <span
-                      :class="
-                        tx.type === 'EXPENSE'
-                          ? 'text-red-600 dark:text-red-500'
-                          : 'text-green-600 dark:text-green-500'
-                      "
-                    >
-                      {{ formatCurrency(tx.amount) }}
-                    </span>
-                  </div>
-
-                  <!-- Category (clickable to open modal) -->
-                  <div class="col-span-2">
-                    <button
-                      class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full transition-colors"
-                      :class="
-                        tx.categoryName
-                          ? tx.type === 'EXPENSE'
-                            ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
-                            : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
-                          : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
-                      "
-                      @click="openCategoryModal(tx)"
-                    >
-                      {{ tx.categoryIcon ? tx.categoryIcon + ' ' : ''
-                      }}{{ tx.categoryName || 'Sans catégorie' }}
-                      <svg
-                        class="h-3 w-3 opacity-50"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-
-                  <!-- Pointed status (toggle) -->
-                  <div class="col-span-1 flex justify-center">
-                    <button
-                      class="p-1 rounded-full transition-colors"
-                      :class="
-                        tx.isPointed
-                          ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
-                          : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
-                      "
-                      :title="tx.isPointed ? 'Depointer' : 'Pointer'"
-                      @click="togglePointed(tx)"
-                    >
-                      <svg
-                        v-if="tx.isPointed"
-                        class="h-5 w-5"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fill-rule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clip-rule="evenodd"
-                        />
-                      </svg>
-                      <svg
-                        v-else
-                        class="h-5 w-5"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fill-rule="evenodd"
-                          d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                          clip-rule="evenodd"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-
-                  <!-- Actions -->
-                  <div class="col-span-1 flex justify-center">
-                    <button
-                      v-if="tx.type === 'EXPENSE' && getRemainingAmount(tx) > 0"
-                      class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-                      @click="openReimbursementModal(tx)"
-                    >
-                      <svg
-                        class="h-3.5 w-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M12 4v16m8-8H4"
-                        />
-                      </svg>
-                      Assigner
-                    </button>
-                    <span
-                      v-else-if="tx.type === 'EXPENSE'"
-                      class="text-xs text-green-600 dark:text-green-400 font-medium"
-                    >
-                      Assigne
-                    </span>
-                    <!-- Settlement links (one per person settled by this income) -->
-                    <div
-                      v-else-if="tx.type === 'INCOME' && tx.settlements"
-                      class="flex flex-wrap justify-center gap-1"
-                    >
-                      <button
-                        v-for="settlement in tx.settlements"
-                        :key="settlement.id"
-                        type="button"
-                        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors disabled:opacity-50"
-                        :disabled="isLoadingSettlement"
-                        :title="`Voir le règlement de ${settlement.personName}`"
-                        @click="openSettlementDetail(settlement)"
-                      >
-                        <svg
-                          class="h-3.5 w-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.828-6.828l3-3a4 4 0 015.656 5.656l-1.5 1.5m-9.9 4.244a4 4 0 010-5.656"
-                          />
-                        </svg>
-                        {{ settlement.personName }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Tags line (both layouts) -->
-                <div
-                  class="flex flex-wrap items-center gap-1.5 mt-2 ml-12 md:ml-2"
-                >
-                  <TagChip
-                    v-for="t in tx.tags ?? []"
-                    :key="t.id"
-                    :name="t.name"
-                    :color="t.color"
-                    :icon="t.icon"
-                    dense
-                    removable
-                    @remove="handleDetachTag(tx, t.id)"
-                  />
-                  <TagSelector
-                    v-if="!isSelectionMode"
-                    :selected-tag-ids="txTagIds(tx)"
-                    :tags="tagsStore.tags"
-                    @attach="id => handleAttachTag(tx, id)"
-                    @detach="id => handleDetachTag(tx, id)"
-                    @create="name => handleCreateTag(tx, name)"
-                  />
-                </div>
-
-                <!-- Reimbursements for this transaction (DESKTOP ONLY) -->
-                <div
-                  v-if="
-                    tx.type === 'EXPENSE' &&
-                    getReimbursementsForTransaction(tx.id).length > 0
-                  "
-                  class="hidden md:block mt-2 ml-4 md:ml-8 pl-3 md:pl-4 border-l-2 border-amber-200 dark:border-amber-700"
-                >
-                  <div
-                    v-for="reimb in getReimbursementsForTransaction(tx.id)"
-                    :key="reimb.id"
-                    class="flex items-center justify-between py-1 text-sm"
-                  >
-                    <div class="flex items-center gap-2">
-                      <span
-                        class="inline-flex items-center justify-center h-6 w-6 rounded-full text-xs font-medium"
-                        :class="
-                          reimb.status === 'COMPLETED'
-                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                            : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                        "
-                      >
-                        {{ reimb.personName.charAt(0).toUpperCase() }}
-                      </span>
-                      <span class="text-gray-700 dark:text-gray-300">{{
-                        reimb.personName
-                      }}</span>
-                      <span class="text-gray-500 dark:text-gray-400">:</span>
-                      <span
-                        class="font-medium"
-                        :class="
-                          reimb.status === 'COMPLETED'
-                            ? 'text-green-700 dark:text-green-400'
-                            : 'text-amber-700 dark:text-amber-400'
-                        "
-                      >
-                        {{ formatCurrency(reimb.amount) }}
-                      </span>
-                      <span
-                        v-if="reimb.status === 'PARTIAL'"
-                        class="text-xs text-green-600 dark:text-green-400"
-                      >
-                        (recu: {{ formatCurrency(reimb.amountReceived) }})
-                      </span>
-                    </div>
-                    <button
-                      v-if="reimb.status !== 'COMPLETED'"
-                      class="p-1 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                      title="Supprimer"
-                      @click="handleDeleteReimbursement(reimb.id)"
-                    >
-                      <svg
-                        class="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                  <!-- Remaining amount -->
-                  <div
-                    v-if="getRemainingAmount(tx) > 0"
-                    class="text-xs text-gray-500 dark:text-gray-400 mt-1"
-                  >
-                    Restant: {{ formatCurrency(getRemainingAmount(tx)) }}
-                  </div>
-                </div>
-              </div>
+                :transaction="tx"
+                :reimbursements="getReimbursementsForTransaction(tx.id)"
+                :remaining-amount="getRemainingAmount(tx)"
+                :all-tags="tagsStore.tags"
+                :selection-mode="isSelectionMode"
+                :selected="selectedIds.has(tx.id)"
+                :is-editing-note="editingNoteId === tx.id"
+                :reimbursements-expanded="expandedReimbursementsTxId === tx.id"
+                :settlement-loading="isLoadingSettlement"
+                @toggle-select="toggleSelection(tx.id)"
+                @open-category="openCategoryModal(tx)"
+                @toggle-pointed="togglePointed(tx)"
+                @start-note="startEditNote(tx)"
+                @save-note="note => saveNote(tx, note)"
+                @cancel-note="cancelEditNote"
+                @open-reimbursement="openReimbursementModal(tx)"
+                @toggle-reimbursements="toggleReimbursementsExpand(tx.id)"
+                @open-settlement="openSettlementDetail"
+                @delete-reimbursement="handleDeleteReimbursement"
+                @attach-tag="id => handleAttachTag(tx, id)"
+                @detach-tag="id => handleDetachTag(tx, id)"
+                @create-tag="name => handleCreateTag(tx, name)"
+              />
             </div>
 
             <!-- Pagination -->
