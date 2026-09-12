@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { computed } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
+  import StepIndicator from '@/components/ui/StepIndicator.vue'
 
   const route = useRoute()
   const router = useRouter()
@@ -28,6 +29,11 @@
     class="min-h-screen bg-gray-50 dark:bg-slate-800 py-12 transition-colors"
   >
     <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+      <StepIndicator
+        class="mb-8"
+        :steps="['Dépôt', 'Aperçu', 'Doublons', 'Récapitulatif']"
+        :current="4"
+      />
       <div
         class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-8"
       >

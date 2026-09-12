@@ -12,6 +12,7 @@
     PartialImportError,
   } from '@/composables/useChunkedImport'
   import DuplicatesReviewModal from '@/components/DuplicatesReviewModal.vue'
+  import StepIndicator from '@/components/ui/StepIndicator.vue'
 
   /** A row the parser could not use, and why. */
   interface SkippedRow {
@@ -42,6 +43,14 @@
   const partialImportError = ref<PartialImportError | null>(null)
 
   // AI Suggestions state
+
+  /** Where the flow stands: dépôt → aperçu → doublons (→ récapitulatif). */
+  const IMPORT_STEPS = ['Dépôt', 'Aperçu', 'Doublons', 'Récapitulatif']
+  const currentStep = computed(() => {
+    if (showDuplicatesModal.value) return 3
+    if (showPreview.value) return 2
+    return 1
+  })
 
   // Show progress bar during chunking
   const showProgressBar = computed(() => {
@@ -377,6 +386,11 @@
         <p class="mt-2 text-gray-600 dark:text-gray-400">
           Importez vos transactions depuis un export CSV Bankin
         </p>
+        <StepIndicator
+          class="mt-6"
+          :steps="IMPORT_STEPS"
+          :current="currentStep"
+        />
       </div>
 
       <!-- Progress bar during chunking -->
