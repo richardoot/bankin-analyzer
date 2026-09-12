@@ -365,7 +365,7 @@ describe('ReimbursementsPage', () => {
 
       expect(wrapper.text()).toContain('Supprimer cette personne ?')
       expect(wrapper.text()).toContain('Test Person')
-      expect(wrapper.text()).toContain('irreversible')
+      expect(wrapper.text()).toContain('irréversible')
     })
 
     it('should close modal when clicking cancel', async () => {
@@ -547,7 +547,7 @@ describe('ReimbursementsPage', () => {
       })
       await flushPromises()
 
-      expect(wrapper.text()).toContain('Enregistrer un reglement')
+      expect(wrapper.text()).toContain('Enregistrer un règlement')
     })
 
     /**
@@ -618,7 +618,7 @@ describe('ReimbursementsPage', () => {
 
         const personButton = wrapper
           .findAll('button')
-          .find(button => button.text().includes('Enregistrer un reglement'))
+          .find(button => button.text().includes('Enregistrer un règlement'))
         await personButton?.trigger('click')
 
         expect(multi(wrapper).props('isOpen')).toBe(true)
@@ -636,7 +636,7 @@ describe('ReimbursementsPage', () => {
 
         const personButton = wrapper
           .findAll('button')
-          .find(button => button.text().includes('Enregistrer un reglement'))
+          .find(button => button.text().includes('Enregistrer un règlement'))
         await personButton?.trigger('click')
 
         expect(multi(wrapper).props('pendingReimbursements')).toEqual([

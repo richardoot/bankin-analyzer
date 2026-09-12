@@ -380,12 +380,12 @@ describe('TransactionsPage — optimistic updates', () => {
     it('renders one link per settlement for an income transaction', async () => {
       const wrapper = await mountWith([incomeWithSettlements])
 
-      const links = wrapper.findAll('button[title^="Voir le reglement de"]')
+      const links = wrapper.findAll('button[title^="Voir le règlement de"]')
       // One button per settlement, rendered in both mobile and desktop layouts
       expect(links.length).toBeGreaterThanOrEqual(2)
       const titles = links.map(l => l.attributes('title'))
-      expect(titles).toContain('Voir le reglement de Marie')
-      expect(titles).toContain('Voir le reglement de Paul')
+      expect(titles).toContain('Voir le règlement de Marie')
+      expect(titles).toContain('Voir le règlement de Paul')
     })
 
     it('fetches the settlement detail when a link is clicked', async () => {
@@ -405,7 +405,7 @@ describe('TransactionsPage — optimistic updates', () => {
 
       const wrapper = await mountWith([incomeWithSettlements])
       const marieLink = nth(
-        wrapper.findAll('button[title="Voir le reglement de Marie"]'),
+        wrapper.findAll('button[title="Voir le règlement de Marie"]'),
         0
       )
       await marieLink.trigger('click')
@@ -417,7 +417,7 @@ describe('TransactionsPage — optimistic updates', () => {
     it('does not render settlement links for expense transactions', async () => {
       const wrapper = await mountWith([makeTx()])
       expect(
-        wrapper.findAll('button[title^="Voir le reglement de"]').length
+        wrapper.findAll('button[title^="Voir le règlement de"]').length
       ).toBe(0)
     })
   })

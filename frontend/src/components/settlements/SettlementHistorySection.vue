@@ -57,7 +57,7 @@
       class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4"
     >
       <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        Historique des Reglements
+        Historique des Règlements
       </h2>
 
       <!-- Person filter -->
@@ -117,8 +117,8 @@
           d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
         />
       </svg>
-      <p class="text-sm">Aucun reglement enregistre</p>
-      <p class="text-xs mt-1">Les reglements apparaitront ici une fois crees</p>
+      <p class="text-sm">Aucun règlement enregistré</p>
+      <p class="text-xs mt-1">Les règlements apparaîtront ici une fois créés</p>
     </div>
 
     <!-- Settlements list -->
@@ -222,7 +222,7 @@
               <button
                 type="button"
                 class="p-2.5 min-h-[44px] min-w-[44px] text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                title="Annuler le reglement"
+                title="Annuler le règlement"
                 @click="emit('delete', settlement.id)"
               >
                 <svg
@@ -343,7 +343,7 @@
               <button
                 type="button"
                 class="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                title="Annuler le reglement"
+                title="Annuler le règlement"
                 @click="emit('delete', settlement.id)"
               >
                 <svg
@@ -370,7 +370,7 @@
         v-if="filteredSettlements.length === 0 && settlements.length > 0"
         class="text-center py-6 text-gray-500 dark:text-gray-400 text-sm"
       >
-        Aucun reglement pour cette personne
+        Aucun règlement pour cette personne
       </div>
     </div>
   </div>

@@ -7,7 +7,7 @@
   import type { ReimbursementDto, SettlementDto } from '@/lib/api'
   import { usePdfExport } from '@/composables/usePdfExport'
   import PageHeader from '@/components/ui/PageHeader.vue'
-  import { useModalA11y } from '@/composables/useModalA11y'
+  import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import SettlementModal from '@/components/settlements/SettlementModal.vue'
   import SingleSettlementModal from '@/components/settlements/SingleSettlementModal.vue'
   import SettlementHistorySection from '@/components/settlements/SettlementHistorySection.vue'
@@ -56,20 +56,6 @@
 
   // Settlement delete confirmation
   const settlementToDelete = ref<string | null>(null)
-
-  // Escape closes, Tab stays inside, focus returns to the opener after.
-  const personDeletePanelRef = ref<HTMLElement | null>(null)
-  useModalA11y({
-    isOpen: () => personToDelete.value !== null,
-    onClose: () => cancelDelete(),
-    panel: personDeletePanelRef,
-  })
-  const settlementDeletePanelRef = ref<HTMLElement | null>(null)
-  useModalA11y({
-    isOpen: () => settlementToDelete.value !== null,
-    onClose: () => cancelDeleteSettlement(),
-    panel: settlementDeletePanelRef,
-  })
 
   // Summary by person
   interface CategorySummary {
@@ -861,7 +847,7 @@
                     d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-                Enregistrer un reglement ({{
+                Enregistrer un règlement ({{
                   formatCurrency(person.totalRemaining)
                 }}
                 en attente)
@@ -945,76 +931,19 @@
     </div>
 
     <!-- Delete confirmation modal -->
-    <Teleport to="body">
-      <div
-        v-if="personToDelete"
-        class="fixed inset-0 z-50 flex items-center justify-center"
-      >
-        <!-- Backdrop -->
-        <div class="absolute inset-0 bg-black/50" @click="cancelDelete" />
-
-        <!-- Modal -->
-        <div
-          ref="personDeletePanelRef"
-          role="dialog"
-          aria-modal="true"
-          class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
-        >
-          <!-- Icon -->
-          <div class="flex justify-center mb-4">
-            <div
-              class="h-12 w-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center"
-            >
-              <svg
-                class="h-6 w-6 text-red-600 dark:text-red-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-            </div>
-          </div>
-
-          <!-- Title -->
-          <h3
-            class="text-lg font-semibold text-gray-900 dark:text-gray-100 text-center mb-2"
-          >
-            Supprimer cette personne ?
-          </h3>
-
-          <!-- Message -->
-          <p class="text-gray-600 dark:text-gray-400 text-center mb-6">
-            Etes-vous sur de vouloir supprimer
-            <span class="font-medium text-gray-900 dark:text-gray-100">{{
-              personToDelete.name
-            }}</span>
-            ? Cette action est irreversible.
-          </p>
-
-          <!-- Buttons -->
-          <div class="flex gap-3">
-            <button
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
-              @click="cancelDelete"
-            >
-              Annuler
-            </button>
-            <button
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 dark:bg-red-500 hover:bg-red-700 dark:hover:bg-red-600 rounded-lg transition-colors"
-              @click="confirmDeletePerson"
-            >
-              Supprimer
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <ConfirmDialog
+      :open="personToDelete !== null"
+      title="Supprimer cette personne ?"
+      confirm-label="Supprimer"
+      @confirm="confirmDeletePerson"
+      @cancel="cancelDelete"
+    >
+      Êtes-vous sûr de vouloir supprimer
+      <span class="font-medium text-gray-900 dark:text-gray-100">{{
+        personToDelete?.name
+      }}</span>
+      ? Cette action est irréversible.
+    </ConfirmDialog>
 
     <!-- Settlement Modal -->
     <SettlementModal
@@ -1043,75 +972,16 @@
     />
 
     <!-- Settlement delete confirmation modal -->
-    <Teleport to="body">
-      <div
-        v-if="settlementToDelete"
-        class="fixed inset-0 z-50 flex items-center justify-center"
-      >
-        <!-- Backdrop -->
-        <div
-          class="absolute inset-0 bg-black/50"
-          @click="cancelDeleteSettlement"
-        />
-
-        <!-- Modal -->
-        <div
-          ref="settlementDeletePanelRef"
-          role="dialog"
-          aria-modal="true"
-          class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
-        >
-          <!-- Icon -->
-          <div class="flex justify-center mb-4">
-            <div
-              class="h-12 w-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center"
-            >
-              <svg
-                class="h-6 w-6 text-red-600 dark:text-red-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-            </div>
-          </div>
-
-          <!-- Title -->
-          <h3
-            class="text-lg font-semibold text-gray-900 dark:text-gray-100 text-center mb-2"
-          >
-            Annuler ce reglement ?
-          </h3>
-
-          <!-- Message -->
-          <p class="text-gray-600 dark:text-gray-400 text-center mb-6">
-            Cette action va annuler le reglement et restaurer les montants en
-            attente sur les remboursements associes.
-          </p>
-
-          <!-- Buttons -->
-          <div class="flex gap-3">
-            <button
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
-              @click="cancelDeleteSettlement"
-            >
-              Non, conserver
-            </button>
-            <button
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 dark:bg-red-500 hover:bg-red-700 dark:hover:bg-red-600 rounded-lg transition-colors"
-              @click="confirmDeleteSettlement"
-            >
-              Oui, annuler
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <ConfirmDialog
+      :open="settlementToDelete !== null"
+      title="Annuler ce règlement ?"
+      confirm-label="Oui, annuler"
+      cancel-label="Non, conserver"
+      @confirm="confirmDeleteSettlement"
+      @cancel="cancelDeleteSettlement"
+    >
+      Cette action va annuler le règlement et restaurer les montants en attente
+      sur les remboursements associés.
+    </ConfirmDialog>
   </div>
 </template>

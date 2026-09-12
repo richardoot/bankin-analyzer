@@ -307,7 +307,7 @@
       selectedSettlement.value = await api.getSettlement(summary.id)
       showSettlementDetailModal.value = true
     } catch {
-      toast.error('Impossible de charger le detail du reglement')
+      toast.error('Impossible de charger le detail du règlement')
     } finally {
       isLoadingSettlement.value = false
     }
@@ -1910,7 +1910,7 @@
                         type="button"
                         class="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-primary-600 dark:text-primary-400 rounded hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors disabled:opacity-50"
                         :disabled="isLoadingSettlement"
-                        :title="`Voir le reglement de ${settlement.personName}`"
+                        :title="`Voir le règlement de ${settlement.personName}`"
                         @click="openSettlementDetail(settlement)"
                       >
                         <svg
@@ -2213,7 +2213,7 @@
                         type="button"
                         class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors disabled:opacity-50"
                         :disabled="isLoadingSettlement"
-                        :title="`Voir le reglement de ${settlement.personName}`"
+                        :title="`Voir le règlement de ${settlement.personName}`"
                         @click="openSettlementDetail(settlement)"
                       >
                         <svg

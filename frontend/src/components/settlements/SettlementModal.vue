@@ -444,7 +444,7 @@
               <h2
                 class="text-xl font-semibold text-gray-900 dark:text-gray-100"
               >
-                Enregistrer un reglement
+                Enregistrer un règlement
               </h2>
               <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
                 {{ personName }}
@@ -955,7 +955,7 @@
                     />
                     Creation...
                   </span>
-                  <span v-else>Confirmer le reglement</span>
+                  <span v-else>Confirmer le règlement</span>
                 </button>
               </div>
             </div>

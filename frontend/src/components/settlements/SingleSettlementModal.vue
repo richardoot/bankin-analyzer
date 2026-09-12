@@ -345,7 +345,7 @@
                 />
                 Creation...
               </span>
-              <span v-else>Confirmer le reglement</span>
+              <span v-else>Confirmer le règlement</span>
             </button>
           </div>
         </div>
