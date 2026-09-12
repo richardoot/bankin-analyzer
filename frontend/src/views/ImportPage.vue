@@ -369,7 +369,9 @@
   >
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
+        <h1
+          class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
+        >
           Import de transactions
         </h1>
         <p class="mt-2 text-gray-600 dark:text-gray-400">

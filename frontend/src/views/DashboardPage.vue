@@ -7,6 +7,7 @@
   import TimePeriodSelector from '@/components/filters/TimePeriodSelector.vue'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import CategoryBreakdownList from '@/components/dashboard/CategoryBreakdownList.vue'
+  import PageHeader from '@/components/ui/PageHeader.vue'
   import { useDashboardData } from '@/composables/useDashboardData'
   import { formatCurrency } from '@/lib/formatters'
 
@@ -116,39 +117,32 @@
     class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors"
   >
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <!-- Header -->
-      <div class="mb-8 flex items-center justify-between">
-        <div>
-          <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
-            Dashboard
-          </h1>
-          <p class="mt-2 text-gray-600 dark:text-gray-400">
-            Vue d'ensemble de vos finances
-          </p>
-        </div>
-        <!-- Subtle refresh indicator -->
-        <div
-          v-if="isRefreshing"
-          class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400"
-        >
-          <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
-            />
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-          <span>Mise à jour...</span>
-        </div>
-      </div>
+      <PageHeader title="Dashboard" subtitle="Vue d'ensemble de vos finances">
+        <template #actions>
+          <!-- Subtle refresh indicator -->
+          <div
+            v-if="isRefreshing"
+            class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400"
+          >
+            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              />
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+            <span>Mise à jour...</span>
+          </div>
+        </template>
+      </PageHeader>
 
       <!-- Error state -->
       <div

@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { onMounted, ref } from 'vue'
+  import PageHeader from '@/components/ui/PageHeader.vue'
   import { useRouter } from 'vue-router'
   import { useTagsStore } from '@/stores/tags'
   import type { TagDto } from '@/lib/api'
@@ -172,15 +173,10 @@
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-      <!-- Header -->
-      <div class="mb-6">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
-          Étiquettes
-        </h1>
-        <p class="mt-2 text-gray-600 dark:text-gray-400">
-          Regroupez des transactions (événement, vacances…) et analysez-les.
-        </p>
-      </div>
+      <PageHeader
+        title="Étiquettes"
+        subtitle="Regroupez des transactions (événement, vacances…) et analysez-les."
+      />
 
       <!-- Create form -->
       <div

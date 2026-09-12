@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { computed, ref } from 'vue'
+  import PageHeader from '@/components/ui/PageHeader.vue'
   import { useRouter } from 'vue-router'
   import { useAuthStore } from '@/stores/auth'
   import DeleteAccountModal from '@/components/DeleteAccountModal.vue'
@@ -48,14 +49,10 @@
   >
     <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
       <!-- Profile Header -->
-      <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
-          Mon Profil
-        </h1>
-        <p class="mt-2 text-gray-600 dark:text-gray-400">
-          Gérez vos informations personnelles
-        </p>
-      </div>
+      <PageHeader
+        title="Mon profil"
+        subtitle="Gérez vos informations personnelles"
+      />
 
       <!-- Profile Card -->
       <div

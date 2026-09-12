@@ -22,6 +22,7 @@
   import BulkCategoryModal from '@/components/transactions/BulkCategoryModal.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
   import ToggleSwitch from '@/components/ToggleSwitch.vue'
+  import PageHeader from '@/components/ui/PageHeader.vue'
   import { formatCurrency } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
 
@@ -1005,16 +1006,10 @@
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <!-- Header -->
-      <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
-          Transactions
-        </h1>
-        <p class="mt-2 text-gray-600 dark:text-gray-400">
-          Gérez vos transactions, modifiez les catégories et assignez des
-          remboursements
-        </p>
-      </div>
+      <PageHeader
+        title="Transactions"
+        subtitle="Gérez vos transactions, modifiez les catégories et assignez des remboursements"
+      />
 
       <!-- Filters -->
       <div

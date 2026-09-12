@@ -190,7 +190,9 @@
             class="inline-block h-4 w-4 rounded-full shrink-0"
             :style="{ backgroundColor: analysis.tag.color ?? '#9ca3af' }"
           ></span>
-          <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          <h1
+            class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
+          >
             {{ analysis.tag.name }}
           </h1>
         </div>

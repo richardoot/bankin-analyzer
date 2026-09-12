@@ -6,6 +6,7 @@
   import { api, UNCATEGORIZED_CATEGORY_ID } from '@/lib/api'
   import type { ReimbursementDto, SettlementDto } from '@/lib/api'
   import { usePdfExport } from '@/composables/usePdfExport'
+  import PageHeader from '@/components/ui/PageHeader.vue'
   import { useModalA11y } from '@/composables/useModalA11y'
   import SettlementModal from '@/components/settlements/SettlementModal.vue'
   import SingleSettlementModal from '@/components/settlements/SingleSettlementModal.vue'
@@ -418,42 +419,32 @@
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <!-- Header -->
-      <div
-        class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8"
+      <PageHeader
+        title="Remboursements"
+        subtitle="Gérez les personnes et suivez les remboursements en cours"
       >
-        <div>
-          <h1
-            class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
+        <template #actions>
+          <RouterLink
+            to="/transactions"
+            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors min-h-[44px] sm:min-h-0 w-full sm:w-auto"
           >
-            Remboursements
-          </h1>
-          <p
-            class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400"
-          >
-            Gérez les personnes et suivez les remboursements en cours
-          </p>
-        </div>
-        <RouterLink
-          to="/transactions"
-          class="inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors min-h-[44px] sm:min-h-0 w-full sm:w-auto"
-        >
-          <svg
-            class="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-            />
-          </svg>
-          Voir les transactions
-        </RouterLink>
-      </div>
+            <svg
+              class="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
+            </svg>
+            Voir les transactions
+          </RouterLink>
+        </template>
+      </PageHeader>
 
       <!-- Persons Section -->
       <div
