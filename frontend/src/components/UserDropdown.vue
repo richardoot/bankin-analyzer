@@ -13,6 +13,8 @@
   const userInitial = computed(() => userEmail.value.charAt(0).toUpperCase())
   const loading = computed(() => authStore.loading)
 
+  // Les historiques ont rejoint la page Données, à côté de leurs sources —
+  // ils n'ont rien à faire entre le profil et la déconnexion.
   const menuItems = [
     {
       to: '/profile',
@@ -23,16 +25,6 @@
       to: '/settings',
       label: 'Réglages',
       icon: 'settings',
-    },
-    {
-      to: '/import/history',
-      label: 'Historique des imports',
-      icon: 'history',
-    },
-    {
-      to: '/bank-sync/history',
-      label: 'Historique des synchros',
-      icon: 'history',
     },
   ]
 

@@ -43,6 +43,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Connexion bancaire' },
   },
   {
+    path: '/data',
+    name: 'data',
+    component: () => import('@/views/DataPage.vue'),
+    meta: { title: 'Données', requiresAuth: true },
+  },
+  {
     path: '/import',
     name: 'import',
     component: () => import('@/views/ImportPage.vue'),
