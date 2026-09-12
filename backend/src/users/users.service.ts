@@ -11,12 +11,11 @@ export class UsersService {
     private readonly supabaseService: SupabaseService
   ) {}
 
-  async findAll(): Promise<User[]> {
-    return this.prisma.user.findMany({
-      orderBy: { createdAt: 'desc' },
-    })
-  }
-
+  /**
+   * One user by id, for `delete()` to resolve the supabaseId it must also
+   * remove. Not reachable over HTTP: no route reads a user other than the
+   * caller's own.
+   */
   async findOne(id: string): Promise<User> {
     const user = await this.prisma.user.findUnique({
       where: { id },

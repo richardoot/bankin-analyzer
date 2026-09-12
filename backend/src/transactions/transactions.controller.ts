@@ -19,6 +19,7 @@ import {
   ApiBearerAuth,
   ApiQuery,
 } from '@nestjs/swagger'
+import { Throttle } from '@nestjs/throttler'
 import { TransactionsService } from './transactions.service'
 import {
   parseTransactionFilters,
@@ -101,6 +102,11 @@ export class TransactionsController {
   }
 
   @Post('import/preview')
+  // Sized for the chunked importer, not a single call: the frontend splits a
+  // CSV into batches of 200, so a 5 000-row file is ~25 previews then ~25
+  // imports inside a couple of minutes. Sixty per five minutes lets that
+  // through untouched and still stops an unattended loop.
+  @Throttle({ default: { limit: 60, ttl: 300_000 } })
   @ApiOperation({
     summary: 'Preview import - analyze duplicates without writing to DB',
   })
@@ -113,6 +119,10 @@ export class TransactionsController {
   }
 
   @Post('import')
+  // Same budget as the preview, for the same chunked caller — and this one
+  // spends real money: each imported batch may fan out into Anthropic
+  // categorization calls.
+  @Throttle({ default: { limit: 60, ttl: 300_000 } })
   @ApiOperation({ summary: 'Import transactions with deduplication' })
   @ApiResponse({ status: 201, type: ImportResultDto })
   async importTransactions(

@@ -24,8 +24,6 @@ const mockUser2 = {
 }
 
 const mockUsersService = {
-  findAll: vi.fn(),
-  findOne: vi.fn(),
   delete: vi.fn(),
 }
 
@@ -67,33 +65,22 @@ describe('UsersController', () => {
     })
   })
 
-  describe('findAll', () => {
-    it('should return an array of users', async () => {
-      mockUsersService.findAll.mockResolvedValue([mockUser, mockUser2])
+  // A `GET /users` listing every account, and a `GET /users/:id` reading any
+  // of them, both used to live here behind authentication alone. They are the
+  // one thing this controller must never grow back, so the surface is asserted
+  // rather than left to a reviewer's memory.
+  describe('exposed surface', () => {
+    const handlers = Object.getOwnPropertyNames(
+      UsersController.prototype
+    ).filter(name => name !== 'constructor')
 
-      const result = await controller.findAll()
-
-      expect(result).toEqual([mockUser, mockUser2])
-      expect(mockUsersService.findAll).toHaveBeenCalled()
+    it('exposes only the caller-scoped handlers', () => {
+      expect(handlers.sort()).toEqual(['delete', 'deleteMe', 'getMe'])
     })
 
-    it('should return empty array when no users', async () => {
-      mockUsersService.findAll.mockResolvedValue([])
-
-      const result = await controller.findAll()
-
-      expect(result).toEqual([])
-    })
-  })
-
-  describe('findOne', () => {
-    it('should return a user by id', async () => {
-      mockUsersService.findOne.mockResolvedValue(mockUser)
-
-      const result = await controller.findOne(mockUser.id)
-
-      expect(result).toEqual(mockUser)
-      expect(mockUsersService.findOne).toHaveBeenCalledWith(mockUser.id)
+    it('has no handler that reads a user other than the caller', () => {
+      expect(handlers).not.toContain('findAll')
+      expect(handlers).not.toContain('findOne')
     })
   })
 

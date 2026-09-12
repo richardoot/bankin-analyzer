@@ -98,18 +98,13 @@ describe('Users (e2e)', () => {
     })
   })
 
-  describe('/users (GET)', () => {
-    it('should return only the caller before anyone else signs in', async () => {
-      const response = await request(ctx.server)
-        .get('/users')
-        .set(ctx.auth(alice))
-
-      expect(response.status).toBe(200)
-      // Alice provisioned herself by calling this route, and is the only one.
-      expect(usersOf(response.body).map(u => u.email)).toEqual([alice.email])
-    })
-
-    it('should list every user once both have signed in', async () => {
+  // `GET /users` and `GET /users/:id` used to exist behind authentication
+  // alone: any valid token listed every account's id, supabaseId and email.
+  // They were removed as dead, over-exposing routes — nothing ever called
+  // them — and these tests pin the removal: a route that grows back will
+  // answer 200 here and fail loudly.
+  describe('removed read routes', () => {
+    it('no longer lists users, even for a signed-in caller', async () => {
       await signIn(alice)
       await signIn(bob)
 
@@ -117,36 +112,20 @@ describe('Users (e2e)', () => {
         .get('/users')
         .set(ctx.auth(alice))
 
-      expect(response.status).toBe(200)
-      expect(
-        usersOf(response.body)
-          .map(u => u.email)
-          .sort()
-      ).toEqual([alice.email, bob.email].sort())
+      expect(response.status).toBe(404)
+      expect(usersOf(response.body)).toEqual([])
     })
-  })
 
-  describe('/users/:id (GET)', () => {
-    it('should return a user by id', async () => {
-      const caller = await signIn()
+    it("no longer serves another user's row by id", async () => {
+      const caller = await signIn(alice)
+      await signIn(bob)
 
       const response = await request(ctx.server)
         .get(`/users/${caller.id}`)
-        .set(ctx.auth(alice))
-
-      expect(response.status).toBe(200)
-      expect(response.body.id).toBe(caller.id)
-      expect(response.body.email).toBe(alice.email)
-    })
-
-    it('should return 404 for a non-existent user', async () => {
-      await signIn()
-
-      const response = await request(ctx.server)
-        .get('/users/550e8400-e29b-41d4-a716-446655440000')
-        .set(ctx.auth(alice))
+        .set(ctx.auth(bob))
 
       expect(response.status).toBe(404)
+      expect(response.body.email).toBeUndefined()
     })
   })
 

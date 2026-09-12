@@ -23,6 +23,7 @@ import {
 import type { Request } from 'express'
 import { FileInterceptor } from '@nestjs/platform-express'
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger'
+import { Throttle } from '@nestjs/throttler'
 import { SupabaseGuard } from '../auth/guards/supabase.guard'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import type { User } from '../generated/prisma'
@@ -340,6 +341,11 @@ export class BankSyncController {
   }
 
   @Post('connections/:id/sync')
+  // The sync-policy module is the real gate — 8h between syncs, 3 fetches a
+  // day, checked against the database. This throttle is the cheaper outer
+  // fence: it absorbs a scripted hammering before each request costs a
+  // policy lookup, and it survives even if the policy env overrides are set.
+  @Throttle({ default: { limit: 10, ttl: 3_600_000 } })
   @ApiOperation({
     summary: 'Read the bank now',
     description:

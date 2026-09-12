@@ -15,6 +15,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger'
+import { Throttle } from '@nestjs/throttler'
 import { CategoriesService } from './categories.service'
 import { CategoryMigrationService } from './category-migration.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
@@ -139,6 +140,10 @@ export class CategoriesController {
   }
 
   @Post('generate-icons')
+  // Every call is money: one Anthropic request per batch of missing icons.
+  // Five an hour covers any honest use — the button is pressed once, twice if
+  // the first answer disappointed — and caps what a scripted caller can spend.
+  @Throttle({ default: { limit: 5, ttl: 3_600_000 } })
   @ApiOperation({
     summary:
       'Generate emoji icons for categories and subcategories without icons',
