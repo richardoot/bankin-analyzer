@@ -11,6 +11,7 @@ vi.mock('@/lib/api', () => ({
     getBankConnections: vi.fn(),
     getLatestImportDate: vi.fn(),
     getAccounts: vi.fn(),
+    getBanks: vi.fn(),
     syncBankConnection: vi.fn(),
     startBankAuthorization: vi.fn(),
   },
@@ -81,6 +82,7 @@ describe('AccountsPage', () => {
     vi.mocked(api.getLatestImportDate).mockResolvedValue({ date: null })
     vi.mocked(api.getAccounts).mockResolvedValue([])
     vi.mocked(api.getBankConnections).mockResolvedValue([])
+    vi.mocked(api.getBanks).mockResolvedValue([])
   })
 
   it('groups linked accounts under their bank, the rest under CSV/manuels', async () => {
@@ -216,5 +218,34 @@ describe('AccountsPage', () => {
     )
     // Nothing is fetchable: the global button has no work to offer.
     expect(wrapper.find('[data-testid="sync-all-button"]').exists()).toBe(false)
+  })
+
+  it('shows the bank logo in its tile, or the initial when there is none', async () => {
+    vi.mocked(api.getBankConnections).mockResolvedValue([
+      connection({ id: 'c1' }),
+      connection({ id: 'c2', aspspName: 'Banque Sans Logo' }),
+    ])
+    vi.mocked(api.getBanks).mockResolvedValue([
+      {
+        name: 'Boursorama',
+        country: 'FR',
+        beta: false,
+        logo: 'https://cdn.example/logo/',
+      },
+    ])
+
+    const wrapper = await mountPage()
+    await flushPromises()
+
+    const withLogo = wrapper.get('[data-testid="connection-c1"]')
+    expect(
+      withLogo.get('[data-testid="bank-logo-tile"] img').attributes('src')
+    ).toBe('https://cdn.example/logo/-/preview/96x96/')
+
+    const withoutLogo = wrapper.get('[data-testid="connection-c2"]')
+    expect(
+      withoutLogo.find('[data-testid="bank-logo-tile"] img').exists()
+    ).toBe(false)
+    expect(withoutLogo.get('[data-testid="bank-logo-tile"]').text()).toBe('B')
   })
 })

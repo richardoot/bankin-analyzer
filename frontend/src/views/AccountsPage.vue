@@ -88,6 +88,35 @@
     connections.value.filter(c => c.action === 'fetch')
   )
 
+  // ── Logos ─────────────────────────────────────────────────────────────────
+  // Un GET /aspsps par pays présent dans les connexions (un seul en
+  // pratique). Absent ou en échec : l'initiale de la banque tient la tuile.
+  const logoByBankName = ref<Map<string, string>>(new Map())
+
+  async function loadLogos(): Promise<void> {
+    const countries = [...new Set(connections.value.map(c => c.aspspCountry))]
+    const lists = await Promise.allSettled(
+      countries.map(country => api.getBanks(country))
+    )
+    const map = new Map<string, string>()
+    for (const list of lists) {
+      if (list.status !== 'fulfilled') continue
+      for (const bank of list.value) {
+        if (bank.logo) map.set(bank.name, bank.logo)
+      }
+    }
+    logoByBankName.value = map
+  }
+
+  /**
+   * Redimensionné via le suffixe Uploadcare — `preview`, pas `resize` : les
+   * logos ont des ratios quelconques et `resize` les écrase dans la boîte.
+   */
+  function logoUrl(aspspName: string): string | null {
+    const logo = logoByBankName.value.get(aspspName)
+    return logo ? `${logo}-/preview/96x96/` : null
+  }
+
   // ── Formats ───────────────────────────────────────────────────────────────
   function formatDateTime(value: string | null): string | null {
     if (!value) return null
@@ -210,6 +239,8 @@
       latestImportDate.value = importDate.value.date
     }
     isLoading.value = false
+    // Après le rendu : la page n'attend pas les logos.
+    void loadLogos()
   })
 </script>
 
@@ -254,45 +285,67 @@
           class="rounded-xl bg-white p-6 shadow-sm dark:bg-slate-900 dark:shadow-slate-900/20"
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="min-w-0">
-              <div class="flex flex-wrap items-center gap-2">
-                <h2
-                  class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-                >
-                  {{ connection.aspspName }}
-                </h2>
+            <div class="flex min-w-0 items-start gap-3">
+              <!-- Fond blanc même en sombre : les logos de banque sont
+                   dessinés pour un fond clair. -->
+              <div
+                class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white p-1 ring-1 ring-gray-200 dark:ring-slate-600"
+                data-testid="bank-logo-tile"
+              >
+                <img
+                  v-if="logoUrl(connection.aspspName)"
+                  :src="logoUrl(connection.aspspName)!"
+                  :alt="`Logo ${connection.aspspName}`"
+                  class="h-full w-full object-contain"
+                />
                 <span
-                  class="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                  :class="BADGE_CLASSES[badgeOf(connection).tone]"
-                  data-testid="connection-badge"
+                  v-else
+                  aria-hidden="true"
+                  class="text-sm font-semibold text-gray-400"
                 >
-                  {{ badgeOf(connection).label }}
+                  {{ connection.aspspName.charAt(0).toUpperCase() }}
                 </span>
               </div>
-              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                <template v-if="connection.lastSyncAt">
-                  Dernière synchro :
-                  {{ formatDateTime(connection.lastSyncAt) }}
-                </template>
-                <template v-else>Jamais synchronisée</template>
-              </p>
-              <!-- La raison de la policy, jamais tue : quota, intervalle,
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h2
+                    class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+                  >
+                    {{ connection.aspspName }}
+                  </h2>
+                  <span
+                    class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                    :class="BADGE_CLASSES[badgeOf(connection).tone]"
+                    data-testid="connection-badge"
+                  >
+                    {{ badgeOf(connection).label }}
+                  </span>
+                </div>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  <template v-if="connection.lastSyncAt">
+                    Dernière synchro :
+                    {{ formatDateTime(connection.lastSyncAt) }}
+                  </template>
+                  <template v-else>Jamais synchronisée</template>
+                </p>
+                <!-- La raison de la policy, jamais tue : quota, intervalle,
                    demande de la banque. -->
-              <p
-                v-if="connection.action === 'skip'"
-                class="mt-1 text-xs text-amber-700 dark:text-amber-400"
-                data-testid="skip-reason"
-              >
-                {{ connection.reason }}
-              </p>
-              <p
-                v-if="outcomeById.get(connection.id)"
-                class="mt-1 text-xs text-primary-700 dark:text-primary-400"
-                aria-live="polite"
-                data-testid="sync-outcome"
-              >
-                {{ outcomeLabel(outcomeById.get(connection.id)!) }}
-              </p>
+                <p
+                  v-if="connection.action === 'skip'"
+                  class="mt-1 text-xs text-amber-700 dark:text-amber-400"
+                  data-testid="skip-reason"
+                >
+                  {{ connection.reason }}
+                </p>
+                <p
+                  v-if="outcomeById.get(connection.id)"
+                  class="mt-1 text-xs text-primary-700 dark:text-primary-400"
+                  aria-live="polite"
+                  data-testid="sync-outcome"
+                >
+                  {{ outcomeLabel(outcomeById.get(connection.id)!) }}
+                </p>
+              </div>
             </div>
 
             <BaseButton
