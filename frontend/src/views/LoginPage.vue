@@ -2,6 +2,7 @@
   import { ref, computed, onMounted } from 'vue'
   import { useRouter, useRoute } from 'vue-router'
   import { useAuthStore } from '@/stores/auth'
+  import BaseField from '@/components/ui/BaseField.vue'
 
   const router = useRouter()
   const route = useRoute()
@@ -59,7 +60,7 @@
     }
 
     if (password.value.length < 6) {
-      localError.value = 'Le mot de passe doit contenir au moins 6 caracteres'
+      localError.value = 'Le mot de passe doit contenir au moins 6 caractères'
       return
     }
 
@@ -73,7 +74,7 @@
         })
       } else {
         await authStore.signIn(email.value, password.value)
-        const redirectPath = (route.query.redirect as string) || '/profile'
+        const redirectPath = (route.query.redirect as string) || '/dashboard'
         await router.push(redirectPath)
       }
     } catch {
@@ -93,13 +94,13 @@
         <!-- Header -->
         <div class="mb-8 text-center">
           <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {{ isSignUp ? 'Creer un compte' : 'Se connecter' }}
+            {{ isSignUp ? 'Créer un compte' : 'Se connecter' }}
           </h1>
           <p class="mt-2 text-gray-600 dark:text-gray-400">
             {{
               isSignUp
                 ? 'Rejoignez Finance Analyzer gratuitement'
-                : 'Accedez a votre tableau de bord'
+                : 'Accédez à votre tableau de bord'
             }}
           </p>
         </div>
@@ -107,6 +108,7 @@
         <!-- Error message -->
         <div
           v-if="error"
+          role="alert"
           class="mb-6 rounded-lg bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-400"
         >
           {{ error }}
@@ -114,64 +116,41 @@
 
         <!-- Form -->
         <form class="space-y-6" @submit.prevent="handleSubmit">
-          <div>
-            <label
-              for="email"
-              class="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Email
-            </label>
-            <input
-              id="email"
-              v-model="email"
-              type="email"
-              required
-              data-testid="login-email-input"
-              class="mt-1 block w-full rounded-lg border border-gray-300 dark:border-slate-600 px-4 py-3 text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:border-emerald-500 dark:focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:focus:ring-emerald-400/20"
-              placeholder="vous@exemple.com"
-            />
-          </div>
+          <BaseField
+            v-model="email"
+            label="Email"
+            type="email"
+            required
+            data-testid="login-email-input"
+            placeholder="vous@exemple.com"
+            autocomplete="email"
+          />
 
-          <div>
-            <label
-              for="password"
-              class="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Mot de passe
-            </label>
-            <input
-              id="password"
-              v-model="password"
-              type="password"
-              required
-              data-testid="login-password-input"
-              class="mt-1 block w-full rounded-lg border border-gray-300 dark:border-slate-600 px-4 py-3 text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:border-emerald-500 dark:focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:focus:ring-emerald-400/20"
-              placeholder="••••••••"
-            />
-          </div>
+          <BaseField
+            v-model="password"
+            label="Mot de passe"
+            type="password"
+            required
+            data-testid="login-password-input"
+            placeholder="••••••••"
+            :autocomplete="isSignUp ? 'new-password' : 'current-password'"
+          />
 
-          <div v-if="isSignUp">
-            <label
-              for="confirmPassword"
-              class="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Confirmer le mot de passe
-            </label>
-            <input
-              id="confirmPassword"
-              v-model="confirmPassword"
-              type="password"
-              required
-              class="mt-1 block w-full rounded-lg border border-gray-300 dark:border-slate-600 px-4 py-3 text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:border-emerald-500 dark:focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:focus:ring-emerald-400/20"
-              placeholder="••••••••"
-            />
-          </div>
+          <BaseField
+            v-if="isSignUp"
+            v-model="confirmPassword"
+            label="Confirmer le mot de passe"
+            type="password"
+            required
+            placeholder="••••••••"
+            autocomplete="new-password"
+          />
 
           <button
             type="submit"
             :disabled="loading"
             data-testid="login-submit-button"
-            class="w-full rounded-lg bg-emerald-500 px-4 py-3 text-base font-medium text-white transition-colors hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+            class="w-full rounded-lg bg-primary-500 px-4 py-3 text-base font-medium text-white transition-colors hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span v-if="loading">Chargement...</span>
             <span v-else>{{ isSignUp ? "S'inscrire" : 'Se connecter' }}</span>
@@ -233,12 +212,12 @@
                 ? 'Passer au mode connexion'
                 : 'Passer au mode inscription'
             "
-            class="text-sm text-emerald-600 dark:text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400"
+            class="text-sm text-primary-600 dark:text-primary-500 hover:text-primary-700 dark:hover:text-primary-400"
             @click="toggleMode"
           >
             {{
               isSignUp
-                ? 'Deja un compte ? Se connecter'
+                ? 'Déjà un compte ? Se connecter'
                 : "Pas de compte ? S'inscrire"
             }}
           </button>
@@ -251,7 +230,7 @@
           to="/"
           class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
         >
-          &larr; Retour a l'accueil
+          &larr; Retour à l'accueil
         </RouterLink>
       </div>
     </div>

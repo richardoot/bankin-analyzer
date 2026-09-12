@@ -270,15 +270,23 @@ export class TransactionsService {
   async findAllByUserPaginated(
     userId: string,
     pagination: { page: number; limit: number },
-    filters?: TransactionFilters
+    filters?: TransactionFilters,
+    sort?: { by: 'date' | 'amount'; order: 'asc' | 'desc' }
   ): Promise<{ data: Transaction[]; total: number }> {
     const where = buildTransactionWhere(userId, filters)
+
+    // The id tiebreak keeps pagination stable: many rows share a date (or an
+    // amount), and without it the same row can appear on two pages.
+    const orderBy: Prisma.TransactionOrderByWithRelationInput[] = [
+      sort ? { [sort.by]: sort.order } : { date: 'desc' },
+      { id: 'desc' },
+    ]
 
     const [data, total] = await Promise.all([
       this.prisma.transaction.findMany({
         where,
         include: TRANSACTION_READ_INCLUDE,
-        orderBy: { date: 'desc' },
+        orderBy,
         skip: (pagination.page - 1) * pagination.limit,
         take: pagination.limit,
       }),

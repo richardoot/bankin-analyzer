@@ -38,7 +38,7 @@ describe('usePdfExport', () => {
       // Verify title
       expect(mockSetFontSize).toHaveBeenCalledWith(18)
       expect(mockText).toHaveBeenCalledWith(
-        'Recapitulatif des Remboursements',
+        'Récapitulatif des remboursements',
         20,
         20
       )
@@ -46,7 +46,7 @@ describe('usePdfExport', () => {
       // Verify date generation text
       expect(mockSetFontSize).toHaveBeenCalledWith(10)
       expect(mockText).toHaveBeenCalledWith(
-        expect.stringContaining('Genere le'),
+        expect.stringContaining('Généré le'),
         20,
         30
       )
@@ -327,7 +327,7 @@ describe('usePdfExport', () => {
         expect.any(Number)
       )
       expect(mockText).toHaveBeenCalledWith(
-        'Total General',
+        'Total général',
         20,
         expect.any(Number)
       )

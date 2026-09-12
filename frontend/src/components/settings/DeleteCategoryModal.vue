@@ -10,6 +10,7 @@
    * that fires every time stops being read.
    */
   import { computed, ref, watch } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import {
     api,
     type CategoryDeletionSummaryDto,
@@ -29,6 +30,14 @@
       },
     ]
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.category !== null,
+    onClose: () => close(),
+    panel: modalPanelRef,
+  })
 
   const summary = ref<CategoryDeletionSummaryDto | null>(null)
   const isLoadingSummary = ref(false)
@@ -166,6 +175,7 @@
         <div class="fixed inset-0 bg-black/50" @click="close" />
 
         <div
+          ref="modalPanelRef"
           role="dialog"
           aria-modal="true"
           aria-labelledby="delete-category-title"
@@ -377,6 +387,7 @@
 
           <p
             v-if="error"
+            role="alert"
             class="mb-4 text-sm text-red-600 dark:text-red-400"
             data-testid="deletion-error"
           >

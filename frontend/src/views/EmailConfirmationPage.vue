@@ -15,10 +15,10 @@
       >
         <!-- Icon -->
         <div
-          class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30"
+          class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30"
         >
           <svg
-            class="h-10 w-10 text-emerald-600 dark:text-emerald-400"
+            class="h-10 w-10 text-primary-600 dark:text-primary-400"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -34,7 +34,7 @@
 
         <!-- Title -->
         <h1 class="mt-6 text-2xl font-bold text-gray-900 dark:text-gray-100">
-          Verifiez votre boite mail
+          Vérifiez votre boîte mail
         </h1>
 
         <!-- Description -->
@@ -84,7 +84,7 @@
         <div class="mt-8">
           <RouterLink
             to="/login"
-            class="inline-flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400"
+            class="inline-flex items-center gap-2 text-sm font-medium text-primary-600 dark:text-primary-500 hover:text-primary-700 dark:hover:text-primary-400"
           >
             <svg
               class="h-4 w-4"

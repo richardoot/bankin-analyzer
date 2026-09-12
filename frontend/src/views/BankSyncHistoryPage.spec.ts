@@ -70,7 +70,7 @@ describe('BankSyncHistoryPage', () => {
     ])
 
     expect(wrapper.get('[data-testid="run-status-badge"]').text()).toContain(
-      'Annulee'
+      'Annulée'
     )
     expect(wrapper.find('[data-testid="ask-undo"]').exists()).toBe(false)
   })
@@ -138,7 +138,7 @@ describe('BankSyncHistoryPage', () => {
     expect(api.undoBankSyncRun).toHaveBeenCalledWith('run-1')
     expect(api.getBankSyncRuns).toHaveBeenCalledTimes(2)
     expect(wrapper.get('[data-testid="run-status-badge"]').text()).toContain(
-      'Annulee'
+      'Annulée'
     )
   })
 

@@ -104,10 +104,10 @@
     <template v-else>
       <div
         v-if="applicationId"
-        class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-emerald-50 p-4 dark:bg-emerald-900/20"
+        class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-primary-50 p-4 dark:bg-primary-900/20"
         data-testid="enable-banking-credential-configured"
       >
-        <p class="text-sm text-emerald-800 dark:text-emerald-200">
+        <p class="text-sm text-primary-800 dark:text-primary-200">
           Configurée — identifiant d'application :
           <code class="font-mono">{{ applicationId }}</code>
         </p>
@@ -115,7 +115,7 @@
           type="button"
           data-testid="remove-credential-button"
           :disabled="removing"
-          class="rounded-lg border border-emerald-300 px-3 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-700 dark:text-emerald-200 dark:hover:bg-emerald-900/40"
+          class="rounded-lg border border-primary-300 px-3 py-1.5 text-sm font-medium text-primary-800 hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-primary-700 dark:text-primary-200 dark:hover:bg-primary-900/40"
           @click="remove"
         >
           {{ removing ? 'Suppression…' : 'Supprimer' }}
@@ -160,7 +160,7 @@
             type="button"
             data-testid="save-credential-button"
             :disabled="!applicationIdInput || !file || saving"
-            class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-slate-700"
+            class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-slate-700"
             @click="save"
           >
             {{ saving ? 'Enregistrement…' : 'Enregistrer' }}
@@ -188,7 +188,7 @@
               href="https://enablebanking.com/sign-in/"
               target="_blank"
               rel="noopener noreferrer"
-              class="text-emerald-700 underline hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
+              class="text-primary-700 underline hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300"
               >enablebanking.com/sign-in</a
             >
             — un compte est créé automatiquement à la première connexion.

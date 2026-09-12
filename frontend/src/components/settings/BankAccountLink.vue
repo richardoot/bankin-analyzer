@@ -78,7 +78,7 @@
           class="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
           :class="
             discovered.isIngested
-              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
+              ? 'bg-primary-100 text-primary-800 dark:bg-primary-900/40 dark:text-primary-200'
               : 'bg-gray-200 text-gray-700 dark:bg-slate-700 dark:text-gray-300'
           "
           @click="emit('toggle-ingestion')"
@@ -156,7 +156,7 @@
         class="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
         :class="
           discovered.isIngested
-            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
+            ? 'bg-primary-100 text-primary-800 dark:bg-primary-900/40 dark:text-primary-200'
             : 'bg-gray-200 text-gray-700 dark:bg-slate-700 dark:text-gray-300'
         "
         @click="emit('toggle-ingestion')"
@@ -201,7 +201,7 @@
         <strong>{{ discovered.suggestion.accountLabel }}</strong>
         <button
           type="button"
-          class="ml-2 font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+          class="ml-2 font-medium text-primary-600 hover:underline dark:text-primary-400"
           @click="emit('assign', discovered.suggestion.accountId)"
         >
           associer

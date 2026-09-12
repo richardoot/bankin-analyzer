@@ -11,6 +11,7 @@
    */
   import { computed, onMounted, ref } from 'vue'
   import { useFiltersStore } from '@/stores/filters'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import { api, type CategoryDto, type SubcategoryDto } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
   import CategoryIcon from '@/components/CategoryIcon.vue'
@@ -306,6 +307,14 @@
 
   // ── Create a category ─────────────────────────────────────────────────────
   const isCreateModalOpen = ref(false)
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const createModalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => isCreateModalOpen.value,
+    onClose: () => closeCreateModal(),
+    panel: createModalPanelRef,
+  })
   const newCategoryName = ref('')
   const newCategoryType = ref<'EXPENSE' | 'INCOME'>('EXPENSE')
   const isCreatingCategory = ref(false)
@@ -432,7 +441,7 @@
         <div class="flex flex-wrap gap-2">
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+            class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
             data-testid="open-create-category"
             @click="openCreateModal"
           >
@@ -453,7 +462,7 @@
           </button>
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-900/20"
+            class="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-primary-800 dark:text-primary-300 dark:hover:bg-primary-900/20"
             :disabled="isGeneratingIcons || missingIconCount === 0"
             :title="
               missingIconCount === 0
@@ -499,7 +508,7 @@
         >
           <div class="relative flex-1">
             <svg
-              class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500"
+              class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -516,7 +525,7 @@
               type="text"
               placeholder="Rechercher une catégorie…"
               aria-label="Rechercher une catégorie"
-              class="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-9 text-sm text-gray-800 placeholder-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:placeholder-gray-500"
+              class="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-9 text-sm text-gray-800 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:placeholder-gray-500"
             />
             <button
               v-if="categorySearch"
@@ -554,7 +563,7 @@
               class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
               :class="
                 categoryStateFilter === opt.key
-                  ? 'bg-emerald-500 text-white dark:bg-emerald-600'
+                  ? 'bg-primary-500 text-white dark:bg-primary-600'
                   : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
               "
               @click="categoryStateFilter = opt.key"
@@ -572,7 +581,7 @@
           Aucune catégorie ne correspond.
           <button
             type="button"
-            class="ml-1 font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+            class="ml-1 font-medium text-primary-600 hover:underline dark:text-primary-400"
             @click="clearCategoryFilters"
           >
             Réinitialiser les filtres
@@ -721,7 +730,7 @@
                       :value="renameDraftFor(category)"
                       :disabled="renameSaving[category.id]"
                       data-testid="rename-input"
-                      class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                      class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
                       @input="
                         onRenameDraftChange(
                           category.id,
@@ -735,7 +744,7 @@
                         :disabled="
                           !isRenameDirty(category) || renameSaving[category.id]
                         "
-                        class="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {{
                           renameSaving[category.id]
@@ -808,7 +817,7 @@
                       type="text"
                       :placeholder="`Ajouter une sous-catégorie à ${category.name}…`"
                       :aria-label="`Nouvelle sous-catégorie de ${category.name}`"
-                      class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                      class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
                     />
                     <button
                       type="submit"
@@ -816,7 +825,7 @@
                         !newSubcategoryNames[category.id]?.trim() ||
                         creatingSubcategory.has(category.id)
                       "
-                      class="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      class="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Ajouter
                     </button>
@@ -877,6 +886,9 @@
           <div class="fixed inset-0 bg-black/50" @click="closeCreateModal" />
 
           <div
+            ref="createModalPanelRef"
+            role="dialog"
+            aria-modal="true"
             class="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900"
           >
             <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
@@ -888,6 +900,7 @@
 
             <div
               v-if="createError"
+              role="alert"
               class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
             >
               {{ createError }}
@@ -907,7 +920,7 @@
                   type="text"
                   maxlength="100"
                   :disabled="isCreatingCategory"
-                  class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
                 />
               </div>
 
@@ -928,7 +941,7 @@
                     class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
                     :class="
                       newCategoryType === 'EXPENSE'
-                        ? 'bg-emerald-600 text-white'
+                        ? 'bg-primary-600 text-white'
                         : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
                     "
                     @click="newCategoryType = 'EXPENSE'"
@@ -941,7 +954,7 @@
                     class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
                     :class="
                       newCategoryType === 'INCOME'
-                        ? 'bg-emerald-600 text-white'
+                        ? 'bg-primary-600 text-white'
                         : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
                     "
                     @click="newCategoryType = 'INCOME'"
@@ -962,7 +975,7 @@
                 </button>
                 <button
                   type="submit"
-                  class="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  class="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
                   :disabled="!newCategoryName.trim() || isCreatingCategory"
                 >
                   {{ isCreatingCategory ? 'Création…' : 'Créer' }}

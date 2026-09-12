@@ -61,7 +61,7 @@
           v-for="(period, index) in periods"
           :key="period.value"
           :data-testid="`period-${period.value}`"
-          class="relative px-4 py-2 text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-800"
+          class="relative px-4 py-2 text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-800"
           :class="[
             filtersStore.timePeriod === period.value
               ? 'text-white'
@@ -74,7 +74,7 @@
           <!-- Active background pill -->
           <span
             v-if="filtersStore.timePeriod === period.value"
-            class="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-500 dark:to-blue-400 rounded-md shadow-sm"
+            class="absolute inset-0 bg-gradient-to-r from-primary-600 to-primary-500 dark:from-primary-500 dark:to-primary-400 rounded-md shadow-sm"
           />
           <!-- Label -->
           <span class="relative z-10 hidden sm:inline">{{ period.label }}</span>

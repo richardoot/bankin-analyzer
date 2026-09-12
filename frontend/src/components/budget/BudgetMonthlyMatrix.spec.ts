@@ -71,7 +71,7 @@ describe('BudgetMonthlyMatrix', () => {
     const cell = wrapper.find('[data-testid="matrix-cell-Divers-2026-06"]')
     const classes = cell.classes().join(' ')
     expect(classes).not.toContain('bg-red-50')
-    expect(classes).not.toContain('bg-emerald-50')
+    expect(classes).not.toContain('bg-primary-50')
     expect(cell.attributes('title')).toContain("pas d'enveloppe")
   })
 

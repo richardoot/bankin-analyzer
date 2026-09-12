@@ -12,6 +12,7 @@
     PartialImportError,
   } from '@/composables/useChunkedImport'
   import DuplicatesReviewModal from '@/components/DuplicatesReviewModal.vue'
+  import StepIndicator from '@/components/ui/StepIndicator.vue'
 
   /** A row the parser could not use, and why. */
   interface SkippedRow {
@@ -42,6 +43,14 @@
   const partialImportError = ref<PartialImportError | null>(null)
 
   // AI Suggestions state
+
+  /** Where the flow stands: dépôt → aperçu → doublons (→ récapitulatif). */
+  const IMPORT_STEPS = ['Dépôt', 'Aperçu', 'Doublons', 'Récapitulatif']
+  const currentStep = computed(() => {
+    if (showDuplicatesModal.value) return 3
+    if (showPreview.value) return 2
+    return 1
+  })
 
   // Show progress bar during chunking
   const showProgressBar = computed(() => {
@@ -318,7 +327,7 @@
         // The import history stays in IN_PROGRESS status
         // User can delete it from the history page if needed
         partialImportError.value = err
-        error.value = `Import echoue au chunk ${err.details.failedAtChunk + 1}/${err.details.chunksTotal}. ${err.details.imported} transactions importees sur ${err.details.total}.`
+        error.value = `Import échoué au chunk ${err.details.failedAtChunk + 1}/${err.details.chunksTotal}. ${err.details.imported} transactions importées sur ${err.details.total}.`
       } else {
         error.value =
           err instanceof Error ? err.message : "Erreur lors de l'import"
@@ -369,40 +378,49 @@
   >
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
+        <h1
+          class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
+        >
           Import de transactions
         </h1>
         <p class="mt-2 text-gray-600 dark:text-gray-400">
           Importez vos transactions depuis un export CSV Bankin
         </p>
+        <StepIndicator
+          class="mt-6"
+          :steps="IMPORT_STEPS"
+          :current="currentStep"
+        />
       </div>
 
       <!-- Progress bar during chunking -->
       <div
         v-if="showProgressBar"
-        class="mb-6 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4"
+        role="status"
+        aria-live="polite"
+        class="mb-6 bg-white dark:bg-slate-900 border border-primary-200 dark:border-primary-800 rounded-lg p-4"
       >
         <div class="flex items-center justify-between mb-2">
           <span
-            class="text-sm font-medium text-indigo-700 dark:text-indigo-400"
+            class="text-sm font-medium text-primary-700 dark:text-primary-400"
           >
             {{ progress.message }}
           </span>
-          <span class="text-sm text-indigo-600 dark:text-indigo-400"
+          <span class="text-sm text-primary-600 dark:text-primary-400"
             >{{ progress.percent }}%</span
           >
         </div>
         <div
-          class="w-full bg-indigo-100 dark:bg-indigo-900/30 rounded-full h-2.5"
+          class="w-full bg-primary-100 dark:bg-primary-900/30 rounded-full h-2.5"
         >
           <div
-            class="bg-indigo-600 dark:bg-indigo-500 h-2.5 rounded-full transition-all duration-300"
+            class="bg-primary-600 dark:bg-primary-500 h-2.5 rounded-full transition-all duration-300"
             :style="{ width: `${progress.percent}%` }"
           ></div>
         </div>
         <div
           v-if="progress.totalChunks > 1"
-          class="mt-2 text-xs text-indigo-500 dark:text-indigo-400"
+          class="mt-2 text-xs text-primary-500 dark:text-primary-400"
         >
           Chunk {{ progress.completedChunks }}/{{ progress.totalChunks }}
         </div>
@@ -411,6 +429,7 @@
       <!-- Partial import error with retry -->
       <div
         v-if="partialImportError"
+        role="alert"
         class="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4"
       >
         <div class="flex items-start gap-3">
@@ -432,19 +451,19 @@
               Import partiel
             </h3>
             <p class="text-sm text-amber-700 dark:text-amber-400/80 mt-1">
-              {{ partialImportError.details.imported }} transactions importees
+              {{ partialImportError.details.imported }} transactions importées
               sur {{ partialImportError.details.total }}.
             </p>
             <p class="text-xs text-amber-600 dark:text-amber-500 mt-2">
-              Vous pouvez reessayer sans risque de dupliquer les transactions
-              deja importees.
+              Vous pouvez réessayer sans risque de dupliquer les transactions
+              déjà importées.
             </p>
             <div class="mt-3 flex gap-2">
               <button
                 class="px-3 py-1.5 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 transition-colors"
                 @click="retryImport"
               >
-                Reessayer l'import
+                Réessayer l'import
               </button>
               <button
                 class="px-3 py-1.5 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 text-sm rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
@@ -460,6 +479,7 @@
       <!-- Error message -->
       <div
         v-if="error && !partialImportError"
+        role="alert"
         class="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg"
       >
         {{ error }}
@@ -472,6 +492,7 @@
       -->
       <div
         v-if="skippedRows.length > 0"
+        role="status"
         data-testid="skipped-rows"
         class="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-lg"
       >
@@ -479,7 +500,7 @@
           {{ skippedRows.length }} ligne{{
             skippedRows.length > 1 ? 's' : ''
           }}
-          du fichier {{ skippedRows.length > 1 ? 'ont' : 'a' }} ete ignoree{{
+          du fichier {{ skippedRows.length > 1 ? 'ont' : 'a' }} été ignorée{{
             skippedRows.length > 1 ? 's' : ''
           }}
         </p>
@@ -504,7 +525,7 @@
         class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border-2 border-dashed transition-colors"
         :class="
           isDragOver
-            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
             : 'border-gray-300 dark:border-slate-600'
         "
         @dragover="handleDragOver"
@@ -515,7 +536,7 @@
           class="flex flex-col items-center justify-center py-16 cursor-pointer"
         >
           <svg
-            class="w-16 h-16 text-gray-400 dark:text-gray-500 mb-4"
+            class="w-16 h-16 text-gray-500 dark:text-gray-400 mb-4"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -579,14 +600,12 @@
         <!-- Stats -->
         <div class="grid grid-cols-3 gap-4 mb-6">
           <div
-            class="bg-indigo-50 dark:bg-indigo-900/30 rounded-lg p-4 text-center"
+            class="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 text-center"
           >
-            <div
-              class="text-2xl font-bold text-indigo-600 dark:text-indigo-400"
-            >
+            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
               {{ parsedTransactions.length }}
             </div>
-            <div class="text-sm text-indigo-800 dark:text-indigo-300">
+            <div class="text-sm text-blue-800 dark:text-blue-300">
               Transactions
             </div>
           </div>
@@ -664,7 +683,7 @@
           </button>
           <button
             :disabled="isUploading || isPreviewLoading"
-            class="flex-1 px-4 py-3 bg-indigo-600 dark:bg-indigo-500 text-white rounded-lg font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            class="flex-1 px-4 py-3 bg-primary-600 dark:bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             @click="submitImport"
           >
             <span v-if="isPreviewLoading">Analyse en cours...</span>

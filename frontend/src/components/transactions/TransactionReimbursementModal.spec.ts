@@ -66,7 +66,7 @@ describe('TransactionReimbursementModal', () => {
     // expense transaction, which already knows its category. One select
     // remains — the person owing the money.
     expect(wrapper.findAll('select')).toHaveLength(1)
-    expect(wrapper.text()).not.toContain('Categorie')
+    expect(wrapper.text()).not.toContain('Catégorie')
   })
 
   it('creates the debt from the person, the amount and the note alone', async () => {

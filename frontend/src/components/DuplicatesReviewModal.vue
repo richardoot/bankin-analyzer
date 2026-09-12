@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { ref, computed, watch } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import type { ImportPreviewResultDto } from '@/lib/api'
 
   const props = defineProps<{
@@ -12,6 +13,14 @@
     close: []
     confirm: [selectedIndices: Set<number>]
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.isOpen,
+    onClose: () => handleClose(),
+    panel: modalPanelRef,
+  })
 
   // Track selected indices for internal duplicates (which ones to import)
   const selectedInternalIndices = ref<Set<number>>(new Set())
@@ -197,6 +206,9 @@
         <div class="fixed inset-0 bg-black/50" @click="handleClose" />
 
         <div
+          ref="modalPanelRef"
+          role="dialog"
+          aria-modal="true"
           class="relative z-10 w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-xl dark:shadow-slate-900/30 flex flex-col"
         >
           <!-- Header -->
@@ -228,7 +240,7 @@
               </h2>
             </div>
             <button
-              class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+              class="text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               @click="handleClose"
             >
               <svg
@@ -315,11 +327,11 @@
                     type="checkbox"
                     :checked="allInternalSelected"
                     :indeterminate="someInternalSelected"
-                    class="h-4 w-4 text-indigo-600 dark:text-indigo-500 rounded border-gray-300 dark:border-slate-600 focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
+                    class="h-4 w-4 text-primary-600 dark:text-primary-500 rounded border-gray-300 dark:border-slate-600 focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
                     @change="toggleAllInternalDuplicates"
                   />
                   <span class="text-sm text-gray-600 dark:text-gray-400"
-                    >Tout selectionner</span
+                    >Tout sélectionner</span
                   >
                 </label>
               </div>
@@ -352,12 +364,12 @@
                     <input
                       type="checkbox"
                       :checked="selectedInternalIndices.has(tx.index)"
-                      class="h-4 w-4 text-indigo-600 dark:text-indigo-500 rounded border-gray-300 dark:border-slate-600 focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
+                      class="h-4 w-4 text-primary-600 dark:text-primary-500 rounded border-gray-300 dark:border-slate-600 focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
                       @change="toggleInternalIndex(tx.index)"
                     />
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center justify-between">
-                        <span class="text-xs text-gray-400 dark:text-gray-500"
+                        <span class="text-xs text-gray-500 dark:text-gray-400"
                           >#{{ tx.index + 1 }}</span
                         >
                         <span
@@ -407,18 +419,18 @@
                       d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
                     />
                   </svg>
-                  Deja en base de donnees
+                  Déjà en base de données
                 </h3>
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     :checked="allExternalSelected"
                     :indeterminate="someExternalSelected"
-                    class="h-4 w-4 text-indigo-600 dark:text-indigo-500 rounded border-gray-300 dark:border-slate-600 focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
+                    class="h-4 w-4 text-primary-600 dark:text-primary-500 rounded border-gray-300 dark:border-slate-600 focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
                     @change="toggleAllExternalDuplicates"
                   />
                   <span class="text-sm text-gray-600 dark:text-gray-400"
-                    >Tout selectionner</span
+                    >Tout sélectionner</span
                   >
                 </label>
               </div>
@@ -480,7 +492,7 @@
                       </div>
                       <div>
                         <span class="text-gray-500 dark:text-gray-400"
-                          >Categorie:</span
+                          >Catégorie:</span
                         >
                         {{ dup.uploaded.category }}
                       </div>
@@ -523,11 +535,11 @@
                       </div>
                       <div>
                         <span class="text-gray-500 dark:text-gray-400"
-                          >Categorie:</span
+                          >Catégorie:</span
                         >
                         {{ dup.existing.categoryName || '-' }}
                       </div>
-                      <div class="text-xs text-gray-400 dark:text-gray-500">
+                      <div class="text-xs text-gray-500 dark:text-gray-400">
                         Importe le {{ formatDate(dup.existing.createdAt) }}
                       </div>
                     </div>
@@ -542,7 +554,7 @@
                     <input
                       type="checkbox"
                       :checked="selectedExternalIndices.has(dup.uploaded.index)"
-                      class="h-4 w-4 text-indigo-600 dark:text-indigo-500 rounded border-gray-300 dark:border-slate-600 focus:ring-indigo-500 dark:focus:ring-indigo-400 dark:bg-slate-700"
+                      class="h-4 w-4 text-primary-600 dark:text-primary-500 rounded border-gray-300 dark:border-slate-600 focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
                       @change="toggleExternalIndex(dup.uploaded.index)"
                     />
                     <span class="text-sm text-gray-700 dark:text-gray-300"
@@ -579,7 +591,7 @@
               </button>
               <button
                 type="button"
-                class="px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-lg font-medium hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-4 py-2 bg-primary-600 dark:bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="loading || totalToImport === 0"
                 @click="handleConfirm"
               >

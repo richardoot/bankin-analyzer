@@ -91,7 +91,7 @@
   })
 
   function colorClass(value: number): string {
-    if (value > 0) return 'text-emerald-600 dark:text-emerald-400'
+    if (value > 0) return 'text-primary-600 dark:text-primary-400'
     if (value < 0) return 'text-red-600 dark:text-red-400'
     return 'text-gray-500 dark:text-gray-400'
   }
@@ -124,7 +124,7 @@
               Suis-je dans les clous&nbsp;?
             </span>
           </h3>
-          <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             {{ followupHint }} · {{ planLabel }}
           </p>
         </div>
@@ -138,11 +138,11 @@
             Budget alloué
           </span>
           <span
-            class="text-lg font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums"
+            class="text-lg font-semibold text-primary-600 dark:text-primary-400 tabular-nums"
           >
             {{ formatCurrency(planBudgetTotal) }}
           </span>
-          <span class="text-[11px] text-gray-400 dark:text-gray-500">
+          <span class="text-[11px] text-gray-500 dark:text-gray-400">
             Épargne prévue
             <span :class="colorClass(followupProjectedSavings)">
               {{ formatCurrency(followupProjectedSavings) }}
@@ -161,7 +161,7 @@
           >
             {{ formatCurrency(planActualExpenseAvg) }}
           </span>
-          <span class="text-[11px] text-gray-400 dark:text-gray-500">
+          <span class="text-[11px] text-gray-500 dark:text-gray-400">
             Épargne réelle
             <span :class="colorClass(planActualSavings)">
               {{ formatCurrency(planActualSavings) }}
@@ -184,7 +184,7 @@
             {{ trackingDelta > 0 ? '+' : ''
             }}{{ formatCurrency(trackingDelta) }}
           </span>
-          <span class="text-[11px] text-gray-400 dark:text-gray-500">
+          <span class="text-[11px] text-gray-500 dark:text-gray-400">
             <template v-if="trackingDelta > 0">
               ✓ Tu épargnes plus que prévu
             </template>
@@ -213,7 +213,7 @@
               Mon plan est-il réaliste&nbsp;?
             </span>
           </h3>
-          <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             {{ comparison?.label }} → {{ planLabel }}
           </p>
         </div>
@@ -231,7 +231,7 @@
           >
             {{ formatCurrency(comparison?.expenseAvg ?? 0) }}
           </span>
-          <span class="text-[11px] text-gray-400 dark:text-gray-500">
+          <span class="text-[11px] text-gray-500 dark:text-gray-400">
             Épargne moyenne
             <span :class="colorClass(comparisonSavings)">
               {{ formatCurrency(comparisonSavings) }}
@@ -246,11 +246,11 @@
             Budget alloué
           </span>
           <span
-            class="text-lg font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums"
+            class="text-lg font-semibold text-primary-600 dark:text-primary-400 tabular-nums"
           >
             {{ formatCurrency(planBudgetTotal) }}
           </span>
-          <span class="text-[11px] text-gray-400 dark:text-gray-500">
+          <span class="text-[11px] text-gray-500 dark:text-gray-400">
             Épargne prévue
             <span :class="colorClass(planningProjectedSavings)">
               {{ formatCurrency(planningProjectedSavings) }}
@@ -279,7 +279,7 @@
               ({{ relative(planningDelta, comparisonSavings) }})
             </span>
           </span>
-          <span class="text-[11px] text-gray-400 dark:text-gray-500">
+          <span class="text-[11px] text-gray-500 dark:text-gray-400">
             <template v-if="planningDelta > 0">
               ✓ Plan plus économe que le passé
             </template>
@@ -302,7 +302,7 @@
         <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
           Épargne projetée
         </h3>
-        <p class="text-xs text-gray-400 dark:text-gray-500">
+        <p class="text-xs text-gray-500 dark:text-gray-400">
           {{ planLabel }}
         </p>
       </header>

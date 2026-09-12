@@ -17,7 +17,7 @@
     const id = route.query.authorization_id as string
 
     if (!id) {
-      error.value = 'Parametre authorization_id manquant'
+      error.value = 'Paramètre authorization_id manquant'
       isLoading.value = false
       return
     }
@@ -85,10 +85,10 @@
       <!-- Header -->
       <div class="px-8 pt-8 pb-4 text-center">
         <div
-          class="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4"
+          class="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4"
         >
           <svg
-            class="w-8 h-8 text-indigo-600 dark:text-indigo-400"
+            class="w-8 h-8 text-primary-600 dark:text-primary-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -109,7 +109,7 @@
       <!-- Loading -->
       <div v-if="isLoading" class="px-8 py-12 text-center">
         <div
-          class="w-8 h-8 border-3 border-indigo-200 dark:border-indigo-800 border-t-indigo-600 dark:border-t-indigo-400 rounded-full animate-spin mx-auto"
+          class="w-8 h-8 border-3 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-400 rounded-full animate-spin mx-auto"
         />
         <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">
           Chargement...
@@ -150,10 +150,10 @@
           <div
             v-for="scope in scopes"
             :key="scope"
-            class="flex items-center gap-3 px-4 py-3 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800 rounded-lg"
+            class="flex items-center gap-3 px-4 py-3 bg-primary-50 dark:bg-primary-900/10 border border-primary-100 dark:border-primary-800 rounded-lg"
           >
             <svg
-              class="w-5 h-5 text-emerald-500 shrink-0"
+              class="w-5 h-5 text-primary-500 shrink-0"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -171,10 +171,10 @@
           </div>
           <div
             v-if="scopes.length === 0"
-            class="flex items-center gap-3 px-4 py-3 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800 rounded-lg"
+            class="flex items-center gap-3 px-4 py-3 bg-primary-50 dark:bg-primary-900/10 border border-primary-100 dark:border-primary-800 rounded-lg"
           >
             <svg
-              class="w-5 h-5 text-emerald-500 shrink-0"
+              class="w-5 h-5 text-primary-500 shrink-0"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -193,7 +193,7 @@
               />
             </svg>
             <span class="text-sm text-gray-700 dark:text-gray-300"
-              >Lecture seule de vos donnees financieres</span
+              >Lecture seule de vos données financières</span
             >
           </div>
         </div>
@@ -217,7 +217,7 @@
           </svg>
           <p class="text-xs text-amber-700 dark:text-amber-400">
             Cette application pourra consulter vos transactions, categories,
-            budgets et statistiques. Elle ne pourra pas modifier vos donnees.
+            budgets et statistiques. Elle ne pourra pas modifier vos données.
           </p>
         </div>
 
@@ -232,7 +232,7 @@
           </button>
           <button
             :disabled="isSubmitting"
-            class="flex-1 px-4 py-3 text-sm font-medium text-white bg-indigo-600 dark:bg-indigo-500 hover:bg-indigo-700 dark:hover:bg-indigo-600 rounded-xl transition-colors disabled:opacity-50"
+            class="flex-1 px-4 py-3 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 hover:bg-primary-700 dark:hover:bg-primary-600 rounded-xl transition-colors disabled:opacity-50"
             @click="approve"
           >
             <span v-if="isSubmitting">Autorisation...</span>

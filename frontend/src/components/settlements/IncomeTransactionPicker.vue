@@ -291,6 +291,7 @@
   <div>
     <div
       v-if="error"
+      role="alert"
       class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm"
     >
       {{ error }}
@@ -316,7 +317,7 @@
         type="text"
         placeholder="Rechercher une transaction..."
         data-testid="settlement-search"
-        class="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+        class="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
       />
     </div>
 
@@ -324,7 +325,7 @@
       <button
         type="button"
         data-testid="settlement-toggle-filters"
-        class="text-emerald-600 dark:text-emerald-400 hover:underline"
+        class="text-primary-600 dark:text-primary-400 hover:underline"
         @click="showFilters = !showFilters"
       >
         {{ showFilters ? 'Masquer les filtres' : 'Plus de filtres' }}
@@ -336,7 +337,7 @@
         class="text-gray-500 dark:text-gray-400 hover:underline"
         @click="clearFilters"
       >
-        Reinitialiser
+        Réinitialiser
       </button>
     </div>
 
@@ -365,7 +366,7 @@
       </label>
       <label class="text-sm">
         <span class="block text-gray-600 dark:text-gray-400 mb-1"
-          >Categorie</span
+          >Catégorie</span
         >
         <select
           v-model="filterCategoryId"
@@ -384,7 +385,7 @@
       </label>
       <label class="text-sm">
         <span class="block text-gray-600 dark:text-gray-400 mb-1"
-          >Sous-categorie</span
+          >Sous-catégorie</span
         >
         <select
           v-model="filterSubcategoryId"
@@ -432,7 +433,7 @@
 
     <div v-if="isLoadingTransactions" class="py-12 text-center">
       <div
-        class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-500 border-t-transparent"
+        class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent"
       />
       <p class="mt-2 text-gray-600 dark:text-gray-400">
         Chargement des transactions...
@@ -452,10 +453,10 @@
             :key="entry.transaction.id"
             type="button"
             data-testid="settlement-transaction"
-            class="w-full flex items-center gap-3 p-3 text-left border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+            class="w-full flex items-center gap-3 p-3 text-left border border-primary-200 dark:border-primary-800 bg-primary-50/50 dark:bg-primary-900/10 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
             :class="
               selectedTransactionId === entry.transaction.id
-                ? 'ring-2 ring-emerald-500'
+                ? 'ring-2 ring-primary-500'
                 : ''
             "
             @click="emit('select', entry.transaction)"
@@ -474,14 +475,14 @@
                 <span
                   v-for="reason in entry.reasons"
                   :key="reason"
-                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400"
                 >
                   {{ REASON_LABELS[reason] }}
                 </span>
               </div>
             </div>
             <div
-              class="text-lg font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
+              class="text-lg font-semibold text-primary-600 dark:text-primary-400 whitespace-nowrap"
             >
               +{{ formatCurrency(entry.available) }}
             </div>
@@ -491,7 +492,7 @@
           v-if="hiddenSuggestionCount > 0"
           type="button"
           data-testid="settlement-more-suggestions"
-          class="mt-2 text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
+          class="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:underline"
           @click="showAllSuggestions = true"
         >
           Voir les {{ hiddenSuggestionCount }} autres suggestions
@@ -513,7 +514,7 @@
             class="w-full flex items-center gap-3 p-3 text-left border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
             :class="
               selectedTransactionId === entry.transaction.id
-                ? 'ring-2 ring-emerald-500'
+                ? 'ring-2 ring-primary-500'
                 : ''
             "
             @click="emit('select', entry.transaction)"
@@ -530,7 +531,7 @@
               </div>
             </div>
             <div
-              class="text-lg font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
+              class="text-lg font-semibold text-primary-600 dark:text-primary-400 whitespace-nowrap"
             >
               +{{ formatCurrency(entry.available) }}
             </div>

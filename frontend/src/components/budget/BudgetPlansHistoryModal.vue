@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { computed, ref, watch } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import { api } from '@/lib/api'
   import type { BudgetPlanSummaryDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
@@ -15,6 +16,14 @@
     (e: 'select', planId: string): void
     (e: 'deleted', planId: string): void
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.open,
+    onClose: () => onClose(),
+    panel: modalPanelRef,
+  })
 
   const plans = ref<BudgetPlanSummaryDto[]>([])
   const isLoading = ref(false)
@@ -53,7 +62,7 @@
   function statusClass(s: Status): string {
     switch (s) {
       case 'current':
-        return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+        return 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
       case 'future':
         return 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400'
       case 'past':
@@ -145,6 +154,7 @@
       v-if="open"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
       data-testid="budget-history-modal"
+      ref="modalPanelRef"
       role="dialog"
       aria-modal="true"
       @click.self="onClose"

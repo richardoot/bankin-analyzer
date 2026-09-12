@@ -307,7 +307,7 @@ describe('DashboardPage', () => {
     // RouterLink renders as <a> tag with router
     const links = wrapper.findAll('a')
     const importLink = links.find(link =>
-      link.text().includes('Importer des transactions')
+      link.text().includes('Importer un CSV')
     )
     expect(importLink).toBeDefined()
   })

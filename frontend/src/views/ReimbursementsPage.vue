@@ -6,6 +6,9 @@
   import { api, UNCATEGORIZED_CATEGORY_ID } from '@/lib/api'
   import type { ReimbursementDto, SettlementDto } from '@/lib/api'
   import { usePdfExport } from '@/composables/usePdfExport'
+  import PageHeader from '@/components/ui/PageHeader.vue'
+  import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+  import EmptyState from '@/components/ui/EmptyState.vue'
   import SettlementModal from '@/components/settlements/SettlementModal.vue'
   import SingleSettlementModal from '@/components/settlements/SingleSettlementModal.vue'
   import SettlementHistorySection from '@/components/settlements/SettlementHistorySection.vue'
@@ -156,7 +159,7 @@
         // where a refund found its way back to an expense through a category
         // pairing — it now says nothing about what the debt repays.
         const catKey = r.expenseCategoryId || 'none'
-        const catName = r.expenseCategoryName || 'Sans categorie'
+        const catName = r.expenseCategoryName || 'Sans catégorie'
         if (!person.byCategory.has(catKey)) {
           person.byCategory.set(catKey, {
             categoryId: r.expenseCategoryId,
@@ -403,46 +406,302 @@
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <!-- Header -->
-      <div
-        class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8"
+      <PageHeader
+        title="Remboursements"
+        subtitle="Gérez les personnes et suivez les remboursements en cours"
       >
-        <div>
-          <h1
-            class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
+        <template #actions>
+          <RouterLink
+            to="/transactions"
+            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors min-h-[44px] sm:min-h-0 w-full sm:w-auto"
           >
-            Remboursements
-          </h1>
-          <p
-            class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400"
+            <svg
+              class="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
+            </svg>
+            Voir les transactions
+          </RouterLink>
+        </template>
+      </PageHeader>
+
+      <!-- Summary Section: the balances are what the page is opened for -->
+      <div
+        v-if="reimbursements.length > 0"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
+      >
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Récapitulatif des remboursements
+          </h2>
+          <button
+            class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+            @click="exportReimbursementsToPdf(summaryByPerson, totalDue)"
           >
-            Gerez les personnes et suivez les remboursements en cours
-          </p>
+            <svg
+              class="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
+            </svg>
+            Export PDF
+          </button>
         </div>
-        <RouterLink
-          to="/transactions"
-          class="inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-medium text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors min-h-[44px] sm:min-h-0 w-full sm:w-auto"
-        >
-          <svg
-            class="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+
+        <div class="space-y-4">
+          <div
+            v-for="person in summaryByPerson"
+            :key="person.personId"
+            class="border border-gray-200 dark:border-slate-700 rounded-lg p-4"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-            />
-          </svg>
-          Voir les transactions
-        </RouterLink>
+            <!-- Person header -->
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-3">
+                <div
+                  class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center"
+                >
+                  <span
+                    class="text-lg font-semibold text-amber-700 dark:text-amber-400"
+                  >
+                    {{ person.personName.charAt(0).toUpperCase() }}
+                  </span>
+                </div>
+                <div>
+                  <h3 class="font-medium text-gray-900 dark:text-gray-100">
+                    {{ person.personName }}
+                  </h3>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                    Reçu : {{ formatCurrency(person.totalReceived) }} | En
+                    attente: {{ formatCurrency(person.totalRemaining) }}
+                  </p>
+                </div>
+              </div>
+              <div class="text-lg font-bold text-amber-700 dark:text-amber-400">
+                {{ formatCurrency(person.total) }}
+              </div>
+            </div>
+
+            <!-- Categories breakdown -->
+            <div class="mt-3 space-y-1">
+              <div
+                v-for="cat in person.byCategory"
+                :key="cat.categoryId ?? 'none'"
+              >
+                <!-- Category header - clickable -->
+                <button
+                  class="w-full flex items-center justify-between py-2 px-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors text-sm min-h-[44px] sm:min-h-0"
+                  @click="
+                    toggleCategoryExpanded(
+                      person.personId,
+                      cat.categoryId ?? 'none'
+                    )
+                  "
+                >
+                  <span
+                    class="text-gray-600 dark:text-gray-400 flex items-center gap-1.5 sm:gap-2 flex-wrap"
+                  >
+                    <svg
+                      class="w-3 h-3 text-gray-500 dark:text-gray-400 transition-transform duration-200 shrink-0"
+                      :class="{
+                        'rotate-90': isCategoryExpanded(
+                          person.personId,
+                          cat.categoryId ?? 'none'
+                        ),
+                      }"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                    <span class="truncate">{{ cat.categoryName }}</span>
+                    <span
+                      class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
+                      >({{ cat.reimbursements.length }})</span
+                    >
+                    <!-- Status badge -->
+                    <span
+                      v-if="cat.status === 'COMPLETED'"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 shrink-0"
+                    >
+                      Regle
+                    </span>
+                    <span
+                      v-else-if="cat.status === 'PARTIAL'"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 shrink-0"
+                    >
+                      Partiel
+                    </span>
+                    <span
+                      v-else
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 shrink-0"
+                    >
+                      En attente
+                    </span>
+                  </span>
+                  <span
+                    class="font-medium text-gray-700 dark:text-gray-300 shrink-0 ml-2"
+                  >
+                    {{ formatCurrency(cat.amountRemaining) }}
+                  </span>
+                </button>
+
+                <!-- Transaction details - collapsible -->
+                <div
+                  class="transition-all duration-200 ease-in-out overflow-hidden"
+                  :class="
+                    isCategoryExpanded(
+                      person.personId,
+                      cat.categoryId ?? 'none'
+                    )
+                      ? 'max-h-[500px] opacity-100'
+                      : 'max-h-0 opacity-0'
+                  "
+                >
+                  <div class="ml-3 sm:ml-5 mt-1 mb-2 space-y-1">
+                    <div
+                      v-for="r in cat.reimbursements"
+                      :key="r.id"
+                      class="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-amber-200 dark:border-amber-700"
+                    >
+                      <span class="truncate">
+                        <span class="text-gray-500 dark:text-gray-400"
+                          >[{{
+                            formatTransactionDate(r.transaction?.date)
+                          }}]</span
+                        >
+                        {{ r.transaction?.description || 'Transaction' }}
+                      </span>
+                      <span
+                        class="flex items-center gap-2 whitespace-nowrap mt-0.5 sm:mt-0 sm:ml-2"
+                      >
+                        <span class="font-medium">
+                          {{ formatCurrency(r.amountRemaining) }}
+                          <span
+                            v-if="r.amountReceived > 0"
+                            class="text-primary-600 dark:text-primary-400 ml-1"
+                          >
+                            (recu: {{ formatCurrency(r.amountReceived) }})
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          class="px-2 py-1 text-xs font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
+                          :title="`Regler uniquement ${r.transaction?.description || 'cette transaction'}`"
+                          @click="openSettlementModalForReimbursement(r)"
+                        >
+                          Regler
+                        </button>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Settlement button -->
+            <div
+              v-if="person.totalRemaining > 0"
+              class="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700"
+            >
+              <button
+                type="button"
+                class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
+                @click="openSettlementModal(person.personId, person.personName)"
+              >
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                Enregistrer un règlement ({{
+                  formatCurrency(person.totalRemaining)
+                }}
+                en attente)
+              </button>
+            </div>
+          </div>
+
+          <!-- Total -->
+          <div
+            class="border-t-2 border-amber-200 dark:border-amber-700 pt-4 flex items-center justify-between"
+          >
+            <span class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+              >Total General</span
+            >
+            <span class="text-xl font-bold text-amber-700 dark:text-amber-400">
+              {{ formatCurrency(totalDue) }}
+            </span>
+          </div>
+        </div>
       </div>
 
-      <!-- Persons Section -->
+      <!-- Empty state for reimbursements -->
       <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
+        v-else-if="!isLoadingReimbursements && reimbursements.length === 0"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
+      >
+        <EmptyState
+          title="Aucun remboursement en cours"
+          description="Assignez des remboursements aux transactions depuis la page Transactions."
+        >
+          <template #icon>
+            <svg
+              class="h-8 w-8"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
+            </svg>
+          </template>
+          <template #action>
+            <RouterLink
+              to="/transactions"
+              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 hover:bg-primary-700 dark:hover:bg-primary-600 rounded-lg transition-colors"
+            >
+              Aller aux transactions
+            </RouterLink>
+          </template>
+        </EmptyState>
+      </div>
+
+      <!-- Persons Section: configuration, below the balances it serves -->
+      <div
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6 mt-8"
       >
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           Personnes
@@ -451,6 +710,7 @@
         <!-- Error state for persons -->
         <div
           v-if="personsStore.error"
+          role="alert"
           class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 mb-4"
         >
           {{ personsStore.error }}
@@ -568,7 +828,7 @@
                   </svg>
                 </button>
                 <button
-                  class="p-1.5 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                  class="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
                   @click="cancelEditPerson"
                 >
                   <svg
@@ -617,7 +877,7 @@
                 </div>
                 <!-- Delete button -->
                 <button
-                  class="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
+                  class="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
                   title="Supprimer"
                   @click="showDeleteConfirmation(person.id, person.name)"
                 >
@@ -642,289 +902,8 @@
 
         <!-- Empty state -->
         <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
-          Aucune personne ajoutee. Commencez par ajouter une personne ci-dessus.
+          Aucune personne ajoutée. Commencez par ajouter une personne ci-dessus.
         </div>
-      </div>
-
-      <!-- Summary Section -->
-      <div
-        v-if="reimbursements.length > 0"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6 mt-8"
-      >
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Recapitulatif des Remboursements
-          </h2>
-          <button
-            class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-            @click="exportReimbursementsToPdf(summaryByPerson, totalDue)"
-          >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
-            Export PDF
-          </button>
-        </div>
-
-        <div class="space-y-4">
-          <div
-            v-for="person in summaryByPerson"
-            :key="person.personId"
-            class="border border-gray-200 dark:border-slate-700 rounded-lg p-4"
-          >
-            <!-- Person header -->
-            <div class="flex items-center justify-between mb-2">
-              <div class="flex items-center gap-3">
-                <div
-                  class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center"
-                >
-                  <span
-                    class="text-lg font-semibold text-amber-700 dark:text-amber-400"
-                  >
-                    {{ person.personName.charAt(0).toUpperCase() }}
-                  </span>
-                </div>
-                <div>
-                  <h3 class="font-medium text-gray-900 dark:text-gray-100">
-                    {{ person.personName }}
-                  </h3>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Recu: {{ formatCurrency(person.totalReceived) }} | En
-                    attente: {{ formatCurrency(person.totalRemaining) }}
-                  </p>
-                </div>
-              </div>
-              <div class="text-lg font-bold text-amber-700 dark:text-amber-400">
-                {{ formatCurrency(person.total) }}
-              </div>
-            </div>
-
-            <!-- Categories breakdown -->
-            <div class="mt-3 space-y-1">
-              <div
-                v-for="cat in person.byCategory"
-                :key="cat.categoryId ?? 'none'"
-              >
-                <!-- Category header - clickable -->
-                <button
-                  class="w-full flex items-center justify-between py-2 px-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors text-sm min-h-[44px] sm:min-h-0"
-                  @click="
-                    toggleCategoryExpanded(
-                      person.personId,
-                      cat.categoryId ?? 'none'
-                    )
-                  "
-                >
-                  <span
-                    class="text-gray-600 dark:text-gray-400 flex items-center gap-1.5 sm:gap-2 flex-wrap"
-                  >
-                    <svg
-                      class="w-3 h-3 text-gray-400 dark:text-gray-500 transition-transform duration-200 shrink-0"
-                      :class="{
-                        'rotate-90': isCategoryExpanded(
-                          person.personId,
-                          cat.categoryId ?? 'none'
-                        ),
-                      }"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                    <span class="truncate">{{ cat.categoryName }}</span>
-                    <span
-                      class="text-xs text-gray-400 dark:text-gray-500 shrink-0"
-                      >({{ cat.reimbursements.length }})</span
-                    >
-                    <!-- Status badge -->
-                    <span
-                      v-if="cat.status === 'COMPLETED'"
-                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 shrink-0"
-                    >
-                      Regle
-                    </span>
-                    <span
-                      v-else-if="cat.status === 'PARTIAL'"
-                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 shrink-0"
-                    >
-                      Partiel
-                    </span>
-                    <span
-                      v-else
-                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 shrink-0"
-                    >
-                      En attente
-                    </span>
-                  </span>
-                  <span
-                    class="font-medium text-gray-700 dark:text-gray-300 shrink-0 ml-2"
-                  >
-                    {{ formatCurrency(cat.amountRemaining) }}
-                  </span>
-                </button>
-
-                <!-- Transaction details - collapsible -->
-                <div
-                  class="transition-all duration-200 ease-in-out overflow-hidden"
-                  :class="
-                    isCategoryExpanded(
-                      person.personId,
-                      cat.categoryId ?? 'none'
-                    )
-                      ? 'max-h-[500px] opacity-100'
-                      : 'max-h-0 opacity-0'
-                  "
-                >
-                  <div class="ml-3 sm:ml-5 mt-1 mb-2 space-y-1">
-                    <div
-                      v-for="r in cat.reimbursements"
-                      :key="r.id"
-                      class="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-amber-200 dark:border-amber-700"
-                    >
-                      <span class="truncate">
-                        <span class="text-gray-400 dark:text-gray-500"
-                          >[{{
-                            formatTransactionDate(r.transaction?.date)
-                          }}]</span
-                        >
-                        {{ r.transaction?.description || 'Transaction' }}
-                      </span>
-                      <span
-                        class="flex items-center gap-2 whitespace-nowrap mt-0.5 sm:mt-0 sm:ml-2"
-                      >
-                        <span class="font-medium">
-                          {{ formatCurrency(r.amountRemaining) }}
-                          <span
-                            v-if="r.amountReceived > 0"
-                            class="text-emerald-600 dark:text-emerald-400 ml-1"
-                          >
-                            (recu: {{ formatCurrency(r.amountReceived) }})
-                          </span>
-                        </span>
-                        <button
-                          type="button"
-                          class="px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
-                          :title="`Regler uniquement ${r.transaction?.description || 'cette transaction'}`"
-                          @click="openSettlementModalForReimbursement(r)"
-                        >
-                          Regler
-                        </button>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Settlement button -->
-            <div
-              v-if="person.totalRemaining > 0"
-              class="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700"
-            >
-              <button
-                type="button"
-                class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
-                @click="openSettlementModal(person.personId, person.personName)"
-              >
-                <svg
-                  class="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                Enregistrer un reglement ({{
-                  formatCurrency(person.totalRemaining)
-                }}
-                en attente)
-              </button>
-            </div>
-          </div>
-
-          <!-- Total -->
-          <div
-            class="border-t-2 border-amber-200 dark:border-amber-700 pt-4 flex items-center justify-between"
-          >
-            <span class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-              >Total General</span
-            >
-            <span class="text-xl font-bold text-amber-700 dark:text-amber-400">
-              {{ formatCurrency(totalDue) }}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Empty state for reimbursements -->
-      <div
-        v-else-if="!isLoadingReimbursements && reimbursements.length === 0"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-8 mt-8 text-center"
-      >
-        <div
-          class="h-16 w-16 bg-amber-50 dark:bg-amber-900/20 rounded-full flex items-center justify-center mx-auto mb-4"
-        >
-          <svg
-            class="h-8 w-8 text-amber-600 dark:text-amber-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-            />
-          </svg>
-        </div>
-        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-          Aucun remboursement en cours
-        </h3>
-        <p class="text-gray-500 dark:text-gray-400 mb-4">
-          Assignez des remboursements aux transactions depuis la page
-          Transactions.
-        </p>
-        <RouterLink
-          to="/transactions"
-          class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-amber-600 dark:bg-amber-500 hover:bg-amber-700 dark:hover:bg-amber-600 rounded-lg transition-colors"
-        >
-          <svg
-            class="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          Aller aux transactions
-        </RouterLink>
       </div>
 
       <!-- Settlement History Section -->
@@ -939,73 +918,19 @@
     </div>
 
     <!-- Delete confirmation modal -->
-    <Teleport to="body">
-      <div
-        v-if="personToDelete"
-        class="fixed inset-0 z-50 flex items-center justify-center"
-      >
-        <!-- Backdrop -->
-        <div class="absolute inset-0 bg-black/50" @click="cancelDelete" />
-
-        <!-- Modal -->
-        <div
-          class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
-        >
-          <!-- Icon -->
-          <div class="flex justify-center mb-4">
-            <div
-              class="h-12 w-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center"
-            >
-              <svg
-                class="h-6 w-6 text-red-600 dark:text-red-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-            </div>
-          </div>
-
-          <!-- Title -->
-          <h3
-            class="text-lg font-semibold text-gray-900 dark:text-gray-100 text-center mb-2"
-          >
-            Supprimer cette personne ?
-          </h3>
-
-          <!-- Message -->
-          <p class="text-gray-600 dark:text-gray-400 text-center mb-6">
-            Etes-vous sur de vouloir supprimer
-            <span class="font-medium text-gray-900 dark:text-gray-100">{{
-              personToDelete.name
-            }}</span>
-            ? Cette action est irreversible.
-          </p>
-
-          <!-- Buttons -->
-          <div class="flex gap-3">
-            <button
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
-              @click="cancelDelete"
-            >
-              Annuler
-            </button>
-            <button
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 dark:bg-red-500 hover:bg-red-700 dark:hover:bg-red-600 rounded-lg transition-colors"
-              @click="confirmDeletePerson"
-            >
-              Supprimer
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <ConfirmDialog
+      :open="personToDelete !== null"
+      title="Supprimer cette personne ?"
+      confirm-label="Supprimer"
+      @confirm="confirmDeletePerson"
+      @cancel="cancelDelete"
+    >
+      Êtes-vous sûr de vouloir supprimer
+      <span class="font-medium text-gray-900 dark:text-gray-100">{{
+        personToDelete?.name
+      }}</span>
+      ? Cette action est irréversible.
+    </ConfirmDialog>
 
     <!-- Settlement Modal -->
     <SettlementModal
@@ -1034,72 +959,16 @@
     />
 
     <!-- Settlement delete confirmation modal -->
-    <Teleport to="body">
-      <div
-        v-if="settlementToDelete"
-        class="fixed inset-0 z-50 flex items-center justify-center"
-      >
-        <!-- Backdrop -->
-        <div
-          class="absolute inset-0 bg-black/50"
-          @click="cancelDeleteSettlement"
-        />
-
-        <!-- Modal -->
-        <div
-          class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
-        >
-          <!-- Icon -->
-          <div class="flex justify-center mb-4">
-            <div
-              class="h-12 w-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center"
-            >
-              <svg
-                class="h-6 w-6 text-red-600 dark:text-red-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-            </div>
-          </div>
-
-          <!-- Title -->
-          <h3
-            class="text-lg font-semibold text-gray-900 dark:text-gray-100 text-center mb-2"
-          >
-            Annuler ce reglement ?
-          </h3>
-
-          <!-- Message -->
-          <p class="text-gray-600 dark:text-gray-400 text-center mb-6">
-            Cette action va annuler le reglement et restaurer les montants en
-            attente sur les remboursements associes.
-          </p>
-
-          <!-- Buttons -->
-          <div class="flex gap-3">
-            <button
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
-              @click="cancelDeleteSettlement"
-            >
-              Non, conserver
-            </button>
-            <button
-              class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 dark:bg-red-500 hover:bg-red-700 dark:hover:bg-red-600 rounded-lg transition-colors"
-              @click="confirmDeleteSettlement"
-            >
-              Oui, annuler
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <ConfirmDialog
+      :open="settlementToDelete !== null"
+      title="Annuler ce règlement ?"
+      confirm-label="Oui, annuler"
+      cancel-label="Non, conserver"
+      @confirm="confirmDeleteSettlement"
+      @cancel="cancelDeleteSettlement"
+    >
+      Cette action va annuler le règlement et restaurer les montants en attente
+      sur les remboursements associés.
+    </ConfirmDialog>
   </div>
 </template>

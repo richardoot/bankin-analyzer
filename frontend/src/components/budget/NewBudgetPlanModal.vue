@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { computed, ref, watch } from 'vue'
+  import { useModalA11y } from '@/composables/useModalA11y'
   import { api } from '@/lib/api'
   import type {
     BudgetPlanDto,
@@ -20,6 +21,14 @@
     (e: 'close'): void
     (e: 'created', plan: BudgetPlanDto): void
   }>()
+
+  // Escape closes, Tab stays inside, focus returns to the opener after.
+  const modalPanelRef = ref<HTMLElement | null>(null)
+  useModalA11y({
+    isOpen: () => props.open,
+    onClose: () => onClose(),
+    panel: modalPanelRef,
+  })
 
   const filtersStore = useFiltersStore()
 
@@ -186,7 +195,7 @@
 
   // ── Computed validation for step 1 ───────────────────────────────────────
   const step1Error = computed<string | null>(() => {
-    if (!startMonth.value || !endMonth.value) return 'Renseigne la plage'
+    if (!startMonth.value || !endMonth.value) return 'Renseignez la plage'
     const s = ymToParts(startMonth.value)
     const e = ymToParts(endMonth.value)
     if (!s || !e) return 'Format de mois invalide'
@@ -703,6 +712,7 @@
       v-if="open"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
       data-testid="new-budget-plan-modal"
+      ref="modalPanelRef"
       role="dialog"
       aria-modal="true"
       @click.self="onClose"
@@ -964,7 +974,7 @@
                     class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
                     :class="
                       deductReimbursements
-                        ? 'bg-emerald-500'
+                        ? 'bg-primary-500'
                         : 'bg-gray-300 dark:bg-slate-600'
                     "
                   >
@@ -998,7 +1008,7 @@
                     class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
                     :class="
                       deductPendingReimbursements
-                        ? 'bg-emerald-500'
+                        ? 'bg-primary-500'
                         : 'bg-gray-300 dark:bg-slate-600'
                     "
                   >
@@ -1021,7 +1031,7 @@
               </div>
 
               <p
-                class="text-xs text-gray-400 dark:text-gray-500 leading-relaxed"
+                class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed"
               >
                 Les pastilles colorées sur chaque ligne indiquent le montant
                 réellement déduit par catégorie. Sans pastille, rien n'a été
@@ -1065,7 +1075,7 @@
                   Montants
                   <span
                     v-if="isLoadingPreview"
-                    class="flex items-center gap-1.5 text-[10px] font-normal normal-case tracking-normal text-gray-400 dark:text-gray-500"
+                    class="flex items-center gap-1.5 text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
                     data-testid="preview-loading"
                   >
                     <svg
@@ -1108,7 +1118,7 @@
                   <span class="text-gray-700 dark:text-gray-300 tabular-nums">
                     {{ formatCurrency(referenceIncomeAvg) }}
                   </span>
-                  <span class="text-gray-400 dark:text-gray-500">
+                  <span class="text-gray-500 dark:text-gray-400">
                     · {{ referenceIncomeLabel }}
                   </span>
                 </span>
@@ -1120,7 +1130,7 @@
                     class="text-sm tabular-nums"
                     :class="
                       projectedSavings > 0
-                        ? 'text-emerald-600 dark:text-emerald-400'
+                        ? 'text-primary-600 dark:text-primary-400'
                         : projectedSavings < 0
                           ? 'text-red-600 dark:text-red-400'
                           : 'text-gray-500 dark:text-gray-400'
@@ -1212,7 +1222,7 @@
                   :class="
                     reserveGap < 0
                       ? 'text-red-700 dark:text-red-400'
-                      : 'text-emerald-700 dark:text-emerald-400'
+                      : 'text-primary-700 dark:text-primary-400'
                   "
                 >
                   <template v-if="reserveGap < 0">
@@ -1238,8 +1248,8 @@
                 v-if="initSource === 'copy' && !copyFromPlanId"
                 class="mb-2 text-xs text-gray-500 dark:text-gray-400 italic"
               >
-                Choisis un plan à copier — en attendant, toutes les catégories
-                sont affichées vides.
+                Choisissez un plan à copier — en attendant, toutes les
+                catégories sont affichées vides.
               </p>
               <div
                 v-if="previewCategories.length === 0 && !isLoadingPreview"
@@ -1269,7 +1279,7 @@
                   <span
                     v-if="cat.reimbursement && cat.reimbursement > 0"
                     :data-testid="`preview-reimbursement-${cat.categoryName}`"
-                    class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                    class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400"
                     :title="`Remboursements reçus déduits : ${formatCurrency(cat.reimbursement)}`"
                   >
                     −{{ formatCurrency(cat.reimbursement) }} reçus
@@ -1293,7 +1303,7 @@
                     −{{ formatCurrency(excludedFromSeed(cat)) }} exceptionnel
                   </span>
                   <span
-                    class="text-xs text-gray-400 dark:text-gray-500 tabular-nums hidden sm:inline shrink-0"
+                    class="text-xs text-gray-500 dark:text-gray-400 tabular-nums hidden sm:inline shrink-0"
                   >
                     <template v-if="seedBasisAmount(cat) > 0">
                       Moy. {{ formatCurrency(seedBasisAmount(cat)) }}
@@ -1367,7 +1377,7 @@
               v-if="step === 1"
               type="button"
               data-testid="next-step-button"
-              class="px-4 py-1.5 text-sm font-medium bg-indigo-600 dark:bg-indigo-500 text-white rounded-md hover:bg-indigo-700 dark:hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              class="px-4 py-1.5 text-sm font-medium bg-primary-600 dark:bg-primary-500 text-white rounded-md hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               @click="goToStep2"
             >
               Suivant →
@@ -1376,7 +1386,7 @@
               v-else
               type="button"
               data-testid="create-plan-button"
-              class="px-4 py-1.5 text-sm font-medium bg-indigo-600 dark:bg-indigo-500 text-white rounded-md hover:bg-indigo-700 dark:hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+              class="px-4 py-1.5 text-sm font-medium bg-primary-600 dark:bg-primary-500 text-white rounded-md hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
               :disabled="isSubmitting"
               @click="submit"
             >
