@@ -2,6 +2,7 @@
   import { ref, computed, onMounted } from 'vue'
   import { useRouter, useRoute } from 'vue-router'
   import { useAuthStore } from '@/stores/auth'
+  import BaseField from '@/components/ui/BaseField.vue'
 
   const router = useRouter()
   const route = useRoute()
@@ -114,58 +115,35 @@
 
         <!-- Form -->
         <form class="space-y-6" @submit.prevent="handleSubmit">
-          <div>
-            <label
-              for="email"
-              class="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Email
-            </label>
-            <input
-              id="email"
-              v-model="email"
-              type="email"
-              required
-              data-testid="login-email-input"
-              class="mt-1 block w-full rounded-lg border border-gray-300 dark:border-slate-600 px-4 py-3 text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:border-primary-500 dark:focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:focus:ring-primary-400/20"
-              placeholder="vous@exemple.com"
-            />
-          </div>
+          <BaseField
+            v-model="email"
+            label="Email"
+            type="email"
+            required
+            data-testid="login-email-input"
+            placeholder="vous@exemple.com"
+            autocomplete="email"
+          />
 
-          <div>
-            <label
-              for="password"
-              class="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Mot de passe
-            </label>
-            <input
-              id="password"
-              v-model="password"
-              type="password"
-              required
-              data-testid="login-password-input"
-              class="mt-1 block w-full rounded-lg border border-gray-300 dark:border-slate-600 px-4 py-3 text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:border-primary-500 dark:focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:focus:ring-primary-400/20"
-              placeholder="••••••••"
-            />
-          </div>
+          <BaseField
+            v-model="password"
+            label="Mot de passe"
+            type="password"
+            required
+            data-testid="login-password-input"
+            placeholder="••••••••"
+            :autocomplete="isSignUp ? 'new-password' : 'current-password'"
+          />
 
-          <div v-if="isSignUp">
-            <label
-              for="confirmPassword"
-              class="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Confirmer le mot de passe
-            </label>
-            <input
-              id="confirmPassword"
-              v-model="confirmPassword"
-              type="password"
-              required
-              class="mt-1 block w-full rounded-lg border border-gray-300 dark:border-slate-600 px-4 py-3 text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-800 placeholder-gray-500 dark:placeholder-gray-400 focus:border-primary-500 dark:focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:focus:ring-primary-400/20"
-              placeholder="••••••••"
-            />
-          </div>
+          <BaseField
+            v-if="isSignUp"
+            v-model="confirmPassword"
+            label="Confirmer le mot de passe"
+            type="password"
+            required
+            placeholder="••••••••"
+            autocomplete="new-password"
+          />
 
           <button
             type="submit"

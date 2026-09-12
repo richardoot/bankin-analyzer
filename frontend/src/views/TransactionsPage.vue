@@ -26,6 +26,8 @@
   import EmptyState from '@/components/ui/EmptyState.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
+  import FilterChips from '@/components/ui/FilterChips.vue'
+  import type { FilterChip } from '@/components/ui/FilterChips.vue'
   import { formatCurrency } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
 
@@ -270,6 +272,105 @@
       needsBankReview.value
     )
   })
+
+  /**
+   * The active filters as removable chips: what the list is currently NOT
+   * showing, named in one line under the controls that caused it.
+   */
+  const activeFilterChips = computed<FilterChip[]>(() => {
+    const chips: FilterChip[] = []
+    if (typeFilter.value !== 'ALL') {
+      chips.push({
+        key: 'type',
+        label: typeFilter.value === 'EXPENSE' ? 'Dépenses' : 'Revenus',
+      })
+    }
+    if (selectedCategory.value) {
+      const name = allCategories.value.find(
+        c => c.id === selectedCategory.value
+      )?.name
+      chips.push({ key: 'category', label: `Catégorie : ${name ?? '…'}` })
+    }
+    if (selectedSubcategory.value) {
+      const name = allSubcategories.value.find(
+        sc => sc.id === selectedSubcategory.value
+      )?.name
+      chips.push({
+        key: 'subcategory',
+        label: `Sous-catégorie : ${name ?? '…'}`,
+      })
+    }
+    if (selectedAccount.value) {
+      chips.push({ key: 'account', label: `Compte : ${selectedAccount.value}` })
+    }
+    if (selectedTag.value) {
+      const name = tagsStore.tags.find(t => t.id === selectedTag.value)?.name
+      chips.push({ key: 'tag', label: `Étiquette : ${name ?? '…'}` })
+    }
+    if (showOnlyNotPointed.value) {
+      chips.push({ key: 'notPointed', label: 'Non pointées' })
+    }
+    if (needsBankReview.value) {
+      chips.push({ key: 'review', label: 'À vérifier (banque)' })
+    }
+    if (searchKeyword.value.trim()) {
+      chips.push({ key: 'q', label: `« ${searchKeyword.value.trim()} »` })
+    }
+    if (filterStartDate.value) {
+      chips.push({ key: 'from', label: `Du ${filterStartDate.value}` })
+    }
+    if (filterEndDate.value) {
+      chips.push({ key: 'to', label: `Au ${filterEndDate.value}` })
+    }
+    if (amountMin.value !== '') {
+      chips.push({ key: 'min', label: `≥ ${amountMin.value} €` })
+    }
+    if (amountMax.value !== '') {
+      chips.push({ key: 'max', label: `≤ ${amountMax.value} €` })
+    }
+    return chips
+  })
+
+  function removeFilterChip(key: string): void {
+    switch (key) {
+      case 'type':
+        typeFilter.value = 'ALL'
+        break
+      case 'category':
+        selectedCategory.value = null
+        break
+      case 'subcategory':
+        selectedSubcategory.value = null
+        break
+      case 'account':
+        selectedAccount.value = null
+        break
+      case 'tag':
+        selectedTag.value = null
+        break
+      case 'notPointed':
+        showOnlyNotPointed.value = false
+        break
+      case 'review':
+        needsBankReview.value = false
+        break
+      case 'q':
+        searchKeyword.value = ''
+        break
+      case 'from':
+        filterStartDate.value = ''
+        break
+      case 'to':
+        filterEndDate.value = ''
+        break
+      case 'min':
+        amountMin.value = ''
+        break
+      case 'max':
+        amountMax.value = ''
+        break
+    }
+  }
 
   // Pagination
   const currentPage = ref(
@@ -1345,6 +1446,15 @@
           </div>
         </div>
       </div>
+
+      <!-- What the list is currently filtered on, each chip removable -->
+      <FilterChips
+        v-if="activeFilterChips.length > 0"
+        :chips="activeFilterChips"
+        class="mb-4 -mt-2"
+        @remove="removeFilterChip"
+        @clear="resetFilters"
+      />
 
       <!--
         Ticking every box selects the page, not the filter. Saying so — and
