@@ -24,6 +24,22 @@
  * for a raw palette name when styling an action.
  */
 /*
+ * The system said « less motion » : spinners stop spinning, skeletons stop
+ * pulsing, toasts and modals appear instead of sliding. One rule, because
+ * per-component opt-ins are exactly the kind of discipline that erodes.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
  * Keyboard focus is always visible. Components that draw their own focus
  * ring (Tailwind's focus:ring-* with focus:outline-none) keep it — this
  * only catches the elements that declared nothing.
