@@ -23,6 +23,16 @@
  * Components must reach for `primary-*` (or a semantic hue above), never
  * for a raw palette name when styling an action.
  */
+/*
+ * Keyboard focus is always visible. Components that draw their own focus
+ * ring (Tailwind's focus:ring-* with focus:outline-none) keep it — this
+ * only catches the elements that declared nothing.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
 @theme {
   --color-primary-50: #ecfdf5;
   --color-primary-100: #d1fae5;

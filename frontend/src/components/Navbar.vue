@@ -227,6 +227,8 @@
           <button
             type="button"
             data-testid="nav-mobile-menu-button"
+            :aria-expanded="isMobileMenuOpen"
+            aria-controls="mobile-menu"
             class="inline-flex items-center justify-center rounded-md p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
             @click="toggleMobileMenu"
           >
@@ -267,6 +269,7 @@
     <!-- Mobile menu -->
     <div
       v-if="isMobileMenuOpen"
+      id="mobile-menu"
       class="border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 md:hidden"
     >
       <div class="px-4 py-3">
