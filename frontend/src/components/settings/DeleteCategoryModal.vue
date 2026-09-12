@@ -387,6 +387,7 @@
 
           <p
             v-if="error"
+            role="alert"
             class="mb-4 text-sm text-red-600 dark:text-red-400"
             data-testid="deletion-error"
           >

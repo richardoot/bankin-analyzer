@@ -1421,7 +1421,10 @@
         <div
           class="mt-4 flex items-center justify-between gap-2 border-t border-gray-200 pt-3 dark:border-slate-700"
         >
-          <span class="text-sm text-gray-500 dark:text-gray-400">
+          <span
+            aria-live="polite"
+            class="text-sm text-gray-500 dark:text-gray-400"
+          >
             {{ totalTransactions }} transaction(s)
           </span>
 
@@ -1702,6 +1705,7 @@
         <!-- Error state -->
         <div
           v-if="transactionsError"
+          role="alert"
           class="p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 text-red-700 dark:text-red-400"
         >
           {{ transactionsError }}

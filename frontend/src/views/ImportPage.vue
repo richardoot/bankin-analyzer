@@ -396,6 +396,8 @@
       <!-- Progress bar during chunking -->
       <div
         v-if="showProgressBar"
+        role="status"
+        aria-live="polite"
         class="mb-6 bg-white dark:bg-slate-900 border border-primary-200 dark:border-primary-800 rounded-lg p-4"
       >
         <div class="flex items-center justify-between mb-2">
@@ -427,6 +429,7 @@
       <!-- Partial import error with retry -->
       <div
         v-if="partialImportError"
+        role="alert"
         class="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4"
       >
         <div class="flex items-start gap-3">
@@ -476,6 +479,7 @@
       <!-- Error message -->
       <div
         v-if="error && !partialImportError"
+        role="alert"
         class="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg"
       >
         {{ error }}
@@ -488,6 +492,7 @@
       -->
       <div
         v-if="skippedRows.length > 0"
+        role="status"
         data-testid="skipped-rows"
         class="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-lg"
       >

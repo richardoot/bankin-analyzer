@@ -265,6 +265,7 @@
 
           <p
             v-if="error"
+            role="alert"
             data-testid="migrate-error"
             class="text-sm text-red-600 dark:text-red-400 mb-4"
           >
@@ -447,6 +448,7 @@
 
           <p
             v-if="error"
+            role="alert"
             data-testid="migrate-error"
             class="text-sm text-red-600 dark:text-red-400 mb-3"
           >
