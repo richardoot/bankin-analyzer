@@ -110,6 +110,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
           statusCode: HttpStatus.BAD_REQUEST,
           message: 'Related record not found',
         }
+      case 'P2028':
+        // Interactive transaction expired: everything rolled back, nothing
+        // was written. Worth saying so — this surfaced as an anonymous 500
+        // when a first bank sync claimed a thousand rows one UPDATE at a time.
+        return {
+          statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+          message:
+            'The write took too long and was rolled back — nothing was saved. ' +
+            'Please retry.',
+        }
       default:
         this.logger.error(
           `Prisma error ${exception.code}: ${exception.message}`

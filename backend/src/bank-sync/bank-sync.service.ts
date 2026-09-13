@@ -1584,21 +1584,50 @@ export class BankSyncService {
     let claimed = 0
     let inserted = 0
 
+    // Claims gathered up front, written as ONE set-based statement below —
+    // never one UPDATE per row: a first sync over an imported history can
+    // match a thousand rows, and that many sequential round trips from a
+    // serverless function overran the transaction budget, rolled the whole
+    // write back and answered an anonymous 500. The same lesson the inserts
+    // already carry, learned a second time.
+    const claims: {
+      transactionId: string
+      externalId: string | null
+      bookingStatus: string | null
+    }[] = []
+    for (const [position, verdict] of verdicts.entries()) {
+      if (verdict.kind !== 'matched') continue
+      const row = bookable[position]
+      if (!row) continue
+      claims.push({
+        transactionId: verdict.transactionId,
+        externalId: row.externalId,
+        bookingStatus: row.raw.status ?? null,
+      })
+    }
+
     await this.prisma.$transaction(
       async tx => {
-        for (const [position, verdict] of verdicts.entries()) {
-          if (verdict.kind !== 'matched') continue
-          const row = bookable[position]
-          if (!row) continue
-          await tx.transaction.update({
-            where: { id: verdict.transactionId },
-            data: {
-              externalId: row.externalId,
-              bookingStatus: row.raw.status ?? null,
-              syncRunId: runId,
-            },
-          })
-          claimed++
+        if (claims.length > 0) {
+          // Raw on purpose: Prisma has no set-based update-with-values, and
+          // `updated_at` must be set by hand since @updatedAt only fires
+          // through the client. `user_id` in the WHERE is belt-and-braces —
+          // every id comes from this user's own ledger read above.
+          claimed = await tx.$executeRaw`
+            update "app"."transactions" as t
+            set
+              external_id = v.external_id,
+              booking_status = v.booking_status,
+              sync_run_id = ${runId},
+              updated_at = now()
+            from (
+              select
+                unnest(${claims.map(c => c.transactionId)}::text[]) as id,
+                unnest(${claims.map(c => c.externalId)}::text[]) as external_id,
+                unnest(${claims.map(c => c.bookingStatus)}::text[]) as booking_status
+            ) as v
+            where t.id = v.id and t.user_id = ${userId}
+          `
         }
 
         // One statement for every insert, not one statement each: a first
