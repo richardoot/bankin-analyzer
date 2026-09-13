@@ -23,6 +23,11 @@
   const toast = useToast()
 
   const redirectUrl = `${window.location.origin}/bank-callback`
+  // Exigées par Enable Banking pour une application en environnement
+  // Production — les pages publiques de cette application, à copier telles
+  // quelles dans le formulaire de création.
+  const privacyUrl = `${window.location.origin}/privacy`
+  const termsUrl = `${window.location.origin}/terms`
 
   async function load(): Promise<void> {
     loading.value = true
@@ -202,15 +207,48 @@
               >enablebanking.com/sign-in</a
             >
             — un compte est créé automatiquement à la première connexion.
-            Créez-y ensuite une application.
           </li>
           <li>
-            Lors de la création de l'application, indiquez cette URL de
-            redirection — c'est celle par laquelle votre banque vous renverra
-            ici une fois l'autorisation donnée :
+            Dans le Control Panel, ouvrez l'onglet
+            <strong>« API applications »</strong> et créez une application.
+          </li>
+          <li>
+            Choisissez l'environnement <strong>« Production »</strong> — le bac
+            à sable (Sandbox) ne donne accès qu'à des banques de test.
+          </li>
+          <li>
+            Pour la génération de la clé privée RSA, cochez
+            <strong
+              >« Generate in the browser (using SubtleCrypto) and export private
+              key »</strong
+            >
+            : le fichier <code>.pem</code> est téléchargé à la création.
+            <strong
+              >Ce téléchargement est unique : le Control Panel ne la redonnera
+              plus jamais ensuite</strong
+            >, gardez-en une copie en lieu sûr.
+          </li>
+          <li>
+            Indiquez cette URL de redirection — c'est celle par laquelle votre
+            banque vous renverra ici une fois l'autorisation donnée :
             <code
               class="mt-1 block break-all rounded bg-gray-100 px-2 py-1 font-mono text-xs dark:bg-slate-900"
               >{{ redirectUrl }}</code
+            >
+          </li>
+          <li>
+            Le mode Production demande aussi une «&nbsp;Privacy URL&nbsp;» et
+            une «&nbsp;Terms URL&nbsp;» : indiquez les pages publiques de cette
+            application, telles quelles :
+            <code
+              class="mt-1 block break-all rounded bg-gray-100 px-2 py-1 font-mono text-xs dark:bg-slate-900"
+              data-testid="privacy-url"
+              >{{ privacyUrl }}</code
+            >
+            <code
+              class="mt-1 block break-all rounded bg-gray-100 px-2 py-1 font-mono text-xs dark:bg-slate-900"
+              data-testid="terms-url"
+              >{{ termsUrl }}</code
             >
           </li>
           <li>
@@ -219,19 +257,27 @@
             le Control Panel, vous pourrez toujours le retrouver.
           </li>
           <li>
-            Téléchargez la <strong>clé privée</strong> (fichier
-            <code>.pem</code>) proposée à la création de l'application.
+            Toujours dans le Control Panel,
             <strong
-              >Ce téléchargement est unique : le Control Panel ne la redonnera
-              plus jamais ensuite</strong
-            >, gardez-en une copie en lieu sûr.
+              >activez l'application en y connectant directement vos
+              banques</strong
+            >
+            («&nbsp;Activate by linking accounts&nbsp;») : autorisez-y au moins
+            un de vos comptes. Tant que cette étape n'est pas faite,
+            l'application reste inactive et Enable Banking refuse de servir la
+            liste des banques ici.
           </li>
           <li>
-            Renseignez les deux ci-dessus et cliquez sur « Enregistrer ». La clé
-            est vérifiée avant d'être conservée : si elle est refusée,
+            Renseignez les deux champs ci-dessus et cliquez sur « Enregistrer ».
+            La clé est vérifiée avant d'être conservée : si elle est refusée,
             revérifiez le fichier téléchargé.
           </li>
         </ol>
+        <p class="mt-3 text-gray-600 dark:text-gray-400">
+          Si l'application est enregistrée ici avant d'avoir été activée, un
+          message vous le signalera — refaites alors l'étape d'activation dans
+          le Control Panel.
+        </p>
       </details>
     </template>
   </div>

@@ -178,4 +178,30 @@ describe('EnableBankingCredentialCard', () => {
     expect(link.attributes('target')).toBe('_blank')
     expect(link.attributes('rel')).toContain('noopener')
   })
+
+  it('walks through the Control Panel choices a Production application needs', async () => {
+    // Les étapes qui manquaient au premier accompagnement réel : l'onglet où
+    // créer l'application, l'environnement, et le mode de génération de clé
+    // qui télécharge effectivement un .pem.
+    const wrapper = await mountCard(null)
+
+    const tutorial = wrapper.find('[data-testid="enable-banking-tutorial"]')
+    expect(tutorial.text()).toContain('API applications')
+    expect(tutorial.text()).toContain('Production')
+    expect(tutorial.text()).toContain(
+      'Generate in the browser (using SubtleCrypto) and export private key'
+    )
+    // L'activation se fait chez Enable Banking, en y connectant ses banques —
+    // l'étape sans laquelle la liste des banques reste refusée ici.
+    expect(tutorial.text()).toContain('Activate by linking accounts')
+  })
+
+  it('gives the privacy and terms URLs Production applications must declare', async () => {
+    const wrapper = await mountCard(null)
+
+    expect(wrapper.find('[data-testid="privacy-url"]').text()).toContain(
+      '/privacy'
+    )
+    expect(wrapper.find('[data-testid="terms-url"]').text()).toContain('/terms')
+  })
 })
