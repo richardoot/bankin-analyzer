@@ -3,6 +3,7 @@ import {
   EnableBankingCredentialsService,
   InvalidEnableBankingCredentialsError,
 } from './enable-banking-credentials.service'
+import { EnableBankingError } from './enable-banking.client'
 import { encryptSecret } from './credential-encryption'
 import { generateKeyPairSync } from 'crypto'
 
@@ -23,6 +24,9 @@ describe('EnableBankingCredentialsService', () => {
       deleteMany: vi.fn(),
     },
   }
+  const mockClient = {
+    getApplication: vi.fn(),
+  }
   const savedEnv = {
     id: process.env.ENABLE_BANKING_APP_ID,
     key: process.env.ENABLE_BANKING_PRIVATE_KEY_PATH,
@@ -30,6 +34,12 @@ describe('EnableBankingCredentialsService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockClient.getApplication.mockResolvedValue({
+      name: 'test-app',
+      environment: 'PRODUCTION',
+      redirect_urls: ['https://example.test/bank-callback'],
+      active: true,
+    })
     process.env.CREDENTIALS_ENCRYPTION_KEY = Buffer.from(
       'a'.repeat(32)
     ).toString('base64')
@@ -43,7 +53,10 @@ describe('EnableBankingCredentialsService', () => {
   })
 
   function buildService(): EnableBankingCredentialsService {
-    return new EnableBankingCredentialsService(mockPrisma as never)
+    return new EnableBankingCredentialsService(
+      mockPrisma as never,
+      mockClient as never
+    )
   }
 
   describe('resolve', () => {
@@ -110,6 +123,7 @@ describe('EnableBankingCredentialsService', () => {
         buildService().save('user-1', 'app-1', 'not-a-pem')
       ).rejects.toThrow(InvalidEnableBankingCredentialsError)
 
+      expect(mockClient.getApplication).not.toHaveBeenCalled()
       expect(mockPrisma.enableBankingCredential.upsert).not.toHaveBeenCalled()
     })
 
@@ -122,6 +136,60 @@ describe('EnableBankingCredentialsService', () => {
       const call = mockPrisma.enableBankingCredential.upsert.mock.calls[0][0]
       expect(call.create.applicationId).toBe('app-1')
       expect(call.create.encryptedPrivateKey).not.toContain(privateKey)
+    })
+
+    it('asks Enable Banking about the pair, and reports the application state', async () => {
+      const { privateKey } = genPem()
+      mockClient.getApplication.mockResolvedValue({
+        name: 'still-pending',
+        environment: 'PRODUCTION',
+        redirect_urls: [],
+        active: false,
+      })
+
+      const saved = await buildService().save('user-1', 'app-1', privateKey)
+
+      expect(mockClient.getApplication).toHaveBeenCalledWith({
+        applicationId: 'app-1',
+        privateKey,
+      })
+      expect(saved).toEqual({ active: false, environment: 'PRODUCTION' })
+    })
+
+    it('rejects a pair Enable Banking does not recognise, storing nothing', async () => {
+      // A key that signs, for an application id that is not its own: locally
+      // indistinguishable from a good pair, and a silent 401 at the first
+      // sync if it were stored.
+      const { privateKey } = genPem()
+      mockClient.getApplication.mockRejectedValue(
+        new EnableBankingError(
+          401,
+          '{"message":"Unauthorized"}',
+          'GET /application → 401'
+        )
+      )
+
+      await expect(
+        buildService().save('user-1', 'app-1', privateKey)
+      ).rejects.toThrow(InvalidEnableBankingCredentialsError)
+      expect(mockPrisma.enableBankingCredential.upsert).not.toHaveBeenCalled()
+    })
+
+    it('lets an Enable Banking outage through unblamed, storing nothing', async () => {
+      // A 500 from Enable Banking says nothing about the credentials — the
+      // error keeps its identity so the filter answers 502, not 400.
+      const { privateKey } = genPem()
+      const outage = new EnableBankingError(
+        503,
+        'service unavailable',
+        'GET /application → 503'
+      )
+      mockClient.getApplication.mockRejectedValue(outage)
+
+      await expect(
+        buildService().save('user-1', 'app-1', privateKey)
+      ).rejects.toBe(outage)
+      expect(mockPrisma.enableBankingCredential.upsert).not.toHaveBeenCalled()
     })
   })
 

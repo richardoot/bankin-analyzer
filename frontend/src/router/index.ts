@@ -144,6 +144,22 @@ const routes: RouteRecordRaw[] = [
     path: '/preferences',
     redirect: '/settings',
   },
+  // Publiques sans authentification : Enable Banking exige une Privacy URL et
+  // une Terms URL pour toute application Production, et leurs équipes doivent
+  // pouvoir les ouvrir sans compte — le tutoriel de la carte Enable Banking
+  // donne ces deux adresses à copier.
+  {
+    path: '/privacy',
+    name: 'privacy',
+    component: () => import('@/views/PrivacyPage.vue'),
+    meta: { title: 'Politique de confidentialité' },
+  },
+  {
+    path: '/terms',
+    name: 'terms',
+    component: () => import('@/views/TermsPage.vue'),
+    meta: { title: 'Conditions d’utilisation' },
+  },
 ]
 
 // The design reference documents the system; it ships to developers, not

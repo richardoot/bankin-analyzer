@@ -8,6 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma'
+import { EnableBankingError } from '../../bank-sync/enable-banking.client'
 import { AllExceptionsFilter } from './all-exceptions.filter'
 
 describe('AllExceptionsFilter', () => {
@@ -188,6 +189,52 @@ describe('AllExceptionsFilter', () => {
         statusCode: 500,
         message: 'Internal server error',
       })
+    })
+  })
+
+  describe('Enable Banking error handling', () => {
+    it('answers 502 with the upstream reason, not an anonymous 500', () => {
+      // The 500 that hid "Application is not active" behind "Internal server
+      // error" on the settings page is exactly what this branch exists for.
+      const exception = new EnableBankingError(
+        403,
+        '{"message":"Application is not active"}',
+        'GET /aspsps?country=FR → 403 Forbidden'
+      )
+
+      filter.catch(exception, mockHost as never)
+
+      expect(mockResponse.status).toHaveBeenCalledWith(502)
+      const body = mockResponse.json.mock.calls[0][0] as { message: string }
+      expect(body.message).toContain('Application is not active')
+      expect(body.message).toContain('403')
+    })
+
+    it('appends the activation hint when the application is not active', () => {
+      const exception = new EnableBankingError(
+        403,
+        '{"message":"Application is not active"}',
+        'GET /aspsps?country=FR → 403 Forbidden'
+      )
+
+      filter.catch(exception, mockHost as never)
+
+      const body = mockResponse.json.mock.calls[0][0] as { message: string }
+      expect(body.message).toContain('Activate by linking accounts')
+    })
+
+    it('falls back to the raw body when it is not JSON', () => {
+      const exception = new EnableBankingError(
+        503,
+        'upstream maintenance',
+        'GET /application → 503 Service Unavailable'
+      )
+
+      filter.catch(exception, mockHost as never)
+
+      expect(mockResponse.status).toHaveBeenCalledWith(502)
+      const body = mockResponse.json.mock.calls[0][0] as { message: string }
+      expect(body.message).toContain('upstream maintenance')
     })
   })
 

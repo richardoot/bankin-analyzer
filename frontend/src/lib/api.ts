@@ -1026,11 +1026,21 @@ export const api = {
     return response.json() as Promise<{ applicationId: string | null }>
   },
 
-  /** Save this user's Enable Banking application id and .pem private key. */
+  /**
+   * Save this user's Enable Banking application id and .pem private key.
+   *
+   * `active` is what Enable Banking reports about the application: saved
+   * while still inactive is a valid save, but every bank-facing call will
+   * be refused until it is activated from the Control Panel.
+   */
   async saveEnableBankingCredential(
     applicationId: string,
     pemFile: File
-  ): Promise<{ applicationId: string | null }> {
+  ): Promise<{
+    applicationId: string | null
+    active?: boolean
+    environment?: 'SANDBOX' | 'PRODUCTION'
+  }> {
     const body = new FormData()
     body.append('applicationId', applicationId)
     body.append('file', pemFile)
@@ -1043,7 +1053,11 @@ export const api = {
       throw new Error(
         await readErrorMessage(response, 'save your Enable Banking application')
       )
-    return response.json() as Promise<{ applicationId: string | null }>
+    return response.json() as Promise<{
+      applicationId: string | null
+      active?: boolean
+      environment?: 'SANDBOX' | 'PRODUCTION'
+    }>
   },
 
   /** Remove this user's own Enable Banking application. */

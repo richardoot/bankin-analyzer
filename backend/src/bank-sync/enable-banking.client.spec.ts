@@ -144,4 +144,23 @@ describe('EnableBankingClient PSU headers', () => {
     ).rejects.toThrow(/429/)
     expect(mockFetch).toHaveBeenCalledTimes(1)
   })
+
+  it('reads the application these credentials belong to', async () => {
+    mockFetch.mockResolvedValue(
+      ok({
+        name: 'my-app',
+        environment: 'PRODUCTION',
+        redirect_urls: ['https://example.test/bank-callback'],
+        active: false,
+      })
+    )
+    const client = new EnableBankingClient()
+
+    const application = await client.getApplication(credentials)
+
+    expect(application.active).toBe(false)
+    expect(application.environment).toBe('PRODUCTION')
+    const [url] = mockFetch.mock.calls[0] as [string]
+    expect(url).toBe('https://api.enablebanking.com/application')
+  })
 })
