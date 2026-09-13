@@ -85,6 +85,8 @@ const mockPrisma = {
   $transaction: vi.fn((callback: (tx: unknown) => unknown) =>
     callback(mockPrisma)
   ),
+  // The set-based claim UPDATE; resolves to how many rows it touched.
+  $executeRaw: vi.fn().mockResolvedValue(0),
 }
 
 const mockClient = {

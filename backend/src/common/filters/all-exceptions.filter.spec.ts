@@ -284,6 +284,20 @@ describe('AllExceptionsFilter', () => {
       })
     })
 
+    it('maps an expired transaction (P2028) to 503 with a clear rollback message', () => {
+      const exception = new Prisma.PrismaClientKnownRequestError(
+        'Transaction API error: transaction already closed',
+        { code: 'P2028', clientVersion: '7.0.0' }
+      )
+
+      filter.catch(exception, mockHost as never)
+
+      expect(mockResponse.status).toHaveBeenCalledWith(503)
+      const body = mockResponse.json.mock.calls[0][0] as { message: string }
+      expect(body.message).toContain('rolled back')
+      expect(body.message).toContain('nothing was saved')
+    })
+
     it('should handle unknown Prisma error code with 500', () => {
       const exception = new Prisma.PrismaClientKnownRequestError(
         'Unknown error',
