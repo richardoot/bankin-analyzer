@@ -111,7 +111,10 @@ describe('BankSyncController — credentials', () => {
     })
 
     it('saves the decoded file content against this user', async () => {
-      mockCredentials.save.mockResolvedValue(undefined)
+      mockCredentials.save.mockResolvedValue({
+        active: true,
+        environment: 'PRODUCTION',
+      })
 
       const result = await controller.saveCredentials(
         mockUser,
@@ -124,7 +127,11 @@ describe('BankSyncController — credentials', () => {
         'app-1',
         'pem-content'
       )
-      expect(result).toEqual({ applicationId: 'app-1' })
+      expect(result).toEqual({
+        applicationId: 'app-1',
+        active: true,
+        environment: 'PRODUCTION',
+      })
     })
 
     it('turns an invalid key into a 400, not a 500', async () => {

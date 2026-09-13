@@ -12,8 +12,13 @@ vi.mock('@/lib/api', () => ({
 
 const toastSuccess = vi.fn()
 const toastError = vi.fn()
+const toastInfo = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ success: toastSuccess, error: toastError, info: vi.fn() }),
+  useToast: () => ({
+    success: toastSuccess,
+    error: toastError,
+    info: toastInfo,
+  }),
 }))
 
 import { api } from '@/lib/api'
@@ -90,6 +95,33 @@ describe('EnableBankingCredentialCard', () => {
     expect(toastSuccess).toHaveBeenCalled()
     expect(wrapper.emitted('changed')).toBeTruthy()
     expect(wrapper.text()).toContain('app-1')
+  })
+
+  it('warns when the saved application is not active yet', async () => {
+    // Enregistrée mais inactive : chaque appel bancaire sera refusé tant que
+    // l'application n'est pas activée depuis le Control Panel — le dire au
+    // moment de la sauvegarde, pas au premier échec.
+    vi.mocked(api.saveEnableBankingCredential).mockResolvedValue({
+      applicationId: 'app-1',
+      active: false,
+      environment: 'PRODUCTION',
+    })
+    const wrapper = await mountCard(null)
+
+    await wrapper.find('[data-testid="application-id-input"]').setValue('app-1')
+    const file = new File(['pem-content'], 'key.pem')
+    const fileInput = wrapper.find('[data-testid="private-key-file-input"]')
+    Object.defineProperty(fileInput.element, 'files', { value: [file] })
+    await fileInput.trigger('change')
+    await wrapper
+      .find('[data-testid="save-credential-button"]')
+      .trigger('click')
+    await flushPromises()
+
+    expect(toastSuccess).toHaveBeenCalled()
+    expect(toastInfo).toHaveBeenCalledWith(
+      expect.stringContaining('pas encore active')
+    )
   })
 
   it('reports the server’s refusal rather than a generic message', async () => {

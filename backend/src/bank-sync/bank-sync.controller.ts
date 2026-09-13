@@ -125,29 +125,36 @@ export class BankSyncController {
     description:
       'The application id, plus the .pem private key downloaded once from ' +
       'the Control Panel. Rejected outright if the key cannot actually sign ' +
-      'a request, before anything is stored.',
+      'a request, or if Enable Banking does not recognise the pair, before ' +
+      'anything is stored. `active` and `environment` are what Enable ' +
+      'Banking reports about the application — saved-but-inactive is a ' +
+      'state the caller should surface.',
   })
   async saveCredentials(
     @CurrentUser() user: User,
     @Body() dto: SaveEnableBankingCredentialDto,
     @UploadedFile() file?: UploadedPemFile
-  ): Promise<{ applicationId: string | null }> {
+  ): Promise<{
+    applicationId: string
+    active: boolean
+    environment: 'SANDBOX' | 'PRODUCTION'
+  }> {
     if (!file) {
       throw new BadRequestException('The .pem private key file is required.')
     }
     try {
-      await this.credentials.save(
+      const application = await this.credentials.save(
         user.id,
         dto.applicationId,
         file.buffer.toString('utf8')
       )
+      return { applicationId: dto.applicationId, ...application }
     } catch (error) {
       if (error instanceof InvalidEnableBankingCredentialsError) {
         throw new BadRequestException(error.message)
       }
       throw error
     }
-    return { applicationId: dto.applicationId }
   }
 
   @Delete('credentials')

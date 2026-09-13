@@ -56,6 +56,14 @@ export class EnableBankingError extends Error {
   }
 }
 
+/** Shape of `GetApplicationResponse` — the application as Enable Banking sees it. */
+export interface EnableBankingApplication {
+  name: string
+  environment: 'SANDBOX' | 'PRODUCTION'
+  redirect_urls: string[]
+  active: boolean
+}
+
 export interface Aspsp {
   name: string
   country: string
@@ -168,6 +176,20 @@ export class EnableBankingClient {
       )
     }
     return (await response.json()) as T
+  }
+
+  /**
+   * The application these credentials belong to.
+   *
+   * Whether a key signs is checkable locally; whether it signs for *this*
+   * application id, only Enable Banking can say. This is the cheapest call
+   * that answers, and it works even while the application is not yet active
+   * — unlike `/aspsps`, which 403s until activation.
+   */
+  async getApplication(
+    credentials: EnableBankingCredentials
+  ): Promise<EnableBankingApplication> {
+    return this.call(credentials, '/application')
   }
 
   async listAspsps(

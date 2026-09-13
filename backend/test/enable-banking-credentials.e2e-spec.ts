@@ -7,7 +7,15 @@
  * the form field beside the file, and the row landing encrypted in PostgreSQL
  * rather than as the PEM that was sent.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  vi,
+} from 'vitest'
 import request from 'supertest'
 import { generateKeyPairSync } from 'node:crypto'
 import type { PrismaService } from '../src/prisma/prisma.service'
@@ -23,6 +31,34 @@ const { privateKey } = generateKeyPairSync('rsa', {
   privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
 })
 
+/**
+ * What Enable Banking answers to `GET /application` — saving now validates
+ * the pair against the real API, and these specs must not leave the machine.
+ * Supertest drives the app over its own HTTP server, not fetch, so stubbing
+ * the global only intercepts the outbound Enable Banking call.
+ */
+let enableBankingAnswer: { status: number; body: unknown }
+
+function stubEnableBanking(): void {
+  const realFetch = globalThis.fetch
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      // Only Enable Banking is faked; the tooling's own fetches (the local
+      // Prisma dev server phones home with query insights) pass through.
+      if (!String(url).startsWith('https://api.enablebanking.com')) {
+        return realFetch(url as never, init)
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify(enableBankingAnswer.body), {
+          status: enableBankingAnswer.status,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    })
+  )
+}
+
 describe('Enable Banking credentials API (e2e)', () => {
   let ctx: E2eContext
   let prisma: PrismaService
@@ -34,13 +70,24 @@ describe('Enable Banking credentials API (e2e)', () => {
     ).toString('base64')
     ctx = await createE2eApp([owner, stranger])
     prisma = ctx.prisma
+    stubEnableBanking()
   }, 60000)
 
   afterAll(async () => {
+    vi.unstubAllGlobals()
     await ctx.close()
   })
 
   beforeEach(async () => {
+    enableBankingAnswer = {
+      status: 200,
+      body: {
+        name: 'e2e-app',
+        environment: 'PRODUCTION',
+        redirect_urls: ['https://localhost:5174/bank-callback'],
+        active: true,
+      },
+    }
     await prisma.user.deleteMany()
     const me = await request(ctx.server).get('/users/me').set(ctx.auth(owner))
     ownerId = (me.body as { id: string }).id
@@ -72,7 +119,11 @@ describe('Enable Banking credentials API (e2e)', () => {
   it('accepts a real .pem as multipart and stores it encrypted', async () => {
     const response = await saveOwnerCredential()
     expect(response.status).toBe(200)
-    expect(response.body).toEqual({ applicationId: 'app-e2e' })
+    expect(response.body).toEqual({
+      applicationId: 'app-e2e',
+      active: true,
+      environment: 'PRODUCTION',
+    })
 
     const read = await request(ctx.server)
       .get('/bank-sync/credentials')
@@ -124,6 +175,43 @@ describe('Enable Banking credentials API (e2e)', () => {
       /private key/
     )
     expect(await prisma.enableBankingCredential.count()).toBe(0)
+  })
+
+  it('refuses a pair Enable Banking does not recognise, storing nothing', async () => {
+    // The key signs locally — only Enable Banking can say it signs for the
+    // wrong application. That refusal must land as a fixable 400, not the
+    // silent 401 the first sync would have hit.
+    enableBankingAnswer = { status: 401, body: { message: 'Unauthorized' } }
+
+    const response = await saveOwnerCredential()
+
+    expect(response.status).toBe(400)
+    expect((response.body as { message: string }).message).toMatch(
+      /Enable Banking/
+    )
+    expect(await prisma.enableBankingCredential.count()).toBe(0)
+  })
+
+  it('saves an application that is not yet active, and says so', async () => {
+    enableBankingAnswer = {
+      status: 200,
+      body: {
+        name: 'e2e-app',
+        environment: 'PRODUCTION',
+        redirect_urls: [],
+        active: false,
+      },
+    }
+
+    const response = await saveOwnerCredential()
+
+    expect(response.status).toBe(200)
+    expect(response.body).toEqual({
+      applicationId: 'app-e2e',
+      active: false,
+      environment: 'PRODUCTION',
+    })
+    expect(await prisma.enableBankingCredential.count()).toBe(1)
   })
 
   it('refuses a multipart body with no file attached', async () => {

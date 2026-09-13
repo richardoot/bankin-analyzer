@@ -13,13 +13,23 @@ import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { buildJwt } from './enable-banking.jwt'
 import { encryptSecret, decryptSecret } from './credential-encryption'
-import type { EnableBankingCredentials } from './enable-banking.client'
+import {
+  EnableBankingClient,
+  EnableBankingError,
+} from './enable-banking.client'
+import type {
+  EnableBankingApplication,
+  EnableBankingCredentials,
+} from './enable-banking.client'
 
 export class InvalidEnableBankingCredentialsError extends Error {}
 
 @Injectable()
 export class EnableBankingCredentialsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly client: EnableBankingClient
+  ) {}
 
   /** The credentials to sign with for this user, or null if none are set up. */
   async resolve(userId: string): Promise<EnableBankingCredentials | null> {
@@ -59,12 +69,17 @@ export class EnableBankingCredentialsService {
    * again afterwards, so a typo caught only at the next sync is a typo the
    * user cannot fix by re-reading it — it is validated by actually signing
    * with it before anything is persisted.
+   *
+   * Returns the application's own state as Enable Banking reports it: an
+   * application saved while still inactive is a valid save, but the caller
+   * should say so — every bank-facing call will be refused until it is
+   * activated from the Control Panel.
    */
   async save(
     userId: string,
     applicationId: string,
     privateKeyPem: string
-  ): Promise<void> {
+  ): Promise<{ active: boolean; environment: 'SANDBOX' | 'PRODUCTION' }> {
     try {
       buildJwt(applicationId, privateKeyPem)
     } catch {
@@ -73,12 +88,43 @@ export class EnableBankingCredentialsService {
       )
     }
 
+    // The key signs — but only Enable Banking knows whether it signs for
+    // this application id. A mismatched pair stored today is a silent 401
+    // at the first sync; asked about now, it is a form error the user can
+    // fix while the Control Panel is still open.
+    let application: EnableBankingApplication
+    try {
+      application = await this.client.getApplication({
+        applicationId,
+        privateKey: privateKeyPem,
+      })
+    } catch (error) {
+      if (
+        error instanceof EnableBankingError &&
+        error.status >= 400 &&
+        error.status < 500
+      ) {
+        throw new InvalidEnableBankingCredentialsError(
+          `Enable Banking refused these credentials (${error.status}) — ` +
+            'check that the App ID is the one shown next to this key in the ' +
+            'Control Panel.'
+        )
+      }
+      // Enable Banking unreachable or failing: nothing is stored, and the
+      // error keeps its upstream identity rather than blaming the user.
+      throw error
+    }
+
     const encryptedPrivateKey = encryptSecret(privateKeyPem)
     await this.prisma.enableBankingCredential.upsert({
       where: { userId },
       create: { userId, applicationId, encryptedPrivateKey },
       update: { applicationId, encryptedPrivateKey },
     })
+    return {
+      active: application.active,
+      environment: application.environment,
+    }
   }
 
   async remove(userId: string): Promise<void> {

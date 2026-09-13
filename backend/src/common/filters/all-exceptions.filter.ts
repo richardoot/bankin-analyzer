@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma'
+import { EnableBankingError } from '../../bank-sync/enable-banking.client'
 import type { Response } from 'express'
 
 @Catch()
@@ -32,6 +33,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return
     }
 
+    // Enable Banking refusals keep their upstream reason: the status and
+    // body say something the user can act on ("Application is not active"),
+    // which an anonymous 500 would bury.
+    if (exception instanceof EnableBankingError) {
+      const detail = this.enableBankingDetail(exception)
+      const hint = /not active/i.test(detail)
+        ? ' Activate it from the Enable Banking Control Panel ' +
+          '("Activate by linking accounts"), then retry.'
+        : ''
+      this.logger.warn(`Enable Banking ${exception.status}: ${detail}`)
+      response.status(HttpStatus.BAD_GATEWAY).json({
+        statusCode: HttpStatus.BAD_GATEWAY,
+        message: `Enable Banking refused this request (${exception.status}): ${detail}.${hint}`,
+      })
+      return
+    }
+
     // Prisma known errors (constraint violations, not found, etc.)
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       const prismaResponse = this.handlePrismaError(exception)
@@ -52,6 +70,24 @@ export class AllExceptionsFilter implements ExceptionFilter {
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Internal server error',
     })
+  }
+
+  /** The human sentence in an Enable Banking error body, if there is one. */
+  private enableBankingDetail(exception: EnableBankingError): string {
+    try {
+      const parsed: unknown = JSON.parse(exception.body)
+      if (
+        parsed !== null &&
+        typeof parsed === 'object' &&
+        'message' in parsed &&
+        typeof parsed.message === 'string'
+      ) {
+        return parsed.message
+      }
+    } catch {
+      // Not JSON — fall through to the raw body.
+    }
+    return exception.body.slice(0, 200) || exception.message
   }
 
   private handlePrismaError(exception: Prisma.PrismaClientKnownRequestError): {

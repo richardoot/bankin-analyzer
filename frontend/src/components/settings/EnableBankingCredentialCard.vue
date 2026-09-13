@@ -59,6 +59,16 @@
       applicationIdInput.value = ''
       file.value = null
       toast.success('Application Enable Banking enregistrée')
+      if (result.active === false) {
+        // Enregistrée mais pas encore active : Enable Banking refusera tout
+        // appel bancaire tant qu'elle n'est pas activée depuis le Control
+        // Panel — dit ici, pendant que l'utilisateur y est encore.
+        toast.info(
+          "Votre application n'est pas encore active chez Enable Banking : " +
+            'activez-la depuis le Control Panel (« Activate by linking ' +
+            'accounts »), sinon la liste des banques restera indisponible.'
+        )
+      }
       emit('changed')
     } catch (err) {
       toast.error(
