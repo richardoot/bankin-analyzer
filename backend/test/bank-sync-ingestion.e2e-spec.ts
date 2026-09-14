@@ -132,6 +132,87 @@ describe('Bank sync ingestion (e2e)', () => {
     })
   }
 
+  it('ingests both copies of a genuinely double purchase', async () => {
+    // Paying the same 4 € twice at the same bar the same day: identical in
+    // every visible way, distinguished only by `entry_reference`. Folding
+    // them lost a real "CB Pastis" in production.
+    const path = dumpOf([
+      {
+        entry_reference: 'PASTIS-1',
+        amount: '4.00',
+        date: '2026-08-25',
+        label: 'CARTE 25/08/26 PASTIS CB*7962',
+      },
+      {
+        entry_reference: 'PASTIS-2',
+        amount: '4.00',
+        date: '2026-08-25',
+        label: 'CARTE 25/08/26 PASTIS CB*7962',
+      },
+    ])
+
+    await run(path, true)
+
+    const rows = await prisma.transaction.findMany({
+      orderBy: { externalId: 'asc' },
+    })
+    expect(rows.map(r => r.externalId)).toEqual(['PASTIS-1', 'PASTIS-2'])
+  })
+
+  it('twin purchases with one CSV row: claims it and inserts the sibling', async () => {
+    const existing = await csvRow({ description: 'CB Pastis', amount: -4 })
+    const path = dumpOf([
+      {
+        entry_reference: 'PASTIS-1',
+        amount: '4.00',
+        date: '2026-08-25',
+        label: 'CARTE 25/08/26 PASTIS CB*7962',
+      },
+      {
+        entry_reference: 'PASTIS-2',
+        amount: '4.00',
+        date: '2026-08-25',
+        label: 'CARTE 25/08/26 PASTIS CB*7962',
+      },
+    ])
+
+    await run(path, true)
+
+    // Two purchases, two rows — the CSV one claimed, the sibling inserted.
+    expect(await prisma.transaction.count()).toBe(2)
+    const claimed = await prisma.transaction.findUniqueOrThrow({
+      where: { id: existing },
+    })
+    expect(claimed.externalId).toMatch(/^PASTIS-/)
+    expect(claimed.note).toBe('écrit à la main')
+  })
+
+  it('a second sync leaves the repaired twins exactly as they are', async () => {
+    // The steady state after the self-repair: both references written, and a
+    // refetch must neither fold one away nor insert a third copy.
+    const dump = [
+      {
+        entry_reference: 'PASTIS-1',
+        amount: '4.00',
+        date: '2026-08-25',
+        label: 'CARTE 25/08/26 PASTIS CB*7962',
+      },
+      {
+        entry_reference: 'PASTIS-2',
+        amount: '4.00',
+        date: '2026-08-25',
+        label: 'CARTE 25/08/26 PASTIS CB*7962',
+      },
+    ]
+    await run(dumpOf(dump), true)
+    await run(dumpOf(dump), true)
+
+    const rows = await prisma.transaction.findMany({
+      orderBy: { externalId: 'asc' },
+    })
+    expect(rows.map(r => r.externalId)).toEqual(['PASTIS-1', 'PASTIS-2'])
+  })
+
   it('claims an existing row instead of inserting a second one', async () => {
     const existing = await csvRow()
     const path = dumpOf([

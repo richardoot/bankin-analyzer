@@ -390,6 +390,83 @@ describe('reconcileAll', () => {
     expect(verdicts[1]).toEqual({ kind: 'duplicate', ofIndex: 0 })
   })
 
+  it('keeps both when one account reports two references for the same event', () => {
+    // Paying the same 4 € twice at the same bar in one day: identical amount,
+    // date and label, but `entry_reference` is unique per account, so two
+    // references on ONE account are two real purchases. Folding them lost a
+    // "CB Pastis" in production (2026-09-13).
+    const verdicts = reconcileAll(
+      [
+        staged({
+          externalAccountId: 'current',
+          externalId: '31696618371',
+          label: 'CB Pastis',
+          amount: -4,
+        }),
+        staged({
+          externalAccountId: 'current',
+          externalId: '31696618342',
+          label: 'CB Pastis',
+          amount: -4,
+        }),
+      ],
+      []
+    )
+    expect(verdicts[0]).toEqual({ kind: 'new' })
+    expect(verdicts[1]).toEqual({ kind: 'new' })
+  })
+
+  it('still folds the cross-account copy while keeping same-account twins', () => {
+    // The two real purchases on the current account, plus the card account
+    // reporting one of them again: only the cross-account echo folds.
+    const verdicts = reconcileAll(
+      [
+        staged({ externalAccountId: 'current', externalId: 'A', amount: -4 }),
+        staged({ externalAccountId: 'current', externalId: 'B', amount: -4 }),
+        staged({ externalAccountId: 'card', externalId: 'C', amount: -4 }),
+      ],
+      []
+    )
+    expect(verdicts[0]).toEqual({ kind: 'new' })
+    expect(verdicts[1]).toEqual({ kind: 'new' })
+    expect(verdicts[2]).toEqual({ kind: 'duplicate', ofIndex: 0 })
+  })
+
+  it('still folds same-account copies that carry no reference to tell apart', () => {
+    // With no reference on either side there is nothing to prove they are two
+    // purchases rather than one reported twice; the conservative answer holds.
+    const verdicts = reconcileAll(
+      [
+        staged({ externalAccountId: 'current', externalId: null }),
+        staged({ externalAccountId: 'current', externalId: null }),
+      ],
+      []
+    )
+    expect(verdicts[0]).toEqual({ kind: 'new' })
+    expect(verdicts[1]).toEqual({ kind: 'duplicate', ofIndex: 0 })
+  })
+
+  it('lets same-account twins each claim their own CSV row', () => {
+    // The ledger holds both CSV lines of the double payment; each bank row
+    // takes one instead of the second competing with nothing.
+    const verdicts = reconcileAll(
+      [
+        staged({ externalAccountId: 'current', externalId: 'A', amount: -4 }),
+        staged({ externalAccountId: 'current', externalId: 'B', amount: -4 }),
+      ],
+      [
+        ledger({ id: 'tx-1', amount: -4, description: 'CB Pastis' }),
+        ledger({ id: 'tx-2', amount: -4, description: 'CB Pastis' }),
+      ],
+      { accountIdByExternalAccountId: { current: 'acc-db-1' } }
+    )
+    const claimedIds = verdicts
+      .filter(v => v.kind === 'matched')
+      .map(v => (v as { transactionId: string }).transactionId)
+      .sort()
+    expect(claimedIds).toEqual(['tx-1', 'tx-2'])
+  })
+
   it('gives the row to the better match when two purchases compete', () => {
     const verdicts = reconcileAll(
       [
@@ -451,6 +528,170 @@ describe('reconcileAll', () => {
       transactionId: 'csv-swile',
     })
     expect(verdicts[1]).toEqual({ kind: 'new' })
+  })
+
+  describe('twin and near-twin purchases — no transaction silently lost', () => {
+    // The family of shapes that cost a real "CB Pastis" in production: the
+    // bank reports N genuinely distinct purchases that look alike, and every
+    // one of them must end up in the ledger exactly once — whatever subset
+    // of them the ledger already holds.
+    const twinA = () =>
+      staged({
+        externalAccountId: 'current',
+        externalId: 'REF-A',
+        label: 'CB Pastis',
+        amount: -4,
+        date: '2026-09-04',
+      })
+    const twinB = () =>
+      staged({
+        externalAccountId: 'current',
+        externalId: 'REF-B',
+        label: 'CB Pastis',
+        amount: -4,
+        date: '2026-09-04',
+      })
+
+    it('twins with one CSV row: one claims it, the other is inserted, none ignored', () => {
+      // Which twin claims the CSV row is indifferent — they are identical —
+      // what matters is that the OTHER one enters the ledger instead of
+      // being folded away.
+      const verdicts = reconcileAll(
+        [twinA(), twinB()],
+        [
+          ledger({
+            id: 'csv-1',
+            amount: -4,
+            description: 'CB Pastis',
+            date: '2026-09-04',
+          }),
+        ]
+      )
+
+      expect(verdicts.map(v => v.kind).sort()).toEqual(['matched', 'new'])
+    })
+
+    it('paid three times the same day: all three kept', () => {
+      const verdicts = reconcileAll(
+        [twinA(), twinB(), { ...twinA(), externalId: 'REF-C' }],
+        []
+      )
+      expect(verdicts.map(v => v.kind)).toEqual(['new', 'new', 'new'])
+    })
+
+    it('near-twins a day or two apart, nothing in the ledger: both inserted', () => {
+      const verdicts = reconcileAll(
+        [twinA(), { ...twinB(), date: '2026-09-06' }],
+        []
+      )
+      expect(verdicts.map(v => v.kind)).toEqual(['new', 'new'])
+    })
+
+    it('near-twins bracketing one CSV row a day either side: one claims, one is inserted', () => {
+      // Equal similarity, equal day gap — the tie is broken deterministically,
+      // and the losing twin must surface as new rather than vanish.
+      const verdicts = reconcileAll(
+        [
+          { ...twinA(), date: '2026-09-03' },
+          { ...twinB(), date: '2026-09-05' },
+        ],
+        [
+          ledger({
+            id: 'csv-1',
+            amount: -4,
+            description: 'CB Pastis',
+            date: '2026-09-04',
+          }),
+        ]
+      )
+      expect(verdicts.map(v => v.kind).sort()).toEqual(['matched', 'new'])
+    })
+
+    it('steady state: both twins already claimed by earlier syncs stay put', () => {
+      // The re-sync AFTER the repair: both references are in the ledger, and
+      // a regression here would fold one and re-insert it forever.
+      const verdicts = reconcileAll(
+        [twinA(), twinB()],
+        [
+          ledger({ id: 'tx-a', amount: -4, externalId: 'REF-A' }),
+          ledger({ id: 'tx-b', amount: -4, externalId: 'REF-B' }),
+        ]
+      )
+      expect(verdicts).toEqual([
+        { kind: 'alreadyLinked', transactionId: 'tx-a' },
+        { kind: 'alreadyLinked', transactionId: 'tx-b' },
+      ])
+    })
+
+    it('one twin already claimed, no CSV: the other is inserted — the self-repair', () => {
+      // Exactly the production ledger after the incident: one twin written,
+      // its sibling dropped. The next fetch must bring the sibling in.
+      const verdicts = reconcileAll(
+        [twinA(), twinB()],
+        [ledger({ id: 'tx-a', amount: -4, externalId: 'REF-A' })]
+      )
+      expect(verdicts).toEqual([
+        { kind: 'alreadyLinked', transactionId: 'tx-a' },
+        { kind: 'new' },
+      ])
+    })
+
+    it('one twin already claimed, one unlinked CSV row: the other claims it', () => {
+      const verdicts = reconcileAll(
+        [twinA(), twinB()],
+        [
+          ledger({ id: 'tx-a', amount: -4, externalId: 'REF-A' }),
+          ledger({
+            id: 'csv-1',
+            amount: -4,
+            description: 'CB Pastis',
+            date: '2026-09-04',
+          }),
+        ]
+      )
+      expect(verdicts).toEqual([
+        { kind: 'alreadyLinked', transactionId: 'tx-a' },
+        { kind: 'matched', transactionId: 'csv-1', similarity: 1 },
+      ])
+    })
+
+    it('same day and amount but different merchants, no references: both kept', () => {
+      // Distinct labels are already distinct events; the conservative fold
+      // for reference-less rows must not reach across merchants.
+      const verdicts = reconcileAll(
+        [
+          { ...twinA(), externalId: null },
+          { ...twinB(), externalId: null, label: 'CB Boulangerie' },
+        ],
+        []
+      )
+      expect(verdicts.map(v => v.kind)).toEqual(['new', 'new'])
+    })
+
+    it('reference-less twins with one CSV row: one claims, the copy folds', () => {
+      // With no reference on either side nothing proves two purchases, so
+      // the fold stands — and it must fold onto the twin that claimed the
+      // row, not eat the claim itself.
+      const verdicts = reconcileAll(
+        [
+          { ...twinA(), externalId: null },
+          { ...twinB(), externalId: null },
+        ],
+        [
+          ledger({
+            id: 'csv-1',
+            amount: -4,
+            description: 'CB Pastis',
+            date: '2026-09-04',
+          }),
+        ]
+      )
+      expect(verdicts[0]).toMatchObject({
+        kind: 'matched',
+        transactionId: 'csv-1',
+      })
+      expect(verdicts[1]).toEqual({ kind: 'duplicate', ofIndex: 0 })
+    })
   })
 
   it('keeps ambiguity when a candidate remains unclaimed', () => {

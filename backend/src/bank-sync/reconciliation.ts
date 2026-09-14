@@ -408,16 +408,35 @@ export function reconcileAll(
   const tolerance = options.dateToleranceDays ?? DEFAULT_DATE_TOLERANCE_DAYS
   const floor = options.minimumSimilarity ?? DEFAULT_MINIMUM_SIMILARITY
 
-  // One representative per event. The others are duplicates of it and take no
-  // part in the assignment — letting them compete would be letting a purchase
-  // claim two ledger rows.
-  const representativeOf = new Map<string, number>()
+  // One representative per event — with one carve-out. Collapsing by event
+  // key is what folds Boursorama's double reporting (the same purchase on
+  // the card account AND the current account, under different references).
+  // But two rows on the SAME account carrying DISTINCT references are two
+  // real purchases, by the API's own contract: `entry_reference` is unique
+  // per account. Paying the same 4 € twice at the same bar in one day is
+  // exactly that shape, and folding it silently loses the second payment.
+  // Only rows this rule cannot tell apart become duplicates.
+  const representativesOf = new Map<string, number[]>()
   const duplicateOf = new Map<number, number>()
   staged.forEach((transaction, index) => {
     const key = eventKey(transaction)
-    const first = representativeOf.get(key)
-    if (first === undefined) representativeOf.set(key, index)
-    else duplicateOf.set(index, first)
+    const representatives = representativesOf.get(key)
+    if (representatives === undefined) {
+      representativesOf.set(key, [index])
+      return
+    }
+    const twin = representatives.find(candidate => {
+      const representative = staged[candidate]
+      if (!representative) return false
+      const provablyDistinct =
+        representative.externalAccountId === transaction.externalAccountId &&
+        representative.externalId !== null &&
+        transaction.externalId !== null &&
+        representative.externalId !== transaction.externalId
+      return !provablyDistinct
+    })
+    if (twin !== undefined) duplicateOf.set(index, twin)
+    else representatives.push(index)
   })
 
   const verdicts: AssignedVerdict[] = staged.map(() => ({ kind: 'new' }))
@@ -430,7 +449,7 @@ export function reconcileAll(
   }
 
   const contenders: number[] = []
-  for (const index of representativeOf.values()) {
+  for (const index of [...representativesOf.values()].flat()) {
     const transaction = staged[index]
     if (!transaction) continue
     const linked =
