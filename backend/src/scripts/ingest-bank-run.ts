@@ -454,7 +454,17 @@ export async function main(
         data: {
           userId: user.id,
           accountId,
-          hash: computeHash(user.id, date, s.amount, accountId, s.label),
+          // The bank reference when there is one, the label otherwise — the
+          // same choice `BankSyncService.ingest` makes. Hashing on the label
+          // alone collides two genuinely distinct purchases of the same
+          // amount at the same merchant on the same day.
+          hash: computeHash(
+            user.id,
+            date,
+            s.amount,
+            accountId,
+            s.externalId ?? s.label
+          ),
           date,
           description: s.label,
           amount: s.amount,
