@@ -9,8 +9,11 @@
     CategoryAverageDto,
     CategoryDto,
   } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
   import StepIndicator from '@/components/ui/StepIndicator.vue'
+  import PlanStepPeriod from './wizard/PlanStepPeriod.vue'
+  import PlanStepSource from './wizard/PlanStepSource.vue'
+  import PlanStepEnvelopes from './wizard/PlanStepEnvelopes.vue'
+  import type { EnvelopeRow } from './wizard/PlanStepEnvelopes.vue'
   import { useFiltersStore } from '@/stores/filters'
 
   // ── Props / emits ────────────────────────────────────────────────────────
@@ -566,6 +569,16 @@
     return previewEntries.value.get(catId) ?? 0
   }
 
+  /** Ce que l'étape 3 affiche : une ligne précalculée par catégorie. */
+  const envelopeRows = computed<EnvelopeRow[]>(() =>
+    previewCategories.value.map(category => ({
+      category,
+      amount: getEntryAmount(category.categoryId),
+      seedAverage: seedBasisAmount(category),
+      excluded: excludedFromSeed(category),
+    }))
+  )
+
   const previewTotal = computed(() => {
     let total = 0
     for (const v of previewEntries.value.values()) total += v
@@ -770,589 +783,52 @@
 
         <!-- Body -->
         <div class="flex-1 overflow-y-auto px-5 py-4">
-          <!-- Step 1 -->
-          <div v-if="step === 1" class="space-y-5">
-            <!-- Presets -->
-            <div>
-              <label
-                class="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-              >
-                Plage
-              </label>
-              <div
-                class="inline-flex flex-wrap gap-1.5 rounded-lg bg-gray-100 dark:bg-slate-700/50 p-1"
-              >
-                <button
-                  v-for="opt in [
-                    { value: 'next-month', label: 'Mois prochain' },
-                    { value: 'next-quarter', label: 'Trimestre suivant' },
-                    { value: 'next-year', label: 'Année suivante' },
-                    { value: 'custom', label: 'Personnalisé' },
-                  ]"
-                  :key="opt.value"
-                  type="button"
-                  class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
-                  :class="
-                    preset === (opt.value as Preset)
-                      ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                  "
-                  @click="applyPreset(opt.value as Preset)"
-                >
-                  {{ opt.label }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Month inputs -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label
-                  for="start-month"
-                  class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
-                >
-                  Mois de début
-                </label>
-                <input
-                  id="start-month"
-                  v-model="startMonth"
-                  type="month"
-                  data-testid="new-plan-start-month"
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 text-sm"
-                  @change="preset = 'custom'"
-                />
-              </div>
-              <div>
-                <label
-                  for="end-month"
-                  class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
-                >
-                  Mois de fin
-                </label>
-                <input
-                  id="end-month"
-                  v-model="endMonth"
-                  type="month"
-                  data-testid="new-plan-end-month"
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 text-sm"
-                  @change="preset = 'custom'"
-                />
-              </div>
-            </div>
-
-            <p
-              v-if="planMonthCount > 0"
-              class="text-xs text-gray-500 dark:text-gray-400"
-            >
-              Durée : {{ planMonthCount }} mois
-            </p>
-
-            <!-- Name -->
-            <div>
-              <label
-                for="plan-name"
-                class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
-              >
-                Nom du budget
-              </label>
-              <input
-                id="plan-name"
-                v-model="name"
-                type="text"
-                data-testid="new-plan-name"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 text-sm"
-                @input="userEditedName = true"
-              />
-            </div>
-          </div>
+          <!-- Step 1 : the period and the name -->
+          <PlanStepPeriod
+            v-if="step === 1"
+            v-model:start-month="startMonth"
+            v-model:end-month="endMonth"
+            v-model:name="name"
+            :preset="preset"
+            :plan-month-count="planMonthCount"
+            @set-preset="applyPreset"
+            @name-edited="userEditedName = true"
+          />
 
           <!-- Step 2 : how the envelopes start -->
-          <div v-else-if="step === 2" class="space-y-5">
-            <div>
-              <label
-                class="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-              >
-                Comment initialiser les montants ?
-              </label>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <button
-                  v-for="opt in [
-                    { value: 'averages', label: 'Reprendre les moyennes' },
-                    { value: 'copy', label: 'Copier un budget existant' },
-                    { value: 'empty', label: 'Partir de zéro' },
-                  ]"
-                  :key="opt.value"
-                  type="button"
-                  :data-testid="`init-source-${opt.value}`"
-                  class="px-3 py-2 text-sm font-medium rounded-lg border transition-colors text-left"
-                  :class="
-                    initSource === (opt.value as InitSource)
-                      ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
-                      : 'border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800'
-                  "
-                  @click="initSource = opt.value as InitSource"
-                >
-                  {{ opt.label }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Lookback selector + reimbursement toggles for averages -->
-            <div v-if="initSource === 'averages'" class="space-y-3">
-              <div>
-                <label
-                  class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
-                >
-                  Période de référence pour les moyennes
-                </label>
-                <div
-                  class="inline-flex rounded-lg bg-gray-100 dark:bg-slate-700/50 p-1"
-                >
-                  <button
-                    v-for="opt in [
-                      { value: '3m', label: '3 mois' },
-                      { value: '6m', label: '6 mois' },
-                      { value: '12m', label: '12 mois' },
-                    ]"
-                    :key="opt.value"
-                    type="button"
-                    class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
-                    :class="
-                      lookback === (opt.value as LookbackOption)
-                        ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    "
-                    @click="lookback = opt.value as LookbackOption"
-                  >
-                    {{ opt.label }}
-                  </button>
-                </div>
-              </div>
-
-              <!-- Which historical figure seeds the envelopes -->
-              <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span
-                  class="text-xs font-medium text-gray-600 dark:text-gray-400"
-                >
-                  Base des enveloppes
-                </span>
-                <div
-                  class="inline-flex rounded-lg bg-gray-100 dark:bg-slate-700/50 p-0.5"
-                >
-                  <button
-                    v-for="opt in [
-                      { value: 'everyday', label: 'Vie courante' },
-                      { value: 'all', label: 'Tout' },
-                    ]"
-                    :key="opt.value"
-                    type="button"
-                    :data-testid="`seed-basis-${opt.value}`"
-                    class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
-                    :class="
-                      seedBasis === (opt.value as SeedBasis)
-                        ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    "
-                    @click="seedBasis = opt.value as SeedBasis"
-                  >
-                    {{ opt.label }}
-                  </button>
-                </div>
-                <span
-                  v-if="hasExceptionalInLookback"
-                  data-testid="seed-basis-hint"
-                  class="text-xs text-gray-500 dark:text-gray-400 leading-snug"
-                >
-                  {{
-                    seedBasis === 'everyday'
-                      ? 'Les dépenses étiquetées exceptionnelles sont retirées : un voyage ponctuel ne doit pas être budgété tous les mois.'
-                      : 'Les événements ponctuels de la période sont inclus dans chaque enveloppe mensuelle.'
-                  }}
-                </span>
-              </div>
-
-              <div
-                class="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-5"
-              >
-                <button
-                  type="button"
-                  role="switch"
-                  :aria-checked="deductReimbursements"
-                  data-testid="modal-toggle-deduct-reimbursements"
-                  class="group flex items-center gap-2.5 cursor-pointer select-none"
-                  @click="deductReimbursements = !deductReimbursements"
-                >
-                  <span
-                    class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
-                    :class="
-                      deductReimbursements
-                        ? 'bg-primary-500'
-                        : 'bg-gray-300 dark:bg-slate-600'
-                    "
-                  >
-                    <span
-                      class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
-                      :class="
-                        deductReimbursements
-                          ? 'translate-x-4'
-                          : 'translate-x-0.5'
-                      "
-                    />
-                  </span>
-                  <span
-                    class="text-sm text-gray-700 dark:text-gray-300"
-                    title="Soustrait tous les revenus enregistrés dans les catégories de revenus liées à une catégorie de dépense (via les associations de catégories)."
-                  >
-                    Déduire les remboursements reçus
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  role="switch"
-                  :aria-checked="deductPendingReimbursements"
-                  data-testid="modal-toggle-deduct-pending"
-                  class="group flex items-center gap-2.5 cursor-pointer select-none"
-                  @click="
-                    deductPendingReimbursements = !deductPendingReimbursements
-                  "
-                >
-                  <span
-                    class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
-                    :class="
-                      deductPendingReimbursements
-                        ? 'bg-primary-500'
-                        : 'bg-gray-300 dark:bg-slate-600'
-                    "
-                  >
-                    <span
-                      class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
-                      :class="
-                        deductPendingReimbursements
-                          ? 'translate-x-4'
-                          : 'translate-x-0.5'
-                      "
-                    />
-                  </span>
-                  <span
-                    class="text-sm text-gray-700 dark:text-gray-300"
-                    title="Soustrait le montant restant à percevoir (montant − déjà reçu) des demandes de remboursement actives (statut En attente ou Partiel)."
-                  >
-                    Déduire les remboursements en attente
-                  </span>
-                </button>
-              </div>
-
-              <p
-                class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed"
-              >
-                Les pastilles colorées sur chaque ligne indiquent le montant
-                réellement déduit par catégorie. Sans pastille, rien n'a été
-                déduit pour cette catégorie sur la période.
-              </p>
-            </div>
-
-            <!-- Plan picker for "copy" -->
-            <div v-else-if="initSource === 'copy'">
-              <label
-                for="copy-plan"
-                class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
-              >
-                Plan source
-              </label>
-              <select
-                id="copy-plan"
-                v-model="copyFromPlanId"
-                data-testid="copy-plan-select"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 text-sm"
-              >
-                <option :value="null">— Choisir un plan —</option>
-                <option v-for="p in existingPlans" :key="p.id" :value="p.id">
-                  {{ p.name }} ({{ p.startDate }} → {{ p.endDate }})
-                </option>
-              </select>
-              <p
-                v-if="!isLoadingPlans && existingPlans.length === 0"
-                class="text-xs text-gray-500 dark:text-gray-400 mt-1"
-              >
-                Aucun plan précédent disponible.
-              </p>
-            </div>
-          </div>
+          <PlanStepSource
+            v-else-if="step === 2"
+            v-model:init-source="initSource"
+            v-model:lookback="lookback"
+            v-model:seed-basis="seedBasis"
+            v-model:deduct-reimbursements="deductReimbursements"
+            v-model:deduct-pending-reimbursements="deductPendingReimbursements"
+            v-model:copy-from-plan-id="copyFromPlanId"
+            :existing-plans="existingPlans"
+            :is-loading-plans="isLoadingPlans"
+            :has-exceptional-in-lookback="hasExceptionalInLookback"
+          />
 
           <!-- Step 3 : the envelopes themselves, and the savings equation -->
-          <div v-else class="space-y-5">
-            <div>
-              <div class="flex items-center justify-between mb-2 gap-3">
-                <label
-                  class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 flex items-center gap-2"
-                >
-                  Montants
-                  <span
-                    v-if="isLoadingPreview"
-                    class="flex items-center gap-1.5 text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
-                    data-testid="preview-loading"
-                  >
-                    <svg
-                      class="animate-spin h-3 w-3"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        class="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        stroke-width="4"
-                      />
-                      <path
-                        class="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    mise à jour…
-                  </span>
-                </label>
-                <span
-                  class="text-xs text-gray-500 dark:text-gray-400 tabular-nums"
-                >
-                  Total : <strong>{{ formatCurrency(previewTotal) }}</strong>
-                </span>
-              </div>
-
-              <!-- Projected monthly savings indicator -->
-              <div
-                v-if="showSavingsIndicator"
-                data-testid="projected-savings"
-                class="mb-3 flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-3 py-2 text-xs"
-              >
-                <span class="text-gray-500 dark:text-gray-400 leading-snug">
-                  Revenus moyens
-                  <span class="text-gray-700 dark:text-gray-300 tabular-nums">
-                    {{ formatCurrency(referenceIncomeAvg) }}
-                  </span>
-                  <span class="text-gray-500 dark:text-gray-400">
-                    · {{ referenceIncomeLabel }}
-                  </span>
-                </span>
-                <span class="flex items-baseline gap-1.5">
-                  <span class="text-gray-500 dark:text-gray-400">
-                    Épargne prévue / mois :
-                  </span>
-                  <strong
-                    class="text-sm tabular-nums"
-                    :class="
-                      projectedSavings > 0
-                        ? 'text-primary-600 dark:text-primary-400'
-                        : projectedSavings < 0
-                          ? 'text-red-600 dark:text-red-400'
-                          : 'text-gray-500 dark:text-gray-400'
-                    "
-                  >
-                    {{ projectedSavings > 0 ? '+' : ''
-                    }}{{ formatCurrency(projectedSavings) }}
-                  </strong>
-                </span>
-              </div>
-
-              <!-- The equation: savings is decided, the project reserve is
-                   what the plan leaves once it is set aside. -->
-              <div
-                v-if="showSavingsIndicator"
-                data-testid="savings-equation"
-                class="mb-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-900/20 px-3 py-2.5 text-xs"
-              >
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-                  <label
-                    for="savings-target"
-                    class="font-medium text-indigo-900 dark:text-indigo-300"
-                  >
-                    Épargne décidée / mois
-                  </label>
-                  <div class="relative shrink-0">
-                    <input
-                      id="savings-target"
-                      data-testid="savings-target-input"
-                      type="number"
-                      min="0"
-                      step="10"
-                      :value="savingsTarget ?? ''"
-                      placeholder="—"
-                      class="w-28 pl-2 pr-7 py-1 text-sm text-right bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-md text-gray-900 dark:text-gray-100 tabular-nums"
-                      @input="
-                        setSavingsTarget(
-                          ($event.target as HTMLInputElement).value
-                        )
-                      "
-                    />
-                    <span
-                      class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"
-                    >
-                      €
-                    </span>
-                  </div>
-                  <span
-                    v-if="savingsTarget === null"
-                    class="text-indigo-700/80 dark:text-indigo-400/80 leading-snug"
-                  >
-                    Décidez-la avant de répartir le reste : ce plan dégage
-                    actuellement
-                    {{ formatCurrency(projectedSavings) }} / mois.
-                  </span>
-                </div>
-
-                <!-- Derived reserve — deliberately shown even when negative -->
-                <div
-                  v-if="monthlyProjectReserve !== null"
-                  data-testid="project-reserve"
-                  class="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1"
-                >
-                  <span class="text-indigo-900 dark:text-indigo-300">
-                    Budget projets :
-                  </span>
-                  <strong
-                    class="text-sm tabular-nums"
-                    :class="
-                      monthlyProjectReserve < 0
-                        ? 'text-red-600 dark:text-red-400'
-                        : 'text-indigo-700 dark:text-indigo-300'
-                    "
-                  >
-                    {{ formatCurrency(monthlyProjectReserve) }} / mois
-                  </strong>
-                  <span class="text-indigo-700/70 dark:text-indigo-400/70">
-                    soit
-                    {{ formatCurrency(planProjectReserve ?? 0) }} sur
-                    {{ planMonthCount }} mois
-                  </span>
-                </div>
-
-                <!-- Confrontation with what events have actually cost -->
-                <p
-                  v-if="reserveGap !== null"
-                  data-testid="reserve-gap"
-                  class="mt-2 leading-snug"
-                  :class="
-                    reserveGap < 0
-                      ? 'text-red-700 dark:text-red-400'
-                      : 'text-primary-700 dark:text-primary-400'
-                  "
-                >
-                  <template v-if="reserveGap < 0">
-                    Vos événements ont coûté
-                    {{ formatCurrency(lookbackExceptionalPerMonth) }} / mois sur
-                    {{ referenceIncomeLabel }}. Il manque
-                    <strong>{{ formatCurrency(-reserveGap) }} / mois</strong> :
-                    épargner moins, couper dans la vie courante, ou renoncer à
-                    un projet.
-                  </template>
-                  <template v-else>
-                    Vos événements ont coûté
-                    {{ formatCurrency(lookbackExceptionalPerMonth) }} / mois sur
-                    {{ referenceIncomeLabel }} — ce plan en finance le train
-                    habituel, avec
-                    <strong>{{ formatCurrency(reserveGap) }} / mois</strong> de
-                    marge.
-                  </template>
-                </p>
-              </div>
-
-              <p
-                v-if="initSource === 'copy' && !copyFromPlanId"
-                class="mb-2 text-xs text-gray-500 dark:text-gray-400 italic"
-              >
-                Choisissez un plan à copier — en attendant, toutes les
-                catégories sont affichées vides.
-              </p>
-              <div
-                v-if="previewCategories.length === 0 && !isLoadingPreview"
-                class="text-sm text-gray-500 dark:text-gray-400 py-4 px-3 bg-gray-50 dark:bg-slate-800 rounded-lg"
-              >
-                Aucune catégorie de dépense disponible.
-              </div>
-              <div
-                v-else
-                class="space-y-1 max-h-72 overflow-y-auto pr-1 -mr-1 transition-opacity"
-                :class="{ 'opacity-60': isLoadingPreview }"
-              >
-                <div
-                  v-for="cat in previewCategories"
-                  :key="cat.categoryId"
-                  :data-testid="`preview-row-${cat.categoryName}`"
-                  class="flex items-center gap-3 py-1.5 px-3 rounded text-sm bg-gray-50 dark:bg-slate-800"
-                >
-                  <span v-if="cat.categoryIcon" class="text-base shrink-0">
-                    {{ cat.categoryIcon }}
-                  </span>
-                  <span
-                    class="flex-1 truncate text-gray-700 dark:text-gray-300"
-                  >
-                    {{ cat.categoryName }}
-                  </span>
-                  <span
-                    v-if="cat.reimbursement && cat.reimbursement > 0"
-                    :data-testid="`preview-reimbursement-${cat.categoryName}`"
-                    class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400"
-                    :title="`Remboursements reçus déduits : ${formatCurrency(cat.reimbursement)}`"
-                  >
-                    −{{ formatCurrency(cat.reimbursement) }} reçus
-                  </span>
-                  <span
-                    v-if="
-                      cat.pendingReimbursement && cat.pendingReimbursement > 0
-                    "
-                    :data-testid="`preview-pending-${cat.categoryName}`"
-                    class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
-                    :title="`Remboursements en attente déduits : ${formatCurrency(cat.pendingReimbursement)}`"
-                  >
-                    −{{ formatCurrency(cat.pendingReimbursement) }} en attente
-                  </span>
-                  <span
-                    v-if="excludedFromSeed(cat) > 0.005"
-                    :data-testid="`preview-exceptional-${cat.categoryName}`"
-                    class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400"
-                    :title="`Part exceptionnelle exclue de l'enveloppe : ${formatCurrency(excludedFromSeed(cat))}/mois sur une moyenne de ${formatCurrency(cat.averagePerMonth)}`"
-                  >
-                    −{{ formatCurrency(excludedFromSeed(cat)) }} exceptionnel
-                  </span>
-                  <span
-                    class="text-xs text-gray-500 dark:text-gray-400 tabular-nums hidden sm:inline shrink-0"
-                  >
-                    <template v-if="seedBasisAmount(cat) > 0">
-                      Moy. {{ formatCurrency(seedBasisAmount(cat)) }}
-                    </template>
-                    <template v-else>Pas d'historique</template>
-                  </span>
-                  <div class="relative shrink-0">
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      :value="
-                        getEntryAmount(cat.categoryId) > 0
-                          ? getEntryAmount(cat.categoryId)
-                          : ''
-                      "
-                      placeholder="—"
-                      class="w-24 pl-2 pr-7 py-1 text-sm text-right bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-md text-gray-900 dark:text-gray-100 tabular-nums"
-                      @input="
-                        setEntryAmount(
-                          cat.categoryId,
-                          ($event.target as HTMLInputElement).value
-                        )
-                      "
-                    />
-                    <span
-                      class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"
-                    >
-                      €
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <PlanStepEnvelopes
+            v-else
+            :rows="envelopeRows"
+            :is-loading="isLoadingPreview"
+            :copy-without-plan="initSource === 'copy' && !copyFromPlanId"
+            :preview-total="previewTotal"
+            :show-savings-indicator="showSavingsIndicator"
+            :reference-income-avg="referenceIncomeAvg"
+            :reference-income-label="referenceIncomeLabel"
+            :projected-savings="projectedSavings"
+            :savings-target="savingsTarget"
+            :monthly-project-reserve="monthlyProjectReserve"
+            :plan-project-reserve="planProjectReserve"
+            :plan-month-count="planMonthCount"
+            :reserve-gap="reserveGap"
+            :lookback-exceptional-per-month="lookbackExceptionalPerMonth"
+            @update-entry="setEntryAmount"
+            @set-savings="setSavingsTarget"
+          />
 
           <!-- Error banner -->
           <div
