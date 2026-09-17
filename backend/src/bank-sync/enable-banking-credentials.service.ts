@@ -9,7 +9,7 @@
  * only by the standalone operator scripts (`probe-enable-banking.ts`,
  * `spike-enable-banking-fetch.ts`), never by this service.
  */
-import { Injectable } from '@nestjs/common'
+import { ConflictException, Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { buildJwt } from './enable-banking.jwt'
 import { encryptSecret, decryptSecret } from './credential-encryption'
@@ -37,9 +37,23 @@ export class EnableBankingCredentialsService {
       where: { userId },
     })
     if (!stored) return null
-    return {
-      applicationId: stored.applicationId,
-      privateKey: decryptSecret(stored.encryptedPrivateKey),
+    try {
+      return {
+        applicationId: stored.applicationId,
+        privateKey: decryptSecret(stored.encryptedPrivateKey),
+      }
+    } catch {
+      // A stored secret the key of THIS machine cannot open. The routine way
+      // to get here is restoring a production dump onto a machine with its
+      // own CREDENTIALS_ENCRYPTION_KEY — a documented workflow, not an
+      // anomaly, so it deserves an answer a person can act on rather than a
+      // 500 on every screen that touches the bank.
+      throw new ConflictException(
+        'Les identifiants Enable Banking stockés ne peuvent pas être ' +
+          'déchiffrés avec la clé de cette machine — probablement une ' +
+          "restauration d'un autre environnement. Supprimez-les puis " +
+          'ressaisissez-les dans Réglages > Comptes.'
+      )
     }
   }
 
