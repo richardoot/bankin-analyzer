@@ -9,13 +9,17 @@
     TagDto,
   } from '@/lib/api'
   import { useFiltersStore } from '@/stores/filters'
-  import { formatCurrency } from '@/lib/formatters'
   import BudgetSavingsSummary from '@/components/budget/BudgetSavingsSummary.vue'
   import MonthlyExpensesChart from '@/components/budget/MonthlyExpensesChart.vue'
-  import SparklineChart from '@/components/budget/SparklineChart.vue'
-  import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import NewBudgetPlanModal from '@/components/budget/NewBudgetPlanModal.vue'
   import BudgetPlansHistoryModal from '@/components/budget/BudgetPlansHistoryModal.vue'
+  import BudgetPlanHeader from '@/components/budget/BudgetPlanHeader.vue'
+  import BudgetProjectsSection from '@/components/budget/BudgetProjectsSection.vue'
+  import BudgetCategoryRow from '@/components/budget/BudgetCategoryRow.vue'
+  import BudgetTableControls from '@/components/budget/BudgetTableControls.vue'
+  import BudgetEditBar from '@/components/budget/BudgetEditBar.vue'
+  import { type SortOrder } from '@/components/budget/sortOptions'
+  import { planStatus } from '@/components/budget/planStatus'
   import BudgetMonthlyMatrix from '@/components/budget/BudgetMonthlyMatrix.vue'
   import type {
     MatrixMonth,
@@ -49,15 +53,6 @@
       // Private browsing: the choice simply does not persist.
     }
   }
-
-  // ── Sort options ─────────────────────────────────────────────────────────
-  type SortOrder = 'amount-desc' | 'amount-asc' | 'difference-desc' | 'alpha'
-  const sortOptions: { value: SortOrder; label: string }[] = [
-    { value: 'amount-desc', label: 'Dépense (décroissant)' },
-    { value: 'amount-asc', label: 'Dépense (croissant)' },
-    { value: 'difference-desc', label: 'Économie potentielle' },
-    { value: 'alpha', label: 'Alphabétique' },
-  ]
 
   // ── State ────────────────────────────────────────────────────────────────
   const plan = ref<BudgetPlanDto | null>(null)
@@ -109,29 +104,6 @@
   const planCount = ref(0)
 
   // ── Helpers ──────────────────────────────────────────────────────────────
-  function formatDateLabel(iso: string): string {
-    return new Date(`${iso}T00:00:00`).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    })
-  }
-
-  type PlanStatus = 'past' | 'current' | 'future'
-
-  function planStatus(p: BudgetPlanDto | null): PlanStatus | null {
-    if (!p) return null
-    const today = new Date()
-    const todayUtc = new Date(
-      Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
-    ).getTime()
-    const start = new Date(`${p.startDate}T00:00:00Z`).getTime()
-    const end = new Date(`${p.endDate}T23:59:59Z`).getTime()
-    if (todayUtc < start) return 'future'
-    if (todayUtc > end) return 'past'
-    return 'current'
-  }
-
   function getBudgetForCategory(categoryId: string): number {
     return budgetInputs.value.get(categoryId) ?? 0
   }
@@ -213,30 +185,6 @@
   }
 
   // ── Computed ─────────────────────────────────────────────────────────────
-  const currentPlanStatus = computed(() => planStatus(plan.value))
-
-  const statusBadge = computed(() => {
-    const s = currentPlanStatus.value
-    if (s === 'current')
-      return {
-        label: 'En cours',
-        class:
-          'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400',
-      }
-    if (s === 'future')
-      return {
-        label: 'À venir',
-        class:
-          'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
-      }
-    if (s === 'past')
-      return {
-        label: 'Terminé',
-        class: 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400',
-      }
-    return null
-  })
-
   // The comparison composable derives the wider date range, the month
   // zones, and per-category averages from the statistics response.
   const comparison = useBudgetComparison({
@@ -422,26 +370,6 @@
 
   function openTagAnalysis(tagId: string): void {
     void router.push(`/tags/${tagId}`)
-  }
-
-  const hasProjects = computed(() => (projects.value?.items.length ?? 0) > 0)
-
-  /**
-   * Reserve minus the envelopes already committed to projects. Null unless the
-   * plan carries an equation — without it there is nothing to charge against.
-   */
-  const reserveRemaining = computed<number | null>(() => {
-    const reserve = plan.value?.projectReserve
-    if (reserve === null || reserve === undefined) return null
-    return reserve - (projects.value?.totalBudget ?? 0)
-  })
-
-  /** Projects that have spent more than their envelope allowed. */
-  function isProjectOver(item: {
-    budgetAmount: number | null
-    spent: number
-  }): boolean {
-    return item.budgetAmount !== null && item.spent > item.budgetAmount
   }
 
   const MONTH_LABEL_FR: Record<string, string> = {
@@ -929,183 +857,16 @@
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <!-- Header -->
-      <div
-        class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6"
-      >
-        <div>
-          <h1
-            class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
-          >
-            Budget
-          </h1>
-          <p
-            v-if="plan"
-            class="mt-1 text-sm sm:text-base text-gray-600 dark:text-gray-400 flex flex-wrap items-center gap-x-1.5 gap-y-1"
-          >
-            <span class="font-medium text-gray-900 dark:text-gray-100">
-              {{ plan.name }}
-            </span>
-            <span
-              v-if="statusBadge"
-              :data-testid="`plan-status-${currentPlanStatus}`"
-              class="px-2 py-0.5 text-[11px] font-medium rounded-full"
-              :class="statusBadge.class"
-            >
-              {{ statusBadge.label }}
-            </span>
-            <span class="text-gray-300 dark:text-gray-600">·</span>
-            <span>
-              {{ formatDateLabel(plan.startDate) }} →
-              {{ formatDateLabel(plan.endDate) }}
-            </span>
-            <span class="text-gray-500 dark:text-gray-400">
-              ({{ plan.monthCount }} mois)
-            </span>
-          </p>
-          <!-- The plan's equation, when one was decided at creation. -->
-          <p
-            v-if="
-              plan &&
-              plan.projectReserve !== null &&
-              plan.projectReserve !== undefined
-            "
-            data-testid="plan-project-reserve"
-            class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
-          >
-            Épargne décidée
-            <strong class="text-gray-700 dark:text-gray-300 tabular-nums">
-              {{ formatCurrency(plan.savingsTarget ?? 0) }} / mois
-            </strong>
-            · Budget projets
-            <strong
-              class="tabular-nums"
-              :class="
-                plan.projectReserve < 0
-                  ? 'text-red-600 dark:text-red-400'
-                  : 'text-indigo-600 dark:text-indigo-400'
-              "
-            >
-              {{ formatCurrency(plan.projectReserve) }}
-            </strong>
-            <span v-if="plan.projectReserve < 0">
-              — ce plan ne tient pas dans les revenus prévus
-            </span>
-          </p>
-          <p
-            v-else-if="!isLoading"
-            class="mt-1 text-sm sm:text-base text-gray-600 dark:text-gray-400"
-          >
-            Aucun budget en cours.
-          </p>
-        </div>
-
-        <div class="flex items-center gap-2 shrink-0">
-          <button
-            v-if="planCount > 0"
-            type="button"
-            data-testid="header-history-button"
-            :disabled="isEditing"
-            :title="
-              isEditing
-                ? 'Enregistrez ou annulez les modifications avant de changer de plan'
-                : undefined
-            "
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            @click="isHistoryOpen = true"
-          >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            Historique
-          </button>
-          <button
-            type="button"
-            data-testid="header-new-plan-button"
-            :disabled="isEditing"
-            :title="
-              isEditing
-                ? 'Enregistrez ou annulez les modifications avant de créer un plan'
-                : undefined
-            "
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary-600 dark:bg-primary-500 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            @click="openCreateModal"
-          >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            Nouveau budget
-          </button>
-        </div>
-
-        <!-- Save indicator -->
-        <div
-          v-if="plan && (isSaving || saveSuccess)"
-          class="flex items-center gap-2 text-sm shrink-0"
-          aria-live="polite"
-        >
-          <template v-if="isSaving">
-            <svg
-              class="animate-spin h-4 w-4 text-indigo-600 dark:text-indigo-400"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                class="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                stroke-width="4"
-              />
-              <path
-                class="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            <span class="text-gray-500 dark:text-gray-400">Sauvegarde…</span>
-          </template>
-          <template v-else>
-            <svg
-              class="h-4 w-4 text-primary-600 dark:text-primary-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-            <span class="text-primary-600 dark:text-primary-400">
-              Sauvegardé
-            </span>
-          </template>
-        </div>
-      </div>
+      <BudgetPlanHeader
+        :plan="plan"
+        :is-loading="isLoading"
+        :plan-count="planCount"
+        :is-editing="isEditing"
+        :is-saving="isSaving"
+        :save-success="saveSuccess"
+        @open-history="isHistoryOpen = true"
+        @create="openCreateModal"
+      />
 
       <!-- Error banner -->
       <div
@@ -1324,306 +1085,31 @@
         <div
           class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5"
         >
-          <div
-            class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3"
-          >
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Dépenses par catégorie
-            </h2>
-            <div class="flex items-center gap-2">
-              <button
-                v-if="!isEditing"
-                type="button"
-                data-testid="budget-edit-button"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
-                @click="enterEditMode"
-              >
-                <svg
-                  class="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                  />
-                </svg>
-                Modifier les budgets
-              </button>
-              <label class="text-sm text-gray-500 dark:text-gray-400 shrink-0">
-                Trier :
-              </label>
-              <select
-                v-model="sortOrder"
-                class="text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-              >
-                <option
-                  v-for="opt in sortOptions"
-                  :key="opt.value"
-                  :value="opt.value"
-                >
-                  {{ opt.label }}
-                </option>
-              </select>
-            </div>
-          </div>
+          <BudgetTableControls
+            v-model:sort-order="sortOrder"
+            :editing="isEditing"
+            :month-options="monthOptions"
+            :selected-month="selectedMonth"
+            :complete-months-count="comparison.completePlanMonthsCount.value"
+            :actual-period-label="actualPeriodLabel"
+            :plan-is-past="planStatus(plan) === 'past'"
+            :has-exceptional="hasExceptionalInPlan"
+            :breakdown-mode="breakdownMode"
+            :plan-events="planEvents"
+            @enter-edit="enterEditMode"
+            @select-month="selectMonth"
+            @apply-averages="applyAverageToAll"
+            @adjust-percent="adjustAllByPercent"
+            @reset="resetAllBudgets"
+            @set-mode="setBreakdownMode"
+            @open-tag="openTagAnalysis"
+          />
 
-          <!-- Month selector: the plan averaged, or one month on its own.
-               A budget is already a monthly figure, so on a single month the
-               comparison needs no averaging at all. -->
-          <div
-            v-if="monthOptions.length > 0"
-            data-testid="budget-month-selector"
-            class="flex flex-wrap items-center gap-2 mb-4"
-          >
-            <span class="text-xs text-gray-500 dark:text-gray-400 mr-1">
-              Période :
-            </span>
-            <button
-              type="button"
-              data-testid="budget-month-average"
-              class="px-2.5 py-1 text-xs font-medium rounded-md border transition-colors"
-              :class="
-                selectedMonth === null
-                  ? 'bg-gray-900 text-white border-gray-900 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200'
-                  : 'text-gray-600 dark:text-gray-400 bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700'
-              "
-              @click="selectMonth(null)"
-            >
-              Moyenne
-              <span class="opacity-60">
-                ({{ comparison.completePlanMonthsCount.value }} mois)
-              </span>
-            </button>
-            <button
-              v-for="option in monthOptions"
-              :key="option.ym"
-              type="button"
-              :data-testid="`budget-month-${option.ym}`"
-              class="px-2.5 py-1 text-xs font-medium rounded-md border transition-colors"
-              :class="
-                selectedMonth === option.ym
-                  ? 'bg-gray-900 text-white border-gray-900 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200'
-                  : 'text-gray-600 dark:text-gray-400 bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700'
-              "
-              @click="selectMonth(option.ym)"
-            >
-              {{ option.short }}
-              <span v-if="option.isRunning" class="text-amber-500">●</span>
-            </button>
-            <span
-              data-testid="budget-actual-period"
-              class="text-xs text-gray-500 dark:text-gray-400"
-            >
-              {{ actualPeriodLabel }}
-            </span>
-          </div>
-
-          <!-- Rewriting the envelopes of a closed period moves the gap on a
-               bilan that has already been read. Allowed, but never silent. -->
-          <div
-            v-if="isEditing && currentPlanStatus === 'past'"
-            data-testid="budget-past-plan-warning"
-            class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300"
-          >
-            Ce plan est terminé. Modifier ses enveloppes change le bilan d'une
-            période déjà écoulée.
-          </div>
-
-          <!-- Quick actions — edit mode only. Applying an average or shaving
-               5 % off every envelope is an edit like any other; offering it
-               outside edit mode is what made a budget change a single
-               unannounced click. -->
-          <div
-            v-if="isEditing"
-            data-testid="budget-quick-actions"
-            class="flex flex-wrap items-center gap-2 mb-4 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg"
-          >
-            <span class="text-xs text-gray-500 dark:text-gray-400 mr-1">
-              Actions rapides :
-            </span>
-            <button
-              type="button"
-              class="px-2.5 py-1 text-xs font-medium text-indigo-700 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-md hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors"
-              @click="applyAverageToAll"
-            >
-              Appliquer toutes les moyennes
-            </button>
-            <button
-              type="button"
-              class="px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
-              @click="adjustAllByPercent(-5)"
-            >
-              −5%
-            </button>
-            <button
-              type="button"
-              class="px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
-              @click="adjustAllByPercent(5)"
-            >
-              +5%
-            </button>
-            <button
-              type="button"
-              class="ml-auto px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border border-transparent hover:border-red-200 dark:hover:border-red-800 rounded-md transition-colors"
-              @click="resetAllBudgets"
-            >
-              Réinitialiser
-            </button>
-          </div>
-
-          <!-- Tracking mode: everyday keeps a one-off event from reading as an
-               overrun of the recurring budget. -->
-          <div
-            v-if="hasExceptionalInPlan"
-            data-testid="budget-breakdown-mode"
-            class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5"
-          >
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <span
-                class="text-xs font-medium text-amber-800 dark:text-amber-300"
-              >
-                Suivi
-              </span>
-              <div
-                class="inline-flex rounded-lg border border-amber-300 dark:border-amber-700 bg-white/70 dark:bg-slate-900/40 p-0.5 text-xs"
-                role="group"
-                aria-label="Mode de suivi du budget"
-              >
-                <button
-                  type="button"
-                  data-testid="budget-mode-everyday"
-                  class="px-2.5 py-1 rounded-md transition-colors"
-                  :class="
-                    breakdownMode === 'everyday'
-                      ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
-                      : 'text-gray-600 dark:text-gray-400'
-                  "
-                  @click="setBreakdownMode('everyday')"
-                >
-                  Vie courante
-                </button>
-                <button
-                  type="button"
-                  data-testid="budget-mode-real"
-                  class="px-2.5 py-1 rounded-md transition-colors"
-                  :class="
-                    breakdownMode === 'real'
-                      ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
-                      : 'text-gray-600 dark:text-gray-400'
-                  "
-                  @click="setBreakdownMode('real')"
-                >
-                  Tout
-                </button>
-              </div>
-              <span
-                class="text-xs text-amber-700 dark:text-amber-400 leading-snug"
-              >
-                {{
-                  breakdownMode === 'everyday'
-                    ? 'Les dépenses d’événements sont sorties du réel : une enveloppe n’est dépassée que par la vie courante.'
-                    : 'Les dépenses d’événements sont incluses : une enveloppe peut être dépassée par un projet ponctuel.'
-                }}
-              </span>
-            </div>
-
-            <div
-              v-if="planEvents.length > 0"
-              class="mt-2 flex flex-wrap items-center gap-1.5"
-            >
-              <span class="text-xs text-amber-700 dark:text-amber-400">
-                Événements de la période :
-              </span>
-              <button
-                v-for="event in planEvents"
-                :key="event.id"
-                type="button"
-                :data-testid="`budget-event-${event.name}`"
-                class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-amber-300 transition"
-                @click="openTagAnalysis(event.id)"
-              >
-                <span
-                  class="inline-block h-2 w-2 rounded-full shrink-0"
-                  :style="{ backgroundColor: event.color ?? '#9ca3af' }"
-                ></span>
-                {{ event.name }}
-              </button>
-            </div>
-          </div>
-
-          <!-- Projects: the second tier of the budget, charged against the
-               plan's reserve rather than against the monthly envelopes. -->
-          <div
-            v-if="hasProjects"
-            data-testid="budget-projects"
-            class="mb-4 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-900/20 px-3 py-2.5"
-          >
-            <div class="flex flex-wrap items-baseline justify-between gap-2">
-              <p
-                class="text-xs font-medium text-indigo-900 dark:text-indigo-300"
-              >
-                Projets de la période
-              </p>
-              <p
-                v-if="reserveRemaining !== null"
-                data-testid="reserve-remaining"
-                class="text-xs tabular-nums"
-                :class="
-                  reserveRemaining < 0
-                    ? 'text-red-600 dark:text-red-400 font-semibold'
-                    : 'text-indigo-700 dark:text-indigo-400'
-                "
-              >
-                <template v-if="reserveRemaining < 0">
-                  {{ formatCurrency(projects?.totalBudget ?? 0) }} engagés sur
-                  {{ formatCurrency(plan?.projectReserve ?? 0) }} de réserve —
-                  dépassement de {{ formatCurrency(-reserveRemaining) }}
-                </template>
-                <template v-else>
-                  {{ formatCurrency(projects?.totalBudget ?? 0) }} engagés sur
-                  {{ formatCurrency(plan?.projectReserve ?? 0) }} de réserve
-                </template>
-              </p>
-            </div>
-
-            <div class="mt-2 flex flex-wrap gap-1.5">
-              <button
-                v-for="item in projects?.items ?? []"
-                :key="item.id"
-                type="button"
-                :data-testid="`project-${item.name}`"
-                class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-indigo-300 transition"
-                @click="openTagAnalysis(item.id)"
-              >
-                <span
-                  class="inline-block h-2 w-2 rounded-full shrink-0"
-                  :style="{ backgroundColor: item.color ?? '#9ca3af' }"
-                ></span>
-                {{ item.name }}
-                <span
-                  class="font-semibold tabular-nums"
-                  :class="
-                    isProjectOver(item) ? 'text-red-600 dark:text-red-400' : ''
-                  "
-                >
-                  {{ formatCurrency(item.spent) }}
-                </span>
-                <span
-                  v-if="item.budgetAmount !== null"
-                  class="text-gray-500 dark:text-gray-400 tabular-nums"
-                >
-                  / {{ formatCurrency(item.budgetAmount) }}
-                </span>
-                <span v-else class="text-gray-500 dark:text-gray-400 italic">
-                  sans enveloppe
-                </span>
-              </button>
-            </div>
-          </div>
+          <BudgetProjectsSection
+            :projects="projects"
+            :plan="plan"
+            @open-tag="openTagAnalysis"
+          />
 
           <!-- Column-count CSS variable drives both header & row grids so
                the table adapts to which columns are visible. -->
@@ -1678,434 +1164,47 @@
 
           <!-- Category rows -->
           <div v-else class="divide-y divide-gray-100 dark:divide-slate-700">
-            <div
+            <BudgetCategoryRow
               v-for="cat in sortedCategories"
               :key="cat.categoryId"
-              :data-testid="`budget-row-${cat.categoryName}`"
-            >
-              <!-- Row -->
-              <div
-                class="grid grid-cols-2 sm:[grid-template-columns:var(--row-grid)] sm:gap-x-6 gap-x-4 gap-y-2 sm:gap-y-0 items-center py-4 px-4 hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors"
-                :style="{ '--row-grid': rowGridTemplate }"
-              >
-                <!-- Name + chevron + status badge -->
-                <button
-                  type="button"
-                  class="col-span-2 sm:col-span-1 flex items-center gap-2 min-w-0 text-left"
-                  :aria-expanded="isCategoryExpanded(cat.categoryId)"
-                  @click="toggleCategoryExpanded(cat.categoryId)"
-                >
-                  <svg
-                    class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
-                    :class="{
-                      'rotate-90': isCategoryExpanded(cat.categoryId),
-                    }"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                  <span v-if="cat.categoryIcon" class="text-lg shrink-0">
-                    {{ cat.categoryIcon }}
-                  </span>
-                  <span
-                    class="font-medium text-gray-900 dark:text-gray-100 truncate"
-                  >
-                    {{ cat.categoryName }}
-                  </span>
-                  <!-- Status badge: over budget ⚠ or budget covers history ✓ -->
-                  <span
-                    v-if="getRowStatus(cat) === 'over'"
-                    class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
-                    title="Dépassement par rapport au budget"
-                  >
-                    ⚠ Dépassé
-                  </span>
-                  <span
-                    v-else-if="getRowStatus(cat) === 'covered'"
-                    class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400"
-                    title="Le budget couvre la moyenne historique"
-                  >
-                    ✓ Couvert
-                  </span>
-                </button>
-
-                <!-- Historique (conditional) -->
-                <div
-                  v-if="showHistoricalColumn"
-                  class="sm:text-right text-sm tabular-nums leading-tight"
-                >
-                  <span class="sm:hidden text-xs text-gray-400 mr-1">
-                    Historique :
-                  </span>
-                  <button
-                    v-if="isEditing && getHistoricalAverage(cat) > 0"
-                    type="button"
-                    class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline decoration-dotted underline-offset-2"
-                    :title="`Moyenne sur ${comparisonRange?.label} — cliquer pour appliquer comme budget`"
-                    @click="
-                      setBudgetValue(cat.categoryId, getHistoricalAverage(cat))
-                    "
-                  >
-                    {{ formatCurrency(getHistoricalAverage(cat)) }}
-                  </button>
-                  <span
-                    v-else-if="getHistoricalAverage(cat) > 0"
-                    class="text-indigo-600 dark:text-indigo-400 font-medium"
-                  >
-                    {{ formatCurrency(getHistoricalAverage(cat)) }}
-                  </span>
-                  <span v-else class="text-gray-500 dark:text-gray-400">—</span>
-                </div>
-
-                <!-- Budget: read as text, edited only in edit mode -->
-                <div class="sm:text-right">
-                  <div v-if="isEditing" class="relative inline-block">
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      :value="
-                        getBudgetForCategory(cat.categoryId) > 0
-                          ? getBudgetForCategory(cat.categoryId)
-                          : ''
-                      "
-                      placeholder="—"
-                      :data-testid="`budget-input-${cat.categoryName}`"
-                      class="w-24 sm:w-28 pl-2 pr-7 py-1.5 text-sm text-right bg-white dark:bg-slate-900 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900 dark:text-gray-100 tabular-nums font-medium"
-                      :class="
-                        isCategoryDirty(cat.categoryId)
-                          ? 'border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20'
-                          : 'border-primary-300 dark:border-primary-800'
-                      "
-                      @input="
-                        updateBudgetInput(
-                          cat.categoryId,
-                          ($event.target as HTMLInputElement).value
-                        )
-                      "
-                    />
-                    <span
-                      class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-primary-500/70 dark:text-primary-400/70 pointer-events-none"
-                    >
-                      €
-                    </span>
-                    <!-- What this envelope was before the draft touched it. -->
-                    <span
-                      v-if="isCategoryDirty(cat.categoryId)"
-                      :data-testid="`budget-was-${cat.categoryName}`"
-                      class="block text-[10px] text-gray-500 dark:text-gray-400 line-through tabular-nums text-right"
-                    >
-                      {{ formatCurrency(getSavedBudget(cat.categoryId)) }}
-                    </span>
-                  </div>
-                  <div v-else class="text-sm tabular-nums leading-tight">
-                    <span class="sm:hidden text-xs text-gray-400 mr-1">
-                      Budget :
-                    </span>
-                    <span
-                      v-if="getBudgetForCategory(cat.categoryId) > 0"
-                      :data-testid="`budget-value-${cat.categoryName}`"
-                      class="font-semibold text-primary-700 dark:text-primary-400"
-                    >
-                      {{ formatCurrency(getBudgetForCategory(cat.categoryId)) }}
-                    </span>
-                    <span v-else class="text-gray-500 dark:text-gray-400">
-                      —
-                    </span>
-                    <!-- On a month still running, the envelope's fair share to
-                         date — so a half-finished month is judged on pace. -->
-                    <span
-                      v-if="getProratedBudget(cat.categoryId) !== null"
-                      :data-testid="`budget-prorata-${cat.categoryName}`"
-                      class="block text-[10px] text-gray-500 dark:text-gray-400 tabular-nums"
-                      title="Part du budget correspondant aux jours écoulés"
-                    >
-                      {{
-                        formatCurrency(getProratedBudget(cat.categoryId) ?? 0)
-                      }}
-                      à ce jour
-                    </span>
-                  </div>
-                </div>
-
-                <!-- Réel à date (conditional) -->
-                <div
-                  v-if="showActualColumn"
-                  class="sm:text-right text-sm tabular-nums leading-tight"
-                >
-                  <span class="sm:hidden text-xs text-gray-400 mr-1">
-                    Réel :
-                  </span>
-                  <button
-                    v-if="isEditing && getPlanActualAverage(cat) > 0"
-                    type="button"
-                    class="text-red-600 dark:text-red-400 font-medium hover:underline decoration-dotted underline-offset-2"
-                    :title="`Réel sur ${actualPeriodLabel} — cliquer pour appliquer comme budget`"
-                    @click="
-                      setBudgetValue(cat.categoryId, getPlanActualAverage(cat))
-                    "
-                  >
-                    {{ formatCurrency(getPlanActualAverage(cat)) }}
-                  </button>
-                  <span
-                    v-else-if="getPlanActualAverage(cat) > 0"
-                    class="text-red-600 dark:text-red-400 font-medium"
-                  >
-                    {{ formatCurrency(getPlanActualAverage(cat)) }}
-                  </span>
-                  <span v-else class="text-gray-500 dark:text-gray-400">—</span>
-                  <span
-                    v-if="getExceptionalAverage(cat) > 0.005"
-                    :data-testid="`budget-exceptional-${cat.categoryName}`"
-                    class="block text-[10px] text-amber-600 dark:text-amber-500"
-                    :title="
-                      breakdownMode === 'everyday'
-                        ? 'Part portée par un événement, exclue de ce réel'
-                        : 'Part portée par un événement, incluse dans ce réel'
-                    "
-                  >
-                    {{ breakdownMode === 'everyday' ? 'hors' : 'dont' }}
-                    {{ formatCurrency(getExceptionalAverage(cat)) }}
-                  </span>
-                </div>
-
-                <!-- Sparkline -->
-                <div class="hidden sm:flex justify-end items-center w-24">
-                  <SparklineChart
-                    v-if="(comparison.seriesFor(cat)?.length ?? 0) >= 2"
-                    :data="comparison.seriesFor(cat) ?? []"
-                    color="#ef4444"
-                  />
-                </div>
-              </div>
-
-              <!-- Drill-down panel -->
-              <div
-                v-if="isCategoryExpanded(cat.categoryId)"
-                class="bg-gray-50 dark:bg-slate-800/40 px-4 py-5 border-t border-gray-100 dark:border-slate-700 space-y-5"
-              >
-                <!-- Margin / remaining quick summary -->
-                <div
-                  v-if="
-                    getBudgetForCategory(cat.categoryId) > 0 &&
-                    (showHistoricalColumn || showActualColumn)
-                  "
-                  class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm"
-                  :data-testid="`budget-row-detail-${cat.categoryName}`"
-                >
-                  <div
-                    v-if="showHistoricalColumn"
-                    class="rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-3"
-                  >
-                    <div
-                      class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
-                    >
-                      Marge vs historique
-                    </div>
-                    <div
-                      class="text-lg font-bold tabular-nums"
-                      :class="
-                        getMarginVsHistorical(cat) > 0
-                          ? 'text-primary-600 dark:text-primary-400'
-                          : getMarginVsHistorical(cat) < 0
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-gray-500'
-                      "
-                    >
-                      {{ getMarginVsHistorical(cat) > 0 ? '+' : ''
-                      }}{{ formatCurrency(getMarginVsHistorical(cat)) }}
-                    </div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      <template v-if="getMarginVsHistorical(cat) > 0">
-                        Budget plus généreux que la moyenne passée
-                      </template>
-                      <template v-else-if="getMarginVsHistorical(cat) < 0">
-                        Budget plus serré que la moyenne passée
-                      </template>
-                      <template v-else>
-                        Budget aligné sur la moyenne passée
-                      </template>
-                    </p>
-                  </div>
-                  <div
-                    v-if="showActualColumn"
-                    class="rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-3"
-                  >
-                    <div
-                      class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
-                    >
-                      Reste à dépenser
-                    </div>
-                    <div
-                      class="text-lg font-bold tabular-nums"
-                      :class="
-                        getRemainingVsActual(cat) > 0
-                          ? 'text-primary-600 dark:text-primary-400'
-                          : getRemainingVsActual(cat) < 0
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-gray-500'
-                      "
-                    >
-                      {{ getRemainingVsActual(cat) > 0 ? '+' : ''
-                      }}{{ formatCurrency(getRemainingVsActual(cat)) }}
-                    </div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      <template v-if="getRemainingVsActual(cat) > 0">
-                        Marge disponible vs la moyenne réelle
-                      </template>
-                      <template v-else-if="getRemainingVsActual(cat) < 0">
-                        Dépassement par rapport au budget
-                      </template>
-                      <template v-else>Budget pile consommé</template>
-                    </p>
-                  </div>
-                </div>
-
-                <!-- Subcategories -->
-                <div v-if="cat.subcategories && cat.subcategories.length > 0">
-                  <h3
-                    class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-                  >
-                    Sous-catégories
-                  </h3>
-                  <div class="space-y-1">
-                    <div
-                      v-for="sub in cat.subcategories"
-                      :key="sub.subcategory || '(sans sous-catégorie)'"
-                      class="flex items-center gap-3 px-3 py-1.5 rounded text-sm bg-white dark:bg-slate-900"
-                    >
-                      <span
-                        class="flex-1 truncate text-gray-700 dark:text-gray-300"
-                      >
-                        {{ sub.subcategory || '(sans sous-catégorie)' }}
-                      </span>
-                      <span
-                        class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0"
-                      >
-                        {{ sub.transactionCount }} tx
-                      </span>
-                      <span
-                        class="font-medium text-gray-900 dark:text-gray-100 tabular-nums shrink-0"
-                      >
-                        {{ formatCurrency(sub.totalAmount) }}
-                      </span>
-                      <span
-                        class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0 hidden sm:inline"
-                      >
-                        {{ formatCurrency(sub.averagePerMonth) }}/mois
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Monthly evolution chart -->
-                <div v-if="(cat.monthlyAmounts?.length ?? 0) >= 2">
-                  <h3
-                    class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-                  >
-                    Évolution mensuelle
-                  </h3>
-                  <MonthlyBarChart
-                    :data="categoryChartData(cat)"
-                    :title="cat.categoryName"
-                    color="#ef4444"
-                  />
-                </div>
-
-                <!-- Reimbursement info -->
-                <div
-                  v-if="cat.reimbursement || cat.pendingReimbursement"
-                  class="mt-3 flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400"
-                >
-                  <span v-if="cat.reimbursement">
-                    Remboursements reçus déduits :
-                    <strong class="text-gray-700 dark:text-gray-300">
-                      {{ formatCurrency(cat.reimbursement) }}
-                    </strong>
-                  </span>
-                  <span v-if="cat.pendingReimbursement">
-                    En attente déduits :
-                    <strong class="text-gray-700 dark:text-gray-300">
-                      {{ formatCurrency(cat.pendingReimbursement) }}
-                    </strong>
-                  </span>
-                </div>
-              </div>
-            </div>
+              :category="cat"
+              :row-grid="rowGridTemplate"
+              :expanded="isCategoryExpanded(cat.categoryId)"
+              :editing="isEditing"
+              :show-historical="showHistoricalColumn"
+              :show-actual="showActualColumn"
+              :historical-average="getHistoricalAverage(cat)"
+              :actual-average="getPlanActualAverage(cat)"
+              :exceptional-average="getExceptionalAverage(cat)"
+              :budget="getBudgetForCategory(cat.categoryId)"
+              :saved-budget="getSavedBudget(cat.categoryId)"
+              :dirty="isCategoryDirty(cat.categoryId)"
+              :prorated-budget="getProratedBudget(cat.categoryId)"
+              :row-status="getRowStatus(cat)"
+              :margin-vs-historical="getMarginVsHistorical(cat)"
+              :remaining-vs-actual="getRemainingVsActual(cat)"
+              :sparkline="comparison.seriesFor(cat) ?? []"
+              :chart-data="categoryChartData(cat)"
+              :comparison-label="comparisonRange?.label"
+              :actual-period-label="actualPeriodLabel"
+              :breakdown-mode="breakdownMode"
+              @toggle-expand="toggleCategoryExpanded(cat.categoryId)"
+              @update-budget="value => updateBudgetInput(cat.categoryId, value)"
+              @apply-budget="amount => setBudgetValue(cat.categoryId, amount)"
+            />
           </div>
         </div>
 
-        <!-- Edit bar: the only way a budget change reaches the server. Kept
-             on screen so the count of pending changes and the way out are
-             never scrolled away from. -->
-        <div
+        <BudgetEditBar
           v-if="isEditing"
-          data-testid="budget-edit-bar"
-          class="sticky bottom-0 z-10 mt-4 -mx-4 sm:mx-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-slate-900 border-t sm:border border-gray-200 dark:border-slate-700 sm:rounded-xl shadow-lg dark:shadow-slate-900/40 px-4 py-3"
-        >
-          <p class="text-sm text-gray-600 dark:text-gray-400">
-            <span
-              v-if="hasUnsavedChanges"
-              data-testid="budget-dirty-count"
-              class="font-medium text-gray-900 dark:text-gray-100"
-            >
-              {{ dirtyCategoryIds.length }} catégorie{{
-                dirtyCategoryIds.length > 1 ? 's' : ''
-              }}
-              modifiée{{ dirtyCategoryIds.length > 1 ? 's' : '' }}
-            </span>
-            <span v-else>Aucune modification</span>
-            <span class="mx-1.5 text-gray-300 dark:text-gray-600">·</span>
-            <span class="tabular-nums">
-              Total {{ formatCurrency(savedPlanTotal) }}
-              <template v-if="hasUnsavedChanges">
-                →
-                <strong class="text-gray-900 dark:text-gray-100">
-                  {{ formatCurrency(draftPlanTotal) }}
-                </strong>
-                <span
-                  data-testid="budget-draft-delta"
-                  :class="
-                    draftDelta > 0
-                      ? 'text-red-600 dark:text-red-400'
-                      : 'text-primary-600 dark:text-primary-400'
-                  "
-                >
-                  ({{ draftDelta > 0 ? '+' : ''
-                  }}{{ formatCurrency(draftDelta) }})
-                </span>
-              </template>
-              <span class="text-gray-500 dark:text-gray-400">/ mois</span>
-            </span>
-          </p>
-          <div class="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              data-testid="budget-cancel-button"
-              :disabled="isSaving"
-              class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-              @click="cancelEdit"
-            >
-              Annuler
-            </button>
-            <button
-              type="button"
-              data-testid="budget-save-button"
-              :disabled="isSaving || !hasUnsavedChanges"
-              class="px-4 py-1.5 text-sm font-medium bg-primary-600 dark:bg-primary-500 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              @click="saveBudget"
-            >
-              {{ isSaving ? 'Enregistrement…' : 'Enregistrer' }}
-            </button>
-          </div>
-        </div>
+          :dirty-count="dirtyCategoryIds.length"
+          :saved-total="savedPlanTotal"
+          :draft-total="draftPlanTotal"
+          :delta="draftDelta"
+          :saving="isSaving"
+          @save="saveBudget"
+          @cancel="cancelEdit"
+        />
       </template>
     </div>
 
