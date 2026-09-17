@@ -98,6 +98,25 @@ function mountModal() {
   })
 }
 
+/** The wizard walks Période → Base de départ → Enveloppes; one press each. */
+async function clickNext(): Promise<void> {
+  ;(
+    document.body.querySelector(
+      '[data-testid="next-step-button"]'
+    ) as HTMLButtonElement
+  ).click()
+  await flushPromises()
+}
+
+async function clickPrev(): Promise<void> {
+  ;(
+    document.body.querySelector(
+      '[data-testid="prev-step-button"]'
+    ) as HTMLButtonElement
+  ).click()
+  await flushPromises()
+}
+
 describe('NewBudgetPlanModal', () => {
   beforeEach(() => {
     vi.resetAllMocks()
@@ -196,6 +215,9 @@ describe('NewBudgetPlanModal', () => {
 
     // Statistics fetched for averages
     expect(api.getBudgetStatistics).toHaveBeenCalledOnce()
+
+    // On to the envelopes (step 3)
+    await clickNext()
 
     // Both categories appear with their averages prefilled
     expect(
@@ -316,6 +338,9 @@ describe('NewBudgetPlanModal', () => {
     ).click()
     await flushPromises()
 
+    // On to the envelopes (step 3)
+    await clickNext()
+
     // Alimentation row shows both badges
     expect(
       document.body.querySelector(
@@ -368,6 +393,9 @@ describe('NewBudgetPlanModal', () => {
     ).click()
     await flushPromises()
 
+    // On to the envelopes (step 3)
+    await clickNext()
+
     // "Reçus" badge must NOT appear when nothing was actually deducted
     expect(
       document.body.querySelector(
@@ -395,6 +423,9 @@ describe('NewBudgetPlanModal', () => {
       ) as HTMLButtonElement
     ).click()
     await flushPromises()
+
+    // On to the envelopes (step 3)
+    await clickNext()
 
     const indicator = document.body.querySelector(
       '[data-testid="projected-savings"]'
@@ -431,6 +462,9 @@ describe('NewBudgetPlanModal', () => {
 
     // A side fetch should have been made to get the income reference
     expect(api.getBudgetStatistics).toHaveBeenCalled()
+
+    // On to the envelopes (step 3)
+    await clickNext()
 
     const indicator = document.body.querySelector(
       '[data-testid="projected-savings"]'
@@ -492,6 +526,9 @@ describe('NewBudgetPlanModal', () => {
     ) as HTMLButtonElement
     next.click()
     await flushPromises()
+
+    // On to the envelopes (step 3)
+    await clickNext()
 
     // Hidden category isn't rendered, the other still is
     expect(
@@ -574,6 +611,9 @@ describe('NewBudgetPlanModal', () => {
     select.dispatchEvent(new Event('change'))
     await flushPromises()
 
+    // On to the envelopes (step 3)
+    await clickNext()
+
     expect(
       document.body.querySelector('[data-testid="preview-row-Alimentation"]')
     ).not.toBeNull()
@@ -604,6 +644,9 @@ describe('NewBudgetPlanModal', () => {
 
     // Every visible expense category is still rendered so the user can
     // fill the ones they care about, but inputs are blank.
+    // On to the envelopes (step 3)
+    await clickNext()
+
     const rows = document.body.querySelectorAll('[data-testid^="preview-row-"]')
     expect(rows.length).toBe(sampleCategories.length)
     rows.forEach(row => {
@@ -654,6 +697,9 @@ describe('NewBudgetPlanModal', () => {
     ).click()
     await flushPromises()
 
+    // On to the envelopes (step 3)
+    await clickNext()
+
     // Every category appears, including those without historical data
     expect(
       document.body.querySelector('[data-testid="preview-row-Alimentation"]')
@@ -696,6 +742,9 @@ describe('NewBudgetPlanModal', () => {
     ).click()
     await flushPromises()
 
+    // On to the envelopes (step 3)
+    await clickNext()
+
     // Regular categories still appear…
     expect(
       document.body.querySelector('[data-testid="preview-row-Alimentation"]')
@@ -733,6 +782,9 @@ describe('NewBudgetPlanModal', () => {
       ) as HTMLButtonElement
     ).click()
     await flushPromises()
+
+    // On to the envelopes (step 3)
+    await clickNext()
 
     expect(
       document.body.querySelector('[data-testid="preview-row-Loisirs"]')
@@ -852,6 +904,9 @@ describe('NewBudgetPlanModal', () => {
     ).click()
     await flushPromises()
 
+    // On to the envelopes (step 3)
+    await clickNext()
+
     const indicator = document.body.querySelector(
       '[data-testid="projected-savings"]'
     )
@@ -904,6 +959,9 @@ describe('NewBudgetPlanModal', () => {
     emptyBtn.click()
     await flushPromises()
 
+    // On to the envelopes (step 3)
+    await clickNext()
+
     const create = document.body.querySelector(
       '[data-testid="create-plan-button"]'
     ) as HTMLButtonElement
@@ -948,14 +1006,11 @@ describe('NewBudgetPlanModal', () => {
       ],
     }
 
-    async function openStep2() {
+    async function openEnvelopes() {
       const wrapper = mountModal()
       await flushPromises()
-      const next = document.body.querySelector(
-        '[data-testid="next-step-button"]'
-      ) as HTMLButtonElement
-      next.click()
-      await flushPromises()
+      await clickNext()
+      await clickNext()
       return wrapper
     }
 
@@ -969,7 +1024,7 @@ describe('NewBudgetPlanModal', () => {
 
     it('seeds envelopes with the everyday average, not the raw one', async () => {
       vi.mocked(api.getBudgetStatistics).mockResolvedValue(statsWithExceptional)
-      const wrapper = await openStep2()
+      const wrapper = await openEnvelopes()
 
       // 150 (everyday), not 250 — the holiday is not budgeted every month.
       expect(amountFor('Alimentation')).toBe(150)
@@ -981,7 +1036,7 @@ describe('NewBudgetPlanModal', () => {
 
     it('shows how much was excluded from the envelope', async () => {
       vi.mocked(api.getBudgetStatistics).mockResolvedValue(statsWithExceptional)
-      const wrapper = await openStep2()
+      const wrapper = await openEnvelopes()
 
       const chip = document.body.querySelector(
         '[data-testid="preview-exceptional-Alimentation"]'
@@ -999,13 +1054,17 @@ describe('NewBudgetPlanModal', () => {
 
     it('re-seeds on the raw average when switching to "Tout"', async () => {
       vi.mocked(api.getBudgetStatistics).mockResolvedValue(statsWithExceptional)
-      const wrapper = await openStep2()
+      const wrapper = await openEnvelopes()
 
+      // The basis is a step-2 control: walk back (no reload — the guard
+      // keeps the loaded stats), flip it, walk forward again.
+      await clickPrev()
       const all = document.body.querySelector(
         '[data-testid="seed-basis-all"]'
       ) as HTMLButtonElement
       all.click()
       await flushPromises()
+      await clickNext()
 
       expect(amountFor('Alimentation')).toBe(250)
       // Switching the basis reuses the loaded stats, no extra request.
@@ -1016,7 +1075,7 @@ describe('NewBudgetPlanModal', () => {
 
     it('falls back to the raw average when the backend sends no split', async () => {
       vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStats)
-      const wrapper = await openStep2()
+      const wrapper = await openEnvelopes()
 
       expect(amountFor('Alimentation')).toBe(250)
       expect(
@@ -1037,14 +1096,11 @@ describe('NewBudgetPlanModal', () => {
       totalExceptionalExpenses: 1200,
     }
 
-    async function openStep2() {
+    async function openEnvelopes() {
       const wrapper = mountModal()
       await flushPromises()
-      const next = document.body.querySelector(
-        '[data-testid="next-step-button"]'
-      ) as HTMLButtonElement
-      next.click()
-      await flushPromises()
+      await clickNext()
+      await clickNext()
       return wrapper
     }
 
@@ -1065,7 +1121,7 @@ describe('NewBudgetPlanModal', () => {
     })
 
     it('shows no reserve until savings are actually decided', async () => {
-      const wrapper = await openStep2()
+      const wrapper = await openEnvelopes()
 
       expect(
         document.body.querySelector('[data-testid="project-reserve"]')
@@ -1075,7 +1131,7 @@ describe('NewBudgetPlanModal', () => {
     })
 
     it('derives the project reserve from income − savings − envelopes', async () => {
-      const wrapper = await openStep2()
+      const wrapper = await openEnvelopes()
       await setSavings('1200')
 
       // 2000 − 1200 − 300 = 500 / month, over a 1-month plan.
@@ -1089,7 +1145,7 @@ describe('NewBudgetPlanModal', () => {
     })
 
     it('shows a negative reserve instead of clamping it to zero', async () => {
-      const wrapper = await openStep2()
+      const wrapper = await openEnvelopes()
       await setSavings('1900')
 
       // 2000 − 1900 − 300 = −200.
@@ -1103,7 +1159,7 @@ describe('NewBudgetPlanModal', () => {
     })
 
     it('confronts the reserve with what events actually cost', async () => {
-      const wrapper = await openStep2()
+      const wrapper = await openEnvelopes()
       await setSavings('1700')
 
       // Reserve 0/month vs 200/month of observed events → 200 missing.
@@ -1117,7 +1173,7 @@ describe('NewBudgetPlanModal', () => {
     })
 
     it('reports a margin when the reserve covers the observed events', async () => {
-      const wrapper = await openStep2()
+      const wrapper = await openEnvelopes()
       await setSavings('1200')
 
       // Reserve 500/month vs 200/month observed → 300 of margin.
@@ -1132,7 +1188,7 @@ describe('NewBudgetPlanModal', () => {
 
     it('stays silent about the gap when no event was observed', async () => {
       vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStats)
-      const wrapper = await openStep2()
+      const wrapper = await openEnvelopes()
       await setSavings('1200')
 
       expect(
@@ -1147,7 +1203,7 @@ describe('NewBudgetPlanModal', () => {
 
     it('persists both halves of the equation on create', async () => {
       vi.mocked(api.createBudgetPlan).mockResolvedValue(samplePlan)
-      const wrapper = await openStep2()
+      const wrapper = await openEnvelopes()
       await setSavings('1200')
 
       const create = document.body.querySelector(
@@ -1165,7 +1221,7 @@ describe('NewBudgetPlanModal', () => {
 
     it('omits the equation entirely when no target was set', async () => {
       vi.mocked(api.createBudgetPlan).mockResolvedValue(samplePlan)
-      const wrapper = await openStep2()
+      const wrapper = await openEnvelopes()
 
       const create = document.body.querySelector(
         '[data-testid="create-plan-button"]'
