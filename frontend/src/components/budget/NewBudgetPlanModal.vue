@@ -10,6 +10,7 @@
     CategoryDto,
   } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
+  import StepIndicator from '@/components/ui/StepIndicator.vue'
   import { useFiltersStore } from '@/stores/filters'
 
   // ── Props / emits ────────────────────────────────────────────────────────
@@ -79,7 +80,8 @@
   const referenceIncomeLabel = ref('')
 
   // ── General state ────────────────────────────────────────────────────────
-  const step = ref<1 | 2>(1)
+  const step = ref<1 | 2 | 3>(1)
+  const STEP_LABELS = ['Période', 'Base de départ', 'Enveloppes & épargne']
   const isLoadingPreview = ref(false)
   const isSubmitting = ref(false)
   const error = ref<string | null>(null)
@@ -202,7 +204,7 @@
     if (e.year < s.year || (e.year === s.year && e.month < s.month)) {
       return 'La date de fin doit être après la date de début'
     }
-    if (!name.value.trim()) return 'Donne un nom au budget'
+    if (!name.value.trim()) return 'Donnez un nom au budget'
     return null
   })
 
@@ -508,8 +510,12 @@
       deductReimbursements,
       deductPendingReimbursements,
     ],
-    async ([source, , , stepValue]) => {
+    async ([source, , , stepValue], [, , , previousStepValue]) => {
       if (stepValue !== 2) return
+      // Coming back from the envelopes must not reload: a reload re-seeds
+      // the entries and would wipe what was just typed on step 3. Loading
+      // happens on 1 → 2 and on any option change while step 2 is active.
+      if (previousStepValue === 3) return
       if (source === 'averages') {
         // loadAveragesPreview already populates referenceIncomeAvg
         await loadAveragesPreview()
@@ -527,17 +533,23 @@
   )
 
   // ── Step transitions ─────────────────────────────────────────────────────
-  function goToStep2() {
+  function nextStep() {
     error.value = null
-    if (step1Error.value) {
-      error.value = step1Error.value
-      return
+    if (step.value === 1) {
+      if (step1Error.value) {
+        error.value = step1Error.value
+        return
+      }
+      step.value = 2
+    } else if (step.value === 2) {
+      step.value = 3
     }
-    step.value = 2
   }
 
-  function backToStep1() {
-    step.value = 1
+  function prevStep() {
+    error.value = null
+    if (step.value === 3) step.value = 2
+    else if (step.value === 2) step.value = 1
   }
 
   // ── Manual entry edit ────────────────────────────────────────────────────
@@ -724,15 +736,15 @@
         <div
           class="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700"
         >
-          <div>
+          <div class="min-w-0">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
               Nouveau budget
             </h2>
-            <p class="text-xs text-gray-500 dark:text-gray-400">
-              Étape {{ step }} sur 2 ·
-              <span v-if="step === 1">Plage et nom</span>
-              <span v-else>Montants initiaux</span>
-            </p>
+            <StepIndicator
+              class="mt-2 justify-start"
+              :steps="STEP_LABELS"
+              :current="step"
+            />
           </div>
           <button
             type="button"
@@ -854,8 +866,8 @@
             </div>
           </div>
 
-          <!-- Step 2 -->
-          <div v-else class="space-y-5">
+          <!-- Step 2 : how the envelopes start -->
+          <div v-else-if="step === 2" class="space-y-5">
             <div>
               <label
                 class="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
@@ -1065,8 +1077,10 @@
                 Aucun plan précédent disponible.
               </p>
             </div>
+          </div>
 
-            <!-- Preview / editable entries -->
+          <!-- Step 3 : the envelopes themselves, and the savings equation -->
+          <div v-else class="space-y-5">
             <div>
               <div class="flex items-center justify-between mb-2 gap-3">
                 <label
@@ -1182,7 +1196,7 @@
                     v-if="savingsTarget === null"
                     class="text-indigo-700/80 dark:text-indigo-400/80 leading-snug"
                   >
-                    Décide-la avant de répartir le reste : ce plan dégage
+                    Décidez-la avant de répartir le reste : ce plan dégage
                     actuellement
                     {{ formatCurrency(projectedSavings) }} / mois.
                   </span>
@@ -1226,7 +1240,7 @@
                   "
                 >
                   <template v-if="reserveGap < 0">
-                    Tes événements ont coûté
+                    Vos événements ont coûté
                     {{ formatCurrency(lookbackExceptionalPerMonth) }} / mois sur
                     {{ referenceIncomeLabel }}. Il manque
                     <strong>{{ formatCurrency(-reserveGap) }} / mois</strong> :
@@ -1234,7 +1248,7 @@
                     un projet.
                   </template>
                   <template v-else>
-                    Tes événements ont coûté
+                    Vos événements ont coûté
                     {{ formatCurrency(lookbackExceptionalPerMonth) }} / mois sur
                     {{ referenceIncomeLabel }} — ce plan en finance le train
                     habituel, avec
@@ -1355,11 +1369,12 @@
           class="flex items-center justify-between px-5 py-4 border-t border-gray-100 dark:border-slate-700"
         >
           <button
-            v-if="step === 2"
+            v-if="step > 1"
             type="button"
+            data-testid="prev-step-button"
             class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
             :disabled="isSubmitting"
-            @click="backToStep1"
+            @click="prevStep"
           >
             ← Retour
           </button>
@@ -1374,11 +1389,11 @@
               Annuler
             </button>
             <button
-              v-if="step === 1"
+              v-if="step < 3"
               type="button"
               data-testid="next-step-button"
               class="px-4 py-1.5 text-sm font-medium bg-primary-600 dark:bg-primary-500 text-white rounded-md hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              @click="goToStep2"
+              @click="nextStep"
             >
               Suivant →
             </button>
