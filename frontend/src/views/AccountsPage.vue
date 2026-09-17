@@ -16,6 +16,7 @@
   import type { BankConnectionDto, SyncOutcomeDto } from '@/lib/api'
   import { useAccountsStore } from '@/stores/accounts'
   import { useToast } from '@/composables/useToast'
+  import { formatCurrency } from '@/lib/formatters'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
@@ -58,6 +59,34 @@
   const manualAccounts = computed(() =>
     accountsStore.sortedAccounts.filter(a => !linkedAccountIds.value.has(a.id))
   )
+
+  /**
+   * Le solde par compte local, tiré des liens bancaires. Uniquement pour
+   * les comptes synchronisés : un compte CSV n'a pas de solde fiable, et
+   * l'afficher vide le dirait mieux qu'un zéro trompeur.
+   */
+  const balanceByAccountId = computed(() => {
+    const map = new Map<
+      string,
+      { amount: number; currency: string | null; at: string | null }
+    >()
+    for (const connection of connections.value) {
+      for (const discovered of connection.accounts) {
+        if (discovered.accountId && discovered.balance) {
+          map.set(discovered.accountId, discovered.balance)
+        }
+      }
+    }
+    return map
+  })
+
+  function formatBalanceDate(value: string | null): string | null {
+    if (!value) return null
+    return new Date(value).toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+    })
+  }
 
   // ── État par connexion, dérivé de ce que la policy backend a déjà décidé ──
   type BadgeTone = 'ok' | 'warn' | 'danger'
@@ -393,19 +422,56 @@
                 >
                   {{ account.name }}
                 </span>
-                <svg
-                  class="h-4 w-4 shrink-0 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
+                <span class="flex shrink-0 items-center gap-3">
+                  <span
+                    v-if="balanceByAccountId.get(account.id)"
+                    :data-testid="`balance-${account.name}`"
+                    class="text-right leading-tight"
+                  >
+                    <span
+                      class="block text-sm font-semibold tabular-nums"
+                      :class="
+                        balanceByAccountId.get(account.id)!.amount < 0
+                          ? 'text-red-600 dark:text-red-400'
+                          : 'text-gray-900 dark:text-gray-100'
+                      "
+                    >
+                      {{
+                        formatCurrency(
+                          balanceByAccountId.get(account.id)!.amount
+                        )
+                      }}
+                    </span>
+                    <span
+                      v-if="
+                        formatBalanceDate(
+                          balanceByAccountId.get(account.id)!.at
+                        )
+                      "
+                      class="block text-[10px] text-gray-500 dark:text-gray-400"
+                    >
+                      au
+                      {{
+                        formatBalanceDate(
+                          balanceByAccountId.get(account.id)!.at
+                        )
+                      }}
+                    </span>
+                  </span>
+                  <svg
+                    class="h-4 w-4 shrink-0 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </span>
               </RouterLink>
             </li>
           </ul>

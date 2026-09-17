@@ -843,6 +843,15 @@ model BankAccountLink {
   /// mistake to avoid.
   isIngested Boolean @default(false) @map("is_ingested")
 
+  /// The last balance the bank reported at sync time — closing booked
+  /// (CLBD) when offered, the bank's first answer otherwise. Absent until a
+  /// sync has read one; a CSV import never produces one, which is why the
+  /// balance lives on the link and not on the Account.
+  balanceAmount   Decimal?  @map("balance_amount") @db.Decimal(12, 2)
+  balanceCurrency String?   @map("balance_currency")
+  /// The bank's reference date for that figure, not our fetch time.
+  balanceAt       DateTime? @map("balance_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

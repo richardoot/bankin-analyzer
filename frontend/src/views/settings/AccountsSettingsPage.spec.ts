@@ -73,6 +73,7 @@ function discoveredAccount(
     accountId: null,
     accountLabel: null,
     isIngested: false,
+    balance: null,
     suggestion: null,
     warning: null,
     ...overrides,

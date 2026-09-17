@@ -918,6 +918,15 @@ export interface DiscoveredAccountDto {
   accountId: string | null
   accountLabel: string | null
   isIngested: boolean
+  /**
+   * Le dernier solde lu à la synchro — absent tant qu'aucune synchro n'en a
+   * rapporté (un import CSV n'en produit jamais).
+   */
+  balance: {
+    amount: number
+    currency: string | null
+    at: string | null
+  } | null
   /** What the transactions suggest, when there is history to reason from. */
   suggestion: {
     accountId: string

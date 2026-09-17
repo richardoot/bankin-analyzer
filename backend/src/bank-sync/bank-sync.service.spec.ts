@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
 import { BadRequestException, NotFoundException } from '@nestjs/common'
-import { BankSyncService, syncPolicyOptionsFromEnv } from './bank-sync.service'
+import { BankSyncService, syncPolicyOptionsFromEnv, pickBookedBalance } from './bank-sync.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { EnableBankingClient } from './enable-banking.client'
 import { EnableBankingCredentialsService } from './enable-banking-credentials.service'
@@ -1235,5 +1235,39 @@ describe('syncPolicyOptionsFromEnv', () => {
     process.env.BANK_SYNC_MIN_INTERVAL_HOURS = 'soon'
     process.env.BANK_SYNC_MAX_FETCHES_PER_DAY = 'many'
     expect(syncPolicyOptionsFromEnv()).toEqual({})
+  })
+})
+
+describe('pickBookedBalance', () => {
+  it('prefers the closing booked figure whatever the bank ordered', () => {
+    const picked = pickBookedBalance([
+      {
+        balance_type: 'ITAV',
+        balance_amount: { amount: '900.00', currency: 'EUR' },
+      },
+      {
+        balance_type: 'CLBD',
+        balance_amount: { amount: '1234.56', currency: 'EUR' },
+        reference_date: '2026-09-16',
+      },
+    ])
+    expect(picked).toMatchObject({ amount: 1234.56, currency: 'EUR' })
+    expect(picked?.at.toISOString()).toBe('2026-09-16T00:00:00.000Z')
+  })
+
+  it('falls past a figure that does not parse instead of storing NaN', () => {
+    const picked = pickBookedBalance([
+      { balance_type: 'CLBD', balance_amount: { amount: 'not-a-number' } },
+      {
+        balance_type: 'ITBD',
+        balance_amount: { amount: '42.10', currency: 'EUR' },
+      },
+    ])
+    expect(picked).toMatchObject({ amount: 42.1 })
+  })
+
+  it('returns null when the bank offered nothing usable', () => {
+    expect(pickBookedBalance([])).toBeNull()
+    expect(pickBookedBalance([{ balance_type: 'CLBD' }])).toBeNull()
   })
 })

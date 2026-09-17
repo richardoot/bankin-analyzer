@@ -32,6 +32,7 @@ import {
 import {
   EnableBankingClient,
   type BankAccountResource,
+  type BankBalance,
   type BankTransaction,
   type EnableBankingCredentials,
   type PsuContext,
@@ -56,6 +57,37 @@ import {
 import { TransactionSource } from '../generated/prisma'
 
 /** What a bank account looks like once a person has to decide about it. */
+/**
+ * Which of the bank's balances to keep: closing booked (CLBD) when offered —
+ * the accounting figure a person means by « solde » — then interim booked
+ * (ITBD), then whatever the bank listed first. Amounts arrive as strings;
+ * one that does not parse is treated as not offered at all.
+ */
+const BALANCE_TYPE_RANK: Record<string, number> = { CLBD: 0, ITBD: 1 }
+
+export function pickBookedBalance(
+  balances: BankBalance[]
+): { amount: number; currency: string | null; at: Date } | null {
+  const byPreference = [...balances].sort(
+    (a, b) =>
+      (BALANCE_TYPE_RANK[a.balance_type ?? ''] ?? 2) -
+      (BALANCE_TYPE_RANK[b.balance_type ?? ''] ?? 2)
+  )
+  for (const candidate of byPreference) {
+    const amount = Number(candidate.balance_amount?.amount)
+    if (!Number.isFinite(amount)) continue
+    return {
+      amount,
+      currency: candidate.balance_amount?.currency ?? null,
+      // The bank's reference date when it names one; our clock otherwise.
+      at: candidate.reference_date
+        ? new Date(candidate.reference_date)
+        : new Date(),
+    }
+  }
+  return null
+}
+
 export interface DiscoveredAccount {
   linkId: string
   externalAccountId: string
@@ -69,6 +101,15 @@ export interface DiscoveredAccount {
   accountId: string | null
   accountLabel: string | null
   isIngested: boolean
+  /**
+   * The last balance a sync read for this bank account. Null until one has —
+   * a link created by authorization alone has never been asked.
+   */
+  balance: {
+    amount: number
+    currency: string | null
+    at: string | null
+  } | null
   /**
    * What the transactions suggest, and how strongly. Absent for an account
    * with no history to reason from — a fresh ledger, or a bank the export
@@ -503,6 +544,14 @@ export class BankSyncService {
         accountId: link.accountId,
         accountLabel: link.account?.name ?? null,
         isIngested: link.isIngested,
+        balance:
+          link.balanceAmount !== null
+            ? {
+                amount: Number(link.balanceAmount),
+                currency: link.balanceCurrency,
+                at: link.balanceAt?.toISOString() ?? null,
+              }
+            : null,
         suggestion: suggestions.get(link.externalAccountId) ?? null,
         warning: link.cashAccountType === 'CARD' ? CARD_ACCOUNT_WARNING : null,
       })),
@@ -1383,6 +1432,33 @@ export class BankSyncService {
           }
         )
       )
+
+      // The balance of the moment, while the session is answering anyway.
+      // A failure here never fails the sync: the transactions are the
+      // product, the balance a perishable snapshot the next sync retakes.
+      try {
+        const balances = await this.client.getBalances(
+          credentials,
+          link.externalAccountId,
+          psu
+        )
+        const picked = pickBookedBalance(balances)
+        if (picked) {
+          await this.prisma.bankAccountLink.update({
+            where: { id: link.id },
+            data: {
+              balanceAmount: picked.amount,
+              balanceCurrency: picked.currency,
+              balanceAt: picked.at,
+            },
+          })
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Balance read failed for "${link.accountName}": ` +
+            (error instanceof Error ? error.message : String(error))
+        )
+      }
     }
 
     const outcome = await this.ingest(

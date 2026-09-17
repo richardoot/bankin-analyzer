@@ -104,6 +104,7 @@ describe('AccountsPage', () => {
             accountId: 'a1',
             accountLabel: 'Compte courant',
             isIngested: true,
+            balance: null,
             suggestion: null,
             warning: null,
           },
@@ -247,5 +248,47 @@ describe('AccountsPage', () => {
       withoutLogo.find('[data-testid="bank-logo-tile"] img').exists()
     ).toBe(false)
     expect(withoutLogo.get('[data-testid="bank-logo-tile"]').text()).toBe('B')
+  })
+
+  it('shows the synced balance on the linked account, nothing on CSV accounts', async () => {
+    vi.mocked(api.getAccounts).mockResolvedValue([
+      account('a1', 'Compte courant'),
+      account('a2', 'PEL'),
+    ])
+    vi.mocked(api.getBankConnections).mockResolvedValue([
+      connection({
+        id: 'c1',
+        accounts: [
+          {
+            linkId: 'l1',
+            externalAccountId: 'ext1',
+            accountName: 'CC',
+            product: null,
+            cashAccountType: 'CACC',
+            iban: null,
+            accountId: 'a1',
+            accountLabel: 'Compte courant',
+            isIngested: true,
+            balance: {
+              amount: -1234.56,
+              currency: 'EUR',
+              at: '2026-09-16T00:00:00.000Z',
+            },
+            suggestion: null,
+            warning: null,
+          },
+        ],
+      }),
+    ])
+
+    const wrapper = await mountPage()
+
+    const balance = wrapper.get('[data-testid="balance-Compte courant"]')
+    expect(balance.text()).toMatch(/1\s?234,56/)
+    expect(balance.text()).toContain('au 16 sept')
+    // Negative balances read as such.
+    expect(balance.find('.text-red-600').exists()).toBe(true)
+    // A CSV account never claims a balance it cannot know.
+    expect(wrapper.find('[data-testid="balance-PEL"]').exists()).toBe(false)
   })
 })
