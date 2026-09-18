@@ -31,6 +31,7 @@ model User {
   bankStagedTransactions BankStagedTransaction[]
   bankConnections       BankConnection[]
   bankAccountLinks      BankAccountLink[]
+  balanceSnapshots      BankAccountBalanceSnapshot[]
   bankAuthorizationAttempts BankAuthorizationAttempt[]
   accountAliases        AccountAlias[]
   enableBankingCredential EnableBankingCredential?
@@ -873,7 +874,35 @@ model BankAccountLink {
   @@index([accountId])
   @@map("bank_account_links")
   @@schema("app")
+  snapshots BankAccountBalanceSnapshot[]
+
 }
+
+/// One balance point per bank account per day, written at sync time. The
+/// link keeps only the latest figure; this table keeps the series a future
+/// evolution chart will read. One row per (link, day): the sync quota allows
+/// three fetches a day and the last figure of the day wins.
+model BankAccountBalanceSnapshot {
+  id     String @id @default(uuid())
+  linkId String @map("link_id")
+  userId String @map("user_id")
+
+  amount   Decimal @db.Decimal(12, 2)
+  currency String?
+
+  /// The bank's reference date for the figure — the series' x axis, never
+  /// our fetch clock.
+  referenceDate DateTime @map("reference_date") @db.Date
+  capturedAt    DateTime @default(now()) @map("captured_at")
+
+  link BankAccountLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  user User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([linkId, referenceDate])
+  @@map("bank_account_balance_snapshots")
+  @@schema("app")
+}
+
 
 /// A label an import has used for an account.
 ///

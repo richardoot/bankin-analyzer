@@ -65,6 +65,13 @@ import { TransactionSource } from '../generated/prisma'
  */
 const BALANCE_TYPE_RANK: Record<string, number> = { CLBD: 0, ITBD: 1 }
 
+/** The calendar day a figure belongs to, in UTC — the snapshot key. */
+export function utcDayOf(date: Date): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  )
+}
+
 export function pickBookedBalance(
   balances: BankBalance[]
 ): { amount: number; currency: string | null; at: Date } | null {
@@ -1451,6 +1458,23 @@ export class BankSyncService {
               balanceCurrency: picked.currency,
               balanceAt: picked.at,
             },
+          })
+          // The series point a future chart will read: one per (link, day),
+          // the last figure of the day winning over the earlier ones the
+          // three-a-day quota allows.
+          const referenceDate = utcDayOf(picked.at)
+          await this.prisma.bankAccountBalanceSnapshot.upsert({
+            where: {
+              linkId_referenceDate: { linkId: link.id, referenceDate },
+            },
+            create: {
+              linkId: link.id,
+              userId,
+              amount: picked.amount,
+              currency: picked.currency,
+              referenceDate,
+            },
+            update: { amount: picked.amount, currency: picked.currency },
           })
         }
       } catch (error) {

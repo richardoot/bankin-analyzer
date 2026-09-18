@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
 import { BadRequestException, NotFoundException } from '@nestjs/common'
-import { BankSyncService, syncPolicyOptionsFromEnv, pickBookedBalance } from './bank-sync.service'
+import {
+  BankSyncService,
+  syncPolicyOptionsFromEnv,
+  pickBookedBalance,
+  utcDayOf,
+} from './bank-sync.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { EnableBankingClient } from './enable-banking.client'
 import { EnableBankingCredentialsService } from './enable-banking-credentials.service'
@@ -1269,5 +1274,17 @@ describe('pickBookedBalance', () => {
   it('returns null when the bank offered nothing usable', () => {
     expect(pickBookedBalance([])).toBeNull()
     expect(pickBookedBalance([{ balance_type: 'CLBD' }])).toBeNull()
+  })
+})
+
+describe('utcDayOf', () => {
+  it('strips the time and keeps the UTC day', () => {
+    expect(utcDayOf(new Date('2026-09-16T23:45:12.345Z')).toISOString()).toBe(
+      '2026-09-16T00:00:00.000Z'
+    )
+    // A date-only figure passes through unchanged.
+    expect(utcDayOf(new Date('2026-09-16')).toISOString()).toBe(
+      '2026-09-16T00:00:00.000Z'
+    )
   })
 })
