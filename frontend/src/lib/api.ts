@@ -944,6 +944,9 @@ export interface BankConnectionDto {
   status: string
   consentValidUntil: string | null
   lastSyncAt: string | null
+  /** Ce que la dernière synchro en échec a dit — null après un succès. */
+  lastSyncError: string | null
+  lastSyncErrorAt: string | null
   /** What pressing sync would do right now. */
   action: 'fetch' | 'skip' | 'reconnect'
   reason: string

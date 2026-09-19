@@ -357,6 +357,22 @@
                   </template>
                   <template v-else>Jamais synchronisée</template>
                 </p>
+                <!-- Ce que la dernière synchro (souvent la nocturne, qui n'a
+                   pas d'écran) a laissé comme message d'échec. Un succès
+                   l'efface. -->
+                <p
+                  v-if="connection.lastSyncError"
+                  data-testid="sync-error"
+                  class="mt-1 text-xs text-red-600 dark:text-red-400"
+                >
+                  Dernière synchronisation en échec<template
+                    v-if="connection.lastSyncErrorAt"
+                  >
+                    le
+                    {{ formatDateTime(connection.lastSyncErrorAt) }}</template
+                  >
+                  : {{ connection.lastSyncError }}
+                </p>
                 <!-- La raison de la policy, jamais tue : quota, intervalle,
                    demande de la banque. -->
                 <p
