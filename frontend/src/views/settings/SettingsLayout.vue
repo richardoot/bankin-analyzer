@@ -25,7 +25,7 @@
 
 <template>
   <div
-    class="min-h-[calc(100vh-4rem)] bg-gray-50 py-12 transition-colors dark:bg-slate-800"
+    class="min-h-[calc(100vh-4rem)] bg-gray-50 py-6 sm:py-12 transition-colors dark:bg-slate-800"
   >
     <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
       <PageHeader

@@ -122,7 +122,7 @@
 <template>
   <div
     data-testid="dashboard-container"
-    class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors"
+    class="min-h-screen bg-gray-50 dark:bg-slate-800 py-6 sm:py-8 transition-colors"
   >
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <PageHeader title="Dashboard" subtitle="Vue d'ensemble de vos finances">

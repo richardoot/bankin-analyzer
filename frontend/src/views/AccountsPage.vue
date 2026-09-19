@@ -274,7 +274,9 @@
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 py-8 transition-colors dark:bg-slate-800">
+  <div
+    class="min-h-screen bg-gray-50 py-6 sm:py-8 transition-colors dark:bg-slate-800"
+  >
     <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
       <PageHeader
         title="Comptes"

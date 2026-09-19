@@ -14,6 +14,7 @@
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import BaseField from '@/components/ui/BaseField.vue'
   import FilterChips from '@/components/ui/FilterChips.vue'
+  import FilterDisclosure from '@/components/ui/FilterDisclosure.vue'
   import type { FilterChip } from '@/components/ui/FilterChips.vue'
 
   const PRIMARY_SHADES = [
@@ -58,6 +59,7 @@
   const isModalOpen = ref(false)
   const isConfirmOpen = ref(false)
   const isButtonLoading = ref(false)
+  const demoFilterOpen = ref(true)
   const demoField = ref('')
   const demoFieldError = ref<string | undefined>(undefined)
 
@@ -80,7 +82,9 @@
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 py-8 transition-colors dark:bg-slate-800">
+  <div
+    class="min-h-screen bg-gray-50 py-6 sm:py-8 transition-colors dark:bg-slate-800"
+  >
     <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
       <PageHeader
         title="Référence design"
@@ -215,6 +219,57 @@
             >
               (toutes retirées — rechargez la page)
             </p>
+          </div>
+        </section>
+
+        <!-- Filter card -->
+        <section
+          class="rounded-xl bg-white p-6 shadow-sm dark:bg-slate-900 dark:shadow-slate-900/20"
+        >
+          <h2
+            class="mb-1 text-xl font-semibold text-gray-900 dark:text-gray-100"
+          >
+            FilterDisclosure
+          </h2>
+          <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+            Tout visible sur un bureau ; sous 768px les contrôles se replient
+            derrière « Filtres » et la recherche reste seule en tête. Ci-dessous
+            : repliée par défaut, puis ouverte.
+          </p>
+          <div class="space-y-4 bg-gray-50 p-3 dark:bg-slate-800">
+            <FilterDisclosure
+              v-for="variant in ['folded', 'open']"
+              :key="variant"
+              :active-count="variant === 'open' ? 2 : 0"
+              :expanded="variant === 'open' ? demoFilterOpen : false"
+              @update:expanded="variant === 'open' && (demoFilterOpen = $event)"
+            >
+              <template #search>
+                <input
+                  type="search"
+                  placeholder="Rechercher…"
+                  class="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-base md:h-9 md:text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                />
+              </template>
+              <div class="grid grid-cols-2 gap-3 md:flex md:items-end">
+                <label
+                  v-for="name in ['Type', 'Catégorie', 'Compte']"
+                  :key="name"
+                  class="flex flex-col gap-1 text-[11px] font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400"
+                >
+                  {{ name }}
+                  <select
+                    class="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-base font-normal normal-case tracking-normal text-gray-900 md:h-9 md:w-36 md:text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  >
+                    <option>Tous</option>
+                  </select>
+                </label>
+              </div>
+              <template #summary>2 213 transaction(s)</template>
+              <template #actions>
+                <BaseButton variant="secondary" size="sm">Action</BaseButton>
+              </template>
+            </FilterDisclosure>
           </div>
         </section>
 
