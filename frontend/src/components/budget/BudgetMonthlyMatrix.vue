@@ -93,7 +93,7 @@
       <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
         Mois par mois
       </h2>
-      <p class="text-xs text-gray-500 dark:text-gray-400">
+      <p class="hidden text-xs text-gray-500 sm:block dark:text-gray-400">
         Rouge : l'enveloppe du mois est dépassée. Clique un mois pour n'afficher
         que celui-là.
       </p>
@@ -101,24 +101,24 @@
 
     <!-- The table is the one thing on this page that legitimately grows wider
          than the viewport, so it scrolls inside its own box. -->
-    <div class="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+    <div class="overflow-x-auto -mx-4 sm:mx-0">
       <table class="min-w-full text-sm border-separate border-spacing-0">
         <thead>
           <tr>
             <th
-              class="sticky left-0 z-10 bg-white dark:bg-slate-900 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pb-2 pr-3"
+              class="sticky left-0 z-10 bg-white dark:bg-slate-900 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 pb-2 pl-4 pr-3 sm:pl-0"
             >
               Catégorie
             </th>
             <th
-              class="text-right text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-400 pb-2 px-3 whitespace-nowrap"
+              class="text-right text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-400 pb-2 px-2 sm:px-3 whitespace-nowrap"
             >
               Budget
             </th>
             <th
               v-for="month in months"
               :key="month.ym"
-              class="pb-2 px-3 whitespace-nowrap"
+              class="pb-2 px-2 sm:px-3 whitespace-nowrap"
             >
               <button
                 type="button"
@@ -145,7 +145,7 @@
             class="border-t border-gray-100 dark:border-slate-700"
           >
             <td
-              class="sticky left-0 z-10 bg-white dark:bg-slate-900 py-1.5 pr-3 max-w-[14rem]"
+              class="sticky left-0 z-10 bg-white dark:bg-slate-900 py-1.5 pl-4 pr-3 max-w-[8rem] sm:pl-0 sm:max-w-[14rem]"
             >
               <span class="flex items-center gap-1.5 min-w-0">
                 <span v-if="row.categoryIcon" class="shrink-0">
@@ -157,7 +157,7 @@
               </span>
             </td>
             <td
-              class="py-1.5 px-3 text-right tabular-nums whitespace-nowrap text-primary-700 dark:text-primary-400"
+              class="py-1.5 px-2 sm:px-3 text-right tabular-nums whitespace-nowrap text-primary-700 dark:text-primary-400"
             >
               <span v-if="row.budget > 0">
                 {{ formatCurrency(row.budget) }}
@@ -168,7 +168,7 @@
               v-for="(month, index) in months"
               :key="month.ym"
               :data-testid="`matrix-cell-${row.categoryName}-${month.ym}`"
-              class="py-1.5 px-3 text-right tabular-nums whitespace-nowrap rounded"
+              class="py-1.5 px-2 sm:px-3 text-right tabular-nums whitespace-nowrap rounded"
               :class="CELL_TONE[toneFor(row, index)]"
               :title="cellTitle(row, index)"
             >
@@ -184,7 +184,7 @@
               Total
             </td>
             <td
-              class="py-2 px-3 text-right tabular-nums font-semibold text-primary-700 dark:text-primary-400 whitespace-nowrap"
+              class="py-2 px-2 sm:px-3 text-right tabular-nums font-semibold text-primary-700 dark:text-primary-400 whitespace-nowrap"
             >
               {{ formatCurrency(budgetTotal) }}
             </td>
@@ -192,7 +192,7 @@
               v-for="(total, index) in monthTotals"
               :key="months[index]?.ym ?? index"
               :data-testid="`matrix-total-${months[index]?.ym}`"
-              class="py-2 px-3 text-right tabular-nums font-semibold whitespace-nowrap"
+              class="py-2 px-2 sm:px-3 text-right tabular-nums font-semibold whitespace-nowrap"
               :class="
                 budgetTotal > 0 && total > budgetTotal
                   ? 'text-red-600 dark:text-red-400'

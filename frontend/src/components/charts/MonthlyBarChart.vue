@@ -3,6 +3,7 @@
   import VueApexCharts from 'vue3-apexcharts'
   import type { ApexOptions } from 'apexcharts'
   import { useChartTheme } from '@/composables/useChartTheme'
+  import { useIsMobile } from '@/composables/useMediaQuery'
 
   export interface ChartData {
     labels: string[]
@@ -22,6 +23,9 @@
   )
 
   const { isDark, labelColor, chartTheme } = useChartTheme()
+  // A 300px chart with twelve full-currency ticks is unreadable at 375px:
+  // shorter, compact axis labels, rotated month names.
+  const isMobile = useIsMobile()
 
   // Compute colors array based on positive/negative values
   const barColors = computed(() =>
@@ -55,9 +59,12 @@
     xaxis: {
       categories: props.data.labels,
       labels: {
+        rotate: -45,
+        rotateAlways: isMobile.value,
+        hideOverlappingLabels: true,
         style: {
           colors: labelColor.value,
-          fontSize: '12px',
+          fontSize: isMobile.value ? '11px' : '12px',
         },
       },
       axisBorder: {
@@ -68,16 +75,18 @@
       },
     },
     yaxis: {
+      ...(isMobile.value ? { tickAmount: 4 } : {}),
       labels: {
         style: {
           colors: labelColor.value,
-          fontSize: '12px',
+          fontSize: isMobile.value ? '11px' : '12px',
         },
         formatter: (value: number) => {
           return new Intl.NumberFormat('fr-FR', {
             style: 'currency',
             currency: 'EUR',
-            maximumFractionDigits: 0,
+            maximumFractionDigits: isMobile.value ? 1 : 0,
+            ...(isMobile.value ? { notation: 'compact' as const } : {}),
           }).format(value)
         },
       },
@@ -113,7 +122,7 @@
     <VueApexCharts
       :key="isDark ? 'dark' : 'light'"
       type="bar"
-      height="300"
+      :height="isMobile ? 220 : 300"
       :options="chartOptions"
       :series="series"
     />

@@ -3,6 +3,7 @@
   import VueApexCharts from 'vue3-apexcharts'
   import type { ApexOptions } from 'apexcharts'
   import { useChartTheme } from '@/composables/useChartTheme'
+  import { useIsMobile } from '@/composables/useMediaQuery'
 
   export interface ChartData {
     labels: string[]
@@ -23,6 +24,8 @@
 
   const { isDark, strokeColor, donutNameColor, donutValueColor } =
     useChartTheme()
+  // No hover on a touch screen: the legend is the only way to name a slice.
+  const isMobile = useIsMobile()
 
   const PALETTE = [
     '#f97316', // orange-500
@@ -116,7 +119,13 @@
     },
     labels: processedData.value.labels,
     legend: {
-      show: false,
+      show: isMobile.value,
+      position: 'bottom',
+      fontSize: '12px',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      labels: { colors: donutNameColor.value },
+      markers: { size: 5 },
+      itemMargin: { horizontal: 6, vertical: 2 },
     },
     dataLabels: {
       enabled: false,
@@ -161,7 +170,7 @@
             },
             value: {
               show: true,
-              fontSize: '24px',
+              fontSize: isMobile.value ? '18px' : '24px',
               fontFamily: 'Inter, system-ui, sans-serif',
               fontWeight: 700,
               color: donutValueColor.value,
