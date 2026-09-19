@@ -26,6 +26,7 @@
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import FilterChips from '@/components/ui/FilterChips.vue'
+  import FilterDisclosure from '@/components/ui/FilterDisclosure.vue'
   import type { FilterChip } from '@/components/ui/FilterChips.vue'
   import { useToast } from '@/composables/useToast'
 
@@ -1104,48 +1105,54 @@
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors">
+  <div
+    class="min-h-screen bg-gray-50 dark:bg-slate-800 py-6 sm:py-8 transition-colors"
+  >
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <PageHeader
         title="Transactions"
         subtitle="Gérez vos transactions, modifiez les catégories et assignez des remboursements"
       />
 
-      <!-- Filters -->
-      <div
+      <!-- Filters: every control on a desk, folded behind « Filtres » on a
+           phone (the chips below stay as the summary of what is active). -->
+      <FilterDisclosure
         data-testid="transactions-filter-area"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 mb-6"
+        class="mb-6"
+        :active-count="activeFilterChips.length"
       >
         <!-- Keyword search bar -->
-        <div class="relative">
-          <svg
-            class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 dark:text-gray-400 pointer-events-none"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+        <template #search>
+          <div class="relative">
+            <svg
+              class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 dark:text-gray-400 pointer-events-none"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <input
+              v-model="searchKeyword"
+              type="search"
+              data-testid="transactions-search-input"
+              placeholder="Rechercher par mot-clé (libellé, note, sous-catégorie)..."
+              class="w-full pl-10 pr-3 py-3 md:py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
             />
-          </svg>
-          <input
-            v-model="searchKeyword"
-            type="search"
-            data-testid="transactions-search-input"
-            placeholder="Rechercher par mot-clé (libellé, note, sous-catégorie)..."
-            class="w-full pl-10 pr-3 py-3 md:py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
-          />
-        </div>
+          </div>
+        </template>
 
         <!-- Filter groups: each control carries an uppercase label so the
              different filters can be told apart at a glance. Naturally paired
              ranges (dates, amounts) are grouped with an inline separator, and
              vertical rules cluster the three families. -->
         <div
-          class="mt-4 grid grid-cols-2 gap-x-3 gap-y-4 md:flex md:flex-wrap md:items-end md:gap-x-4 md:gap-y-3"
+          class="grid grid-cols-2 gap-x-3 gap-y-3 md:flex md:flex-wrap md:items-end md:gap-x-4 md:gap-y-3"
         >
           <!-- Type -->
           <div class="flex flex-col gap-1">
@@ -1381,70 +1388,68 @@
           </div>
         </div>
 
-        <!-- Footer: result count + actions -->
-        <div
-          class="mt-4 flex items-center justify-between gap-2 border-t border-gray-200 pt-3 dark:border-slate-700"
-        >
-          <span
-            aria-live="polite"
-            class="text-sm text-gray-500 dark:text-gray-400"
-          >
-            {{ totalTransactions }} transaction(s)
+        <!-- Toolbar: result count + actions -->
+        <template #summary>
+          <span aria-live="polite">
+            <span class="md:hidden">{{ totalTransactions }} résultat(s)</span>
+            <span class="hidden md:inline"
+              >{{ totalTransactions }} transaction(s)</span
+            >
           </span>
+        </template>
 
-          <div class="flex items-center gap-2">
-            <!-- Reset filters button -->
-            <button
-              v-if="hasActiveFilters"
-              class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-              @click="resetFilters"
+        <template #actions>
+          <!-- Reset filters button -->
+          <button
+            v-if="hasActiveFilters"
+            class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+            @click="resetFilters"
+          >
+            <svg
+              class="h-5 w-5 md:h-4 md:w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              <svg
-                class="h-5 w-5 md:h-4 md:w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-              <span class="hidden md:inline md:ml-1.5">Réinitialiser</span>
-            </button>
-            <!-- Selection mode toggle -->
-            <button
-              class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium rounded-lg transition-colors"
-              :class="
-                isSelectionMode
-                  ? 'text-primary-700 dark:text-primary-300 bg-primary-100 dark:bg-primary-900/40 border border-primary-300 dark:border-primary-700'
-                  : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600'
-              "
-              data-testid="toggle-selection-mode"
-              @click="toggleSelectionMode"
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+            <span class="hidden md:inline md:ml-1.5">Réinitialiser</span>
+          </button>
+          <!-- Selection mode toggle -->
+          <button
+            class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium rounded-lg transition-colors"
+            :class="
+              isSelectionMode
+                ? 'text-primary-700 dark:text-primary-300 bg-primary-100 dark:bg-primary-900/40 border border-primary-300 dark:border-primary-700'
+                : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600'
+            "
+            data-testid="toggle-selection-mode"
+            @click="toggleSelectionMode"
+          >
+            <svg
+              class="h-5 w-5 md:h-4 md:w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              <svg
-                class="h-5 w-5 md:h-4 md:w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                />
-              </svg>
-              <span class="hidden md:inline md:ml-1.5">{{
-                isSelectionMode ? 'Mode sélection actif' : 'Sélection multiple'
-              }}</span>
-            </button>
-          </div>
-        </div>
-      </div>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+              />
+            </svg>
+            <span class="hidden md:inline md:ml-1.5">{{
+              isSelectionMode ? 'Mode sélection actif' : 'Sélection multiple'
+            }}</span>
+          </button>
+        </template>
+      </FilterDisclosure>
 
       <!-- What the list is currently filtered on, each chip removable -->
       <FilterChips
