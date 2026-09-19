@@ -597,6 +597,11 @@ model BankSyncRun {
   /// row was written, and from the transactions' own dates.
   fetchedAt DateTime @map("fetched_at")
 
+  /// Who asked: MANUAL for a person pressing the button, SCHEDULED for the
+  /// daily cron. The history owes the user that distinction — a sync they
+  /// never started must say so.
+  trigger String @default("MANUAL")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   /// Set once this run has been undone: an inserted row deleted, a claimed

@@ -269,6 +269,15 @@
                   >
                     {{ getStatusLabel(run) }}
                   </span>
+                  <!-- Une synchro que personne n'a lancée le dit. -->
+                  <span
+                    v-if="run.trigger === 'SCHEDULED'"
+                    data-testid="run-auto-badge"
+                    class="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                    title="Synchronisation quotidienne automatique"
+                  >
+                    Auto
+                  </span>
                 </div>
                 <p class="text-sm text-gray-500 dark:text-gray-400">
                   {{ run.aspspName }}

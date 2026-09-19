@@ -1,5 +1,11 @@
 {
   "buildCommand": "pnpm build:vercel",
   "installCommand": "pnpm install",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "crons": [
+    {
+      "path": "/bank-sync/scheduled-run",
+      "schedule": "30 4 * * *"
+    }
+  ]
 }

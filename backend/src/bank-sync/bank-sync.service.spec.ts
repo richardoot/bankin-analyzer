@@ -46,6 +46,7 @@ const mockPrisma = {
   bankConnection: {
     findFirst: vi.fn(),
     findFirstOrThrow: vi.fn(),
+    findMany: vi.fn(),
     upsert: vi.fn(),
     update: vi.fn(),
   },
@@ -1286,5 +1287,77 @@ describe('utcDayOf', () => {
     expect(utcDayOf(new Date('2026-09-16')).toISOString()).toBe(
       '2026-09-16T00:00:00.000Z'
     )
+  })
+})
+
+describe('runScheduledSync', () => {
+  let service: BankSyncService
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        BankSyncService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: EnableBankingClient, useValue: mockClient },
+        {
+          provide: EnableBankingCredentialsService,
+          useValue: mockCredentialsService,
+        },
+        { provide: AiSuggestionsService, useValue: mockAiSuggestions },
+      ],
+    }).compile()
+    service = module.get<BankSyncService>(BankSyncService)
+  })
+
+  const fetchableState = (id: string) => ({
+    id,
+    aspspName: 'Boursorama',
+    status: 'ACTIVE',
+    consentValidUntil: null,
+    lastSyncAt: null,
+    fetchesToday: 0,
+    retryAfter: null,
+  })
+
+  it('syncs what the policy allows, skips the rest, survives a failure', async () => {
+    mockPrisma.bankConnection.findMany.mockResolvedValue([
+      { id: 'c-ok', userId: 'u1', aspspName: 'Boursorama' },
+      { id: 'c-spent', userId: 'u1', aspspName: 'CIC' },
+      { id: 'c-broken', userId: 'u2', aspspName: 'BNP' },
+    ])
+
+    const stateOf = vi
+      .spyOn(
+        service as unknown as {
+          stateOf: (u: string, c: string) => Promise<unknown>
+        },
+        'stateOf'
+      )
+      .mockImplementation(async (_u: string, c: string) =>
+        c === 'c-spent'
+          ? { ...fetchableState(c), fetchesToday: 3 }
+          : fetchableState(c)
+      )
+
+    const sync = vi
+      .spyOn(service, 'sync')
+      .mockImplementation(async (_u, connectionId) => {
+        if (connectionId === 'c-broken') throw new Error('bank said no')
+        return {} as never
+      })
+
+    const summary = await service.runScheduledSync()
+
+    expect(summary).toEqual({
+      considered: 3,
+      synced: 1,
+      skipped: 1,
+      failed: 1,
+    })
+    // The one allowed sync ran unattended (no PSU) and marked SCHEDULED.
+    expect(sync).toHaveBeenCalledWith('u1', 'c-ok', undefined, 'SCHEDULED')
+    expect(sync).toHaveBeenCalledTimes(2)
+    expect(stateOf).toHaveBeenCalledTimes(3)
   })
 })

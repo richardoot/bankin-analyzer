@@ -992,6 +992,8 @@ export interface BankSyncRunDto {
   claimed: number
   /** Set once this run has been undone. */
   undoneAt: string | null
+  /** MANUAL pour un clic, SCHEDULED pour la synchro quotidienne. */
+  trigger: string
 }
 
 /** What undoing a run did, or would do. */
