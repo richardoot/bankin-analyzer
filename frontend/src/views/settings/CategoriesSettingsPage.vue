@@ -438,10 +438,12 @@
       description="Choisissez où apparaît chaque catégorie, gérez ses sous-catégories et son association de remboursement."
     >
       <template #action>
-        <div class="flex flex-wrap gap-2">
+        <div
+          class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap"
+        >
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
+            class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 sm:min-h-0"
             data-testid="open-create-category"
             @click="openCreateModal"
           >
@@ -458,11 +460,12 @@
                 d="M12 4v16m8-8H4"
               />
             </svg>
-            Nouvelle catégorie
+            <span class="sm:hidden">Nouvelle</span>
+            <span class="hidden sm:inline">Nouvelle catégorie</span>
           </button>
           <button
             type="button"
-            class="inline-flex items-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-primary-800 dark:text-primary-300 dark:hover:bg-primary-900/20"
+            class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-medium text-primary-700 sm:min-h-0 transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-primary-800 dark:text-primary-300 dark:hover:bg-primary-900/20"
             :disabled="isGeneratingIcons || missingIconCount === 0"
             :title="
               missingIconCount === 0
@@ -473,11 +476,20 @@
             @click="generateIcons"
           >
             <span>✨</span>
-            {{
-              isGeneratingIcons
-                ? 'Génération…'
-                : `Générer les icônes (${missingIconCount})`
-            }}
+            <span class="sm:hidden">
+              {{
+                isGeneratingIcons
+                  ? 'Génération…'
+                  : `Icônes (${missingIconCount})`
+              }}
+            </span>
+            <span class="hidden sm:inline">
+              {{
+                isGeneratingIcons
+                  ? 'Génération…'
+                  : `Générer les icônes (${missingIconCount})`
+              }}
+            </span>
           </button>
         </div>
       </template>
@@ -489,7 +501,11 @@
       </div>
 
       <div v-else class="space-y-6">
-        <p class="text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+        <!-- Five lines of prose before the list is a screen on a phone;
+             there it folds behind its question, on a desk it reads. -->
+        <p
+          class="hidden text-xs leading-relaxed text-gray-500 sm:block dark:text-gray-400"
+        >
           <strong class="text-gray-700 dark:text-gray-300"
             >Tableau de bord</strong
           >
@@ -500,6 +516,26 @@
           tableau de bord est aussi exclue du budget. Chaque changement est
           enregistré immédiatement.
         </p>
+        <details
+          class="text-xs leading-relaxed text-gray-500 sm:hidden dark:text-gray-400"
+        >
+          <summary
+            class="cursor-pointer py-2 font-medium text-gray-700 dark:text-gray-300"
+          >
+            Que font les colonnes Tableau de bord et Budget ?
+          </summary>
+          <p class="pt-1">
+            <strong class="text-gray-700 dark:text-gray-300"
+              >Tableau de bord</strong
+            >
+            retire la catégorie de toutes les vues ;
+            <strong class="text-gray-700 dark:text-gray-300">Budget</strong>
+            la retire uniquement des budgets, plans et moyennes (utile pour les
+            dépenses exceptionnelles ou les prêts). Une catégorie masquée du
+            tableau de bord est aussi exclue du budget. Chaque changement est
+            enregistré immédiatement.
+          </p>
+        </details>
 
         <!-- Search + quick state filters -->
         <div
@@ -525,7 +561,7 @@
               type="text"
               placeholder="Rechercher une catégorie…"
               aria-label="Rechercher une catégorie"
-              class="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-9 text-sm text-gray-800 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:placeholder-gray-500"
+              class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-9 text-base text-gray-800 placeholder-gray-400 sm:py-2 sm:text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:placeholder-gray-500"
             />
             <button
               v-if="categorySearch"
@@ -551,7 +587,7 @@
           </div>
 
           <div
-            class="inline-flex shrink-0 rounded-lg border border-gray-200 p-0.5 dark:border-slate-700"
+            class="flex shrink-0 rounded-lg border border-gray-200 p-0.5 sm:inline-flex dark:border-slate-700"
             role="group"
             aria-label="Filtrer les catégories par état"
           >
@@ -560,7 +596,7 @@
               :key="opt.key"
               type="button"
               :aria-pressed="categoryStateFilter === opt.key"
-              class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+              class="min-h-[40px] flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:min-h-0 sm:flex-none"
               :class="
                 categoryStateFilter === opt.key
                   ? 'bg-primary-500 text-white dark:bg-primary-600'
@@ -594,7 +630,7 @@
           :key="section.key"
         >
           <div
-            class="mb-1 grid grid-cols-[1fr_5.5rem_5.5rem] items-end gap-3 px-3"
+            class="mb-1 grid grid-cols-[1fr_3rem_3rem] items-end gap-3 px-3 sm:grid-cols-[1fr_5.5rem_5.5rem]"
           >
             <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ section.title }}
@@ -602,7 +638,8 @@
             <span
               class="text-center text-[11px] font-medium leading-tight text-gray-500 dark:text-gray-400"
             >
-              Tableau de bord
+              <span class="sm:hidden">Visible</span>
+              <span class="hidden sm:inline">Tableau de bord</span>
             </span>
             <span
               class="text-center text-[11px] font-medium leading-tight text-gray-500 dark:text-gray-400"
@@ -620,7 +657,7 @@
               data-testid="category-row"
             >
               <div
-                class="grid grid-cols-[1fr_5.5rem_5.5rem] items-center gap-3 px-3 py-2 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/50"
+                class="grid grid-cols-[1fr_3rem_3rem] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-gray-50 sm:grid-cols-[1fr_5.5rem_5.5rem] sm:py-2 dark:hover:bg-slate-800/50"
               >
                 <!-- Name, badges, expander -->
                 <div class="flex min-w-0 items-center gap-2">
@@ -840,14 +877,14 @@
                     type="button"
                     disabled
                     :title="UNAVAILABLE_HINT"
-                    class="cursor-not-allowed rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-400 dark:border-slate-700 dark:text-gray-500"
+                    class="min-h-[40px] flex-1 cursor-not-allowed rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-400 sm:min-h-0 sm:flex-none dark:border-slate-700 dark:text-gray-500"
                   >
                     Changer l'icône
                   </button>
                   <button
                     type="button"
                     :data-testid="`migrate-category-${category.id}`"
-                    class="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-slate-700 dark:text-gray-300 dark:hover:bg-slate-800"
+                    class="min-h-[40px] flex-1 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:min-h-0 sm:flex-none dark:border-slate-700 dark:text-gray-300 dark:hover:bg-slate-800"
                     @click="askMigrate(category)"
                   >
                     Déplacer les transactions…
@@ -855,7 +892,7 @@
                   <button
                     type="button"
                     :data-testid="`delete-category-${category.id}`"
-                    class="rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
+                    class="min-h-[40px] flex-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 sm:min-h-0 sm:flex-none dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
                     @click="askDelete(category)"
                   >
                     Supprimer
@@ -881,7 +918,7 @@
       <Transition name="modal">
         <div
           v-if="isCreateModalOpen"
-          class="fixed inset-0 z-50 flex items-center justify-center"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4"
         >
           <div class="fixed inset-0 bg-black/50" @click="closeCreateModal" />
 
@@ -889,7 +926,7 @@
             ref="createModalPanelRef"
             role="dialog"
             aria-modal="true"
-            class="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900"
+            class="relative z-10 max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl sm:p-6 dark:bg-slate-900"
           >
             <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
               Nouvelle catégorie

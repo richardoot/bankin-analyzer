@@ -227,15 +227,23 @@
       >
         {{ account.name }}
       </span>
+      <!-- A phone shows the first badge and counts the rest: three of
+           them side by side left the account name four characters. -->
       <span class="flex shrink-0 flex-wrap justify-end gap-1">
         <slot name="extra-badges" />
         <span
-          v-for="badge in computeBadges()"
+          v-for="(badge, index) in computeBadges()"
           :key="badge.label"
           class="rounded-full px-2 py-0.5 text-[10px] font-medium"
-          :class="badge.tone"
+          :class="[badge.tone, index > 0 ? 'hidden sm:inline' : '']"
         >
           {{ badge.label }}
+        </span>
+        <span
+          v-if="computeBadges().length > 1"
+          class="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 sm:hidden dark:bg-slate-700 dark:text-gray-300"
+        >
+          +{{ computeBadges().length - 1 }}
         </span>
       </span>
       <svg
@@ -342,7 +350,7 @@
             :aria-pressed="account.type === option.value"
             :disabled="saving"
             :title="option.hint"
-            class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
+            class="min-h-[40px] rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 sm:min-h-0"
             :class="
               account.type === option.value
                 ? 'bg-primary-600 text-white'
@@ -363,7 +371,7 @@
         >
           Diviseur des montants
         </label>
-        <div class="flex items-center gap-3">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
           <input
             :id="`account-divisor-${account.id}`"
             type="number"
@@ -428,21 +436,21 @@
       </div>
 
       <div
-        class="flex flex-wrap gap-2 border-t border-gray-100 pt-4 dark:border-slate-700/60"
+        class="flex flex-col gap-2 border-t border-gray-100 pt-4 sm:flex-row sm:flex-wrap dark:border-slate-700/60"
       >
         <!-- Merging still needs a backend endpoint -->
         <button
           type="button"
           disabled
           :title="UNAVAILABLE_HINT"
-          class="cursor-not-allowed rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-400 dark:border-slate-700 dark:text-gray-500"
+          class="min-h-[44px] cursor-not-allowed rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-400 sm:min-h-0 dark:border-slate-700 dark:text-gray-500"
         >
           Fusionner avec un autre compte…
         </button>
         <button
           type="button"
           :disabled="saving"
-          class="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+          class="min-h-[44px] rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
           data-testid="delete-account"
           @click="emit('ask-delete')"
         >

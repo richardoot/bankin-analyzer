@@ -245,13 +245,13 @@
         <div
           v-for="history in histories"
           :key="history.id"
-          class="rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-lg dark:shadow-slate-900/20 transition-shadow hover:shadow-xl dark:hover:shadow-slate-900/40"
+          class="rounded-2xl bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-lg dark:shadow-slate-900/20 transition-shadow hover:shadow-xl dark:hover:shadow-slate-900/40"
         >
           <!-- Date Header -->
           <div
-            class="mb-4 flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-4"
+            class="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 dark:border-slate-700 pb-4"
           >
-            <div class="flex items-center gap-3">
+            <div class="flex min-w-0 flex-1 items-center gap-3">
               <div
                 class="flex h-10 w-10 items-center justify-center rounded-full"
                 :class="getStatusClass(history.status).bg"
@@ -271,8 +271,8 @@
                   />
                 </svg>
               </div>
-              <div>
-                <div class="flex items-center gap-2">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
                   <p class="font-semibold text-gray-900 dark:text-gray-100">
                     {{ formatDateTime(history.createdAt) }}
                   </p>
@@ -288,7 +288,7 @@
                 </div>
                 <p
                   v-if="history.fileName"
-                  class="text-sm text-gray-500 dark:text-gray-400"
+                  class="truncate text-sm text-gray-500 dark:text-gray-400"
                 >
                   {{ history.fileName }}
                 </p>
@@ -297,7 +297,7 @@
             <!-- Delete Button -->
             <button
               v-if="deleteConfirmId !== history.id"
-              class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400"
+              class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 sm:h-9 sm:w-9"
               title="Supprimer cet import"
               @click="confirmDelete(history.id)"
             >
@@ -316,19 +316,22 @@
               </svg>
             </button>
             <!-- Delete Confirmation -->
-            <div v-else class="flex items-center gap-2">
+            <div
+              v-else
+              class="flex w-full items-center justify-end gap-2 sm:w-auto"
+            >
               <span class="text-sm text-red-600 dark:text-red-400"
                 >Supprimer ?</span
               >
               <button
-                class="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                class="min-h-[40px] rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50 sm:min-h-0"
                 :disabled="isDeleting"
                 @click="deleteImport(history.id)"
               >
                 {{ isDeleting ? 'Suppression...' : 'Oui' }}
               </button>
               <button
-                class="rounded-lg bg-gray-200 dark:bg-slate-700 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-300 dark:hover:bg-slate-600"
+                class="min-h-[40px] rounded-lg bg-gray-200 dark:bg-slate-700 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-300 dark:hover:bg-slate-600 sm:min-h-0"
                 :disabled="isDeleting"
                 @click="cancelDelete"
               >
