@@ -161,7 +161,7 @@
     <Transition name="modal">
       <div
         v-if="isOpen && reimbursement && line"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
       >
         <div class="fixed inset-0 bg-black/50" @click="handleClose" />
 
@@ -169,11 +169,11 @@
           ref="modalPanelRef"
           role="dialog"
           aria-modal="true"
-          class="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-xl dark:shadow-slate-900/30 flex flex-col"
+          class="relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-slate-900 dark:shadow-slate-900/30"
         >
           <!-- Header -->
           <div
-            class="flex items-center justify-between border-b border-gray-200 dark:border-slate-700 p-6"
+            class="flex items-start justify-between gap-3 border-b border-gray-200 p-4 sm:p-6 dark:border-slate-700"
           >
             <div class="min-w-0">
               <h2
@@ -188,7 +188,7 @@
             </div>
             <button
               type="button"
-              class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 shrink-0"
+              class="-m-2 shrink-0 p-2 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
               aria-label="Fermer"
               @click="handleClose"
             >
@@ -208,7 +208,7 @@
             </button>
           </div>
 
-          <div class="flex-1 overflow-y-auto p-6">
+          <div class="flex-1 overflow-y-auto p-4 sm:p-6">
             <div
               v-if="error"
               class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm"
@@ -296,7 +296,7 @@
                     :max="Math.min(amountDue, pot)"
                     :value="amount"
                     :aria-label="`Montant affecte a ${line.description}`"
-                    class="w-28 px-2 py-1 text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
+                    class="w-24 min-h-[40px] px-2 py-1 text-right border border-gray-300 sm:min-h-0 sm:w-28 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
                     @change="onAmountCommit"
                   />
                   <span class="text-gray-500 dark:text-gray-400">&euro;</span>
@@ -322,11 +322,11 @@
 
           <!-- Footer -->
           <div
-            class="border-t border-gray-200 dark:border-slate-700 p-6 flex justify-end gap-3"
+            class="flex flex-col-reverse gap-2 border-t border-gray-200 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:gap-3 sm:p-6 dark:border-slate-700"
           >
             <button
               type="button"
-              class="px-4 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+              class="min-h-[44px] px-4 py-2 sm:min-h-0 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               :disabled="isSubmitting"
               @click="handleClose"
             >
@@ -335,7 +335,7 @@
             <button
               type="button"
               data-testid="single-settlement-confirm"
-              class="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="inline-flex min-h-[44px] items-center justify-center px-6 py-2 sm:min-h-0 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               :disabled="!canConfirm"
               @click="handleConfirm"
             >

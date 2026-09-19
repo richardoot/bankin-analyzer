@@ -426,7 +426,7 @@
     <Transition name="modal">
       <div
         v-if="isOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
       >
         <div class="fixed inset-0 bg-black/50" @click="handleClose" />
 
@@ -434,13 +434,13 @@
           ref="modalPanelRef"
           role="dialog"
           aria-modal="true"
-          class="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-xl dark:shadow-slate-900/30 flex flex-col"
+          class="relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-slate-900 dark:shadow-slate-900/30"
         >
           <!-- Header -->
           <div
-            class="flex items-center justify-between border-b border-gray-200 dark:border-slate-700 p-6"
+            class="flex items-start justify-between gap-3 border-b border-gray-200 p-4 sm:p-6 dark:border-slate-700"
           >
-            <div>
+            <div class="min-w-0">
               <h2
                 class="text-xl font-semibold text-gray-900 dark:text-gray-100"
               >
@@ -448,17 +448,20 @@
               </h2>
               <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
                 {{ personName }}
-                <span v-if="currentStep === 1">
+                <span class="sm:hidden"
+                  >&middot; étape {{ currentStep }}/2</span
+                >
+                <span v-if="currentStep === 1" class="hidden sm:inline">
                   &middot; etape 1 sur 2 : que voulez-vous regler ?</span
                 >
-                <span v-else>
+                <span v-else class="hidden sm:inline">
                   &middot; etape 2 sur 2 : d'ou vient l'argent ?</span
                 >
               </p>
             </div>
             <button
               type="button"
-              class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+              class="-m-2 shrink-0 p-2 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
               aria-label="Fermer"
               @click="handleClose"
             >
@@ -478,7 +481,7 @@
             </button>
           </div>
 
-          <div class="flex-1 overflow-y-auto p-6">
+          <div class="flex-1 overflow-y-auto p-4 sm:p-6">
             <div
               v-if="error"
               class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm"
@@ -497,7 +500,7 @@
                 <button
                   type="button"
                   data-testid="settlement-select-all"
-                  class="text-primary-600 dark:text-primary-400 hover:underline"
+                  class="inline-flex min-h-[40px] items-center text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
                   @click="selectAllLines"
                 >
                   Tout sélectionner
@@ -505,7 +508,7 @@
                 <span class="text-gray-300 dark:text-gray-600">|</span>
                 <button
                   type="button"
-                  class="text-gray-600 dark:text-gray-400 hover:underline"
+                  class="inline-flex min-h-[40px] items-center text-gray-600 hover:underline sm:min-h-0 dark:text-gray-400"
                   @click="clearSelection"
                 >
                   Tout decocher
@@ -524,7 +527,7 @@
                   >
                     <button
                       type="button"
-                      class="p-1 text-gray-500 dark:text-gray-400 shrink-0"
+                      class="-my-2 shrink-0 p-2.5 text-gray-500 sm:my-0 sm:p-1 dark:text-gray-400"
                       :aria-label="`Deplier ${group.categoryName}`"
                       :aria-expanded="expandedCategories.has(group.key)"
                       @click="toggleExpanded(group.key)"
@@ -584,7 +587,7 @@
                     <label
                       v-for="line in group.lines"
                       :key="line.reimbursementId"
-                      class="flex items-center gap-2 p-3 pl-10 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/50"
+                      class="flex items-center gap-2 p-3 pl-4 sm:pl-10 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/50"
                     >
                       <input
                         type="checkbox"
@@ -682,7 +685,7 @@
                   <div class="flex gap-3 text-sm">
                     <button
                       type="button"
-                      class="text-primary-600 dark:text-primary-400 hover:underline"
+                      class="inline-flex min-h-[40px] items-center text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
                       @click="allocateEverything"
                     >
                       Tout affecter
@@ -690,7 +693,7 @@
                     <span class="text-gray-300 dark:text-gray-600">|</span>
                     <button
                       type="button"
-                      class="text-gray-600 dark:text-gray-400 hover:underline"
+                      class="inline-flex min-h-[40px] items-center text-gray-600 hover:underline sm:min-h-0 dark:text-gray-400"
                       @click="clearAmounts"
                     >
                       Tout remettre a zero
@@ -710,7 +713,7 @@
                     >
                       <button
                         type="button"
-                        class="p-1 text-gray-500 dark:text-gray-400 shrink-0"
+                        class="-my-2 shrink-0 p-2.5 text-gray-500 sm:my-0 sm:p-1 dark:text-gray-400"
                         :aria-label="`Deplier ${group.categoryName}`"
                         :aria-expanded="expandedCategories.has(group.key)"
                         @click="toggleExpanded(group.key)"
@@ -751,7 +754,7 @@
                           :max="group.selectedDue"
                           :value="group.allocated"
                           :aria-label="`Montant affecte a ${group.categoryName}`"
-                          class="w-24 px-2 py-1 text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
+                          class="w-20 min-h-[40px] px-2 py-1 text-right border border-gray-300 sm:min-h-0 sm:w-24 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
                           @change="onCategoryAmountCommit(group, $event)"
                         />
                         <span class="text-gray-500 dark:text-gray-400"
@@ -768,7 +771,7 @@
                       <div
                         v-for="line in group.lines"
                         :key="line.reimbursementId"
-                        class="p-3 pl-10"
+                        class="p-3 pl-4 sm:pl-10"
                       >
                         <div class="flex items-center gap-2">
                           <div class="flex-1 min-w-0">
@@ -794,7 +797,7 @@
                               :max="line.amountDue"
                               :value="stateOf(line.reimbursementId).amount"
                               :aria-label="`Montant affecte a ${line.description}`"
-                              class="w-24 px-2 py-1 text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
+                              class="w-20 min-h-[40px] px-2 py-1 text-right border border-gray-300 sm:min-h-0 sm:w-24 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
                               @change="
                                 onAmountCommit(line.reimbursementId, $event)
                               "
@@ -856,7 +859,7 @@
 
           <!-- Footer -->
           <div
-            class="border-t border-gray-200 dark:border-slate-700 p-6 space-y-3"
+            class="space-y-3 border-t border-gray-200 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 dark:border-slate-700"
           >
             <!-- Selection total, step 1 only -->
             <div
@@ -877,7 +880,7 @@
             <!-- Running balance, step 2 only -->
             <div
               v-if="currentStep === 2 && selectedTransaction"
-              class="flex items-center justify-between p-3 rounded-lg"
+              class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 p-3 rounded-lg"
               :class="{
                 'bg-primary-50 dark:bg-primary-900/20':
                   Math.abs(remainingToAllocate) < 0.01,
@@ -910,23 +913,25 @@
               </span>
             </div>
 
-            <div class="flex justify-between items-center">
+            <div
+              class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between"
+            >
               <button
                 v-if="currentStep === 2"
                 type="button"
                 data-testid="settlement-back"
-                class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                class="min-h-[44px] px-4 py-2 sm:min-h-0 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                 :disabled="isSubmitting"
                 @click="goBackToSelection"
               >
                 Retour
               </button>
-              <div v-else />
+              <div v-else class="hidden sm:block" />
 
-              <div class="flex gap-3">
+              <div class="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
                 <button
                   type="button"
-                  class="px-4 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                  class="min-h-[44px] px-4 py-2 sm:min-h-0 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                   :disabled="isSubmitting"
                   @click="handleClose"
                 >
@@ -936,7 +941,7 @@
                   v-if="currentStep === 1"
                   type="button"
                   data-testid="settlement-continue"
-                  class="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="min-h-[44px] px-6 py-2 sm:min-h-0 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   :disabled="!hasSelection"
                   @click="goToReceipt"
                 >
@@ -945,7 +950,7 @@
                 <button
                   v-else
                   type="button"
-                  class="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="inline-flex min-h-[44px] items-center justify-center px-6 py-2 sm:min-h-0 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   :disabled="!canConfirm"
                   @click="handleConfirm"
                 >

@@ -24,6 +24,9 @@
   }>()
 
   const open = ref(false)
+  // The panel is 14rem wide; opened near the right edge of a phone it
+  // would run off-screen, so it hangs from whichever side has the room.
+  const alignRight = ref(false)
   const search = ref('')
   const root = ref<HTMLElement | null>(null)
   const searchInput = ref<HTMLInputElement | null>(null)
@@ -70,6 +73,14 @@
     }
   }
 
+  function toggleOpen(): void {
+    if (!open.value && root.value) {
+      const { left } = root.value.getBoundingClientRect()
+      alignRight.value = left + 256 > window.innerWidth
+    }
+    open.value = !open.value
+  }
+
   watch(open, isOpen => {
     if (isOpen) {
       document.addEventListener('mousedown', onDocMouseDown)
@@ -89,9 +100,9 @@
   <div ref="root" class="relative inline-block">
     <button
       type="button"
-      class="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-[10px] font-medium text-gray-500 hover:border-primary-400 hover:text-primary-600 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-400 dark:border-slate-600 dark:text-slate-400 dark:hover:border-primary-500"
+      class="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-dashed border-gray-300 px-2.5 py-0.5 text-xs font-medium sm:min-h-0 sm:px-2 sm:text-[10px] text-gray-500 hover:border-primary-400 hover:text-primary-600 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-400 dark:border-slate-600 dark:text-slate-400 dark:hover:border-primary-500"
       aria-label="Ajouter une étiquette"
-      @click="open = !open"
+      @click="toggleOpen"
     >
       <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
         <path
@@ -103,14 +114,15 @@
 
     <div
       v-if="open"
-      class="absolute z-30 mt-1 w-56 rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-800"
+      class="absolute z-30 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-lg border border-gray-200 bg-white p-2 shadow-lg sm:w-56 dark:border-slate-700 dark:bg-slate-800"
+      :class="alignRight ? 'right-0' : 'left-0'"
     >
       <input
         ref="searchInput"
         v-model="search"
         type="text"
         placeholder="Rechercher ou créer…"
-        class="mb-2 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 focus:border-primary-400 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+        class="mb-2 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-2 text-base text-gray-700 sm:py-1 sm:text-xs focus:border-primary-400 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
         @keydown.enter.prevent="canCreate ? create() : null"
       />
 
@@ -118,7 +130,7 @@
         <li v-for="tag in filteredTags" :key="tag.id">
           <button
             type="button"
-            class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs hover:bg-gray-100 disabled:opacity-50 dark:hover:bg-slate-700"
+            class="flex min-h-[40px] w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs hover:bg-gray-100 sm:min-h-0 disabled:opacity-50 dark:hover:bg-slate-700"
             :disabled="busy"
             @click="toggle(tag)"
           >
@@ -152,7 +164,7 @@
       <button
         v-if="canCreate"
         type="button"
-        class="mt-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium text-primary-600 hover:bg-primary-50 disabled:opacity-50 dark:text-primary-400 dark:hover:bg-slate-700"
+        class="mt-1 flex min-h-[40px] w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium text-primary-600 sm:min-h-0 hover:bg-primary-50 disabled:opacity-50 dark:text-primary-400 dark:hover:bg-slate-700"
         :disabled="busy"
         @click="create"
       >

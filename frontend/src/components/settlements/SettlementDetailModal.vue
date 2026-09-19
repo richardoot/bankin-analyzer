@@ -58,7 +58,7 @@
     <Transition name="modal">
       <div
         v-if="isOpen && settlement"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
       >
         <!-- Backdrop -->
         <div class="fixed inset-0 bg-black/50" @click="emit('close')" />
@@ -68,13 +68,13 @@
           ref="modalPanelRef"
           role="dialog"
           aria-modal="true"
-          class="relative z-10 w-full max-w-lg max-h-[90vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-xl dark:shadow-slate-900/30 flex flex-col"
+          class="relative z-10 flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-slate-900 dark:shadow-slate-900/30"
         >
           <!-- Header -->
           <div
-            class="flex items-center justify-between border-b border-gray-200 dark:border-slate-700 p-6"
+            class="flex items-start justify-between gap-3 border-b border-gray-200 p-4 sm:p-6 dark:border-slate-700"
           >
-            <div>
+            <div class="min-w-0">
               <h2
                 class="text-xl font-semibold text-gray-900 dark:text-gray-100"
               >
@@ -86,7 +86,8 @@
             </div>
             <button
               type="button"
-              class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+              class="-m-2 shrink-0 p-2 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+              aria-label="Fermer"
               @click="emit('close')"
             >
               <svg
@@ -106,7 +107,7 @@
           </div>
 
           <!-- Content -->
-          <div class="flex-1 overflow-y-auto p-6">
+          <div class="flex-1 overflow-y-auto p-4 sm:p-6">
             <!-- Person info -->
             <div class="flex items-center gap-3 mb-6">
               <div
@@ -275,13 +276,13 @@
 
           <!-- Footer -->
           <div
-            class="flex items-center border-t border-gray-200 dark:border-slate-700 p-6"
-            :class="hideDelete ? 'justify-end' : 'justify-between'"
+            class="flex flex-col-reverse gap-2 border-t border-gray-200 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:p-6 dark:border-slate-700"
+            :class="hideDelete ? 'sm:justify-end' : 'sm:justify-between'"
           >
             <button
               v-if="!hideDelete"
               type="button"
-              class="px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex items-center gap-2"
+              class="min-h-[44px] justify-center px-4 py-2 sm:min-h-0 sm:justify-start text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex items-center gap-2"
               @click="emit('delete')"
             >
               <svg
@@ -301,7 +302,7 @@
             </button>
             <button
               type="button"
-              class="px-6 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+              class="min-h-[44px] px-6 py-2 sm:min-h-0 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
               @click="emit('close')"
             >
               Fermer
