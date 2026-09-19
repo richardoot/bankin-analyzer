@@ -149,7 +149,7 @@
             ? 'Enregistrez ou annulez les modifications avant de changer de plan'
             : undefined
         "
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        class="inline-flex min-h-[40px] items-center gap-1.5 px-3 py-1.5 text-sm font-medium sm:min-h-0 text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         @click="emit('open-history')"
       >
         <svg
@@ -176,7 +176,7 @@
             ? 'Enregistrez ou annulez les modifications avant de créer un plan'
             : undefined
         "
-        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary-600 dark:bg-primary-500 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        class="inline-flex min-h-[40px] items-center gap-1.5 px-3 py-1.5 text-sm font-medium sm:min-h-0 bg-primary-600 dark:bg-primary-500 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         @click="emit('create')"
       >
         <svg

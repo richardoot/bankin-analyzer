@@ -968,13 +968,13 @@
             />
 
             <div
-              class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6 pt-3 border-t border-gray-100 dark:border-slate-700"
+              class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 sm:flex sm:flex-wrap sm:items-center sm:gap-6 dark:border-slate-700"
             >
               <button
                 type="button"
                 role="switch"
                 :aria-checked="deductReimbursements"
-                class="group flex items-center gap-2.5 cursor-pointer select-none"
+                class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
                 @click="deductReimbursements = !deductReimbursements"
               >
                 <span
@@ -992,15 +992,20 @@
                     "
                   />
                 </span>
-                <span class="text-sm text-gray-700 dark:text-gray-300">
-                  Déduire les remboursements reçus
+                <span
+                  class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
+                >
+                  <span class="sm:hidden">Déduire les remb. reçus</span>
+                  <span class="hidden sm:inline"
+                    >Déduire les remboursements reçus</span
+                  >
                 </span>
               </button>
               <button
                 type="button"
                 role="switch"
                 :aria-checked="deductPendingReimbursements"
-                class="group flex items-center gap-2.5 cursor-pointer select-none"
+                class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
                 @click="
                   deductPendingReimbursements = !deductPendingReimbursements
                 "
@@ -1022,8 +1027,13 @@
                     "
                   />
                 </span>
-                <span class="text-sm text-gray-700 dark:text-gray-300">
-                  Déduire les remboursements en attente
+                <span
+                  class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
+                >
+                  <span class="sm:hidden">Déduire les remb. en attente</span>
+                  <span class="hidden sm:inline"
+                    >Déduire les remboursements en attente</span
+                  >
                 </span>
               </button>
             </div>

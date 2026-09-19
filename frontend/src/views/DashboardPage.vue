@@ -193,14 +193,14 @@
           <TimePeriodSelector />
 
           <div
-            class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-6 pt-4 border-t border-gray-100 dark:border-slate-700"
+            class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-4 sm:flex sm:flex-wrap sm:items-center sm:gap-6 dark:border-slate-700"
           >
             <button
               type="button"
               role="switch"
               :aria-checked="deductReimbursements"
               data-testid="toggle-deduct-reimbursements"
-              class="group flex items-center gap-2.5 cursor-pointer select-none"
+              class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
               @click="deductReimbursements = !deductReimbursements"
             >
               <span
@@ -218,8 +218,13 @@
                   "
                 />
               </span>
-              <span class="text-sm text-gray-700 dark:text-gray-300">
-                Déduire les remboursements reçus
+              <span
+                class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
+              >
+                <span class="sm:hidden">Déduire les remb. reçus</span>
+                <span class="hidden sm:inline"
+                  >Déduire les remboursements reçus</span
+                >
               </span>
             </button>
             <button
@@ -227,7 +232,7 @@
               role="switch"
               :aria-checked="deductPendingReimbursements"
               data-testid="toggle-deduct-pending"
-              class="group flex items-center gap-2.5 cursor-pointer select-none"
+              class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
               @click="
                 deductPendingReimbursements = !deductPendingReimbursements
               "
@@ -249,8 +254,13 @@
                   "
                 />
               </span>
-              <span class="text-sm text-gray-700 dark:text-gray-300">
-                Déduire les remboursements en attente
+              <span
+                class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
+              >
+                <span class="sm:hidden">Déduire les remb. en attente</span>
+                <span class="hidden sm:inline"
+                  >Déduire les remboursements en attente</span
+                >
               </span>
             </button>
           </div>
@@ -262,7 +272,7 @@
             <!-- Average monthly expenses -->
             <div
               data-testid="kpi-card-expenses"
-              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-5 border-l-4 border-red-500"
+              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-5 border-l-4 border-red-500"
             >
               <div class="flex items-start justify-between gap-3">
                 <div>
@@ -303,7 +313,7 @@
             <!-- Average monthly income -->
             <div
               data-testid="kpi-card-income"
-              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-5 border-l-4 border-green-500"
+              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-5 border-l-4 border-green-500"
             >
               <div class="flex items-start justify-between gap-3">
                 <div>
@@ -329,7 +339,7 @@
             <!-- Average monthly savings -->
             <div
               data-testid="kpi-card-savings"
-              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-5 border-l-4"
+              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-5 border-l-4"
               :class="
                 averageMonthlySavings >= 0
                   ? 'border-indigo-500'
@@ -376,9 +386,11 @@
             >
               <!-- Monthly expenses chart -->
               <div
-                class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
+                class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
               >
-                <div class="flex justify-between items-center mb-4">
+                <div
+                  class="mb-4 flex flex-wrap items-center justify-between gap-2"
+                >
                   <h3
                     class="text-lg font-semibold text-gray-900 dark:text-gray-100"
                   >
@@ -388,7 +400,7 @@
                     v-if="availableExpenseCategories.length > 0"
                     data-testid="expense-category-filter"
                     :value="selectedCategory ?? ''"
-                    class="text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
+                    class="max-w-full min-h-[40px] sm:min-h-0 text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
                     @change="handleCategoryChange"
                   >
                     <option value="">Toutes les catégories</option>
@@ -418,14 +430,17 @@
 
               <!-- Expenses pie chart -->
               <div
-                class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
+                class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
               >
                 <h3
                   class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
                 >
                   Dépenses par catégorie
                 </h3>
-                <div v-if="expensesByCategory.values.length > 0" class="h-80">
+                <div
+                  v-if="expensesByCategory.values.length > 0"
+                  class="h-64 sm:h-80"
+                >
                   <CategoryPieChart
                     :data="expensesByCategory"
                     title="Dépenses"
@@ -556,9 +571,11 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <!-- Monthly income chart -->
               <div
-                class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
+                class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
               >
-                <div class="flex justify-between items-center mb-4">
+                <div
+                  class="mb-4 flex flex-wrap items-center justify-between gap-2"
+                >
                   <h3
                     class="text-lg font-semibold text-gray-900 dark:text-gray-100"
                   >
@@ -568,7 +585,7 @@
                     v-if="availableIncomeCategories.length > 0"
                     data-testid="income-category-filter"
                     :value="selectedIncomeCategory ?? ''"
-                    class="text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
+                    class="max-w-full min-h-[40px] sm:min-h-0 text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
                     @change="handleIncomeCategoryChange"
                   >
                     <option value="">Toutes les catégories</option>
@@ -598,14 +615,17 @@
 
               <!-- Income pie chart -->
               <div
-                class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
+                class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
               >
                 <h3
                   class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
                 >
                   Revenus par catégorie
                 </h3>
-                <div v-if="incomeByCategory.values.length > 0" class="h-80">
+                <div
+                  v-if="incomeByCategory.values.length > 0"
+                  class="h-64 sm:h-80"
+                >
                   <CategoryPieChart :data="incomeByCategory" title="Revenus" />
                 </div>
                 <div

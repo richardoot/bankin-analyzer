@@ -195,11 +195,11 @@
         Comparer avec
       </span>
 
-      <div class="relative inline-block">
+      <div class="relative w-full min-w-0 sm:w-auto">
         <button
           type="button"
           data-testid="comparison-trigger"
-          class="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+          class="inline-flex min-h-[44px] w-full max-w-full items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 transition-colors hover:bg-gray-50 sm:min-h-0 sm:w-auto dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:hover:bg-slate-700"
           @click="open = !open"
         >
           <span
@@ -210,9 +210,11 @@
                 : 'bg-primary-500'
             "
           />
-          <span>{{ currentLabel }}</span>
+          <span class="min-w-0 flex-1 truncate text-left">{{
+            currentLabel
+          }}</span>
           <svg
-            class="w-4 h-4 text-gray-500 dark:text-gray-400"
+            class="h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400"
             :class="{ 'rotate-180': open }"
             fill="none"
             stroke="currentColor"
@@ -229,14 +231,14 @@
 
         <div
           v-if="open"
-          class="absolute z-20 mt-1 min-w-[220px] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg overflow-hidden"
+          class="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg sm:w-auto sm:min-w-[220px] dark:border-slate-700 dark:bg-slate-900"
         >
           <button
             v-for="opt in options"
             :key="opt.value"
             type="button"
             :data-testid="`comparison-option-${opt.value}`"
-            class="block w-full text-left px-3 py-2 text-sm transition-colors"
+            class="block w-full px-3 py-2.5 text-left text-sm transition-colors sm:py-2"
             :class="
               preset === opt.value
                 ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
@@ -251,7 +253,7 @@
 
       <span
         v-if="resolvedRange"
-        class="text-xs text-gray-500 dark:text-gray-400"
+        class="hidden text-xs text-gray-500 sm:inline dark:text-gray-400"
       >
         {{ formatMonth(resolvedRange.startDate) }} →
         {{ formatMonth(resolvedRange.endDate) }}
@@ -261,9 +263,9 @@
     <!-- Custom date inputs -->
     <div
       v-if="preset === 'custom'"
-      class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3"
+      class="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3"
     >
-      <div class="flex items-center gap-2">
+      <div class="flex min-w-0 items-center gap-2">
         <label class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
           >Du :</label
         >
@@ -271,7 +273,7 @@
           type="date"
           :value="customStartDate"
           data-testid="comparison-custom-start"
-          class="px-2.5 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+          class="min-h-[44px] w-full min-w-0 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-sm text-gray-900 sm:min-h-0 sm:w-auto dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
           @input="
             emit(
               'update:customStartDate',
@@ -280,7 +282,7 @@
           "
         />
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex min-w-0 items-center gap-2">
         <label class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
           >Au :</label
         >
@@ -288,7 +290,7 @@
           type="date"
           :value="customEndDate"
           data-testid="comparison-custom-end"
-          class="px-2.5 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+          class="min-h-[44px] w-full min-w-0 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-sm text-gray-900 sm:min-h-0 sm:w-auto dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
           @input="
             emit(
               'update:customEndDate',
