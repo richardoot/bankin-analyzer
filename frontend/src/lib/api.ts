@@ -918,6 +918,15 @@ export interface DiscoveredAccountDto {
   accountId: string | null
   accountLabel: string | null
   isIngested: boolean
+  /**
+   * Le dernier solde lu à la synchro — absent tant qu'aucune synchro n'en a
+   * rapporté (un import CSV n'en produit jamais).
+   */
+  balance: {
+    amount: number
+    currency: string | null
+    at: string | null
+  } | null
   /** What the transactions suggest, when there is history to reason from. */
   suggestion: {
     accountId: string
@@ -983,6 +992,8 @@ export interface BankSyncRunDto {
   claimed: number
   /** Set once this run has been undone. */
   undoneAt: string | null
+  /** MANUAL pour un clic, SCHEDULED pour la synchro quotidienne. */
+  trigger: string
 }
 
 /** What undoing a run did, or would do. */

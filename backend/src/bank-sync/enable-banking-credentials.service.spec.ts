@@ -202,4 +202,26 @@ describe('EnableBankingCredentialsService', () => {
       ).toHaveBeenCalledWith({ where: { userId: 'user-1' } })
     })
   })
+
+  describe('resolve with a foreign ciphertext', () => {
+    it('says what happened instead of a 500 when the key cannot open it', async () => {
+      // A production dump restored onto a machine with its own key: the row
+      // exists, the auth tag never authenticates.
+      mockPrisma.enableBankingCredential.findUnique.mockResolvedValue({
+        userId: 'user-1',
+        applicationId: 'app-1',
+        encryptedPrivateKey: Buffer.from(
+          'not-encrypted-with-this-key-at-all-0000000000',
+          'utf8'
+        ).toString('base64'),
+      })
+
+      const service = buildService()
+      await expect(service.resolve('user-1')).rejects.toMatchObject({
+        status: 409,
+      })
+      await expect(service.resolve('user-1')).rejects.toThrow(/déchiffrés/)
+    })
+  })
 })
+

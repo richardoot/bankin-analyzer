@@ -1,8 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
-import { BadRequestException, NotFoundException } from '@nestjs/common'
-import { BankSyncService, syncPolicyOptionsFromEnv } from './bank-sync.service'
+import {
+  BadRequestException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common'
+import {
+  BankSyncService,
+  syncPolicyOptionsFromEnv,
+  pickBookedBalance,
+  utcDayOf,
+} from './bank-sync.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { EnableBankingClient } from './enable-banking.client'
 import { EnableBankingCredentialsService } from './enable-banking-credentials.service'
@@ -41,6 +50,7 @@ const mockPrisma = {
   bankConnection: {
     findFirst: vi.fn(),
     findFirstOrThrow: vi.fn(),
+    findMany: vi.fn(),
     upsert: vi.fn(),
     update: vi.fn(),
   },
@@ -1235,5 +1245,129 @@ describe('syncPolicyOptionsFromEnv', () => {
     process.env.BANK_SYNC_MIN_INTERVAL_HOURS = 'soon'
     process.env.BANK_SYNC_MAX_FETCHES_PER_DAY = 'many'
     expect(syncPolicyOptionsFromEnv()).toEqual({})
+  })
+})
+
+describe('pickBookedBalance', () => {
+  it('prefers the closing booked figure whatever the bank ordered', () => {
+    const picked = pickBookedBalance([
+      {
+        balance_type: 'ITAV',
+        balance_amount: { amount: '900.00', currency: 'EUR' },
+      },
+      {
+        balance_type: 'CLBD',
+        balance_amount: { amount: '1234.56', currency: 'EUR' },
+        reference_date: '2026-09-16',
+      },
+    ])
+    expect(picked).toMatchObject({ amount: 1234.56, currency: 'EUR' })
+    expect(picked?.at.toISOString()).toBe('2026-09-16T00:00:00.000Z')
+  })
+
+  it('falls past a figure that does not parse instead of storing NaN', () => {
+    const picked = pickBookedBalance([
+      { balance_type: 'CLBD', balance_amount: { amount: 'not-a-number' } },
+      {
+        balance_type: 'ITBD',
+        balance_amount: { amount: '42.10', currency: 'EUR' },
+      },
+    ])
+    expect(picked).toMatchObject({ amount: 42.1 })
+  })
+
+  it('returns null when the bank offered nothing usable', () => {
+    expect(pickBookedBalance([])).toBeNull()
+    expect(pickBookedBalance([{ balance_type: 'CLBD' }])).toBeNull()
+  })
+})
+
+describe('utcDayOf', () => {
+  it('strips the time and keeps the UTC day', () => {
+    expect(utcDayOf(new Date('2026-09-16T23:45:12.345Z')).toISOString()).toBe(
+      '2026-09-16T00:00:00.000Z'
+    )
+    // A date-only figure passes through unchanged.
+    expect(utcDayOf(new Date('2026-09-16')).toISOString()).toBe(
+      '2026-09-16T00:00:00.000Z'
+    )
+  })
+})
+
+describe('runScheduledSync', () => {
+  let service: BankSyncService
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        BankSyncService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: EnableBankingClient, useValue: mockClient },
+        {
+          provide: EnableBankingCredentialsService,
+          useValue: mockCredentialsService,
+        },
+        { provide: AiSuggestionsService, useValue: mockAiSuggestions },
+      ],
+    }).compile()
+    service = module.get<BankSyncService>(BankSyncService)
+  })
+
+  const fetchableState = (id: string) => ({
+    id,
+    aspspName: 'Boursorama',
+    status: 'ACTIVE',
+    consentValidUntil: null,
+    lastSyncAt: null,
+    fetchesToday: 0,
+    retryAfter: null,
+  })
+
+  it('syncs what the policy allows, skips the rest, survives a failure', async () => {
+    mockPrisma.bankConnection.findMany.mockResolvedValue([
+      { id: 'c-ok', userId: 'u1', aspspName: 'Boursorama' },
+      { id: 'c-spent', userId: 'u1', aspspName: 'CIC' },
+      { id: 'c-broken', userId: 'u2', aspspName: 'BNP' },
+      { id: 'c-unconfigured', userId: 'u3', aspspName: 'Fortuneo' },
+    ])
+
+    const stateOf = vi
+      .spyOn(
+        service as unknown as {
+          stateOf: (u: string, c: string) => Promise<unknown>
+        },
+        'stateOf'
+      )
+      .mockImplementation(async (_u: string, c: string) =>
+        c === 'c-spent'
+          ? { ...fetchableState(c), fetchesToday: 3 }
+          : fetchableState(c)
+      )
+
+    const sync = vi
+      .spyOn(service, 'sync')
+      .mockImplementation(async (_u, connectionId) => {
+        if (connectionId === 'c-broken') throw new Error('bank said no')
+        // A user who never configured an Enable Banking application: a
+        // resting state the nightly walk cannot fix — counted as skipped.
+        if (connectionId === 'c-unconfigured') {
+          throw new ServiceUnavailableException('Bank sync is not configured')
+        }
+        return {} as never
+      })
+
+    const summary = await service.runScheduledSync()
+
+    expect(summary).toEqual({
+      considered: 4,
+      synced: 1,
+      skipped: 2,
+      failed: 1,
+    })
+    // The one allowed sync ran unattended (no PSU) and marked SCHEDULED.
+    expect(sync).toHaveBeenCalledWith('u1', 'c-ok', undefined, 'SCHEDULED')
+    expect(sync).toHaveBeenCalledTimes(3)
+    expect(stateOf).toHaveBeenCalledTimes(4)
   })
 })

@@ -32,6 +32,7 @@ import {
 import {
   EnableBankingClient,
   type BankAccountResource,
+  type BankBalance,
   type BankTransaction,
   type EnableBankingCredentials,
   type PsuContext,
@@ -56,6 +57,44 @@ import {
 import { TransactionSource } from '../generated/prisma'
 
 /** What a bank account looks like once a person has to decide about it. */
+/**
+ * Which of the bank's balances to keep: closing booked (CLBD) when offered —
+ * the accounting figure a person means by « solde » — then interim booked
+ * (ITBD), then whatever the bank listed first. Amounts arrive as strings;
+ * one that does not parse is treated as not offered at all.
+ */
+const BALANCE_TYPE_RANK: Record<string, number> = { CLBD: 0, ITBD: 1 }
+
+/** The calendar day a figure belongs to, in UTC — the snapshot key. */
+export function utcDayOf(date: Date): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  )
+}
+
+export function pickBookedBalance(
+  balances: BankBalance[]
+): { amount: number; currency: string | null; at: Date } | null {
+  const byPreference = [...balances].sort(
+    (a, b) =>
+      (BALANCE_TYPE_RANK[a.balance_type ?? ''] ?? 2) -
+      (BALANCE_TYPE_RANK[b.balance_type ?? ''] ?? 2)
+  )
+  for (const candidate of byPreference) {
+    const amount = Number(candidate.balance_amount?.amount)
+    if (!Number.isFinite(amount)) continue
+    return {
+      amount,
+      currency: candidate.balance_amount?.currency ?? null,
+      // The bank's reference date when it names one; our clock otherwise.
+      at: candidate.reference_date
+        ? new Date(candidate.reference_date)
+        : new Date(),
+    }
+  }
+  return null
+}
+
 export interface DiscoveredAccount {
   linkId: string
   externalAccountId: string
@@ -69,6 +108,15 @@ export interface DiscoveredAccount {
   accountId: string | null
   accountLabel: string | null
   isIngested: boolean
+  /**
+   * The last balance a sync read for this bank account. Null until one has —
+   * a link created by authorization alone has never been asked.
+   */
+  balance: {
+    amount: number
+    currency: string | null
+    at: string | null
+  } | null
   /**
    * What the transactions suggest, and how strongly. Absent for an account
    * with no history to reason from — a fresh ledger, or a bank the export
@@ -133,6 +181,8 @@ export interface BankSyncRunSummary {
   id: string
   aspspName: string
   fetchedAt: Date
+  /** MANUAL for a person's click, SCHEDULED for the daily cron. */
+  trigger: string
   /** Still attributed to this run right now — 0 once it's been undone. */
   inserted: number
   claimed: number
@@ -503,6 +553,14 @@ export class BankSyncService {
         accountId: link.accountId,
         accountLabel: link.account?.name ?? null,
         isIngested: link.isIngested,
+        balance:
+          link.balanceAmount !== null
+            ? {
+                amount: Number(link.balanceAmount),
+                currency: link.balanceCurrency,
+                at: link.balanceAt?.toISOString() ?? null,
+              }
+            : null,
         suggestion: suggestions.get(link.externalAccountId) ?? null,
         warning: link.cashAccountType === 'CARD' ? CARD_ACCOUNT_WARNING : null,
       })),
@@ -552,7 +610,13 @@ export class BankSyncService {
     const runs = await this.prisma.bankSyncRun.findMany({
       where: { userId },
       orderBy: { fetchedAt: 'desc' },
-      select: { id: true, aspspName: true, fetchedAt: true, undoneAt: true },
+      select: {
+        id: true,
+        aspspName: true,
+        fetchedAt: true,
+        undoneAt: true,
+        trigger: true,
+      },
     })
     if (runs.length === 0) return []
 
@@ -574,6 +638,7 @@ export class BankSyncService {
       id: r.id,
       aspspName: r.aspspName,
       fetchedAt: r.fetchedAt,
+      trigger: r.trigger,
       inserted: insertedByRun.get(r.id) ?? 0,
       claimed: claimedByRun.get(r.id) ?? 0,
       undoneAt: r.undoneAt,
@@ -1318,7 +1383,8 @@ export class BankSyncService {
   async sync(
     userId: string,
     connectionId: string,
-    psu?: PsuContext
+    psu?: PsuContext,
+    trigger: 'MANUAL' | 'SCHEDULED' = 'MANUAL'
   ): Promise<SyncOutcome> {
     const connection = await this.prisma.bankConnection.findFirst({
       where: { id: connectionId, userId },
@@ -1355,6 +1421,7 @@ export class BankSyncService {
         aspspName: connection.aspspName,
         sessionId: connection.sessionId,
         fetchedAt: new Date(),
+        trigger,
       },
       select: { id: true },
     })
@@ -1383,6 +1450,50 @@ export class BankSyncService {
           }
         )
       )
+
+      // The balance of the moment, while the session is answering anyway.
+      // A failure here never fails the sync: the transactions are the
+      // product, the balance a perishable snapshot the next sync retakes.
+      try {
+        const balances = await this.client.getBalances(
+          credentials,
+          link.externalAccountId,
+          psu
+        )
+        const picked = pickBookedBalance(balances)
+        if (picked) {
+          await this.prisma.bankAccountLink.update({
+            where: { id: link.id },
+            data: {
+              balanceAmount: picked.amount,
+              balanceCurrency: picked.currency,
+              balanceAt: picked.at,
+            },
+          })
+          // The series point a future chart will read: one per (link, day),
+          // the last figure of the day winning over the earlier ones the
+          // three-a-day quota allows.
+          const referenceDate = utcDayOf(picked.at)
+          await this.prisma.bankAccountBalanceSnapshot.upsert({
+            where: {
+              linkId_referenceDate: { linkId: link.id, referenceDate },
+            },
+            create: {
+              linkId: link.id,
+              userId,
+              amount: picked.amount,
+              currency: picked.currency,
+              referenceDate,
+            },
+            update: { amount: picked.amount, currency: picked.currency },
+          })
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Balance read failed for "${link.accountName}": ` +
+            (error instanceof Error ? error.message : String(error))
+        )
+      }
     }
 
     const outcome = await this.ingest(
@@ -1397,6 +1508,70 @@ export class BankSyncService {
       data: { lastSyncAt: new Date() },
     })
     return outcome
+  }
+
+  /**
+   * The daily walk the cron asks for: every connection of every user, the
+   * existing policy deciding for each. No PSU context — nobody pressed a
+   * button, so the call is unattended in the PSD2 sense, and the policy's
+   * three-a-day cap keeps us under the unattended allowance of four.
+   *
+   * One connection failing never stops the walk, and a connection the
+   * policy holds back (quota spent, consent lapsed, bank asked to wait) is
+   * skipped without noise: for the balance series, a user who already
+   * synced today has their point.
+   */
+  async runScheduledSync(): Promise<{
+    considered: number
+    synced: number
+    skipped: number
+    failed: number
+  }> {
+    const connections = await this.prisma.bankConnection.findMany({
+      select: { id: true, userId: true, aspspName: true },
+    })
+    let synced = 0
+    let skipped = 0
+    let failed = 0
+    for (const connection of connections) {
+      try {
+        const decision = decide(
+          await this.stateOf(connection.userId, connection.id),
+          new Date(),
+          syncPolicyOptionsFromEnv()
+        )
+        if (decision.action !== 'fetch') {
+          skipped += 1
+          continue
+        }
+        await this.sync(connection.userId, connection.id, undefined, 'SCHEDULED')
+        synced += 1
+      } catch (error) {
+        // Resting states, not failures: "no account enabled" answers
+        // BadRequest, "no Enable Banking application configured" answers
+        // ServiceUnavailable. Neither is something a nightly walk can fix,
+        // and neither deserves a failure count that reads like an outage.
+        if (
+          error instanceof BadRequestException ||
+          error instanceof ServiceUnavailableException
+        ) {
+          skipped += 1
+          continue
+        }
+        failed += 1
+        this.logger.warn(
+          `Scheduled sync failed for ${connection.aspspName} ` +
+            `(${connection.id}): ` +
+            (error instanceof Error ? error.message : String(error))
+        )
+      }
+    }
+    const summary = { considered: connections.length, synced, skipped, failed }
+    this.logger.log(
+      `Scheduled sync: ${synced} synced, ${skipped} skipped, ` +
+        `${failed} failed of ${connections.length} connections`
+    )
+    return summary
   }
 
   /** Stage what was fetched, reconcile it, and write the difference. */
