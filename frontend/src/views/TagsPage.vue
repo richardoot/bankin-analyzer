@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { onMounted, ref } from 'vue'
+  import { useIsMobile } from '@/composables/useMediaQuery'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import { useRouter } from 'vue-router'
   import { useTagsStore } from '@/stores/tags'
@@ -27,6 +28,10 @@
   ]
 
   // Create form state
+  // The creation form is a screen of controls on a phone; it folds
+  // behind one button there and stays open on a desk.
+  const isMobile = useIsMobile()
+  const createOpen = ref(false)
   const newName = ref('')
   const newColor = ref<string>(DEFAULT_COLOR)
   const newIsExceptional = ref(false)
@@ -93,6 +98,7 @@
       newEventStart.value = ''
       newEventEnd.value = ''
       newBudget.value = ''
+      createOpen.value = false
       toast.success(`Étiquette « ${created.name} » créée`)
     }
   }
@@ -171,7 +177,9 @@
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-slate-800 py-8 transition-colors">
+  <div
+    class="min-h-screen bg-gray-50 dark:bg-slate-800 py-6 sm:py-8 transition-colors"
+  >
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
       <PageHeader
         title="Étiquettes"
@@ -182,103 +190,145 @@
       <div
         class="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4 mb-6 dark:shadow-slate-900/20"
       >
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <input
-            v-model="newName"
-            type="text"
-            placeholder="Nom de l'étiquette (ex : Vacances Italie)"
-            class="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
-            @keyup.enter="createTag"
-          />
-          <div class="flex items-center gap-1.5">
-            <button
-              v-for="c in COLORS"
-              :key="c"
-              type="button"
-              class="h-6 w-6 rounded-full border-2 transition-transform hover:scale-110"
-              :class="
-                newColor === c
-                  ? 'border-gray-900 dark:border-white'
-                  : 'border-transparent'
-              "
-              :style="{ backgroundColor: c }"
-              :aria-label="`Couleur ${c}`"
-              @click="newColor = c"
-            ></button>
-          </div>
-          <button
-            type="button"
-            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
-            :disabled="!newName.trim() || creating"
-            @click="createTag"
+        <button
+          type="button"
+          data-testid="toggle-create-tag"
+          class="flex min-h-[44px] w-full items-center justify-between gap-2 text-sm font-medium text-gray-800 md:hidden dark:text-gray-200"
+          :aria-expanded="createOpen"
+          @click="createOpen = !createOpen"
+        >
+          <span class="inline-flex items-center gap-2">
+            <svg
+              class="h-4 w-4 text-primary-600 dark:text-primary-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Nouvelle étiquette
+          </span>
+          <svg
+            class="h-4 w-4 text-gray-500 transition-transform"
+            :class="{ 'rotate-180': createOpen }"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
           >
-            Créer
-          </button>
-        </div>
-
-        <!-- Exceptional event settings -->
-        <div class="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-          <label
-            class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
-          >
-            <input
-              v-model="newIsExceptional"
-              type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              data-testid="new-tag-exceptional"
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M19 9l-7 7-7-7"
             />
-            Dépense exceptionnelle
-            <span class="text-xs text-gray-400">
-              — exclue des moyennes du quotidien
-            </span>
-          </label>
-
-          <div v-if="newIsExceptional" class="mt-3 pl-6">
-            <p class="text-xs text-gray-500 dark:text-gray-400">
-              Période d'absence (facultatif) — pendant ces dates vos dépenses
-              habituelles sont suspendues. Renseignez-la pour un déplacement ou
-              des vacances ; laissez vide pour une fête à la maison.
-            </p>
-            <div class="mt-2 flex flex-wrap items-center gap-2">
-              <input
-                v-model="newEventStart"
-                type="date"
-                class="px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                aria-label="Début de la période d'absence"
-              />
-              <span class="text-gray-400 text-sm">→</span>
-              <input
-                v-model="newEventEnd"
-                type="date"
-                class="px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                aria-label="Fin de la période d'absence"
-              />
+          </svg>
+        </button>
+        <div v-show="!isMobile || createOpen" class="mt-3 md:mt-0">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <input
+              v-model="newName"
+              type="text"
+              placeholder="Nom de l'étiquette (ex : Vacances Italie)"
+              class="min-h-[44px] flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 focus:ring-2 focus:ring-primary-500 sm:min-h-0 sm:text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+              @keyup.enter="createTag"
+            />
+            <div class="flex items-center gap-2 sm:gap-1.5">
+              <button
+                v-for="c in COLORS"
+                :key="c"
+                type="button"
+                class="h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 sm:h-6 sm:w-6"
+                :class="
+                  newColor === c
+                    ? 'border-gray-900 dark:border-white'
+                    : 'border-transparent'
+                "
+                :style="{ backgroundColor: c }"
+                :aria-label="`Couleur ${c}`"
+                @click="newColor = c"
+              ></button>
             </div>
+            <button
+              type="button"
+              class="min-h-[44px] rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 sm:min-h-0"
+              :disabled="!newName.trim() || creating"
+              @click="createTag"
+            >
+              Créer
+            </button>
+          </div>
 
-            <div class="mt-3 flex flex-wrap items-center gap-2">
-              <label
-                for="new-tag-budget"
-                class="text-xs text-gray-500 dark:text-gray-400"
-              >
-                Enveloppe du projet (facultatif) — un total, pas un montant
-                mensuel
-              </label>
-              <div class="relative">
+          <!-- Exceptional event settings -->
+          <div class="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
+            <label
+              class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
+            >
+              <input
+                v-model="newIsExceptional"
+                type="checkbox"
+                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                data-testid="new-tag-exceptional"
+              />
+              Dépense exceptionnelle
+              <span class="text-xs text-gray-400">
+                — exclue des moyennes du quotidien
+              </span>
+            </label>
+
+            <div v-if="newIsExceptional" class="mt-3 pl-6">
+              <p class="text-xs text-gray-500 dark:text-gray-400">
+                Période d'absence (facultatif) — pendant ces dates vos dépenses
+                habituelles sont suspendues. Renseignez-la pour un déplacement
+                ou des vacances ; laissez vide pour une fête à la maison.
+              </p>
+              <div class="mt-2 flex flex-wrap items-center gap-2">
                 <input
-                  id="new-tag-budget"
-                  v-model="newBudget"
-                  type="number"
-                  min="0"
-                  step="10"
-                  placeholder="—"
-                  data-testid="new-tag-budget"
-                  class="w-28 pl-2 pr-6 py-1 text-sm text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 tabular-nums"
+                  v-model="newEventStart"
+                  type="date"
+                  class="min-h-[40px] min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 sm:min-h-0 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  aria-label="Début de la période d'absence"
                 />
-                <span
-                  class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"
+                <span class="text-gray-400 text-sm">→</span>
+                <input
+                  v-model="newEventEnd"
+                  type="date"
+                  class="min-h-[40px] min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 sm:min-h-0 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  aria-label="Fin de la période d'absence"
+                />
+              </div>
+
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <label
+                  for="new-tag-budget"
+                  class="text-xs text-gray-500 dark:text-gray-400"
                 >
-                  €
-                </span>
+                  Enveloppe du projet (facultatif) — un total, pas un montant
+                  mensuel
+                </label>
+                <div class="relative">
+                  <input
+                    id="new-tag-budget"
+                    v-model="newBudget"
+                    type="number"
+                    min="0"
+                    step="10"
+                    placeholder="—"
+                    data-testid="new-tag-budget"
+                    class="w-28 pl-2 pr-6 py-1 text-sm text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 tabular-nums"
+                  />
+                  <span
+                    class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"
+                  >
+                    €
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -323,7 +373,7 @@
                 v-for="c in COLORS"
                 :key="c"
                 type="button"
-                class="h-5 w-5 rounded-full border-2"
+                class="h-7 w-7 rounded-full border-2 sm:h-5 sm:w-5"
                 :class="
                   editColor === c
                     ? 'border-gray-900 dark:border-white'
@@ -402,7 +452,7 @@
           <template v-else>
             <button
               type="button"
-              class="w-full text-left"
+              class="w-full pr-16 text-left sm:pr-0"
               @click="openAnalysis(tag)"
             >
               <div class="flex items-center gap-2">
@@ -466,10 +516,10 @@
 
             <!-- Card actions -->
             <div
-              class="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+              class="absolute top-2 right-2 flex items-center gap-1 transition-opacity sm:top-3 sm:right-3 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
             >
               <button
-                class="p-1 text-gray-400 hover:text-primary-500 rounded"
+                class="inline-flex h-9 w-9 items-center justify-center rounded text-gray-400 hover:text-primary-500 sm:h-auto sm:w-auto sm:p-1"
                 aria-label="Modifier"
                 @click.stop="startEdit(tag)"
               >
@@ -488,7 +538,7 @@
                 </svg>
               </button>
               <button
-                class="p-1 text-gray-400 hover:text-red-500 rounded"
+                class="inline-flex h-9 w-9 items-center justify-center rounded text-gray-400 hover:text-red-500 sm:h-auto sm:w-auto sm:p-1"
                 aria-label="Supprimer"
                 @click.stop="confirmingDeleteId = tag.id"
               >

@@ -213,7 +213,7 @@
     <Transition name="modal-backdrop">
       <div
         v-if="isOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
       >
         <!-- Backdrop with blur -->
         <div
@@ -228,10 +228,10 @@
             role="dialog"
             aria-modal="true"
             aria-labelledby="category-modal-title"
-            class="relative z-10 w-full max-w-md h-[85vh] sm:h-[75vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-2xl dark:shadow-black/40 flex flex-col"
+            class="relative z-10 flex h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:h-[75vh] sm:rounded-2xl dark:bg-slate-900 dark:shadow-black/40"
           >
             <!-- Header -->
-            <div class="relative px-6 pt-6 pb-4">
+            <div class="relative px-4 pt-4 pb-3 sm:px-6 sm:pt-6 sm:pb-4">
               <div class="flex items-start justify-between">
                 <div>
                   <h2
@@ -379,8 +379,8 @@
                     }}
                   </span>
                 </div>
-                <div class="flex-1 overflow-y-auto min-h-0 px-6">
-                  <div class="grid grid-cols-2 gap-2 py-1">
+                <div class="flex-1 overflow-y-auto min-h-0 px-4 sm:px-6">
+                  <div class="grid grid-cols-1 gap-2 py-1 sm:grid-cols-2">
                     <!-- No category option -->
                     <button
                       type="button"
@@ -522,12 +522,12 @@
                   </div>
                   <div
                     v-else
-                    class="flex-1 overflow-y-auto min-h-0 space-y-2 px-6 py-1"
+                    class="flex-1 overflow-y-auto min-h-0 space-y-2 px-4 py-1 sm:px-6"
                   >
                     <div class="flex flex-wrap gap-1.5">
                       <button
                         type="button"
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150"
+                        class="inline-flex min-h-[36px] items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150 sm:min-h-0"
                         :class="
                           selectedSubcategoryId === null
                             ? 'bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-300 ring-2 ring-primary-500 dark:ring-primary-400 ring-offset-1 dark:ring-offset-slate-900'
@@ -636,9 +636,11 @@
 
             <!-- Footer -->
             <div
-              class="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-100 dark:border-slate-800"
+              class="px-4 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-gray-50 sm:px-6 sm:py-4 dark:bg-slate-800/50 border-t border-gray-100 dark:border-slate-800"
             >
-              <div class="flex items-center justify-between gap-3">
+              <div
+                class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+              >
                 <!-- Selection summary -->
                 <div class="flex-1 min-w-0">
                   <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
@@ -661,17 +663,17 @@
                 </div>
 
                 <!-- Buttons -->
-                <div class="flex items-center gap-2">
+                <div class="flex items-center justify-end gap-2">
                   <button
                     type="button"
-                    class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                    class="min-h-[44px] px-4 py-2 text-sm font-medium sm:min-h-0 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
                     @click="handleClose"
                   >
                     Annuler
                   </button>
                   <button
                     type="button"
-                    class="px-5 py-2 bg-primary-600 dark:bg-primary-500 text-white rounded-xl text-sm font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
+                    class="min-h-[44px] flex-1 px-5 py-2 sm:min-h-0 sm:flex-none bg-primary-600 dark:bg-primary-500 text-white rounded-xl text-sm font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
                     :disabled="!hasChanges"
                     @click="confirmSelection"
                   >

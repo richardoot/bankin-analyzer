@@ -274,7 +274,9 @@
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 py-8 transition-colors dark:bg-slate-800">
+  <div
+    class="min-h-screen bg-gray-50 py-6 sm:py-8 transition-colors dark:bg-slate-800"
+  >
     <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
       <PageHeader
         title="Comptes"
@@ -284,6 +286,7 @@
           <BaseButton
             v-if="fetchableConnections.length > 0"
             data-testid="sync-all-button"
+            class="flex-1 sm:flex-none"
             :loading="isSyncingAll"
             :disabled="syncing !== null && !isSyncingAll"
             @click="synchroniseAll"
@@ -292,7 +295,7 @@
           </BaseButton>
           <RouterLink
             to="/settings/accounts"
-            class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700"
+            class="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700"
           >
             Connecter une banque
           </RouterLink>
@@ -311,7 +314,7 @@
           v-for="connection in connections"
           :key="connection.id"
           :data-testid="`connection-${connection.id}`"
-          class="rounded-xl bg-white p-6 shadow-sm dark:bg-slate-900 dark:shadow-slate-900/20"
+          class="rounded-xl bg-white p-4 shadow-sm sm:p-6 dark:bg-slate-900 dark:shadow-slate-900/20"
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="flex min-w-0 items-start gap-3">
@@ -498,7 +501,7 @@
             Aucun compte relié pour l'instant —
             <RouterLink
               to="/settings/accounts"
-              class="font-medium text-primary-600 hover:underline dark:text-primary-400"
+              class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
             >
               choisissez lesquels lire
             </RouterLink>
@@ -529,7 +532,7 @@
         <!-- CSV / manual accounts -->
         <section
           data-testid="manual-accounts"
-          class="rounded-xl bg-white p-6 shadow-sm dark:bg-slate-900 dark:shadow-slate-900/20"
+          class="rounded-xl bg-white p-4 shadow-sm sm:p-6 dark:bg-slate-900 dark:shadow-slate-900/20"
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -602,19 +605,19 @@
         >
           <RouterLink
             to="/bank-sync/history"
-            class="font-medium text-primary-600 hover:underline dark:text-primary-400"
+            class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
           >
             Historique des synchronisations
           </RouterLink>
           <RouterLink
             to="/import/history"
-            class="font-medium text-primary-600 hover:underline dark:text-primary-400"
+            class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
           >
             Historique des imports
           </RouterLink>
           <RouterLink
             to="/settings/accounts"
-            class="font-medium text-primary-600 hover:underline dark:text-primary-400"
+            class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
           >
             Configurer les comptes
           </RouterLink>

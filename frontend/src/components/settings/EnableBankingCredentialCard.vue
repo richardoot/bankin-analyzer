@@ -101,7 +101,7 @@
 
 <template>
   <div
-    class="rounded-xl border border-gray-200 p-5 dark:border-slate-700"
+    class="rounded-xl border border-gray-200 p-4 sm:p-5 dark:border-slate-700"
     data-testid="enable-banking-credential-card"
   >
     <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -122,9 +122,9 @@
         class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-primary-50 p-4 dark:bg-primary-900/20"
         data-testid="enable-banking-credential-configured"
       >
-        <p class="text-sm text-primary-800 dark:text-primary-200">
+        <p class="min-w-0 text-sm text-primary-800 dark:text-primary-200">
           Configurée — identifiant d'application :
-          <code class="font-mono">{{ applicationId }}</code>
+          <code class="font-mono break-all">{{ applicationId }}</code>
         </p>
         <button
           type="button"

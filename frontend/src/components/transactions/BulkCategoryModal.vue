@@ -57,7 +57,7 @@
   <Teleport to="body">
     <div
       v-if="isOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center"
+      class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
     >
       <div class="absolute inset-0 bg-black/50" @click="emit('close')" />
 
@@ -66,7 +66,7 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby="bulk-category-modal-title"
-        class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
+        class="relative max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl sm:rounded-xl sm:p-6 sm:pb-6 dark:bg-slate-900 dark:shadow-slate-900/30"
       >
         <h3
           id="bulk-category-modal-title"
@@ -87,7 +87,7 @@
           id="bulk-category"
           v-model="selectedCategoryId"
           data-testid="bulk-category-select"
-          class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 mb-4"
+          class="w-full min-h-[44px] px-3 py-2 border border-gray-300 sm:min-h-0 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 mb-4"
         >
           <option :value="null" disabled>Sélectionnez une catégorie</option>
           <option v-for="cat in categories" :key="cat.id" :value="cat.id">
@@ -106,7 +106,7 @@
           v-model="selectedSubcategoryId"
           data-testid="bulk-subcategory-select"
           :disabled="!selectedCategoryId"
-          class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 disabled:cursor-not-allowed disabled:opacity-50 mb-3"
+          class="w-full min-h-[44px] px-3 py-2 border border-gray-300 sm:min-h-0 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 disabled:cursor-not-allowed disabled:opacity-50 mb-3"
         >
           <option :value="null">Aucune</option>
           <option
@@ -140,7 +140,7 @@
 
         <div class="flex gap-3">
           <button
-            class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
+            class="flex-1 min-h-[44px] px-4 py-2.5 text-sm font-medium sm:min-h-0 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
             @click="emit('close')"
           >
             Annuler
@@ -148,7 +148,7 @@
           <button
             :disabled="!selectedCategoryId || isUpdating"
             data-testid="bulk-category-apply"
-            class="flex-1 px-4 py-2.5 text-sm font-medium text-white rounded-lg transition-colors"
+            class="flex-1 min-h-[44px] px-4 py-2.5 text-sm font-medium sm:min-h-0 text-white rounded-lg transition-colors"
             :class="
               selectedCategoryId && !isUpdating
                 ? 'bg-primary-600 dark:bg-primary-500 hover:bg-primary-700 dark:hover:bg-primary-600'

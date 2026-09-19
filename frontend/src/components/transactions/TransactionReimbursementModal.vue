@@ -115,7 +115,7 @@
   <Teleport to="body">
     <div
       v-if="isOpen && transaction"
-      class="fixed inset-0 z-50 flex items-center justify-center"
+      class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
     >
       <div class="absolute inset-0 bg-black/50" @click="emit('close')" />
 
@@ -124,7 +124,7 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby="reimbursement-modal-title"
-        class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl dark:shadow-slate-900/30 max-w-md w-full mx-4 p-6"
+        class="relative max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl sm:rounded-xl sm:p-6 sm:pb-6 dark:bg-slate-900 dark:shadow-slate-900/30"
       >
         <h3
           id="reimbursement-modal-title"
@@ -180,7 +180,7 @@
             </label>
             <select
               v-model="form.personId"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
+              class="w-full min-h-[44px] px-3 py-2 border border-gray-300 sm:min-h-0 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
             >
               <option value="">Sélectionnez une personne</option>
               <option
@@ -205,7 +205,7 @@
               step="0.01"
               min="0.01"
               :max="remainingAmount"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
+              class="w-full min-h-[44px] px-3 py-2 border border-gray-300 sm:min-h-0 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
             />
 
             <div class="mt-2">
@@ -218,7 +218,7 @@
                   v-for="d in [1, 2, 3, 4]"
                   :key="d"
                   type="button"
-                  class="px-2 py-1 text-xs font-medium rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+                  class="min-h-[40px] px-3 py-1 text-xs font-medium sm:min-h-0 sm:px-2 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30"
                   @click="setAmountFromDivisor(d)"
                 >
                   {{ d === 1 ? '100%' : `/ ${d}` }}
@@ -232,12 +232,12 @@
                     type="number"
                     min="1"
                     max="100"
-                    class="w-12 px-1.5 py-1 text-xs border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+                    class="w-14 min-h-[40px] px-1.5 py-1 text-xs sm:min-h-0 sm:w-12 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
                     @keyup.enter="applyCustomDivisor"
                   />
                   <button
                     type="button"
-                    class="px-2 py-1 text-xs font-medium rounded border border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/30"
+                    class="min-h-[40px] px-3 py-1 text-xs font-medium sm:min-h-0 sm:px-2 rounded border border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/30"
                     @click="applyCustomDivisor"
                   >
                     Appliquer
@@ -257,7 +257,7 @@
               v-model="form.note"
               type="text"
               placeholder="Ajouter une note..."
-              class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
+              class="w-full min-h-[44px] px-3 py-2 border border-gray-300 sm:min-h-0 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
             />
           </div>
         </div>
@@ -265,7 +265,7 @@
         <!-- Buttons -->
         <div class="flex gap-3 mt-6">
           <button
-            class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
+            class="flex-1 min-h-[44px] px-4 py-2.5 text-sm font-medium sm:min-h-0 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
             @click="emit('close')"
           >
             Annuler
@@ -277,7 +277,7 @@
               form.amount > remainingAmount ||
               isCreating
             "
-            class="flex-1 px-4 py-2.5 text-sm font-medium text-white rounded-lg transition-colors"
+            class="flex-1 min-h-[44px] px-4 py-2.5 text-sm font-medium sm:min-h-0 text-white rounded-lg transition-colors"
             :class="
               form.personId &&
               form.amount > 0 &&

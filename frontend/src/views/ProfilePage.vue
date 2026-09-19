@@ -45,7 +45,7 @@
 
 <template>
   <div
-    class="min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-slate-800 py-12 transition-colors"
+    class="min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-slate-800 py-6 sm:py-12 transition-colors"
   >
     <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
       <!-- Profile Header -->

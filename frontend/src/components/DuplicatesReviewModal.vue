@@ -201,7 +201,7 @@
     <Transition name="modal">
       <div
         v-if="isOpen && previewResult"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
       >
         <div class="fixed inset-0 bg-black/50" @click="handleClose" />
 
@@ -209,11 +209,11 @@
           ref="modalPanelRef"
           role="dialog"
           aria-modal="true"
-          class="relative z-10 w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-900 shadow-xl dark:shadow-slate-900/30 flex flex-col"
+          class="relative z-10 flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-slate-900 dark:shadow-slate-900/30"
         >
           <!-- Header -->
           <div
-            class="flex items-center justify-between p-6 border-b dark:border-slate-700"
+            class="flex items-center justify-between gap-3 p-4 sm:p-6 border-b dark:border-slate-700"
           >
             <div class="flex items-center gap-3">
               <div
@@ -240,7 +240,8 @@
               </h2>
             </div>
             <button
-              class="text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              class="-m-2 shrink-0 p-2 text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
+              aria-label="Fermer"
               @click="handleClose"
             >
               <svg
@@ -260,13 +261,13 @@
           </div>
 
           <!-- Content -->
-          <div class="flex-1 overflow-y-auto p-6 space-y-6">
+          <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
             <!-- Summary -->
             <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
               <h3 class="font-medium text-gray-900 dark:text-gray-100 mb-3">
                 Resume
               </h3>
-              <div class="grid grid-cols-3 gap-4 text-sm">
+              <div class="grid grid-cols-3 gap-2 sm:gap-4 text-sm">
                 <div class="text-center">
                   <div
                     class="text-2xl font-bold text-green-600 dark:text-green-400"
@@ -303,7 +304,7 @@
               v-if="previewResult.internalDuplicates.length > 0"
               class="space-y-4"
             >
-              <div class="flex items-center justify-between">
+              <div class="flex flex-wrap items-center justify-between gap-2">
                 <h3
                   class="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2"
                 >
@@ -402,7 +403,7 @@
               v-if="previewResult.externalDuplicates.length > 0"
               class="space-y-4"
             >
-              <div class="flex items-center justify-between">
+              <div class="flex flex-wrap items-center justify-between gap-2">
                 <h3
                   class="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2"
                 >
@@ -455,7 +456,9 @@
                 </div>
 
                 <!-- Side by side comparison -->
-                <div class="grid grid-cols-2 divide-x dark:divide-slate-700">
+                <div
+                  class="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0 dark:divide-slate-700"
+                >
                   <!-- Uploaded -->
                   <div class="p-4">
                     <div
@@ -568,7 +571,7 @@
 
           <!-- Footer -->
           <div
-            class="flex items-center justify-between p-6 border-t dark:border-slate-700 bg-gray-50 dark:bg-slate-800"
+            class="flex flex-col gap-3 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t sm:flex-row sm:items-center sm:justify-between sm:p-6 dark:border-slate-700 bg-gray-50 dark:bg-slate-800"
           >
             <div class="text-sm text-gray-600 dark:text-gray-400">
               <span class="font-medium text-green-600 dark:text-green-400">{{
@@ -580,10 +583,10 @@
               }}</span>
               ignores
             </div>
-            <div class="flex gap-3">
+            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
               <button
                 type="button"
-                class="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                class="min-h-[44px] px-4 py-2 sm:min-h-0 border border-gray-300 dark:border-slate-600 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
                 :disabled="loading"
                 @click="handleClose"
               >
@@ -591,7 +594,7 @@
               </button>
               <button
                 type="button"
-                class="px-4 py-2 bg-primary-600 dark:bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                class="min-h-[44px] px-4 py-2 sm:min-h-0 bg-primary-600 dark:bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="loading || totalToImport === 0"
                 @click="handleConfirm"
               >

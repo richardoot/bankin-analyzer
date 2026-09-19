@@ -167,7 +167,7 @@
                 >&middot;</span
               >
               <button
-                class="text-xs text-gray-500 dark:text-gray-400 truncate hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                class="relative truncate text-xs text-gray-500 transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-3 pointer-coarse:before:content-[''] hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
                 @click="emit('open-category')"
               >
                 {{ transaction.categoryName || 'Sans catégorie' }}
@@ -219,7 +219,7 @@
             </div>
             <!-- Pointed toggle -->
             <button
-              class="shrink-0 ml-2 -mr-1 flex items-center justify-center w-7 h-7 rounded-full transition-colors"
+              class="relative -my-1 -mr-1.5 ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors pointer-coarse:before:absolute pointer-coarse:before:-inset-1 pointer-coarse:before:content-['']"
               :class="
                 transaction.isPointed
                   ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
@@ -251,7 +251,7 @@
       </div>
 
       <!-- Note editor -->
-      <div v-if="isEditingNote" class="ml-12 mt-1.5">
+      <div v-if="isEditingNote" class="mt-1.5">
         <TransactionNoteEditor
           v-model="noteDraft"
           dense
@@ -261,11 +261,11 @@
       </div>
 
       <!-- ── Quick action bar (contextual, compact) ── -->
-      <div v-if="!selectionMode" class="flex items-center gap-1 ml-12 mt-1">
+      <div v-if="!selectionMode" class="ml-10 mt-0.5 flex items-center gap-1">
         <!-- Add note -->
         <button
           v-if="!transaction.note && !isEditingNote"
-          class="px-2 py-1 text-[11px] text-gray-500 dark:text-gray-400 rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+          class="inline-flex min-h-[36px] items-center rounded px-2.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-700"
           @click="emit('start-note')"
         >
           + Note
@@ -273,7 +273,7 @@
         <!-- Assign reimbursement -->
         <button
           v-if="isExpense && remainingAmount > 0"
-          class="px-2 py-1 text-[11px] text-amber-600 dark:text-amber-400 rounded hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+          class="inline-flex min-h-[36px] items-center rounded px-2.5 text-xs text-amber-600 transition-colors hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20"
           @click="emit('open-reimbursement')"
         >
           + Remb.
@@ -282,7 +282,7 @@
           v-else-if="
             isExpense && reimbursements.length > 0 && remainingAmount <= 0
           "
-          class="px-2 py-1 text-[11px] text-green-500 dark:text-green-400"
+          class="inline-flex min-h-[36px] items-center px-2.5 text-xs text-green-500 dark:text-green-400"
         >
           Assigne
         </span>
@@ -299,7 +299,7 @@
       <!-- ── Expanded reimbursements ── -->
       <div
         v-if="isExpense && reimbursementsExpanded && reimbursements.length > 0"
-        class="ml-12 mt-1.5"
+        class="mt-1.5"
       >
         <TransactionReimbursementList
           :reimbursements="reimbursements"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { ref, computed } from 'vue'
+  import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
   import { useRouter, useRoute } from 'vue-router'
   import { useAuthStore } from '@/stores/auth'
   import { useThemeStore } from '@/stores/theme'
@@ -62,6 +62,15 @@
   const closeMobileMenu = (): void => {
     isMobileMenuOpen.value = false
   }
+
+  // The menu closes the way a phone user expects: Escape, a tap outside,
+  // or simply arriving on the page they picked.
+  watch(() => route.path, closeMobileMenu)
+  const onKeydown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && isMobileMenuOpen.value) closeMobileMenu()
+  }
+  onMounted(() => document.addEventListener('keydown', onKeydown))
+  onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 
   const handleSignOut = async (): Promise<void> => {
     await authStore.signOut()
@@ -268,8 +277,14 @@
     <!-- Mobile menu -->
     <div
       v-if="isMobileMenuOpen"
+      class="fixed inset-0 top-16 z-[-1] bg-black/30 md:hidden"
+      aria-hidden="true"
+      @click="closeMobileMenu"
+    />
+    <div
+      v-if="isMobileMenuOpen"
       id="mobile-menu"
-      class="border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 md:hidden"
+      class="max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain border-t border-slate-100 bg-white pb-[env(safe-area-inset-bottom)] md:hidden dark:border-slate-800 dark:bg-slate-900"
     >
       <div class="px-4 py-3">
         <template v-if="isAuthenticated">
@@ -291,7 +306,7 @@
               v-for="link in navLinks"
               :key="link.to"
               :to="link.to"
-              class="block rounded-md px-3 py-2 text-base font-medium transition-colors"
+              class="block min-h-[44px] rounded-md px-3 py-2.5 text-base font-medium transition-colors"
               :class="
                 isActiveRoute(link.to)
                   ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
@@ -317,7 +332,7 @@
                 v-for="link in accountLinks"
                 :key="link.to"
                 :to="link.to"
-                class="block rounded-md px-3 py-2 text-base font-medium transition-colors"
+                class="block min-h-[44px] rounded-md px-3 py-2.5 text-base font-medium transition-colors"
                 :class="
                   isActiveRoute(link.to)
                     ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'

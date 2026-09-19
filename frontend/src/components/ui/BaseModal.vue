@@ -10,6 +10,10 @@
    *
    * Sixteen layers each respelled this markup; new dialogs start here, and
    * the confirm-style ones have already moved.
+   *
+   * The panel never outgrows the viewport: it caps at 90dvh and the body
+   * scrolls inside it. On a phone it rises from the bottom edge as a sheet
+   * and the footer buttons stack, primary on top.
    */
   const props = withDefaults(
     defineProps<{
@@ -51,7 +55,7 @@
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
     >
       <div class="fixed inset-0 bg-black/50" @click="requestClose" />
 
@@ -60,12 +64,12 @@
         role="dialog"
         aria-modal="true"
         :aria-labelledby="title ? titleId : undefined"
-        class="relative z-10 w-full rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900 dark:shadow-slate-900/30"
+        class="relative z-10 flex max-h-[90dvh] w-full flex-col rounded-t-2xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl sm:rounded-2xl sm:p-6 sm:pb-6 dark:bg-slate-900 dark:shadow-slate-900/30"
         :class="widthClass"
       >
         <div
           v-if="title || $slots.header"
-          class="mb-4 flex items-start justify-between gap-4"
+          class="mb-4 flex shrink-0 items-start justify-between gap-4"
         >
           <slot name="header">
             <h2
@@ -79,7 +83,7 @@
             v-if="closable"
             type="button"
             aria-label="Fermer"
-            class="-m-1 rounded-md p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+            class="relative -m-2 rounded-md p-2 text-gray-400 transition-colors hover:text-gray-600 pointer-coarse:before:absolute pointer-coarse:before:-inset-1 pointer-coarse:before:content-[''] dark:text-gray-500 dark:hover:text-gray-300"
             @click="requestClose"
           >
             <svg
@@ -98,9 +102,14 @@
           </button>
         </div>
 
-        <slot />
+        <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <slot />
+        </div>
 
-        <div v-if="$slots.footer" class="mt-6 flex justify-end gap-3">
+        <div
+          v-if="$slots.footer"
+          class="mt-5 flex shrink-0 flex-col-reverse gap-2 sm:mt-6 sm:flex-row sm:justify-end sm:gap-3"
+        >
           <slot name="footer" />
         </div>
       </div>

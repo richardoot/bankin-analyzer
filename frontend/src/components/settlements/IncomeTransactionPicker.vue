@@ -317,7 +317,7 @@
         type="text"
         placeholder="Rechercher une transaction..."
         data-testid="settlement-search"
-        class="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+        class="w-full min-h-[44px] pl-10 pr-4 py-2 text-base sm:min-h-0 sm:text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
       />
     </div>
 
@@ -325,7 +325,7 @@
       <button
         type="button"
         data-testid="settlement-toggle-filters"
-        class="text-primary-600 dark:text-primary-400 hover:underline"
+        class="inline-flex min-h-[40px] items-center text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
         @click="showFilters = !showFilters"
       >
         {{ showFilters ? 'Masquer les filtres' : 'Plus de filtres' }}
@@ -334,7 +334,7 @@
         v-if="hasActiveFilters"
         type="button"
         data-testid="settlement-clear-filters"
-        class="text-gray-500 dark:text-gray-400 hover:underline"
+        class="inline-flex min-h-[40px] items-center text-gray-500 hover:underline sm:min-h-0 dark:text-gray-400"
         @click="clearFilters"
       >
         Réinitialiser
@@ -344,7 +344,7 @@
     <div
       v-if="showFilters"
       data-testid="settlement-filters"
-      class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 p-3 border border-gray-200 dark:border-slate-700 rounded-lg"
+      class="grid grid-cols-2 gap-3 mb-4 p-3 border border-gray-200 dark:border-slate-700 rounded-lg"
     >
       <label class="text-sm">
         <span class="block text-gray-600 dark:text-gray-400 mb-1">Du</span>
@@ -352,7 +352,7 @@
           v-model="filterStartDate"
           type="date"
           data-testid="settlement-start-date"
-          class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+          class="w-full min-h-[44px] px-2 py-1.5 sm:min-h-0 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
         />
       </label>
       <label class="text-sm">
@@ -361,7 +361,7 @@
           v-model="filterEndDate"
           type="date"
           data-testid="settlement-end-date"
-          class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+          class="w-full min-h-[44px] px-2 py-1.5 sm:min-h-0 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
         />
       </label>
       <label class="text-sm">
@@ -371,7 +371,7 @@
         <select
           v-model="filterCategoryId"
           data-testid="settlement-category"
-          class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+          class="w-full min-h-[44px] px-2 py-1.5 sm:min-h-0 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
         >
           <option :value="null">Toutes</option>
           <option
@@ -391,7 +391,7 @@
           v-model="filterSubcategoryId"
           data-testid="settlement-subcategory"
           :disabled="!filterCategoryId"
-          class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+          class="w-full min-h-[44px] px-2 py-1.5 sm:min-h-0 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <option :value="null">Toutes</option>
           <option
@@ -413,7 +413,7 @@
           min="0"
           step="0.01"
           data-testid="settlement-amount-min"
-          class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+          class="w-full min-h-[44px] px-2 py-1.5 sm:min-h-0 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
         />
       </label>
       <label class="text-sm">
@@ -426,7 +426,7 @@
           min="0"
           step="0.01"
           data-testid="settlement-amount-max"
-          class="w-full px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+          class="w-full min-h-[44px] px-2 py-1.5 sm:min-h-0 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
         />
       </label>
     </div>
@@ -463,7 +463,7 @@
           >
             <div class="flex-1 min-w-0">
               <div
-                class="font-medium text-gray-900 dark:text-gray-100 truncate"
+                class="line-clamp-2 font-medium text-gray-900 sm:line-clamp-none sm:truncate dark:text-gray-100"
               >
                 {{ entry.transaction.description }}
               </div>
@@ -482,7 +482,7 @@
               </div>
             </div>
             <div
-              class="text-lg font-semibold text-primary-600 dark:text-primary-400 whitespace-nowrap"
+              class="shrink-0 text-base font-semibold whitespace-nowrap text-primary-600 sm:text-lg dark:text-primary-400"
             >
               +{{ formatCurrency(entry.available) }}
             </div>
@@ -492,7 +492,7 @@
           v-if="hiddenSuggestionCount > 0"
           type="button"
           data-testid="settlement-more-suggestions"
-          class="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:underline"
+          class="mt-2 inline-flex min-h-[40px] items-center text-sm text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
           @click="showAllSuggestions = true"
         >
           Voir les {{ hiddenSuggestionCount }} autres suggestions
@@ -505,7 +505,7 @@
         >
           Toutes les transactions recues
         </h3>
-        <div class="space-y-2 max-h-64 overflow-y-auto">
+        <div class="space-y-2 sm:max-h-64 sm:overflow-y-auto">
           <button
             v-for="entry in otherTransactions"
             :key="entry.transaction.id"
@@ -521,7 +521,7 @@
           >
             <div class="flex-1 min-w-0">
               <div
-                class="font-medium text-gray-900 dark:text-gray-100 truncate"
+                class="line-clamp-2 font-medium text-gray-900 sm:line-clamp-none sm:truncate dark:text-gray-100"
               >
                 {{ entry.transaction.description }}
               </div>
@@ -531,7 +531,7 @@
               </div>
             </div>
             <div
-              class="text-lg font-semibold text-primary-600 dark:text-primary-400 whitespace-nowrap"
+              class="shrink-0 text-base font-semibold whitespace-nowrap text-primary-600 sm:text-lg dark:text-primary-400"
             >
               +{{ formatCurrency(entry.available) }}
             </div>

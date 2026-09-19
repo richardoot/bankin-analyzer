@@ -25,7 +25,7 @@
 
 <template>
   <div
-    class="min-h-[calc(100vh-4rem)] bg-gray-50 py-12 transition-colors dark:bg-slate-800"
+    class="min-h-[calc(100vh-4rem)] bg-gray-50 py-6 sm:py-12 transition-colors dark:bg-slate-800"
   >
     <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
       <PageHeader
@@ -37,7 +37,7 @@
       <!-- Tab bar. Scrolls horizontally on narrow screens rather than wrapping,
            so the tabs keep reading as a single row. -->
       <nav
-        class="mb-8 -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+        class="mb-5 -mx-4 overflow-x-auto px-4 sm:mx-0 sm:mb-8 sm:px-0"
         aria-label="Sections des réglages"
       >
         <ul
@@ -47,7 +47,7 @@
             <RouterLink
               :to="tab.to"
               :data-testid="tab.testId"
-              class="block whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+              class="flex min-h-[44px] items-center whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:min-h-0"
               active-class="bg-primary-600 text-white dark:bg-primary-600"
               exact-active-class="bg-primary-600 text-white dark:bg-primary-600"
               :class="

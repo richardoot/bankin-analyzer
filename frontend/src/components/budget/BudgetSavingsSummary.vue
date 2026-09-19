@@ -112,7 +112,7 @@
     <section
       v-if="showFollowupBlock"
       data-testid="summary-followup"
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-5"
+      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5"
     >
       <header class="flex items-baseline justify-between gap-3 mb-4">
         <div>
@@ -130,7 +130,7 @@
         </div>
       </header>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+      <div class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
         <div class="flex flex-col gap-0.5">
           <span
             class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400"
@@ -170,7 +170,7 @@
         </div>
 
         <div
-          class="flex flex-col gap-0.5 sm:border-l sm:pl-4 border-gray-200 dark:border-slate-700"
+          class="col-span-2 flex flex-col gap-0.5 border-t border-gray-200 pt-3 sm:col-span-1 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4 dark:border-slate-700"
         >
           <span
             class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400"
@@ -201,7 +201,7 @@
     <section
       v-if="showPlanningBlock"
       data-testid="summary-planning"
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-5"
+      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5"
     >
       <header class="flex items-baseline justify-between gap-3 mb-4">
         <div>
@@ -219,7 +219,7 @@
         </div>
       </header>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+      <div class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
         <div class="flex flex-col gap-0.5">
           <span
             class="text-[11px] uppercase tracking-wide text-indigo-600 dark:text-indigo-400"
@@ -259,7 +259,7 @@
         </div>
 
         <div
-          class="flex flex-col gap-0.5 sm:border-l sm:pl-4 border-gray-200 dark:border-slate-700"
+          class="col-span-2 flex flex-col gap-0.5 border-t border-gray-200 pt-3 sm:col-span-1 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4 dark:border-slate-700"
         >
           <span
             class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400"
@@ -296,7 +296,7 @@
     <section
       v-if="!showFollowupBlock && !showPlanningBlock"
       data-testid="summary-plan-only"
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-5"
+      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5"
     >
       <header class="mb-3">
         <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">

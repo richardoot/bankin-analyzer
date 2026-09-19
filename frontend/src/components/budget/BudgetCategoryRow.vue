@@ -48,13 +48,13 @@
   <div :data-testid="`budget-row-${category.categoryName}`">
     <!-- Row -->
     <div
-      class="grid grid-cols-2 sm:[grid-template-columns:var(--row-grid)] sm:gap-x-6 gap-x-4 gap-y-2 sm:gap-y-0 items-center py-4 px-4 hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors"
+      class="grid grid-cols-3 sm:[grid-template-columns:var(--row-grid)] sm:gap-x-6 gap-x-3 gap-y-2 sm:gap-y-0 items-center py-3 sm:py-4 px-4 hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors"
       :style="{ '--row-grid': rowGrid }"
     >
       <!-- Name + chevron + status badge -->
       <button
         type="button"
-        class="col-span-2 sm:col-span-1 flex items-center gap-2 min-w-0 text-left"
+        class="col-span-3 sm:col-span-1 flex items-center gap-2 min-w-0 text-left"
         :aria-expanded="expanded"
         @click="emit('toggle-expand')"
       >
@@ -98,9 +98,12 @@
       <!-- Historique (conditional) -->
       <div
         v-if="showHistorical"
-        class="sm:text-right text-sm tabular-nums leading-tight"
+        class="text-right text-sm tabular-nums leading-tight"
       >
-        <span class="sm:hidden text-xs text-gray-400 mr-1">Historique :</span>
+        <span
+          class="block text-[10px] uppercase tracking-wide text-gray-400 sm:hidden"
+          >Historique</span
+        >
         <button
           v-if="editing && historicalAverage > 0"
           type="button"
@@ -120,16 +123,22 @@
       </div>
 
       <!-- Budget: read as text, edited only in edit mode -->
-      <div class="sm:text-right">
-        <div v-if="editing" class="relative inline-block">
+      <div class="text-right">
+        <span
+          v-if="editing"
+          class="block text-[10px] uppercase tracking-wide text-gray-400 sm:hidden"
+          >Budget</span
+        >
+        <div v-if="editing" class="relative inline-block w-full sm:w-auto">
           <input
             type="number"
             min="0"
             step="1"
             :value="budget > 0 ? budget : ''"
             placeholder="—"
+            inputmode="decimal"
             :data-testid="`budget-input-${category.categoryName}`"
-            class="w-24 sm:w-28 pl-2 pr-7 py-1.5 text-sm text-right bg-white dark:bg-slate-900 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900 dark:text-gray-100 tabular-nums font-medium"
+            class="w-full min-h-[40px] sm:min-h-0 sm:w-28 pl-2 pr-7 py-1.5 text-sm text-right bg-white dark:bg-slate-900 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900 dark:text-gray-100 tabular-nums font-medium"
             :class="
               dirty
                 ? 'border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20'
@@ -154,7 +163,10 @@
           </span>
         </div>
         <div v-else class="text-sm tabular-nums leading-tight">
-          <span class="sm:hidden text-xs text-gray-400 mr-1">Budget :</span>
+          <span
+            class="block text-[10px] uppercase tracking-wide text-gray-400 sm:hidden"
+            >Budget</span
+          >
           <span
             v-if="budget > 0"
             :data-testid="`budget-value-${category.categoryName}`"
@@ -180,9 +192,12 @@
       <!-- Réel à date (conditional) -->
       <div
         v-if="showActual"
-        class="sm:text-right text-sm tabular-nums leading-tight"
+        class="text-right text-sm tabular-nums leading-tight"
       >
-        <span class="sm:hidden text-xs text-gray-400 mr-1">Réel :</span>
+        <span
+          class="block text-[10px] uppercase tracking-wide text-gray-400 sm:hidden"
+          >Réel</span
+        >
         <button
           v-if="editing && actualAverage > 0"
           type="button"
@@ -318,7 +333,7 @@
               {{ sub.subcategory || '(sans sous-catégorie)' }}
             </span>
             <span
-              class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0"
+              class="hidden text-xs text-gray-500 tabular-nums shrink-0 sm:inline dark:text-gray-400"
             >
               {{ sub.transactionCount }} tx
             </span>

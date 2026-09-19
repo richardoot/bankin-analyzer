@@ -142,14 +142,17 @@
           />
         </svg>
 
-        <!-- Icon + name -->
-        <div class="flex items-center gap-2 min-w-0 flex-1">
+        <!-- Icon + name; the share sits beside the name on a desk and
+             wraps under it on a phone, where it used to be hidden outright. -->
+        <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2">
           <span v-if="cat.icon" class="text-lg shrink-0">{{ cat.icon }}</span>
-          <span class="font-medium text-gray-900 dark:text-gray-100 truncate">
+          <span
+            class="min-w-0 flex-1 truncate font-medium text-gray-900 dark:text-gray-100"
+          >
             {{ cat.category }}
           </span>
           <span
-            class="text-xs text-gray-500 dark:text-gray-400 shrink-0 hidden sm:inline"
+            class="basis-full text-xs text-gray-500 tabular-nums sm:basis-auto dark:text-gray-400"
           >
             {{ getPercent(cat).toFixed(1) }}%
           </span>
@@ -227,7 +230,7 @@
                 {{ sub.subcategory || '(sans sous-catégorie)' }}
               </span>
               <span
-                class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0"
+                class="hidden text-xs text-gray-500 tabular-nums shrink-0 sm:inline dark:text-gray-400"
               >
                 {{ sub.transactionCount }} tx
               </span>

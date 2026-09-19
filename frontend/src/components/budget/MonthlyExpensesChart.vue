@@ -4,6 +4,7 @@
   import type { ApexOptions } from 'apexcharts'
   import { useChartTheme } from '@/composables/useChartTheme'
   import { formatCurrency } from '@/lib/formatters'
+  import { useIsMobile } from '@/composables/useMediaQuery'
 
   const props = defineProps<{
     /** Total expenses per month (chronological) */
@@ -32,6 +33,17 @@
   }>()
 
   const { isDark, labelColor, chartTheme } = useChartTheme()
+  const isMobile = useIsMobile()
+
+  // On a ~340px plot the full « Revenus 3 456,78 € » labels overlapped the
+  // bars and each other; a phone gets « Rev. 3,5 k€ » on the left.
+  const compact = (n: number): string =>
+    new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency: 'EUR',
+      notation: 'compact',
+      maximumFractionDigits: 1,
+    }).format(n)
 
   const MONTHS_FR = [
     'Jan',
@@ -118,8 +130,11 @@
         borderColor: '#34d399',
         strokeDashArray: 4,
         label: {
-          text: `Revenus ${formatCurrency(props.averageIncome)}`,
-          position: 'right',
+          text: isMobile.value
+            ? `Rev. ${compact(props.averageIncome)}`
+            : `Revenus ${formatCurrency(props.averageIncome)}`,
+          position: isMobile.value ? 'left' : 'right',
+          textAnchor: isMobile.value ? 'start' : 'end',
           borderColor: 'transparent',
           style: {
             color: '#34d399',
@@ -137,8 +152,11 @@
         borderColor: '#818cf8',
         strokeDashArray: 4,
         label: {
-          text: `Budget ${formatCurrency(props.totalBudget)}`,
-          position: 'right',
+          text: isMobile.value
+            ? `Budget ${compact(props.totalBudget)}`
+            : `Budget ${formatCurrency(props.totalBudget)}`,
+          position: isMobile.value ? 'left' : 'right',
+          textAnchor: isMobile.value ? 'start' : 'end',
           borderColor: 'transparent',
           style: {
             color: '#818cf8',
@@ -201,7 +219,8 @@
     plotOptions: {
       bar: {
         borderRadius: 3,
-        columnWidth: '55%',
+        // Wider bars on a phone: each one is the month selector.
+        columnWidth: isMobile.value ? '75%' : '55%',
         distributed: true,
       },
     },
@@ -210,6 +229,9 @@
     xaxis: {
       categories: displayLabels.value,
       labels: {
+        rotate: -45,
+        rotateAlways: isMobile.value,
+        hideOverlappingLabels: true,
         style: {
           colors: props.monthLabels.map(ym => {
             if (ym === currentYearMonth) return CURRENT_COLOR
@@ -230,17 +252,20 @@
       axisTicks: { show: false },
     },
     yaxis: {
+      ...(isMobile.value ? { tickAmount: 4 } : {}),
       labels: {
         style: {
           colors: labelColor.value,
           fontSize: '11px',
         },
         formatter: (value: number) =>
-          new Intl.NumberFormat('fr-FR', {
-            style: 'currency',
-            currency: 'EUR',
-            maximumFractionDigits: 0,
-          }).format(value),
+          isMobile.value
+            ? compact(value)
+            : new Intl.NumberFormat('fr-FR', {
+                style: 'currency',
+                currency: 'EUR',
+                maximumFractionDigits: 0,
+              }).format(value),
       },
     },
     grid: {
@@ -363,7 +388,7 @@
     <VueApexCharts
       :key="isDark ? 'dark' : 'light'"
       type="bar"
-      :height="280"
+      :height="isMobile ? 220 : 280"
       :options="chartOptions"
       :series="series"
     />

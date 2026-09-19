@@ -54,14 +54,16 @@
   <div class="flex flex-col gap-3">
     <div class="flex flex-col sm:flex-row sm:items-center gap-3">
       <!-- Segmented control -->
+      <!-- A 5-column grid on a phone: the inline pill wrapped to a second
+           line at 375px and its rounded ends landed mid-row. -->
       <div
-        class="inline-flex rounded-lg bg-gray-100 dark:bg-slate-700/50 p-1 flex-wrap"
+        class="grid grid-cols-5 rounded-lg bg-gray-100 p-1 sm:inline-flex sm:flex-wrap dark:bg-slate-700/50"
       >
         <button
           v-for="(period, index) in periods"
           :key="period.value"
           :data-testid="`period-${period.value}`"
-          class="relative px-4 py-2 text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-800"
+          class="relative min-h-[44px] px-1 py-2 text-sm font-medium transition-all duration-200 focus:outline-none sm:min-h-0 sm:px-4 focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-800"
           :class="[
             filtersStore.timePeriod === period.value
               ? 'text-white'
@@ -108,9 +110,9 @@
     <div
       v-if="isCustom"
       data-testid="custom-date-pickers"
-      class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4"
+      class="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4"
     >
-      <div class="flex items-center gap-2">
+      <div class="flex min-w-0 items-center gap-2">
         <label
           for="custom-start-date"
           class="text-sm text-gray-600 dark:text-gray-400 shrink-0"
@@ -122,10 +124,10 @@
           v-model="startInput"
           data-testid="custom-start-date"
           type="date"
-          class="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 text-sm min-h-[44px] sm:min-h-0"
+          class="min-h-[44px] w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 sm:min-h-0 sm:w-auto dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
         />
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex min-w-0 items-center gap-2">
         <label
           for="custom-end-date"
           class="text-sm text-gray-600 dark:text-gray-400 shrink-0"
@@ -137,7 +139,7 @@
           v-model="endInput"
           data-testid="custom-end-date"
           type="date"
-          class="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 text-sm min-h-[44px] sm:min-h-0"
+          class="min-h-[44px] w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 sm:min-h-0 sm:w-auto dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
         />
       </div>
     </div>
