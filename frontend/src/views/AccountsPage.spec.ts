@@ -49,6 +49,8 @@ const connection = (
   status: 'ACTIVE',
   consentValidUntil: null,
   lastSyncAt: '2026-09-12T08:00:00.000Z',
+  lastSyncError: null,
+  lastSyncErrorAt: null,
   action: 'fetch',
   reason: '',
   daysUntilConsentExpires: 120,
@@ -290,5 +292,27 @@ describe('AccountsPage', () => {
     expect(balance.find('.text-red-600').exists()).toBe(true)
     // A CSV account never claims a balance it cannot know.
     expect(wrapper.find('[data-testid="balance-PEL"]').exists()).toBe(false)
+  })
+
+  it('surfaces the last sync failure on the connection card', async () => {
+    vi.mocked(api.getBankConnections).mockResolvedValue([
+      connection({
+        id: 'c1',
+        action: 'reconnect',
+        reason: 'the consent has lapsed',
+        lastSyncError: 'Enable Banking answered 401',
+        lastSyncErrorAt: '2026-09-19T04:31:00.000Z',
+      }),
+    ])
+
+    const wrapper = await mountPage()
+
+    const alert = wrapper.get('[data-testid="sync-error"]')
+    expect(alert.text()).toContain('Dernière synchronisation en échec')
+    expect(alert.text()).toContain('Enable Banking answered 401')
+    // The way out stands right next to the explanation.
+    expect(wrapper.get('[data-testid="reconnect-button"]').text()).toContain(
+      'Reconnecter'
+    )
   })
 })

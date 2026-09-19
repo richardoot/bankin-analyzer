@@ -31,6 +31,7 @@ import {
 } from '../ai-suggestions/category-rules'
 import {
   EnableBankingClient,
+  EnableBankingError,
   type BankAccountResource,
   type BankBalance,
   type BankTransaction,
@@ -138,6 +139,9 @@ export interface ConnectionView {
   status: string
   consentValidUntil: Date | null
   lastSyncAt: Date | null
+  /** Ce que la dernière synchro en échec a dit — null après un succès. */
+  lastSyncError: string | null
+  lastSyncErrorAt: Date | null
   /** What pressing sync would do right now, and why. */
   action: 'fetch' | 'skip' | 'reconnect'
   reason: string
@@ -540,6 +544,8 @@ export class BankSyncService {
       status: connection.status,
       consentValidUntil: connection.consentValidUntil,
       lastSyncAt: connection.lastSyncAt,
+      lastSyncError: connection.lastSyncError,
+      lastSyncErrorAt: connection.lastSyncErrorAt,
       action: decision.action,
       reason: decision.reason,
       daysUntilConsentExpires: warning?.daysLeft ?? null,
@@ -1428,86 +1434,126 @@ export class BankSyncService {
 
     const credentials = await this.credentialsOf(userId)
     const fetched = new Map<string, BankTransaction[]>()
-    for (const link of ingestable) {
-      fetched.set(
-        link.externalAccountId,
-        // `strategy: 'longest'` asks for the deepest window the bank will
-        // serve — ~90 days on a routine sync, measured. Omit it and the
-        // bank picks its own default: Boursorama's is the current calendar
-        // month, which silently dropped a late-August purchase from a
-        // September fetch. Every measurement this module was built on was
-        // taken WITH this parameter; the app's client just never sent it.
-        //
-        // `psu` says a person pressed the button — which is the only way a
-        // sync starts here. Without it the bank counts this read against
-        // PSD2's four-unattended-a-day; with it, it does not.
-        await this.client.listTransactions(
-          credentials,
+    try {
+      for (const link of ingestable) {
+        fetched.set(
           link.externalAccountId,
-          {
-            strategy: 'longest',
-            ...(psu ? { psu } : {}),
+          // `strategy: 'longest'` asks for the deepest window the bank will
+          // serve — ~90 days on a routine sync, measured. Omit it and the
+          // bank picks its own default: Boursorama's is the current calendar
+          // month, which silently dropped a late-August purchase from a
+          // September fetch. Every measurement this module was built on was
+          // taken WITH this parameter; the app's client just never sent it.
+          //
+          // `psu` says a person pressed the button — which is the only way a
+          // sync starts here. Without it the bank counts this read against
+          // PSD2's four-unattended-a-day; with it, it does not.
+          await this.client.listTransactions(
+            credentials,
+            link.externalAccountId,
+            {
+              strategy: 'longest',
+              ...(psu ? { psu } : {}),
+            }
+          )
+        )
+
+        // The balance of the moment, while the session is answering anyway.
+        // A failure here never fails the sync: the transactions are the
+        // product, the balance a perishable snapshot the next sync retakes.
+        try {
+          const balances = await this.client.getBalances(
+            credentials,
+            link.externalAccountId,
+            psu
+          )
+          const picked = pickBookedBalance(balances)
+          if (picked) {
+            await this.prisma.bankAccountLink.update({
+              where: { id: link.id },
+              data: {
+                balanceAmount: picked.amount,
+                balanceCurrency: picked.currency,
+                balanceAt: picked.at,
+              },
+            })
+            // The series point a future chart will read: one per (link, day),
+            // the last figure of the day winning over the earlier ones the
+            // three-a-day quota allows.
+            const referenceDate = utcDayOf(picked.at)
+            await this.prisma.bankAccountBalanceSnapshot.upsert({
+              where: {
+                linkId_referenceDate: { linkId: link.id, referenceDate },
+              },
+              create: {
+                linkId: link.id,
+                userId,
+                amount: picked.amount,
+                currency: picked.currency,
+                referenceDate,
+              },
+              update: { amount: picked.amount, currency: picked.currency },
+            })
           }
-        )
-      )
-
-      // The balance of the moment, while the session is answering anyway.
-      // A failure here never fails the sync: the transactions are the
-      // product, the balance a perishable snapshot the next sync retakes.
-      try {
-        const balances = await this.client.getBalances(
-          credentials,
-          link.externalAccountId,
-          psu
-        )
-        const picked = pickBookedBalance(balances)
-        if (picked) {
-          await this.prisma.bankAccountLink.update({
-            where: { id: link.id },
-            data: {
-              balanceAmount: picked.amount,
-              balanceCurrency: picked.currency,
-              balanceAt: picked.at,
-            },
-          })
-          // The series point a future chart will read: one per (link, day),
-          // the last figure of the day winning over the earlier ones the
-          // three-a-day quota allows.
-          const referenceDate = utcDayOf(picked.at)
-          await this.prisma.bankAccountBalanceSnapshot.upsert({
-            where: {
-              linkId_referenceDate: { linkId: link.id, referenceDate },
-            },
-            create: {
-              linkId: link.id,
-              userId,
-              amount: picked.amount,
-              currency: picked.currency,
-              referenceDate,
-            },
-            update: { amount: picked.amount, currency: picked.currency },
-          })
+        } catch (error) {
+          this.logger.warn(
+            `Balance read failed for "${link.accountName}": ` +
+              (error instanceof Error ? error.message : String(error))
+          )
         }
-      } catch (error) {
-        this.logger.warn(
-          `Balance read failed for "${link.accountName}": ` +
-            (error instanceof Error ? error.message : String(error))
-        )
       }
-    }
 
-    const outcome = await this.ingest(
-      userId,
-      connection.id,
-      connection.aspspName,
-      run.id,
-      fetched
-    )
-    await this.prisma.bankConnection.update({
-      where: { id: connection.id },
-      data: { lastSyncAt: new Date() },
-    })
-    return outcome
+      const outcome = await this.ingest(
+        userId,
+        connection.id,
+        connection.aspspName,
+        run.id,
+        fetched
+      )
+      await this.prisma.bankConnection.update({
+        where: { id: connection.id },
+        // A success clears the failure trace: the alert must describe the
+        // present, not a bad night three weeks ago.
+        data: {
+          lastSyncAt: new Date(),
+          lastSyncError: null,
+          lastSyncErrorAt: null,
+        },
+      })
+      return outcome
+    } catch (error) {
+      await this.recordSyncFailure(connection.id, error)
+      throw error
+    }
+  }
+
+  /**
+   * Leave the connection telling the truth about why reading it failed.
+   * The nightly cron has no screen: the connection carries the message and
+   * the Comptes page reads it at the next visit — state is the channel.
+   */
+  private async recordSyncFailure(
+    connectionId: string,
+    error: unknown
+  ): Promise<void> {
+    const message = error instanceof Error ? error.message : String(error)
+    // The bank refusing authentication IS the consent gone, whatever the
+    // stored status still believes: flip it so the policy answers
+    // 'reconnect' and the page's existing badge and button take over.
+    const revoked =
+      error instanceof EnableBankingError &&
+      (error.status === 401 || error.status === 403)
+    await this.prisma.bankConnection
+      .update({
+        where: { id: connectionId },
+        data: {
+          lastSyncError: message.slice(0, 500),
+          lastSyncErrorAt: new Date(),
+          ...(revoked ? { status: 'EXPIRED' as const } : {}),
+        },
+      })
+      // Recording must never mask the original error.
+      .catch(() => undefined)
   }
 
   /**
@@ -1544,7 +1590,12 @@ export class BankSyncService {
           skipped += 1
           continue
         }
-        await this.sync(connection.userId, connection.id, undefined, 'SCHEDULED')
+        await this.sync(
+          connection.userId,
+          connection.id,
+          undefined,
+          'SCHEDULED'
+        )
         synced += 1
       } catch (error) {
         // Resting states, not failures: "no account enabled" answers

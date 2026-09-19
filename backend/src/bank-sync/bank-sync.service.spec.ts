@@ -13,7 +13,7 @@ import {
   utcDayOf,
 } from './bank-sync.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { EnableBankingClient } from './enable-banking.client'
+import { EnableBankingClient, EnableBankingError } from './enable-banking.client'
 import { EnableBankingCredentialsService } from './enable-banking-credentials.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 
@@ -1369,5 +1369,60 @@ describe('runScheduledSync', () => {
     expect(sync).toHaveBeenCalledWith('u1', 'c-ok', undefined, 'SCHEDULED')
     expect(sync).toHaveBeenCalledTimes(3)
     expect(stateOf).toHaveBeenCalledTimes(4)
+  })
+})
+
+describe('recordSyncFailure', () => {
+  let service: BankSyncService
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        BankSyncService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: EnableBankingClient, useValue: mockClient },
+        {
+          provide: EnableBankingCredentialsService,
+          useValue: mockCredentialsService,
+        },
+        { provide: AiSuggestionsService, useValue: mockAiSuggestions },
+      ],
+    }).compile()
+    service = module.get<BankSyncService>(BankSyncService)
+    mockPrisma.bankConnection.update.mockResolvedValue({})
+  })
+
+  const record = (error: unknown) =>
+    (
+      service as unknown as {
+        recordSyncFailure: (id: string, error: unknown) => Promise<void>
+      }
+    ).recordSyncFailure('conn-1', error)
+
+  it('flips the connection to EXPIRED when the bank refuses authentication', async () => {
+    await record(new EnableBankingError(401, '', 'Unauthorized'))
+
+    expect(mockPrisma.bankConnection.update).toHaveBeenCalledWith({
+      where: { id: 'conn-1' },
+      data: expect.objectContaining({
+        status: 'EXPIRED',
+        lastSyncError: 'Unauthorized',
+        lastSyncErrorAt: expect.any(Date),
+      }),
+    })
+  })
+
+  it('records an ordinary failure without touching the status', async () => {
+    await record(new Error('bank timed out'))
+
+    const data = mockPrisma.bankConnection.update.mock.calls[0]?.[0]?.data
+    expect(data).toMatchObject({ lastSyncError: 'bank timed out' })
+    expect(data).not.toHaveProperty('status')
+  })
+
+  it('never masks the original error when recording itself fails', async () => {
+    mockPrisma.bankConnection.update.mockRejectedValue(new Error('db down'))
+    await expect(record(new Error('bank timed out'))).resolves.toBeUndefined()
   })
 })

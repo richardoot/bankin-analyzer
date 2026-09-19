@@ -90,6 +90,8 @@ function connection(
     status: 'ACTIVE',
     consentValidUntil: null,
     lastSyncAt: null,
+    lastSyncError: null,
+    lastSyncErrorAt: null,
     action: 'fetch',
     reason: 'due',
     daysUntilConsentExpires: 120,

@@ -717,6 +717,12 @@ model BankConnection {
   /// permitted requests doing it.
   retryAfter DateTime? @map("retry_after")
 
+  /// What the last failed sync said, kept until a sync succeeds. Written by
+  /// manual and scheduled syncs alike — the nightly cron has no screen, so
+  /// the connection carries the message and the Comptes page reads it.
+  lastSyncError   String?   @map("last_sync_error")
+  lastSyncErrorAt DateTime? @map("last_sync_error_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
