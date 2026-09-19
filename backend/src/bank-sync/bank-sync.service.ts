@@ -1547,8 +1547,14 @@ export class BankSyncService {
         await this.sync(connection.userId, connection.id, undefined, 'SCHEDULED')
         synced += 1
       } catch (error) {
-        // "No account enabled" is a resting state, not a failure.
-        if (error instanceof BadRequestException) {
+        // Resting states, not failures: "no account enabled" answers
+        // BadRequest, "no Enable Banking application configured" answers
+        // ServiceUnavailable. Neither is something a nightly walk can fix,
+        // and neither deserves a failure count that reads like an outage.
+        if (
+          error instanceof BadRequestException ||
+          error instanceof ServiceUnavailableException
+        ) {
           skipped += 1
           continue
         }

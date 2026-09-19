@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
-import { BadRequestException, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common'
 import {
   BankSyncService,
   syncPolicyOptionsFromEnv,
@@ -1325,6 +1329,7 @@ describe('runScheduledSync', () => {
       { id: 'c-ok', userId: 'u1', aspspName: 'Boursorama' },
       { id: 'c-spent', userId: 'u1', aspspName: 'CIC' },
       { id: 'c-broken', userId: 'u2', aspspName: 'BNP' },
+      { id: 'c-unconfigured', userId: 'u3', aspspName: 'Fortuneo' },
     ])
 
     const stateOf = vi
@@ -1344,20 +1349,25 @@ describe('runScheduledSync', () => {
       .spyOn(service, 'sync')
       .mockImplementation(async (_u, connectionId) => {
         if (connectionId === 'c-broken') throw new Error('bank said no')
+        // A user who never configured an Enable Banking application: a
+        // resting state the nightly walk cannot fix — counted as skipped.
+        if (connectionId === 'c-unconfigured') {
+          throw new ServiceUnavailableException('Bank sync is not configured')
+        }
         return {} as never
       })
 
     const summary = await service.runScheduledSync()
 
     expect(summary).toEqual({
-      considered: 3,
+      considered: 4,
       synced: 1,
-      skipped: 1,
+      skipped: 2,
       failed: 1,
     })
     // The one allowed sync ran unattended (no PSU) and marked SCHEDULED.
     expect(sync).toHaveBeenCalledWith('u1', 'c-ok', undefined, 'SCHEDULED')
-    expect(sync).toHaveBeenCalledTimes(2)
-    expect(stateOf).toHaveBeenCalledTimes(3)
+    expect(sync).toHaveBeenCalledTimes(3)
+    expect(stateOf).toHaveBeenCalledTimes(4)
   })
 })
