@@ -175,3 +175,6 @@ backups/
 # once and never again: committing it would leak the application's identity.
 *.pem
 *.key
+
+# Vitest 5 writes reporter output here
+.vitest/

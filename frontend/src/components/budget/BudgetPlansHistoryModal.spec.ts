@@ -195,17 +195,23 @@ describe('BudgetPlansHistoryModal', () => {
   })
 
   describe('deletion', () => {
-    const spyOnConfirm = () => vi.spyOn(window, 'confirm')
-    let confirmSpy: ReturnType<typeof spyOnConfirm>
+    // happy-dom ships no window.confirm, so the stub is what the component
+    // reaches; vi.stubGlobal mirrors it onto window.
+    const stubConfirm = () => {
+      const stub = vi.fn<() => boolean>()
+      vi.stubGlobal('confirm', stub)
+      return stub
+    }
+    let confirmSpy: ReturnType<typeof stubConfirm>
 
     beforeEach(() => {
       vi.mocked(api.getBudgetPlans).mockResolvedValue(makePlans())
       vi.mocked(api.deleteBudgetPlan).mockResolvedValue(undefined)
-      confirmSpy = spyOnConfirm()
+      confirmSpy = stubConfirm()
     })
 
     afterEach(() => {
-      confirmSpy.mockRestore()
+      vi.unstubAllGlobals()
     })
 
     it('calls deleteBudgetPlan and emits "deleted" when the user confirms', async () => {

@@ -689,10 +689,12 @@ describe('BudgetPage', () => {
         .find('[data-testid="budget-input-Alimentation"]')
         .setValue('300')
 
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+      // happy-dom ships no window.confirm; the stub is mirrored onto window.
+      const confirmSpy = vi.fn(() => false)
+      vi.stubGlobal('confirm', confirmSpy)
       expect(routeLeaveGuard?.()).toBe(false)
       expect(confirmSpy).toHaveBeenCalled()
-      confirmSpy.mockRestore()
+      vi.unstubAllGlobals()
     })
 
     it('keeps the draft when the save fails', async () => {
