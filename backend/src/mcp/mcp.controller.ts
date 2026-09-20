@@ -59,7 +59,7 @@ export class McpController {
           categoryId?: string
           account?: string
         } = {}
-        if (params.type) filters.type = params.type as TransactionType
+        if (params.type) filters.type = params.type
         if (params.startDate) filters.startDate = new Date(params.startDate)
         if (params.endDate) filters.endDate = new Date(params.endDate)
         if (params.categoryId) filters.categoryId = params.categoryId

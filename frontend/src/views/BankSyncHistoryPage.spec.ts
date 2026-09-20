@@ -21,7 +21,7 @@ function run(overrides: Partial<BankSyncRunDto> = {}): BankSyncRunDto {
     inserted: 3,
     claimed: 1,
     undoneAt: null,
-  trigger: 'MANUAL',
+    trigger: 'MANUAL',
     ...overrides,
   }
 }

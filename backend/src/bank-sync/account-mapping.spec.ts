@@ -21,12 +21,12 @@ function fixture(
     staged: transactionIds.map((_, i) => staged(externalAccountId, i)),
     verdicts: transactionIds.map(id =>
       id === null
-        ? ({ kind: 'new' } as AssignedVerdict)
-        : ({
+        ? { kind: 'new' }
+        : {
             kind: 'matched',
             transactionId: id,
             similarity: 1,
-          } as AssignedVerdict)
+          }
     ),
   }
 }

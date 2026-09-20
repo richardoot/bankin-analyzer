@@ -37,7 +37,10 @@ function readEnv(file, name) {
   const line = readFileSync(file, 'utf8')
     .split('\n')
     .find(l => l.startsWith(`${name}=`))
-  return line?.slice(name.length + 1).trim().replace(/^["']|["']$/g, '')
+  return line
+    ?.slice(name.length + 1)
+    .trim()
+    .replace(/^["']|["']$/g, '')
 }
 
 const envFile = path.join(repoRoot, 'backend', '.env')

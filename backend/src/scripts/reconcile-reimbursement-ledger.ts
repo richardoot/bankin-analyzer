@@ -314,7 +314,7 @@ export async function main(
     amount: Number(row.amount),
     payments: row.payments.map(payment => ({
       amount: Number(payment.amount),
-      kind: payment.kind as LedgerPaymentKind,
+      kind: payment.kind,
     })),
   }))
 
@@ -325,7 +325,7 @@ export async function main(
     amountUsed: Number(row.amountUsed),
     payments: row.payments.map(payment => ({
       amount: Number(payment.amount),
-      kind: payment.kind as LedgerPaymentKind,
+      kind: payment.kind,
     })),
   }))
 

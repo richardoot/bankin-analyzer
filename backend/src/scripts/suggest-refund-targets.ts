@@ -188,7 +188,7 @@ export function suggestRefundTargets(
     )
     suggestion.remaining = round2(suggestion.total - suggestion.alreadyDrawn)
     suggestion.lines.push(candidate)
-    bucket.set(key, suggestion as IgnoredSuggestion)
+    bucket.set(key, suggestion)
   }
 
   const byTotalDesc = <T extends { total: number }>(a: T, b: T): number =>

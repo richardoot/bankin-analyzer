@@ -7,12 +7,7 @@ import type {
 
 /** What the user picked in the "Comparer avec…" selector. */
 export type ComparisonPreset =
-  | 'none'
-  | '3m'
-  | '6m'
-  | '12m'
-  | 'year-ago'
-  | 'custom'
+  'none' | '3m' | '6m' | '12m' | 'year-ago' | 'custom'
 
 /** A concrete comparison window resolved from a preset (or custom dates). */
 export interface ComparisonRange {

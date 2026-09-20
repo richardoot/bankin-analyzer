@@ -55,7 +55,7 @@ import {
   type ConnectionState,
   type SyncPolicyOptions,
 } from './sync-policy'
-import { TransactionSource } from '../generated/prisma'
+import { TransactionSource, type Prisma } from '../generated/prisma'
 
 /** What a bank account looks like once a person has to decide about it. */
 /**
@@ -1695,7 +1695,7 @@ export class BankSyncService {
         date: new Date(row.date),
         amount: row.amount,
         label: row.label,
-        raw: row.raw as unknown as object,
+        raw: row.raw as unknown as Prisma.InputJsonObject,
       })),
       skipDuplicates: true,
     })

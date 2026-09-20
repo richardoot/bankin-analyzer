@@ -36,8 +36,7 @@ import type {
  * filter the list was showing plus the count they were shown.
  */
 export type BulkSelection =
-  | { ids: string[] }
-  | { filters: TransactionFilters; expectedCount: number }
+  { ids: string[] } | { filters: TransactionFilters; expectedCount: number }
 
 /** Where an imported transaction lands, however that was decided. */
 interface ImportFiling {

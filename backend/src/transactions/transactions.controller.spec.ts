@@ -477,7 +477,10 @@ describe('TransactionsController', () => {
       ).toHaveBeenCalledWith(
         mockUser.id,
         { page: 1, limit: 20 },
-        expect.objectContaining({ categoryId: 'cat-1', subcategoryId: 'sub-1' }),
+        expect.objectContaining({
+          categoryId: 'cat-1',
+          subcategoryId: 'sub-1',
+        }),
         undefined
       )
     })
@@ -710,12 +713,10 @@ describe('TransactionsController', () => {
 
       expect(
         mockTransactionsService.findAllByUserPaginated
-      ).toHaveBeenCalledWith(
-        mockUser.id,
-        { page: 1, limit: 20 },
-        undefined,
-        { by: 'amount', order: 'desc' }
-      )
+      ).toHaveBeenCalledWith(mockUser.id, { page: 1, limit: 20 }, undefined, {
+        by: 'amount',
+        order: 'desc',
+      })
     })
 
     it('rejects a sort column outside the allowlist', async () => {
