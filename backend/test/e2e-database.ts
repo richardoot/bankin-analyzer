@@ -187,7 +187,8 @@ export async function createE2eDatabase(
       throw new Error(
         `Migration ${path.basename(path.dirname(file))} failed: ${
           error instanceof Error ? error.message : String(error)
-        }`
+        }`,
+        { cause: error }
       )
     }
   }

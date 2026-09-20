@@ -101,6 +101,14 @@ export const prettierConfig = {
 // Root-level configuration (for config files at root)
 export default [
   sharedIgnores,
+  // typescript-eslint 8.70 refuses to guess between the workspaces' tsconfigs
+  // for files that live at the root.
+  {
+    name: 'root/parser-root',
+    languageOptions: {
+      parserOptions: { tsconfigRootDir: import.meta.dirname },
+    },
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   sharedJavaScriptConfig,
