@@ -3,10 +3,13 @@ import type { RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const routes: RouteRecordRaw[] = [
+  // The public pitch. A signed-in user has nothing to read there — the guard
+  // sends them to their data, and the navbar logo points there directly.
   {
     path: '/',
     name: 'home',
     component: () => import('@/views/HomePage.vue'),
+    meta: { guestOnly: true },
   },
   {
     path: '/login',
