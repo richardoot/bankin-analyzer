@@ -152,7 +152,7 @@
         </h3>
         <div class="grid gap-4 sm:grid-cols-2">
           <RouterLink
-            to="/"
+            to="/dashboard"
             class="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-slate-700 p-4 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800"
           >
             <div
@@ -174,10 +174,10 @@
             </div>
             <div>
               <p class="font-medium text-gray-900 dark:text-gray-100">
-                Accueil
+                Dashboard
               </p>
               <p class="text-sm text-gray-600 dark:text-gray-400">
-                Retour a la page d'accueil
+                Retour à vos finances
               </p>
             </div>
           </RouterLink>

@@ -88,8 +88,11 @@
         <!-- Logo + Navigation -->
         <div class="flex items-center gap-8">
           <!-- Logo -->
+          <!-- The public homepage is for visitors; a signed-in user's home is
+               their dashboard. -->
           <RouterLink
-            to="/"
+            :to="isAuthenticated ? '/dashboard' : '/'"
+            data-testid="navbar-logo"
             class="flex items-center gap-2"
             @click="closeMobileMenu"
           >
