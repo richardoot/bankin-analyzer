@@ -52,7 +52,9 @@ describe('e2e database harness', () => {
 
     // First attempt is handed the port we are sitting on. @prisma/dev does not
     // report that as an error: it waits forever, which is what the deadline is
-    // there to cut short.
+    // there to cut short. The same deadline then applies to the healthy retry,
+    // which competes with every other file's database start when the whole
+    // suite runs: 4 s was too tight for it and made this test flaky.
     let attempts = 0
     const reserve = async (count: number): Promise<number[]> => {
       attempts++
@@ -65,7 +67,7 @@ describe('e2e database harness', () => {
       return [serverPort, busy, shadowPort]
     }
 
-    database = await createE2eDatabase({ reserve, startTimeoutMs: 4000 })
+    database = await createE2eDatabase({ reserve, startTimeoutMs: 10_000 })
 
     expect(attempts).toBe(2)
     // The retry produced a working database, not just a resolved promise.
