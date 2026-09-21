@@ -50,9 +50,20 @@ export default defineConfig({
   plugins: [vue(), tailwindcss(), ...(useHttps ? [basicSsl()] : [])],
   define: httpsDefines,
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
+    alias: [
+      {
+        find: '@',
+        replacement: fileURLToPath(new URL('./src', import.meta.url)),
+      },
+      // Bare `apexcharts` (ours and vue3-apexcharts') resolves to the slim
+      // build in src/lib/apexcharts-slim.ts; subpaths keep resolving normally.
+      {
+        find: /^apexcharts$/,
+        replacement: fileURLToPath(
+          new URL('./src/lib/apexcharts-slim.ts', import.meta.url)
+        ),
+      },
+    ],
   },
   server: {
     port,
