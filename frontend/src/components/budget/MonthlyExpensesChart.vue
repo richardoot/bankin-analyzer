@@ -209,9 +209,12 @@
         dataPointSelection: (
           _event: unknown,
           _context: unknown,
-          config: { dataPointIndex: number }
+          config?: { dataPointIndex: number }
         ) => {
-          const ym = props.monthLabels[config.dataPointIndex]
+          const ym =
+            config === undefined
+              ? undefined
+              : props.monthLabels[config.dataPointIndex]
           if (ym) emit('select-month', ym)
         },
       },
