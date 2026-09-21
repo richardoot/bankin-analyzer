@@ -1,3 +1,11 @@
 packages:
   - 'frontend'
   - 'backend'
+
+# pnpm 10+ skips dependency install scripts unless they are listed here, and
+# pnpm 12 turns a skipped script into an install error. These three are the
+# only ones the build needs; the rest (telemetry, banners) stay ignored.
+onlyBuiltDependencies:
+  - '@prisma/engines'
+  - '@swc/core'
+  - prisma

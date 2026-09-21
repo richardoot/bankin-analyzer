@@ -1,7 +1,9 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# The pnpm version comes from "packageManager" in package.json, so the image
+# installs with the same pnpm the lockfile was written with.
+RUN corepack enable
 
 # Copy workspace files from root
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
@@ -25,7 +27,7 @@ RUN pnpm prisma generate
 RUN pnpm build
 
 # Production stage
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 
 COPY --from=builder /app/backend/dist ./dist
