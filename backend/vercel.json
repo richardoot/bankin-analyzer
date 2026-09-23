@@ -1,6 +1,6 @@
 {
-  "buildCommand": "pnpm build:vercel",
-  "installCommand": "pnpm install",
+  "buildCommand": "npx pnpm@12.5.1 build:vercel",
+  "installCommand": "npx pnpm@12.5.1 install",
   "outputDirectory": "dist",
   "crons": [
     {

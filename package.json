@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "packageManager": "pnpm@10.26.1",
+  "packageManager": "pnpm@12.5.1",
   "scripts": {
     "prepare": "husky",
     "dev": "pnpm -r --parallel dev",
@@ -35,11 +35,17 @@
     "node": "24.x"
   },
   "lint-staged": {
+    "{package.json,*/vercel.json}": [
+      "node scripts/check-pnpm-version.mjs"
+    ],
     "*.{js,ts,vue}": [
       "eslint --fix --max-warnings=100"
     ],
     "*.{js,ts,vue,json,md,yaml,yml,css,scss}": [
       "prettier --write"
     ]
+  },
+  "volta": {
+    "node": "24.21.0"
   }
 }

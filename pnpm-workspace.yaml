@@ -2,10 +2,20 @@ packages:
   - 'frontend'
   - 'backend'
 
-# pnpm 10+ skips dependency install scripts unless they are listed here, and
-# pnpm 12 turns a skipped script into an install error. These three are the
-# only ones the build needs; the rest (telemetry, banners) stay ignored.
-onlyBuiltDependencies:
-  - '@prisma/engines'
-  - '@swc/core'
-  - prisma
+# pnpm 11+ reads only auth and registry settings from .npmrc; everything else
+# lives here.
+shamefullyHoist: true
+strictPeerDependencies: false
+autoInstallPeers: true
+saveExact: true
+engineStrict: true
+
+# pnpm only runs a dependency's install scripts once it is listed here (pnpm
+# 11 replaced onlyBuiltDependencies with this map). The three set to true are
+# the ones the build relies on; telemetry and banners stay off.
+allowBuilds:
+  '@prisma/engines': true
+  '@swc/core': true
+  prisma: true
+  '@scarf/scarf': false
+  core-js: false
