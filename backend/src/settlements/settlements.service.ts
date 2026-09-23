@@ -125,9 +125,7 @@ export class SettlementsService {
       orderBy: { createdAt: 'desc' },
     })
 
-    return settlements.map(s =>
-      this.toResponseDto(s as SettlementWithRelations)
-    )
+    return settlements.map(s => this.toResponseDto(s))
   }
 
   async findOne(id: string, userId: string): Promise<SettlementResponseDto> {

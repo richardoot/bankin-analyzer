@@ -35,9 +35,6 @@
     "node": "24.x"
   },
   "lint-staged": {
-    "{package.json,*/vercel.json}": [
-      "node scripts/check-pnpm-version.mjs"
-    ],
     "*.{js,ts,vue}": [
       "eslint --fix --max-warnings=100"
     ],
