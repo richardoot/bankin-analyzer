@@ -3,7 +3,7 @@ import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import BudgetPage from './BudgetPage.vue'
 import type { BudgetPlanDto, BudgetStatisticsDto } from '@/lib/api'
 
-vi.mock('vue3-apexcharts', () => ({
+vi.mock('vue3-apexcharts/core', () => ({
   default: {
     name: 'VueApexCharts',
     props: ['type', 'height', 'options', 'series'],
@@ -689,10 +689,11 @@ describe('BudgetPage', () => {
         .find('[data-testid="budget-input-Alimentation"]')
         .setValue('300')
 
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+      // happy-dom ships no window.confirm; the stub is mirrored onto window.
+      const confirmSpy = vi.fn(() => false)
+      vi.stubGlobal('confirm', confirmSpy)
       expect(routeLeaveGuard?.()).toBe(false)
       expect(confirmSpy).toHaveBeenCalled()
-      confirmSpy.mockRestore()
     })
 
     it('keeps the draft when the save fails', async () => {

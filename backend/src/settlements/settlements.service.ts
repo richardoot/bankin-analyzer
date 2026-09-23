@@ -125,9 +125,7 @@ export class SettlementsService {
       orderBy: { createdAt: 'desc' },
     })
 
-    return settlements.map(s =>
-      this.toResponseDto(s as SettlementWithRelations)
-    )
+    return settlements.map(s => this.toResponseDto(s))
   }
 
   async findOne(id: string, userId: string): Promise<SettlementResponseDto> {
@@ -167,7 +165,7 @@ export class SettlementsService {
       throw new NotFoundException(`Settlement with ID ${id} not found`)
     }
 
-    return this.toResponseDto(settlement as SettlementWithRelations)
+    return this.toResponseDto(settlement)
   }
 
   async getAvailableAmount(
@@ -418,7 +416,7 @@ export class SettlementsService {
       return created
     })
 
-    return this.toResponseDto(settlement as SettlementWithRelations)
+    return this.toResponseDto(settlement)
   }
 
   async delete(id: string, userId: string): Promise<void> {

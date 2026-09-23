@@ -46,8 +46,9 @@ function stubEnableBanking(): void {
     vi.fn((url: string | URL | Request, init?: RequestInit) => {
       // Only Enable Banking is faked; the tooling's own fetches (the local
       // Prisma dev server phones home with query insights) pass through.
-      if (!String(url).startsWith('https://api.enablebanking.com')) {
-        return realFetch(url as never, init)
+      const target = url instanceof Request ? url.url : String(url)
+      if (!target.startsWith('https://api.enablebanking.com')) {
+        return realFetch(url, init)
       }
       return Promise.resolve(
         new Response(JSON.stringify(enableBankingAnswer.body), {

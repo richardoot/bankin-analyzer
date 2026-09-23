@@ -12,15 +12,19 @@ const mockSave = vi.fn()
 
 vi.mock('jspdf', () => {
   return {
-    default: vi.fn().mockImplementation(() => ({
-      text: mockText,
-      setFontSize: mockSetFontSize,
-      setFont: mockSetFont,
-      setTextColor: mockSetTextColor,
-      line: mockLine,
-      addPage: mockAddPage,
-      save: mockSave,
-    })),
+    // `new jsPDF()` needs a constructible implementation: vitest calls it
+    // with `new`, and an arrow function cannot be.
+    default: vi.fn(function () {
+      return {
+        text: mockText,
+        setFontSize: mockSetFontSize,
+        setFont: mockSetFont,
+        setTextColor: mockSetTextColor,
+        line: mockLine,
+        addPage: mockAddPage,
+        save: mockSave,
+      }
+    }),
   }
 })
 

@@ -36,7 +36,7 @@
 import { readFileSync } from 'fs'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
-import { PrismaClient } from '../generated/prisma'
+import { PrismaClient, type Prisma } from '../generated/prisma'
 import {
   findDuplicateGroups,
   reconcileAll,
@@ -180,7 +180,7 @@ export async function main(
         date: new Date(staged.date),
         amount: staged.amount,
         label: staged.label,
-        raw: raw as unknown as object,
+        raw: raw as unknown as Prisma.InputJsonObject,
       })),
       skipDuplicates: true,
     })

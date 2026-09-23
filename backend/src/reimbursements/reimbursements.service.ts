@@ -157,10 +157,7 @@ export class ReimbursementsService {
     // would reject at runtime — the spread that used to do it typechecked
     // fine.
     const responses = reimbursements.map(r =>
-      this.toResponseDto(
-        r as ReimbursementWithRelations,
-        filters?.includeTransaction
-      )
+      this.toResponseDto(r, filters?.includeTransaction)
     )
 
     return filters?.status
@@ -178,9 +175,7 @@ export class ReimbursementsService {
       orderBy: { createdAt: 'desc' },
     })
 
-    return reimbursements.map(r =>
-      this.toResponseDto(r as ReimbursementWithRelations)
-    )
+    return reimbursements.map(r => this.toResponseDto(r))
   }
 
   async findByPerson(
@@ -193,9 +188,7 @@ export class ReimbursementsService {
       orderBy: { createdAt: 'desc' },
     })
 
-    return reimbursements.map(r =>
-      this.toResponseDto(r as ReimbursementWithRelations, true)
-    )
+    return reimbursements.map(r => this.toResponseDto(r, true))
   }
 
   async findOne(
@@ -214,10 +207,7 @@ export class ReimbursementsService {
       )
     }
 
-    return this.toResponseDto(
-      reimbursement as ReimbursementWithRelations,
-      includeTransaction
-    )
+    return this.toResponseDto(reimbursement, includeTransaction)
   }
 
   async create(
@@ -270,7 +260,7 @@ export class ReimbursementsService {
       include: RESPONSE_INCLUDE,
     })
 
-    return this.toResponseDto(reimbursement as ReimbursementWithRelations)
+    return this.toResponseDto(reimbursement)
   }
 
   async update(
@@ -335,7 +325,7 @@ export class ReimbursementsService {
       include: RESPONSE_INCLUDE,
     })
 
-    return this.toResponseDto(reimbursement as ReimbursementWithRelations)
+    return this.toResponseDto(reimbursement)
   }
 
   // REMOVED: receivePayment. Crediting `amountReceived` outside the settlement

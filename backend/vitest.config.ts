@@ -12,7 +12,10 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      exclude: ['node_modules', 'dist', '**/*.spec.ts', '**/*.e2e-spec.ts'],
+      // Vitest 5 only reports what `include` names, and the generated Prisma
+      // client would otherwise dwarf the numbers.
+      include: ['src/**/*.ts'],
+      exclude: ['src/generated/**', '**/*.spec.ts', '**/*.e2e-spec.ts'],
     },
   },
   resolve: {

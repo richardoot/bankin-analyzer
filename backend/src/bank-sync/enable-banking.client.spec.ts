@@ -114,7 +114,7 @@ describe('EnableBankingClient PSU headers', () => {
         statusText: 'Bad Request',
         text: () =>
           Promise.resolve('{"error":{"code":"PSU_HEADER_NOT_PROVIDED"}}'),
-      } as unknown as Response)
+      })
       .mockResolvedValueOnce(ok({ transactions: [{ status: 'BOOK' }] }))
     const client = new EnableBankingClient()
 
@@ -136,7 +136,7 @@ describe('EnableBankingClient PSU headers', () => {
       statusText: 'Too Many Requests',
       text: () =>
         Promise.resolve('{"error":{"code":"ASPSP_RATE_LIMIT_EXCEEDED"}}'),
-    } as unknown as Response)
+    })
     const client = new EnableBankingClient()
 
     await expect(

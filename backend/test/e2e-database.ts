@@ -82,6 +82,31 @@ export async function reservePorts(count: number): Promise<number[]> {
 /** Marks a start that never completed, so the retry can tell it apart. */
 class StartTimeoutError extends Error {}
 
+/** Marks a reserved port that someone grabbed before the server could. */
+class PortBusyError extends Error {}
+
+/**
+ * Binds each port for an instant before the server does. A port taken between
+ * the reservation and now fails here in milliseconds, instead of leaving
+ * @prisma/dev waiting until the deadline cuts it short.
+ */
+async function assertPortsFree(ports: number[]): Promise<void> {
+  for (const port of ports) {
+    const probe = await new Promise<net.Server>((resolve, reject) => {
+      const server = net.createServer()
+      server.once('error', reject)
+      server.listen(port, '127.0.0.1', () => resolve(server))
+    }).catch((error: unknown) => {
+      throw new PortBusyError(
+        `port ${port} is already in use: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    })
+    await closeProbe(probe)
+  }
+}
+
 /**
  * A reserved port is only a port nobody held a moment ago — the probe has to let
  * go before the server can bind, and another spec file can slip into that gap.
@@ -92,7 +117,9 @@ class StartTimeoutError extends Error {}
  * symptom was a spec file timing out with nothing having failed.
  */
 function isPortConflict(error: unknown): boolean {
-  if (error instanceof StartTimeoutError) return true
+  if (error instanceof StartTimeoutError || error instanceof PortBusyError) {
+    return true
+  }
   if (!(error instanceof Error)) return false
   return (
     error.name === 'PortNotAvailableError' ||
@@ -118,6 +145,14 @@ async function startServerOnFreePorts(
   let lastError: unknown
   for (let attempt = 1; attempt <= MAX_START_ATTEMPTS; attempt++) {
     const [serverPort, databasePort, shadowDatabasePort] = await reserve(3)
+
+    try {
+      await assertPortsFree([serverPort, databasePort, shadowDatabasePort])
+    } catch (error) {
+      lastError = error
+      if (!isPortConflict(error)) throw error
+      continue
+    }
 
     const starting = startPrismaDevServer({
       name: `e2e-${process.pid}-${databasePort}`,
@@ -187,7 +222,8 @@ export async function createE2eDatabase(
       throw new Error(
         `Migration ${path.basename(path.dirname(file))} failed: ${
           error instanceof Error ? error.message : String(error)
-        }`
+        }`,
+        { cause: error }
       )
     }
   }

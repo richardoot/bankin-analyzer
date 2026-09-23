@@ -11,14 +11,13 @@
     planMonthCount: number
   }>()
 
-  const startMonth = defineModel<string>('startMonth', { required: true })
-  const endMonth = defineModel<string>('endMonth', { required: true })
-  const name = defineModel<string>('name', { required: true })
-
   const emit = defineEmits<{
     'set-preset': [preset: Preset]
     'name-edited': []
   }>()
+  const startMonth = defineModel<string>('startMonth', { required: true })
+  const endMonth = defineModel<string>('endMonth', { required: true })
+  const name = defineModel<string>('name', { required: true })
 </script>
 
 <template>

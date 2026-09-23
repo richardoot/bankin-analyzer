@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { computed } from 'vue'
-  import VueApexCharts from 'vue3-apexcharts'
+  import VueApexCharts from 'vue3-apexcharts/core'
+  import '@/lib/apexcharts-features'
   import type { ApexOptions } from 'apexcharts'
   import { useChartTheme } from '@/composables/useChartTheme'
   import { useIsMobile } from '@/composables/useMediaQuery'

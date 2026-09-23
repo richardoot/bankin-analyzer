@@ -5,7 +5,7 @@ import { api } from '@/lib/api'
 import type { TagAnalysisDto, TransactionDto } from '@/lib/api'
 import { nth } from '@/test/nth'
 
-vi.mock('vue3-apexcharts', () => ({
+vi.mock('vue3-apexcharts/core', () => ({
   default: {
     name: 'VueApexCharts',
     props: ['type', 'height', 'options', 'series'],

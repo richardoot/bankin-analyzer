@@ -13,7 +13,10 @@ import {
   utcDayOf,
 } from './bank-sync.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { EnableBankingClient, EnableBankingError } from './enable-banking.client'
+import {
+  EnableBankingClient,
+  EnableBankingError,
+} from './enable-banking.client'
 import { EnableBankingCredentialsService } from './enable-banking-credentials.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 

@@ -1,14 +1,19 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "module": "CommonJS",
-    "moduleResolution": "node",
+    // CommonJS output (package.json has no "type": "module") that still
+    // resolves the ESM-only NestJS 12 packages through their exports map,
+    // the way Node 24 does with require(esm).
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "resolvePackageJsonExports": true,
     "outDir": "./dist",
     "rootDir": "./src",
-    "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
+    // TypeScript 6 stops loading every @types package by default.
+    "types": ["node"],
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "target": "ES2022",

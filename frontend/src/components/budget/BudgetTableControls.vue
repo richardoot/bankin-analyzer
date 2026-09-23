@@ -26,10 +26,6 @@
     planEvents: { id: string; name: string; color: string | null }[]
   }>()
 
-  const sortOrder = defineModel<SortOrder>('sortOrder', {
-    default: 'amount-desc',
-  })
-
   const emit = defineEmits<{
     'enter-edit': []
     'select-month': [ym: string | null]
@@ -39,6 +35,10 @@
     'set-mode': [mode: BreakdownMode]
     'open-tag': [tagId: string]
   }>()
+
+  const sortOrder = defineModel<SortOrder>('sortOrder', {
+    default: 'amount-desc',
+  })
 </script>
 
 <template>

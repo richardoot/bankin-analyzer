@@ -1,10 +1,12 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Copy workspace files from root
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+# The pnpm the lockfile was written with, read from "packageManager": the
+# corepack bundled with Node 24 cannot launch pnpm 12, npm can install it.
+RUN npm install -g pnpm@$(node -p "require('./package.json').packageManager.slice(5)")
 
 # Copy backend package.json and prisma schema
 COPY backend/package.json ./backend/
@@ -25,7 +27,7 @@ RUN pnpm prisma generate
 RUN pnpm build
 
 # Production stage
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 
 COPY --from=builder /app/backend/dist ./dist

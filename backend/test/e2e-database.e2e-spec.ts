@@ -50,9 +50,9 @@ describe('e2e database harness', () => {
     if (busy === undefined) throw new Error('no port reserved')
     held = await occupy(busy)
 
-    // First attempt is handed the port we are sitting on. @prisma/dev does not
-    // report that as an error: it waits forever, which is what the deadline is
-    // there to cut short.
+    // First attempt is handed the port we are sitting on. The harness binds
+    // each port before spawning, so the collision fails in milliseconds and
+    // the retry runs under the normal deadline.
     let attempts = 0
     const reserve = async (count: number): Promise<number[]> => {
       attempts++
@@ -65,7 +65,7 @@ describe('e2e database harness', () => {
       return [serverPort, busy, shadowPort]
     }
 
-    database = await createE2eDatabase({ reserve, startTimeoutMs: 4000 })
+    database = await createE2eDatabase({ reserve })
 
     expect(attempts).toBe(2)
     // The retry produced a working database, not just a resolved promise.

@@ -3,7 +3,6 @@ import { api, AuthError } from './api'
 
 // Mock fetch globally
 const mockFetch = vi.fn()
-vi.stubGlobal('fetch', mockFetch)
 
 // Use vi.hoisted to define mocks that will be available in vi.mock
 const { mockGetSession, mockRefreshSession } = vi.hoisted(() => ({
@@ -23,6 +22,8 @@ vi.mock('./supabase', () => ({
 describe('api', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Re-stubbed per test: the config unstubs globals after each one.
+    vi.stubGlobal('fetch', mockFetch)
     // Default mock for getSession - returns valid token
     mockGetSession.mockResolvedValue({
       data: {

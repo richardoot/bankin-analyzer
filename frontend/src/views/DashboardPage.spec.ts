@@ -5,7 +5,7 @@ import DashboardPage from './DashboardPage.vue'
 import type { DashboardSummaryDto } from '@/lib/api'
 
 // Mock vue3-apexcharts
-vi.mock('vue3-apexcharts', () => ({
+vi.mock('vue3-apexcharts/core', () => ({
   default: {
     name: 'VueApexCharts',
     props: ['type', 'height', 'options', 'series'],

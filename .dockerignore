@@ -1,9 +1,13 @@
-# Dependencies
+# Dependencies. A bare `node_modules` only matches the root: the workspaces'
+# own node_modules (symlink farms into the host's virtual store) must be kept
+# out too, or `COPY backend/` overwrites what the image just installed.
 node_modules
+**/node_modules
 .pnpm-store
 
 # Build outputs
 dist
+**/dist
 .output
 .nuxt
 
