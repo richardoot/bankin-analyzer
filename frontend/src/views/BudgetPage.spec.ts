@@ -3,7 +3,7 @@ import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import BudgetPage from './BudgetPage.vue'
 import type { BudgetPlanDto, BudgetStatisticsDto } from '@/lib/api'
 
-vi.mock('vue3-apexcharts', () => ({
+vi.mock('vue3-apexcharts/core', () => ({
   default: {
     name: 'VueApexCharts',
     props: ['type', 'height', 'options', 'series'],
@@ -694,7 +694,6 @@ describe('BudgetPage', () => {
       vi.stubGlobal('confirm', confirmSpy)
       expect(routeLeaveGuard?.()).toBe(false)
       expect(confirmSpy).toHaveBeenCalled()
-      vi.unstubAllGlobals()
     })
 
     it('keeps the draft when the save fails', async () => {

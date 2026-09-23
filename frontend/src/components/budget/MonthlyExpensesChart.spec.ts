@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import MonthlyExpensesChart from './MonthlyExpensesChart.vue'
 
 // Mock vue3-apexcharts — capture options and series for assertions
-vi.mock('vue3-apexcharts', () => ({
+vi.mock('vue3-apexcharts/core', () => ({
   default: {
     name: 'VueApexCharts',
     props: ['type', 'height', 'options', 'series'],

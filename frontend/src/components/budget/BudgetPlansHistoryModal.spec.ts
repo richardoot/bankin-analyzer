@@ -210,10 +210,6 @@ describe('BudgetPlansHistoryModal', () => {
       confirmSpy = stubConfirm()
     })
 
-    afterEach(() => {
-      vi.unstubAllGlobals()
-    })
-
     it('calls deleteBudgetPlan and emits "deleted" when the user confirms', async () => {
       confirmSpy.mockReturnValue(true)
 

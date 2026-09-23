@@ -13,5 +13,8 @@ export default defineConfig({
     globals: true,
     environment: 'happy-dom',
     setupFiles: ['./src/test/setup.ts'],
+    // A stubbed global (window.confirm in the budget specs) must not outlive
+    // its test, even when an assertion fails before the manual cleanup.
+    unstubGlobals: true,
   },
 })
