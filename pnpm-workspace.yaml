@@ -19,3 +19,8 @@ allowBuilds:
   prisma: true
   '@scarf/scarf': false
   core-js: false
+minimumReleaseAgeExclude:
+  - '@nestjs/common@11.2.6'
+  - '@nestjs/core@11.2.6'
+  - '@nestjs/platform-express@11.2.6'
+  - '@nestjs/testing@11.2.6'
