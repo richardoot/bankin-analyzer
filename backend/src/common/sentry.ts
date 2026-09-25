@@ -24,8 +24,13 @@ export interface SentryEnv {
   VERCEL_GIT_COMMIT_SHA?: string | undefined
 }
 
-/** Applied unless the environment says otherwise. */
-export const DEFAULT_TRACES_SAMPLE_RATE = 0.2
+/**
+ * Applied unless the environment says otherwise. Everything, because a
+ * single-household application produces a few thousand requests a day,
+ * far inside the free quota, and a p95 out of a 20 % sample of that is
+ * a guess. Lower it from the environment the day the volume changes.
+ */
+export const DEFAULT_TRACES_SAMPLE_RATE = 1
 
 /** A rate is a number in [0, 1]; anything else means the default. */
 export function sampleRate(

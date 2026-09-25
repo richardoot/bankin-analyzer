@@ -66,7 +66,9 @@ variables, no component props, no prompts or model answers. The SQL in a
 span is parameterised. Both `sentryOptions` functions have a spec that
 asserts this.
 
-**Sample rates.** 20 % of requests and page loads are traced by default;
+**Sample rates.** Every request and page load is traced by default — the
+volume of a single household sits far inside the free quota, and a p95
+out of a 20 % sample of it would be a guess;
 `SENTRY_TRACES_SAMPLE_RATE` / `VITE_SENTRY_TRACES_SAMPLE_RATE` change it.
 Errors are always sent.
 

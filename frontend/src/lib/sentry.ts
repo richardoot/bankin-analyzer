@@ -28,7 +28,7 @@ export interface SentryEnv {
   MODE?: string | undefined
 }
 
-export const DEFAULT_TRACES_SAMPLE_RATE = 0.2
+export const DEFAULT_TRACES_SAMPLE_RATE = 1
 
 export function sampleRate(
   raw: string | undefined,
