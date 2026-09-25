@@ -10,6 +10,19 @@ import { Prisma } from '../../generated/prisma'
 import { EnableBankingError } from '../../bank-sync/enable-banking.client'
 import type { Response } from 'express'
 
+/** What the request-log middleware stamped on this response, if it ran. */
+function requestIdOf(response: Response): string | undefined {
+  const id: unknown = response.locals?.requestId
+  return typeof id === 'string' ? id : undefined
+}
+
+/** The shape every error answer takes; what Nest's own exceptions produce. */
+interface ErrorBody {
+  statusCode: number
+  message: string | string[]
+  [key: string]: unknown
+}
+
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name)
@@ -23,13 +36,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const status = exception.getStatus()
       const exceptionResponse = exception.getResponse()
 
-      response
-        .status(status)
-        .json(
-          typeof exceptionResponse === 'string'
-            ? { statusCode: status, message: exceptionResponse }
-            : exceptionResponse
-        )
+      this.answer(
+        response,
+        typeof exceptionResponse === 'string'
+          ? { statusCode: status, message: exceptionResponse }
+          : (exceptionResponse as ErrorBody)
+      )
       return
     }
 
@@ -43,7 +55,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
           '("Activate by linking accounts"), then retry.'
         : ''
       this.logger.warn(`Enable Banking ${exception.status}: ${detail}`)
-      response.status(HttpStatus.BAD_GATEWAY).json({
+      this.answer(response, {
         statusCode: HttpStatus.BAD_GATEWAY,
         message: `Enable Banking refused this request (${exception.status}): ${detail}.${hint}`,
       })
@@ -52,8 +64,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     // Prisma known errors (constraint violations, not found, etc.)
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
-      const prismaResponse = this.handlePrismaError(exception)
-      response.status(prismaResponse.statusCode).json(prismaResponse)
+      this.answer(response, this.handlePrismaError(exception))
       return
     }
 
@@ -62,14 +73,33 @@ export class AllExceptionsFilter implements ExceptionFilter {
       exception instanceof Error ? exception.message : 'Internal server error'
 
     this.logger.error(
-      `Unhandled exception: ${message}`,
+      `Unhandled exception: ${message} [${requestIdOf(response) ?? '-'}]`,
       exception instanceof Error ? exception.stack : undefined
     )
 
-    response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+    this.answer(response, {
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Internal server error',
     })
+  }
+
+  /**
+   * Send the error, and leave two things behind for the request log line
+   * written when the response finishes (common/request-log.ts): the
+   * message, so a 4xx is explained without a second line of its own; and,
+   * on a 5xx, the request id in the body, so the reference a user reads in
+   * a toast is the one to search the logs for.
+   */
+  private answer(response: Response, body: ErrorBody): void {
+    const requestId = requestIdOf(response)
+    if (response.locals) {
+      response.locals.error = Array.isArray(body.message)
+        ? body.message.join(', ')
+        : body.message
+    }
+    const payload =
+      body.statusCode >= 500 && requestId ? { ...body, requestId } : body
+    response.status(body.statusCode).json(payload)
   }
 
   /** The human sentence in an Enable Banking error body, if there is one. */

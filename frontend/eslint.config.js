@@ -30,13 +30,14 @@ export default [
   // Shared rules
   sharedJavaScriptConfig,
 
-  // Override TypeScript config for Vue
+  // Override TypeScript config for Vue.
+  // No `plugins` entry: @vue/eslint-config-typescript has already registered
+  // `@typescript-eslint` above, and ESLint 10 refuses a second registration
+  // of the same name from another copy of the package. The rules below
+  // address the plugin it registered.
   {
     name: 'frontend/typescript',
     files: ['**/*.{ts,tsx,vue}'],
-    plugins: {
-      '@typescript-eslint': tseslint.plugin,
-    },
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {

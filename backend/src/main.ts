@@ -1,13 +1,15 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { NestFactory } from '@nestjs/core'
-import { ValidationPipe } from '@nestjs/common'
+import { Logger, ValidationPipe } from '@nestjs/common'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
 import helmet from 'helmet'
 import { AppModule } from './app.module'
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter'
 import { apiDocsEnabled, helmetOptions } from './common/http-hardening'
+import { createLogger, logFormat } from './common/logging'
+import { requestLogger } from './common/request-log'
 
 /**
  * TLS for local development, opt-in through `BACKEND_HTTPS=1`.
@@ -48,7 +50,15 @@ async function bootstrap(): Promise<void> {
   const tls = httpsOptions()
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     ...(tls ? { httpsOptions: tls } : {}),
+    // JSON lines in production so Vercel indexes them, readable ones at a
+    // desk. Decided in common/logging.ts.
+    logger: createLogger(process.env),
   })
+
+  // One line per request, with an id the response also carries. First in
+  // the chain so that a request refused by a guard or the throttler is
+  // logged too.
+  app.use(requestLogger(logFormat(process.env)))
 
   // Trust the reverse proxy (Vercel, Railway, etc.) so that `req.protocol`
   // reflects the client-facing scheme from `X-Forwarded-Proto` and the MCP
@@ -111,6 +121,8 @@ async function bootstrap(): Promise<void> {
   // containers among them — keeps 3000 and the two can run side by side.
   const port = Number(process.env.PORT ?? (tls ? 3443 : 3000))
   await app.listen(port)
-  console.log(`Listening on ${tls ? 'https' : 'http'}://localhost:${port}`)
+  new Logger('Bootstrap').log(
+    `Listening on ${tls ? 'https' : 'http'}://localhost:${port}`
+  )
 }
 void bootstrap()

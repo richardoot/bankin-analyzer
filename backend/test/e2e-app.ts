@@ -21,6 +21,7 @@ import { AppModule } from '../src/app.module'
 import { PrismaService } from '../src/prisma/prisma.service'
 import { SupabaseService } from '../src/auth/supabase.service'
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter'
+import { requestLogger } from '../src/common/request-log'
 import { createE2eDatabase } from './e2e-database'
 
 /** A caller: a bearer token, and the Supabase identity it stands for. */
@@ -103,6 +104,7 @@ export async function createE2eApp(
 
   // Mirrors main.ts: without these, DTO validation and error shapes differ
   // from production and the specs would assert on something that never runs.
+  app.use(requestLogger('pretty'))
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

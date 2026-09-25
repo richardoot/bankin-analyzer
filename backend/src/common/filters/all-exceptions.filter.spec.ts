@@ -16,6 +16,7 @@ describe('AllExceptionsFilter', () => {
   let mockResponse: {
     status: ReturnType<typeof vi.fn>
     json: ReturnType<typeof vi.fn>
+    locals: Record<string, unknown>
   }
   let mockHost: { switchToHttp: ReturnType<typeof vi.fn> }
 
@@ -25,6 +26,7 @@ describe('AllExceptionsFilter', () => {
     mockResponse = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn(),
+      locals: {},
     }
 
     mockHost = {
@@ -312,5 +314,70 @@ describe('AllExceptionsFilter', () => {
         message: 'Internal server error',
       })
     })
+  })
+})
+
+describe('AllExceptionsFilter — what it leaves for the request log', () => {
+  function run(
+    exception: unknown,
+    locals: Record<string, unknown> | undefined = {}
+  ): {
+    status: ReturnType<typeof vi.fn>
+    json: ReturnType<typeof vi.fn>
+    locals: Record<string, unknown> | undefined
+  } {
+    const response = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+      locals,
+    }
+    const host = {
+      switchToHttp: () => ({ getResponse: () => response }),
+    }
+    new AllExceptionsFilter().catch(exception, host as never)
+    return response
+  }
+
+  it('records the message a 4xx was answered with', () => {
+    const response = run(new UnauthorizedException('No token provided'))
+    expect(response.locals?.error).toBe('No token provided')
+  })
+
+  it('joins a validation list into one message', () => {
+    const response = run(
+      new BadRequestException(['date must be a string', 'amount is required'])
+    )
+    expect(response.locals?.error).toBe(
+      'date must be a string, amount is required'
+    )
+  })
+
+  it('puts the request id in a 500 body, and only there', () => {
+    const boom = run(new Error('boom'), { requestId: 'cdg1::abc' })
+    expect(boom.json).toHaveBeenCalledWith({
+      statusCode: 500,
+      message: 'Internal server error',
+      requestId: 'cdg1::abc',
+    })
+
+    const missing = run(new NotFoundException('nope'), {
+      requestId: 'cdg1::abc',
+    })
+    expect(missing.json).toHaveBeenCalledWith(
+      expect.not.objectContaining({ requestId: expect.anything() })
+    )
+  })
+
+  it('answers without a request id when no middleware stamped one', () => {
+    const response = run(new Error('boom'))
+    expect(response.json).toHaveBeenCalledWith({
+      statusCode: 500,
+      message: 'Internal server error',
+    })
+  })
+
+  it('survives a response without locals', () => {
+    const response = run(new Error('boom'), undefined)
+    expect(response.status).toHaveBeenCalledWith(500)
   })
 })

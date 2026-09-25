@@ -892,14 +892,23 @@ async function readErrorMessage(
   response: Response,
   fallbackAction: string
 ): Promise<string> {
+  let message = `Failed to ${fallbackAction}`
   try {
-    const body = (await response.json()) as { message?: string | string[] }
-    if (Array.isArray(body.message)) return body.message.join(', ')
-    if (typeof body.message === 'string') return body.message
+    const body = (await response.json()) as {
+      message?: string | string[]
+      requestId?: string
+    }
+    if (Array.isArray(body.message)) message = body.message.join(', ')
+    else if (typeof body.message === 'string') message = body.message
+    // A 5xx carries the id its log line is filed under. Shown to the user
+    // so that "it failed" can become "it failed, here is the reference".
+    if (response.status >= 500 && typeof body.requestId === 'string') {
+      message += ` (réf. ${body.requestId})`
+    }
   } catch {
     // body wasn't JSON; ignore
   }
-  return `Failed to ${fallbackAction}`
+  return message
 }
 
 // ---------------------------------------------------------------------------
