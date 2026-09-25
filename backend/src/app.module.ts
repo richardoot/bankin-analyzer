@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { APP_GUARD } from '@nestjs/core'
 import { ConfigModule } from '@nestjs/config'
+import { SentryModule } from '@sentry/nestjs/setup'
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler'
 import { HealthModule } from './health/health.module'
 import { AiSuggestionsModule } from './ai-suggestions/ai-suggestions.module'
@@ -24,6 +25,9 @@ import { BankSyncModule } from './bank-sync/bank-sync.module'
 
 @Module({
   imports: [
+    // Names each span after the handler it ran and, on Vercel, keeps a
+    // request's scope isolated from the next. Inert without SENTRY_DSN.
+    SentryModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
     }),

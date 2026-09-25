@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useAsyncAction } from './useAsyncAction'
 
 const mockToastError = vi.fn()
+const { captureException } = vi.hoisted(() => ({ captureException: vi.fn() }))
+
+vi.mock('@sentry/vue', () => ({ captureException }))
 
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
@@ -91,5 +94,27 @@ describe('useAsyncAction', () => {
     }, 'Fallback')
 
     expect(mockToastError).toHaveBeenCalledWith('toast error')
+  })
+})
+
+describe('useAsyncAction — what Sentry hears about', () => {
+  beforeEach(() => {
+    captureException.mockClear()
+  })
+
+  it('reports the error behind a toast, so it is not lost with it', async () => {
+    const { run } = useAsyncAction()
+    const boom = new TypeError('Cannot read properties of undefined')
+    await run(() => Promise.reject(boom), 'fallback')
+    expect(captureException).toHaveBeenCalledWith(boom)
+  })
+
+  it('keeps a session problem out: the login flow owns it', async () => {
+    const { run } = useAsyncAction()
+    const expired = new Error('Session expiree')
+    expired.name = 'AuthError'
+    await run(() => Promise.reject(expired), 'fallback')
+    expect(captureException).not.toHaveBeenCalled()
+    expect(mockToastError).toHaveBeenCalledWith('Session expiree')
   })
 })

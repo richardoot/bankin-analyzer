@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common'
 import type { Request } from 'express'
+import * as Sentry from '@sentry/nestjs'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { SupabaseService } from '../supabase.service'
 import { UsersService } from '../../users/users.service'
@@ -46,6 +47,10 @@ export class SupabaseGuard implements CanActivate {
     // Attach both Supabase user and DB user to request
     request.supabaseUser = supabaseUser
     request.user = user
+
+    // What Sentry knows of the person: an opaque id, so that an error can
+    // be counted per user and a trace found again, and nothing more.
+    Sentry.setUser({ id: user.id })
 
     return true
   }
