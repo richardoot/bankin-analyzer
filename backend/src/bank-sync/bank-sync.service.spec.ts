@@ -1367,6 +1367,9 @@ describe('runScheduledSync', () => {
       synced: 1,
       skipped: 2,
       failed: 1,
+      failures: [
+        { aspspName: 'BNP', connectionId: 'c-broken', reason: 'bank said no' },
+      ],
     })
     // The one allowed sync ran unattended (no PSU) and marked SCHEDULED.
     expect(sync).toHaveBeenCalledWith('u1', 'c-ok', undefined, 'SCHEDULED')

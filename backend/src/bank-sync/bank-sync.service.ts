@@ -242,6 +242,16 @@ const CARD_ACCOUNT_WARNING =
   'A card account: its purchases are already reported by the account it ' +
   'settles onto, so ingesting both counts each of them twice.'
 
+/** What the nightly walk did, and which connections it could not serve. */
+export interface ScheduledSyncSummary {
+  considered: number
+  synced: number
+  skipped: number
+  failed: number
+  /** One entry per failure: the bank's name and the error's own words. */
+  failures: { aspspName: string; connectionId: string; reason: string }[]
+}
+
 @Injectable()
 export class BankSyncService {
   private readonly logger = new Logger(BankSyncService.name)
@@ -1567,18 +1577,14 @@ export class BankSyncService {
    * skipped without noise: for the balance series, a user who already
    * synced today has their point.
    */
-  async runScheduledSync(): Promise<{
-    considered: number
-    synced: number
-    skipped: number
-    failed: number
-  }> {
+  async runScheduledSync(): Promise<ScheduledSyncSummary> {
     const connections = await this.prisma.bankConnection.findMany({
       select: { id: true, userId: true, aspspName: true },
     })
     let synced = 0
     let skipped = 0
     let failed = 0
+    const failures: ScheduledSyncSummary['failures'] = []
     for (const connection of connections) {
       try {
         const decision = decide(
@@ -1610,14 +1616,25 @@ export class BankSyncService {
           continue
         }
         failed += 1
+        const reason = error instanceof Error ? error.message : String(error)
+        failures.push({
+          aspspName: connection.aspspName,
+          connectionId: connection.id,
+          reason,
+        })
         this.logger.warn(
           `Scheduled sync failed for ${connection.aspspName} ` +
-            `(${connection.id}): ` +
-            (error instanceof Error ? error.message : String(error))
+            `(${connection.id}): ${reason}`
         )
       }
     }
-    const summary = { considered: connections.length, synced, skipped, failed }
+    const summary: ScheduledSyncSummary = {
+      considered: connections.length,
+      synced,
+      skipped,
+      failed,
+      failures,
+    }
     this.logger.log(
       `Scheduled sync: ${synced} synced, ${skipped} skipped, ` +
         `${failed} failed of ${connections.length} connections`

@@ -96,10 +96,29 @@ Optional, backend: setting `NODE_OPTIONS=--enable-source-maps` on the
 Vercel backend project makes Node map the stack frames to TypeScript at
 runtime, which Sentry then shows as such. No upload needed.
 
+## Lot 2 — the nightly bank sync reports for duty
+
+Nothing else notices a cron that does not run: the health check stays
+green, the logs stay empty, the user finds no new balance point and
+cannot say why. So every run of `/bank-sync/scheduled-run` checks in
+with Sentry when it starts and when it ends (`backend/src/common/
+cron-monitor.ts`), under the monitor `daily-bank-sync`, whose schedule is
+the crontab from `backend/vercel.json` — a spec keeps the two equal.
+
+Sentry raises an issue, hence an email, when a run is **missed** (no
+check-in within 10 minutes of 04:30 UTC), **fails**, or **times out**
+(still in progress after 10 minutes). A night on which any bank refused
+counts as a failed run even though the HTTP answer stays 200 for Vercel,
+and a warning event lists the banks and the errors' own words, grouped
+under one issue so that repeated bad nights stack up and a good night
+lets it be resolved.
+
+The monitor appears under **Monitors** in Sentry after the first run;
+nothing to create by hand. To watch it before the next 04:30, trigger a
+run by calling the route with `Authorization: Bearer <CRON_SECRET>`.
+
 ## What the next lots add
 
-- **Lot 2 — cron monitor**: `/bank-sync/scheduled-run` wrapped in a Sentry
-  Cron Monitor, and a captured message when any connection failed.
 - **Lot 3 — business metrics**: structured events for CSV imports, AI
   categorisation (tokens, cost), Enable Banking calls (latency, status),
   bank syncs per connection, and the pg pool at request end.
