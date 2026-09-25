@@ -117,8 +117,42 @@ The monitor appears under **Monitors** in Sentry after the first run;
 nothing to create by hand. To watch it before the next 04:30, trigger a
 run by calling the route with `Authorization: Bearer <CRON_SECRET>`.
 
-## What the next lots add
+## Lot 3 — the numbers that explain a duration
 
-- **Lot 3 — business metrics**: structured events for CSV imports, AI
-  categorisation (tokens, cost), Enable Banking calls (latency, status),
-  bank syncs per connection, and the pg pool at request end.
+A trace says an import took nine seconds; only the import can say it was
+1 200 rows and three model calls. So the operations that matter record
+one event each (`backend/src/common/metrics.ts`), which goes to the log
+as one line — JSON in production, so Vercel can filter on any field —
+and onto the active Sentry span as `app.<event>.<field>` attributes, so
+the trace of a slow request carries the volumes that made it slow. Each
+operation is also a span of its own (`app.import`, `app.ai`,
+`app.bank_sync`, `app.enable_banking`) under the request.
+
+| Event                 | Where                | Fields                                                                             |
+| --------------------- | -------------------- | ---------------------------------------------------------------------------------- |
+| `csv_import`          | TransactionsService  | rows, forced, imported, duplicates, durationMs                                     |
+| `ai_call`             | AiSuggestionsService | purpose, model, batch, answered, inputTokens, outputTokens, durationMs             |
+| `enable_banking_call` | EnableBankingClient  | method, path (ids scrubbed), status, attended, durationMs                          |
+| `bank_sync`           | BankSyncService      | aspspName, trigger, accountsRead, fetched, inserted, claimed, skipped…, durationMs |
+
+Counts, durations, names of banks and models, opaque ids. Never a label,
+an amount, a prompt or a model answer.
+
+**Tokens are the bill.** `ai_call` carries the input and output tokens of
+each Anthropic call; summed over a month in the Vercel log search (or in
+Sentry's trace explorer on `app.ai_call.inputTokens`) they are the cost.
+
+**The pool.** `/health` now reports this instance's pg pool (`total`,
+`idle`, `waiting`). On serverless every instance holds a pool of its own
+against the Supabase pooler, so `waiting` above zero is the first sign
+that its ceiling is near.
+
+**Reading a slow screen.** Sentry, Explore → Traces, sort by duration,
+open one: the request span, then the `app.*` spans with their attributes,
+then the SQL spans under them. What is missing from the picture — a
+route that is slow with neither SQL nor an `app.*` span to blame — is
+what profiling would answer, and nothing so far has needed it.
+
+**Left out, on purpose.** Vercel Speed Insights would duplicate the web
+vitals (LCP, INP, CLS) that Sentry's browser tracing already reports
+under Insights → Web Vitals, for a second script and a second dashboard.

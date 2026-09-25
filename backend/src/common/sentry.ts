@@ -55,13 +55,18 @@ export function scrubUrl(url: string): string {
   try {
     parsed = new URL(url)
   } catch {
-    return url.split('?')[0] ?? url
+    return scrubPath(url)
   }
-  const path = parsed.pathname
+  return `${parsed.origin}${scrubPath(parsed.pathname)}`
+}
+
+/** The same, for a path on its own: `/accounts/<uid>/transactions?x` → `/accounts/:id/transactions`. */
+export function scrubPath(path: string): string {
+  const bare = path.split('?')[0] ?? path
+  return bare
     .split('/')
     .map(segment => (ID_SEGMENT.test(segment) ? ':id' : segment))
     .join('/')
-  return `${parsed.origin}${path}`
 }
 
 type Breadcrumb = NonNullable<

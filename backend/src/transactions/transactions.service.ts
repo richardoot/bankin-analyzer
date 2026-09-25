@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common'
 import { createHash, randomUUID } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
+import { recordEvent, timed } from '../common/metrics'
 import { CategoriesService } from '../categories/categories.service'
 import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { AccountsService } from '../accounts/accounts.service'
@@ -539,7 +540,25 @@ export class TransactionsService {
     if (transactions.length === 0) {
       return { imported: 0, duplicates: 0, total: 0 }
     }
+    const { result, durationMs } = await timed('import', 'csv import', () =>
+      this.performImport(userId, transactions, importHistoryId)
+    )
+    recordEvent(this.logger, 'csv_import', {
+      userId,
+      rows: transactions.length,
+      forced: transactions.filter(tx => tx.forceImport).length,
+      imported: result.imported,
+      duplicates: result.duplicates,
+      durationMs,
+    })
+    return result
+  }
 
+  private async performImport(
+    userId: string,
+    transactions: CreateTransactionDto[],
+    importHistoryId?: string
+  ): Promise<ImportResultDto> {
     // 1. Separate normal transactions from forceImport ones
     const normalTxs: CreateTransactionDto[] = []
     const forcedTxs: CreateTransactionDto[] = []

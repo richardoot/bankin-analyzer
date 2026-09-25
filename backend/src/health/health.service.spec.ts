@@ -3,7 +3,10 @@ import { DATABASE_TIMEOUT_MS, HealthService } from './health.service'
 import type { PrismaService } from '../prisma/prisma.service'
 
 function service(queryRaw: () => Promise<unknown>): HealthService {
-  return new HealthService({ $queryRaw: queryRaw } as unknown as PrismaService)
+  return new HealthService({
+    $queryRaw: queryRaw,
+    poolStats: () => ({ total: 1, idle: 1, waiting: 0 }),
+  } as unknown as PrismaService)
 }
 
 describe('HealthService', () => {
@@ -26,6 +29,7 @@ describe('HealthService', () => {
     expect(report.status).toBe('ok')
     expect(report.checks.database.status).toBe('ok')
     expect(report.checks.database.latencyMs).toBeGreaterThanOrEqual(0)
+    expect(report.pool).toEqual({ total: 1, idle: 1, waiting: 0 })
   })
 
   it('is an error when the query fails', async () => {

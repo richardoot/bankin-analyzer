@@ -27,6 +27,8 @@
  * counted, not failed.
  */
 import { Injectable, Logger } from '@nestjs/common'
+import { recordEvent, timed } from '../common/metrics'
+import { scrubPath } from '../common/sentry'
 import { buildJwt } from './enable-banking.jwt'
 
 /** Production base URL. `api.tilisy.com` is the deprecated alias. */
@@ -145,14 +147,29 @@ export class EnableBankingClient {
     psu?: PsuContext
   ): Promise<T> {
     const psuHeaders = this.psuHeaders(psu)
-    const response = await fetch(`${API_BASE}${path}`, {
-      method: init?.method ?? 'GET',
-      headers: {
-        Authorization: `Bearer ${this.token(credentials)}`,
-        ...(init ? { 'Content-Type': 'application/json' } : {}),
-        ...psuHeaders,
-      },
-      ...(init ? { body: JSON.stringify(init.body) } : {}),
+    const method = init?.method ?? 'GET'
+    const { result: response, durationMs } = await timed(
+      'enable_banking',
+      `${method} ${scrubPath(path)}`,
+      () =>
+        fetch(`${API_BASE}${path}`, {
+          method,
+          headers: {
+            Authorization: `Bearer ${this.token(credentials)}`,
+            ...(init ? { 'Content-Type': 'application/json' } : {}),
+            ...psuHeaders,
+          },
+          ...(init ? { body: JSON.stringify(init.body) } : {}),
+        })
+    )
+    // The bank's latency and answers, call by call: what a slow sync or a
+    // refused night is made of. Path without its identifiers.
+    recordEvent(this.logger, 'enable_banking_call', {
+      method,
+      path: scrubPath(path),
+      status: response.status,
+      attended: Object.keys(psuHeaders).length > 0,
+      durationMs,
     })
     if (!response.ok) {
       const body = await response.text()
