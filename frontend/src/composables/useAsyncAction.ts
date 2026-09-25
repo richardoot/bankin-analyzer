@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import * as Sentry from '@sentry/vue'
 import { useToast } from './useToast'
 
 export function useAsyncAction() {
@@ -18,6 +19,12 @@ export function useAsyncAction() {
       const message = err instanceof Error ? err.message : errorMessage
       error.value = message
       toast.error(message)
+      // The toast is all the user sees; without this the error would be
+      // gone with it. A session problem is the login flow's business and
+      // not a defect, so it stays out.
+      if (!(err instanceof Error && err.name === 'AuthError')) {
+        Sentry.captureException(err)
+      }
       return null
     } finally {
       isLoading.value = false

@@ -1,7 +1,9 @@
 import { defineConfig } from 'vite'
+import type { PluginOption } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import basicSsl from '@vitejs/plugin-basic-ssl'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 import { fileURLToPath, URL } from 'node:url'
 
 /**
@@ -46,9 +48,54 @@ const httpsDefines = useHttps
     }
   : {}
 
+/**
+ * Source maps go to Sentry, never to the CDN.
+ *
+ * With SENTRY_AUTH_TOKEN set (the Vercel build), the build emits hidden
+ * maps, the plugin uploads them under the deployment's commit as release
+ * name — the same value the SDK reports at runtime — and deletes them from
+ * dist before Vercel publishes it. Without the token (a desk, a CI without
+ * secrets) no map is produced at all, so nothing can be served by mistake.
+ */
+const uploadSourceMaps = Boolean(process.env.SENTRY_AUTH_TOKEN)
+
+function sentryPlugins(): PluginOption[] {
+  const authToken = process.env.SENTRY_AUTH_TOKEN
+  if (!authToken) return []
+  const org = process.env.SENTRY_ORG
+  const project = process.env.SENTRY_PROJECT
+  if (!org || !project) {
+    // Loudly, at build time: a token without a destination would upload
+    // nothing and say nothing, and the first stack trace would be minified.
+    throw new Error(
+      'SENTRY_AUTH_TOKEN is set but SENTRY_ORG or SENTRY_PROJECT is missing.'
+    )
+  }
+  const commit = process.env.VERCEL_GIT_COMMIT_SHA
+  return [
+    sentryVitePlugin({
+      org,
+      project,
+      authToken,
+      ...(commit ? { release: { name: commit } } : {}),
+      sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] },
+      telemetry: false,
+    }),
+  ]
+}
+
 export default defineConfig({
-  plugins: [vue(), tailwindcss(), ...(useHttps ? [basicSsl()] : [])],
+  plugins: [
+    vue(),
+    tailwindcss(),
+    ...(useHttps ? [basicSsl()] : []),
+    // Last, as its documentation asks.
+    ...sentryPlugins(),
+  ],
   define: httpsDefines,
+  build: {
+    sourcemap: uploadSourceMaps ? 'hidden' : false,
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

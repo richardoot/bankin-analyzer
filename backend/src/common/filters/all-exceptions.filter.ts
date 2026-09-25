@@ -9,6 +9,8 @@ import {
 import { Prisma } from '../../generated/prisma'
 import { EnableBankingError } from '../../bank-sync/enable-banking.client'
 import type { Response } from 'express'
+import * as Sentry from '@sentry/nestjs'
+import { waitUntil } from '@vercel/functions'
 
 /** What the request-log middleware stamped on this response, if it ran. */
 function requestIdOf(response: Response): string | undefined {
@@ -40,7 +42,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
         response,
         typeof exceptionResponse === 'string'
           ? { statusCode: status, message: exceptionResponse }
-          : (exceptionResponse as ErrorBody)
+          : (exceptionResponse as ErrorBody),
+        exception
       )
       return
     }
@@ -55,16 +58,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
           '("Activate by linking accounts"), then retry.'
         : ''
       this.logger.warn(`Enable Banking ${exception.status}: ${detail}`)
-      this.answer(response, {
-        statusCode: HttpStatus.BAD_GATEWAY,
-        message: `Enable Banking refused this request (${exception.status}): ${detail}.${hint}`,
-      })
+      this.answer(
+        response,
+        {
+          statusCode: HttpStatus.BAD_GATEWAY,
+          message: `Enable Banking refused this request (${exception.status}): ${detail}.${hint}`,
+        },
+        // A 5xx from the bank gateway is their outage, worth knowing about;
+        // a 4xx is this user's configuration, which the message already says.
+        exception.status >= 500 ? exception : undefined
+      )
       return
     }
 
     // Prisma known errors (constraint violations, not found, etc.)
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
-      this.answer(response, this.handlePrismaError(exception))
+      this.answer(response, this.handlePrismaError(exception), exception)
       return
     }
 
@@ -77,10 +86,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       exception instanceof Error ? exception.stack : undefined
     )
 
-    this.answer(response, {
-      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      message: 'Internal server error',
-    })
+    this.answer(
+      response,
+      {
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Internal server error',
+      },
+      exception
+    )
   }
 
   /**
@@ -89,17 +102,43 @@ export class AllExceptionsFilter implements ExceptionFilter {
    * message, so a 4xx is explained without a second line of its own; and,
    * on a 5xx, the request id in the body, so the reference a user reads in
    * a toast is the one to search the logs for.
+   *
+   * A 5xx is also what Sentry hears about, when `reportable` names the
+   * exception behind it. A 4xx never is: it is the API saying no to a
+   * request, which is a conversation with the user, not a defect.
    */
-  private answer(response: Response, body: ErrorBody): void {
+  private answer(
+    response: Response,
+    body: ErrorBody,
+    reportable?: unknown
+  ): void {
     const requestId = requestIdOf(response)
     if (response.locals) {
       response.locals.error = Array.isArray(body.message)
         ? body.message.join(', ')
         : body.message
     }
+    if (body.statusCode >= 500 && reportable !== undefined) {
+      this.report(reportable, requestId)
+    }
     const payload =
       body.statusCode >= 500 && requestId ? { ...body, requestId } : body
     response.status(body.statusCode).json(payload)
+  }
+
+  /**
+   * Hand the exception to Sentry, tagged with the request id so the event
+   * and the log line can be matched. Then ask the platform to wait for the
+   * upload: Vercel freezes a function the moment its response is out, and
+   * an event still in the queue would freeze with it. `waitUntil` is a
+   * no-op anywhere else, and so is the whole method without a DSN.
+   */
+  private report(exception: unknown, requestId: string | undefined): void {
+    Sentry.withScope(scope => {
+      if (requestId) scope.setTag('request_id', requestId)
+      Sentry.captureException(exception)
+    })
+    waitUntil(Sentry.flush(2000))
   }
 
   /** The human sentence in an Enable Banking error body, if there is one. */

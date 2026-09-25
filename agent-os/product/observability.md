@@ -41,10 +41,61 @@ Nothing in the repository can page anyone. An external monitor has to call
 4. Add the same monitor on the frontend URL, expecting `200` and the text
    `<div id="app">`, so that a broken frontend deploy is caught too.
 
+## Lot 1 — Sentry, errors and traces on both sides
+
+**Backend.** `backend/src/instrument.ts` starts the SDK before anything
+else, from the policy in `backend/src/common/sentry.ts`. The exception
+filter reports every answer with a 5xx status — an unhandled exception, a
+Prisma error it has no mapping for, a 5xx chosen by the code, an outage
+of the bank gateway — tagged with the request id, and asks Vercel to wait
+for the upload (`waitUntil`) so the event is not frozen with the function.
+A 4xx is never reported: it is the API saying no, not a defect. The guard
+names the user to Sentry by id. `SentryModule.forRoot()` names each span
+after the Nest handler; the Prisma integration adds the SQL spans.
+
+**Frontend.** `frontend/src/lib/sentry.ts` starts the SDK before the
+router, so page loads and navigations are traced; `useAsyncAction`
+reports the error behind each toast, except session errors; the user id
+follows the auth store from sign-in to sign-out. At build time, with the
+secrets below, the Vite plugin uploads hidden source maps under the
+commit hash and deletes them from `dist` before Vercel publishes it.
+
+**What never leaves.** No request or response bodies, no query strings,
+no cookies, no headers beyond content type and the request id, no local
+variables, no component props, no prompts or model answers. The SQL in a
+span is parameterised. Both `sentryOptions` functions have a spec that
+asserts this.
+
+**Sample rates.** 20 % of requests and page loads are traced by default;
+`SENTRY_TRACES_SAMPLE_RATE` / `VITE_SENTRY_TRACES_SAMPLE_RATE` change it.
+Errors are always sent.
+
+### To do once, by hand: the Sentry projects and the Vercel variables
+
+1. Create a Sentry account (organisation region: EU) with two projects,
+   platform NestJS for the backend and Vue for the frontend.
+2. On the Vercel **backend** project, add `SENTRY_DSN` (the NestJS
+   project's DSN) for Production and Preview.
+3. On the Vercel **frontend** project, add `VITE_SENTRY_DSN` (the Vue
+   project's DSN), plus `SENTRY_AUTH_TOKEN` (Sentry > Settings > Auth
+   Tokens, scope `project:releases`), `SENTRY_ORG` and `SENTRY_PROJECT`
+   (the two slugs) so that stack traces are readable. Without the three
+   build variables errors still arrive, minified.
+4. Redeploy both. A first event can be forced from a browser console with
+   `throw new Error('sentry smoke test')` on the deployed frontend, and
+   from the API by calling a route with a valid token and a payload the
+   database refuses.
+5. In each Sentry project, Alerts: keep the default "new issue" email and
+   add one for "issue count above 10 in an hour". The Vercel `VERCEL_ENV`
+   and commit hash arrive as environment and release, so an issue says
+   which deployment introduced it.
+
+Optional, backend: setting `NODE_OPTIONS=--enable-source-maps` on the
+Vercel backend project makes Node map the stack frames to TypeScript at
+runtime, which Sentry then shows as such. No upload needed.
+
 ## What the next lots add
 
-- **Lot 1 — Sentry**: unhandled errors with stack traces on backend and
-  frontend, p50/p95 per route, alerts on new issues and regressions.
 - **Lot 2 — cron monitor**: `/bank-sync/scheduled-run` wrapped in a Sentry
   Cron Monitor, and a captured message when any connection failed.
 - **Lot 3 — business metrics**: structured events for CSV imports, AI

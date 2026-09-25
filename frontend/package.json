@@ -20,6 +20,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@sentry/vue": "11.0.0",
     "@supabase/supabase-js": "2.116.0",
     "@tailwindcss/vite": "4.3.3",
     "@vue/devtools-api": "8.2.1",
@@ -32,6 +33,7 @@
     "vue3-apexcharts": "1.11.1"
   },
   "devDependencies": {
+    "@sentry/vite-plugin": "5.4.0",
     "@vitejs/plugin-basic-ssl": "2.3.0",
     "@vitejs/plugin-vue": "^6.0.9",
     "@vue/eslint-config-prettier": "^10.2.0",

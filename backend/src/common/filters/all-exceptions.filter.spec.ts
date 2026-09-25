@@ -11,6 +11,21 @@ import { Prisma } from '../../generated/prisma'
 import { EnableBankingError } from '../../bank-sync/enable-banking.client'
 import { AllExceptionsFilter } from './all-exceptions.filter'
 
+const { captureException, flush } = vi.hoisted(() => ({
+  captureException: vi.fn(),
+  flush: vi.fn(() => Promise.resolve(true)),
+}))
+
+vi.mock('@sentry/nestjs', () => ({
+  captureException,
+  flush,
+  withScope: (fn: (scope: { setTag: ReturnType<typeof vi.fn> }) => void) =>
+    fn({ setTag: vi.fn() }),
+}))
+
+const { waitUntil } = vi.hoisted(() => ({ waitUntil: vi.fn() }))
+vi.mock('@vercel/functions', () => ({ waitUntil }))
+
 describe('AllExceptionsFilter', () => {
   let filter: AllExceptionsFilter
   let mockResponse: {
@@ -379,5 +394,68 @@ describe('AllExceptionsFilter — what it leaves for the request log', () => {
   it('survives a response without locals', () => {
     const response = run(new Error('boom'), undefined)
     expect(response.status).toHaveBeenCalledWith(500)
+  })
+})
+
+describe('AllExceptionsFilter — what Sentry hears about', () => {
+  beforeEach(() => {
+    captureException.mockClear()
+    flush.mockClear()
+    waitUntil.mockClear()
+  })
+
+  function run(exception: unknown): void {
+    const response = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn(),
+      locals: { requestId: 'cdg1::abc' },
+    }
+    const host = { switchToHttp: () => ({ getResponse: () => response }) }
+    new AllExceptionsFilter().catch(exception, host as never)
+  }
+
+  it('reports an unhandled exception, then asks the platform to wait', () => {
+    const boom = new Error('boom')
+    run(boom)
+    expect(captureException).toHaveBeenCalledWith(boom)
+    expect(flush).toHaveBeenCalledWith(2000)
+    expect(waitUntil).toHaveBeenCalledOnce()
+  })
+
+  it('reports a 5xx the code chose to answer with', () => {
+    const exception = new InternalServerErrorException('Config missing')
+    run(exception)
+    expect(captureException).toHaveBeenCalledWith(exception)
+  })
+
+  it('reports a Prisma error it has no answer for', () => {
+    const exception = new Prisma.PrismaClientKnownRequestError('boom', {
+      code: 'P9999',
+      clientVersion: 'x',
+    })
+    run(exception)
+    expect(captureException).toHaveBeenCalledWith(exception)
+  })
+
+  it("reports the bank gateway's outages, not the user's configuration", () => {
+    run(new EnableBankingError(503, 'down', 'GET /sessions'))
+    expect(captureException).toHaveBeenCalledOnce()
+    captureException.mockClear()
+    run(new EnableBankingError(403, '{"message":"not active"}', 'GET /x'))
+    expect(captureException).not.toHaveBeenCalled()
+  })
+
+  it('never reports a 4xx: the API saying no is not a defect', () => {
+    run(new NotFoundException('nope'))
+    run(new BadRequestException(['date must be a string']))
+    run(new UnauthorizedException())
+    run(
+      new Prisma.PrismaClientKnownRequestError('dup', {
+        code: 'P2002',
+        clientVersion: 'x',
+      })
+    )
+    expect(captureException).not.toHaveBeenCalled()
+    expect(waitUntil).not.toHaveBeenCalled()
   })
 })

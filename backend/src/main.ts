@@ -1,3 +1,5 @@
+// Sentry first, before any module it has to patch. See instrument.ts.
+import './instrument'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { NestFactory } from '@nestjs/core'
