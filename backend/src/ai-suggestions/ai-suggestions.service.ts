@@ -3,6 +3,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common'
+import { recordEvent, timed } from '../common/metrics'
 import { ChatAnthropic } from '@langchain/anthropic'
 import { z } from 'zod'
 import { PrismaService } from '../prisma/prisma.service'
@@ -65,6 +66,9 @@ const CategorizationSchema = z.object({
 /** How many transactions go in one prompt. */
 const CATEGORIZATION_BATCH_SIZE = 40
 
+/** Le modèle le moins cher ($1 / $5 par MTok) ; le nom part dans chaque événement. */
+const MODEL = 'claude-haiku-4-5-20251001'
+
 @Injectable()
 export class AiSuggestionsService {
   private readonly logger = new Logger(AiSuggestionsService.name)
@@ -80,10 +84,47 @@ export class AiSuggestionsService {
     }
 
     this.llm = new ChatAnthropic({
-      model: 'claude-haiku-4-5-20251001', // Modèle le moins cher ($1/$5 par MTok)
+      model: MODEL,
       apiKey,
       temperature: 0.1, // Faible température pour des réponses cohérentes
     })
+  }
+
+  /**
+   * One structured call to the model, measured: batch size in, answers
+   * and tokens out. The tokens are the bill — the one number about the AI
+   * that a person will ask for — and they only exist on the raw message,
+   * hence `includeRaw`. Never the prompt, never the answer.
+   */
+  private async ask<T extends Record<string, unknown>>(
+    purpose: string,
+    schema: z.ZodType<T>,
+    messages: { role: 'system' | 'user'; content: string }[],
+    fields: { batch: number; counted: (parsed: T) => number }
+  ): Promise<T> {
+    const structuredLlm = this.llm.withStructuredOutput<T>(schema, {
+      includeRaw: true,
+    })
+    const { result, durationMs } = await timed(
+      'ai',
+      `anthropic ${purpose}`,
+      () => structuredLlm.invoke(messages)
+    )
+    const usage = (
+      result.raw as {
+        usage_metadata?: { input_tokens?: number; output_tokens?: number }
+      }
+    ).usage_metadata
+    recordEvent(this.logger, 'ai_call', {
+      purpose,
+      model: MODEL,
+      batch: fields.batch,
+      answered: fields.counted(result.parsed),
+      inputTokens: usage?.input_tokens ?? null,
+      outputTokens: usage?.output_tokens ?? null,
+      durationMs,
+    })
+    return result.parsed
   }
 
   /**
@@ -99,11 +140,15 @@ export class AiSuggestionsService {
 
     const userPrompt = `Choose one emoji for each of the following category names:\n${names.map(n => `- ${n}`).join('\n')}`
 
-    const structuredLlm = this.llm.withStructuredOutput(IconSchema)
-    const result = await structuredLlm.invoke([
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ])
+    const result = await this.ask<z.infer<typeof IconSchema>>(
+      'icons',
+      IconSchema,
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      { batch: names.length, counted: parsed => parsed.icons.length }
+    )
 
     const iconMap = new Map<string, string>()
     for (const entry of result.icons) {
@@ -277,11 +322,15 @@ export class AiSuggestionsService {
       ),
     ].join('\n')
 
-    const structuredLlm = this.llm.withStructuredOutput(CategorizationSchema)
-    const result = await structuredLlm.invoke([
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ])
+    const result = await this.ask<z.infer<typeof CategorizationSchema>>(
+      `categorize ${type.toLowerCase()}`,
+      CategorizationSchema,
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      { batch: batch.length, counted: parsed => parsed.assignments.length }
+    )
 
     return result.assignments
   }

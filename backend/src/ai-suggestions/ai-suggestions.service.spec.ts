@@ -10,9 +10,24 @@ const mockInvoke = vi.fn()
 vi.mock('@langchain/anthropic', () => {
   return {
     ChatAnthropic: class MockChatAnthropic {
-      withStructuredOutput() {
+      // The service asks for the raw message too, for the token counts;
+      // the mock answers the shape the real client returns then.
+      withStructuredOutput(
+        _schema: unknown,
+        options?: { includeRaw?: boolean }
+      ) {
         return {
-          invoke: mockInvoke,
+          invoke: async (...args: unknown[]) => {
+            const parsed: unknown = await mockInvoke(...args)
+            return options?.includeRaw
+              ? {
+                  raw: {
+                    usage_metadata: { input_tokens: 10, output_tokens: 5 },
+                  },
+                  parsed,
+                }
+              : parsed
+          },
         }
       }
     },

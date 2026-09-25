@@ -12,6 +12,7 @@ function controller(report: HealthReport): HealthController {
 const ok: HealthReport = {
   status: 'ok',
   checks: { database: { status: 'ok', latencyMs: 4 } },
+  pool: { total: 1, idle: 1, waiting: 0 },
   version: null,
 }
 

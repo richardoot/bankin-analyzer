@@ -22,6 +22,7 @@ import { startPrismaDevServer } from '@prisma/dev'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 import { PrismaClient } from '../src/generated/prisma'
+import type { PrismaService } from '../src/prisma/prisma.service'
 
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'prisma', 'migrations')
 
@@ -201,7 +202,12 @@ async function startServerOnFreePorts(
 }
 
 export interface E2eDatabase {
-  prisma: PrismaClient
+  /**
+   * A client with the one addition PrismaService makes to PrismaClient —
+   * `poolStats`, which the health report reads — so the app can take it
+   * in PrismaService's place without noticing.
+   */
+  prisma: PrismaClient & { poolStats: PrismaService['poolStats'] }
   close: () => Promise<void>
 }
 
@@ -228,7 +234,16 @@ export async function createE2eDatabase(
     }
   }
 
-  const prisma = new PrismaClient({ adapter: new PrismaPg(pool) })
+  const prisma = Object.assign(
+    new PrismaClient({ adapter: new PrismaPg(pool) }),
+    {
+      poolStats: () => ({
+        total: pool.totalCount,
+        idle: pool.idleCount,
+        waiting: pool.waitingCount,
+      }),
+    }
+  )
 
   return {
     prisma,

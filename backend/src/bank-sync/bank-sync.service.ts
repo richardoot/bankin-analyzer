@@ -21,6 +21,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common'
+import { recordEvent, timed } from '../common/metrics'
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
@@ -1402,6 +1403,35 @@ export class BankSyncService {
     psu?: PsuContext,
     trigger: 'MANUAL' | 'SCHEDULED' = 'MANUAL'
   ): Promise<SyncOutcome> {
+    const { result, durationMs } = await timed('bank_sync', 'bank sync', () =>
+      this.performSync(userId, connectionId, psu, trigger)
+    )
+    // What the sync did, in numbers: the line to read when a user says
+    // "it synced but I see nothing", and the volumes behind its duration.
+    recordEvent(this.logger, 'bank_sync', {
+      userId,
+      connectionId,
+      aspspName: result.aspspName,
+      trigger,
+      accountsRead: result.accountsRead,
+      fetched: result.fetched,
+      inserted: result.inserted,
+      claimed: result.claimed,
+      skippedDuplicates: result.skippedDuplicates,
+      skippedAmbiguous: result.skippedAmbiguous,
+      skippedTooOld: result.skippedTooOld,
+      durationMs,
+    })
+    const { aspspName: _named, ...outcome } = result
+    return outcome
+  }
+
+  private async performSync(
+    userId: string,
+    connectionId: string,
+    psu: PsuContext | undefined,
+    trigger: 'MANUAL' | 'SCHEDULED'
+  ): Promise<SyncOutcome & { aspspName: string }> {
     const connection = await this.prisma.bankConnection.findFirst({
       where: { id: connectionId, userId },
       include: { accountLinks: true },
@@ -1530,7 +1560,7 @@ export class BankSyncService {
           lastSyncErrorAt: null,
         },
       })
-      return outcome
+      return { ...outcome, aspspName: connection.aspspName }
     } catch (error) {
       await this.recordSyncFailure(connection.id, error)
       throw error

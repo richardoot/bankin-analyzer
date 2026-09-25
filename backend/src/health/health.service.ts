@@ -18,6 +18,8 @@ export interface HealthReport {
   checks: {
     database: { status: 'ok' | 'error'; latencyMs: number }
   }
+  /** This instance's pg pool — see PrismaService.poolStats. */
+  pool: { total: number; idle: number; waiting: number }
   /** The deployed commit, so a monitor's screenshot says which build failed. */
   version: string | null
 }
@@ -31,6 +33,7 @@ export class HealthService {
     return {
       status: database.status,
       checks: { database },
+      pool: this.prisma.poolStats(),
       version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
     }
   }
