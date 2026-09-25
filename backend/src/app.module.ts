@@ -2,8 +2,7 @@ import { Module } from '@nestjs/common'
 import { APP_GUARD } from '@nestjs/core'
 import { ConfigModule } from '@nestjs/config'
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler'
-import { AppController } from './app.controller'
-import { AppService } from './app.service'
+import { HealthModule } from './health/health.module'
 import { AiSuggestionsModule } from './ai-suggestions/ai-suggestions.module'
 import { PrismaModule } from './prisma/prisma.module'
 import { UsersModule } from './users/users.module'
@@ -40,6 +39,7 @@ import { BankSyncModule } from './bank-sync/bank-sync.module'
       throttlers: [{ ttl: 60000, limit: 100 }],
     }),
     PrismaModule,
+    HealthModule,
     UsersModule,
     AuthModule,
     AccountsModule,
@@ -58,9 +58,7 @@ import { BankSyncModule } from './bank-sync/bank-sync.module'
     BankSyncModule,
     McpModule,
   ],
-  controllers: [AppController],
   providers: [
-    AppService,
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
