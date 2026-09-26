@@ -5,6 +5,7 @@ import router from './router'
 import { useAuthStore } from './stores/auth'
 import { useThemeStore } from './stores/theme'
 import { installSentry, setSentryUser } from './lib/sentry'
+import { installStaleDeployRecovery } from './lib/stale-deploy'
 // Import supabase early to validate environment variables at startup
 import './lib/supabase'
 import './style.css'
@@ -14,6 +15,10 @@ const pinia = createPinia()
 
 // Before the router is installed, so that the first navigation is traced.
 installSentry(app, router)
+
+// A tab opened before a deployment asks for screens that no longer exist
+// under their old names; reload it once instead of leaving it stuck.
+installStaleDeployRecovery(router)
 
 app.use(pinia)
 app.use(router)
