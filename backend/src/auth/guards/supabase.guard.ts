@@ -34,15 +34,11 @@ export class SupabaseGuard implements CanActivate {
     // Validate token and get Supabase user
     const supabaseUser = await this.supabaseService.getUser(token)
 
-    // Auto-create or retrieve user from database
-    let user = await this.usersService.findBySupabaseId(supabaseUser.id)
-
-    if (!user) {
-      user = await this.usersService.create({
-        supabaseId: supabaseUser.id,
-        email: supabaseUser.email ?? '',
-      })
-    }
+    // The app's own row for this identity, created on first sight.
+    const user = await this.usersService.findOrCreateBySupabaseId(
+      supabaseUser.id,
+      supabaseUser.email ?? ''
+    )
 
     // Attach both Supabase user and DB user to request
     request.supabaseUser = supabaseUser
