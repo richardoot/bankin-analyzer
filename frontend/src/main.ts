@@ -6,6 +6,7 @@ import { useAuthStore } from './stores/auth'
 import { useThemeStore } from './stores/theme'
 import { installSentry, setSentryUser } from './lib/sentry'
 import { installStaleDeployRecovery } from './lib/stale-deploy'
+import { preloadRouteComponents } from './lib/route-preload'
 // Import supabase early to validate environment variables at startup
 import './lib/supabase'
 import './style.css'
@@ -36,6 +37,10 @@ watch(
   id => setSentryUser(id),
   { immediate: true }
 )
+// The first screen's code downloads while Supabase confirms the session,
+// instead of after.
+preloadRouteComponents(router, router.options.history.location)
+
 authStore.initialize().then(() => {
   app.mount('#app')
 })

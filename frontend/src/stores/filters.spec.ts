@@ -2,11 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useFiltersStore } from './filters'
 
-// Mock auth store to return not authenticated
+const { authState, getFilterPreferences } = vi.hoisted(() => ({
+  authState: { isAuthenticated: false },
+  getFilterPreferences: vi.fn(),
+}))
 vi.mock('./auth', () => ({
-  useAuthStore: () => ({
-    isAuthenticated: false,
-  }),
+  useAuthStore: () => authState,
+}))
+vi.mock('@/lib/api', () => ({
+  api: { getFilterPreferences },
 }))
 
 describe('useFiltersStore', () => {
@@ -14,6 +18,8 @@ describe('useFiltersStore', () => {
     setActivePinia(createPinia())
     vi.mocked(localStorage.getItem).mockReturnValue(null)
     vi.mocked(localStorage.setItem).mockClear()
+    authState.isAuthenticated = false
+    getFilterPreferences.mockReset()
   })
 
   it('should start with panel collapsed on load', () => {
@@ -180,6 +186,35 @@ describe('useFiltersStore', () => {
 
       expect(store.isExpenseCategoryGloballyHidden('cat-restaurant')).toBe(true)
       expect(store.isIncomeCategoryGloballyHidden('cat-salaire')).toBe(true)
+    })
+  })
+
+  describe('loadFromBackend', () => {
+    it('shows the cached global settings until the backend answers', async () => {
+      authState.isAuthenticated = true
+      vi.mocked(localStorage.getItem).mockReturnValue(
+        JSON.stringify({ globalHiddenExpenseCategoryIds: ['cat-cached'] })
+      )
+      let answer!: (prefs: unknown) => void
+      getFilterPreferences.mockReturnValue(
+        new Promise(resolve => {
+          answer = resolve
+        })
+      )
+      const store = useFiltersStore()
+
+      const loading = store.loadFromBackend()
+
+      expect(store.globalHiddenExpenseCategoryIds).toEqual(['cat-cached'])
+
+      answer({
+        globalHiddenExpenseCategoryIds: ['cat-fresh'],
+        globalHiddenIncomeCategoryIds: [],
+        isPanelExpanded: false,
+      })
+      await loading
+
+      expect(store.globalHiddenExpenseCategoryIds).toEqual(['cat-fresh'])
     })
   })
 

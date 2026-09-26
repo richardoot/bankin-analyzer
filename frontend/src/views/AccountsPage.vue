@@ -182,11 +182,15 @@
 
   // ── Actions ───────────────────────────────────────────────────────────────
   async function refresh(): Promise<void> {
-    const status = await api.getBankSyncStatus().catch(() => null)
+    // Both at once: the status only decides whether the list is shown.
+    // Without a configured application there is nothing to synchronise,
+    // so connections left over from removed credentials stay out of sight.
+    const [status, list] = await Promise.all([
+      api.getBankSyncStatus().catch(() => null),
+      api.getBankConnections().catch(() => []),
+    ])
     configured.value = status?.configured ?? false
-    if (configured.value) {
-      connections.value = await api.getBankConnections().catch(() => [])
-    }
+    connections.value = configured.value ? list : []
   }
 
   async function synchronise(connection: BankConnectionDto): Promise<boolean> {

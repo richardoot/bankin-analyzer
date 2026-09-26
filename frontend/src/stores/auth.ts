@@ -21,12 +21,16 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     try {
-      dbUser.value = await api.getMe()
-      // Charger les préférences de filtrage depuis le backend
       // Import dynamique pour éviter la dépendance circulaire
       const { useFiltersStore } = await import('./filters')
       const filtersStore = useFiltersStore()
-      await filtersStore.loadFromBackend()
+      // Two independent answers, asked for at once. The preferences load
+      // never throws; a failed profile is the only thing that lands below.
+      const [me] = await Promise.all([
+        api.getMe(),
+        filtersStore.loadFromBackend(),
+      ])
+      dbUser.value = me
     } catch (err) {
       console.error('Failed to sync with backend:', err)
       dbUser.value = null
@@ -39,15 +43,19 @@ export const useAuthStore = defineStore('auth', () => {
       const { data } = await supabase.auth.getSession()
       session.value = data.session
       user.value = data.session?.user ?? null
-
-      if (data.session) {
-        await syncWithBackend()
-      }
     } catch (err) {
       error.value =
         err instanceof Error ? err.message : 'Failed to initialize auth'
     } finally {
+      // The session alone decides what the router may show. The app's own
+      // user row and the filter preferences follow in the background: no
+      // screen reads them synchronously, and holding the first paint for
+      // two more round-trips is what they used to cost.
       loading.value = false
+    }
+
+    if (session.value) {
+      void syncWithBackend()
     }
 
     supabase.auth.onAuthStateChange(async (_event, newSession) => {
