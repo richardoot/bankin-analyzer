@@ -125,6 +125,17 @@ describe('AccountsPage', () => {
     expect(manualCard.text()).not.toContain('Compte courant')
   })
 
+  it('leaves bank connections out while sync is not configured', async () => {
+    vi.mocked(api.getBankSyncStatus).mockResolvedValue({ configured: false })
+    vi.mocked(api.getBankConnections).mockResolvedValue([
+      connection({ id: 'c1' }),
+    ])
+
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="connection-c1"]').exists()).toBe(false)
+  })
+
   it('links an account row to its filtered transactions', async () => {
     vi.mocked(api.getAccounts).mockResolvedValue([account('a2', 'PEL')])
 

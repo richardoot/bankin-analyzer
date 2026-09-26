@@ -28,8 +28,7 @@ const mockSupabaseService = {
 }
 
 const mockUsersService = {
-  findBySupabaseId: vi.fn(),
-  create: vi.fn(),
+  findOrCreateBySupabaseId: vi.fn(),
 }
 
 interface MockContextOptions {
@@ -173,7 +172,7 @@ describe('McpAuthGuard', () => {
   describe('canActivate — valid token', () => {
     it('attaches supabaseUser and db user to the request and returns true', async () => {
       mockSupabaseService.getUser.mockResolvedValue(mockSupabaseUser)
-      mockUsersService.findBySupabaseId.mockResolvedValue(mockDbUser)
+      mockUsersService.findOrCreateBySupabaseId.mockResolvedValue(mockDbUser)
 
       const { context, request, response } = createMockExecutionContext({
         authorization: 'Bearer valid-token',
@@ -185,38 +184,19 @@ describe('McpAuthGuard', () => {
       expect(request.supabaseUser).toEqual(mockSupabaseUser)
       expect(request.user).toEqual(mockDbUser)
       expect(mockSupabaseService.getUser).toHaveBeenCalledWith('valid-token')
-      expect(mockUsersService.findBySupabaseId).toHaveBeenCalledWith(
-        mockSupabaseUser.id
+      expect(mockUsersService.findOrCreateBySupabaseId).toHaveBeenCalledWith(
+        mockSupabaseUser.id,
+        mockSupabaseUser.email
       )
       expect(response.setHeader).not.toHaveBeenCalled()
     })
 
-    it('auto-creates the db user when none exists for the supabase id', async () => {
-      mockSupabaseService.getUser.mockResolvedValue(mockSupabaseUser)
-      mockUsersService.findBySupabaseId.mockResolvedValue(null)
-      mockUsersService.create.mockResolvedValue(mockDbUser)
-
-      const { context, request } = createMockExecutionContext({
-        authorization: 'Bearer valid-token',
-      })
-
-      const result = await guard.canActivate(context)
-
-      expect(result).toBe(true)
-      expect(request.user).toEqual(mockDbUser)
-      expect(mockUsersService.create).toHaveBeenCalledWith({
-        supabaseId: mockSupabaseUser.id,
-        email: mockSupabaseUser.email,
-      })
-    })
-
-    it('passes empty string email to create when Supabase user has no email', async () => {
+    it('passes an empty email when the Supabase user has none', async () => {
       mockSupabaseService.getUser.mockResolvedValue({
         ...mockSupabaseUser,
         email: undefined,
       })
-      mockUsersService.findBySupabaseId.mockResolvedValue(null)
-      mockUsersService.create.mockResolvedValue(mockDbUser)
+      mockUsersService.findOrCreateBySupabaseId.mockResolvedValue(mockDbUser)
 
       const { context } = createMockExecutionContext({
         authorization: 'Bearer valid-token',
@@ -224,10 +204,10 @@ describe('McpAuthGuard', () => {
 
       await guard.canActivate(context)
 
-      expect(mockUsersService.create).toHaveBeenCalledWith({
-        supabaseId: mockSupabaseUser.id,
-        email: '',
-      })
+      expect(mockUsersService.findOrCreateBySupabaseId).toHaveBeenCalledWith(
+        mockSupabaseUser.id,
+        ''
+      )
     })
   })
 })

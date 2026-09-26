@@ -28,8 +28,7 @@ const mockSupabaseService = {
 }
 
 const mockUsersService = {
-  findBySupabaseId: vi.fn(),
-  create: vi.fn(),
+  findOrCreateBySupabaseId: vi.fn(),
 }
 
 const createMockExecutionContext = (
@@ -91,9 +90,9 @@ describe('SupabaseGuard', () => {
       )
     })
 
-    it('should return true and attach user when token is valid and user exists', async () => {
+    it('should return true and attach the user resolved for the token', async () => {
       mockSupabaseService.getUser.mockResolvedValue(mockSupabaseUser)
-      mockUsersService.findBySupabaseId.mockResolvedValue(mockDbUser)
+      mockUsersService.findOrCreateBySupabaseId.mockResolvedValue(mockDbUser)
 
       const context = createMockExecutionContext('Bearer valid-token')
       const request = context.switchToHttp().getRequest()
@@ -104,27 +103,25 @@ describe('SupabaseGuard', () => {
       expect(request.supabaseUser).toEqual(mockSupabaseUser)
       expect(request.user).toEqual(mockDbUser)
       expect(mockSupabaseService.getUser).toHaveBeenCalledWith('valid-token')
-      expect(mockUsersService.findBySupabaseId).toHaveBeenCalledWith(
-        mockSupabaseUser.id
+      expect(mockUsersService.findOrCreateBySupabaseId).toHaveBeenCalledWith(
+        mockSupabaseUser.id,
+        mockSupabaseUser.email
       )
     })
 
-    it('should create user when token is valid but user does not exist', async () => {
-      mockSupabaseService.getUser.mockResolvedValue(mockSupabaseUser)
-      mockUsersService.findBySupabaseId.mockResolvedValue(null)
-      mockUsersService.create.mockResolvedValue(mockDbUser)
-
-      const context = createMockExecutionContext('Bearer valid-token')
-      const request = context.switchToHttp().getRequest()
-
-      const result = await guard.canActivate(context)
-
-      expect(result).toBe(true)
-      expect(request.user).toEqual(mockDbUser)
-      expect(mockUsersService.create).toHaveBeenCalledWith({
-        supabaseId: mockSupabaseUser.id,
-        email: mockSupabaseUser.email,
+    it('should pass an empty email when the Supabase user has none', async () => {
+      mockSupabaseService.getUser.mockResolvedValue({
+        ...mockSupabaseUser,
+        email: undefined,
       })
+      mockUsersService.findOrCreateBySupabaseId.mockResolvedValue(mockDbUser)
+
+      await guard.canActivate(createMockExecutionContext('Bearer valid-token'))
+
+      expect(mockUsersService.findOrCreateBySupabaseId).toHaveBeenCalledWith(
+        mockSupabaseUser.id,
+        ''
+      )
     })
 
     it('should propagate UnauthorizedException from SupabaseService', async () => {

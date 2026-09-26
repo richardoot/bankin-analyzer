@@ -45,13 +45,11 @@ export class McpAuthGuard implements CanActivate {
     try {
       const supabaseUser = await this.supabaseService.getUser(token)
 
-      let user = await this.usersService.findBySupabaseId(supabaseUser.id)
-      if (!user) {
-        user = await this.usersService.create({
-          supabaseId: supabaseUser.id,
-          email: supabaseUser.email ?? '',
-        })
-      }
+      // The app's own row for this identity, created on first sight.
+      const user = await this.usersService.findOrCreateBySupabaseId(
+        supabaseUser.id,
+        supabaseUser.email ?? ''
+      )
 
       request.supabaseUser = supabaseUser
       request.user = user

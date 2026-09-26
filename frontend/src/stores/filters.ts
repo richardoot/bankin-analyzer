@@ -127,6 +127,11 @@ export const useFiltersStore = defineStore('filters', () => {
       return
     }
 
+    // The last known settings first, so that a screen rendered while the
+    // backend answers filters with what this browser saw last time rather
+    // than with nothing at all. The answer overwrites them below.
+    initFromStorage()
+
     try {
       isSyncing.value = true
       lastSyncError.value = null

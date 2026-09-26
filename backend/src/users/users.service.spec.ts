@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
 import { NotFoundException } from '@nestjs/common'
 import { UsersService } from './users.service'
+import { Prisma } from '../generated/prisma'
 import { PrismaService } from '../prisma/prisma.service'
 import { SupabaseService } from '../auth/supabase.service'
 
@@ -110,6 +111,77 @@ describe('UsersService', () => {
           email: createUserDto.email,
         },
       })
+    })
+  })
+
+  describe('findOrCreateBySupabaseId', () => {
+    const uniqueViolation = (): Prisma.PrismaClientKnownRequestError =>
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      })
+
+    it('returns the existing user without inserting', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue(mockUser)
+
+      const result = await service.findOrCreateBySupabaseId(
+        mockUser.supabaseId,
+        mockUser.email
+      )
+
+      expect(result).toEqual(mockUser)
+      expect(mockPrismaService.user.create).not.toHaveBeenCalled()
+    })
+
+    it('creates the user the first time the identity is seen', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue(null)
+      mockPrismaService.user.create.mockResolvedValue(mockUser)
+
+      const result = await service.findOrCreateBySupabaseId(
+        mockUser.supabaseId,
+        mockUser.email
+      )
+
+      expect(result).toEqual(mockUser)
+      expect(mockPrismaService.user.create).toHaveBeenCalledWith({
+        data: { supabaseId: mockUser.supabaseId, email: mockUser.email },
+      })
+    })
+
+    it('re-reads the row when a concurrent request created it first', async () => {
+      mockPrismaService.user.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(mockUser)
+      mockPrismaService.user.create.mockRejectedValue(uniqueViolation())
+
+      const result = await service.findOrCreateBySupabaseId(
+        mockUser.supabaseId,
+        mockUser.email
+      )
+
+      expect(result).toEqual(mockUser)
+      expect(mockPrismaService.user.findUnique).toHaveBeenCalledTimes(2)
+    })
+
+    it('surfaces a unique violation that is not a race on supabaseId', async () => {
+      // The email is taken by another identity: no row for this supabaseId.
+      mockPrismaService.user.findUnique.mockResolvedValue(null)
+      const violation = uniqueViolation()
+      mockPrismaService.user.create.mockRejectedValue(violation)
+
+      await expect(
+        service.findOrCreateBySupabaseId(mockUser.supabaseId, mockUser.email)
+      ).rejects.toBe(violation)
+    })
+
+    it('surfaces any other insert failure', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue(null)
+      mockPrismaService.user.create.mockRejectedValue(new Error('db down'))
+
+      await expect(
+        service.findOrCreateBySupabaseId(mockUser.supabaseId, mockUser.email)
+      ).rejects.toThrow('db down')
+      expect(mockPrismaService.user.findUnique).toHaveBeenCalledTimes(1)
     })
   })
 
