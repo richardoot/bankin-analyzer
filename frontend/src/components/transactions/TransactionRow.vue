@@ -74,6 +74,25 @@
   )
 
   const isExpense = computed(() => props.transaction.type === 'EXPENSE')
+  const isTransfer = computed(() => props.transaction.type === 'TRANSFER')
+
+  /** Red for spending, green for earning, grey for money merely moving. */
+  const amountClass = computed(() =>
+    isTransfer.value
+      ? 'text-gray-500 dark:text-gray-400'
+      : isExpense.value
+        ? 'text-red-600 dark:text-red-500'
+        : 'text-green-600 dark:text-green-500'
+  )
+  const iconClass = computed(() =>
+    !props.transaction.categoryName
+      ? 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
+      : isTransfer.value
+        ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+        : isExpense.value
+          ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+          : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+  )
 
   const reimbursementSummary = computed(() => {
     const total = props.reimbursements.reduce((sum, r) => sum + r.amount, 0)
@@ -122,13 +141,7 @@
         <button
           v-else
           class="flex items-center justify-center w-9 h-9 rounded-xl text-sm shrink-0 transition-colors"
-          :class="
-            transaction.categoryName
-              ? isExpense
-                ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-                : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-              : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
-          "
+          :class="iconClass"
           @click="emit('open-category')"
         >
           {{
@@ -147,14 +160,7 @@
             >
               {{ transaction.description }}
             </span>
-            <span
-              class="text-sm font-semibold shrink-0"
-              :class="
-                isExpense
-                  ? 'text-red-600 dark:text-red-500'
-                  : 'text-green-600 dark:text-green-500'
-              "
-            >
+            <span class="text-sm font-semibold shrink-0" :class="amountClass">
               {{ formatCurrency(transaction.amount) }}
             </span>
           </div>

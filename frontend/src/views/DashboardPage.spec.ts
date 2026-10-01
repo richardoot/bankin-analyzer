@@ -20,6 +20,9 @@ vi.mock('@/lib/api', () => ({
     getDashboardSummary: vi.fn(),
     getTransactions: vi.fn(),
     getAccounts: vi.fn().mockResolvedValue([]),
+    getLegacyCategories: vi
+      .fn()
+      .mockResolvedValue({ categories: [], totalTransactions: 0 }),
   },
 }))
 

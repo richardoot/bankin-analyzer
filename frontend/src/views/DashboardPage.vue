@@ -8,6 +8,8 @@
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import CategoryBreakdownList from '@/components/dashboard/CategoryBreakdownList.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
+  import LegacyMigrationBanner from '@/components/settings/LegacyMigrationBanner.vue'
+  import SpendingStructureCard from '@/components/dashboard/SpendingStructureCard.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
   import { useDashboardData } from '@/composables/useDashboardData'
@@ -25,6 +27,12 @@
     hasExceptionalExpenses,
     averageMonthlyIncome,
     averageMonthlySavings,
+    periodMonths,
+    spendingStructure,
+    everydaySpendingStructure,
+    savingsTransfers,
+    savingsRate,
+    remainingToLive,
     expensesSparkline,
     incomeSparkline,
     savingsSparkline,
@@ -151,6 +159,8 @@
           </div>
         </template>
       </PageHeader>
+
+      <LegacyMigrationBanner class="mb-6" />
 
       <!-- Error state -->
       <div
@@ -372,6 +382,17 @@
               </div>
             </div>
           </div>
+
+          <SpendingStructureCard
+            v-if="spendingStructure && everydaySpendingStructure"
+            class="mb-8"
+            :actual="spendingStructure"
+            :everyday="everydaySpendingStructure"
+            :savings-transfers="savingsTransfers"
+            :savings-rate="savingsRate"
+            :remaining-to-live="remainingToLive"
+            :period-months="periodMonths"
+          />
 
           <!-- Expenses section (primary) -->
           <section data-testid="dashboard-expenses-section" class="mb-10">

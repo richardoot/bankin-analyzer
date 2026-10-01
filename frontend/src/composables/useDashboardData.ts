@@ -56,6 +56,22 @@ export function useDashboardData() {
   const totalExpenses = computed(() => summaryData.value?.totalExpenses ?? 0)
   const totalIncome = computed(() => summaryData.value?.totalIncome ?? 0)
 
+  // The structure of spending and the savings reading, straight from the
+  // server; absent on an older server, so every consumer guards for it.
+  const spendingStructure = computed(
+    () => summaryData.value?.spendingStructure ?? null
+  )
+  const everydaySpendingStructure = computed(
+    () => summaryData.value?.everydaySpendingStructure ?? null
+  )
+  const savingsTransfers = computed(
+    () => summaryData.value?.savingsTransfers ?? 0
+  )
+  const savingsRate = computed(() => summaryData.value?.savingsRate ?? null)
+  const remainingToLive = computed(
+    () => summaryData.value?.remainingToLive ?? null
+  )
+
   // Number of months in the period (used for averages)
   const periodMonths = computed(() => monthlyData.value.length || 1)
 
@@ -369,6 +385,11 @@ export function useDashboardData() {
     setSelectedIncomeCategory,
     deductReimbursements,
     deductPendingReimbursements,
+    spendingStructure,
+    everydaySpendingStructure,
+    savingsTransfers,
+    savingsRate,
+    remainingToLive,
     isLoading,
     error,
     fetchData,

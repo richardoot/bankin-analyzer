@@ -60,7 +60,7 @@
 
   // Load saved filters from localStorage
   function loadSavedFilters(): {
-    typeFilter: 'ALL' | 'EXPENSE' | 'INCOME'
+    typeFilter: 'ALL' | 'EXPENSE' | 'INCOME' | 'TRANSFER'
     selectedCategory: string | null
     selectedSubcategory: string | null
     selectedAccount: string | null
@@ -152,7 +152,10 @@
     const type = firstParam(q.type)
     const category = firstParam(q.category)
     return {
-      typeFilter: type === 'EXPENSE' || type === 'INCOME' ? type : 'ALL',
+      typeFilter:
+        type === 'EXPENSE' || type === 'INCOME' || type === 'TRANSFER'
+          ? type
+          : 'ALL',
       selectedCategory: category,
       // A subcategory is meaningless without its parent category.
       selectedSubcategory: category ? firstParam(q.subcategory) : null,
@@ -170,7 +173,7 @@
   const initialFilters = hasQueryFilters ? filtersFromQuery() : savedFilters
 
   // Filters
-  const typeFilter = ref<'ALL' | 'EXPENSE' | 'INCOME'>(
+  const typeFilter = ref<'ALL' | 'EXPENSE' | 'INCOME' | 'TRANSFER'>(
     initialFilters.typeFilter
   )
   const selectedCategory = ref<string | null>(initialFilters.selectedCategory)
@@ -281,7 +284,12 @@
     if (typeFilter.value !== 'ALL') {
       chips.push({
         key: 'type',
-        label: typeFilter.value === 'EXPENSE' ? 'Dépenses' : 'Revenus',
+        label:
+          typeFilter.value === 'EXPENSE'
+            ? 'Dépenses'
+            : typeFilter.value === 'INCOME'
+              ? 'Revenus'
+              : 'Transferts',
       })
     }
     if (selectedCategory.value) {
@@ -698,6 +706,18 @@
   }
 
   // Category/Subcategory editing via modal
+  /**
+   * The side the filing dialog opens on. A transfer has no side of its own,
+   * so it opens on the one its sign says — and can be filed back there.
+   */
+  function filingKindOf(
+    tx: TransactionDto | null | undefined
+  ): 'EXPENSE' | 'INCOME' {
+    if (!tx) return 'EXPENSE'
+    if (tx.type === 'TRANSFER') return tx.amount < 0 ? 'EXPENSE' : 'INCOME'
+    return tx.type
+  }
+
   function openCategoryModal(tx: TransactionDto) {
     editingTransaction.value = tx
     showCategoryModal.value = true
@@ -732,17 +752,19 @@
         : null
       transactions.value[found.index] = {
         ...tx,
-        categoryId: categoryId ?? tx.categoryId ?? null,
-        categoryName: newCategory?.name ?? tx.categoryName,
-        categoryIcon: newCategory?.icon ?? tx.categoryIcon ?? null,
+        categoryId,
+        categoryName: newCategory?.name,
+        categoryIcon: newCategory?.icon ?? null,
         subcategoryId: subcategoryId ?? null,
       }
     }
     closeCategoryModal()
 
     try {
+      // Null is a filing too: "à classer". And the type follows the
+      // category server-side, so the row that comes back may be a transfer.
       const updated = await api.updateTransaction(tx.id, {
-        ...(categoryId && { categoryId }),
+        categoryId,
         subcategoryId,
       })
       if (found) {
@@ -1168,6 +1190,7 @@
               <option value="ALL">Toutes</option>
               <option value="EXPENSE">Dépenses</option>
               <option value="INCOME">Revenus</option>
+              <option value="TRANSFER">Transferts</option>
             </select>
           </div>
 
@@ -1941,7 +1964,7 @@
     <!-- Category/Subcategory Selection Modal -->
     <CategorySubcategoryModal
       :is-open="showCategoryModal"
-      :transaction-type="editingTransaction?.type ?? 'EXPENSE'"
+      :transaction-type="filingKindOf(editingTransaction)"
       :current-category-id="editingTransaction?.categoryId ?? null"
       :current-subcategory-id="editingTransaction?.subcategoryId ?? null"
       @close="closeCategoryModal"
