@@ -178,3 +178,6 @@ backups/
 
 # Vitest 5 writes reporter output here
 .vitest/
+
+# Personal production data used by local migrations, never versioned
+agent-os/local/
