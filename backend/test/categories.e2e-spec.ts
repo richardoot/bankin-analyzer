@@ -32,17 +32,29 @@ describe('Categories (e2e)', () => {
 
   const http = () => request(ctx.server)
 
+  /**
+   * A legacy category — one from before the catalogue, with no key. The API
+   * no longer creates categories, so the fixture goes straight to the
+   * database, the way every such row reached production.
+   */
   async function createCategory(
     name: string,
     type: 'EXPENSE' | 'INCOME' = 'EXPENSE'
   ): Promise<{ id: string; name: string }> {
-    const response = await http()
-      .post('/categories')
-      .set(ctx.auth(owner))
-      .send({ name, type })
+    return prisma.category.create({
+      data: { userId, name, type },
+      select: { id: true, name: true },
+    })
+  }
 
-    expect(response.status).toBe(201)
-    return response.body as { id: string; name: string }
+  /** The catalogue row for a key, as provisioned with the user. */
+  async function catalogCategory(
+    catalogKey: string
+  ): Promise<{ id: string; name: string }> {
+    return prisma.category.findUniqueOrThrow({
+      where: { userId_catalogKey: { userId, catalogKey } },
+      select: { id: true, name: true },
+    })
   }
 
   /**
@@ -124,13 +136,16 @@ describe('Categories (e2e)', () => {
   })
 
   describe('POST /categories', () => {
-    it('should create a category', async () => {
-      const created = await createCategory('Alimentation')
+    it('refuses: categories come from the catalogue', async () => {
+      const response = await http()
+        .post('/categories')
+        .set(ctx.auth(owner))
+        .send({ name: 'Cheval', type: 'EXPENSE' })
 
-      expect(created.name).toBe('Alimentation')
+      expect(response.status).toBe(403)
       expect(
-        await prisma.category.findUnique({ where: { id: created.id } })
-      ).not.toBeNull()
+        await prisma.category.findFirst({ where: { userId, name: 'Cheval' } })
+      ).toBeNull()
     })
 
     it('should reject an invalid payload through the validation pipe', async () => {
@@ -150,18 +165,49 @@ describe('Categories (e2e)', () => {
 
       expect(response.status).toBe(400)
     })
+  })
 
-    it('should return the existing category instead of duplicating it', async () => {
-      const first = await createCategory('Alimentation')
-      const second = await createCategory('Alimentation')
+  describe('GET /categories', () => {
+    it('states the lock on catalogue rows and not on legacy ones', async () => {
+      const legacy = await createCategory('Cheval')
 
-      expect(second.id).toBe(first.id)
+      const response = await http().get('/categories').set(ctx.auth(owner))
+
+      expect(response.status).toBe(200)
+      const rows = response.body as {
+        id: string
+        catalogKey: string | null
+        isLocked: boolean
+        defaultNature: string | null
+      }[]
+      const food = rows.find(row => row.catalogKey === 'food')
+      expect(food).toMatchObject({ isLocked: true, defaultNature: 'ESSENTIAL' })
+      expect(rows.find(row => row.id === legacy.id)).toMatchObject({
+        catalogKey: null,
+        isLocked: false,
+      })
+      expect(rows[0]).not.toHaveProperty('userId')
     })
   })
 
   describe('PATCH /categories/:id', () => {
+    it('refuses to rename a catalogue category', async () => {
+      const food = await catalogCategory('food')
+
+      const response = await http()
+        .patch(`/categories/${food.id}`)
+        .set(ctx.auth(owner))
+        .send({ name: 'Courses' })
+
+      expect(response.status).toBe(403)
+      expect(
+        (await prisma.category.findUniqueOrThrow({ where: { id: food.id } }))
+          .name
+      ).toBe('Alimentation')
+    })
+
     it('should rename a category', async () => {
-      const category = await createCategory('Alimentation')
+      const category = await createCategory('Cheval')
 
       const response = await http()
         .patch(`/categories/${category.id}`)
@@ -173,25 +219,25 @@ describe('Categories (e2e)', () => {
     })
 
     it('should reject a name already taken for that type', async () => {
-      await createCategory('Alimentation')
-      const other = await createCategory('Transport')
+      await createCategory('Cheval')
+      const other = await createCategory('Moto')
 
       const response = await http()
         .patch(`/categories/${other.id}`)
         .set(ctx.auth(owner))
-        .send({ name: 'Alimentation' })
+        .send({ name: 'Cheval' })
 
       expect(response.status).toBe(409)
     })
 
     it('should allow the same name across the two types', async () => {
-      await createCategory('Remboursements', 'EXPENSE')
+      await createCategory('Cheval', 'EXPENSE')
       const income = await createCategory('Autre', 'INCOME')
 
       const response = await http()
         .patch(`/categories/${income.id}`)
         .set(ctx.auth(owner))
-        .send({ name: 'Remboursements' })
+        .send({ name: 'Cheval' })
 
       expect(response.status).toBe(200)
     })
@@ -199,7 +245,7 @@ describe('Categories (e2e)', () => {
 
   describe('GET /categories/:id/deletion-summary', () => {
     it('should report nothing attached for a fresh category', async () => {
-      const category = await createCategory('Alimentation')
+      const category = await createCategory('Cheval')
 
       const response = await http()
         .get(`/categories/${category.id}/deletion-summary`)
@@ -216,7 +262,7 @@ describe('Categories (e2e)', () => {
     })
 
     it('should describe every attached entity', async () => {
-      const category = await createCategory('Alimentation')
+      const category = await createCategory('Cheval')
       await attachEverything(category.id)
 
       const response = await http()
@@ -237,7 +283,7 @@ describe('Categories (e2e)', () => {
     })
 
     it("should 404 on another user's category", async () => {
-      const category = await createCategory('Alimentation')
+      const category = await createCategory('Cheval')
 
       const response = await http()
         .get(`/categories/${category.id}/deletion-summary`)
@@ -248,11 +294,24 @@ describe('Categories (e2e)', () => {
   })
 
   describe('DELETE /categories/:id', () => {
+    it('refuses to delete a catalogue category', async () => {
+      const food = await catalogCategory('food')
+
+      const response = await http()
+        .delete(`/categories/${food.id}`)
+        .set(ctx.auth(owner))
+
+      expect(response.status).toBe(403)
+      expect(
+        await prisma.category.findUnique({ where: { id: food.id } })
+      ).not.toBeNull()
+    })
+
     it('should delete a category carrying a subcategorized transaction', async () => {
       // The regression this suite exists for: leaving subcategory_id to the
       // cascade, after having updated the same rows in the transaction, trips
       // transactions_subcategory_id_fkey and the delete fails outright.
-      const category = await createCategory('Alimentation')
+      const category = await createCategory('Cheval')
       await attachEverything(category.id)
 
       const response = await http()
@@ -268,7 +327,7 @@ describe('Categories (e2e)', () => {
     })
 
     it('should leave nothing pointing at the deleted category', async () => {
-      const category = await createCategory('Alimentation')
+      const category = await createCategory('Cheval')
       const { incomeCategoryId, transactionId, planId } =
         await attachEverything(category.id)
 
@@ -316,7 +375,7 @@ describe('Categories (e2e)', () => {
     })
 
     it('should keep the reimbursement request, detached', async () => {
-      const category = await createCategory('Alimentation')
+      const category = await createCategory('Cheval')
       await attachEverything(category.id)
 
       await http()
@@ -337,7 +396,7 @@ describe('Categories (e2e)', () => {
     })
 
     it("should 404 on another user's category and delete nothing", async () => {
-      const category = await createCategory('Alimentation')
+      const category = await createCategory('Cheval')
 
       const response = await http()
         .delete(`/categories/${category.id}`)
