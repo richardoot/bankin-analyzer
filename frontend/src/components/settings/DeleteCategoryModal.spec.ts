@@ -19,7 +19,6 @@ const category: CategoryDto = {
   name: 'Alimentation',
   type: 'EXPENSE',
   icon: '🍽️',
-  isExcludedFromBudget: false,
   createdAt: '2024-01-01T00:00:00.000Z',
 }
 
@@ -36,7 +35,6 @@ const emptySummary: CategoryDeletionSummaryDto = {
   budgetPlanEntries: [],
   reimbursementCount: 0,
   isGloballyHidden: false,
-  isExcludedFromBudget: false,
 }
 
 const fullSummary: CategoryDeletionSummaryDto = {
@@ -56,7 +54,6 @@ const fullSummary: CategoryDeletionSummaryDto = {
   ],
   reimbursementCount: 3,
   isGloballyHidden: true,
-  isExcludedFromBudget: false,
 }
 
 enableAutoUnmount(() => {})

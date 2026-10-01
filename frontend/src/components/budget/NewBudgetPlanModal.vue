@@ -395,9 +395,7 @@
     if (allExpenseCategories.value.length > 0) return
     try {
       const all = await api.getCategories()
-      allExpenseCategories.value = all.filter(
-        c => c.type === 'EXPENSE' && !c.isExcludedFromBudget
-      )
+      allExpenseCategories.value = all.filter(c => c.type === 'EXPENSE')
     } catch (err) {
       error.value =
         err instanceof Error

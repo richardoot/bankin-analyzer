@@ -331,24 +331,12 @@
 
               <!-- Current settings, for the record -->
               <p
-                v-if="summary.isGloballyHidden || summary.isExcludedFromBudget"
+                v-if="summary.isGloballyHidden"
                 class="text-sm text-gray-600 dark:text-gray-400"
                 data-testid="deletion-settings"
               >
-                Pour mémoire, cette catégorie est actuellement
-                <template v-if="summary.isGloballyHidden"
-                  >masquée du dashboard</template
-                >
-                <template
-                  v-if="
-                    summary.isGloballyHidden && summary.isExcludedFromBudget
-                  "
-                >
-                  et
-                </template>
-                <template v-if="summary.isExcludedFromBudget"
-                  >exclue des budgets</template
-                >.
+                Pour mémoire, cette catégorie est actuellement masquée du
+                dashboard.
               </p>
             </template>
 

@@ -67,14 +67,12 @@ const sampleCategories: CategoryDto[] = [
     name: 'Alimentation',
     type: 'EXPENSE',
     icon: '🍽️',
-    isExcludedFromBudget: false,
     createdAt: '2025-01-01T00:00:00Z',
   },
   {
     id: 'cat-transport',
     name: 'Transport',
     type: 'EXPENSE',
-    isExcludedFromBudget: false,
     createdAt: '2025-01-01T00:00:00Z',
   },
 ]
@@ -683,7 +681,6 @@ describe('NewBudgetPlanModal', () => {
         id: 'cat-loisirs',
         name: 'Loisirs',
         type: 'EXPENSE',
-        isExcludedFromBudget: false,
         createdAt: '2026-04-01T00:00:00Z',
       },
     ])
@@ -721,41 +718,6 @@ describe('NewBudgetPlanModal', () => {
     expect(loisirsInput.value).toBe('')
   })
 
-  it('excludes budget-excluded categories from the averages preview', async () => {
-    vi.mocked(api.getCategories).mockResolvedValue([
-      ...sampleCategories,
-      {
-        id: 'cat-vehicle',
-        name: 'Véhicule',
-        type: 'EXPENSE',
-        isExcludedFromBudget: true,
-        createdAt: '2026-04-01T00:00:00Z',
-      },
-    ])
-
-    const wrapper = mountModal()
-    await flushPromises()
-    ;(
-      document.body.querySelector(
-        '[data-testid="next-step-button"]'
-      ) as HTMLButtonElement
-    ).click()
-    await flushPromises()
-
-    // On to the envelopes (step 3)
-    await clickNext()
-
-    // Regular categories still appear…
-    expect(
-      document.body.querySelector('[data-testid="preview-row-Alimentation"]')
-    ).not.toBeNull()
-    // …but the budget-excluded one is filtered out.
-    expect(
-      document.body.querySelector('[data-testid="preview-row-Véhicule"]')
-    ).toBeNull()
-    wrapper.unmount()
-  })
-
   it('still shows every category when switching to "Partir de zéro", with empty inputs', async () => {
     vi.mocked(api.getCategories).mockResolvedValue([
       ...sampleCategories,
@@ -763,7 +725,6 @@ describe('NewBudgetPlanModal', () => {
         id: 'cat-loisirs',
         name: 'Loisirs',
         type: 'EXPENSE',
-        isExcludedFromBudget: false,
         createdAt: '2026-04-01T00:00:00Z',
       },
     ])

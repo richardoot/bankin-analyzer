@@ -2,6 +2,8 @@
   import { ref, computed, watch } from 'vue'
   import { useModalA11y } from '@/composables/useModalA11y'
   import type { CategoryDto, SubcategoryDto } from '@/lib/api'
+  import { KIND_LABELS, isCatalogCategory, kindOf } from '@/lib/categories'
+  import type { CategoryKind } from '@/lib/categories'
 
   const props = defineProps<{
     isOpen: boolean
@@ -30,6 +32,23 @@
   const selectedSubcategoryId = defineModel<string | null>('subcategoryId', {
     default: null,
   })
+
+  /**
+   * The catalogue only, by kind: a bulk move is a new filing, and new filings
+   * never land in a category from before the catalogue. Filing under a
+   * transfer turns the whole batch into transfers — the type follows.
+   */
+  const groups = computed(() =>
+    (['EXPENSE', 'INCOME', 'TRANSFER'] as CategoryKind[])
+      .map(kind => ({
+        kind,
+        label: KIND_LABELS[kind],
+        items: props.categories
+          .filter(c => isCatalogCategory(c) && kindOf(c) === kind)
+          .sort((a, b) => a.name.localeCompare(b.name, 'fr')),
+      }))
+      .filter(group => group.items.length > 0)
+  )
 
   /** A subcategory belongs to one category, so the options follow the choice. */
   const availableSubcategories = computed(() => {
@@ -90,9 +109,15 @@
           class="w-full min-h-[44px] px-3 py-2 border border-gray-300 sm:min-h-0 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 mb-4"
         >
           <option :value="null" disabled>Sélectionnez une catégorie</option>
-          <option v-for="cat in categories" :key="cat.id" :value="cat.id">
-            {{ cat.name }} ({{ cat.type === 'EXPENSE' ? 'Dépense' : 'Revenu' }})
-          </option>
+          <optgroup
+            v-for="group in groups"
+            :key="group.kind"
+            :label="group.label"
+          >
+            <option v-for="cat in group.items" :key="cat.id" :value="cat.id">
+              {{ cat.icon ? cat.icon + ' ' : '' }}{{ cat.name }}
+            </option>
+          </optgroup>
         </select>
 
         <label
@@ -108,7 +133,7 @@
           :disabled="!selectedCategoryId"
           class="w-full min-h-[44px] px-3 py-2 border border-gray-300 sm:min-h-0 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 disabled:cursor-not-allowed disabled:opacity-50 mb-3"
         >
-          <option :value="null">Aucune</option>
+          <option :value="null">Catégorie seule</option>
           <option
             v-for="sub in availableSubcategories"
             :key="sub.id"
