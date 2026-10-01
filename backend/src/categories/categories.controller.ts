@@ -1,6 +1,8 @@
 import {
   Controller,
+  ForbiddenException,
   Get,
+  HttpCode,
   Post,
   Patch,
   Delete,
@@ -18,16 +20,22 @@ import {
 import { Throttle } from '@nestjs/throttler'
 import { CategoriesService } from './categories.service'
 import { CategoryMigrationService } from './category-migration.service'
+import { LegacyMigrationService } from './legacy-migration.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import {
   CategoryDeletionResultDto,
   CategoryDeletionSummaryDto,
   CategoryMigrationPreviewDto,
   CategoryMigrationResultDto,
+  LegacyMigrationPreviewDto,
+  LegacyMigrationRequestDto,
+  LegacyMigrationResultDto,
+  LegacyOverviewDto,
   MigrateCategoryDto,
   CategoryResponseDto,
   CreateCategoryDto,
   UpdateCategoryDto,
+  toCategoryResponse,
 } from './dto'
 import { SupabaseGuard, CurrentUser } from '../auth'
 import type { User } from '../generated/prisma'
@@ -40,6 +48,7 @@ export class CategoriesController {
   constructor(
     private readonly categoriesService: CategoriesService,
     private readonly categoryMigrationService: CategoryMigrationService,
+    private readonly legacyMigrationService: LegacyMigrationService,
     private readonly aiSuggestionsService: AiSuggestionsService
   ) {}
 
@@ -47,22 +56,81 @@ export class CategoriesController {
   @ApiOperation({ summary: 'Get all categories for the current user' })
   @ApiResponse({ status: 200, type: [CategoryResponseDto] })
   async findAll(@CurrentUser() user: User): Promise<CategoryResponseDto[]> {
-    return this.categoriesService.findAllByUser(user.id)
+    const rows = await this.categoriesService.findAllByUser(user.id)
+    return rows.map(toCategoryResponse)
   }
 
-  @Post()
-  @ApiOperation({ summary: 'Create a new category' })
-  @ApiResponse({ status: 201, type: CategoryResponseDto })
-  async create(
+  @Get('legacy')
+  @ApiOperation({
+    summary:
+      'What is left from before the catalogue: every legacy category, each line with its suggested filing',
+  })
+  @ApiResponse({ status: 200, type: LegacyOverviewDto })
+  async legacyOverview(@CurrentUser() user: User): Promise<LegacyOverviewDto> {
+    return this.legacyMigrationService.overview(user.id)
+  }
+
+  @Post(':id/legacy-migration/preview')
+  @ApiOperation({
+    summary:
+      'What migrating a legacy category with these decisions would do: counts, envelopes, type changes',
+  })
+  @ApiResponse({ status: 200, type: LegacyMigrationPreviewDto })
+  @ApiResponse({ status: 400, description: 'The arrangement is impossible' })
+  @ApiResponse({
+    status: 404,
+    description: 'Not a legacy category of this user',
+  })
+  @HttpCode(200)
+  async legacyMigrationPreview(
     @CurrentUser() user: User,
-    @Body() dto: CreateCategoryDto
-  ): Promise<CategoryResponseDto> {
-    return this.categoriesService.create(user.id, dto)
+    @Param('id') id: string,
+    @Body() dto: LegacyMigrationRequestDto
+  ): Promise<LegacyMigrationPreviewDto> {
+    return this.legacyMigrationService.preview(user.id, id, dto.decisions)
+  }
+
+  @Post(':id/legacy-migration')
+  @ApiOperation({
+    summary:
+      'Migrate a legacy category into the catalogue. Deleted once nothing is kept',
+  })
+  @ApiResponse({ status: 201, type: LegacyMigrationResultDto })
+  @ApiResponse({ status: 400, description: 'The arrangement is impossible' })
+  @ApiResponse({
+    status: 404,
+    description: 'Not a legacy category of this user',
+  })
+  async legacyMigration(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() dto: LegacyMigrationRequestDto
+  ): Promise<LegacyMigrationResultDto> {
+    return this.legacyMigrationService.migrate(user.id, id, dto.decisions)
+  }
+
+  /**
+   * Kept as a route rather than removed: a client written for the old API
+   * deserves to be told why, not a 404. The body is still validated first,
+   * so a malformed request reads as malformed and not as forbidden.
+   */
+  @Post()
+  @ApiOperation({
+    summary:
+      'Refused: categories come from the catalogue. Add a subcategory inside one instead',
+  })
+  @ApiResponse({ status: 403, description: 'Categories are not user-created' })
+  create(@CurrentUser() _user: User, @Body() dto: CreateCategoryDto): never {
+    throw new ForbiddenException(
+      `Categories come from the catalogue and cannot be created; ` +
+        `add "${dto.name}" as a subcategory inside one of them`
+    )
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Rename a category or change its budget exclusion' })
+  @ApiOperation({ summary: 'Rename a legacy category' })
   @ApiResponse({ status: 200, type: CategoryResponseDto })
+  @ApiResponse({ status: 403, description: 'Catalogue categories are locked' })
   @ApiResponse({
     status: 409,
     description: 'Another category of the same type already bears that name',
@@ -72,7 +140,9 @@ export class CategoriesController {
     @Param('id') id: string,
     @Body() dto: UpdateCategoryDto
   ): Promise<CategoryResponseDto> {
-    return this.categoriesService.update(user.id, id, dto)
+    return toCategoryResponse(
+      await this.categoriesService.update(user.id, id, dto)
+    )
   }
 
   @Get(':id/deletion-summary')
@@ -131,6 +201,7 @@ export class CategoriesController {
       'Delete a category. Its transactions are kept and become uncategorized',
   })
   @ApiResponse({ status: 200, type: CategoryDeletionResultDto })
+  @ApiResponse({ status: 403, description: 'Catalogue categories are locked' })
   @ApiResponse({ status: 404, description: 'Category not found' })
   async remove(
     @CurrentUser() user: User,

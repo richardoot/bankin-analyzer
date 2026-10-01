@@ -4,9 +4,12 @@ import type { TestingModule } from '@nestjs/testing'
 import { CategoriesController } from './categories.controller'
 import { CategoriesService } from './categories.service'
 import { CategoryMigrationService } from './category-migration.service'
+import { LegacyMigrationService } from './legacy-migration.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import { SupabaseGuard } from '../auth/guards/supabase.guard'
+import { ForbiddenException } from '@nestjs/common'
 import { TransactionType } from '../generated/prisma'
+import { toCategoryResponse } from './dto'
 
 const mockUser = {
   id: '550e8400-e29b-41d4-a716-446655440001',
@@ -21,6 +24,10 @@ const mockCategory = {
   userId: mockUser.id,
   name: 'Alimentation',
   type: TransactionType.EXPENSE,
+  icon: '🛒',
+  catalogKey: 'food',
+  defaultNature: 'ESSENTIAL' as const,
+  defaultRhythm: 'VARIABLE' as const,
   createdAt: new Date('2024-01-15T10:30:00.000Z'),
 }
 
@@ -29,6 +36,10 @@ const mockCategory2 = {
   userId: mockUser.id,
   name: 'Salaires',
   type: TransactionType.INCOME,
+  icon: null,
+  catalogKey: null,
+  defaultNature: null,
+  defaultRhythm: null,
   createdAt: new Date('2024-01-15T10:30:00.000Z'),
 }
 
@@ -69,6 +80,10 @@ describe('CategoriesController', () => {
           useValue: mockCategoryMigrationService,
         },
         {
+          provide: LegacyMigrationService,
+          useValue: { overview: vi.fn(), preview: vi.fn(), migrate: vi.fn() },
+        },
+        {
           provide: AiSuggestionsService,
           useValue: mockAiSuggestionsService,
         },
@@ -90,7 +105,14 @@ describe('CategoriesController', () => {
 
       const result = await controller.findAll(mockUser)
 
-      expect(result).toEqual([mockCategory, mockCategory2])
+      // Stated as the API states it: no userId, and the lock spelled out.
+      expect(result).toEqual([
+        toCategoryResponse(mockCategory),
+        toCategoryResponse(mockCategory2),
+      ])
+      expect(result[0]).toMatchObject({ isLocked: true, catalogKey: 'food' })
+      expect(result[1]).toMatchObject({ isLocked: false })
+      expect(result[0]).not.toHaveProperty('userId')
       expect(mockCategoriesService.findAllByUser).toHaveBeenCalledWith(
         mockUser.id
       )
@@ -106,41 +128,28 @@ describe('CategoriesController', () => {
   })
 
   describe('create', () => {
-    it('should create a new category', async () => {
-      const createDto = {
-        name: 'Transport',
-        type: TransactionType.EXPENSE,
-      }
-      const newCategory = {
-        id: '550e8400-e29b-41d4-a716-446655440003',
-        userId: mockUser.id,
-        ...createDto,
-        createdAt: new Date(),
-      }
-      mockCategoriesService.create.mockResolvedValue(newCategory)
+    it('refuses: categories come from the catalogue', () => {
+      const createDto = { name: 'Transport', type: TransactionType.EXPENSE }
 
-      const result = await controller.create(mockUser, createDto)
-
-      expect(result).toEqual(newCategory)
-      expect(mockCategoriesService.create).toHaveBeenCalledWith(
-        mockUser.id,
-        createDto
+      expect(() => controller.create(mockUser, createDto)).toThrow(
+        ForbiddenException
       )
+      expect(mockCategoriesService.create).not.toHaveBeenCalled()
     })
   })
 
   describe('update', () => {
     it('should forward the update to the service', async () => {
-      const dto = { isExcludedFromBudget: true }
-      const updated = { ...mockCategory, isExcludedFromBudget: true }
+      const dto = { name: 'Courses' }
+      const updated = { ...mockCategory2, name: 'Courses' }
       mockCategoriesService.update.mockResolvedValue(updated)
 
-      const result = await controller.update(mockUser, mockCategory.id, dto)
+      const result = await controller.update(mockUser, mockCategory2.id, dto)
 
-      expect(result).toEqual(updated)
+      expect(result).toEqual(toCategoryResponse(updated))
       expect(mockCategoriesService.update).toHaveBeenCalledWith(
         mockUser.id,
-        mockCategory.id,
+        mockCategory2.id,
         dto
       )
     })
