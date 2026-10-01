@@ -121,6 +121,31 @@ export class ExceptionalEventDto {
   amount!: number
 }
 
+/**
+ * Expenses read through the two attributes of their subcategory: constrained
+ * (essential) or chosen (pleasure), running on its own (committed) or
+ * following the user (variable). A row filed at the category alone takes the
+ * category's defaults; a row of a legacy category, or an uncategorized one,
+ * carries neither and lands in `unknown*` — visible, so the migration's
+ * progress reads off the dashboard.
+ */
+export class SpendingStructureDto {
+  essential!: number
+
+  pleasure!: number
+
+  unknownNature!: number
+
+  committed!: number
+
+  variable!: number
+
+  unknownRhythm!: number
+
+  /** The three buckets of each axis sum to this. */
+  total!: number
+}
+
 export class DashboardSummaryDto {
   /** Monthly breakdown */
   @ApiProperty({ type: [MonthlyDataDto] })
@@ -165,4 +190,28 @@ export class DashboardSummaryDto {
   /** Events overlapping the period, biggest first */
   @ApiProperty({ type: [ExceptionalEventDto] })
   exceptionalEvents!: ExceptionalEventDto[]
+
+  /** The period as it was: every expense, exceptional ones included. */
+  spendingStructure!: SpendingStructureDto
+
+  /** The lifestyle: the same reading without the exceptional share. */
+  everydaySpendingStructure!: SpendingStructureDto
+
+  /**
+   * Money that left the everyday accounts towards savings — transfers filed
+   * under the savings and investment categories, on the accounts the stats
+   * cover, net of withdrawals. The leg on a savings account excluded from
+   * the stats is not counted, which is what keeps one transfer from counting
+   * twice while the two legs are not yet matched.
+   */
+  savingsTransfers!: number
+
+  /** `savingsTransfers / totalIncome`, null when there is no income. */
+  savingsRate!: number | null
+
+  /**
+   * What the period leaves free once the committed everyday spending and the
+   * savings are taken out of the income. Null without income.
+   */
+  remainingToLive!: number | null
 }

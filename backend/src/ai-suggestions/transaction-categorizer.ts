@@ -15,10 +15,22 @@
  * wrong one is invisible and quietly distorts every total it touches.
  */
 
+/**
+ * What the model files: purchases and receipts. A transfer is not a filing
+ * question — where savings went is decided by the user, and one day by
+ * matching the two legs — so transfers never reach the model, neither as
+ * something to file nor as a heading to file under.
+ */
+export type FilingKind = 'EXPENSE' | 'INCOME'
+
+export function isFilingKind(type: string): type is FilingKind {
+  return type === 'EXPENSE' || type === 'INCOME'
+}
+
 export interface CategoryChoice {
   id: string
   name: string
-  type: 'EXPENSE' | 'INCOME'
+  type: FilingKind
 }
 
 export interface SubcategoryChoice {
@@ -32,7 +44,7 @@ export interface CategorizableTransaction {
   index: number
   description: string
   amount: number
-  type: 'EXPENSE' | 'INCOME'
+  type: FilingKind
 }
 
 /** One line as the model returned it, before anything is trusted. */

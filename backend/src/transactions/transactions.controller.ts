@@ -364,7 +364,8 @@ export class TransactionsController {
     @Body()
     body: {
       note?: string
-      categoryId?: string
+      /** Null sends the transaction back to "à classer". */
+      categoryId?: string | null
       subcategoryId?: string | null
       isPointed?: boolean
     }

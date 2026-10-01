@@ -32,6 +32,8 @@ import {
   type FiledExample,
   type FilingProposal,
 } from '../bank-sync/categorisation'
+import { isFilingKind } from '../ai-suggestions/transaction-categorizer'
+import type { FilingKind } from '../ai-suggestions/transaction-categorizer'
 
 const DEFAULT_SAMPLES = 10
 
@@ -63,13 +65,18 @@ export async function main(
       type: true,
     },
   })
-  const examples: FiledExample[] = filed.map(row => ({
-    description: row.description,
-    type: row.type,
-    categoryId: row.categoryId as string,
-    subcategoryId: row.subcategoryId,
-    subcategoryName: row.subcategory,
-  }))
+  const examples: FiledExample[] = []
+  for (const row of filed) {
+    // A transfer is not evidence for filing a purchase.
+    if (!isFilingKind(row.type)) continue
+    examples.push({
+      description: row.description,
+      type: row.type,
+      categoryId: row.categoryId as string,
+      subcategoryId: row.subcategoryId,
+      subcategoryName: row.subcategory,
+    })
+  }
   const index = buildMerchantIndex(examples)
 
   const unfiled = await prisma.transaction.findMany({
@@ -94,9 +101,11 @@ export async function main(
     return
   }
 
-  const proposals = unfiled.map(row =>
-    proposeFiling(row.description, row.type, index)
-  )
+  const proposals = unfiled
+    // A synced row is a purchase or a receipt by sign; a transfer only ever
+    // becomes one by the user's hand, and is then already filed.
+    .filter(row => isFilingKind(row.type))
+    .map(row => proposeFiling(row.description, row.type as FilingKind, index))
   const summary = summarise(proposals)
   const pct = (n: number): string => `${Math.round((n / summary.total) * 100)}%`
 

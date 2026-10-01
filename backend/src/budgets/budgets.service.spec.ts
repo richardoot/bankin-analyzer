@@ -103,14 +103,17 @@ describe('BudgetsService', () => {
       const queries = mockPrismaService.$queryRaw.mock.calls.map(
         ([sql]: [{ strings: string[] }]) => sql.strings.join('')
       )
-      // Both the aggregate and the monthly-breakdown queries join categories
-      // and must filter out excluded ones.
+      // Both the aggregate and the monthly-breakdown queries join categories.
+      // No category is ever left out on its own account any more: keeping
+      // spending out of the budget is the exceptional tag's job, per
+      // transaction, which the same queries already read.
       const categoryJoinQueries = queries.filter((q: string) =>
         q.includes('JOIN app.categories c')
       )
       expect(categoryJoinQueries.length).toBeGreaterThanOrEqual(2)
       for (const q of categoryJoinQueries) {
-        expect(q).toContain('c.is_excluded_from_budget = false')
+        expect(q).not.toContain('is_excluded_from_budget = false\n')
+        expect(q).toContain('is_exceptional = true')
       }
     })
 

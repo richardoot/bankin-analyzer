@@ -126,8 +126,8 @@ export class BudgetsService {
           AND t.date >= ${startDate}
           AND t.date <= ${endDate}
           AND t.category_id IS NOT NULL
+          AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_budget, false) = false
-          AND c.is_excluded_from_budget = false
         GROUP BY t.category_id, c.name, c.icon, t.type, COALESCE(t.subcategory, ''), (et.transaction_id IS NOT NULL)
       `),
       shouldIncludeMonthly
@@ -154,8 +154,8 @@ export class BudgetsService {
               AND t.date >= ${startDate}
               AND t.date <= ${endDate}
               AND t.category_id IS NOT NULL
+              AND t.type IN ('EXPENSE', 'INCOME')
               AND COALESCE(a.is_excluded_from_budget, false) = false
-              AND c.is_excluded_from_budget = false
             GROUP BY t.category_id, t.type, TO_CHAR(t.date, 'YYYY-MM'), (et.transaction_id IS NOT NULL)
             ORDER BY t.category_id, TO_CHAR(t.date, 'YYYY-MM')
           `)
@@ -187,7 +187,6 @@ export class BudgetsService {
             WHERE claims.claimed > claims.credited
               AND (t.date < ${startDate} OR t.date > ${endDate})
               AND COALESCE(a.is_excluded_from_budget, false) = false
-              AND c.is_excluded_from_budget = false
             GROUP BY t.category_id
           `)
         : Promise.resolve([] as OutOfPeriodPendingRow[]),

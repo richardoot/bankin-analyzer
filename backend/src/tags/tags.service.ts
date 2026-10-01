@@ -323,7 +323,9 @@ export class TagsService {
    *
    * The reference is the 12 months preceding the event (clamped to the user's
    * actual history), stripped of every exceptional transaction and normalised
-   * over the days actually spent living an everyday life. Returns null when the
+   * over the days actually spent living an everyday life. Only the *variable*
+   * subcategories count: a trip suspends groceries and fuel, not rent or
+   * insurance, so committed spending is never part of what gets deducted. Returns null when the
    * tag declares no period: such an event is *additive* (a party at home did
    * not stop the user buying groceries), so no baseline should be deducted.
    */
@@ -390,12 +392,18 @@ export class TagsService {
         SUM(ABS(t.amount::numeric) / COALESCE(a.divisor, 1))::float AS total_amount
       FROM app.transactions t
       LEFT JOIN app.categories c ON c.id = t.category_id
+      LEFT JOIN app.subcategories sc ON sc.id = t.subcategory_id
       LEFT JOIN app.accounts a ON a.id = t.account_id
       WHERE t.user_id = ${userId}
         AND t.type = 'EXPENSE'
         AND t.date >= ${refStart}
         AND t.date <= ${refEnd}
         AND COALESCE(a.is_excluded_from_stats, false) = false
+        -- Only what the trip suspends. Rent, insurance, a subscription keep
+        -- running while the user is away, so they are never deducted from an
+        -- event's surplus. Unknown (legacy rows) counts as variable, which is
+        -- what every row used to be.
+        AND COALESCE(sc.rhythm, c.default_rhythm) IS DISTINCT FROM 'COMMITTED'
         AND NOT EXISTS (
           SELECT 1
           FROM app.transaction_tags tt2
@@ -454,6 +462,7 @@ export class TagsService {
         LEFT JOIN app.accounts a ON a.id = t.account_id
         WHERE tt.tag_id = ${tagId}
           AND t.user_id = ${userId}
+          AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
         GROUP BY c.id, COALESCE(c.name, 'Autre'), c.icon, t.type
       `),
@@ -475,6 +484,7 @@ export class TagsService {
         LEFT JOIN app.accounts a ON a.id = t.account_id
         WHERE tt.tag_id = ${tagId}
           AND t.user_id = ${userId}
+          AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
         GROUP BY TO_CHAR(t.date, 'YYYY-MM')
         ORDER BY month_key ASC
@@ -499,6 +509,7 @@ export class TagsService {
         LEFT JOIN app.accounts a ON a.id = t.account_id
         WHERE tt.tag_id = ${tagId}
           AND t.user_id = ${userId}
+          AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
       `),
     ])

@@ -30,6 +30,8 @@ import {
   proposeCategoryFromHistory,
   type CategorizedHistoryRow,
 } from '../ai-suggestions/category-rules'
+import { isFilingKind } from '../ai-suggestions/transaction-categorizer'
+import type { CategoryChoice } from '../ai-suggestions/transaction-categorizer'
 import {
   EnableBankingClient,
   EnableBankingError,
@@ -2010,6 +2012,8 @@ export class BankSyncService {
         ? categoryNameById.get(row.categoryId)
         : undefined
       if (!row.categoryId || !categoryName) continue
+      // A transfer is not evidence for filing a purchase.
+      if (!isFilingKind(row.type)) continue
       history.push({
         description: row.description,
         type: row.type,
@@ -2052,7 +2056,7 @@ export class BankSyncService {
             amount: row.amount,
             type: row.amount < 0 ? ('EXPENSE' as const) : ('INCOME' as const),
           })),
-          categories,
+          categories.filter((c): c is CategoryChoice => isFilingKind(c.type)),
           subcategories,
           history
         )

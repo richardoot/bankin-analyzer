@@ -32,6 +32,7 @@ const mockPrismaService = {
   },
   transaction: {
     findMany: vi.fn(),
+    findFirst: vi.fn(),
   },
   transactionTag: {
     createMany: vi.fn(),
@@ -249,6 +250,42 @@ describe('TagsService', () => {
       // No event period declared → no baseline / surplus.
       expect(result.baseline).toBeNull()
       expect(result.totalSurplus).toBeNull()
+    })
+
+    it('builds the baseline from variable spending only, transfers aside', async () => {
+      // A dated event: the baseline is computed, from the year before it.
+      mockPrismaService.tag.findFirst.mockResolvedValue({
+        ...mockTag,
+        isExceptional: true,
+        eventStartDate: new Date('2026-06-10T00:00:00.000Z'),
+        eventEndDate: new Date('2026-06-14T00:00:00.000Z'),
+      })
+      mockPrismaService.transaction.findFirst.mockResolvedValue({
+        date: new Date('2025-01-01T00:00:00.000Z'),
+      })
+      mockPrismaService.tag.findMany.mockResolvedValue([])
+      mockPrismaService.$queryRaw.mockResolvedValue([])
+
+      await service.getAnalysis(mockTag.id, USER)
+
+      const queries = mockPrismaService.$queryRaw.mock.calls.map(
+        ([sql]: [{ strings: string[] }]) => sql.strings.join('')
+      )
+      // The three tag queries leave transfers out of every total.
+      const tagQueries = queries.filter((q: string) =>
+        q.includes('WHERE tt.tag_id')
+      )
+      expect(tagQueries).toHaveLength(3)
+      for (const q of tagQueries) {
+        expect(q).toContain("t.type IN ('EXPENSE', 'INCOME')")
+      }
+      // The baseline reads the rhythm and drops what keeps running away.
+      const baseline = queries.find((q: string) => q.includes('everyday'))
+      const rhythmClause =
+        "COALESCE(sc.rhythm, c.default_rhythm) IS DISTINCT FROM 'COMMITTED'"
+      const withRhythm = queries.filter((q: string) => q.includes(rhythmClause))
+      expect(withRhythm).toHaveLength(1)
+      expect(baseline ?? withRhythm[0]).toContain(rhythmClause)
     })
 
     it('returns zeroed analysis when the tag has no transactions', async () => {

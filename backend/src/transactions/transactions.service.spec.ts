@@ -117,7 +117,7 @@ const mockAccountsService = {
 }
 
 const mockCategoriesService = {
-  findOrCreateMany: vi.fn(),
+  findManyByName: vi.fn(),
 }
 
 const mockSubcategoriesService = {
@@ -750,10 +750,7 @@ describe('TransactionsService', () => {
       mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
         importCategoriesFromFile: true,
       })
-      mockCategoriesService.findOrCreateMany.mockResolvedValue({
-        categories: [mockCategory],
-        newCount: 0,
-      })
+      mockCategoriesService.findManyByName.mockResolvedValue([mockCategory])
       mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
         subcategories: [],
         newCount: 0,
@@ -863,7 +860,7 @@ describe('TransactionsService', () => {
 
       await service.importTransactions(mockUserId, [createTransactionDto])
 
-      expect(mockCategoriesService.findOrCreateMany).toHaveBeenCalledWith(
+      expect(mockCategoriesService.findManyByName).toHaveBeenCalledWith(
         mockUserId,
         [{ name: 'Alimentation', type: TransactionType.EXPENSE }]
       )
@@ -1007,10 +1004,7 @@ describe('TransactionsService', () => {
       mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
         importCategoriesFromFile: true,
       })
-      mockCategoriesService.findOrCreateMany.mockResolvedValue({
-        categories: [mockCategory],
-        newCount: 0,
-      })
+      mockCategoriesService.findManyByName.mockResolvedValue([mockCategory])
       mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
         subcategories: [],
         newCount: 0,
@@ -1048,10 +1042,7 @@ describe('TransactionsService', () => {
       mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
         importCategoriesFromFile: true,
       })
-      mockCategoriesService.findOrCreateMany.mockResolvedValue({
-        categories: [mockCategory],
-        newCount: 0,
-      })
+      mockCategoriesService.findManyByName.mockResolvedValue([mockCategory])
       mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
         subcategories: [],
         newCount: 0,
@@ -1094,10 +1085,7 @@ describe('TransactionsService', () => {
       mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
         importCategoriesFromFile: true,
       })
-      mockCategoriesService.findOrCreateMany.mockResolvedValue({
-        categories: [mockCategory],
-        newCount: 0,
-      })
+      mockCategoriesService.findManyByName.mockResolvedValue([mockCategory])
       mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
         subcategories: [],
         newCount: 0,
@@ -1135,10 +1123,7 @@ describe('TransactionsService', () => {
       mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
         importCategoriesFromFile: true,
       })
-      mockCategoriesService.findOrCreateMany.mockResolvedValue({
-        categories: [mockCategory],
-        newCount: 0,
-      })
+      mockCategoriesService.findManyByName.mockResolvedValue([mockCategory])
       mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
         subcategories: [],
         newCount: 0,
@@ -1259,13 +1244,18 @@ describe('TransactionsService', () => {
       expect(mockPrismaService.transaction.update).not.toHaveBeenCalled()
     })
 
-    it('should update categoryId', async () => {
+    it('should update categoryId, keeping the type when the category agrees', async () => {
       const newCategoryId = '550e8400-e29b-41d4-a716-446655440020'
       const updatedTransaction = {
         ...mockTransaction,
         categoryId: newCategoryId,
       }
       mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction)
+      mockPrismaService.category.findFirst.mockResolvedValue({
+        id: newCategoryId,
+        userId: mockUserId,
+        type: TransactionType.EXPENSE,
+      })
       mockPrismaService.transaction.update.mockResolvedValue(updatedTransaction)
 
       const result = await service.update(mockTransaction.id, mockUserId, {
@@ -1273,6 +1263,9 @@ describe('TransactionsService', () => {
       })
 
       expect(result.categoryId).toBe(newCategoryId)
+      expect(mockPrismaService.category.findFirst).toHaveBeenCalledWith({
+        where: { id: newCategoryId, userId: mockUserId },
+      })
       expect(mockPrismaService.transaction.update).toHaveBeenCalledWith({
         where: { id: mockTransaction.id },
         data: { categoryId: newCategoryId },
@@ -1282,6 +1275,77 @@ describe('TransactionsService', () => {
           accountRef: { select: { name: true } },
         },
       })
+    })
+
+    it('turns a row into a transfer when filed under a transfer category', async () => {
+      const savingsId = '550e8400-e29b-41d4-a716-446655440021'
+      mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction)
+      mockPrismaService.category.findFirst.mockResolvedValue({
+        id: savingsId,
+        userId: mockUserId,
+        type: TransactionType.TRANSFER,
+      })
+      mockPrismaService.transaction.update.mockResolvedValue({
+        ...mockTransaction,
+        categoryId: savingsId,
+        type: TransactionType.TRANSFER,
+      })
+
+      await service.update(mockTransaction.id, mockUserId, {
+        categoryId: savingsId,
+        subcategoryId: null,
+      })
+
+      expect(mockPrismaService.transaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            categoryId: savingsId,
+            subcategoryId: null,
+            subcategory: null,
+            type: TransactionType.TRANSFER,
+          },
+        })
+      )
+    })
+
+    it('gives an unfiled transfer back the type its sign says', async () => {
+      mockPrismaService.transaction.findFirst.mockResolvedValue({
+        ...mockTransaction,
+        type: TransactionType.TRANSFER,
+      })
+      mockPrismaService.transaction.update.mockResolvedValue({
+        ...mockTransaction,
+        categoryId: null,
+      })
+
+      await service.update(mockTransaction.id, mockUserId, {
+        categoryId: null,
+        subcategoryId: null,
+      })
+
+      expect(mockPrismaService.category.findFirst).not.toHaveBeenCalled()
+      expect(mockPrismaService.transaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            categoryId: null,
+            subcategoryId: null,
+            subcategory: null,
+            type: TransactionType.EXPENSE,
+          },
+        })
+      )
+    })
+
+    it('refuses a category the user does not own', async () => {
+      mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction)
+      mockPrismaService.category.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.update(mockTransaction.id, mockUserId, {
+          categoryId: 'someone-elses',
+        })
+      ).rejects.toThrow(NotFoundException)
+      expect(mockPrismaService.transaction.update).not.toHaveBeenCalled()
     })
 
     it('should update isPointed', async () => {
@@ -1627,10 +1691,7 @@ describe('TransactionsService', () => {
       mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
         importCategoriesFromFile: true,
       })
-      mockCategoriesService.findOrCreateMany.mockResolvedValue({
-        categories: [mockCategory],
-        newCount: 0,
-      })
+      mockCategoriesService.findManyByName.mockResolvedValue([mockCategory])
       mockSubcategoriesService.findOrCreateMany.mockResolvedValue({
         subcategories: [],
         newCount: 0,

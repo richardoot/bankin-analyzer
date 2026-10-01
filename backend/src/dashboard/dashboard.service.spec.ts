@@ -28,8 +28,14 @@ describe('DashboardService', () => {
       total_amount: number
       received_credit: number
       pending_credit: number
+      nature: string | null
+      rhythm: string | null
+      category_catalog_key: string | null
     }> = {}
   ) => ({
+    nature: overrides.nature ?? null,
+    rhythm: overrides.rhythm ?? null,
+    category_catalog_key: overrides.category_catalog_key ?? null,
     month_key: overrides.month_key ?? '2024-01',
     // Rows are grouped and filtered by category id, so each name gets a
     // distinct one unless a test explicitly passes `category_id: null` to
@@ -1168,6 +1174,131 @@ describe('DashboardService', () => {
       ])
     })
   })
+  describe('the structure of spending and the savings reading', () => {
+    it('reads each expense through its nature and rhythm, on both readings', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_name: 'Logement',
+            total_amount: 1000,
+            nature: 'ESSENTIAL',
+            rhythm: 'COMMITTED',
+          }),
+          createRow({
+            category_name: 'Restaurants',
+            total_amount: 200,
+            nature: 'PLEASURE',
+            rhythm: 'VARIABLE',
+          }),
+          // A holiday restaurant: chosen, variable, and exceptional.
+          createRow({
+            category_name: 'Restaurants',
+            total_amount: 300,
+            nature: 'PLEASURE',
+            rhythm: 'VARIABLE',
+            is_exceptional: true,
+          }),
+          // A legacy row: no attribute yet.
+          createRow({ category_name: 'Abonnements', total_amount: 50 }),
+          createRow({
+            category_name: 'Salaire',
+            type: 'INCOME',
+            total_amount: 3000,
+          }),
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.spendingStructure).toEqual({
+        essential: 1000,
+        pleasure: 500,
+        unknownNature: 50,
+        committed: 1000,
+        variable: 500,
+        unknownRhythm: 50,
+        total: 1550,
+      })
+      expect(result.everydaySpendingStructure).toEqual({
+        essential: 1000,
+        pleasure: 200,
+        unknownNature: 50,
+        committed: 1000,
+        variable: 200,
+        unknownRhythm: 50,
+        total: 1250,
+      })
+      // No transfer: nothing saved, and the free money is income less the
+      // committed everyday spending.
+      expect(result.savingsTransfers).toBe(0)
+      expect(result.savingsRate).toBe(0)
+      expect(result.remainingToLive).toBe(2000)
+    })
+
+    it('counts a transfer into savings as saved and nowhere else', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_name: 'Salaire',
+            type: 'INCOME',
+            total_amount: 2000,
+          }),
+          createRow({
+            category_name: 'Épargne de précaution',
+            type: 'TRANSFER',
+            category_catalog_key: 'emergency-savings',
+            // Money leaving the current account: negative, like an expense.
+            total_amount: -300,
+          }),
+          createRow({
+            category_name: 'Investissement',
+            type: 'TRANSFER',
+            category_catalog_key: 'investment',
+            total_amount: -100,
+          }),
+          // A withdrawal from savings comes back positive and un-saves.
+          createRow({
+            category_name: 'Épargne projet',
+            type: 'TRANSFER',
+            category_catalog_key: 'project-savings',
+            total_amount: 50,
+          }),
+          // An internal move says nothing about saving.
+          createRow({
+            category_name: 'Virement interne',
+            type: 'TRANSFER',
+            category_catalog_key: 'internal-transfer',
+            total_amount: -800,
+          }),
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.totalIncome).toBe(2000)
+      expect(result.totalExpenses).toBe(0)
+      expect(result.incomeByCategory.map(c => c.category)).toEqual(['Salaire'])
+      expect(optionNames(result.allIncomeCategories)).toEqual(['Salaire'])
+      expect(result.savingsTransfers).toBe(350)
+      expect(result.savingsRate).toBe(0.175)
+      expect(result.remainingToLive).toBe(1650)
+    })
+
+    it('reports no rate and no free money without income', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([createRow({ total_amount: 100 })])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.savingsRate).toBeNull()
+      expect(result.remainingToLive).toBeNull()
+    })
+  })
+
   describe('everyday vs exceptional split', () => {
     it('leaves categories untouched by any event identical in both modes', async () => {
       setupMocks([
