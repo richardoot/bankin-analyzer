@@ -8,6 +8,10 @@ import { BudgetsModule } from '../budgets/budgets.module'
 import { DashboardModule } from '../dashboard/dashboard.module'
 import { AccountsModule } from '../accounts/accounts.module'
 import { AuthModule } from '../auth/auth.module'
+import { SubcategoriesModule } from '../subcategories/subcategories.module'
+import { PersonsModule } from '../persons/persons.module'
+import { ReimbursementsModule } from '../reimbursements/reimbursements.module'
+import { SettlementsModule } from '../settlements/settlements.module'
 
 @Module({
   imports: [
@@ -17,6 +21,10 @@ import { AuthModule } from '../auth/auth.module'
     BudgetsModule,
     DashboardModule,
     AccountsModule,
+    SubcategoriesModule,
+    PersonsModule,
+    ReimbursementsModule,
+    SettlementsModule,
   ],
   controllers: [McpController, WellKnownController],
   providers: [McpAuthGuard],
