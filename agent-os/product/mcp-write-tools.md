@@ -250,4 +250,18 @@ les services sont couverts (`reimbursement-baseline.e2e-spec.ts`, `settlement-le
 
 ## Avancement
 
-À démarrer.
+Lots 0 à 3 livrés le 2026-10-01, non commités (Richard commite).
+
+- Lot 0 : `get_transactions` (filtres `categoryName`, `subcategoryId`, `search` ; ids dans chaque
+  ligne), `get_transaction`, `get_categories` avec sous-catégories, `get_persons`. Écart au plan :
+  quand `type` est donné, `categoryName` ne cherche que parmi les catégories de ce type, ce qui
+  départage « Remboursements » dépense et revenu.
+- Lot 1 : `filing-target.ts` (+ spec), `set_transaction_category`, `set_transactions_category`.
+  Écart : une sous-catégorie dont le nom normalisé est porté par deux lignes de la même catégorie
+  (« Café » et « Cafe ») est refusée comme ambiguë.
+- Lot 2 : `create_reimbursement_request`, `settle_reimbursements`, `get_reimbursements`. Écart :
+  `get_reimbursements` accepte aussi `personId`, utile pour préparer un règlement.
+- Lot 3 : `docs/mcp.md`.
+- Vérification : `type-check`, `lint` (0 erreur) et `test:unit` (1062 tests) verts. L'appel
+  JSON-RPC local n'est pas fait : la base locale porte le test du cadre des catégories, et
+  `docker-start.sh --prod` l'écraserait.
