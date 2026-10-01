@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
-import { IsBoolean, IsOptional, IsString, Length } from 'class-validator'
+import { IsOptional, IsString, Length } from 'class-validator'
 import { Transform } from 'class-transformer'
 
 export class UpdateCategoryDto {
@@ -18,9 +18,4 @@ export class UpdateCategoryDto {
   )
   @Length(1, 100)
   name?: string
-
-  /** Exclude this category from budget statistics and plans */
-  @IsOptional()
-  @IsBoolean()
-  isExcludedFromBudget?: boolean
 }

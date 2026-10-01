@@ -23,6 +23,7 @@
  */
 
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { PrismaPg } from '@prisma/adapter-pg'
 import pg from 'pg'
 
@@ -31,6 +32,26 @@ import pg from 'pg'
 const { PrismaClient } = await import('../src/generated/prisma/index.js').catch(
   () => import('../dist/generated/prisma/index.js')
 )
+
+/**
+ * The category catalogue, read from the same file the application validates
+ * at boot (src/categories/catalog.ts): the seed files under the exact
+ * vocabulary the app imposes, so it exercises the catalogue rather than a
+ * lookalike of it. Resolved from src (dev) or dist (container image).
+ */
+const catalog = (() => {
+  for (const candidate of [
+    '../src/categories/catalog.data.json',
+    '../dist/categories/catalog.data.json',
+  ]) {
+    try {
+      return JSON.parse(readFileSync(new URL(candidate, import.meta.url), 'utf8'))
+    } catch {
+      // try the next location
+    }
+  }
+  throw new Error('catalog.data.json not found in src/ nor dist/')
+})()
 
 const DEFAULT_LOCAL_URL =
   'postgresql://postgres:postgres@localhost:5432/postgres'
@@ -75,67 +96,11 @@ const expense = (min, max) => -r2(min + rand() * (max - min))
 const income = (min, max) => r2(min + rand() * (max - min))
 const dateUTC = (y, m, d, hour = 10) => new Date(Date.UTC(y, m, d, hour, 0, 0))
 
-// ── Category tree (icon + subcategories) ──────────────────────────────────────
-/** @type {Array<{name:string,icon:string,subs:string[],excluded?:boolean}>} */
-const EXPENSE_CATEGORIES = [
-  {
-    name: 'Alimentation',
-    icon: '🛒',
-    subs: ['Supermarché', 'Boulangerie', 'Marché'],
-  },
-  {
-    name: 'Logement',
-    icon: '🏠',
-    subs: ['Loyer', 'Électricité', 'Internet', 'Assurance habitation'],
-  },
-  {
-    name: 'Transport',
-    icon: '🚗',
-    subs: ['Essence', 'Transports en commun', 'Péage', 'Entretien'],
-  },
-  {
-    name: 'Restaurants',
-    icon: '🍽️',
-    subs: ['Restaurant', 'Fast-food', 'Café'],
-  },
-  {
-    name: 'Loisirs',
-    icon: '🎉',
-    subs: ['Cinéma', 'Sport', 'Sorties', 'Livres'],
-  },
-  { name: 'Santé', icon: '💊', subs: ['Pharmacie', 'Médecin', 'Mutuelle'] },
-  {
-    name: 'Shopping',
-    icon: '🛍️',
-    subs: ['Vêtements', 'Électronique', 'Maison'],
-  },
-  {
-    name: 'Abonnements',
-    icon: '🔁',
-    subs: ['Téléphone', 'Netflix', 'Spotify'],
-  },
-  {
-    name: 'Voyages',
-    icon: '✈️',
-    subs: ['Transport', 'Hébergement', 'Activités'],
-  },
-  { name: 'Enfants', icon: '🧸', subs: ['Garde', 'Scolarité', 'Loisirs'] },
-  {
-    name: 'Achats exceptionnels',
-    icon: '💎',
-    subs: ['Véhicule', 'Électroménager', 'Mobilier'],
-    excluded: true, // excluded from budget plans
-  },
-]
-
-/** @type {Array<{name:string,icon:string}>} */
-const INCOME_CATEGORIES = [
-  { name: 'Salaire', icon: '💰' },
-  { name: 'Prime', icon: '🎁' },
-  { name: 'Remboursement', icon: '💸' },
-  { name: 'Revenus locatifs', icon: '🏦' },
-  { name: 'Intérêts', icon: '📈' },
-]
+// ── Categories: the catalogue, nothing else ───────────────────────────────────
+/** Expense category labels, for the budget plans. */
+const EXPENSE_CATEGORY_NAMES = catalog.categories
+  .filter(c => c.type === 'EXPENSE')
+  .map(c => c.label)
 
 const ACCOUNTS = [
   { name: 'Compte Courant', type: 'STANDARD', divisor: 1 },
@@ -201,6 +166,10 @@ const TAGS = [
   // it as "sans enveloppe".
   { name: 'Rentrée scolaire', color: '#0ea5e9', icon: '🎒' },
   { name: 'Noël', color: '#22c55e', icon: '🎄', budget: 600 },
+  // Additive and undated: the car and the washing machine are filed under
+  // their purpose (Transport, Shopping) and this tag alone keeps them out of
+  // the everyday averages — there is no "exceptional" category any more.
+  { name: 'Gros achats', color: '#a855f7', icon: '💎' },
 ]
 
 const SUPERMARKETS = ['Carrefour', 'Leclerc', 'Monoprix', 'Lidl', 'Auchan']
@@ -367,32 +336,36 @@ async function main() {
     accountByName[a.name] = acc
   }
 
-  // ── Categories + subcategories ───────────────────────────────────────────────
-  const categoryByName = {} // name -> category row
-  const subByKey = {} // `${cat}/${sub}` -> subcategory row
-  for (const c of EXPENSE_CATEGORIES) {
+  // ── Categories + subcategories: the catalogue, materialised ─────────────────
+  const categoryByName = {} // label -> category row
+  const subByKey = {} // `${category label}/${subcategory label}` -> row
+  for (const c of catalog.categories) {
+    const other = c.subcategories.find(sub => sub.key === `${c.key}.other`)
     const cat = await prisma.category.create({
       data: {
         userId,
-        name: c.name,
-        type: 'EXPENSE',
+        name: c.label,
+        type: c.type,
         icon: c.icon,
-        isExcludedFromBudget: c.excluded ?? false,
+        catalogKey: c.key,
+        defaultNature: other?.nature ?? null,
+        defaultRhythm: other?.rhythm ?? null,
       },
     })
-    categoryByName[c.name] = cat
-    for (const s of c.subs) {
-      const sub = await prisma.subcategory.create({
-        data: { userId, categoryId: cat.id, name: s },
+    categoryByName[c.label] = cat
+    for (const sub of c.subcategories) {
+      const row = await prisma.subcategory.create({
+        data: {
+          userId,
+          categoryId: cat.id,
+          name: sub.label,
+          catalogKey: sub.key,
+          nature: sub.nature ?? null,
+          rhythm: sub.rhythm ?? null,
+        },
       })
-      subByKey[`${c.name}/${s}`] = sub
+      subByKey[`${c.label}/${sub.label}`] = row
     }
-  }
-  for (const c of INCOME_CATEGORIES) {
-    const cat = await prisma.category.create({
-      data: { userId, name: c.name, type: 'INCOME', icon: c.icon },
-    })
-    categoryByName[c.name] = cat
   }
 
   // ── Persons ──────────────────────────────────────────────────────────────────
@@ -409,7 +382,7 @@ async function main() {
    * @property {Date} date
    * @property {string} description
    * @property {number} amount
-   * @property {'EXPENSE'|'INCOME'} type
+   * @property {'EXPENSE'|'INCOME'|'TRANSFER'} type
    * @property {string} category
    * @property {string} [sub]
    * @property {string} account
@@ -474,7 +447,8 @@ async function main() {
       description: 'Salaire',
       amount: income(2550, 2750),
       type: 'INCOME',
-      category: 'Salaire',
+      category: "Revenus d'activité",
+      sub: 'Salaire',
       account: 'Compte Courant',
       pointed: true,
     })
@@ -483,7 +457,8 @@ async function main() {
       description: 'Salaire conjoint',
       amount: income(2300, 2500),
       type: 'INCOME',
-      category: 'Salaire',
+      category: "Revenus d'activité",
+      sub: 'Salaire',
       account: 'Compte Joint',
       pointed: true,
     })
@@ -492,7 +467,8 @@ async function main() {
       description: 'Loyer studio locatif',
       amount: income(450, 450),
       type: 'INCOME',
-      category: 'Revenus locatifs',
+      category: 'Revenus du patrimoine',
+      sub: 'Loyers perçus',
       account: 'Compte Courant',
     })
     // Twice-a-year bonus
@@ -502,7 +478,8 @@ async function main() {
         description: m === 11 ? "Prime de fin d'année" : 'Prime',
         amount: income(900, 1600),
         type: 'INCOME',
-        category: 'Prime',
+        category: "Revenus d'activité",
+        sub: 'Prime et bonus',
         account: 'Compte Courant',
       })
     }
@@ -513,18 +490,28 @@ async function main() {
         description: 'Intérêts Livret A',
         amount: income(18, 42),
         type: 'INCOME',
-        category: 'Intérêts',
+        category: 'Revenus du patrimoine',
+        sub: 'Intérêts et dividendes',
         account: 'Livret A',
       })
     }
-    // Monthly saving transfer approximation as investment inflow
+    // Savings: transfers, neither income nor expense. The Livret A leg is
+    // the outgoing one, from the current account.
+    specs.push({
+      date: dateUTC(y, m, 4),
+      description: 'Virement Livret A',
+      amount: -150,
+      type: 'TRANSFER',
+      category: 'Épargne de précaution',
+      account: 'Compte Courant',
+    })
     if (m % 2 === 0) {
       specs.push({
         date: dateUTC(y, m, 4),
         description: 'Versement PEA',
         amount: income(200, 200),
-        type: 'INCOME',
-        category: 'Intérêts',
+        type: 'TRANSFER',
+        category: 'Investissement',
         account: 'PEA',
       })
     }
@@ -536,7 +523,7 @@ async function main() {
       amount: -1100,
       type: 'EXPENSE',
       category: 'Logement',
-      sub: 'Loyer',
+      sub: 'Loyer ou crédit immobilier',
       account: 'Compte Courant',
       pointed: true,
     })
@@ -546,7 +533,7 @@ async function main() {
       amount: expense(winter ? 110 : 55, winter ? 155 : 90),
       type: 'EXPENSE',
       category: 'Logement',
-      sub: 'Électricité',
+      sub: 'Électricité et gaz',
       account: 'Compte Joint',
     })
     specs.push({
@@ -554,7 +541,7 @@ async function main() {
       description: 'Free Internet Fibre',
       amount: -34.99,
       type: 'EXPENSE',
-      category: 'Logement',
+      category: 'Télécom et numérique',
       sub: 'Internet',
       account: 'Compte Courant',
     })
@@ -572,7 +559,7 @@ async function main() {
       description: 'Forfait mobile',
       amount: -19.99,
       type: 'EXPENSE',
-      category: 'Abonnements',
+      category: 'Télécom et numérique',
       sub: 'Téléphone',
       account: 'Compte Courant',
     })
@@ -581,8 +568,8 @@ async function main() {
       description: 'Netflix',
       amount: -13.49,
       type: 'EXPENSE',
-      category: 'Abonnements',
-      sub: 'Netflix',
+      category: 'Loisirs et culture',
+      sub: 'Streaming et médias',
       account: 'Compte Courant',
     })
     specs.push({
@@ -590,8 +577,8 @@ async function main() {
       description: 'Spotify',
       amount: -10.99,
       type: 'EXPENSE',
-      category: 'Abonnements',
-      sub: 'Spotify',
+      category: 'Loisirs et culture',
+      sub: 'Streaming et médias',
       account: 'Compte Courant',
     })
     specs.push({
@@ -609,7 +596,7 @@ async function main() {
       amount: -75.2,
       type: 'EXPENSE',
       category: 'Transport',
-      sub: 'Transports en commun',
+      sub: 'Abonnement transports en commun',
       account: 'Compte Courant',
     })
 
@@ -634,7 +621,7 @@ async function main() {
         amount: expense(6, 18),
         type: 'EXPENSE',
         category: 'Alimentation',
-        sub: 'Boulangerie',
+        sub: 'Commerces de bouche et marché',
         account: 'Compte Courant',
       })
     }
@@ -646,7 +633,7 @@ async function main() {
         description: pick(RESTAURANTS),
         amount: expense(22, 78),
         type: 'EXPENSE',
-        category: 'Restaurants',
+        category: 'Restaurants et bars',
         sub: 'Restaurant',
         account: 'Compte Courant',
       })
@@ -660,7 +647,7 @@ async function main() {
         amount: expense(52, 82),
         type: 'EXPENSE',
         category: 'Transport',
-        sub: 'Essence',
+        sub: 'Carburant',
         account: 'Compte Courant',
       })
     }
@@ -672,8 +659,8 @@ async function main() {
         description: 'Cinéma UGC',
         amount: expense(11, 26),
         type: 'EXPENSE',
-        category: 'Loisirs',
-        sub: 'Cinéma',
+        category: 'Loisirs et culture',
+        sub: 'Sorties et culture',
         account: 'Compte Courant',
       })
     }
@@ -682,8 +669,8 @@ async function main() {
       description: 'Salle de sport',
       amount: -39.9,
       type: 'EXPENSE',
-      category: 'Loisirs',
-      sub: 'Sport',
+      category: 'Loisirs et culture',
+      sub: 'Salle de sport et licences',
       account: 'Compte Courant',
     })
 
@@ -694,8 +681,8 @@ async function main() {
         description: pick(['Zara', 'Uniqlo', 'Decathlon', 'Fnac']),
         amount: expense(30, 160),
         type: 'EXPENSE',
-        category: 'Shopping',
-        sub: rand() < 0.5 ? 'Vêtements' : 'Électronique',
+        category: 'Shopping et soins',
+        sub: rand() < 0.5 ? 'Vêtements' : 'High-tech',
         account: 'Compte Courant',
       })
     }
@@ -708,13 +695,13 @@ async function main() {
         amount: expense(15, 60),
         type: 'EXPENSE',
         category: 'Santé',
-        sub: rand() < 0.5 ? 'Pharmacie' : 'Médecin',
+        sub: rand() < 0.5 ? 'Pharmacie' : 'Médecin et spécialistes',
         account: 'Compte Courant',
       })
     }
   }
 
-  // ── One-off exceptional purchases (excluded-from-budget category) ─────────────
+  // ── One-off purchases: filed by purpose, kept out of the averages by a tag ────
   {
     const carMonth = months[4]
     specs.push({
@@ -722,10 +709,11 @@ async function main() {
       description: "Achat voiture d'occasion",
       amount: -8500,
       type: 'EXPENSE',
-      category: 'Achats exceptionnels',
-      sub: 'Véhicule',
+      category: 'Transport',
+      sub: 'Achat de véhicule',
       account: 'Compte Courant',
       note: 'Renault Clio — achat exceptionnel',
+      tags: ['Gros achats'],
     })
     const applMonth = months[9]
     specs.push({
@@ -733,9 +721,10 @@ async function main() {
       description: 'Lave-linge Bosch',
       amount: -649,
       type: 'EXPENSE',
-      category: 'Achats exceptionnels',
-      sub: 'Électroménager',
+      category: 'Shopping et soins',
+      sub: 'Maison et déco',
       account: 'Compte Joint',
+      tags: ['Gros achats'],
     })
   }
 
@@ -749,8 +738,8 @@ async function main() {
       description: 'Location maison Ardèche',
       amount: -980,
       type: 'EXPENSE',
-      category: 'Voyages',
-      sub: 'Hébergement',
+      category: 'Logement',
+      sub: 'Hébergement temporaire',
       account: 'Compte Joint',
       tags: tag,
     })
@@ -770,7 +759,7 @@ async function main() {
       amount: -132.75,
       type: 'EXPENSE',
       category: 'Alimentation',
-      sub: 'Marché',
+      sub: 'Commerces de bouche et marché',
       account: 'Compte Joint',
       tags: tag,
     })
@@ -779,8 +768,8 @@ async function main() {
       description: 'Descente des gorges en canoë',
       amount: -186,
       type: 'EXPENSE',
-      category: 'Loisirs',
-      sub: 'Sport',
+      category: 'Loisirs et culture',
+      sub: 'Sport et activités ponctuelles',
       account: 'Compte Courant',
       tags: tag,
     })
@@ -789,7 +778,7 @@ async function main() {
       description: 'Restaurant Le Chêne Vert',
       amount: -128.4,
       type: 'EXPENSE',
-      category: 'Restaurants',
+      category: 'Restaurants et bars',
       sub: 'Restaurant',
       account: 'Compte Joint',
       tags: tag,
@@ -800,7 +789,7 @@ async function main() {
       amount: -88.9,
       type: 'EXPENSE',
       category: 'Transport',
-      sub: 'Essence',
+      sub: 'Carburant',
       account: 'Compte Courant',
       tags: tag,
     })
@@ -815,8 +804,8 @@ async function main() {
       description: 'Leroy Merlin — peinture',
       amount: -234.5,
       type: 'EXPENSE',
-      category: 'Shopping',
-      sub: 'Maison',
+      category: 'Shopping et soins',
+      sub: 'Maison et déco',
       account: 'Compte Joint',
       tags: tag,
     })
@@ -825,8 +814,8 @@ async function main() {
       description: 'Leroy Merlin — parquet',
       amount: -812,
       type: 'EXPENSE',
-      category: 'Shopping',
-      sub: 'Maison',
+      category: 'Shopping et soins',
+      sub: 'Maison et déco',
       account: 'Compte Joint',
       tags: tag,
     })
@@ -835,8 +824,8 @@ async function main() {
       description: 'Castorama — outillage',
       amount: -157.8,
       type: 'EXPENSE',
-      category: 'Shopping',
-      sub: 'Maison',
+      category: 'Shopping et soins',
+      sub: 'Maison et déco',
       account: 'Compte Courant',
       tags: tag,
     })
@@ -846,7 +835,7 @@ async function main() {
       amount: -450,
       type: 'EXPENSE',
       category: 'Logement',
-      sub: 'Assurance habitation',
+      sub: 'Entretien et travaux',
       account: 'Compte Joint',
       tags: tag,
     })
@@ -861,8 +850,8 @@ async function main() {
       description: "Billets d'avion Rome",
       amount: -428,
       type: 'EXPENSE',
-      category: 'Voyages',
-      sub: 'Transport',
+      category: 'Transport',
+      sub: 'Avion',
       account: 'Compte Courant',
       tags: tag,
     })
@@ -871,8 +860,8 @@ async function main() {
       description: 'Hôtel Firenze 4 nuits',
       amount: -612,
       type: 'EXPENSE',
-      category: 'Voyages',
-      sub: 'Hébergement',
+      category: 'Logement',
+      sub: 'Hébergement temporaire',
       account: 'Compte Courant',
       tags: tag,
       reimb: [{ person: 'Sophie', amount: 306, status: 'PENDING' }],
@@ -882,7 +871,7 @@ async function main() {
       description: 'Trattoria Da Mario',
       amount: -96,
       type: 'EXPENSE',
-      category: 'Restaurants',
+      category: 'Restaurants et bars',
       sub: 'Restaurant',
       account: 'Compte Courant',
       tags: tag,
@@ -892,8 +881,8 @@ async function main() {
       description: 'Musée des Offices',
       amount: -48,
       type: 'EXPENSE',
-      category: 'Voyages',
-      sub: 'Activités',
+      category: 'Loisirs et culture',
+      sub: 'Sorties et culture',
       account: 'Compte Courant',
       tags: tag,
     })
@@ -902,8 +891,8 @@ async function main() {
       description: 'Location scooter',
       amount: -75,
       type: 'EXPENSE',
-      category: 'Voyages',
-      sub: 'Activités',
+      category: 'Transport',
+      sub: 'Location de véhicule',
       account: 'Compte Courant',
       tags: tag,
     })
@@ -918,8 +907,8 @@ async function main() {
       description: 'Cadeau anniversaire Marie',
       amount: -120,
       type: 'EXPENSE',
-      category: 'Shopping',
-      sub: 'Maison',
+      category: 'Shopping et soins',
+      sub: 'Maison et déco',
       account: 'Compte Courant',
       tags: tag,
     })
@@ -928,7 +917,7 @@ async function main() {
       description: 'Restaurant anniversaire',
       amount: -210,
       type: 'EXPENSE',
-      category: 'Restaurants',
+      category: 'Restaurants et bars',
       sub: 'Restaurant',
       account: 'Compte Courant',
       tags: tag,
@@ -943,7 +932,8 @@ async function main() {
       description: 'Virement Julien (part resto)',
       amount: 52.5,
       type: 'INCOME',
-      category: 'Remboursement',
+      category: 'Remboursements',
+      sub: "Remboursement d'un proche",
       account: 'Compte Courant',
       settlesReimb: true,
       settlePerson: 'Julien',
@@ -959,8 +949,8 @@ async function main() {
       description: 'Forfait ski Les Arcs',
       amount: -186,
       type: 'EXPENSE',
-      category: 'Loisirs',
-      sub: 'Sport',
+      category: 'Loisirs et culture',
+      sub: 'Sport et activités ponctuelles',
       account: 'Compte Courant',
       tags: tag,
     })
@@ -969,8 +959,8 @@ async function main() {
       description: 'Chalet 2 nuits',
       amount: -340,
       type: 'EXPENSE',
-      category: 'Voyages',
-      sub: 'Hébergement',
+      category: 'Logement',
+      sub: 'Hébergement temporaire',
       account: 'Compte Joint',
       tags: tag,
     })
@@ -979,8 +969,8 @@ async function main() {
       description: 'Location matériel ski',
       amount: -94,
       type: 'EXPENSE',
-      category: 'Loisirs',
-      sub: 'Sport',
+      category: 'Loisirs et culture',
+      sub: 'Sport et activités ponctuelles',
       account: 'Compte Courant',
       tags: tag,
     })
@@ -995,8 +985,8 @@ async function main() {
       description: 'Inscription trail des Crêtes',
       amount: -68,
       type: 'EXPENSE',
-      category: 'Loisirs',
-      sub: 'Sport',
+      category: 'Loisirs et culture',
+      sub: 'Sport et activités ponctuelles',
       account: 'Compte Courant',
       tags: tag,
     })
@@ -1005,8 +995,8 @@ async function main() {
       description: 'Hôtel veille de course',
       amount: -112,
       type: 'EXPENSE',
-      category: 'Voyages',
-      sub: 'Hébergement',
+      category: 'Logement',
+      sub: 'Hébergement temporaire',
       account: 'Compte Courant',
       tags: tag,
     })
@@ -1016,7 +1006,7 @@ async function main() {
       amount: -61.4,
       type: 'EXPENSE',
       category: 'Transport',
-      sub: 'Essence',
+      sub: 'Carburant',
       account: 'Compte Courant',
       tags: tag,
     })
@@ -1025,7 +1015,7 @@ async function main() {
       description: 'Ravitaillement + repas post-course',
       amount: -74.2,
       type: 'EXPENSE',
-      category: 'Restaurants',
+      category: 'Restaurants et bars',
       sub: 'Restaurant',
       account: 'Compte Courant',
       tags: tag,
@@ -1041,8 +1031,8 @@ async function main() {
       description: 'Fournitures scolaires',
       amount: -142.6,
       type: 'EXPENSE',
-      category: 'Enfants',
-      sub: 'Scolarité',
+      category: 'Famille et amis',
+      sub: 'Scolarité et cantine',
       account: 'Compte Joint',
       tags: tag,
     })
@@ -1051,7 +1041,7 @@ async function main() {
       description: 'Cartable + trousse',
       amount: -87.9,
       type: 'EXPENSE',
-      category: 'Shopping',
+      category: 'Shopping et soins',
       sub: 'Vêtements',
       account: 'Compte Joint',
       tags: tag,
@@ -1061,8 +1051,8 @@ async function main() {
       description: 'Licence club de foot',
       amount: -180,
       type: 'EXPENSE',
-      category: 'Enfants',
-      sub: 'Loisirs',
+      category: 'Famille et amis',
+      sub: 'Activités enfants',
       account: 'Compte Courant',
       tags: tag,
     })
@@ -1079,8 +1069,8 @@ async function main() {
         description: 'Cadeaux de Noël',
         amount: -340,
         type: 'EXPENSE',
-        category: 'Shopping',
-        sub: 'Maison',
+        category: 'Shopping et soins',
+        sub: 'Maison et déco',
         account: 'Compte Courant',
         tags: tag,
       })
@@ -1099,8 +1089,8 @@ async function main() {
         description: 'Sapin & décorations',
         amount: -68,
         type: 'EXPENSE',
-        category: 'Shopping',
-        sub: 'Maison',
+        category: 'Shopping et soins',
+        sub: 'Maison et déco',
         account: 'Compte Courant',
         tags: tag,
       })
@@ -1158,7 +1148,7 @@ async function main() {
           amount: rb.amount,
           status: rb.status ?? 'PENDING',
           received: rb.received ?? 0,
-          categoryId: categoryByName['Remboursement'].id,
+          categoryId: categoryByName['Remboursements'].id,
         })
       }
     }
@@ -1214,20 +1204,19 @@ async function main() {
 
   // ── Budget plans ──────────────────────────────────────────────────────────────
   console.log('📊 Creating budget plans…')
-  const budgetCats = EXPENSE_CATEGORIES.filter(c => !c.excluded).map(
-    c => c.name
-  )
+  const budgetCats = EXPENSE_CATEGORY_NAMES
   const monthlyBudget = {
     Alimentation: 550,
     Logement: 1300,
     Transport: 200,
-    Restaurants: 200,
-    Loisirs: 120,
+    'Restaurants et bars': 200,
+    'Loisirs et culture': 160,
     Santé: 90,
-    Shopping: 150,
-    Abonnements: 60,
-    Voyages: 150,
-    Enfants: 100,
+    'Shopping et soins': 150,
+    'Télécom et numérique': 60,
+    'Famille et amis': 100,
+    'Impôts et taxes': 120,
+    'Banque et crédits': 10,
   }
 
   /** Envelope total per month — entries are monthly amounts, like the UI. */
@@ -1241,7 +1230,7 @@ async function main() {
    * does it: joint accounts halved, reimbursement-linked income categories
    * left out (they are deductions, not earnings).
    */
-  const REIMBURSEMENT_INCOME = new Set(['Remboursement', 'Revenus locatifs'])
+  const REIMBURSEMENT_INCOME = new Set(['Remboursements'])
   const divisorOf = accountName =>
     ACCOUNTS.find(a => a.name === accountName)?.divisor ?? 1
 
@@ -1322,7 +1311,7 @@ async function main() {
       userId,
       status: 'COMPLETED',
       transactionsImported: specs.length,
-      categoriesCreated: EXPENSE_CATEGORIES.length + INCOME_CATEGORIES.length,
+      categoriesCreated: catalog.categories.length,
       duplicatesSkipped: randInt(3, 15),
       totalInFile: specs.length + randInt(3, 15),
       dateRangeStart: specs[0].date,
