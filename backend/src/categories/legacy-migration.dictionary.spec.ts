@@ -54,14 +54,36 @@ describe('suggestFiling', () => {
   })
 
   it('sends a heading that names no purpose back to the categoriser', () => {
-    expect(suggestFiling('Erreurs', 'Erreurs - Autres', 'EXPENSE')).toEqual({
+    expect(suggestFiling('Divers', null, 'EXPENSE')).toEqual({
       action: 'UNFILE',
       categoryKey: null,
       subcategoryKey: null,
       tagName: null,
       basis: 'category',
     })
-    expect(suggestFiling('Divers', null, 'EXPENSE')?.action).toBe('UNFILE')
+  })
+
+  it('neutralises both legs of a mistake instead of counting them again', () => {
+    // The purchase on the wrong account, and the category alone.
+    expect(
+      suggestFiling('Erreurs', 'Erreurs - Autres', 'EXPENSE')
+    ).toMatchObject({
+      action: 'CATALOG',
+      categoryKey: 'adjustment',
+      subcategoryKey: null,
+      basis: 'category',
+    })
+    expect(suggestFiling('Erreurs', null, 'INCOME')).toMatchObject({
+      action: 'CATALOG',
+      categoryKey: 'adjustment',
+    })
+    // The transfer that covered it is not a refund.
+    expect(suggestFiling('Erreurs', 'R Erreurs', 'INCOME')).toMatchObject({
+      action: 'CATALOG',
+      categoryKey: 'adjustment',
+      subcategoryKey: null,
+      basis: 'subcategory',
+    })
   })
 
   it('carries a context heading over as a tag', () => {

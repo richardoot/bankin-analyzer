@@ -9,8 +9,8 @@
  * so far was born from a Bankin' export), the old seed's, and the variants
  * observed in production. Each maps to a catalogue key — a category
  * (`housing`) or a subcategory (`housing.rent`) — or to "unfile": a heading
- * like "Erreurs" or "Divers" that names no purpose, whose rows are better
- * sent back to the categoriser one by one than poured somewhere plausible.
+ * like "Divers" that names no purpose, whose rows are better sent back to
+ * the categoriser one by one than poured somewhere plausible.
  *
  * A few headings name a *context* the framework turned into a tag
  * ("Cadeaux", "Vacances", "Dépenses pro"). Those suggest the tag to attach
@@ -108,9 +108,15 @@ const CATEGORY_HINTS: Record<string, string> = {
   pret: 'family.loan',
   vacances: UNFILE,
   voyages: UNFILE,
-  erreurs: UNFILE,
-  erreur: UNFILE,
   // Transfers, on either side.
+  // "Erreurs" is where people park the two legs of a mistake — a purchase on
+  // the wrong account and the transfer that covered it, a rejected transfer
+  // and its return. The real spending already lives elsewhere, on the
+  // transfer out of the right account; unfiling these rows, or calling the
+  // income leg a refund, would count it a second time. Both legs are an
+  // adjustment, and the transfer type takes them out of every total.
+  erreurs: 'adjustment',
+  erreur: 'adjustment',
   investissement: 'investment',
   epargne: 'emergency-savings',
   economies: 'emergency-savings',
@@ -341,8 +347,9 @@ const SUBCATEGORY_HINTS: Record<string, string> = {
   'r sante': 'refunds.health',
   'r achats et shopping': 'refunds.merchant',
   'r articles de sport': 'refunds.merchant',
-  'r erreur': 'refunds.other',
-  'r erreurs': 'refunds.other',
+  // The income leg of a mistake is not a refund: see "erreurs" above.
+  'r erreur': 'adjustment',
+  'r erreurs': 'adjustment',
 }
 
 /** A context the legacy subcategory encoded, to carry over as a tag. */
