@@ -98,6 +98,72 @@ describe('proposeCategoryFromHistory', () => {
     ).toBeNull()
   })
 
+  it('counts two rows as one filing when they share a catalogue key, whatever their ids', () => {
+    // Rows filed before and after a migration: the ids changed, the key did not.
+    const history = [
+      row({
+        categoryId: 'old-sport',
+        categoryKey: 'leisure',
+        subcategoryId: 'old-gym',
+        subcategoryKey: 'leisure.gym',
+      }),
+      row({
+        categoryId: 'cat-leisure',
+        categoryKey: 'leisure',
+        subcategoryId: 'sub-gym',
+        subcategoryKey: 'leisure.gym',
+      }),
+      row({
+        categoryId: 'cat-leisure',
+        categoryKey: 'leisure',
+        subcategoryId: 'sub-gym',
+        subcategoryKey: 'leisure.gym',
+      }),
+    ]
+
+    const proposal = proposeCategoryFromHistory(
+      'CB Fitness Park',
+      'EXPENSE',
+      history
+    )
+
+    expect(proposal).toMatchObject({ confidence: 1, matches: 3 })
+    // Resolved to the ids the first (most recent) row carries today.
+    expect(proposal?.categoryId).toBe('old-sport')
+  })
+
+  it('keeps a subcategory the user created apart under the same keyed category', () => {
+    const history = [
+      row({
+        categoryKey: 'leisure',
+        subcategoryId: 'sub-own',
+        subcategoryName: 'Escalade',
+      }),
+      row({
+        categoryKey: 'leisure',
+        subcategoryId: 'sub-own',
+        subcategoryName: 'Escalade',
+      }),
+      row({
+        categoryKey: 'leisure',
+        subcategoryId: 'sub-gym',
+        subcategoryKey: 'leisure.gym',
+        subcategoryName: 'Salle',
+      }),
+      row({
+        categoryKey: 'leisure',
+        subcategoryId: 'sub-gym',
+        subcategoryKey: 'leisure.gym',
+        subcategoryName: 'Salle',
+      }),
+    ]
+
+    // Two against two: too divided to trust, as it should be.
+    expect(
+      proposeCategoryFromHistory('CB Fitness Park', 'EXPENSE', history)
+    ).toBeNull()
+  })
+
   it('carries the subcategory the agreeing rows share', () => {
     const history = [
       row({ subcategoryId: 'sub-gym', subcategoryName: 'Salle de sport' }),

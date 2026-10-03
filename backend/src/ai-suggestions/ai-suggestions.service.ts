@@ -21,6 +21,11 @@ import {
   findSimilarExamples,
   type CategorizedHistoryRow,
 } from './category-rules'
+import {
+  proposeFromMerchantMemory,
+  resolveCatalogFiling,
+} from './merchant-memory'
+import { MerchantMemoryService } from './merchant-memory.service'
 
 /**
  * Schéma Zod pour valider la sortie structurée du LLM (icônes)
@@ -74,7 +79,10 @@ export class AiSuggestionsService {
   private readonly logger = new Logger(AiSuggestionsService.name)
   private llm: ChatAnthropic
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private readonly merchantMemory: MerchantMemoryService
+  ) {
     const apiKey = process.env.ANTHROPIC_API_KEY
 
     if (!apiKey) {
@@ -234,6 +242,12 @@ export class AiSuggestionsService {
    * closest labels this user has already filed, next to the transaction
    * that looks like them, so a guess is informed by this user's own habits
    * rather than the category names alone.
+   *
+   * Before the model, one more rule: the merchant memory, what every user
+   * filed a label under, by catalogue key (`merchant-memory.ts`). It answers
+   * the ordinary merchants — supermarkets, carriers, operators — for an
+   * account with no history of its own, and only when the user carries the
+   * key it names; otherwise the transaction goes to the model like any other.
    */
   async categorizeTransactions(
     transactions: CategorizableTransaction[],
@@ -245,8 +259,32 @@ export class AiSuggestionsService {
 
     const assignments: ResolvedAssignment[] = []
 
+    const memory = await this.merchantMemory.load()
+    const forModel: CategorizableTransaction[] = []
+    for (const transaction of transactions) {
+      const remembered = proposeFromMerchantMemory(
+        transaction.description,
+        transaction.type,
+        memory
+      )
+      const filing = remembered
+        ? resolveCatalogFiling(remembered, categories, subcategories)
+        : null
+      if (filing) {
+        assignments.push({ index: transaction.index, ...filing })
+      } else {
+        forModel.push(transaction)
+      }
+    }
+    if (assignments.length > 0) {
+      recordEvent(this.logger, 'merchant_memory', {
+        remembered: assignments.length,
+        asked: forModel.length,
+      })
+    }
+
     for (const type of ['EXPENSE', 'INCOME'] as const) {
-      const ofType = transactions.filter(t => t.type === type)
+      const ofType = forModel.filter(t => t.type === type)
       if (ofType.length === 0) continue
 
       const catalog = describeCatalog(categories, subcategories, type)
@@ -274,7 +312,7 @@ export class AiSuggestionsService {
       }
     }
 
-    return assignments
+    return assignments.sort((a, b) => a.index - b.index)
   }
 
   private async classifyBatch(
@@ -289,10 +327,18 @@ export class AiSuggestionsService {
       'Tu classes des transactions bancaires francaises dans les categories',
       "existantes d'un utilisateur.",
       '',
+      'Chaque categorie repond a une seule question : a quoi a servi',
+      "l'argent. Sa description dit ce qu'elle couvre et ce qu'elle exclut ;",
+      'chaque sous-categorie porte sa nature (essentiel ou plaisir) et son',
+      'rythme (engage : continue tout seul, comme un loyer ou un abonnement ;',
+      "variable : depend d'une decision, comme une sortie).",
+      '',
       'Regles imperatives :',
       "- Choisis uniquement un nom present dans la liste, a l'identique.",
       "- N'invente jamais de categorie ni de sous-categorie.",
       '- La sous-categorie doit appartenir a la categorie choisie, sinon null.',
+      '- Prefere la sous-categorie la plus precise ; « Autre » seulement',
+      '  quand aucune ne convient.',
       '- Si aucune categorie ne convient vraiment, omets la transaction :',
       '  une transaction non classee vaut mieux quun mauvais classement.',
       '- Reponds pour chaque transaction avec son index exact.',

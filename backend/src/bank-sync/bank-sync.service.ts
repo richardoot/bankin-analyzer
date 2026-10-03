@@ -30,8 +30,10 @@ import {
   proposeCategoryFromHistory,
   type CategorizedHistoryRow,
 } from '../ai-suggestions/category-rules'
-import { isFilingKind } from '../ai-suggestions/transaction-categorizer'
-import type { CategoryChoice } from '../ai-suggestions/transaction-categorizer'
+import {
+  filingCategories,
+  isFilingKind,
+} from '../ai-suggestions/transaction-categorizer'
 import {
   EnableBankingClient,
   EnableBankingError,
@@ -1982,17 +1984,24 @@ export class BankSyncService {
     const [categories, subcategories] = await Promise.all([
       this.prisma.category.findMany({
         where: { userId },
-        select: { id: true, name: true, type: true },
+        select: { id: true, name: true, type: true, catalogKey: true },
       }),
       this.prisma.subcategory.findMany({
         where: { userId },
-        select: { id: true, name: true, categoryId: true },
+        select: {
+          id: true,
+          name: true,
+          categoryId: true,
+          catalogKey: true,
+          nature: true,
+          rhythm: true,
+        },
       }),
     ])
     if (categories.length === 0) return byPosition
 
-    const categoryNameById = new Map(categories.map(c => [c.id, c.name]))
-    const subcategoryNameById = new Map(subcategories.map(s => [s.id, s.name]))
+    const categoryById = new Map(categories.map(c => [c.id, c]))
+    const subcategoryById = new Map(subcategories.map(s => [s.id, s]))
     const historyRows = await this.prisma.transaction.findMany({
       where: { userId, categoryId: { not: null } },
       select: {
@@ -2008,21 +2017,24 @@ export class BankSyncService {
     })
     const history: CategorizedHistoryRow[] = []
     for (const row of historyRows) {
-      const categoryName = row.categoryId
-        ? categoryNameById.get(row.categoryId)
+      const category = row.categoryId
+        ? categoryById.get(row.categoryId)
         : undefined
-      if (!row.categoryId || !categoryName) continue
+      if (!row.categoryId || !category) continue
       // A transfer is not evidence for filing a purchase.
       if (!isFilingKind(row.type)) continue
+      const subcategory = row.subcategoryId
+        ? subcategoryById.get(row.subcategoryId)
+        : undefined
       history.push({
         description: row.description,
         type: row.type,
         categoryId: row.categoryId,
-        categoryName,
+        categoryName: category.name,
+        categoryKey: category.catalogKey,
         subcategoryId: row.subcategoryId,
-        subcategoryName: row.subcategoryId
-          ? (subcategoryNameById.get(row.subcategoryId) ?? null)
-          : null,
+        subcategoryName: subcategory?.name ?? null,
+        subcategoryKey: subcategory?.catalogKey ?? null,
       })
     }
 
@@ -2056,7 +2068,7 @@ export class BankSyncService {
             amount: row.amount,
             type: row.amount < 0 ? ('EXPENSE' as const) : ('INCOME' as const),
           })),
-          categories.filter((c): c is CategoryChoice => isFilingKind(c.type)),
+          filingCategories(categories),
           subcategories,
           history
         )

@@ -4,10 +4,12 @@ import {
   matchKey,
   resolveAssignments,
   describeCatalog,
+  filingCategories,
   type CategoryChoice,
   type SubcategoryChoice,
   type CategorizableTransaction,
 } from './transaction-categorizer'
+import { catalogCategory, catalogSubcategory } from '../categories/catalog'
 
 const categories: CategoryChoice[] = [
   { id: 'cat-food', name: 'Alimentation & Restau.', type: 'EXPENSE' },
@@ -177,13 +179,73 @@ describe('describeCatalog', () => {
     expect(catalog).not.toContain('Santé')
   })
 
-  it('names each category subcategories under it', () => {
-    const catalog = describeCatalog(categories, subcategories, 'EXPENSE')
-
-    expect(catalog).toContain(
-      'Alimentation & Restau. (sous-categories: Courses)'
+  it('names each category and its subcategories under it', () => {
+    const lines = describeCatalog(categories, subcategories, 'EXPENSE').split(
+      '\n'
     )
+
+    const food = lines.indexOf('- Alimentation & Restau.')
+    expect(food).toBeGreaterThanOrEqual(0)
+    expect(lines[food + 1]).toBe('  . Courses')
     // A category without subcategories stays on one plain line.
-    expect(catalog.split('\n')).toContain('- Erreurs')
+    expect(lines).toContain('- Erreurs')
+  })
+
+  it('reads the catalogue entries with their description and attributes', () => {
+    const housing = catalogCategory('housing')
+    const rent = catalogSubcategory('housing.rent')?.subcategory
+    const catalog = describeCatalog(
+      [
+        {
+          id: 'cat-housing',
+          name: 'Logement',
+          type: 'EXPENSE',
+          catalogKey: 'housing',
+        },
+      ],
+      [
+        {
+          id: 'sub-rent',
+          name: 'Loyer',
+          categoryId: 'cat-housing',
+          catalogKey: 'housing.rent',
+        },
+        // A subcategory the user added: its own attributes, no description.
+        {
+          id: 'sub-own',
+          name: 'Jardin',
+          categoryId: 'cat-housing',
+          catalogKey: null,
+          nature: 'PLEASURE',
+          rhythm: 'VARIABLE',
+        },
+      ],
+      'EXPENSE'
+    )
+
+    expect(catalog).toContain(`- Logement : ${housing?.description}`)
+    expect(catalog).toContain('  . Loyer [essentiel, engage]')
+    if (rent?.description) expect(catalog).toContain(rent.description)
+    expect(catalog).toContain('  . Jardin [plaisir, variable]')
+  })
+})
+
+describe('filingCategories', () => {
+  it('drops transfers and carries the catalogue key', () => {
+    expect(
+      filingCategories([
+        { id: 'c1', name: 'Logement', type: 'EXPENSE', catalogKey: 'housing' },
+        {
+          id: 'c2',
+          name: 'Livret A',
+          type: 'TRANSFER',
+          catalogKey: 'emergency-savings',
+        },
+        { id: 'c3', name: 'Ancienne', type: 'INCOME' },
+      ])
+    ).toEqual([
+      { id: 'c1', name: 'Logement', type: 'EXPENSE', catalogKey: 'housing' },
+      { id: 'c3', name: 'Ancienne', type: 'INCOME', catalogKey: null },
+    ])
   })
 })

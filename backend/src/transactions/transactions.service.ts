@@ -11,11 +11,11 @@ import { CategoriesService } from '../categories/categories.service'
 import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { AccountsService } from '../accounts/accounts.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
-import { isFilingKind } from '../ai-suggestions/transaction-categorizer'
-import type {
-  CategorizableTransaction,
-  CategoryChoice,
+import {
+  filingCategories,
+  isFilingKind,
 } from '../ai-suggestions/transaction-categorizer'
+import type { CategorizableTransaction } from '../ai-suggestions/transaction-categorizer'
 import { TransactionSource } from '../generated/prisma'
 import type { Prisma, Transaction, TransactionType } from '../generated/prisma'
 import {
@@ -938,11 +938,18 @@ export class TransactionsService {
     const [categories, subcategories] = await Promise.all([
       this.prisma.category.findMany({
         where: { userId },
-        select: { id: true, name: true, type: true },
+        select: { id: true, name: true, type: true, catalogKey: true },
       }),
       this.prisma.subcategory.findMany({
         where: { userId },
-        select: { id: true, name: true, categoryId: true },
+        select: {
+          id: true,
+          name: true,
+          categoryId: true,
+          catalogKey: true,
+          nature: true,
+          rhythm: true,
+        },
       }),
     ])
 
@@ -965,7 +972,7 @@ export class TransactionsService {
       })
       assignments = await this.aiSuggestionsService.categorizeTransactions(
         toFile,
-        categories.filter((c): c is CategoryChoice => isFilingKind(c.type)),
+        filingCategories(categories),
         subcategories
       )
     } catch (error) {
