@@ -753,7 +753,7 @@
       "type": "TRANSFER",
       "label": "Régularisation",
       "icon": "↩️",
-      "description": "Un aller-retour sans consommation : prélèvement à tort et son remboursement, double débit annulé. Les deux jambes se neutralisent.",
+      "description": "Un aller-retour sans consommation : prélèvement à tort et son remboursement, double débit annulé, achat fait avec le mauvais compte et le virement qui l'a couvert. Les deux jambes se neutralisent. Aussi le remboursement d'une dépense antérieure aux données : la dépense n'a jamais compté, le revenu ne compte pas non plus.",
       "subcategories": []
     }
   ]
