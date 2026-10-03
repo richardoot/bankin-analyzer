@@ -342,7 +342,7 @@
         <EmptyState
           v-if="legacy.length === 0"
           title="Tout est dans le catalogue"
-          description="Plus aucune catégorie d'avant le catalogue ne porte de transaction."
+          description="Plus aucune catégorie d'avant le catalogue, ni aucune sous-catégorie à ranger."
         >
           <template #action>
             <RouterLink
@@ -382,6 +382,13 @@
                     class="ml-2 text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500"
                   >
                     {{ category.type === 'EXPENSE' ? 'Dépense' : 'Revenu' }}
+                  </span>
+                  <span
+                    v-if="category.isCatalog"
+                    class="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                    data-testid="tidy-badge"
+                  >
+                    Sous-catégories à ranger
                   </span>
                   <span
                     v-if="category.isHidden"
@@ -700,6 +707,10 @@
           <li>
             <template v-if="preview.deletesSourceCategory">
               La catégorie sera supprimée une fois vide.
+            </template>
+            <template v-else-if="selected?.isCatalog">
+              La catégorie fait partie du catalogue et reste en place ; seules
+              les sous-catégories rangées disparaissent.
             </template>
             <template v-else>
               La catégorie est conservée : des lignes restent à décider.

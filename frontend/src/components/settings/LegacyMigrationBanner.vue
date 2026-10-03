@@ -46,16 +46,14 @@
   >
     <p>
       <strong>{{ count }}</strong>
-      catégorie{{ count > 1 ? 's' : '' }} d'avant le catalogue
+      catégorie{{ count > 1 ? 's' : '' }} à ranger dans le catalogue
       <template v-if="transactionCount !== undefined">
         ({{ transactionCount }} transaction{{
           transactionCount > 1 ? 's' : ''
         }})
       </template>
-      attend{{ count > 1 ? 'ent' : '' }} d'être replacée{{
-        count > 1 ? 's' : ''
-      }}
-      dans le catalogue.
+      : catégories d'avant le catalogue, ou sous-catégories laissées à côté des
+      siennes.
     </p>
     <RouterLink
       to="/settings/categories/migration"

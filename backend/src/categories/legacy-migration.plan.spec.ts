@@ -11,6 +11,7 @@ const source: LegacySource = {
   id: 'legacy-abos',
   name: 'Abonnements',
   type: 'EXPENSE',
+  isCatalog: false,
   subcategories: [
     { id: 'sub-phone', name: 'Téléphonie mobile', transactionCount: 90 },
     { id: 'sub-sport', name: 'Sport', transactionCount: 46 },
@@ -338,6 +339,78 @@ describe('planLegacyMigration', () => {
     )
 
     expect(plan.budgetTargetCategoryId).toBeNull()
+  })
+
+  describe('a catalogue category tidying its stray subcategories', () => {
+    // "Logement" adopted by name; "Loyer" left beside "Loyer ou crédit
+    // immobilier" because the names differ. The target is the source.
+    const housing: TargetCategory = {
+      id: 'cat-housing',
+      key: 'housing',
+      name: 'Logement',
+      type: 'EXPENSE',
+      defaultNature: 'ESSENTIAL',
+      defaultRhythm: 'VARIABLE',
+      subcategories: [
+        {
+          id: 'sub-rent',
+          name: 'Loyer ou crédit immobilier',
+          catalogKey: 'housing.rent',
+        },
+        { id: 'sub-loyer', name: 'Loyer', catalogKey: null },
+      ],
+    }
+    const tidy: LegacySource = {
+      id: 'cat-housing',
+      name: 'Logement',
+      type: 'EXPENSE',
+      isCatalog: true,
+      subcategories: [{ id: 'sub-loyer', name: 'Loyer', transactionCount: 22 }],
+      uncategorizedCount: 0,
+    }
+
+    it('files the stray rows under the catalogue subcategory and keeps the category', () => {
+      const plan = planLegacyMigration(
+        tidy,
+        [housing],
+        [
+          {
+            sourceSubcategoryId: 'sub-loyer',
+            action: 'CATALOG',
+            categoryKey: 'housing',
+            subcategoryKey: 'housing.rent',
+          },
+        ]
+      )
+
+      expect(plan.moves[0]).toMatchObject({
+        sourceSubcategoryId: 'sub-loyer',
+        transactionCount: 22,
+        filing: {
+          categoryId: 'cat-housing',
+          subcategory: { kind: 'existing', id: 'sub-rent' },
+        },
+        deletesSourceSubcategory: true,
+      })
+      expect(plan.deletesSourceCategory).toBe(false)
+    })
+
+    it('refuses to file a subcategory onto itself', () => {
+      expect(() =>
+        planLegacyMigration(
+          tidy,
+          [housing],
+          [
+            {
+              sourceSubcategoryId: 'sub-loyer',
+              action: 'CUSTOM',
+              categoryKey: 'housing',
+              subcategoryName: 'Loyer',
+            },
+          ]
+        )
+      ).toThrow(MigrationPlanError)
+    })
   })
 
   describe('rejects an incomplete or impossible arrangement', () => {

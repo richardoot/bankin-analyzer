@@ -111,6 +111,15 @@ export class LegacyCategoryDto {
 
   icon!: string | null
 
+  /**
+   * True for a catalogue category whose lines are the subcategories
+   * provisioning left beside its own, without a key. It is tidied, not
+   * migrated: it stays, and its own rows are not lines.
+   */
+  isCatalog!: boolean
+
+  catalogKey!: string | null
+
   transactionCount!: number
 
   /** Hidden from the dashboard by preference — the old way of neutralising transfers. */

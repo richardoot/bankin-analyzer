@@ -8,6 +8,12 @@
  * a set of lines: each of its subcategories, plus the transactions filed at
  * the category alone. Every line gets exactly one decision:
  *
+ * A catalogue category can be a source too, for one reason: provisioning
+ * adopted it by name but left its subcategories alone when their names did
+ * not match — "Loyer" beside "Loyer ou crédit immobilier". Those keyless
+ * subcategories are its lines; the rows filed at the category alone are
+ * where they belong already, and the category itself is never deleted.
+ *
  *  - **CATALOG** files the rows under a catalogue category, optionally under
  *    one of its catalogue subcategories.
  *  - **CUSTOM** files them under a catalogue category, inside a subcategory
@@ -73,6 +79,11 @@ export interface LegacySource {
   id: string
   name: string
   type: TransactionType
+  /**
+   * True for a catalogue category whose keyless subcategories are being
+   * tidied: its lines are those subcategories only, and it stays.
+   */
+  isCatalog: boolean
   subcategories: LegacySourceSubcategory[]
   /** Transactions filed at the category alone. */
   uncategorizedCount: number
@@ -339,6 +350,18 @@ export function planLegacyMigration(
       decision.action === 'CATALOG'
         ? catalogFiling(decision, target)
         : customFiling(decision, source, sourceSub, target)
+    // A keyless subcategory of a catalogue category is also one of the
+    // target's own rows: filing it onto itself would move nothing and then
+    // delete the row the transactions sit in.
+    if (
+      sourceSub &&
+      filing.subcategory?.kind === 'existing' &&
+      filing.subcategory.id === sourceSub.id
+    ) {
+      throw new MigrationPlanError(
+        `${labelOf(decision.sourceSubcategoryId, source)} is already filed there; keep the line instead.`
+      )
+    }
 
     if (filing.subcategory?.kind === 'create') {
       const key = `${target.id}|${normalizeName(filing.subcategory.name)}`
@@ -369,7 +392,8 @@ export function planLegacyMigration(
     }
   }
 
-  plan.deletesSourceCategory = plan.keeps.length === 0
+  // A catalogue category stays whatever happens to its stray subcategories.
+  plan.deletesSourceCategory = !source.isCatalog && plan.keeps.length === 0
 
   let best: { id: string; count: number } | null = null
   for (const [id, count] of receivedByCategory) {

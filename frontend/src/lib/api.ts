@@ -177,6 +177,13 @@ export interface LegacyCategoryDto {
   name: string
   type: 'EXPENSE' | 'INCOME'
   icon: string | null
+  /**
+   * True for a catalogue category whose lines are the subcategories
+   * provisioning left beside its own, without a key: it is tidied, not
+   * migrated, and stays.
+   */
+  isCatalog: boolean
+  catalogKey: string | null
   transactionCount: number
   isHidden: boolean
   budgetPlanEntryCount: number

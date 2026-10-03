@@ -163,6 +163,129 @@ describe('Legacy category migration (e2e)', () => {
     })
   })
 
+  describe('a catalogue category with subcategories of its own', () => {
+    /** "Logement" adopted by name, "Loyer" left beside "Loyer ou crédit immobilier". */
+    async function strayLoyer() {
+      const housing = await catalog('housing')
+      const loyer = await prisma.subcategory.create({
+        data: { userId, categoryId: housing.id, name: 'Loyer' },
+      })
+      await file(housing.id, loyer, 5)
+      // Rows filed at the category alone, and under a catalogue subcategory:
+      // neither is a line.
+      const rent = await prisma.subcategory.findUniqueOrThrow({
+        where: { userId_catalogKey: { userId, catalogKey: 'housing.rent' } },
+      })
+      await file(housing.id, { id: rent.id, name: rent.name }, 2)
+      await file(housing.id, null, 1)
+      return { housing, loyer, rent }
+    }
+
+    it('is listed with only its keyless subcategories as lines', async () => {
+      const { housing, loyer } = await strayLoyer()
+
+      const response = await http()
+        .get('/categories/legacy')
+        .set(ctx.auth(owner))
+
+      expect(response.status).toBe(200)
+      const body = response.body as {
+        totalTransactions: number
+        categories: {
+          id: string
+          isCatalog: boolean
+          catalogKey: string | null
+          transactionCount: number
+          lines: {
+            sourceSubcategoryId: string | null
+            suggestion: { subcategoryKey: string | null } | null
+          }[]
+        }[]
+      }
+      expect(body.categories).toHaveLength(1)
+      expect(body.categories[0]).toMatchObject({
+        id: housing.id,
+        isCatalog: true,
+        catalogKey: 'housing',
+        transactionCount: 5,
+      })
+      expect(body.categories[0]?.lines).toEqual([
+        expect.objectContaining({
+          sourceSubcategoryId: loyer.id,
+          suggestion: expect.objectContaining({
+            subcategoryKey: 'housing.rent',
+          }),
+        }),
+      ])
+      expect(body.totalTransactions).toBe(5)
+    })
+
+    it('files the stray rows under the catalogue subcategory and keeps the category', async () => {
+      const { housing, loyer, rent } = await strayLoyer()
+
+      const response = await http()
+        .post(`/categories/${housing.id}/legacy-migration`)
+        .set(ctx.auth(owner))
+        .send({
+          decisions: [
+            {
+              sourceSubcategoryId: loyer.id,
+              action: 'CATALOG',
+              categoryKey: 'housing',
+              subcategoryKey: 'housing.rent',
+            },
+          ],
+        })
+
+      expect(response.status).toBe(201)
+      expect(response.body).toMatchObject({
+        movedTransactions: 5,
+        deletedSubcategories: 1,
+        sourceDeleted: false,
+      })
+      expect(
+        await prisma.transaction.count({
+          where: { categoryId: housing.id, subcategoryId: rent.id },
+        })
+      ).toBe(7)
+      expect(
+        await prisma.subcategory.findUnique({ where: { id: loyer.id } })
+      ).toBeNull()
+      expect(
+        await prisma.category.findUnique({ where: { id: housing.id } })
+      ).not.toBeNull()
+
+      // Nothing left to tidy: the category is no longer listed.
+      const after = await http().get('/categories/legacy').set(ctx.auth(owner))
+      expect((after.body as { categories: unknown[] }).categories).toHaveLength(
+        0
+      )
+    })
+
+    it('refuses to file a subcategory onto itself', async () => {
+      const { housing, loyer } = await strayLoyer()
+
+      const response = await http()
+        .post(`/categories/${housing.id}/legacy-migration`)
+        .set(ctx.auth(owner))
+        .send({
+          decisions: [
+            {
+              sourceSubcategoryId: loyer.id,
+              action: 'CUSTOM',
+              categoryKey: 'housing',
+              subcategoryName: 'Loyer',
+            },
+          ],
+        })
+
+      expect(response.status).toBe(400)
+      expect(
+        await prisma.subcategory.findUnique({ where: { id: loyer.id } })
+      ).not.toBeNull()
+    })
+  })
+
   describe('POST /categories/:id/legacy-migration', () => {
     it('migrates every line as decided, then deletes the empty category', async () => {
       const { category, phone, sport, ai } = await legacyAbonnements()

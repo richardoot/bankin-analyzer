@@ -45,6 +45,8 @@ const overview: LegacyOverviewDto = {
       transactionCount: 8,
       isHidden: false,
       budgetPlanEntryCount: 1,
+      isCatalog: false,
+      catalogKey: null,
       lines: [
         {
           sourceSubcategoryId: 'sub-phone',
@@ -150,9 +152,12 @@ const proTag: TagDto = {
   updatedAt: '2026-01-01',
 }
 
-async function mountPage(tags: TagDto[] = [proTag]) {
+async function mountPage(
+  tags: TagDto[] = [proTag],
+  data: LegacyOverviewDto = overview
+) {
   vi.mocked(api.getLegacyCategories).mockResolvedValue(
-    JSON.parse(JSON.stringify(overview)) as LegacyOverviewDto
+    JSON.parse(JSON.stringify(data)) as LegacyOverviewDto
   )
   vi.mocked(api.getCategories).mockResolvedValue(categories)
   vi.mocked(api.getSubcategories).mockResolvedValue(subcategories)
@@ -169,6 +174,47 @@ beforeEach(() => {
 })
 
 describe('LegacyMigrationPage', () => {
+  it('marks a catalogue category that only has subcategories to tidy', async () => {
+    const wrapper = await mountPage([proTag], {
+      totalTransactions: 22,
+      categories: [
+        {
+          id: 'cat-housing',
+          name: 'Logement',
+          type: 'EXPENSE',
+          icon: '🏠',
+          transactionCount: 22,
+          isHidden: false,
+          budgetPlanEntryCount: 0,
+          isCatalog: true,
+          catalogKey: 'housing',
+          lines: [
+            {
+              sourceSubcategoryId: 'sub-loyer',
+              name: 'Loyer',
+              transactionCount: 22,
+              suggestion: {
+                action: 'CATALOG',
+                categoryKey: 'housing',
+                categoryName: 'Logement',
+                subcategoryKey: 'housing.rent',
+                subcategoryName: 'Loyer ou crédit immobilier',
+                tagName: null,
+                basis: 'subcategory',
+              },
+            },
+          ],
+        },
+      ],
+    })
+
+    const row = wrapper.find('[data-testid="legacy-category-cat-housing"]')
+    expect(row.find('[data-testid="tidy-badge"]').text()).toContain(
+      'Sous-catégories à ranger'
+    )
+    expect(row.text()).toContain('1 ligne')
+  })
+
   it('lists the legacy categories with their counts', async () => {
     const wrapper = await mountPage()
 

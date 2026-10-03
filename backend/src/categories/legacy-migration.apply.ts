@@ -41,7 +41,11 @@ export interface LegacySourceWithBudget extends LegacySource {
   }[]
 }
 
-/** A legacy category — one without a catalogue key — with everything filed under it. */
+/**
+ * A legacy category — one without a catalogue key — with everything filed
+ * under it; or a catalogue category with the keyless subcategories that
+ * provisioning left beside its own, which are then its only lines.
+ */
 export async function readLegacySource(
   client: LegacyClient,
   userId: string,
@@ -51,7 +55,7 @@ export async function readLegacySource(
     where: { id: categoryId, userId },
     include: {
       subcategories: {
-        select: { id: true, name: true },
+        select: { id: true, name: true, catalogKey: true },
         orderBy: { name: 'asc' },
       },
       budgetPlanEntries: {
@@ -67,9 +71,13 @@ export async function readLegacySource(
   if (!category) {
     throw new LegacyCategoryNotFound(`Category ${categoryId} not found`)
   }
-  if (category.catalogKey !== null) {
+  const isCatalog = category.catalogKey !== null
+  const subcategories = isCatalog
+    ? category.subcategories.filter(s => s.catalogKey === null)
+    : category.subcategories
+  if (isCatalog && subcategories.length === 0) {
     throw new LegacyCategoryNotFound(
-      `"${category.name}" belongs to the catalogue; there is nothing to migrate`
+      `"${category.name}" belongs to the catalogue and carries no subcategory of the user's own; there is nothing to migrate`
     )
   }
 
@@ -87,12 +95,14 @@ export async function readLegacySource(
     name: category.name,
     type: category.type,
     icon: category.icon,
-    subcategories: category.subcategories.map(s => ({
+    isCatalog,
+    subcategories: subcategories.map(s => ({
       id: s.id,
       name: s.name,
       transactionCount: countBySubcategory.get(s.id) ?? 0,
     })),
-    uncategorizedCount: countBySubcategory.get(null) ?? 0,
+    // The rows filed at a catalogue category alone are where they belong.
+    uncategorizedCount: isCatalog ? 0 : (countBySubcategory.get(null) ?? 0),
     budgetPlanEntries: category.budgetPlanEntries.map(e => ({
       id: e.id,
       budgetPlanId: e.budgetPlanId,
@@ -146,6 +156,9 @@ export interface LegacyCategoryView {
   name: string
   type: TransactionType
   icon: string | null
+  /** A catalogue category tidying the subcategories provisioning left beside its own. */
+  isCatalog: boolean
+  catalogKey: string | null
   transactionCount: number
   isHidden: boolean
   budgetPlanEntryCount: number
@@ -169,15 +182,25 @@ function describeSuggestion(
   }
 }
 
-/** Every legacy category the user still has, each line with its suggestion. */
+/**
+ * Every legacy category the user still has, each line with its suggestion —
+ * and every catalogue category still carrying a subcategory without a key,
+ * since those are what adoption by name leaves behind.
+ */
 export async function readLegacyOverview(
   client: LegacyClient,
   userId: string
 ): Promise<LegacyCategoryView[]> {
   const [legacy, preferences] = await Promise.all([
     client.category.findMany({
-      where: { userId, catalogKey: null },
-      select: { id: true },
+      where: {
+        userId,
+        OR: [
+          { catalogKey: null },
+          { subcategories: { some: { catalogKey: null } } },
+        ],
+      },
+      select: { id: true, catalogKey: true },
       orderBy: [{ type: 'asc' }, { name: 'asc' }],
     }),
     client.filterPreferences.findUnique({ where: { userId } }),
@@ -188,7 +211,7 @@ export async function readLegacyOverview(
   ])
 
   const views: LegacyCategoryView[] = []
-  for (const { id } of legacy) {
+  for (const { id, catalogKey } of legacy) {
     const source = await readLegacySource(client, userId, id)
     const lines: LegacyLineView[] = source.subcategories.map(sub => ({
       sourceSubcategoryId: sub.id,
@@ -213,6 +236,8 @@ export async function readLegacyOverview(
       name: source.name,
       type: source.type,
       icon: source.icon,
+      isCatalog: source.isCatalog,
+      catalogKey,
       transactionCount:
         source.uncategorizedCount +
         source.subcategories.reduce((sum, s) => sum + s.transactionCount, 0),

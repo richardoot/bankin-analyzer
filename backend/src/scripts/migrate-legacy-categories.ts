@@ -345,17 +345,15 @@ export async function main(
 
   for (const entry of mapping.categories) {
     const category = await prisma.category.findFirst({
-      where: {
-        userId: user.id,
-        name: entry.name,
-        type: entry.type,
-        catalogKey: null,
-      },
+      // A catalogue category qualifies too, for the keyless subcategories
+      // provisioning left beside its own; `readLegacySource` says so when
+      // there is nothing of the kind left.
+      where: { userId: user.id, name: entry.name, type: entry.type },
       select: { id: true },
     })
     console.log(`\n${entry.name} (${entry.type})`)
     if (!category) {
-      console.log('  not a legacy category of this account any more, skipped')
+      console.log('  not a category of this account any more, skipped')
       continue
     }
 

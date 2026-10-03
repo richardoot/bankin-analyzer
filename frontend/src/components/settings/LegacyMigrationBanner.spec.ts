@@ -53,6 +53,8 @@ describe('LegacyMigrationBanner', () => {
           transactionCount: 8,
           isHidden: false,
           budgetPlanEntryCount: 0,
+          isCatalog: false,
+          catalogKey: null,
           lines: [],
         },
       ],
