@@ -70,7 +70,14 @@
   const yearAgoAvailable = ref(false)
 
   const deductReimbursements = ref(true)
-  const deductPendingReimbursements = ref(false)
+  // A debt still owed: one preference shared with the dashboard, kept by the
+  // backend. The switch reads and writes the store.
+  const deductPendingReimbursements = computed<boolean>({
+    get: () => filtersStore.deductPendingReimbursements,
+    set: value => {
+      void filtersStore.setDeductPendingReimbursements(value)
+    },
+  })
 
   const sortOrder = ref<SortOrder>('amount-desc')
 

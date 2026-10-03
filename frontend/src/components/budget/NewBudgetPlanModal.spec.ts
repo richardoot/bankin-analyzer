@@ -19,6 +19,7 @@ const hiddenExpenseCategoryIds = new Set<string>()
 const hiddenIncomeCategoryIds = new Set<string>()
 vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
+    deductPendingReimbursements: false,
     isExpenseCategoryGloballyHidden: (id: string) =>
       hiddenExpenseCategoryIds.has(id),
     isIncomeCategoryGloballyHidden: (id: string) =>

@@ -31,6 +31,7 @@
     spendingStructure,
     everydaySpendingStructure,
     savingsTransfers,
+    pendingReceivables,
     savingsRate,
     remainingToLive,
     expensesSparkline,
@@ -389,6 +390,7 @@
             :actual="spendingStructure"
             :everyday="everydaySpendingStructure"
             :savings-transfers="savingsTransfers"
+            :pending-receivables="pendingReceivables"
             :savings-rate="savingsRate"
             :remaining-to-live="remainingToLive"
             :period-months="periodMonths"

@@ -37,6 +37,8 @@ vi.mock('@/stores/filters', () => ({
     isIncomeCategoryHidden: vi.fn(() => false),
     isExpenseCategoryGloballyHidden: vi.fn(() => false),
     isIncomeCategoryGloballyHidden: vi.fn(() => false),
+    deductPendingReimbursements: false,
+    setDeductPendingReimbursements: vi.fn(),
     loadFromBackend: vi.fn(),
     isPanelExpanded: true,
     togglePanelExpanded: vi.fn(),

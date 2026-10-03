@@ -33,6 +33,7 @@ function mountCard(
       actual,
       everyday,
       savingsTransfers: 300,
+      pendingReceivables: 0,
       savingsRate: 0.15,
       remainingToLive: 800,
       periodMonths: 1,
@@ -74,6 +75,16 @@ describe('SpendingStructureCard', () => {
     expect(savings).toContain('15 %')
     expect(savings).toContain('900')
     expect(savings).toContain('800')
+  })
+
+  it('shows what is still owed as a stock, not per month', () => {
+    const wrapper = mountCard({ pendingReceivables: 3700, periodMonths: 3 })
+
+    const owed = wrapper.find('[data-testid="pending-receivables"]').text()
+    expect(owed).toContain('Avancé, en attente de retour')
+    expect(owed).toContain('3')
+    expect(owed).toContain('700')
+    expect(owed).not.toContain('/ mois')
   })
 
   it('divides by the months of the period', () => {

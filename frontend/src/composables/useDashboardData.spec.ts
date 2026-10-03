@@ -23,6 +23,8 @@ vi.mock('@/stores/filters', () => ({
     isIncomeCategoryHidden: vi.fn(() => false),
     isExpenseCategoryGloballyHidden: vi.fn(() => false),
     isIncomeCategoryGloballyHidden: vi.fn(() => false),
+    deductPendingReimbursements: false,
+    setDeductPendingReimbursements: vi.fn(),
     timePeriod: 'all',
     setTimePeriod: vi.fn(),
     getDateRangeFromPeriod: vi.fn(() => ({ startDate: null, endDate: null })),

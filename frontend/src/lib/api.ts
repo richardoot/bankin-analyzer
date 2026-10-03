@@ -421,6 +421,12 @@ export interface FilterPreferencesDto {
    * way.
    */
   importCategoriesFromFile: boolean
+  /**
+   * Whether a debt still owed is taken off the spending it hangs off, on the
+   * dashboard and in the budget. On by default: a reimbursement request says
+   * the money comes back, and a loan to a relative is not consumption.
+   */
+  deductPendingReimbursements: boolean
 }
 
 // Account types
@@ -827,6 +833,8 @@ export interface DashboardSummaryDto {
   savingsRate?: number | null
   /** Income minus committed everyday spending minus savings: what the month leaves free. */
   remainingToLive?: number | null
+  /** What is still owed to the user across every open debt, a stock in full euros. */
+  pendingReceivables?: number
 }
 
 // Budget plan DTOs

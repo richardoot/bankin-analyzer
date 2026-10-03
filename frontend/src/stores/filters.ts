@@ -24,6 +24,10 @@ export const useFiltersStore = defineStore('filters', () => {
   // === GLOBAL SETTINGS (synced to DB) ===
   const globalHiddenExpenseCategoryIds = ref<string[]>([])
   const globalHiddenIncomeCategoryIds = ref<string[]>([])
+  // Whether a debt still owed is taken off the spending it hangs off, on the
+  // dashboard and in the budget. One preference for both screens, kept by
+  // the backend; on until the user says otherwise.
+  const deductPendingReimbursements = ref(true)
   // Always start collapsed on page load — the user can expand it on demand.
   const isPanelExpanded = ref(false)
 
@@ -52,6 +56,9 @@ export const useFiltersStore = defineStore('filters', () => {
           data.globalHiddenExpenseCategoryIds || []
         globalHiddenIncomeCategoryIds.value =
           data.globalHiddenIncomeCategoryIds || []
+        if (typeof data.deductPendingReimbursements === 'boolean') {
+          deductPendingReimbursements.value = data.deductPendingReimbursements
+        }
         // isPanelExpanded is intentionally NOT restored — the panel always
         // starts collapsed on each page load.
       } catch {
@@ -74,6 +81,7 @@ export const useFiltersStore = defineStore('filters', () => {
         // Global settings (cached)
         globalHiddenExpenseCategoryIds: globalHiddenExpenseCategoryIds.value,
         globalHiddenIncomeCategoryIds: globalHiddenIncomeCategoryIds.value,
+        deductPendingReimbursements: deductPendingReimbursements.value,
         isPanelExpanded: isPanelExpanded.value,
       })
     )
@@ -102,6 +110,7 @@ export const useFiltersStore = defineStore('filters', () => {
       await api.updateFilterPreferences({
         globalHiddenExpenseCategoryIds: globalHiddenExpenseCategoryIds.value,
         globalHiddenIncomeCategoryIds: globalHiddenIncomeCategoryIds.value,
+        deductPendingReimbursements: deductPendingReimbursements.value,
         isPanelExpanded: isPanelExpanded.value,
       })
 
@@ -141,6 +150,8 @@ export const useFiltersStore = defineStore('filters', () => {
       globalHiddenExpenseCategoryIds.value =
         prefs.globalHiddenExpenseCategoryIds
       globalHiddenIncomeCategoryIds.value = prefs.globalHiddenIncomeCategoryIds
+      deductPendingReimbursements.value =
+        prefs.deductPendingReimbursements ?? true
       // isPanelExpanded is intentionally NOT restored — the panel always
       // starts collapsed on each page load.
 
@@ -164,6 +175,25 @@ export const useFiltersStore = defineStore('filters', () => {
       initFromStorage()
     } finally {
       isSyncing.value = false
+    }
+  }
+
+  /**
+   * Choose whether a debt still owed is taken off the spending. Applied at
+   * once, cached for the next load, and kept by the backend so the dashboard
+   * and the budget read the same way on every device.
+   */
+  async function setDeductPendingReimbursements(value: boolean) {
+    deductPendingReimbursements.value = value
+    saveToStorage()
+    try {
+      const { useAuthStore } = await import('./auth')
+      if (!useAuthStore().isAuthenticated) return
+      await api.updateFilterPreferences({ deductPendingReimbursements: value })
+      lastSyncError.value = null
+    } catch (error) {
+      lastSyncError.value =
+        error instanceof Error ? error.message : 'Sync failed'
     }
   }
 
@@ -350,6 +380,9 @@ export const useFiltersStore = defineStore('filters', () => {
     toggleGlobalHiddenIncomeCategory,
     isIncomeCategoryGloballyHidden,
     forgetCategory,
+    // Debts still owed
+    deductPendingReimbursements,
+    setDeductPendingReimbursements,
     // Panel state
     isPanelExpanded,
     togglePanelExpanded,

@@ -9,7 +9,8 @@
    * Below, what the framework calls the savings reading: what left the
    * everyday accounts towards savings, its share of the income, and what
    * the period left free once the committed spending and the savings were
-   * out.
+   * out. And what is still owed to the user: money advanced to someone
+   * leaves the expenses without leaving sight.
    */
   import { computed, ref } from 'vue'
   import type { SpendingStructureDto } from '@/lib/api'
@@ -19,6 +20,8 @@
     actual: SpendingStructureDto
     everyday: SpendingStructureDto
     savingsTransfers: number
+    /** What is still owed across every open debt; a stock, not per month. */
+    pendingReceivables: number
     savingsRate: number | null
     remainingToLive: number | null
     periodMonths: number
@@ -221,7 +224,7 @@
     </p>
 
     <dl
-      class="mt-5 grid grid-cols-1 gap-3 border-t border-gray-100 pt-4 text-sm sm:grid-cols-3 dark:border-slate-800"
+      class="mt-5 grid grid-cols-1 gap-3 border-t border-gray-100 pt-4 text-sm sm:grid-cols-4 dark:border-slate-800"
       data-testid="savings-reading"
     >
       <div>
@@ -242,6 +245,14 @@
         </dt>
         <dd class="font-semibold text-gray-900 dark:text-gray-100">
           {{ perMonth(everyday.committed) }} / mois
+        </dd>
+      </div>
+      <div data-testid="pending-receivables">
+        <dt class="text-xs text-gray-500 dark:text-gray-400">
+          Avancé, en attente de retour
+        </dt>
+        <dd class="font-semibold text-gray-900 dark:text-gray-100">
+          {{ formatCurrency(pendingReceivables) }}
         </dd>
       </div>
       <div>

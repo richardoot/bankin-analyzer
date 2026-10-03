@@ -2,15 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useFiltersStore } from './filters'
 
-const { authState, getFilterPreferences } = vi.hoisted(() => ({
-  authState: { isAuthenticated: false },
-  getFilterPreferences: vi.fn(),
-}))
+const { authState, getFilterPreferences, updateFilterPreferences } = vi.hoisted(
+  () => ({
+    authState: { isAuthenticated: false },
+    getFilterPreferences: vi.fn(),
+    updateFilterPreferences: vi.fn(),
+  })
+)
 vi.mock('./auth', () => ({
   useAuthStore: () => authState,
 }))
 vi.mock('@/lib/api', () => ({
-  api: { getFilterPreferences },
+  api: { getFilterPreferences, updateFilterPreferences },
 }))
 
 describe('useFiltersStore', () => {
@@ -20,6 +23,58 @@ describe('useFiltersStore', () => {
     vi.mocked(localStorage.setItem).mockClear()
     authState.isAuthenticated = false
     getFilterPreferences.mockReset()
+    updateFilterPreferences.mockReset()
+  })
+
+  describe('a debt still owed', () => {
+    it('is taken off the spending until the user says otherwise', () => {
+      const store = useFiltersStore()
+      expect(store.deductPendingReimbursements).toBe(true)
+    })
+
+    it('keeps the choice, locally and on the backend', async () => {
+      authState.isAuthenticated = true
+      updateFilterPreferences.mockResolvedValue({})
+      const store = useFiltersStore()
+
+      await store.setDeductPendingReimbursements(false)
+
+      expect(store.deductPendingReimbursements).toBe(false)
+      expect(updateFilterPreferences).toHaveBeenCalledWith({
+        deductPendingReimbursements: false,
+      })
+      const saved = JSON.parse(
+        vi.mocked(localStorage.setItem).mock.calls.at(-1)?.[1] ?? '{}'
+      )
+      expect(saved.deductPendingReimbursements).toBe(false)
+    })
+
+    it('does not reach the backend when signed out', async () => {
+      const store = useFiltersStore()
+
+      await store.setDeductPendingReimbursements(false)
+
+      expect(store.deductPendingReimbursements).toBe(false)
+      expect(updateFilterPreferences).not.toHaveBeenCalled()
+    })
+
+    it('comes back from the backend with the other settings', async () => {
+      authState.isAuthenticated = true
+      getFilterPreferences.mockResolvedValue({
+        hiddenExpenseCategoryIds: [],
+        hiddenIncomeCategoryIds: [],
+        globalHiddenExpenseCategoryIds: [],
+        globalHiddenIncomeCategoryIds: [],
+        isPanelExpanded: false,
+        importCategoriesFromFile: true,
+        deductPendingReimbursements: false,
+      })
+      const store = useFiltersStore()
+
+      await store.loadFromBackend()
+
+      expect(store.deductPendingReimbursements).toBe(false)
+    })
   })
 
   it('should start with panel collapsed on load', () => {
@@ -105,6 +160,7 @@ describe('useFiltersStore', () => {
         customEndDate: null,
         globalHiddenExpenseCategoryIds: [],
         globalHiddenIncomeCategoryIds: [],
+        deductPendingReimbursements: true,
         isPanelExpanded: false,
       })
     )

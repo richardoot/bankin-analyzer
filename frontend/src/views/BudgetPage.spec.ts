@@ -39,6 +39,8 @@ vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
     isExpenseCategoryGloballyHidden: () => false,
     isIncomeCategoryGloballyHidden: () => false,
+    deductPendingReimbursements: false,
+    setDeductPendingReimbursements: vi.fn(),
   }),
 }))
 
