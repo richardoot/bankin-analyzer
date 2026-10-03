@@ -115,9 +115,17 @@ describe('Reimbursement baseline (e2e)', () => {
     ]
 
     for (const { name, call } of endpoints) {
+      // A debt still owed is deducted by default since the preference
+      // exists, so every reading here says what it wants of it.
       it(`holds on the ${name}: deducting only moves money between sides`, async () => {
-        const deducted = await call({ deductReimbursements: true })
-        const gross = await call({ deductReimbursements: false })
+        const deducted = await call({
+          deductReimbursements: true,
+          deductPendingReimbursements: false,
+        })
+        const gross = await call({
+          deductReimbursements: false,
+          deductPendingReimbursements: false,
+        })
 
         expect(soldeOf(deducted)).toBeCloseTo(soldeOf(gross), 2)
       })
@@ -127,7 +135,10 @@ describe('Reimbursement baseline (e2e)', () => {
           deductReimbursements: true,
           deductPendingReimbursements: true,
         })
-        const gross = await call({ deductReimbursements: false })
+        const gross = await call({
+          deductReimbursements: false,
+          deductPendingReimbursements: false,
+        })
 
         // A debt not yet collected is not income either way: deducting it in
         // advance lowers the expense, so the solde must rise by the same amount.
@@ -141,14 +152,23 @@ describe('Reimbursement baseline (e2e)', () => {
 
   describe('golden master', () => {
     const configurations = [
-      { name: 'received deducted (default)', filters: {} },
+      // Saying nothing is a reading of its own: received deducted always,
+      // pending deducted by the user's preference, on until said otherwise.
+      { name: 'the default: received and pending deducted', filters: {} },
+      {
+        name: 'received deducted only',
+        filters: { deductPendingReimbursements: false },
+      },
       {
         name: 'received and pending deducted',
         filters: { deductPendingReimbursements: true },
       },
       {
         name: 'nothing deducted',
-        filters: { deductReimbursements: false },
+        filters: {
+          deductReimbursements: false,
+          deductPendingReimbursements: false,
+        },
       },
     ]
 
@@ -209,7 +229,10 @@ describe('Reimbursement baseline (e2e)', () => {
     })
 
     it('keeps the joint account halved in the aggregates', async () => {
-      const body = await dashboard({ deductReimbursements: false })
+      const body = await dashboard({
+        deductReimbursements: false,
+        deductPendingReimbursements: false,
+      })
       const courses = body.expensesByCategory.find(
         c => c.category === 'Courses'
       )

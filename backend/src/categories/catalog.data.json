@@ -311,7 +311,7 @@
           "label": "Prêt à un proche",
           "nature": "ESSENTIAL",
           "rhythm": "VARIABLE",
-          "description": "De l'argent prêté à quelqu'un. Créer une demande de remboursement au nom de la personne : en attente, le prêt sort des totaux si l'option de déduction est active ; remboursé, le règlement le déduit pour de bon."
+          "description": "De l'argent prêté à quelqu'un. Créer une demande de remboursement au nom de la personne : le prêt sort aussitôt des dépenses du dashboard et du budget, et apparaît dans « avancé, en attente de retour » ; remboursé, le règlement solde la demande. Abandonner la dette la transforme en dépense : un prêt qu'on ne reverra pas était un don."
         },
         {
           "key": "family.pets",

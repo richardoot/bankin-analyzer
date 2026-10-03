@@ -28,6 +28,7 @@ export class FilterPreferencesService {
         globalHiddenIncomeCategoryIds: dto.globalHiddenIncomeCategoryIds ?? [],
         isPanelExpanded: dto.isPanelExpanded ?? true,
         importCategoriesFromFile: dto.importCategoriesFromFile ?? true,
+        deductPendingReimbursements: dto.deductPendingReimbursements ?? true,
       },
       update: {
         ...(dto.hiddenExpenseCategoryIds !== undefined && {
@@ -48,7 +49,23 @@ export class FilterPreferencesService {
         ...(dto.importCategoriesFromFile !== undefined && {
           importCategoriesFromFile: dto.importCategoriesFromFile,
         }),
+        ...(dto.deductPendingReimbursements !== undefined && {
+          deductPendingReimbursements: dto.deductPendingReimbursements,
+        }),
       },
     })
+  }
+
+  /**
+   * What the dashboard and the budget do with a debt still owed when the
+   * request does not say: the user's preference, on by default. A user who
+   * never saved any preference has no row, and gets the default.
+   */
+  async deductsPendingByDefault(userId: string): Promise<boolean> {
+    const prefs = await this.prisma.filterPreferences.findUnique({
+      where: { userId },
+      select: { deductPendingReimbursements: true },
+    })
+    return prefs?.deductPendingReimbursements ?? true
   }
 }

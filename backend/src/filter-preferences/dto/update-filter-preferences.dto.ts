@@ -49,4 +49,14 @@ export class UpdateFilterPreferencesDto {
   @IsOptional()
   @IsBoolean()
   importCategoriesFromFile?: boolean
+
+  /**
+   * Whether a debt still owed is taken off the spending it hangs off, on the
+   * dashboard and in the budget. Off, both show the gross spending until the
+   * debt is settled.
+   */
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  deductPendingReimbursements?: boolean
 }

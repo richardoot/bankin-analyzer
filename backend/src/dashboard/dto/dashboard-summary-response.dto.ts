@@ -206,6 +206,15 @@ export class DashboardSummaryDto {
    */
   savingsTransfers!: number
 
+  /**
+   * What is still owed to the user: every reimbursement request not yet
+   * settled, what was claimed less what came back or was written off. A
+   * stock at the time of the call, not bounded by the period, and in full
+   * euros. It is what the pending deduction takes off the spending, shown so
+   * that money advanced to someone leaves the expenses without leaving sight.
+   */
+  pendingReceivables!: number
+
   /** `savingsTransfers / totalIncome`, null when there is no income. */
   savingsRate!: number | null
 

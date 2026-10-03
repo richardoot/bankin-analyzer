@@ -2,6 +2,7 @@ import type { TestingModule } from '@nestjs/testing'
 import { Test } from '@nestjs/testing'
 import { DashboardService } from './dashboard.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 
 describe('DashboardService', () => {
   let service: DashboardService
@@ -68,6 +69,13 @@ describe('DashboardService', () => {
     },
   }
 
+  // The user's preference for debts still owed. Off here so that every test
+  // written before the preference existed keeps reading gross figures; the
+  // tests of the preference itself switch it on.
+  const mockFilterPreferencesService = {
+    deductsPendingByDefault: vi.fn(),
+  }
+
   /**
    * Setup the $queryRaw calls in order: aggregation rows, account rows and the
    * exceptional-events rows. The pending-reimbursement query is toggle-gated
@@ -82,12 +90,14 @@ describe('DashboardService', () => {
       color: string | null
       icon: string | null
       amount: number
-    }[] = []
+    }[] = [],
+    pendingReceivables = 0
   ) {
     mockPrismaService.$queryRaw
       .mockResolvedValueOnce(rows)
       .mockResolvedValueOnce(accounts.map(account => ({ account })))
       .mockResolvedValueOnce(events)
+      .mockResolvedValueOnce([{ pending: pendingReceivables }])
   }
 
   beforeEach(async () => {
@@ -98,16 +108,103 @@ describe('DashboardService', () => {
           provide: PrismaService,
           useValue: mockPrismaService,
         },
+        {
+          provide: FilterPreferencesService,
+          useValue: mockFilterPreferencesService,
+        },
       ],
     }).compile()
 
     service = module.get<DashboardService>(DashboardService)
 
     vi.clearAllMocks()
+    mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
+      false
+    )
+    // Whatever a test queues with `mockResolvedValueOnce`, the receivables
+    // query that comes last gets an empty answer by default.
+    mockPrismaService.$queryRaw.mockResolvedValue([{ pending: 0 }])
 
     // Default mocks
     mockPrismaService.categoryAssociation.findMany.mockResolvedValue([])
     mockPrismaService.tag.findMany.mockResolvedValue([])
+  })
+
+  describe('a debt still owed', () => {
+    it('is taken off the spending when the preference says so and the request does not', async () => {
+      mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
+        true
+      )
+      // 3 700 lent to a relative, claimed back in full: the row arrives net.
+      setupMocks([
+        createRow({
+          category_name: 'Famille et amis',
+          total_amount: 0,
+          pending_credit: 3700,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(
+        mockFilterPreferencesService.deductsPendingByDefault
+      ).toHaveBeenCalledWith(mockUserId)
+      // Gross, the month spent 3 700; net of the debt, nothing.
+      expect(result.monthlyData[0]?.expenses).toBe(3700)
+      expect(result.monthlyData[0]?.netExpenses).toBe(0)
+      expect(result.totalExpenses).toBe(0)
+    })
+
+    it('stays in the spending when the preference says so', async () => {
+      mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
+        false
+      )
+      setupMocks([
+        createRow({
+          category_name: 'Famille et amis',
+          total_amount: 3700,
+          pending_credit: 3700,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.monthlyData[0]?.netExpenses).toBe(3700)
+      expect(result.totalExpenses).toBe(3700)
+    })
+
+    it('lets the request override the preference', async () => {
+      mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
+        true
+      )
+      setupMocks([
+        createRow({
+          category_name: 'Famille et amis',
+          total_amount: 3700,
+          pending_credit: 3700,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        deductPendingReimbursements: false,
+      })
+
+      expect(
+        mockFilterPreferencesService.deductsPendingByDefault
+      ).not.toHaveBeenCalled()
+      expect(result.monthlyData[0]?.netExpenses).toBe(3700)
+    })
+
+    it('is reported as what is still owed, whatever the period', async () => {
+      setupMocks([], [], [], 3700.456)
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2026-09-01',
+        endDate: '2026-09-30',
+      })
+
+      expect(result.pendingReceivables).toBe(3700.46)
+    })
   })
 
   describe('getSummary', () => {

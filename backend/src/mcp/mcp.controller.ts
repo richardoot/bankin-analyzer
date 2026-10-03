@@ -840,7 +840,7 @@ export class McpController {
           .boolean()
           .optional()
           .describe(
-            'Deduire les remboursements en attente (PENDING/PARTIAL) des depenses (defaut: false)'
+            'Deduire les remboursements en attente (PENDING/PARTIAL) des depenses (defaut: la preference de l utilisateur, oui sauf reglage contraire)'
           ),
         includeMonthlyBreakdown: z
           .boolean()

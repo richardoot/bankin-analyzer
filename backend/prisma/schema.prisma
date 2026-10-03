@@ -343,6 +343,13 @@ model FilterPreferences {
   /// is a filter either.
   importCategoriesFromFile Boolean @default(true) @map("import_categories_from_file")
 
+  /// Whether the dashboard and the budget read a debt still owed as money
+  /// that will come back, and take it off the spending it hangs off. On by
+  /// default: a reimbursement request is an explicit statement that the money
+  /// returns, and a loan to a relative is not consumption. Off, the two
+  /// screens show the gross spending until the debt is actually settled.
+  deductPendingReimbursements Boolean @default(true) @map("deduct_pending_reimbursements")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

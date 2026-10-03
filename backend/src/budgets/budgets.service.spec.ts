@@ -2,6 +2,7 @@ import type { TestingModule } from '@nestjs/testing'
 import { Test } from '@nestjs/testing'
 import { BudgetsService } from './budgets.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 
 describe('BudgetsService', () => {
   let service: BudgetsService
@@ -44,6 +45,12 @@ describe('BudgetsService', () => {
     },
   }
 
+  // Off here so that the tests written before the preference existed keep
+  // reading gross figures; the tests of the preference switch it on.
+  const mockFilterPreferencesService = {
+    deductsPendingByDefault: vi.fn(),
+  }
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -52,16 +59,73 @@ describe('BudgetsService', () => {
           provide: PrismaService,
           useValue: mockPrismaService,
         },
+        {
+          provide: FilterPreferencesService,
+          useValue: mockFilterPreferencesService,
+        },
       ],
     }).compile()
 
     service = module.get<BudgetsService>(BudgetsService)
 
     vi.clearAllMocks()
+    mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
+      false
+    )
 
     // Default mocks
     mockPrismaService.categoryAssociation.findMany.mockResolvedValue([])
     mockPrismaService.$queryRaw.mockResolvedValue([])
+  })
+
+  describe('a debt still owed', () => {
+    it('is taken off the spending when the preference says so and the request does not', async () => {
+      mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
+        true
+      )
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({
+          category_name: 'Famille et amis',
+          total_amount: 0,
+          pending_credit: 3700,
+        }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2026-09-01',
+        endDate: '2026-09-30',
+      })
+
+      expect(
+        mockFilterPreferencesService.deductsPendingByDefault
+      ).toHaveBeenCalledWith(mockUserId)
+      expect(result.expensesByCategory[0]?.pendingReimbursement).toBe(3700)
+      expect(result.totalPendingReimbursements).toBe(3700)
+    })
+
+    it('lets the request override the preference', async () => {
+      mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
+        true
+      )
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({
+          category_name: 'Famille et amis',
+          total_amount: 3700,
+          pending_credit: 3700,
+        }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2026-09-01',
+        endDate: '2026-09-30',
+        deductPendingReimbursements: false,
+      })
+
+      expect(
+        mockFilterPreferencesService.deductsPendingByDefault
+      ).not.toHaveBeenCalled()
+      expect(result.expensesByCategory[0]?.pendingReimbursement ?? 0).toBe(0)
+    })
   })
 
   describe('getStatistics', () => {

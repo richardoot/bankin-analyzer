@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 import { Prisma } from '../generated/prisma'
 import {
   PENDING_CREDIT_SCALED,
@@ -65,7 +66,10 @@ interface MonthlyBreakdownRow {
 
 @Injectable()
 export class BudgetsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly filterPreferences: FilterPreferencesService
+  ) {}
 
   /**
    * Get statistics for budget planning:
@@ -82,7 +86,11 @@ export class BudgetsService {
     const startDate = startOfUtcDay(filters.startDate)
     const endDate = endOfUtcDay(filters.endDate)
     const shouldDeductReimbursements = filters.deductReimbursements !== false
-    const shouldDeductPending = filters.deductPendingReimbursements === true
+    // Same rule as the dashboard: the request wins, else the user's
+    // preference, on by default.
+    const shouldDeductPending =
+      filters.deductPendingReimbursements ??
+      (await this.filterPreferences.deductsPendingByDefault(userId))
     const shouldIncludeMonthly = filters.includeMonthlyBreakdown === true
     const includeAllPending = filters.includeAllPendingReimbursements === true
 

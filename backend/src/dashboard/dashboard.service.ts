@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 import { Prisma } from '../generated/prisma'
 import {
   PENDING_CREDIT_SCALED,
@@ -73,6 +74,11 @@ interface DashboardAggregatedRow {
   pending_credit: number
 }
 
+/** One row: what is still owed to the user across every open debt. */
+interface ReceivableRow {
+  pending: number
+}
+
 interface ExceptionalEventRow {
   id: string
   name: string
@@ -133,7 +139,10 @@ function roundStructure(s: SpendingStructureDto): SpendingStructureDto {
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly filterPreferences: FilterPreferencesService
+  ) {}
 
   async getSummary(
     userId: string,
@@ -156,7 +165,12 @@ export class DashboardService {
     )
 
     const shouldDeductReimbursements = filters.deductReimbursements !== false
-    const shouldDeductPending = filters.deductPendingReimbursements === true
+    // A debt still owed is money that comes back: a request says so. Whether
+    // it is taken off the spending now or only once settled is the user's
+    // preference, on by default; a request that says it explicitly wins.
+    const shouldDeductPending =
+      filters.deductPendingReimbursements ??
+      (await this.filterPreferences.deductsPendingByDefault(userId))
     const shouldIncludeBreakdown = filters.includeCategoryBreakdown === true
 
     // The deduction is applied inside the aggregation, per transaction, so the
@@ -170,7 +184,7 @@ export class DashboardService {
     // Fetch aggregated data, the accounts list and the exceptional events.
     // `CategoryAssociation` no longer takes part: it was the only thing
     // linking a refund to a category, and the link is now the transaction.
-    const [rows, accountRows, eventRows] = await Promise.all([
+    const [rows, accountRows, eventRows, receivableRows] = await Promise.all([
       // Query 1: Aggregation by month + category + subcategory + type
       // (excludes stats-excluded accounts).
       this.prisma.$queryRaw<DashboardAggregatedRow[]>(Prisma.sql`
@@ -245,6 +259,20 @@ export class DashboardService {
           AND COALESCE(a.is_excluded_from_stats, false) = false
         GROUP BY tg.id, tg.name, tg.color, tg.icon
         ORDER BY amount DESC
+      `),
+      // Query 4: what is still owed to the user, all debts together. A
+      // stock, not a flow: it ignores the period, because a loan made last
+      // year and not yet repaid is owed today. In full euros, never divided:
+      // the person owes what was claimed, whichever account paid.
+      this.prisma.$queryRaw<ReceivableRow[]>(Prisma.sql`
+        SELECT COALESCE(SUM(GREATEST(r.amount - COALESCE(p.credited, 0), 0)), 0)::float AS pending
+        FROM app.reimbursement_requests r
+        LEFT JOIN (
+          SELECT reimbursement_id, SUM(amount) AS credited
+          FROM app.reimbursement_payments
+          GROUP BY reimbursement_id
+        ) p ON p.reimbursement_id = r.id
+        WHERE r.user_id = ${userId}
       `),
     ])
 
@@ -695,6 +723,8 @@ export class DashboardService {
     )
 
     const roundedSavings = Math.round(savingsTransfers * 100) / 100
+    const pendingReceivables =
+      Math.round((receivableRows[0]?.pending ?? 0) * 100) / 100
     const everydayCommitted =
       Math.round(everydayStructure.committed * 100) / 100
     const response: DashboardSummaryDto = {
@@ -711,6 +741,7 @@ export class DashboardService {
       spendingStructure: roundStructure(structure),
       everydaySpendingStructure: roundStructure(everydayStructure),
       savingsTransfers: roundedSavings,
+      pendingReceivables,
       savingsRate:
         totalIncome > 0
           ? Math.round((roundedSavings / totalIncome) * 10000) / 10000

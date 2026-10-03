@@ -49,13 +49,12 @@ export class DashboardFiltersDto {
   deductReimbursements?: boolean
 
   /**
-   * Whether to deduct pending/partial reimbursement requests (from the
-   * ReimbursementRequest table) from expense totals. Only the remaining
-   * amount (amount − amountReceived) of PENDING/PARTIAL requests whose
-   * linked transaction falls within the date range is deducted.
-   * @default false
+   * Whether a debt still owed (PENDING / PARTIAL reimbursement requests) is
+   * taken off the spending it hangs off. Omitted, the user's preference
+   * applies — on by default; the field is for a caller that needs the other
+   * reading, such as a comparison on gross figures.
    */
-  @ApiPropertyOptional({ default: false })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()
   @Type(() => Boolean)

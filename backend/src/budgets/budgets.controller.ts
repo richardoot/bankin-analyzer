@@ -27,7 +27,7 @@ export class BudgetsController {
       '**Reimbursement deduction** (deductReimbursements, default true): income transactions ' +
       'in categories linked to an expense category via CategoryAssociation are treated as ' +
       'reimbursements and deducted from the corresponding expense category total.\n\n' +
-      '**Pending reimbursement deduction** (deductPendingReimbursements, default false): ' +
+      '**Pending reimbursement deduction** (deductPendingReimbursements, default: the user preference, on unless set otherwise): ' +
       'the remaining amount (amount - amountReceived) of PENDING/PARTIAL ReimbursementRequests ' +
       'whose linked transaction falls within the date range is also deducted from the ' +
       'corresponding expense category total.',
