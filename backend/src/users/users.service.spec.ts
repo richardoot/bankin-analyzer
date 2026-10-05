@@ -6,6 +6,7 @@ import { UsersService } from './users.service'
 import { Prisma } from '../generated/prisma'
 import { PrismaService } from '../prisma/prisma.service'
 import { SupabaseService } from '../auth/supabase.service'
+import { CategoryCatalogService } from '../categories/category-catalog.service'
 
 const mockUser = {
   id: '550e8400-e29b-41d4-a716-446655440000',
@@ -28,6 +29,10 @@ const mockSupabaseService = {
   deleteUser: vi.fn(),
 }
 
+const mockCategoryCatalogService = {
+  ensureCatalog: vi.fn(),
+}
+
 describe('UsersService', () => {
   let service: UsersService
 
@@ -42,6 +47,10 @@ describe('UsersService', () => {
         {
           provide: SupabaseService,
           useValue: mockSupabaseService,
+        },
+        {
+          provide: CategoryCatalogService,
+          useValue: mockCategoryCatalogService,
         },
       ],
     }).compile()

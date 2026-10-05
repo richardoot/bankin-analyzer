@@ -34,9 +34,16 @@ export function useDashboardData() {
   const selectedCategory = ref<string | null>(null)
   const selectedIncomeCategory = ref<string | null>(null)
 
-  // Reimbursement toggles (mirror BudgetPage defaults)
+  // Reimbursement toggles. Received reimbursements are a reading of the
+  // screen; a debt still owed is a preference shared with the budget, kept
+  // by the backend, so the switch here reads and writes the store.
   const deductReimbursements = ref(true)
-  const deductPendingReimbursements = ref(false)
+  const deductPendingReimbursements = computed<boolean>({
+    get: () => filtersStore.deductPendingReimbursements,
+    set: value => {
+      void filtersStore.setDeductPendingReimbursements(value)
+    },
+  })
 
   // Transform backend data to component format
   const monthlyData = computed<MonthlyData[]>(
@@ -55,6 +62,25 @@ export function useDashboardData() {
 
   const totalExpenses = computed(() => summaryData.value?.totalExpenses ?? 0)
   const totalIncome = computed(() => summaryData.value?.totalIncome ?? 0)
+
+  // The structure of spending and the savings reading, straight from the
+  // server; absent on an older server, so every consumer guards for it.
+  const spendingStructure = computed(
+    () => summaryData.value?.spendingStructure ?? null
+  )
+  const everydaySpendingStructure = computed(
+    () => summaryData.value?.everydaySpendingStructure ?? null
+  )
+  const savingsTransfers = computed(
+    () => summaryData.value?.savingsTransfers ?? 0
+  )
+  const savingsRate = computed(() => summaryData.value?.savingsRate ?? null)
+  const remainingToLive = computed(
+    () => summaryData.value?.remainingToLive ?? null
+  )
+  const pendingReceivables = computed(
+    () => summaryData.value?.pendingReceivables ?? 0
+  )
 
   // Number of months in the period (used for averages)
   const periodMonths = computed(() => monthlyData.value.length || 1)
@@ -317,7 +343,7 @@ export function useDashboardData() {
       filtersStore.customStartDate,
       filtersStore.customEndDate,
       deductReimbursements.value,
-      deductPendingReimbursements.value,
+      filtersStore.deductPendingReimbursements,
     ],
     () => {
       if (summaryData.value) {
@@ -369,6 +395,12 @@ export function useDashboardData() {
     setSelectedIncomeCategory,
     deductReimbursements,
     deductPendingReimbursements,
+    spendingStructure,
+    everydaySpendingStructure,
+    savingsTransfers,
+    pendingReceivables,
+    savingsRate,
+    remainingToLive,
     isLoading,
     error,
     fetchData,

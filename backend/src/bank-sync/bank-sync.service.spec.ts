@@ -1101,7 +1101,7 @@ describe('BankSyncService — authorization', () => {
             type: 'EXPENSE',
           }),
         ],
-        [{ id: 'cat-sport', name: 'Sport', type: 'EXPENSE' }],
+        [{ id: 'cat-sport', name: 'Sport', type: 'EXPENSE', catalogKey: null }],
         [],
         []
       )

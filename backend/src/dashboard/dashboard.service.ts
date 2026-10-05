@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 import { Prisma } from '../generated/prisma'
 import {
   PENDING_CREDIT_SCALED,
@@ -15,6 +16,7 @@ import type {
   MonthlyDataDto,
   CategoryDataDto,
   CategoryOptionDto,
+  SpendingStructureDto,
   SubcategoryDataDto,
   ExceptionalEventDto,
 } from './dto'
@@ -58,6 +60,11 @@ interface DashboardAggregatedRow {
   subcategory: string
   subcategory_icon: string | null
   is_exceptional: boolean
+  /** The subcategory's, or the category's default; null on legacy rows. */
+  nature: string | null
+  rhythm: string | null
+  /** The category's catalogue key, to tell a savings transfer from another. */
+  category_catalog_key: string | null
   transaction_count: number
   /** Already net of whichever deductions the filters asked for. */
   total_amount: number
@@ -65,6 +72,11 @@ interface DashboardAggregatedRow {
   received_credit: number
   /** Still owed on them, for reporting. */
   pending_credit: number
+}
+
+/** One row: what is still owed to the user across every open debt. */
+interface ReceivableRow {
+  pending: number
 }
 
 interface ExceptionalEventRow {
@@ -79,9 +91,58 @@ interface AccountRow {
   account: string
 }
 
+/** The transfer categories whose rows mean money set aside. */
+const SAVINGS_CATALOG_KEYS = new Set([
+  'emergency-savings',
+  'project-savings',
+  'investment',
+])
+
+function emptyStructure(): SpendingStructureDto {
+  return {
+    essential: 0,
+    pleasure: 0,
+    unknownNature: 0,
+    committed: 0,
+    variable: 0,
+    unknownRhythm: 0,
+    total: 0,
+  }
+}
+
+function addToStructure(
+  target: SpendingStructureDto,
+  row: { nature: string | null; rhythm: string | null },
+  amount: number
+): void {
+  target.total += amount
+  if (row.nature === 'ESSENTIAL') target.essential += amount
+  else if (row.nature === 'PLEASURE') target.pleasure += amount
+  else target.unknownNature += amount
+  if (row.rhythm === 'COMMITTED') target.committed += amount
+  else if (row.rhythm === 'VARIABLE') target.variable += amount
+  else target.unknownRhythm += amount
+}
+
+function roundStructure(s: SpendingStructureDto): SpendingStructureDto {
+  const r = (v: number) => Math.round(v * 100) / 100
+  return {
+    essential: r(s.essential),
+    pleasure: r(s.pleasure),
+    unknownNature: r(s.unknownNature),
+    committed: r(s.committed),
+    variable: r(s.variable),
+    unknownRhythm: r(s.unknownRhythm),
+    total: r(s.total),
+  }
+}
+
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly filterPreferences: FilterPreferencesService
+  ) {}
 
   async getSummary(
     userId: string,
@@ -104,7 +165,12 @@ export class DashboardService {
     )
 
     const shouldDeductReimbursements = filters.deductReimbursements !== false
-    const shouldDeductPending = filters.deductPendingReimbursements === true
+    // A debt still owed is money that comes back: a request says so. Whether
+    // it is taken off the spending now or only once settled is the user's
+    // preference, on by default; a request that says it explicitly wins.
+    const shouldDeductPending =
+      filters.deductPendingReimbursements ??
+      (await this.filterPreferences.deductsPendingByDefault(userId))
     const shouldIncludeBreakdown = filters.includeCategoryBreakdown === true
 
     // The deduction is applied inside the aggregation, per transaction, so the
@@ -118,7 +184,7 @@ export class DashboardService {
     // Fetch aggregated data, the accounts list and the exceptional events.
     // `CategoryAssociation` no longer takes part: it was the only thing
     // linking a refund to a category, and the link is now the transaction.
-    const [rows, accountRows, eventRows] = await Promise.all([
+    const [rows, accountRows, eventRows, receivableRows] = await Promise.all([
       // Query 1: Aggregation by month + category + subcategory + type
       // (excludes stats-excluded accounts).
       this.prisma.$queryRaw<DashboardAggregatedRow[]>(Prisma.sql`
@@ -138,6 +204,9 @@ export class DashboardService {
           COALESCE(t.subcategory, '') AS subcategory,
           sc.icon AS subcategory_icon,
           (et.transaction_id IS NOT NULL) AS is_exceptional,
+          COALESCE(sc.nature, c.default_nature)::text AS nature,
+          COALESCE(sc.rhythm, c.default_rhythm)::text AS rhythm,
+          c.catalog_key AS category_catalog_key,
           COUNT(*)::int AS transaction_count,
           -- Net of reimbursements, computed per transaction so the credit
           -- lands on the exact category, subcategory and account that carried
@@ -155,7 +224,7 @@ export class DashboardService {
           AND t.date >= ${startDate}
           AND t.date <= ${endDate}
           AND COALESCE(a.is_excluded_from_stats, false) = false
-        GROUP BY TO_CHAR(t.date, 'YYYY-MM'), c.id, COALESCE(c.name, 'Autre'), c.icon, t.type, COALESCE(t.subcategory, ''), sc.icon, (et.transaction_id IS NOT NULL)
+        GROUP BY TO_CHAR(t.date, 'YYYY-MM'), c.id, COALESCE(c.name, 'Autre'), c.icon, c.catalog_key, t.type, COALESCE(t.subcategory, ''), sc.icon, sc.nature, sc.rhythm, c.default_nature, c.default_rhythm, (et.transaction_id IS NOT NULL)
       `),
       // Query 2: Distinct account names (including excluded from stats, for
       // filter panel). Sourced from the Account relation since the legacy
@@ -191,6 +260,20 @@ export class DashboardService {
         GROUP BY tg.id, tg.name, tg.color, tg.icon
         ORDER BY amount DESC
       `),
+      // Query 4: what is still owed to the user, all debts together. A
+      // stock, not a flow: it ignores the period, because a loan made last
+      // year and not yet repaid is owed today. In full euros, never divided:
+      // the person owes what was claimed, whichever account paid.
+      this.prisma.$queryRaw<ReceivableRow[]>(Prisma.sql`
+        SELECT COALESCE(SUM(GREATEST(r.amount - COALESCE(p.credited, 0), 0)), 0)::float AS pending
+        FROM app.reimbursement_requests r
+        LEFT JOIN (
+          SELECT reimbursement_id, SUM(amount) AS credited
+          FROM app.reimbursement_payments
+          GROUP BY reimbursement_id
+        ) p ON p.reimbursement_id = r.id
+        WHERE r.user_id = ${userId}
+      `),
     ])
 
     // Extract all categories from aggregated rows (before filtering hidden
@@ -207,11 +290,20 @@ export class DashboardService {
     ])
 
     for (const row of rows) {
+      // A transfer is neither spending nor earning: it names no filter option.
+      if (row.type === 'TRANSFER') continue
       const target =
         row.type === 'EXPENSE' ? allExpenseCategories : allIncomeCategories
       target.set(categoryKeyOf(row.category_id), row.category_name)
       categoryNameById.set(categoryKeyOf(row.category_id), row.category_name)
     }
+
+    // The structure of spending, on both readings. Accumulated on the rows
+    // the totals keep — hidden categories out — so the two agree.
+    const structure = emptyStructure()
+    const everydayStructure = emptyStructure()
+    // Money leaving the everyday accounts towards savings, net of withdrawals.
+    let savingsTransfers = 0
 
     // Build aggregation data structures
     const monthlyMap = new Map<
@@ -266,6 +358,17 @@ export class DashboardService {
       const received = shouldDeductReimbursements ? row.received_credit : 0
       const pending = shouldDeductPending ? row.pending_credit : 0
 
+      // Neither expense nor income. What it says is where money went to
+      // sleep: a transfer into a savings category is counted as saved, a
+      // transfer back out (positive) as un-saved. Everything else — internal
+      // moves, joint-account top-ups, corrections — is neutral by nature.
+      if (row.type === 'TRANSFER') {
+        if (SAVINGS_CATALOG_KEYS.has(row.category_catalog_key ?? '')) {
+          savingsTransfers -= amount
+        }
+        continue
+      }
+
       // Skip hidden categories for aggregations
       if (
         row.type === 'EXPENSE' &&
@@ -295,6 +398,8 @@ export class DashboardService {
         monthData.expenses += amount
         monthData.reimbursements += received + pending
         if (row.is_exceptional) monthData.exceptionalExpenses += amount
+        addToStructure(structure, row, amount)
+        if (!row.is_exceptional) addToStructure(everydayStructure, row, amount)
       } else {
         monthData.income += amount
       }
@@ -617,6 +722,11 @@ export class DashboardService {
       })
     )
 
+    const roundedSavings = Math.round(savingsTransfers * 100) / 100
+    const pendingReceivables =
+      Math.round((receivableRows[0]?.pending ?? 0) * 100) / 100
+    const everydayCommitted =
+      Math.round(everydayStructure.committed * 100) / 100
     const response: DashboardSummaryDto = {
       monthlyData,
       expensesByCategory,
@@ -628,6 +738,20 @@ export class DashboardService {
       availableAccounts: accountRows.map(r => r.account),
       totalExceptionalExpenses,
       exceptionalEvents,
+      spendingStructure: roundStructure(structure),
+      everydaySpendingStructure: roundStructure(everydayStructure),
+      savingsTransfers: roundedSavings,
+      pendingReceivables,
+      savingsRate:
+        totalIncome > 0
+          ? Math.round((roundedSavings / totalIncome) * 10000) / 10000
+          : null,
+      remainingToLive:
+        totalIncome > 0
+          ? Math.round(
+              (totalIncome - everydayCommitted - roundedSavings) * 100
+            ) / 100
+          : null,
     }
 
     if (shouldIncludeBreakdown) {

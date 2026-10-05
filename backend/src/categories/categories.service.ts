@@ -1,15 +1,16 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { forgetCategoryInPreferences } from './forget-in-preferences'
 import { Prisma, TransactionType } from '../generated/prisma'
 import type { Category } from '../generated/prisma'
 import type {
   CategoryDeletionResultDto,
   CategoryDeletionSummaryDto,
-  CreateCategoryDto,
   UpdateCategoryDto,
 } from './dto'
 
@@ -24,28 +25,44 @@ export class CategoriesService {
     })
   }
 
-  async findOrCreate(
+  /**
+   * The categories bearing these names, and nothing for the ones that do
+   * not exist. Categories are not created from a name any more — the
+   * vocabulary is the catalogue's — so a CSV naming a heading the user does
+   * not have leaves that transaction unfiled, visible and one click away
+   * from a real filing, rather than minting a category nobody decided on.
+   */
+  async findManyByName(
     userId: string,
-    name: string,
-    type: TransactionType
-  ): Promise<Category> {
-    const existing = await this.prisma.category.findUnique({
+    refs: Array<{ name: string; type: TransactionType }>
+  ): Promise<Category[]> {
+    const unique = [
+      ...new Map(
+        refs
+          .filter(ref => ref.name && ref.name.trim())
+          .map(ref => [`${ref.name}|${ref.type}`, ref])
+      ).values(),
+    ]
+    if (unique.length === 0) return []
+    return this.prisma.category.findMany({
       where: {
-        userId_name_type: { userId, name, type },
+        userId,
+        OR: unique.map(ref => ({ name: ref.name, type: ref.type })),
       },
-    })
-
-    if (existing) {
-      return existing
-    }
-
-    return this.prisma.category.create({
-      data: { userId, name, type },
     })
   }
 
-  async create(userId: string, dto: CreateCategoryDto): Promise<Category> {
-    return this.findOrCreate(userId, dto.name, dto.type)
+  /**
+   * A catalogue row is the application's vocabulary, not the user's: it
+   * cannot be renamed, re-iconed or deleted. Legacy rows still can, until
+   * the migration assistant has emptied them.
+   */
+  private static assertUnlocked(category: Category, action: string): void {
+    if (category.catalogKey !== null) {
+      throw new ForbiddenException(
+        `"${category.name}" belongs to the catalogue and cannot be ${action}`
+      )
+    }
   }
 
   /**
@@ -59,12 +76,10 @@ export class CategoriesService {
     dto: UpdateCategoryDto
   ): Promise<Category> {
     const category = await this.findOwned(userId, id)
+    CategoriesService.assertUnlocked(category, 'renamed')
 
     const data = {
       ...(dto.name !== undefined && { name: dto.name }),
-      ...(dto.isExcludedFromBudget !== undefined && {
-        isExcludedFromBudget: dto.isExcludedFromBudget,
-      }),
     }
     const isRenaming = dto.name !== undefined && dto.name !== category.name
 
@@ -160,7 +175,6 @@ export class CategoriesService {
       })),
       reimbursementCount,
       isGloballyHidden: globalHidden.includes(id),
-      isExcludedFromBudget: category.isExcludedFromBudget,
     }
   }
 
@@ -177,6 +191,7 @@ export class CategoriesService {
    */
   async remove(userId: string, id: string): Promise<CategoryDeletionResultDto> {
     const category = await this.findOwned(userId, id)
+    CategoriesService.assertUnlocked(category, 'deleted')
 
     return this.prisma.$transaction(async tx => {
       const [uncategorizedTransactions, deletedSubcategories, entryCount] =
@@ -200,7 +215,7 @@ export class CategoriesService {
         })
       }
 
-      await this.forgetInFilterPreferences(tx, userId, id, category.type)
+      await forgetCategoryInPreferences(tx, userId, id, category.type)
       await tx.category.delete({ where: { id } })
 
       return {
@@ -208,47 +223,6 @@ export class CategoriesService {
         deletedSubcategories,
         deletedBudgetPlanEntries: entryCount,
       }
-    })
-  }
-
-  /** Drop a deleted category's id from the hidden lists, which carry no FK. */
-  private async forgetInFilterPreferences(
-    tx: Prisma.TransactionClient,
-    userId: string,
-    categoryId: string,
-    type: TransactionType
-  ): Promise<void> {
-    const preferences = await tx.filterPreferences.findUnique({
-      where: { userId },
-    })
-    if (!preferences) return
-
-    const isExpense = type === TransactionType.EXPENSE
-    const hidden = isExpense
-      ? preferences.hiddenExpenseCategoryIds
-      : preferences.hiddenIncomeCategoryIds
-    const globalHidden = isExpense
-      ? preferences.globalHiddenExpenseCategoryIds
-      : preferences.globalHiddenIncomeCategoryIds
-
-    if (!hidden.includes(categoryId) && !globalHidden.includes(categoryId)) {
-      return
-    }
-
-    const without = (ids: string[]): string[] =>
-      ids.filter(candidate => candidate !== categoryId)
-
-    await tx.filterPreferences.update({
-      where: { userId },
-      data: isExpense
-        ? {
-            hiddenExpenseCategoryIds: without(hidden),
-            globalHiddenExpenseCategoryIds: without(globalHidden),
-          }
-        : {
-            hiddenIncomeCategoryIds: without(hidden),
-            globalHiddenIncomeCategoryIds: without(globalHidden),
-          },
     })
   }
 
@@ -260,56 +234,6 @@ export class CategoriesService {
       throw new NotFoundException(`Category ${id} not found`)
     }
     return category
-  }
-
-  /**
-   * Batch find or create multiple categories.
-   * Much more efficient than calling findOrCreate() N times.
-   * Returns all categories and count of newly created ones.
-   */
-  async findOrCreateMany(
-    userId: string,
-    categories: Array<{ name: string; type: TransactionType }>
-  ): Promise<{ categories: Category[]; newCount: number }> {
-    if (categories.length === 0) {
-      return { categories: [], newCount: 0 }
-    }
-
-    // Deduplicate by name|type
-    const uniqueCategories = [
-      ...new Map(categories.map(c => [`${c.name}|${c.type}`, c])).values(),
-    ]
-
-    // 1. Find all existing categories in one query
-    const existing = await this.prisma.category.findMany({
-      where: {
-        userId,
-        OR: uniqueCategories.map(c => ({ name: c.name, type: c.type })),
-      },
-    })
-    const existingSet = new Set(existing.map(c => `${c.name}|${c.type}`))
-
-    // 2. Create missing ones in batch
-    const toCreate = uniqueCategories.filter(
-      c => !existingSet.has(`${c.name}|${c.type}`)
-    )
-
-    if (toCreate.length > 0) {
-      await this.prisma.category.createMany({
-        data: toCreate.map(c => ({ userId, name: c.name, type: c.type })),
-        skipDuplicates: true,
-      })
-    }
-
-    // 3. Return all categories and count of new ones
-    const allCategories = await this.prisma.category.findMany({
-      where: {
-        userId,
-        OR: uniqueCategories.map(c => ({ name: c.name, type: c.type })),
-      },
-    })
-
-    return { categories: allCategories, newCount: toCreate.length }
   }
 
   async findWithoutIcons(userId: string) {

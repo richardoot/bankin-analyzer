@@ -20,6 +20,9 @@ vi.mock('@/lib/api', () => ({
     getDashboardSummary: vi.fn(),
     getTransactions: vi.fn(),
     getAccounts: vi.fn().mockResolvedValue([]),
+    getLegacyCategories: vi
+      .fn()
+      .mockResolvedValue({ categories: [], totalTransactions: 0 }),
   },
 }))
 
@@ -34,6 +37,8 @@ vi.mock('@/stores/filters', () => ({
     isIncomeCategoryHidden: vi.fn(() => false),
     isExpenseCategoryGloballyHidden: vi.fn(() => false),
     isIncomeCategoryGloballyHidden: vi.fn(() => false),
+    deductPendingReimbursements: false,
+    setDeductPendingReimbursements: vi.fn(),
     loadFromBackend: vi.fn(),
     isPanelExpanded: true,
     togglePanelExpanded: vi.fn(),

@@ -19,6 +19,7 @@ describe('FilterPreferencesService', () => {
     globalHiddenIncomeCategoryIds: ['cat-cadeaux'],
     isPanelExpanded: true,
     importCategoriesFromFile: true,
+    deductPendingReimbursements: true,
     createdAt: new Date(),
     updatedAt: new Date(),
   }
@@ -73,6 +74,31 @@ describe('FilterPreferencesService', () => {
     })
   })
 
+  describe('deductsPendingByDefault', () => {
+    it('reads the preference', async () => {
+      vi.mocked(prisma.filterPreferences.findUnique).mockResolvedValue({
+        ...mockFilterPreferences,
+        deductPendingReimbursements: false,
+      })
+
+      await expect(service.deductsPendingByDefault(mockUserId)).resolves.toBe(
+        false
+      )
+      expect(prisma.filterPreferences.findUnique).toHaveBeenCalledWith({
+        where: { userId: mockUserId },
+        select: { deductPendingReimbursements: true },
+      })
+    })
+
+    it('is on for a user who never saved any preference', async () => {
+      vi.mocked(prisma.filterPreferences.findUnique).mockResolvedValue(null)
+
+      await expect(service.deductsPendingByDefault(mockUserId)).resolves.toBe(
+        true
+      )
+    })
+  })
+
   describe('upsert', () => {
     it('should create new preferences with all fields', async () => {
       const dto = {
@@ -107,6 +133,7 @@ describe('FilterPreferencesService', () => {
           globalHiddenIncomeCategoryIds: dto.globalHiddenIncomeCategoryIds,
           isPanelExpanded: dto.isPanelExpanded,
           importCategoriesFromFile: true,
+          deductPendingReimbursements: true,
         },
         update: {
           hiddenExpenseCategoryIds: dto.hiddenExpenseCategoryIds,
@@ -142,6 +169,7 @@ describe('FilterPreferencesService', () => {
           globalHiddenIncomeCategoryIds: [],
           isPanelExpanded: true,
           importCategoriesFromFile: true,
+          deductPendingReimbursements: true,
         },
         update: {},
       })
@@ -169,6 +197,7 @@ describe('FilterPreferencesService', () => {
           globalHiddenIncomeCategoryIds: [],
           isPanelExpanded: true,
           importCategoriesFromFile: true,
+          deductPendingReimbursements: true,
         },
         update: {
           globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
@@ -198,6 +227,7 @@ describe('FilterPreferencesService', () => {
           globalHiddenIncomeCategoryIds: [],
           isPanelExpanded: false,
           importCategoriesFromFile: true,
+          deductPendingReimbursements: true,
         },
         update: {
           isPanelExpanded: false,

@@ -88,13 +88,22 @@ export interface ImportResultDto {
   total: number
 }
 
+export type CategoryNature = 'ESSENTIAL' | 'PLEASURE'
+export type CategoryRhythm = 'COMMITTED' | 'VARIABLE'
+
 export interface CategoryDto {
   id: string
   name: string
   type: 'EXPENSE' | 'INCOME'
   icon?: string | null
-  isExcludedFromBudget: boolean
   createdAt: string
+  /** The catalogue entry this row is; null for a legacy category awaiting migration. */
+  catalogKey?: string | null
+  /** A catalogue category cannot be renamed, re-iconed or deleted. */
+  isLocked?: boolean
+  /** Defaults for a transaction filed at the category alone. Null outside expenses. */
+  defaultNature?: CategoryNature | null
+  defaultRhythm?: CategoryRhythm | null
 }
 
 /** One budget plan line lost with the category. */
@@ -122,7 +131,132 @@ export interface CategoryDeletionSummaryDto {
   budgetPlanEntries: BudgetPlanEntrySummaryDto[]
   reimbursementCount: number
   isGloballyHidden: boolean
-  isExcludedFromBudget: boolean
+}
+
+// ── Legacy migration (the assistant) ─────────────────────────────────────────
+
+export type LegacyAction = 'CATALOG' | 'CUSTOM' | 'UNFILE' | 'KEEP'
+
+/** One decision of the assistant's table. */
+export interface LegacyDecisionDto {
+  /** Null stands for the transactions filed at the legacy category alone. */
+  sourceSubcategoryId: string | null
+  action: LegacyAction
+  /** CATALOG and CUSTOM: the catalogue category, by key. */
+  categoryKey?: string | null
+  /** CATALOG: the catalogue subcategory, by key; omitted files at the category. */
+  subcategoryKey?: string | null
+  /** CUSTOM: the user's own subcategory, by name; existing or created. */
+  subcategoryName?: string | null
+  /** A tag attached to every transaction the line moves or unfiles. */
+  tagId?: string | null
+}
+
+export interface LegacySuggestionDto {
+  action: 'CATALOG' | 'UNFILE'
+  categoryKey: string | null
+  categoryName: string | null
+  subcategoryKey: string | null
+  subcategoryName: string | null
+  /** A context the legacy heading encoded, to carry over as a tag. */
+  tagName: string | null
+  /** What the guess rests on: pair, subcategory, catalog-label, category. */
+  basis: string
+}
+
+export interface LegacyLineDto {
+  sourceSubcategoryId: string | null
+  /** Null for the transactions filed at the category alone. */
+  name: string | null
+  transactionCount: number
+  suggestion: LegacySuggestionDto | null
+}
+
+export interface LegacyCategoryDto {
+  id: string
+  name: string
+  type: 'EXPENSE' | 'INCOME'
+  icon: string | null
+  /**
+   * True for a catalogue category whose lines are the subcategories
+   * provisioning left beside its own, without a key: it is tidied, not
+   * migrated, and stays.
+   */
+  isCatalog: boolean
+  catalogKey: string | null
+  transactionCount: number
+  isHidden: boolean
+  budgetPlanEntryCount: number
+  lines: LegacyLineDto[]
+}
+
+export interface LegacyOverviewDto {
+  categories: LegacyCategoryDto[]
+  totalTransactions: number
+}
+
+export interface LegacyMoveDto {
+  sourceSubcategoryId: string | null
+  sourceSubcategoryName: string | null
+  transactionCount: number
+  categoryName: string
+  subcategoryName: string | null
+  createsSubcategory: boolean
+  reparentsSubcategory: boolean
+  changesType: boolean
+  tagId: string | null
+}
+
+export interface LegacyUnfileDto {
+  sourceSubcategoryId: string | null
+  sourceSubcategoryName: string | null
+  transactionCount: number
+  tagId: string | null
+}
+
+export interface LegacyBudgetEntryOutcomeDto {
+  planName: string
+  amount: number
+  targetCategoryName: string | null
+  mergesIntoExisting: boolean
+}
+
+export interface LegacyMigrationPreviewDto {
+  sourceCategoryId: string
+  sourceCategoryName: string
+  moves: LegacyMoveDto[]
+  unfiles: LegacyUnfileDto[]
+  keptTransactions: number
+  movedTransactions: number
+  unfiledTransactions: number
+  typeChangedTransactions: number
+  deletesSourceCategory: boolean
+  budgetEntries: LegacyBudgetEntryOutcomeDto[]
+  dropsHiddenPreference: boolean
+}
+
+export interface LegacyMigrationResultDto {
+  sourceCategoryId: string
+  movedTransactions: number
+  unfiledTransactions: number
+  keptTransactions: number
+  typeChangedTransactions: number
+  createdSubcategories: number
+  reparentedSubcategories: number
+  deletedSubcategories: number
+  taggedTransactions: number
+  budgetEntriesMoved: number
+  budgetEntriesMerged: number
+  budgetEntriesDropped: number
+  hiddenPreferenceDropped: boolean
+  sourceDeleted: boolean
+}
+
+/** What deleting a subcategory did to the rows filed under it. */
+export interface SubcategoryDeletionResultDto {
+  refiledTransactions: number
+  fallbackSubcategoryId: string | null
+  fallbackSubcategoryName: string | null
 }
 
 /** One decision of the mapping table. */
@@ -184,6 +318,13 @@ export interface SubcategoryDto {
   name: string
   icon?: string | null
   createdAt: string
+  /** The catalogue entry this row is; null for one the user added. */
+  catalogKey?: string | null
+  /** A catalogue subcategory cannot be renamed or deleted. */
+  isLocked?: boolean
+  /** Null on income and transfer subcategories. */
+  nature?: CategoryNature | null
+  rhythm?: CategoryRhythm | null
 }
 
 export interface TransactionSettlementSummaryDto {
@@ -200,12 +341,14 @@ export interface TransactionTagSummaryDto {
   icon: string | null
 }
 
+export type TransactionKind = 'EXPENSE' | 'INCOME' | 'TRANSFER'
+
 export interface TransactionDto {
   id: string
   date: string
   description: string
   amount: number
-  type: 'EXPENSE' | 'INCOME'
+  type: TransactionKind
   accountId: string
   account: string
   subcategory?: string | null
@@ -250,7 +393,7 @@ export interface PaginatedResponse<T> {
 export interface TransactionQueryParams {
   page?: number | undefined
   limit?: number | undefined
-  type?: 'EXPENSE' | 'INCOME' | undefined
+  type?: TransactionKind | undefined
   startDate?: string | undefined
   endDate?: string | undefined
   categoryId?: string | undefined
@@ -285,6 +428,12 @@ export interface FilterPreferencesDto {
    * way.
    */
   importCategoriesFromFile: boolean
+  /**
+   * Whether a debt still owed is taken off the spending it hangs off, on the
+   * dashboard and in the budget. On by default: a reimbursement request says
+   * the money comes back, and a loan to a relative is not consumption.
+   */
+  deductPendingReimbursements: boolean
 }
 
 // Account types
@@ -653,6 +802,21 @@ export interface DashboardFiltersDto {
   includeCategoryBreakdown?: boolean
 }
 
+/**
+ * Expenses read through the two attributes of their subcategory: constrained
+ * or chosen, running on its own or following the user. `unknown*` holds what
+ * predates the catalogue and carries no attribute yet.
+ */
+export interface SpendingStructureDto {
+  essential: number
+  pleasure: number
+  unknownNature: number
+  committed: number
+  variable: number
+  unknownRhythm: number
+  total: number
+}
+
 export interface DashboardSummaryDto {
   monthlyData: MonthlyDataDto[]
   expensesByCategory: CategoryDataDto[]
@@ -666,6 +830,18 @@ export interface DashboardSummaryDto {
   monthLabels?: string[]
   totalExceptionalExpenses: number
   exceptionalEvents: ExceptionalEventDto[]
+  /** The month as it was: every expense, exceptional ones included. */
+  spendingStructure?: SpendingStructureDto
+  /** The lifestyle: the same, without the exceptional share. */
+  everydaySpendingStructure?: SpendingStructureDto
+  /** Money that left the everyday accounts towards savings, net of withdrawals. */
+  savingsTransfers?: number
+  /** `savingsTransfers / totalIncome`, null without income. */
+  savingsRate?: number | null
+  /** Income minus committed everyday spending minus savings: what the month leaves free. */
+  remainingToLive?: number | null
+  /** What is still owed to the user across every open debt, a stock in full euros. */
+  pendingReceivables?: number
 }
 
 // Budget plan DTOs
@@ -831,6 +1007,26 @@ async function getAuthHeaders(): Promise<HeadersInit> {
  * Fetch wrapper that handles 401 errors by refreshing the token and retrying.
  * Throws AuthError if refresh fails.
  */
+/**
+ * The server's own message when it has one — a rejected migration says why,
+ * and that reason is the whole point of the response — else the fallback.
+ */
+async function errorMessageOf(
+  response: Response,
+  fallback: string
+): Promise<string> {
+  try {
+    const body = (await response.json()) as { message?: unknown }
+    if (typeof body.message === 'string' && body.message) return body.message
+    if (Array.isArray(body.message) && typeof body.message[0] === 'string') {
+      return body.message[0]
+    }
+  } catch {
+    // no body, or not JSON
+  }
+  return fallback
+}
+
 async function fetchWithAuth(
   url: string,
   options: RequestInit = {}
@@ -1359,7 +1555,7 @@ export const api = {
 
   async updateCategory(
     id: string,
-    dto: { name?: string; isExcludedFromBudget?: boolean }
+    dto: { name?: string }
   ): Promise<CategoryDto> {
     const response = await fetchWithAuth(`${API_BASE_URL}/categories/${id}`, {
       method: 'PATCH',
@@ -1456,6 +1652,69 @@ export const api = {
    * needs the counts for all categories at once, so fetching per category
    * would mean one request per row.
    */
+  async getLegacyCategories(): Promise<LegacyOverviewDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/categories/legacy`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch legacy categories')
+    }
+
+    return response.json() as Promise<LegacyOverviewDto>
+  },
+
+  /** The server answers 400 with the reason when the arrangement is impossible. */
+  async previewLegacyMigration(
+    categoryId: string,
+    decisions: LegacyDecisionDto[]
+  ): Promise<LegacyMigrationPreviewDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/categories/${categoryId}/legacy-migration/preview`,
+      { method: 'POST', body: JSON.stringify({ decisions }) }
+    )
+
+    if (!response.ok) {
+      throw new Error(
+        await errorMessageOf(response, 'Impossible de préparer la migration')
+      )
+    }
+
+    return response.json() as Promise<LegacyMigrationPreviewDto>
+  },
+
+  async migrateLegacyCategory(
+    categoryId: string,
+    decisions: LegacyDecisionDto[]
+  ): Promise<LegacyMigrationResultDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/categories/${categoryId}/legacy-migration`,
+      { method: 'POST', body: JSON.stringify({ decisions }) }
+    )
+
+    if (!response.ok) {
+      throw new Error(await errorMessageOf(response, 'La migration a échoué'))
+    }
+
+    return response.json() as Promise<LegacyMigrationResultDto>
+  },
+
+  async deleteSubcategory(id: string): Promise<SubcategoryDeletionResultDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/subcategories/${id}`,
+      { method: 'DELETE' }
+    )
+
+    if (!response.ok) {
+      throw new Error(
+        await errorMessageOf(
+          response,
+          'Impossible de supprimer la sous-catégorie'
+        )
+      )
+    }
+
+    return response.json() as Promise<SubcategoryDeletionResultDto>
+  },
+
   async getSubcategories(): Promise<SubcategoryDto[]> {
     const response = await fetchWithAuth(`${API_BASE_URL}/subcategories`)
 
@@ -1483,6 +1742,8 @@ export const api = {
   async createSubcategory(dto: {
     categoryId: string
     name: string
+    nature?: CategoryNature
+    rhythm?: CategoryRhythm
   }): Promise<SubcategoryDto> {
     const response = await fetchWithAuth(`${API_BASE_URL}/subcategories`, {
       method: 'POST',
@@ -1541,7 +1802,8 @@ export const api = {
     id: string,
     data: {
       note?: string
-      categoryId?: string
+      /** Null sends the transaction back to "à classer". */
+      categoryId?: string | null
       subcategoryId?: string | null
       isPointed?: boolean
     }

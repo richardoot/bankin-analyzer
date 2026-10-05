@@ -15,16 +15,61 @@
  * wrong one is invisible and quietly distorts every total it touches.
  */
 
+import { catalogCategory, catalogSubcategory } from '../categories/catalog'
+
+/**
+ * What the model files: purchases and receipts. A transfer is not a filing
+ * question — where savings went is decided by the user, and one day by
+ * matching the two legs — so transfers never reach the model, neither as
+ * something to file nor as a heading to file under.
+ */
+export type FilingKind = 'EXPENSE' | 'INCOME'
+
+export function isFilingKind(type: string): type is FilingKind {
+  return type === 'EXPENSE' || type === 'INCOME'
+}
+
+/**
+ * The categories the model may file under, from the rows a ledger holds:
+ * transfers dropped, the catalogue key carried along when the row has one.
+ */
+export function filingCategories(
+  rows: {
+    id: string
+    name: string
+    type: string
+    catalogKey?: string | null
+  }[]
+): CategoryChoice[] {
+  const choices: CategoryChoice[] = []
+  for (const row of rows) {
+    if (!isFilingKind(row.type)) continue
+    choices.push({
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      catalogKey: row.catalogKey ?? null,
+    })
+  }
+  return choices
+}
+
 export interface CategoryChoice {
   id: string
   name: string
-  type: 'EXPENSE' | 'INCOME'
+  type: FilingKind
+  /** The catalogue entry this is, null on a category from before the catalogue. */
+  catalogKey?: string | null
 }
 
 export interface SubcategoryChoice {
   id: string
   name: string
   categoryId: string
+  /** The catalogue entry this is, null on a subcategory the user created. */
+  catalogKey?: string | null
+  nature?: 'ESSENTIAL' | 'PLEASURE' | null
+  rhythm?: 'COMMITTED' | 'VARIABLE' | null
 }
 
 export interface CategorizableTransaction {
@@ -32,7 +77,7 @@ export interface CategorizableTransaction {
   index: number
   description: string
   amount: number
-  type: 'EXPENSE' | 'INCOME'
+  type: FilingKind
 }
 
 /** One line as the model returned it, before anything is trusted. */
@@ -128,26 +173,57 @@ export function resolveAssignments(
   return [...resolved.values()].sort((a, b) => a.index - b.index)
 }
 
-/** The catalogue the model is allowed to choose from, as prompt text. */
+const NATURE_WORDS = { ESSENTIAL: 'essentiel', PLEASURE: 'plaisir' } as const
+const RHYTHM_WORDS = { COMMITTED: 'engage', VARIABLE: 'variable' } as const
+
+/**
+ * The catalogue the model is allowed to choose from, as prompt text.
+ *
+ * The names alone used to be the whole of it. The catalogue was written with
+ * a description per heading precisely to settle what a name leaves open —
+ * a one-off bus ticket against the monthly pass, a protein powder under
+ * food rather than sport, a loan to a relative under family — so the model
+ * reads those too, with the nature and rhythm that tell a rent from an
+ * outing. A subcategory the user added carries its own two attributes and
+ * no description; a category from before the catalogue carries its name.
+ */
 export function describeCatalog(
   categories: CategoryChoice[],
   subcategories: SubcategoryChoice[],
   type: 'EXPENSE' | 'INCOME'
 ): string {
-  const subsByCategory = new Map<string, string[]>()
+  const subsByCategory = new Map<string, SubcategoryChoice[]>()
   for (const subcategory of subcategories) {
     const list = subsByCategory.get(subcategory.categoryId) ?? []
-    list.push(subcategory.name)
+    list.push(subcategory)
     subsByCategory.set(subcategory.categoryId, list)
   }
 
-  return categories
-    .filter(category => category.type === type)
-    .map(category => {
-      const subs = subsByCategory.get(category.id) ?? []
-      return subs.length > 0
-        ? `- ${category.name} (sous-categories: ${subs.join(', ')})`
-        : `- ${category.name}`
-    })
-    .join('\n')
+  const lines: string[] = []
+  for (const category of categories) {
+    if (category.type !== type) continue
+    const entry = category.catalogKey
+      ? catalogCategory(category.catalogKey)
+      : undefined
+    lines.push(
+      entry ? `- ${category.name} : ${entry.description}` : `- ${category.name}`
+    )
+    for (const subcategory of subsByCategory.get(category.id) ?? []) {
+      const catalogSub = subcategory.catalogKey
+        ? catalogSubcategory(subcategory.catalogKey)?.subcategory
+        : undefined
+      const nature = catalogSub?.nature ?? subcategory.nature ?? null
+      const rhythm = catalogSub?.rhythm ?? subcategory.rhythm ?? null
+      const attributes: string[] = []
+      if (nature) attributes.push(NATURE_WORDS[nature])
+      if (rhythm) attributes.push(RHYTHM_WORDS[rhythm])
+      const description = catalogSub?.description ?? null
+      lines.push(
+        `  . ${subcategory.name}` +
+          (attributes.length > 0 ? ` [${attributes.join(', ')}]` : '') +
+          (description ? ` : ${description}` : '')
+      )
+    }
+  }
+  return lines.join('\n')
 }

@@ -11,6 +11,11 @@ import { CategoriesService } from '../categories/categories.service'
 import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { AccountsService } from '../accounts/accounts.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
+import {
+  filingCategories,
+  isFilingKind,
+} from '../ai-suggestions/transaction-categorizer'
+import type { CategorizableTransaction } from '../ai-suggestions/transaction-categorizer'
 import { TransactionSource } from '../generated/prisma'
 import type { Prisma, Transaction, TransactionType } from '../generated/prisma'
 import {
@@ -36,6 +41,12 @@ import type {
  * Which transactions a bulk action applies to: the ids the user ticked, or the
  * filter the list was showing plus the count they were shown.
  */
+/** What a row is when no category says otherwise: its sign. */
+function typeBySign(amount: { toNumber(): number } | number): TransactionType {
+  const value = typeof amount === 'number' ? amount : amount.toNumber()
+  return value < 0 ? 'EXPENSE' : 'INCOME'
+}
+
 export type BulkSelection =
   { ids: string[] } | { filters: TransactionFilters; expectedCount: number }
 
@@ -747,33 +758,60 @@ export class TransactionsService {
     }
   }
 
+  /**
+   * Update a transaction. The type follows the category: filing a row under
+   * a transfer category is what turns it into a transfer, and filing it back
+   * under an expense or income category (or unfiling it) gives it the type
+   * its sign says. That is the only way a row ever changes type.
+   */
   async update(
     id: string,
     userId: string,
     data: {
       note?: string
-      categoryId?: string
+      /** Null sends the transaction back to "à classer". */
+      categoryId?: string | null
       subcategoryId?: string | null
       isPointed?: boolean
     }
   ): Promise<Transaction> {
-    await this.findOne(id, userId) // Verify ownership
+    const current = await this.findOne(id, userId) // Verify ownership
 
     // Build update data, handling subcategoryId explicitly
     const updateData: {
       note?: string
-      categoryId?: string
+      categoryId?: string | null
       subcategoryId?: string | null
       subcategory?: string | null
       isPointed?: boolean
+      type?: TransactionType
     } = {}
 
     if (data.note !== undefined) updateData.note = data.note
-    if (data.categoryId !== undefined) updateData.categoryId = data.categoryId
     if (data.isPointed !== undefined) updateData.isPointed = data.isPointed
 
+    if (data.categoryId === null) {
+      updateData.categoryId = null
+      updateData.subcategoryId = null
+      updateData.subcategory = null
+      if (current.type === 'TRANSFER') {
+        updateData.type = typeBySign(current.amount)
+      }
+    } else if (data.categoryId !== undefined) {
+      const category = await this.prisma.category.findFirst({
+        where: { id: data.categoryId, userId },
+      })
+      if (!category) {
+        throw new NotFoundException(
+          `Category with ID ${data.categoryId} not found`
+        )
+      }
+      updateData.categoryId = category.id
+      if (category.type !== current.type) updateData.type = category.type
+    }
+
     // Handle subcategoryId - update both the FK and the string field
-    if (data.subcategoryId !== undefined) {
+    if (data.subcategoryId !== undefined && data.categoryId !== null) {
       updateData.subcategoryId = data.subcategoryId
 
       // Also update the subcategory string for backward compatibility
@@ -828,14 +866,17 @@ export class TransactionsService {
   } as const
 
   /**
-   * The historical behaviour: adopt the categories the file names, creating
-   * whatever is missing.
+   * File each transaction under the category the file names, when the user
+   * has it. Categories are the catalogue's and are never created from a
+   * name; a heading the user does not have leaves the transaction unfiled.
+   * Subcategories are still adopted from the file, inside a category the
+   * user owns, with that category's default attributes.
    */
   private async filingFromFile(
     userId: string,
     transactions: CreateTransactionDto[]
   ): Promise<(index: number) => ImportFiling> {
-    const { categories } = await this.categoriesService.findOrCreateMany(
+    const categories = await this.categoriesService.findManyByName(
       userId,
       transactions.map(tx => ({ name: tx.category, type: tx.type }))
     )
@@ -845,6 +886,7 @@ export class TransactionsService {
       userId,
       transactions
         .filter(tx => tx.subcategory && tx.subcategory.trim())
+        .filter(tx => categoryByName.has(tx.category))
         .map(tx => ({
           categoryId: categoryByName.get(tx.category)!.id,
           name: tx.subcategory!,
@@ -854,13 +896,13 @@ export class TransactionsService {
       subcategories.map(s => [`${s.categoryId}|${s.name}`, s])
     )
 
-    // Fire-and-forget: whatever was just created has no icon yet.
-    const catsWithoutIcons = categories.filter(c => !c.icon)
+    // Fire-and-forget: a subcategory just adopted from the file has no icon
+    // yet. Categories never do without one any more.
     const subsWithoutIcons = subcategories.filter(s => !s.icon)
-    if (catsWithoutIcons.length > 0 || subsWithoutIcons.length > 0) {
+    if (subsWithoutIcons.length > 0) {
       void this.aiSuggestionsService.generateAndSaveIcons(
         userId,
-        catsWithoutIcons.map(c => ({ id: c.id, name: c.name })),
+        [],
         subsWithoutIcons.map(s => ({ id: s.id, name: s.name }))
       )
     }
@@ -896,11 +938,18 @@ export class TransactionsService {
     const [categories, subcategories] = await Promise.all([
       this.prisma.category.findMany({
         where: { userId },
-        select: { id: true, name: true, type: true },
+        select: { id: true, name: true, type: true, catalogKey: true },
       }),
       this.prisma.subcategory.findMany({
         where: { userId },
-        select: { id: true, name: true, categoryId: true },
+        select: {
+          id: true,
+          name: true,
+          categoryId: true,
+          catalogKey: true,
+          nature: true,
+          rhythm: true,
+        },
       }),
     ])
 
@@ -908,14 +957,22 @@ export class TransactionsService {
       ReturnType<AiSuggestionsService['categorizeTransactions']>
     > = []
     try {
+      // Transfers are never sent to the model: nothing to file, see
+      // `FilingKind`. Their index is simply absent from the assignments.
+      const toFile: CategorizableTransaction[] = []
+      transactions.forEach((tx, index) => {
+        if (isFilingKind(tx.type)) {
+          toFile.push({
+            index,
+            description: tx.description,
+            amount: tx.amount,
+            type: tx.type,
+          })
+        }
+      })
       assignments = await this.aiSuggestionsService.categorizeTransactions(
-        transactions.map((tx, index) => ({
-          index,
-          description: tx.description,
-          amount: tx.amount,
-          type: tx.type,
-        })),
-        categories,
+        toFile,
+        filingCategories(categories),
         subcategories
       )
     } catch (error) {
@@ -964,6 +1021,7 @@ export class TransactionsService {
       subcategoryId?: string | null
       subcategory?: string | null
       isPointed?: boolean
+      type?: TransactionType
     } = {}
 
     if (data.isPointed !== undefined) updateData.isPointed = data.isPointed
@@ -978,6 +1036,8 @@ export class TransactionsService {
         )
       }
       updateData.categoryId = data.categoryId
+      // The type follows the category, for the whole batch at once.
+      updateData.type = category.type
 
       if (data.subcategoryId) {
         // Scoped to the target category, so a subcategory belonging to another

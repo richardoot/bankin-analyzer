@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { SupabaseService } from '../auth/supabase.service'
+import { CategoryCatalogService } from '../categories/category-catalog.service'
 import type { CreateUserDto } from './dto'
 import { Prisma } from '../generated/prisma'
 import type { User } from '../generated/prisma'
@@ -9,7 +10,8 @@ import type { User } from '../generated/prisma'
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly supabaseService: SupabaseService
+    private readonly supabaseService: SupabaseService,
+    private readonly categoryCatalog: CategoryCatalogService
   ) {}
 
   /**
@@ -35,13 +37,23 @@ export class UsersService {
     })
   }
 
+  /**
+   * A user row, and the catalogue with it: a brand-new user must be able to
+   * file their first transaction without ever creating a category. Two
+   * steps rather than one transaction, on purpose — the row must exist
+   * before the concurrent boot requests (see below) can find it, and a
+   * catalogue left half-provisioned by a crash is repaired by the next
+   * `ensureCatalog`, which is idempotent.
+   */
   async create(createUserDto: CreateUserDto): Promise<User> {
-    return this.prisma.user.create({
+    const user = await this.prisma.user.create({
       data: {
         supabaseId: createUserDto.supabaseId,
         email: createUserDto.email,
       },
     })
+    await this.categoryCatalog.ensureCatalog(user.id)
+    return user
   }
 
   /**

@@ -8,12 +8,13 @@ vi.mock('@/lib/api', () => ({
   api: {
     getCategories: vi.fn(),
     getSubcategories: vi.fn(),
-    createCategory: vi.fn(),
     updateCategory: vi.fn(),
     createSubcategory: vi.fn(),
+    deleteSubcategory: vi.fn(),
     generateCategoryIcons: vi.fn(),
     getCategoryDeletionSummary: vi.fn(),
     deleteCategory: vi.fn(),
+    getLegacyCategories: vi.fn(),
   },
 }))
 
@@ -45,29 +46,77 @@ import { nth } from '@/test/nth'
 
 enableAutoUnmount(afterEach)
 
+/** A catalogue expense category, locked, with the defaults of its "Autre". */
 const foodCategory: CategoryDto = {
   id: 'cat-food',
   name: 'Alimentation',
   type: 'EXPENSE',
   icon: '🍽️',
-  isExcludedFromBudget: false,
+  catalogKey: 'food',
+  isLocked: true,
+  defaultNature: 'ESSENTIAL',
+  defaultRhythm: 'VARIABLE',
   createdAt: '2026-01-01T00:00:00Z',
 }
 
 const salaryCategory: CategoryDto = {
   id: 'cat-salary',
-  name: 'Salaire',
+  name: "Revenus d'activité",
   type: 'INCOME',
   icon: null,
-  isExcludedFromBudget: false,
+  catalogKey: 'work-income',
+  isLocked: true,
+  defaultNature: null,
+  defaultRhythm: null,
+  createdAt: '2026-01-01T00:00:00Z',
+}
+
+const savingsCategory: CategoryDto = {
+  id: 'cat-savings',
+  name: 'Épargne de précaution',
+  type: 'TRANSFER' as 'EXPENSE',
+  icon: '🛟',
+  catalogKey: 'emergency-savings',
+  isLocked: true,
+  defaultNature: null,
+  defaultRhythm: null,
+  createdAt: '2026-01-01T00:00:00Z',
+}
+
+/** From before the catalogue: no key, still renamable and deletable. */
+const legacyCategory: CategoryDto = {
+  id: 'cat-abos',
+  name: 'Abonnements',
+  type: 'EXPENSE',
+  icon: '📱',
+  catalogKey: null,
+  isLocked: false,
+  defaultNature: null,
+  defaultRhythm: null,
   createdAt: '2026-01-01T00:00:00Z',
 }
 
 const groceriesSub: SubcategoryDto = {
   id: 'sub-1',
   categoryId: 'cat-food',
-  name: 'Courses',
+  name: 'Supermarché',
   icon: '🛒',
+  catalogKey: 'food.supermarket',
+  isLocked: true,
+  nature: 'ESSENTIAL',
+  rhythm: 'VARIABLE',
+  createdAt: '2026-01-01T00:00:00Z',
+}
+
+const customSub: SubcategoryDto = {
+  id: 'sub-custom',
+  categoryId: 'cat-food',
+  name: 'Traiteur',
+  icon: null,
+  catalogKey: null,
+  isLocked: false,
+  nature: 'PLEASURE',
+  rhythm: 'VARIABLE',
   createdAt: '2026-01-01T00:00:00Z',
 }
 
@@ -85,7 +134,12 @@ async function mountPage(options?: {
   )
 
   const wrapper = mount(CategoriesSettingsPage, {
-    global: { stubs: { Teleport: true } },
+    global: {
+      stubs: {
+        Teleport: true,
+        RouterLink: { template: '<a><slot /></a>' },
+      },
+    },
   })
   await flushPromises()
   return wrapper
@@ -110,12 +164,52 @@ beforeEach(() => {
 })
 
 describe('CategoriesSettingsPage', () => {
-  it('groups categories by type', async () => {
+  it('groups the catalogue by kind, transfers included', async () => {
+    const wrapper = await mountPage({
+      categories: [foodCategory, salaryCategory, savingsCategory],
+    })
+
+    expect(wrapper.text()).toContain('Dépenses')
+    expect(wrapper.text()).toContain('Revenus')
+    expect(wrapper.text()).toContain('Transferts')
+    expect(wrapper.findAll('[data-testid="category-row"]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-testid="category-lock"]')).toHaveLength(3)
+    expect(
+      wrapper.find('[data-testid="legacy-migration-banner"]').exists()
+    ).toBe(false)
+  })
+
+  it('offers no way to create a category', async () => {
     const wrapper = await mountPage()
 
-    expect(wrapper.text()).toContain('Catégories de dépenses')
-    expect(wrapper.text()).toContain('Catégories de revenus')
-    expect(wrapper.findAll('[data-testid="category-row"]')).toHaveLength(2)
+    expect(wrapper.find('[data-testid="open-create-category"]').exists()).toBe(
+      false
+    )
+    expect(wrapper.text()).not.toContain('Nouvelle catégorie')
+  })
+
+  it('puts the legacy categories first, with the banner and the assistant link', async () => {
+    const wrapper = await mountPage({
+      categories: [foodCategory, legacyCategory],
+    })
+
+    expect(
+      wrapper.find('[data-testid="legacy-migration-banner"]').exists()
+    ).toBe(true)
+    const sections = wrapper.findAll('[data-testid^="category-section-"]')
+    expect(nth(sections, 0).attributes('data-testid')).toBe(
+      'category-section-legacy'
+    )
+    const rows = wrapper.findAll('[data-testid="category-row"]')
+    expect(nth(rows, 0).text()).toContain('Abonnements')
+    expect(nth(rows, 0).find('[data-testid="category-legacy"]').exists()).toBe(
+      true
+    )
+
+    await expandRow(wrapper, 0)
+    expect(
+      nth(rows, 0).find('[data-testid="migrate-category-cat-abos"]').exists()
+    ).toBe(true)
   })
 
   it('saves the dashboard visibility immediately, with no global save button', async () => {
@@ -130,81 +224,150 @@ describe('CategoriesSettingsPage', () => {
     expect(wrapper.text()).not.toContain('Enregistrer')
   })
 
-  it('excludes a category from the budget through the second switch', async () => {
-    const wrapper = await mountPage()
-    vi.mocked(api.updateCategory).mockResolvedValue({
-      ...foodCategory,
-      isExcludedFromBudget: true,
-    })
-
-    const switches = wrapper.findAll('button[role="switch"]')
-    await nth(switches, 1).trigger('click')
-    await flushPromises()
-
-    expect(api.updateCategory).toHaveBeenCalledWith('cat-food', {
-      isExcludedFromBudget: true,
-    })
-  })
-
-  it('filters the list by search term', async () => {
+  it('filters the list by search term, reaching subcategory names', async () => {
     const wrapper = await mountPage()
 
-    await wrapper.find('input[type="text"]').setValue('salaire')
+    await wrapper.find('input[type="text"]').setValue('revenus')
+    expect(wrapper.findAll('[data-testid="category-row"]')).toHaveLength(1)
 
+    // "supermarche" is a subcategory of Alimentation, not a category name.
+    await wrapper.find('input[type="text"]').setValue('supermarche')
     const rows = wrapper.findAll('[data-testid="category-row"]')
     expect(rows).toHaveLength(1)
-    expect(rows[0]?.text()).toContain('Salaire')
+    expect(rows[0]?.text()).toContain('Alimentation')
   })
 
-  it('lists the subcategories of an expanded category and adds one', async () => {
+  it('shows a catalogue row locked: attributes, no rename form', async () => {
+    const wrapper = await mountPage()
+
+    await expandRow(wrapper, 0)
+    const row = nth(wrapper.findAll('[data-testid="category-row"]'), 0)
+    expect(row.find('[data-testid="catalog-note"]').text()).toContain(
+      'Essentiel'
+    )
+    expect(row.find('[data-testid="rename-input"]').exists()).toBe(false)
+    expect(row.find('[data-testid="delete-category-cat-food"]').exists()).toBe(
+      false
+    )
+    // The catalogue subcategory carries its attributes and no delete button.
+    const chip = row.find('[data-testid="subcategory-chip"]')
+    expect(chip.text()).toContain('Supermarché')
+    expect(chip.text()).toContain('Variable')
+    expect(chip.find('[data-testid^="delete-subcategory-"]').exists()).toBe(
+      false
+    )
+  })
+
+  it("adds a subcategory with the parent's defaults", async () => {
     const wrapper = await mountPage()
     vi.mocked(api.createSubcategory).mockResolvedValue({
+      ...customSub,
       id: 'sub-2',
-      categoryId: 'cat-food',
       name: 'Restaurant',
-      icon: null,
-      createdAt: '2026-01-01T00:00:00Z',
     })
 
     await expandRow(wrapper, 0)
-    expect(wrapper.text()).toContain('Courses')
-
-    // The panel opens with the rename form, so the subcategory one comes second.
     const row = nth(wrapper.findAll('[data-testid="category-row"]'), 0)
-    await nth(row.findAll('input[type="text"]'), 1).setValue('Restaurant')
-    await nth(row.findAll('form'), 1).trigger('submit')
+    await row.find('input[type="text"]').setValue('Restaurant')
+    await row.find('form').trigger('submit')
     await flushPromises()
 
     expect(api.createSubcategory).toHaveBeenCalledWith({
       categoryId: 'cat-food',
       name: 'Restaurant',
+      nature: 'ESSENTIAL',
+      rhythm: 'VARIABLE',
     })
     expect(wrapper.text()).toContain('Restaurant')
   })
 
-  it('renames a category', async () => {
+  it('lets the user pick the attributes of a new subcategory', async () => {
     const wrapper = await mountPage()
-    vi.mocked(api.updateCategory).mockResolvedValue({
-      ...foodCategory,
-      name: 'Courses',
+    vi.mocked(api.createSubcategory).mockResolvedValue({
+      ...customSub,
+      id: 'sub-2',
+      name: 'Cours',
     })
 
     await expandRow(wrapper, 0)
     const row = nth(wrapper.findAll('[data-testid="category-row"]'), 0)
-    await row.find('[data-testid="rename-input"]').setValue('Courses')
+    const selects = row.findAll('select')
+    await nth(selects, 0).setValue('PLEASURE')
+    await nth(selects, 1).setValue('COMMITTED')
+    await row.find('input[type="text"]').setValue('Cours')
+    await row.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(api.createSubcategory).toHaveBeenCalledWith({
+      categoryId: 'cat-food',
+      name: 'Cours',
+      nature: 'PLEASURE',
+      rhythm: 'COMMITTED',
+    })
+  })
+
+  it('offers no subcategory under a transfer category', async () => {
+    const wrapper = await mountPage({
+      categories: [savingsCategory],
+      subcategories: [],
+    })
+
+    await expandRow(wrapper, 0)
+    const row = nth(wrapper.findAll('[data-testid="category-row"]'), 0)
+    expect(row.find('form').exists()).toBe(false)
+    expect(row.text()).toContain('transfert')
+  })
+
+  it('deletes a custom subcategory after confirmation, and says where the rows went', async () => {
+    const wrapper = await mountPage({
+      subcategories: [groceriesSub, customSub],
+    })
+    vi.mocked(api.deleteSubcategory).mockResolvedValue({
+      refiledTransactions: 3,
+      fallbackSubcategoryId: 'sub-other',
+      fallbackSubcategoryName: 'Autre',
+    })
+
+    await expandRow(wrapper, 0)
+    await wrapper
+      .get('[data-testid="delete-subcategory-sub-custom"]')
+      .trigger('click')
+    await flushPromises()
+
+    const confirm = wrapper
+      .findAll('button')
+      .find(b => b.text() === 'Supprimer')
+    expect(confirm).toBeDefined()
+    await confirm!.trigger('click')
+    await flushPromises()
+
+    expect(api.deleteSubcategory).toHaveBeenCalledWith('sub-custom')
+    expect(wrapper.text()).not.toContain('Traiteur')
+    expect(toastSuccess).toHaveBeenCalledWith(expect.stringContaining('Autre'))
+  })
+
+  it('renames a legacy category', async () => {
+    const wrapper = await mountPage({ categories: [legacyCategory] })
+    vi.mocked(api.updateCategory).mockResolvedValue({
+      ...legacyCategory,
+      name: 'Abos',
+    })
+
+    await expandRow(wrapper, 0)
+    const row = nth(wrapper.findAll('[data-testid="category-row"]'), 0)
+    await row.find('[data-testid="rename-input"]').setValue('Abos')
     await nth(row.findAll('form'), 0).trigger('submit')
     await flushPromises()
 
-    expect(api.updateCategory).toHaveBeenCalledWith('cat-food', {
-      name: 'Courses',
+    expect(api.updateCategory).toHaveBeenCalledWith('cat-abos', {
+      name: 'Abos',
     })
-    // Nothing to replay: the hidden lists key off the id, which never moved.
-    expect(wrapper.text()).toContain('Courses')
+    expect(wrapper.text()).toContain('Abos')
     expect(toastSuccess).toHaveBeenCalled()
   })
 
   it('shows the server message when the new name is already taken', async () => {
-    const wrapper = await mountPage()
+    const wrapper = await mountPage({ categories: [legacyCategory] })
     vi.mocked(api.updateCategory).mockRejectedValue(
       new Error('A category named "Salaire" already exists for this type.')
     )
@@ -218,47 +381,22 @@ describe('CategoriesSettingsPage', () => {
     expect(row.find('[data-testid="rename-error"]').text()).toContain(
       'already exists'
     )
-    // The row keeps its old name until the rename actually goes through.
-    expect(row.text()).toContain('Alimentation')
+    expect(row.text()).toContain('Abonnements')
   })
 
-  it('creates a category from the modal', async () => {
-    const wrapper = await mountPage()
-    vi.mocked(api.createCategory).mockResolvedValue({
-      id: 'cat-new',
-      name: 'Loisirs',
-      type: 'EXPENSE',
-      icon: null,
-      isExcludedFromBudget: false,
-      createdAt: '2026-01-01T00:00:00Z',
-    })
-
-    await wrapper.find('[data-testid="open-create-category"]').trigger('click')
-    await wrapper.find('#new-category-name').setValue('Loisirs')
-    // The modal form is the last one on the page.
-    await wrapper.findAll('form').at(-1)?.trigger('submit')
-    await flushPromises()
-
-    expect(api.createCategory).toHaveBeenCalledWith({
-      name: 'Loisirs',
-      type: 'EXPENSE',
-    })
-    expect(wrapper.text()).toContain('Loisirs')
-  })
-
-  it('counts the categories missing an icon on the generate button', async () => {
+  it('counts what is missing an icon on the generate button', async () => {
     const wrapper = await mountPage()
 
     const button = wrapper.find('[data-testid="generate-icons"]')
-    // Only "Salaire" has no icon.
+    // Only "Revenus d'activité" has no icon.
     expect(button.text()).toContain('(1)')
     expect(button.attributes('disabled')).toBeUndefined()
   })
 
-  it('disables icon generation when every category already has one', async () => {
+  it('disables icon generation when everything already has one', async () => {
     const wrapper = await mountPage({
       categories: [foodCategory],
-      subcategories: [],
+      subcategories: [groceriesSub],
     })
 
     expect(
@@ -266,11 +404,11 @@ describe('CategoriesSettingsPage', () => {
     ).toBeDefined()
   })
 
-  it('deletes a category through the confirmation modal', async () => {
-    const wrapper = await mountPage()
+  it('deletes a legacy category through the confirmation modal', async () => {
+    const wrapper = await mountPage({ categories: [legacyCategory] })
     vi.mocked(api.getCategoryDeletionSummary).mockResolvedValue({
-      categoryId: 'cat-food',
-      categoryName: 'Alimentation',
+      categoryId: 'cat-abos',
+      categoryName: 'Abonnements',
       type: 'EXPENSE',
       transactionCount: 0,
       firstTransactionDate: null,
@@ -280,7 +418,6 @@ describe('CategoriesSettingsPage', () => {
       budgetPlanEntries: [],
       reimbursementCount: 0,
       isGloballyHidden: false,
-      isExcludedFromBudget: false,
     })
     vi.mocked(api.deleteCategory).mockResolvedValue({
       uncategorizedTransactions: 0,
@@ -290,7 +427,7 @@ describe('CategoriesSettingsPage', () => {
 
     await expandRow(wrapper, 0)
     await wrapper
-      .get('[data-testid="delete-category-cat-food"]')
+      .get('[data-testid="delete-category-cat-abos"]')
       .trigger('click')
     await flushPromises()
 
@@ -299,42 +436,9 @@ describe('CategoriesSettingsPage', () => {
       .trigger('click')
     await flushPromises()
 
-    expect(api.deleteCategory).toHaveBeenCalledWith('cat-food')
-    // The row is gone and the store no longer carries the dangling id.
-    expect(wrapper.text()).not.toContain('Alimentation')
-    expect(forgetCategory).toHaveBeenCalledWith('cat-food', 'EXPENSE')
+    expect(api.deleteCategory).toHaveBeenCalledWith('cat-abos')
+    expect(wrapper.text()).not.toContain('Abonnements')
+    expect(forgetCategory).toHaveBeenCalledWith('cat-abos', 'EXPENSE')
     expect(toastSuccess).toHaveBeenCalled()
-  })
-
-  it('keeps the row when the deletion fails', async () => {
-    const wrapper = await mountPage()
-    vi.mocked(api.getCategoryDeletionSummary).mockResolvedValue({
-      categoryId: 'cat-food',
-      categoryName: 'Alimentation',
-      type: 'EXPENSE',
-      transactionCount: 0,
-      firstTransactionDate: null,
-      lastTransactionDate: null,
-      subcategoryNames: [],
-      labelledTransactionCount: 0,
-      budgetPlanEntries: [],
-      reimbursementCount: 0,
-      isGloballyHidden: false,
-      isExcludedFromBudget: false,
-    })
-    vi.mocked(api.deleteCategory).mockRejectedValue(new Error('Boom'))
-
-    await expandRow(wrapper, 0)
-    await wrapper
-      .get('[data-testid="delete-category-cat-food"]')
-      .trigger('click')
-    await flushPromises()
-    await wrapper
-      .get('[data-testid="delete-category-confirm"]')
-      .trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('Alimentation')
-    expect(forgetCategory).not.toHaveBeenCalled()
   })
 })

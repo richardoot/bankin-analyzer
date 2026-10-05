@@ -138,14 +138,32 @@ enum TransactionSource {
   @@schema("app")
 }
 
+/// A heading the user files transactions under. Rows are per user, but their
+/// vocabulary is not theirs to invent any more: the catalogue
+/// (`src/categories/catalog.data.json`) is materialised for each user, and a row
+/// carrying a `catalogKey` is one of its entries — locked against renaming,
+/// re-iconing and deletion. A row without one predates the catalogue and is
+/// waiting to be migrated into it.
+///
+/// A category names a *purpose* and nothing else. Whether spending is
+/// constrained or chosen, whether it keeps running while the user is away,
+/// are attributes of the subcategory; the category only denormalises the
+/// defaults of its "Autre" entry for transactions filed at the category alone.
 model Category {
-  id                   String          @id @default(uuid())
-  userId               String          @map("user_id")
-  name                 String
-  type                 TransactionType
-  icon                 String?
-  isExcludedFromBudget Boolean         @default(false) @map("is_excluded_from_budget")
-  createdAt            DateTime        @default(now()) @map("created_at")
+  id         String          @id @default(uuid())
+  userId     String          @map("user_id")
+  name       String
+  type       TransactionType
+  icon       String?
+  catalogKey String?         @map("catalog_key")
+
+  /// The attributes of this category's "Autre" subcategory, copied here so a
+  /// transaction filed at the category alone still has a nature and a rhythm.
+  /// Null for income and transfer categories, which carry neither.
+  defaultNature CategoryNature? @map("default_nature")
+  defaultRhythm CategoryRhythm? @map("default_rhythm")
+
+  createdAt DateTime @default(now()) @map("created_at")
 
   user                        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions                Transaction[]
@@ -153,16 +171,32 @@ model Category {
   budgetPlanEntries           BudgetPlanEntry[]
 
   @@unique([userId, name, type])
+  @@unique([userId, catalogKey])
   @@map("categories")
   @@schema("app")
 }
 
+/// The level every calculation works at. A subcategory of the catalogue
+/// carries its `catalogKey` and the attributes the catalogue gave it; one the
+/// user added inside a catalogue category carries no key and the attributes
+/// the user chose. Both are legitimate; only categories are imposed.
 model Subcategory {
   id         String   @id @default(uuid())
   userId     String   @map("user_id")
   categoryId String   @map("category_id")
   name       String
   icon       String?
+  catalogKey String?  @map("catalog_key")
+
+  /// Constrained (ESSENTIAL) or chosen (PLEASURE). Null on income and
+  /// transfer subcategories, and on legacy rows not yet migrated.
+  nature CategoryNature?
+  /// Keeps running on its own (COMMITTED: rent, insurance, a subscription)
+  /// or depends on what the user does (VARIABLE: groceries, fuel). Only
+  /// VARIABLE spending is suspended while the user is away, so only it is
+  /// deducted from an event's everyday baseline.
+  rhythm CategoryRhythm?
+
   createdAt  DateTime @default(now()) @map("created_at")
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -170,15 +204,37 @@ model Subcategory {
   transactions Transaction[]
 
   @@unique([categoryId, name])
+  @@unique([userId, catalogKey])
   @@index([userId])
   @@index([categoryId])
   @@map("subcategories")
   @@schema("app")
 }
 
+/// Which way money moves — and, for TRANSFER, that it does not really move
+/// at all: savings, investments, a top-up of the joint account, a mistaken
+/// debit and its refund. Neither spending nor earning, so neutral in every
+/// total; visible in balances.
 enum TransactionType {
   EXPENSE
   INCOME
+  TRANSFER
+
+  @@schema("app")
+}
+
+/// Constrained or chosen. The "needs / wants" reading of a subcategory.
+enum CategoryNature {
+  ESSENTIAL
+  PLEASURE
+
+  @@schema("app")
+}
+
+/// Runs on its own, or follows what the user does.
+enum CategoryRhythm {
+  COMMITTED
+  VARIABLE
 
   @@schema("app")
 }
@@ -286,6 +342,13 @@ model FilterPreferences {
   /// the per-user preferences live, `isPanelExpanded` included, none of which
   /// is a filter either.
   importCategoriesFromFile Boolean @default(true) @map("import_categories_from_file")
+
+  /// Whether the dashboard and the budget read a debt still owed as money
+  /// that will come back, and take it off the spending it hangs off. On by
+  /// default: a reimbursement request is an explicit statement that the money
+  /// returns, and a loan to a relative is not consumption. Off, the two
+  /// screens show the gross spending until the debt is actually settled.
+  deductPendingReimbursements Boolean @default(true) @map("deduct_pending_reimbursements")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

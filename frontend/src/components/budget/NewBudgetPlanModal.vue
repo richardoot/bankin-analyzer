@@ -70,9 +70,13 @@
   const copyFromPlanId = ref<string | null>(null)
   const previewEntries = ref<Map<string, number>>(new Map())
   const previewCategories = ref<CategoryAverageDto[]>([])
-  // Reimbursement toggles for the averages preview (mirror BudgetPage defaults)
+  // Reimbursement toggles for the averages preview. The debt-still-owed one
+  // starts from the preference shared with the dashboard and the budget; the
+  // choice made here is for this plan's baseline only.
   const deductReimbursements = ref(true)
-  const deductPendingReimbursements = ref(false)
+  const deductPendingReimbursements = ref(
+    filtersStore.deductPendingReimbursements ?? false
+  )
   /**
    * Monthly income average over the lookback period — used as the reference
    * for "Épargne prévue" in step 2. We fetch this independently from the
@@ -395,9 +399,7 @@
     if (allExpenseCategories.value.length > 0) return
     try {
       const all = await api.getCategories()
-      allExpenseCategories.value = all.filter(
-        c => c.type === 'EXPENSE' && !c.isExcludedFromBudget
-      )
+      allExpenseCategories.value = all.filter(c => c.type === 'EXPENSE')
     } catch (err) {
       error.value =
         err instanceof Error

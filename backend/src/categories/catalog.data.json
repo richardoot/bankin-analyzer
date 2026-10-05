@@ -1,0 +1,760 @@
+{
+  "version": 3,
+  "categories": [
+    {
+      "key": "housing",
+      "type": "EXPENSE",
+      "label": "Logement",
+      "icon": "🏠",
+      "description": "Se loger et faire tourner le foyer : loyer ou crédit, charges, énergie, assurance, entretien, laverie, et les nuits passées ailleurs que chez soi.",
+      "subcategories": [
+        {
+          "key": "housing.rent",
+          "label": "Loyer ou crédit immobilier",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "housing.charges",
+          "label": "Charges et copropriété",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "housing.energy",
+          "label": "Électricité et gaz",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "housing.water",
+          "label": "Eau",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "housing.insurance",
+          "label": "Assurance habitation",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "housing.maintenance",
+          "label": "Entretien et travaux",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "housing.laundry",
+          "label": "Laverie et pressing",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "housing.lodging",
+          "label": "Hébergement temporaire",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE",
+          "description": "Hôtel, location de vacances, camping : des nuits de logement hors de chez soi."
+        },
+        {
+          "key": "housing.other",
+          "label": "Autre",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        }
+      ]
+    },
+    {
+      "key": "food",
+      "type": "EXPENSE",
+      "label": "Alimentation",
+      "icon": "🛒",
+      "description": "Ce que l'on mange à la maison : courses, commerces de bouche, livraison de courses, compléments alimentaires.",
+      "subcategories": [
+        {
+          "key": "food.supermarket",
+          "label": "Supermarché",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "food.local-shops",
+          "label": "Commerces de bouche et marché",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "food.delivery",
+          "label": "Livraison de courses",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "food.supplements",
+          "label": "Compléments alimentaires",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "food.other",
+          "label": "Autre",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        }
+      ]
+    },
+    {
+      "key": "transport",
+      "type": "EXPENSE",
+      "label": "Transport",
+      "icon": "🚗",
+      "description": "Se déplacer, en voiture ou autrement : carburant, transports en commun, train, avion, péages, stationnement, entretien, assurance, crédit, achat du véhicule.",
+      "subcategories": [
+        {
+          "key": "transport.fuel",
+          "label": "Carburant",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "transport.transit-pass",
+          "label": "Abonnement transports en commun",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "transport.transit-tickets",
+          "label": "Transports en commun ponctuels",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "transport.train",
+          "label": "Train",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "transport.plane",
+          "label": "Avion",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "transport.tolls",
+          "label": "Péage",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "transport.parking",
+          "label": "Stationnement",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "transport.maintenance",
+          "label": "Entretien et réparation",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "transport.insurance",
+          "label": "Assurance auto",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "transport.loan",
+          "label": "Crédit auto",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "transport.taxi",
+          "label": "Taxi et VTC",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "transport.rental",
+          "label": "Location de véhicule",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "transport.vehicle-purchase",
+          "label": "Achat de véhicule",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "transport.other",
+          "label": "Autre",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        }
+      ]
+    },
+    {
+      "key": "health",
+      "type": "EXPENSE",
+      "label": "Santé",
+      "icon": "💊",
+      "description": "Se soigner : médecins, pharmacie, mutuelle, optique et dentaire.",
+      "subcategories": [
+        {
+          "key": "health.doctors",
+          "label": "Médecin et spécialistes",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "health.pharmacy",
+          "label": "Pharmacie",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "health.insurance",
+          "label": "Mutuelle",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "health.optical-dental",
+          "label": "Optique et dentaire",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "health.other",
+          "label": "Autre",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        }
+      ]
+    },
+    {
+      "key": "telecom",
+      "type": "EXPENSE",
+      "label": "Télécom et numérique",
+      "icon": "📱",
+      "description": "Rester connecté : forfait téléphone, box internet, logiciels, applications et services d'IA.",
+      "subcategories": [
+        {
+          "key": "telecom.phone",
+          "label": "Téléphone",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "telecom.internet",
+          "label": "Internet",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "telecom.software",
+          "label": "Logiciels, applications et IA",
+          "nature": "PLEASURE",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "telecom.other",
+          "label": "Autre",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        }
+      ]
+    },
+    {
+      "key": "family",
+      "type": "EXPENSE",
+      "label": "Famille et amis",
+      "icon": "👨‍👩‍👧",
+      "description": "Les proches, à charge ou aidés : enfants, garde, école, pension, aide à un proche, prêt à un proche, animaux.",
+      "subcategories": [
+        {
+          "key": "family.childcare",
+          "label": "Garde d'enfants",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "family.school",
+          "label": "Scolarité et cantine",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "family.kids-activities",
+          "label": "Activités enfants",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "family.alimony",
+          "label": "Pension alimentaire",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "family.relatives",
+          "label": "Aide à un proche",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "family.loan",
+          "label": "Prêt à un proche",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE",
+          "description": "De l'argent prêté à quelqu'un. Créer une demande de remboursement au nom de la personne : le prêt sort aussitôt des dépenses du dashboard et du budget, et apparaît dans « avancé, en attente de retour » ; remboursé, le règlement solde la demande. Abandonner la dette la transforme en dépense : un prêt qu'on ne reverra pas était un don."
+        },
+        {
+          "key": "family.pets",
+          "label": "Animaux",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "family.other",
+          "label": "Autre",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        }
+      ]
+    },
+    {
+      "key": "donations",
+      "type": "EXPENSE",
+      "label": "Dons et solidarité",
+      "icon": "🤝",
+      "description": "Ce que l'on donne sans contrepartie : associations, cagnottes, collectes.",
+      "subcategories": [
+        {
+          "key": "donations.associations",
+          "label": "Dons et associations",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "donations.other",
+          "label": "Autre",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        }
+      ]
+    },
+    {
+      "key": "taxes",
+      "type": "EXPENSE",
+      "label": "Impôts et taxes",
+      "icon": "🧾",
+      "description": "Ce que l'État prélève : impôt sur le revenu, taxe foncière, autres taxes, amendes.",
+      "subcategories": [
+        {
+          "key": "taxes.income-tax",
+          "label": "Impôt sur le revenu",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "taxes.property-tax",
+          "label": "Taxe foncière",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "taxes.other-taxes",
+          "label": "Autres taxes",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "taxes.fines",
+          "label": "Amendes",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "taxes.other",
+          "label": "Autre",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        }
+      ]
+    },
+    {
+      "key": "banking",
+      "type": "EXPENSE",
+      "label": "Banque et crédits",
+      "icon": "🏦",
+      "description": "Le coût de l'argent : frais bancaires, mensualités de crédit à la consommation, retraits d'espèces dont on ne connaît pas l'usage.",
+      "subcategories": [
+        {
+          "key": "banking.fees",
+          "label": "Frais bancaires",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "banking.consumer-loan",
+          "label": "Crédit à la consommation",
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "banking.cash-withdrawal",
+          "label": "Retrait d'espèces",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "banking.other",
+          "label": "Autre",
+          "nature": "ESSENTIAL",
+          "rhythm": "VARIABLE"
+        }
+      ]
+    },
+    {
+      "key": "dining",
+      "type": "EXPENSE",
+      "label": "Restaurants et bars",
+      "icon": "🍽️",
+      "description": "Manger et boire dehors : restaurant, fast-food et livraison de repas, café, bar.",
+      "subcategories": [
+        {
+          "key": "dining.restaurant",
+          "label": "Restaurant",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "dining.fast-food",
+          "label": "Fast-food et livraison",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "dining.cafe-bar",
+          "label": "Café et bar",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "dining.other",
+          "label": "Autre",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        }
+      ]
+    },
+    {
+      "key": "leisure",
+      "type": "EXPENSE",
+      "label": "Loisirs et culture",
+      "icon": "🎉",
+      "description": "Le temps libre : streaming, salle de sport, activités sportives, cours et formation, sorties, concerts et festivals, jeux, livres.",
+      "subcategories": [
+        {
+          "key": "leisure.streaming",
+          "label": "Streaming et médias",
+          "nature": "PLEASURE",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "leisure.gym",
+          "label": "Salle de sport et licences",
+          "nature": "PLEASURE",
+          "rhythm": "COMMITTED"
+        },
+        {
+          "key": "leisure.sports",
+          "label": "Sport et activités ponctuelles",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "leisure.lessons",
+          "label": "Cours, coaching et formation",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "leisure.outings",
+          "label": "Sorties et culture",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE",
+          "description": "Cinéma, musées, expositions, parcs."
+        },
+        {
+          "key": "leisure.shows",
+          "label": "Concerts, festivals et spectacles",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "leisure.hobbies",
+          "label": "Jeux et hobbies",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "leisure.books",
+          "label": "Livres et presse",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "leisure.other",
+          "label": "Autre",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        }
+      ]
+    },
+    {
+      "key": "shopping",
+      "type": "EXPENSE",
+      "label": "Shopping et soins",
+      "icon": "🛍️",
+      "description": "Acheter des choses et prendre soin de soi : vêtements, high-tech, équipement de sport, maison et déco, beauté et coiffeur.",
+      "subcategories": [
+        {
+          "key": "shopping.clothing",
+          "label": "Vêtements",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "shopping.tech",
+          "label": "High-tech",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "shopping.sports-gear",
+          "label": "Sport et équipement de loisir",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "shopping.home",
+          "label": "Maison et déco",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "shopping.beauty",
+          "label": "Beauté et coiffeur",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        },
+        {
+          "key": "shopping.other",
+          "label": "Autre",
+          "nature": "PLEASURE",
+          "rhythm": "VARIABLE"
+        }
+      ]
+    },
+    {
+      "key": "work-income",
+      "type": "INCOME",
+      "label": "Revenus d'activité",
+      "icon": "💼",
+      "description": "Ce que le travail rapporte : salaire, primes, revenus d'indépendant, indemnités et chômage.",
+      "subcategories": [
+        {
+          "key": "work-income.salary",
+          "label": "Salaire"
+        },
+        {
+          "key": "work-income.bonus",
+          "label": "Prime et bonus"
+        },
+        {
+          "key": "work-income.freelance",
+          "label": "Revenus indépendant"
+        },
+        {
+          "key": "work-income.benefits",
+          "label": "Indemnités et chômage"
+        },
+        {
+          "key": "work-income.other",
+          "label": "Autre"
+        }
+      ]
+    },
+    {
+      "key": "allowances",
+      "type": "INCOME",
+      "label": "Allocations et pensions",
+      "icon": "📊",
+      "description": "Ce que la collectivité verse : CAF, retraite, bourses.",
+      "subcategories": [
+        {
+          "key": "allowances.caf",
+          "label": "CAF"
+        },
+        {
+          "key": "allowances.pension",
+          "label": "Retraite"
+        },
+        {
+          "key": "allowances.grants",
+          "label": "Bourses"
+        },
+        {
+          "key": "allowances.other",
+          "label": "Autre"
+        }
+      ]
+    },
+    {
+      "key": "wealth-income",
+      "type": "INCOME",
+      "label": "Revenus du patrimoine",
+      "icon": "📈",
+      "description": "Ce que le capital rapporte : loyers perçus, intérêts et dividendes, plus-values.",
+      "subcategories": [
+        {
+          "key": "wealth-income.rent",
+          "label": "Loyers perçus"
+        },
+        {
+          "key": "wealth-income.interest",
+          "label": "Intérêts et dividendes"
+        },
+        {
+          "key": "wealth-income.gains",
+          "label": "Plus-values"
+        },
+        {
+          "key": "wealth-income.other",
+          "label": "Autre"
+        }
+      ]
+    },
+    {
+      "key": "refunds",
+      "type": "INCOME",
+      "label": "Remboursements",
+      "icon": "🔄",
+      "description": "De l'argent qui revient : Sécu et mutuelle, un proche qui rembourse sa part, un avoir, un trop-perçu d'impôt, des frais professionnels.",
+      "subcategories": [
+        {
+          "key": "refunds.health",
+          "label": "Sécu et mutuelle"
+        },
+        {
+          "key": "refunds.person",
+          "label": "Remboursement d'un proche"
+        },
+        {
+          "key": "refunds.merchant",
+          "label": "Avoir commerçant"
+        },
+        {
+          "key": "refunds.tax",
+          "label": "Remboursement d'impôt"
+        },
+        {
+          "key": "refunds.work-expenses",
+          "label": "Frais pro remboursés"
+        },
+        {
+          "key": "refunds.other",
+          "label": "Autre"
+        }
+      ]
+    },
+    {
+      "key": "occasional-income",
+      "type": "INCOME",
+      "label": "Ventes et occasionnel",
+      "icon": "💰",
+      "description": "Les rentrées sans régularité : ventes d'occasion, cadeaux reçus, gains.",
+      "subcategories": [
+        {
+          "key": "occasional-income.sales",
+          "label": "Vente d'occasion"
+        },
+        {
+          "key": "occasional-income.gifts",
+          "label": "Cadeaux reçus"
+        },
+        {
+          "key": "occasional-income.winnings",
+          "label": "Gains"
+        },
+        {
+          "key": "occasional-income.other",
+          "label": "Autre"
+        }
+      ]
+    },
+    {
+      "key": "emergency-savings",
+      "type": "TRANSFER",
+      "label": "Épargne de précaution",
+      "icon": "🛟",
+      "description": "Le fonds d'urgence, alimenté ou ponctionné. Ni dépense ni revenu.",
+      "subcategories": []
+    },
+    {
+      "key": "project-savings",
+      "type": "TRANSFER",
+      "label": "Épargne projet",
+      "icon": "🎯",
+      "description": "La réserve pour les projets à enveloppe : alimentée chaque mois, dépensée quand le projet arrive.",
+      "subcategories": []
+    },
+    {
+      "key": "investment",
+      "type": "TRANSFER",
+      "label": "Investissement",
+      "icon": "💹",
+      "description": "Versements vers et retraits depuis les placements : PEA, assurance vie, crypto.",
+      "subcategories": []
+    },
+    {
+      "key": "internal-transfer",
+      "type": "TRANSFER",
+      "label": "Virement interne",
+      "icon": "🔁",
+      "description": "Entre deux comptes de l'utilisateur. Neutre : l'argent change de poche, pas de propriétaire.",
+      "subcategories": []
+    },
+    {
+      "key": "joint-contribution",
+      "type": "TRANSFER",
+      "label": "Apport au compte joint",
+      "icon": "👥",
+      "description": "Ce que chacun verse sur le compte joint. Neutre, mais dit qui a alimenté le compte de combien.",
+      "subcategories": [
+        {
+          "key": "joint-contribution.mine",
+          "label": "Mon apport"
+        },
+        {
+          "key": "joint-contribution.partner",
+          "label": "Apport du conjoint"
+        }
+      ]
+    },
+    {
+      "key": "adjustment",
+      "type": "TRANSFER",
+      "label": "Régularisation",
+      "icon": "↩️",
+      "description": "Un aller-retour sans consommation : prélèvement à tort et son remboursement, double débit annulé, achat fait avec le mauvais compte et le virement qui l'a couvert. Les deux jambes se neutralisent. Aussi le remboursement d'une dépense antérieure aux données : la dépense n'a jamais compté, le revenu ne compte pas non plus.",
+      "subcategories": []
+    }
+  ]
+}

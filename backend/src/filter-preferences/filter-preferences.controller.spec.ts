@@ -25,6 +25,8 @@ describe('FilterPreferencesController', () => {
     globalHiddenExpenseCategoryIds: ['cat-epargne'],
     globalHiddenIncomeCategoryIds: ['cat-cadeaux'],
     isPanelExpanded: true,
+    importCategoriesFromFile: true,
+    deductPendingReimbursements: true,
     createdAt: new Date(),
     updatedAt: new Date(),
   }
@@ -71,6 +73,8 @@ describe('FilterPreferencesController', () => {
         globalHiddenIncomeCategoryIds:
           mockFilterPreferences.globalHiddenIncomeCategoryIds,
         isPanelExpanded: mockFilterPreferences.isPanelExpanded,
+        importCategoriesFromFile: true,
+        deductPendingReimbursements: true,
       })
       expect(service.findByUser).toHaveBeenCalledWith(mockUser.id)
     })
@@ -87,6 +91,7 @@ describe('FilterPreferencesController', () => {
         globalHiddenIncomeCategoryIds: [],
         isPanelExpanded: true,
         importCategoriesFromFile: true,
+        deductPendingReimbursements: true,
       })
       expect(service.findByUser).toHaveBeenCalledWith(mockUser.id)
     })
@@ -135,6 +140,8 @@ describe('FilterPreferencesController', () => {
         globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
         globalHiddenIncomeCategoryIds: [],
         isPanelExpanded: dto.isPanelExpanded,
+        importCategoriesFromFile: true,
+        deductPendingReimbursements: true,
       })
       expect(service.upsert).toHaveBeenCalledWith(mockUser.id, dto)
     })

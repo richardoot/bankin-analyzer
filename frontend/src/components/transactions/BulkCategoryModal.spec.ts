@@ -11,7 +11,8 @@ const categories: CategoryDto[] = [
     name: 'Alimentation',
     type: 'EXPENSE',
     icon: null,
-    isExcludedFromBudget: false,
+    catalogKey: 'food',
+    isLocked: true,
     createdAt: '2026-01-01T00:00:00.000Z',
   },
   {
@@ -19,7 +20,8 @@ const categories: CategoryDto[] = [
     name: 'Transport',
     type: 'EXPENSE',
     icon: null,
-    isExcludedFromBudget: false,
+    catalogKey: 'transport',
+    isLocked: true,
     createdAt: '2026-01-01T00:00:00.000Z',
   },
 ]
@@ -72,7 +74,7 @@ describe('BulkCategoryModal', () => {
       .get('[data-testid="bulk-subcategory-select"]')
       .findAll('option')
       .map(o => o.text())
-    expect(options).toEqual(['Aucune', 'Courses'])
+    expect(options).toEqual(['Catégorie seule', 'Courses'])
   })
 
   it('says the current subcategories will be dropped when none is picked', async () => {

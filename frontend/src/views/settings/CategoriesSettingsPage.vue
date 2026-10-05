@@ -1,24 +1,44 @@
 <script setup lang="ts">
   /**
    * One row per category, and everything about that category reachable from
-   * it: where it shows up, its subcategories, and its reimbursement pairing.
-   * The two former sections (icons, hidden categories) are
-   * folded into this single list.
+   * it: where it shows up, its subcategories, and what the framework lets
+   * the user do with it.
    *
-   * Both visibility switches now write through immediately — the dashboard one
-   * used to wait for a global "Enregistrer" button while the budget one saved
-   * on click, which made two switches on the same row behave differently.
+   * The vocabulary is the catalogue's: a category carrying a catalogue key
+   * cannot be renamed, re-iconed or deleted, and no category is created here
+   * any more — the one level the user still writes to is the subcategory,
+   * inside a catalogue category, with the two attributes every calculation
+   * reads. A category without a key predates the catalogue: it keeps its old
+   * powers until the assistant has emptied it, and that is where the page
+   * sends it.
    */
   import { computed, onMounted, ref } from 'vue'
   import { useFiltersStore } from '@/stores/filters'
-  import { useModalA11y } from '@/composables/useModalA11y'
-  import { api, type CategoryDto, type SubcategoryDto } from '@/lib/api'
+  import { api } from '@/lib/api'
+  import type {
+    CategoryDto,
+    CategoryNature,
+    CategoryRhythm,
+    SubcategoryDto,
+  } from '@/lib/api'
+  import {
+    KIND_LABELS,
+    NATURE_LABELS,
+    RHYTHM_LABELS,
+    isCatalogCategory,
+    isLegacyCategory,
+    kindOf,
+    normalizeForSearch,
+  } from '@/lib/categories'
+  import type { CategoryKind } from '@/lib/categories'
   import { useToast } from '@/composables/useToast'
   import CategoryIcon from '@/components/CategoryIcon.vue'
+  import CategoryAttributeBadges from '@/components/settings/CategoryAttributeBadges.vue'
   import DeleteCategoryModal from '@/components/settings/DeleteCategoryModal.vue'
-  import MigrateCategoryModal from '@/components/settings/MigrateCategoryModal.vue'
+  import LegacyMigrationBanner from '@/components/settings/LegacyMigrationBanner.vue'
   import SettingsCard from '@/components/settings/SettingsCard.vue'
   import ToggleSwitch from '@/components/ToggleSwitch.vue'
+  import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 
   const filtersStore = useFiltersStore()
   const toast = useToast()
@@ -51,17 +71,15 @@
     }
   }
 
-  const expenseCategories = computed(() =>
-    categories.value.filter(c => c.type === 'EXPENSE')
+  const legacyCategories = computed(() =>
+    categories.value.filter(isLegacyCategory)
   )
-  const incomeCategories = computed(() =>
-    categories.value.filter(c => c.type === 'INCOME')
-  )
+  const hasLegacy = computed(() => legacyCategories.value.length > 0)
 
-  // ── Visibility axes ───────────────────────────────────────────────────────
-  // Dashboard → hides the category everywhere; Budget → only removes it from
-  // budgets, plans and averages. A globally hidden category is out of the
-  // budget too, so its budget switch reads off and is disabled.
+  // ── Visibility ────────────────────────────────────────────────────────────
+  // Dashboard → hides the category everywhere. A display preference only:
+  // keeping spending out of the budget and the averages is the exceptional
+  // tag's job, per transaction.
   function isGloballyHidden(category: CategoryDto): boolean {
     return category.type === 'EXPENSE'
       ? filtersStore.isExpenseCategoryGloballyHidden(category.id)
@@ -72,12 +90,7 @@
     return !isGloballyHidden(category)
   }
 
-  function isBudgetIncluded(category: CategoryDto): boolean {
-    return isDashboardVisible(category) && !category.isExcludedFromBudget
-  }
-
   const savingVisibility = ref<Set<string>>(new Set())
-  const savingBudget = ref<Set<string>>(new Set())
 
   function markSaving(
     set: typeof savingVisibility,
@@ -117,54 +130,32 @@
     }
   }
 
-  async function toggleBudgetExclusion(category: CategoryDto): Promise<void> {
-    if (savingBudget.value.has(category.id)) return
-    const next = !category.isExcludedFromBudget
-    markSaving(savingBudget, category.id, true)
-    try {
-      const updated = await api.updateCategory(category.id, {
-        isExcludedFromBudget: next,
-      })
-      category.isExcludedFromBudget = updated.isExcludedFromBudget
-      toast.success(
-        next
-          ? `« ${category.name} » exclue du budget`
-          : `« ${category.name} » réintégrée au budget`
-      )
-    } catch (err) {
-      console.error('Failed to update category budget exclusion:', err)
-      toast.error('Erreur lors de la mise à jour de la catégorie')
-    } finally {
-      markSaving(savingBudget, category.id, false)
-    }
-  }
-
   // ── Search & quick filters ────────────────────────────────────────────────
-  type CategoryStateFilter = 'all' | 'hidden' | 'excluded'
+  type CategoryStateFilter = 'all' | 'hidden' | 'legacy'
   const categorySearch = ref('')
   const categoryStateFilter = ref<CategoryStateFilter>('all')
-  const categoryStateOptions: { key: CategoryStateFilter; label: string }[] = [
+  const categoryStateOptions = computed<
+    { key: CategoryStateFilter; label: string }[]
+  >(() => [
     { key: 'all', label: 'Toutes' },
     { key: 'hidden', label: 'Masquées' },
-    { key: 'excluded', label: 'Hors budget' },
-  ]
+    ...(hasLegacy.value ? [{ key: 'legacy' as const, label: 'À migrer' }] : []),
+  ])
 
-  /** Lower-case and strip diacritics so "energie" matches "Énergie". */
-  function normalize(value: string): string {
-    return value
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-  }
-
+  /** A category matches when its name does, or one of its subcategories'. */
   function matchesFilters(category: CategoryDto): boolean {
-    const term = normalize(categorySearch.value.trim())
-    if (term && !normalize(category.name).includes(term)) return false
+    const term = normalizeForSearch(categorySearch.value)
+    if (term) {
+      const inName = normalizeForSearch(category.name).includes(term)
+      const inSubcategories = subcategoriesFor(category.id).some(sub =>
+        normalizeForSearch(sub.name).includes(term)
+      )
+      if (!inName && !inSubcategories) return false
+    }
     if (categoryStateFilter.value === 'hidden')
       return isGloballyHidden(category)
-    if (categoryStateFilter.value === 'excluded') {
-      return category.isExcludedFromBudget || isGloballyHidden(category)
-    }
+    if (categoryStateFilter.value === 'legacy')
+      return isLegacyCategory(category)
     return true
   }
 
@@ -178,18 +169,30 @@
     })
   }
 
-  const categorySections = computed(() => [
-    {
-      key: 'expense' as const,
-      title: 'Catégories de dépenses',
-      items: sortForDisplay(expenseCategories.value).filter(matchesFilters),
-    },
-    {
-      key: 'income' as const,
-      title: 'Catégories de revenus',
-      items: sortForDisplay(incomeCategories.value).filter(matchesFilters),
-    },
-  ])
+  /**
+   * The legacy categories come first, as one section whatever their type:
+   * they are what needs doing. The catalogue follows, by kind.
+   */
+  const categorySections = computed(() => {
+    const sections: { key: string; title: string; items: CategoryDto[] }[] = []
+    sections.push({
+      key: 'legacy',
+      title: 'À migrer vers le catalogue',
+      items: sortForDisplay(legacyCategories.value.filter(matchesFilters)),
+    })
+    for (const kind of ['EXPENSE', 'INCOME', 'TRANSFER'] as CategoryKind[]) {
+      sections.push({
+        key: kind.toLowerCase(),
+        title: KIND_LABELS[kind],
+        items: sortForDisplay(
+          categories.value.filter(
+            c => isCatalogCategory(c) && kindOf(c) === kind && matchesFilters(c)
+          )
+        ),
+      })
+    }
+    return sections
+  })
 
   const totalCategoryCount = computed(() => categories.value.length)
   const filteredCategoryCount = computed(() =>
@@ -201,7 +204,7 @@
     categoryStateFilter.value = 'all'
   }
 
-  // ── Row expansion: subcategories ──────────────────────────────────────────
+  // ── Expand / collapse ─────────────────────────────────────────────────────
   const expanded = ref<Set<string>>(new Set())
 
   function isExpanded(categoryId: string): boolean {
@@ -215,6 +218,7 @@
     expanded.value = next
   }
 
+  // ── Subcategories ─────────────────────────────────────────────────────────
   const subcategoriesByCategory = computed(() => {
     const map = new Map<string, SubcategoryDto[]>()
     for (const sub of subcategories.value) {
@@ -223,7 +227,13 @@
       else map.set(sub.categoryId, [sub])
     }
     for (const list of map.values()) {
-      list.sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+      // "Autre" last, then by name.
+      list.sort((a, b) => {
+        const aOther = a.catalogKey?.endsWith('.other') ? 1 : 0
+        const bOther = b.catalogKey?.endsWith('.other') ? 1 : 0
+        if (aOther !== bOther) return aOther - bOther
+        return a.name.localeCompare(b.name, 'fr')
+      })
     }
     return map
   })
@@ -232,22 +242,55 @@
     return subcategoriesByCategory.value.get(categoryId) ?? []
   }
 
+  function isLockedSubcategory(sub: SubcategoryDto): boolean {
+    return typeof sub.catalogKey === 'string' && sub.catalogKey !== ''
+  }
+
+  /** Transfers are flat: nothing is filed under one but the category itself. */
+  function acceptsSubcategories(category: CategoryDto): boolean {
+    return kindOf(category) !== 'TRANSFER'
+  }
+
   const newSubcategoryNames = ref<Record<string, string>>({})
+  const newSubcategoryNature = ref<Record<string, CategoryNature>>({})
+  const newSubcategoryRhythm = ref<Record<string, CategoryRhythm>>({})
   const creatingSubcategory = ref<Set<string>>(new Set())
+
+  /** The parent's defaults, shown as the initial choice so the user sees them. */
+  function natureDraftFor(category: CategoryDto): CategoryNature | '' {
+    return (
+      newSubcategoryNature.value[category.id] ?? category.defaultNature ?? ''
+    )
+  }
+
+  function rhythmDraftFor(category: CategoryDto): CategoryRhythm | '' {
+    return (
+      newSubcategoryRhythm.value[category.id] ?? category.defaultRhythm ?? ''
+    )
+  }
 
   async function addSubcategory(category: CategoryDto): Promise<void> {
     const name = newSubcategoryNames.value[category.id]?.trim() ?? ''
     if (name.length === 0 || creatingSubcategory.value.has(category.id)) return
 
+    const nature = natureDraftFor(category)
+    const rhythm = rhythmDraftFor(category)
+    const isExpense = kindOf(category) === 'EXPENSE'
     markSaving(creatingSubcategory, category.id, true)
     try {
       const created = await api.createSubcategory({
         categoryId: category.id,
         name,
+        ...(isExpense && nature ? { nature } : {}),
+        ...(isExpense && rhythm ? { rhythm } : {}),
       })
-      subcategories.value = [...subcategories.value, created]
+      if (subcategories.value.some(s => s.id === created.id)) {
+        toast.success(`« ${created.name} » existe déjà dans ${category.name}`)
+      } else {
+        subcategories.value = [...subcategories.value, created]
+        toast.success(`Sous-catégorie « ${created.name} » ajoutée`)
+      }
       newSubcategoryNames.value[category.id] = ''
-      toast.success(`Sous-catégorie « ${name} » ajoutée`)
     } catch (err) {
       console.error('Failed to create subcategory:', err)
       toast.error('Erreur lors de la création de la sous-catégorie')
@@ -256,11 +299,43 @@
     }
   }
 
-  // ── Rename ────────────────────────────────────────────────────────────────
-  // Transactions, budget plans and the hidden-category
-  // preferences all point at the category by id, so they follow a rename on
-  // their own. The one exception is the association recap below, which holds a
-  // snapshot of both names — reloaded once the write went through.
+  // Deleting a subcategory never loses a transaction: the rows go to the
+  // category's "Autre", and the dialog says so before asking.
+  const subcategoryPendingDeletion = ref<SubcategoryDto | null>(null)
+  const isDeletingSubcategory = ref(false)
+
+  function askDeleteSubcategory(sub: SubcategoryDto): void {
+    subcategoryPendingDeletion.value = sub
+  }
+
+  async function confirmDeleteSubcategory(): Promise<void> {
+    const sub = subcategoryPendingDeletion.value
+    if (!sub || isDeletingSubcategory.value) return
+    isDeletingSubcategory.value = true
+    try {
+      const result = await api.deleteSubcategory(sub.id)
+      subcategories.value = subcategories.value.filter(s => s.id !== sub.id)
+      subcategoryPendingDeletion.value = null
+      const where = result.fallbackSubcategoryName
+        ? `reclassée(s) dans « ${result.fallbackSubcategoryName} »`
+        : 'reclassée(s) à la catégorie seule'
+      toast.success(
+        result.refiledTransactions > 0
+          ? `« ${sub.name} » supprimée — ${result.refiledTransactions} transaction(s) ${where}`
+          : `« ${sub.name} » supprimée`
+      )
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Erreur lors de la suppression'
+      )
+    } finally {
+      isDeletingSubcategory.value = false
+    }
+  }
+
+  // ── Rename (legacy only) ──────────────────────────────────────────────────
+  // Transactions, budget plans and the hidden-category preferences all point
+  // at the category by id, so they follow a rename on their own.
   const renameDrafts = ref<Record<string, string>>({})
   const renameErrors = ref<Record<string, string | null>>({})
   const renameSaving = ref<Record<string, boolean>>({})
@@ -305,57 +380,11 @@
     renameErrors.value[categoryId] = null
   }
 
-  // ── Create a category ─────────────────────────────────────────────────────
-  const isCreateModalOpen = ref(false)
-
-  // Escape closes, Tab stays inside, focus returns to the opener after.
-  const createModalPanelRef = ref<HTMLElement | null>(null)
-  useModalA11y({
-    isOpen: () => isCreateModalOpen.value,
-    onClose: () => closeCreateModal(),
-    panel: createModalPanelRef,
-  })
-  const newCategoryName = ref('')
-  const newCategoryType = ref<'EXPENSE' | 'INCOME'>('EXPENSE')
-  const isCreatingCategory = ref(false)
-  const createError = ref<string | null>(null)
-
-  function openCreateModal(): void {
-    newCategoryName.value = ''
-    newCategoryType.value = 'EXPENSE'
-    createError.value = null
-    isCreateModalOpen.value = true
-  }
-
-  function closeCreateModal(): void {
-    isCreateModalOpen.value = false
-  }
-
-  async function createCategory(): Promise<void> {
-    const name = newCategoryName.value.trim()
-    if (name.length === 0 || isCreatingCategory.value) return
-
-    isCreatingCategory.value = true
-    createError.value = null
-    try {
-      const created = await api.createCategory({
-        name,
-        type: newCategoryType.value,
-      })
-      categories.value = [...categories.value, created]
-      closeCreateModal()
-      toast.success(`Catégorie « ${created.name} » créée`)
-    } catch (err) {
-      createError.value =
-        err instanceof Error ? err.message : 'Erreur lors de la création'
-    } finally {
-      isCreatingCategory.value = false
-    }
-  }
-
   // ── Icons ─────────────────────────────────────────────────────────────────
   const missingIconCount = computed(
-    () => categories.value.filter(c => !c.icon).length
+    () =>
+      categories.value.filter(c => !c.icon).length +
+      subcategories.value.filter(s => !s.icon).length
   )
   const isGeneratingIcons = ref(false)
 
@@ -374,28 +403,13 @@
     }
   }
 
-  // ── Deletion ──────────────────────────────────────────────────────────────
+  // ── Deletion (legacy only) ────────────────────────────────────────────────
   // The modal owns the impact inventory and the confirmation; the page only
-  // opens it and cleans up once the deletion went through. Subcategories and
-  // associations are reloaded rather than pruned by hand: the server cascade
-  // decides what is left, not us.
+  // opens it and cleans up once the deletion went through.
   const categoryPendingDeletion = ref<CategoryDto | null>(null)
 
   function askDelete(category: CategoryDto): void {
     categoryPendingDeletion.value = category
-  }
-
-  // Emptying a category and deleting it are separate intentions, so they are
-  // separate actions sitting side by side.
-  const categoryPendingMigration = ref<CategoryDto | null>(null)
-
-  function askMigrate(category: CategoryDto): void {
-    categoryPendingMigration.value = category
-  }
-
-  async function onMigrated(): Promise<void> {
-    // Subcategories move between categories, so both lists are stale.
-    await Promise.all([loadCategories(), loadSubcategories()])
   }
 
   function cancelDelete(): void {
@@ -422,76 +436,38 @@
         : `« ${category.name} » supprimée`
     )
   }
-
-  /**
-   * Changing the icon still needs an endpoint the API lacks — PATCH
-   * /categories accepts the name and the budget flag, nothing else.
-   */
-  const UNAVAILABLE_HINT =
-    'Pas encore disponible : cette action nécessite un nouvel endpoint côté serveur.'
 </script>
 
 <template>
   <div class="space-y-8">
+    <LegacyMigrationBanner v-if="hasLegacy" :count="legacyCategories.length" />
+
     <SettingsCard
       title="Catégories"
-      description="Choisissez où apparaît chaque catégorie, gérez ses sous-catégories et son association de remboursement."
+      description="Le catalogue impose les catégories ; à l'intérieur, vos sous-catégories restent les vôtres. Choisissez où chaque catégorie apparaît."
     >
       <template #action>
-        <div
-          class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap"
+        <button
+          type="button"
+          class="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:w-auto dark:border-primary-800 dark:text-primary-300 dark:hover:bg-primary-900/20"
+          :disabled="isGeneratingIcons || missingIconCount === 0"
+          :title="
+            missingIconCount === 0
+              ? 'Tout a une icône'
+              : `${missingIconCount} sans icône`
+          "
+          data-testid="generate-icons"
+          @click="generateIcons"
         >
-          <button
-            type="button"
-            class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 sm:min-h-0"
-            data-testid="open-create-category"
-            @click="openCreateModal"
-          >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            <span class="sm:hidden">Nouvelle</span>
-            <span class="hidden sm:inline">Nouvelle catégorie</span>
-          </button>
-          <button
-            type="button"
-            class="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-medium text-primary-700 sm:min-h-0 transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-primary-800 dark:text-primary-300 dark:hover:bg-primary-900/20"
-            :disabled="isGeneratingIcons || missingIconCount === 0"
-            :title="
-              missingIconCount === 0
-                ? 'Toutes les catégories ont une icône'
-                : `${missingIconCount} catégorie(s) sans icône`
-            "
-            data-testid="generate-icons"
-            @click="generateIcons"
-          >
-            <span>✨</span>
-            <span class="sm:hidden">
-              {{
-                isGeneratingIcons
-                  ? 'Génération…'
-                  : `Icônes (${missingIconCount})`
-              }}
-            </span>
-            <span class="hidden sm:inline">
-              {{
-                isGeneratingIcons
-                  ? 'Génération…'
-                  : `Générer les icônes (${missingIconCount})`
-              }}
-            </span>
-          </button>
-        </div>
+          <span>✨</span>
+          <span>
+            {{
+              isGeneratingIcons
+                ? 'Génération…'
+                : `Générer les icônes (${missingIconCount})`
+            }}
+          </span>
+        </button>
       </template>
 
       <div v-if="isLoadingCategories && totalCategoryCount === 0" class="py-8">
@@ -501,41 +477,17 @@
       </div>
 
       <div v-else class="space-y-6">
-        <!-- Five lines of prose before the list is a screen on a phone;
-             there it folds behind its question, on a desk it reads. -->
         <p
           class="hidden text-xs leading-relaxed text-gray-500 sm:block dark:text-gray-400"
         >
           <strong class="text-gray-700 dark:text-gray-300"
             >Tableau de bord</strong
           >
-          retire la catégorie de toutes les vues ;
-          <strong class="text-gray-700 dark:text-gray-300">Budget</strong>
-          la retire uniquement des budgets, plans et moyennes (utile pour les
-          dépenses exceptionnelles ou les prêts). Une catégorie masquée du
-          tableau de bord est aussi exclue du budget. Chaque changement est
-          enregistré immédiatement.
+          retire la catégorie de toutes les vues. Pour tenir une dépense
+          ponctuelle hors des moyennes et du budget, utilisez un tag
+          exceptionnel sur la transaction. Chaque changement est enregistré
+          immédiatement.
         </p>
-        <details
-          class="text-xs leading-relaxed text-gray-500 sm:hidden dark:text-gray-400"
-        >
-          <summary
-            class="cursor-pointer py-2 font-medium text-gray-700 dark:text-gray-300"
-          >
-            Que font les colonnes Tableau de bord et Budget ?
-          </summary>
-          <p class="pt-1">
-            <strong class="text-gray-700 dark:text-gray-300"
-              >Tableau de bord</strong
-            >
-            retire la catégorie de toutes les vues ;
-            <strong class="text-gray-700 dark:text-gray-300">Budget</strong>
-            la retire uniquement des budgets, plans et moyennes (utile pour les
-            dépenses exceptionnelles ou les prêts). Une catégorie masquée du
-            tableau de bord est aussi exclue du budget. Chaque changement est
-            enregistré immédiatement.
-          </p>
-        </details>
 
         <!-- Search + quick state filters -->
         <div
@@ -559,9 +511,9 @@
             <input
               v-model="categorySearch"
               type="text"
-              placeholder="Rechercher une catégorie…"
+              placeholder="Rechercher une catégorie ou une sous-catégorie…"
               aria-label="Rechercher une catégorie"
-              class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-9 text-base text-gray-800 placeholder-gray-400 sm:py-2 sm:text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:placeholder-gray-500"
+              class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-9 text-base text-gray-800 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:py-2 sm:text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:placeholder-gray-500"
             />
             <button
               v-if="categorySearch"
@@ -628,9 +580,10 @@
           v-for="section in categorySections"
           v-show="section.items.length > 0"
           :key="section.key"
+          :data-testid="`category-section-${section.key}`"
         >
           <div
-            class="mb-1 grid grid-cols-[1fr_3rem_3rem] items-end gap-3 px-3 sm:grid-cols-[1fr_5.5rem_5.5rem]"
+            class="mb-1 grid grid-cols-[1fr_3rem] items-end gap-3 px-3 sm:grid-cols-[1fr_5.5rem]"
           >
             <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ section.title }}
@@ -640,11 +593,6 @@
             >
               <span class="sm:hidden">Visible</span>
               <span class="hidden sm:inline">Tableau de bord</span>
-            </span>
-            <span
-              class="text-center text-[11px] font-medium leading-tight text-gray-500 dark:text-gray-400"
-            >
-              Budget
             </span>
           </div>
 
@@ -657,20 +605,23 @@
               data-testid="category-row"
             >
               <div
-                class="grid grid-cols-[1fr_3rem_3rem] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-gray-50 sm:grid-cols-[1fr_5.5rem_5.5rem] sm:py-2 dark:hover:bg-slate-800/50"
+                class="grid grid-cols-[1fr_3rem] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-gray-50 sm:grid-cols-[1fr_5.5rem] sm:py-2 dark:hover:bg-slate-800/50"
               >
-                <!-- Name, badges, expander -->
                 <div class="flex min-w-0 items-center gap-2">
                   <button
                     type="button"
-                    class="shrink-0 rounded p-1 text-gray-400 transition-transform hover:text-gray-600 dark:hover:text-gray-300"
-                    :class="isExpanded(category.id) ? 'rotate-90' : ''"
+                    class="shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300"
                     :aria-expanded="isExpanded(category.id)"
-                    :aria-label="`Détails de ${category.name}`"
+                    :aria-label="
+                      isExpanded(category.id)
+                        ? `Replier ${category.name}`
+                        : `Déplier ${category.name}`
+                    "
                     @click="toggleExpanded(category.id)"
                   >
                     <svg
-                      class="h-4 w-4"
+                      class="h-4 w-4 transition-transform"
+                      :class="isExpanded(category.id) ? 'rotate-90' : ''"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -696,16 +647,38 @@
                     </span>
                   </CategoryIcon>
                   <span
+                    v-if="isCatalogCategory(category)"
+                    class="shrink-0 text-gray-400 dark:text-gray-500"
+                    title="Catégorie du catalogue : ni renommée, ni supprimée"
+                    data-testid="category-lock"
+                    aria-label="Catégorie du catalogue"
+                  >
+                    <svg
+                      class="h-3.5 w-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                      />
+                    </svg>
+                  </span>
+                  <span
+                    v-else
+                    class="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                    data-testid="category-legacy"
+                  >
+                    À migrer
+                  </span>
+                  <span
                     v-if="!isDashboardVisible(category)"
                     class="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
                   >
                     Masquée
-                  </span>
-                  <span
-                    v-else-if="category.isExcludedFromBudget"
-                    class="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                  >
-                    Hors budget
                   </span>
                   <span
                     v-if="subcategoriesFor(category.id).length > 0"
@@ -727,20 +700,6 @@
                     @change="toggleDashboardVisible(category)"
                   />
                 </div>
-
-                <div class="flex justify-center">
-                  <ToggleSwitch
-                    :checked="isBudgetIncluded(category)"
-                    :disabled="!isDashboardVisible(category)"
-                    :loading="savingBudget.has(category.id)"
-                    :label="
-                      isBudgetIncluded(category)
-                        ? `Exclure ${category.name} du budget`
-                        : `Inclure ${category.name} dans le budget`
-                    "
-                    @change="toggleBudgetExclusion(category)"
-                  />
-                </div>
               </div>
 
               <!-- Detail panel -->
@@ -748,77 +707,109 @@
                 v-show="isExpanded(category.id)"
                 class="space-y-4 border-t border-gray-100 bg-gray-50/60 px-4 py-4 dark:border-slate-700/60 dark:bg-slate-800/40"
               >
-                <!-- Name -->
-                <div>
-                  <label
-                    :for="`category-name-${category.id}`"
-                    class="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                <!-- Legacy: the assistant, and the old powers until then -->
+                <template v-if="isLegacyCategory(category)">
+                  <div
+                    class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300"
                   >
-                    Nom
-                  </label>
-                  <form
-                    class="flex flex-col gap-2 sm:flex-row sm:items-center"
-                    @submit.prevent="submitRename(category)"
-                  >
-                    <input
-                      :id="`category-name-${category.id}`"
-                      type="text"
-                      maxlength="100"
-                      :value="renameDraftFor(category)"
-                      :disabled="renameSaving[category.id]"
-                      data-testid="rename-input"
-                      class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                      @input="
-                        onRenameDraftChange(
-                          category.id,
-                          ($event.target as HTMLInputElement).value
-                        )
-                      "
-                    />
-                    <div class="flex gap-2">
-                      <button
-                        type="submit"
-                        :disabled="
-                          !isRenameDirty(category) || renameSaving[category.id]
-                        "
-                        class="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {{
-                          renameSaving[category.id]
-                            ? 'Enregistrement…'
-                            : 'Renommer'
-                        }}
-                      </button>
-                      <button
-                        v-if="isRenameDirty(category)"
-                        type="button"
+                    Cette catégorie date d'avant le catalogue. L'assistant
+                    replace ses transactions dans le catalogue, ligne par ligne,
+                    et la supprime une fois vide.
+                    <RouterLink
+                      to="/settings/categories/migration"
+                      class="ml-1 font-medium underline"
+                      :data-testid="`migrate-category-${category.id}`"
+                    >
+                      Ouvrir l'assistant
+                    </RouterLink>
+                  </div>
+
+                  <div>
+                    <label
+                      :for="`category-name-${category.id}`"
+                      class="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                    >
+                      Nom
+                    </label>
+                    <form
+                      class="flex flex-col gap-2 sm:flex-row sm:items-center"
+                      @submit.prevent="submitRename(category)"
+                    >
+                      <input
+                        :id="`category-name-${category.id}`"
+                        type="text"
+                        maxlength="100"
+                        :value="renameDraftFor(category)"
                         :disabled="renameSaving[category.id]"
-                        class="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600"
-                        @click="cancelRename(category.id)"
-                      >
-                        Annuler
-                      </button>
-                    </div>
-                  </form>
-                  <p
-                    v-if="renameErrors[category.id]"
-                    class="mt-2 text-sm text-red-600 dark:text-red-400"
-                    data-testid="rename-error"
-                  >
-                    {{ renameErrors[category.id] }}
-                  </p>
-                  <p
-                    v-else
-                    class="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400"
-                  >
-                    Transactions, budgets, associations et sous-catégories
-                    suivent la catégorie renommée. Seul un futur import CSV
-                    portant l'ancien nom recréerait une catégorie distincte.
-                  </p>
+                        data-testid="rename-input"
+                        class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                        @input="
+                          onRenameDraftChange(
+                            category.id,
+                            ($event.target as HTMLInputElement).value
+                          )
+                        "
+                      />
+                      <div class="flex gap-2">
+                        <button
+                          type="submit"
+                          :disabled="
+                            !isRenameDirty(category) ||
+                            renameSaving[category.id]
+                          "
+                          class="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {{
+                            renameSaving[category.id]
+                              ? 'Enregistrement…'
+                              : 'Renommer'
+                          }}
+                        </button>
+                        <button
+                          v-if="isRenameDirty(category)"
+                          type="button"
+                          :disabled="renameSaving[category.id]"
+                          class="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600"
+                          @click="cancelRename(category.id)"
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    </form>
+                    <p
+                      v-if="renameErrors[category.id]"
+                      class="mt-2 text-sm text-red-600 dark:text-red-400"
+                      data-testid="rename-error"
+                    >
+                      {{ renameErrors[category.id] }}
+                    </p>
+                  </div>
+                </template>
+
+                <!-- Catalogue: what it is, in two words -->
+                <div
+                  v-else
+                  class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400"
+                  data-testid="catalog-note"
+                >
+                  <span>Catégorie du catalogue.</span>
+                  <template v-if="kindOf(category) === 'EXPENSE'">
+                    <span>
+                      Par défaut pour une transaction sans sous-catégorie :
+                    </span>
+                    <CategoryAttributeBadges
+                      :nature="category.defaultNature"
+                      :rhythm="category.defaultRhythm"
+                    />
+                  </template>
+                  <span v-else-if="kindOf(category) === 'TRANSFER'">
+                    Un transfert n'est ni une dépense ni un revenu ; il se
+                    classe à la catégorie seule.
+                  </span>
                 </div>
 
                 <!-- Subcategories -->
-                <div>
+                <div v-if="acceptsSubcategories(category)">
                   <h4
                     class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
                   >
@@ -831,11 +822,39 @@
                     <li
                       v-for="sub in subcategoriesFor(category.id)"
                       :key="sub.id"
-                      class="rounded-full bg-white px-2.5 py-1 text-xs text-gray-700 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-gray-300 dark:ring-slate-700"
+                      class="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs text-gray-700 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-gray-300 dark:ring-slate-700"
+                      data-testid="subcategory-chip"
                     >
                       <CategoryIcon :icon="sub.icon" :name="sub.name">
                         {{ sub.name }}
                       </CategoryIcon>
+                      <CategoryAttributeBadges
+                        v-if="kindOf(category) === 'EXPENSE'"
+                        :nature="sub.nature"
+                        :rhythm="sub.rhythm"
+                      />
+                      <button
+                        v-if="!isLockedSubcategory(sub)"
+                        type="button"
+                        class="-mr-1 rounded-full p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                        :aria-label="`Supprimer la sous-catégorie ${sub.name}`"
+                        :data-testid="`delete-subcategory-${sub.id}`"
+                        @click="askDeleteSubcategory(sub)"
+                      >
+                        <svg
+                          class="h-3 w-3"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
                     </li>
                   </ul>
                   <p
@@ -846,7 +865,7 @@
                   </p>
 
                   <form
-                    class="flex gap-2"
+                    class="flex flex-col gap-2 sm:flex-row"
                     @submit.prevent="addSubcategory(category)"
                   >
                     <input
@@ -856,6 +875,44 @@
                       :aria-label="`Nouvelle sous-catégorie de ${category.name}`"
                       class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
                     />
+                    <template v-if="kindOf(category) === 'EXPENSE'">
+                      <select
+                        :value="natureDraftFor(category)"
+                        :aria-label="`Nature de la nouvelle sous-catégorie de ${category.name}`"
+                        class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                        @change="
+                          newSubcategoryNature[category.id] = (
+                            $event.target as HTMLSelectElement
+                          ).value as CategoryNature
+                        "
+                      >
+                        <option
+                          v-for="(label, value) in NATURE_LABELS"
+                          :key="value"
+                          :value="value"
+                        >
+                          {{ label }}
+                        </option>
+                      </select>
+                      <select
+                        :value="rhythmDraftFor(category)"
+                        :aria-label="`Rythme de la nouvelle sous-catégorie de ${category.name}`"
+                        class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                        @change="
+                          newSubcategoryRhythm[category.id] = (
+                            $event.target as HTMLSelectElement
+                          ).value as CategoryRhythm
+                        "
+                      >
+                        <option
+                          v-for="(label, value) in RHYTHM_LABELS"
+                          :key="value"
+                          :value="value"
+                        >
+                          {{ label }}
+                        </option>
+                      </select>
+                    </template>
                     <button
                       type="submit"
                       :disabled="
@@ -869,26 +926,10 @@
                   </form>
                 </div>
 
-                <!-- Not yet wired: no endpoint for the icon -->
                 <div
+                  v-if="isLegacyCategory(category)"
                   class="flex flex-wrap gap-2 border-t border-gray-200 pt-3 dark:border-slate-700"
                 >
-                  <button
-                    type="button"
-                    disabled
-                    :title="UNAVAILABLE_HINT"
-                    class="min-h-[40px] flex-1 cursor-not-allowed rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-400 sm:min-h-0 sm:flex-none dark:border-slate-700 dark:text-gray-500"
-                  >
-                    Changer l'icône
-                  </button>
-                  <button
-                    type="button"
-                    :data-testid="`migrate-category-${category.id}`"
-                    class="min-h-[40px] flex-1 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:min-h-0 sm:flex-none dark:border-slate-700 dark:text-gray-300 dark:hover:bg-slate-800"
-                    @click="askMigrate(category)"
-                  >
-                    Déplacer les transactions…
-                  </button>
                   <button
                     type="button"
                     :data-testid="`delete-category-${category.id}`"
@@ -907,122 +948,10 @@
           v-if="totalCategoryCount === 0"
           class="py-8 text-center text-gray-500 dark:text-gray-400"
         >
-          Aucune catégorie disponible. Importez des transactions ou créez-en
-          une.
+          Aucune catégorie. Le catalogue est créé à la première connexion.
         </div>
       </div>
     </SettingsCard>
-
-    <!-- Create category modal -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div
-          v-if="isCreateModalOpen"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-        >
-          <div class="fixed inset-0 bg-black/50" @click="closeCreateModal" />
-
-          <div
-            ref="createModalPanelRef"
-            role="dialog"
-            aria-modal="true"
-            class="relative z-10 max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl sm:p-6 dark:bg-slate-900"
-          >
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
-              Nouvelle catégorie
-            </h2>
-            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Elle sera disponible immédiatement pour classer vos transactions.
-            </p>
-
-            <div
-              v-if="createError"
-              role="alert"
-              class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
-            >
-              {{ createError }}
-            </div>
-
-            <form class="mt-4 space-y-4" @submit.prevent="createCategory">
-              <div>
-                <label
-                  for="new-category-name"
-                  class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  Nom
-                </label>
-                <input
-                  id="new-category-name"
-                  v-model="newCategoryName"
-                  type="text"
-                  maxlength="100"
-                  :disabled="isCreatingCategory"
-                  class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                />
-              </div>
-
-              <div>
-                <span
-                  class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  Type
-                </span>
-                <div
-                  class="inline-flex rounded-lg border border-gray-200 p-1 dark:border-slate-700"
-                  role="group"
-                  aria-label="Type de la catégorie"
-                >
-                  <button
-                    type="button"
-                    :aria-pressed="newCategoryType === 'EXPENSE'"
-                    class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-                    :class="
-                      newCategoryType === 'EXPENSE'
-                        ? 'bg-primary-600 text-white'
-                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
-                    "
-                    @click="newCategoryType = 'EXPENSE'"
-                  >
-                    Dépense
-                  </button>
-                  <button
-                    type="button"
-                    :aria-pressed="newCategoryType === 'INCOME'"
-                    class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-                    :class="
-                      newCategoryType === 'INCOME'
-                        ? 'bg-primary-600 text-white'
-                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
-                    "
-                    @click="newCategoryType = 'INCOME'"
-                  >
-                    Revenu
-                  </button>
-                </div>
-              </div>
-
-              <div class="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  class="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-800"
-                  :disabled="isCreatingCategory"
-                  @click="closeCreateModal"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  class="flex-1 rounded-lg bg-primary-600 px-4 py-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  :disabled="!newCategoryName.trim() || isCreatingCategory"
-                >
-                  {{ isCreatingCategory ? 'Création…' : 'Créer' }}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
 
     <DeleteCategoryModal
       :category="categoryPendingDeletion"
@@ -1030,24 +959,16 @@
       @deleted="onDeleted"
     />
 
-    <MigrateCategoryModal
-      :is-open="categoryPendingMigration !== null"
-      :source="categoryPendingMigration"
-      :categories="categories"
-      @close="categoryPendingMigration = null"
-      @migrated="onMigrated"
-    />
+    <ConfirmDialog
+      :open="subcategoryPendingDeletion !== null"
+      title="Supprimer la sous-catégorie ?"
+      :loading="isDeletingSubcategory"
+      @confirm="confirmDeleteSubcategory"
+      @cancel="subcategoryPendingDeletion = null"
+    >
+      Les transactions classées dans « {{ subcategoryPendingDeletion?.name }} »
+      seront reclassées dans « Autre » de la même catégorie. Aucune ne perd sa
+      catégorie.
+    </ConfirmDialog>
   </div>
 </template>
-
-<style scoped>
-  .modal-enter-active,
-  .modal-leave-active {
-    transition: opacity 0.2s ease;
-  }
-
-  .modal-enter-from,
-  .modal-leave-to {
-    opacity: 0;
-  }
-</style>

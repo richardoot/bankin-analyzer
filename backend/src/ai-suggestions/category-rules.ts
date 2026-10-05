@@ -30,6 +30,26 @@ export interface CategorizedHistoryRow {
   categoryName: string
   subcategoryId: string | null
   subcategoryName: string | null
+  /**
+   * The catalogue keys of the filing, when it has them. Two rows filed under
+   * the same key agree even when their ids differ — across a provisioning,
+   * a migration, or another user's ledger — which is what lets a rule
+   * outlive the row it was learned from.
+   */
+  categoryKey?: string | null
+  subcategoryKey?: string | null
+}
+
+/**
+ * What two rows must share to count as the same filing: the catalogue keys
+ * when the row has them, the ids otherwise. A subcategory the user created
+ * has no key and falls back to its id under the keyed category.
+ */
+export function filingKeyOf(row: CategorizedHistoryRow): string {
+  if (row.categoryKey) {
+    return `${row.categoryKey}|${row.subcategoryKey ?? row.subcategoryId ?? ''}`
+  }
+  return `${row.categoryId}|${row.subcategoryId ?? ''}`
 }
 
 export interface CategoryRuleMatch {
@@ -100,7 +120,7 @@ export function proposeCategoryFromHistory(
 
   const countByFiling = new Map<string, number>()
   for (const row of similar) {
-    const key = `${row.categoryId}|${row.subcategoryId ?? ''}`
+    const key = filingKeyOf(row)
     countByFiling.set(key, (countByFiling.get(key) ?? 0) + 1)
   }
 
@@ -117,9 +137,10 @@ export function proposeCategoryFromHistory(
   const confidence = bestCount / similar.length
   if (confidence < minimumConfidence) return null
 
-  const winner = similar.find(
-    row => `${row.categoryId}|${row.subcategoryId ?? ''}` === bestKey
-  )
+  // The most recent row of the winning filing: the ids a key resolves to
+  // are the ones this ledger carries today, not the ones of a row filed
+  // before a migration.
+  const winner = similar.find(row => filingKeyOf(row) === bestKey)
   if (!winner) return null
 
   return {

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 import { Prisma } from '../generated/prisma'
 import {
   PENDING_CREDIT_SCALED,
@@ -65,7 +66,10 @@ interface MonthlyBreakdownRow {
 
 @Injectable()
 export class BudgetsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly filterPreferences: FilterPreferencesService
+  ) {}
 
   /**
    * Get statistics for budget planning:
@@ -82,7 +86,11 @@ export class BudgetsService {
     const startDate = startOfUtcDay(filters.startDate)
     const endDate = endOfUtcDay(filters.endDate)
     const shouldDeductReimbursements = filters.deductReimbursements !== false
-    const shouldDeductPending = filters.deductPendingReimbursements === true
+    // Same rule as the dashboard: the request wins, else the user's
+    // preference, on by default.
+    const shouldDeductPending =
+      filters.deductPendingReimbursements ??
+      (await this.filterPreferences.deductsPendingByDefault(userId))
     const shouldIncludeMonthly = filters.includeMonthlyBreakdown === true
     const includeAllPending = filters.includeAllPendingReimbursements === true
 
@@ -126,8 +134,8 @@ export class BudgetsService {
           AND t.date >= ${startDate}
           AND t.date <= ${endDate}
           AND t.category_id IS NOT NULL
+          AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_budget, false) = false
-          AND c.is_excluded_from_budget = false
         GROUP BY t.category_id, c.name, c.icon, t.type, COALESCE(t.subcategory, ''), (et.transaction_id IS NOT NULL)
       `),
       shouldIncludeMonthly
@@ -154,8 +162,8 @@ export class BudgetsService {
               AND t.date >= ${startDate}
               AND t.date <= ${endDate}
               AND t.category_id IS NOT NULL
+              AND t.type IN ('EXPENSE', 'INCOME')
               AND COALESCE(a.is_excluded_from_budget, false) = false
-              AND c.is_excluded_from_budget = false
             GROUP BY t.category_id, t.type, TO_CHAR(t.date, 'YYYY-MM'), (et.transaction_id IS NOT NULL)
             ORDER BY t.category_id, TO_CHAR(t.date, 'YYYY-MM')
           `)
@@ -187,7 +195,6 @@ export class BudgetsService {
             WHERE claims.claimed > claims.credited
               AND (t.date < ${startDate} OR t.date > ${endDate})
               AND COALESCE(a.is_excluded_from_budget, false) = false
-              AND c.is_excluded_from_budget = false
             GROUP BY t.category_id
           `)
         : Promise.resolve([] as OutOfPeriodPendingRow[]),

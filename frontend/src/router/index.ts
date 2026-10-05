@@ -135,6 +135,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/settings/CategoriesSettingsPage.vue'),
       },
       {
+        path: 'categories/migration',
+        name: 'settings-category-migration',
+        meta: { title: 'Réglages · Migration des catégories' },
+        component: () => import('@/views/settings/LegacyMigrationPage.vue'),
+      },
+      {
         path: 'general',
         name: 'settings-general',
         meta: { title: 'Réglages · Général' },

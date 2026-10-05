@@ -30,6 +30,7 @@ const preferences = (
   globalHiddenIncomeCategoryIds: [],
   isPanelExpanded: true,
   importCategoriesFromFile,
+  deductPendingReimbursements: true,
 })
 
 beforeEach(() => {

@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
-import { ConflictException, NotFoundException } from '@nestjs/common'
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common'
 import { CategoriesService } from './categories.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { Prisma, TransactionType } from '../generated/prisma'
@@ -12,7 +16,9 @@ const mockCategory = {
   name: 'Alimentation',
   type: TransactionType.EXPENSE,
   icon: null,
-  isExcludedFromBudget: false,
+  catalogKey: null,
+  defaultNature: null,
+  defaultRhythm: null,
   createdAt: new Date('2024-01-15T10:30:00.000Z'),
 }
 
@@ -22,7 +28,9 @@ const mockCategory2 = {
   name: 'Salaires',
   type: TransactionType.INCOME,
   icon: null,
-  isExcludedFromBudget: false,
+  catalogKey: null,
+  defaultNature: null,
+  defaultRhythm: null,
   createdAt: new Date('2024-01-15T10:30:00.000Z'),
 }
 
@@ -130,99 +138,59 @@ describe('CategoriesService', () => {
     })
   })
 
-  describe('findOrCreate', () => {
-    it('should return existing category if found', async () => {
-      mockPrismaService.category.findUnique.mockResolvedValue(mockCategory)
+  describe('findManyByName', () => {
+    it('returns the categories bearing the names, creating none', async () => {
+      mockPrismaService.category.findMany.mockResolvedValue([mockCategory])
 
-      const result = await service.findOrCreate(
-        mockCategory.userId,
-        mockCategory.name,
-        mockCategory.type
-      )
+      const result = await service.findManyByName(mockCategory.userId, [
+        { name: 'Alimentation', type: TransactionType.EXPENSE },
+        { name: 'Alimentation', type: TransactionType.EXPENSE },
+        { name: '  ', type: TransactionType.EXPENSE },
+        { name: 'Inconnue', type: TransactionType.INCOME },
+      ])
 
-      expect(result).toEqual(mockCategory)
-      expect(mockPrismaService.category.findUnique).toHaveBeenCalledWith({
+      expect(result).toEqual([mockCategory])
+      expect(mockPrismaService.category.findMany).toHaveBeenCalledWith({
         where: {
-          userId_name_type: {
-            userId: mockCategory.userId,
-            name: mockCategory.name,
-            type: mockCategory.type,
-          },
-        },
-      })
-      expect(mockPrismaService.category.create).not.toHaveBeenCalled()
-    })
-
-    it('should create new category if not found', async () => {
-      mockPrismaService.category.findUnique.mockResolvedValue(null)
-      mockPrismaService.category.create.mockResolvedValue(mockCategory)
-
-      const result = await service.findOrCreate(
-        mockCategory.userId,
-        mockCategory.name,
-        mockCategory.type
-      )
-
-      expect(result).toEqual(mockCategory)
-      expect(mockPrismaService.category.create).toHaveBeenCalledWith({
-        data: {
           userId: mockCategory.userId,
-          name: mockCategory.name,
-          type: mockCategory.type,
+          OR: [
+            { name: 'Alimentation', type: TransactionType.EXPENSE },
+            { name: 'Inconnue', type: TransactionType.INCOME },
+          ],
         },
       })
-    })
-  })
-
-  describe('create', () => {
-    it('should create a new category via findOrCreate', async () => {
-      mockPrismaService.category.findUnique.mockResolvedValue(null)
-      mockPrismaService.category.create.mockResolvedValue(mockCategory)
-
-      const result = await service.create(mockCategory.userId, {
-        name: mockCategory.name,
-        type: mockCategory.type,
-      })
-
-      expect(result).toEqual(mockCategory)
-    })
-
-    it('should return existing category if already exists', async () => {
-      mockPrismaService.category.findUnique.mockResolvedValue(mockCategory)
-
-      const result = await service.create(mockCategory.userId, {
-        name: mockCategory.name,
-        type: mockCategory.type,
-      })
-
-      expect(result).toEqual(mockCategory)
       expect(mockPrismaService.category.create).not.toHaveBeenCalled()
+    })
+
+    it('does not even query for an empty list', async () => {
+      const result = await service.findManyByName(mockCategory.userId, [])
+
+      expect(result).toEqual([])
+      expect(mockPrismaService.category.findMany).not.toHaveBeenCalled()
     })
   })
 
   describe('update', () => {
-    it('should update isExcludedFromBudget for an owned category', async () => {
+    it('should rename an owned category', async () => {
       mockPrismaService.category.findFirst.mockResolvedValue(mockCategory)
       mockPrismaService.category.update.mockResolvedValue({
         ...mockCategory,
-        isExcludedFromBudget: true,
+        name: 'Courses',
       })
 
       const result = await service.update(
         mockCategory.userId,
         mockCategory.id,
-        {
-          isExcludedFromBudget: true,
-        }
+        { name: 'Courses' }
       )
 
-      expect(result.isExcludedFromBudget).toBe(true)
+      expect(result.name).toBe('Courses')
       expect(mockPrismaService.category.findFirst).toHaveBeenCalledWith({
         where: { id: mockCategory.id, userId: mockCategory.userId },
       })
       expect(mockPrismaService.category.update).toHaveBeenCalledWith({
         where: { id: mockCategory.id },
-        data: { isExcludedFromBudget: true },
+        data: { name: 'Courses' },
       })
     })
 
@@ -230,10 +198,22 @@ describe('CategoriesService', () => {
       mockPrismaService.category.findFirst.mockResolvedValue(null)
 
       await expect(
-        service.update('other-user', mockCategory.id, {
-          isExcludedFromBudget: true,
-        })
+        service.update('other-user', mockCategory.id, { name: 'Courses' })
       ).rejects.toThrow(NotFoundException)
+      expect(mockPrismaService.category.update).not.toHaveBeenCalled()
+    })
+
+    it('refuses to rename a catalogue category', async () => {
+      mockPrismaService.category.findFirst.mockResolvedValue({
+        ...mockCategory,
+        catalogKey: 'food',
+      })
+
+      await expect(
+        service.update(mockCategory.userId, mockCategory.id, {
+          name: 'Courses',
+        })
+      ).rejects.toThrow(ForbiddenException)
       expect(mockPrismaService.category.update).not.toHaveBeenCalled()
     })
 
@@ -333,7 +313,6 @@ describe('CategoriesService', () => {
         budgetPlanEntries: [],
         reimbursementCount: 0,
         isGloballyHidden: false,
-        isExcludedFromBudget: false,
       })
     })
 
@@ -404,6 +383,18 @@ describe('CategoriesService', () => {
       mockPrismaService.subcategory.count.mockResolvedValue(subcategories)
       mockPrismaService.budgetPlanEntry.count.mockResolvedValue(entries)
     }
+
+    it('refuses to delete a catalogue category', async () => {
+      mockPrismaService.category.findFirst.mockResolvedValue({
+        ...mockCategory,
+        catalogKey: 'food',
+      })
+
+      await expect(
+        service.remove(mockCategory.userId, mockCategory.id)
+      ).rejects.toThrow(ForbiddenException)
+      expect(mockPrismaService.category.delete).not.toHaveBeenCalled()
+    })
 
     it('should delete the category and report what it took with it', async () => {
       mockPrismaService.category.findFirst.mockResolvedValue(mockCategory)

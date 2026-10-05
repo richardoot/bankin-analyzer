@@ -106,7 +106,6 @@ describe('TransactionsPage — optimistic updates', () => {
         name: 'Alimentation',
         type: 'EXPENSE',
         icon: null,
-        isExcludedFromBudget: false,
         createdAt: '2026-01-01T00:00:00.000Z',
       },
       {
@@ -114,7 +113,6 @@ describe('TransactionsPage — optimistic updates', () => {
         name: 'Transport',
         type: 'EXPENSE',
         icon: '🚗',
-        isExcludedFromBudget: false,
         createdAt: '2026-01-01T00:00:00.000Z',
       },
     ])

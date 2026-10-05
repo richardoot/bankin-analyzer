@@ -2,6 +2,7 @@ import type { TestingModule } from '@nestjs/testing'
 import { Test } from '@nestjs/testing'
 import { DashboardService } from './dashboard.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 
 describe('DashboardService', () => {
   let service: DashboardService
@@ -28,8 +29,14 @@ describe('DashboardService', () => {
       total_amount: number
       received_credit: number
       pending_credit: number
+      nature: string | null
+      rhythm: string | null
+      category_catalog_key: string | null
     }> = {}
   ) => ({
+    nature: overrides.nature ?? null,
+    rhythm: overrides.rhythm ?? null,
+    category_catalog_key: overrides.category_catalog_key ?? null,
     month_key: overrides.month_key ?? '2024-01',
     // Rows are grouped and filtered by category id, so each name gets a
     // distinct one unless a test explicitly passes `category_id: null` to
@@ -62,6 +69,13 @@ describe('DashboardService', () => {
     },
   }
 
+  // The user's preference for debts still owed. Off here so that every test
+  // written before the preference existed keeps reading gross figures; the
+  // tests of the preference itself switch it on.
+  const mockFilterPreferencesService = {
+    deductsPendingByDefault: vi.fn(),
+  }
+
   /**
    * Setup the $queryRaw calls in order: aggregation rows, account rows and the
    * exceptional-events rows. The pending-reimbursement query is toggle-gated
@@ -76,12 +90,14 @@ describe('DashboardService', () => {
       color: string | null
       icon: string | null
       amount: number
-    }[] = []
+    }[] = [],
+    pendingReceivables = 0
   ) {
     mockPrismaService.$queryRaw
       .mockResolvedValueOnce(rows)
       .mockResolvedValueOnce(accounts.map(account => ({ account })))
       .mockResolvedValueOnce(events)
+      .mockResolvedValueOnce([{ pending: pendingReceivables }])
   }
 
   beforeEach(async () => {
@@ -92,16 +108,103 @@ describe('DashboardService', () => {
           provide: PrismaService,
           useValue: mockPrismaService,
         },
+        {
+          provide: FilterPreferencesService,
+          useValue: mockFilterPreferencesService,
+        },
       ],
     }).compile()
 
     service = module.get<DashboardService>(DashboardService)
 
     vi.clearAllMocks()
+    mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
+      false
+    )
+    // Whatever a test queues with `mockResolvedValueOnce`, the receivables
+    // query that comes last gets an empty answer by default.
+    mockPrismaService.$queryRaw.mockResolvedValue([{ pending: 0 }])
 
     // Default mocks
     mockPrismaService.categoryAssociation.findMany.mockResolvedValue([])
     mockPrismaService.tag.findMany.mockResolvedValue([])
+  })
+
+  describe('a debt still owed', () => {
+    it('is taken off the spending when the preference says so and the request does not', async () => {
+      mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
+        true
+      )
+      // 3 700 lent to a relative, claimed back in full: the row arrives net.
+      setupMocks([
+        createRow({
+          category_name: 'Famille et amis',
+          total_amount: 0,
+          pending_credit: 3700,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(
+        mockFilterPreferencesService.deductsPendingByDefault
+      ).toHaveBeenCalledWith(mockUserId)
+      // Gross, the month spent 3 700; net of the debt, nothing.
+      expect(result.monthlyData[0]?.expenses).toBe(3700)
+      expect(result.monthlyData[0]?.netExpenses).toBe(0)
+      expect(result.totalExpenses).toBe(0)
+    })
+
+    it('stays in the spending when the preference says so', async () => {
+      mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
+        false
+      )
+      setupMocks([
+        createRow({
+          category_name: 'Famille et amis',
+          total_amount: 3700,
+          pending_credit: 3700,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.monthlyData[0]?.netExpenses).toBe(3700)
+      expect(result.totalExpenses).toBe(3700)
+    })
+
+    it('lets the request override the preference', async () => {
+      mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
+        true
+      )
+      setupMocks([
+        createRow({
+          category_name: 'Famille et amis',
+          total_amount: 3700,
+          pending_credit: 3700,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        deductPendingReimbursements: false,
+      })
+
+      expect(
+        mockFilterPreferencesService.deductsPendingByDefault
+      ).not.toHaveBeenCalled()
+      expect(result.monthlyData[0]?.netExpenses).toBe(3700)
+    })
+
+    it('is reported as what is still owed, whatever the period', async () => {
+      setupMocks([], [], [], 3700.456)
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2026-09-01',
+        endDate: '2026-09-30',
+      })
+
+      expect(result.pendingReceivables).toBe(3700.46)
+    })
   })
 
   describe('getSummary', () => {
@@ -1168,6 +1271,131 @@ describe('DashboardService', () => {
       ])
     })
   })
+  describe('the structure of spending and the savings reading', () => {
+    it('reads each expense through its nature and rhythm, on both readings', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_name: 'Logement',
+            total_amount: 1000,
+            nature: 'ESSENTIAL',
+            rhythm: 'COMMITTED',
+          }),
+          createRow({
+            category_name: 'Restaurants',
+            total_amount: 200,
+            nature: 'PLEASURE',
+            rhythm: 'VARIABLE',
+          }),
+          // A holiday restaurant: chosen, variable, and exceptional.
+          createRow({
+            category_name: 'Restaurants',
+            total_amount: 300,
+            nature: 'PLEASURE',
+            rhythm: 'VARIABLE',
+            is_exceptional: true,
+          }),
+          // A legacy row: no attribute yet.
+          createRow({ category_name: 'Abonnements', total_amount: 50 }),
+          createRow({
+            category_name: 'Salaire',
+            type: 'INCOME',
+            total_amount: 3000,
+          }),
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.spendingStructure).toEqual({
+        essential: 1000,
+        pleasure: 500,
+        unknownNature: 50,
+        committed: 1000,
+        variable: 500,
+        unknownRhythm: 50,
+        total: 1550,
+      })
+      expect(result.everydaySpendingStructure).toEqual({
+        essential: 1000,
+        pleasure: 200,
+        unknownNature: 50,
+        committed: 1000,
+        variable: 200,
+        unknownRhythm: 50,
+        total: 1250,
+      })
+      // No transfer: nothing saved, and the free money is income less the
+      // committed everyday spending.
+      expect(result.savingsTransfers).toBe(0)
+      expect(result.savingsRate).toBe(0)
+      expect(result.remainingToLive).toBe(2000)
+    })
+
+    it('counts a transfer into savings as saved and nowhere else', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_name: 'Salaire',
+            type: 'INCOME',
+            total_amount: 2000,
+          }),
+          createRow({
+            category_name: 'Épargne de précaution',
+            type: 'TRANSFER',
+            category_catalog_key: 'emergency-savings',
+            // Money leaving the current account: negative, like an expense.
+            total_amount: -300,
+          }),
+          createRow({
+            category_name: 'Investissement',
+            type: 'TRANSFER',
+            category_catalog_key: 'investment',
+            total_amount: -100,
+          }),
+          // A withdrawal from savings comes back positive and un-saves.
+          createRow({
+            category_name: 'Épargne projet',
+            type: 'TRANSFER',
+            category_catalog_key: 'project-savings',
+            total_amount: 50,
+          }),
+          // An internal move says nothing about saving.
+          createRow({
+            category_name: 'Virement interne',
+            type: 'TRANSFER',
+            category_catalog_key: 'internal-transfer',
+            total_amount: -800,
+          }),
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.totalIncome).toBe(2000)
+      expect(result.totalExpenses).toBe(0)
+      expect(result.incomeByCategory.map(c => c.category)).toEqual(['Salaire'])
+      expect(optionNames(result.allIncomeCategories)).toEqual(['Salaire'])
+      expect(result.savingsTransfers).toBe(350)
+      expect(result.savingsRate).toBe(0.175)
+      expect(result.remainingToLive).toBe(1650)
+    })
+
+    it('reports no rate and no free money without income', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([createRow({ total_amount: 100 })])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.savingsRate).toBeNull()
+      expect(result.remainingToLive).toBeNull()
+    })
+  })
+
   describe('everyday vs exceptional split', () => {
     it('leaves categories untouched by any event identical in both modes', async () => {
       setupMocks([

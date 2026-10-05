@@ -31,6 +31,7 @@ export class FilterPreferencesController {
         globalHiddenIncomeCategoryIds: [],
         isPanelExpanded: true,
         importCategoriesFromFile: true,
+        deductPendingReimbursements: true,
       }
     }
 
@@ -41,6 +42,7 @@ export class FilterPreferencesController {
       globalHiddenIncomeCategoryIds: prefs.globalHiddenIncomeCategoryIds,
       isPanelExpanded: prefs.isPanelExpanded,
       importCategoriesFromFile: prefs.importCategoriesFromFile,
+      deductPendingReimbursements: prefs.deductPendingReimbursements,
     }
   }
 
@@ -60,6 +62,7 @@ export class FilterPreferencesController {
       globalHiddenIncomeCategoryIds: prefs.globalHiddenIncomeCategoryIds,
       isPanelExpanded: prefs.isPanelExpanded,
       importCategoriesFromFile: prefs.importCategoriesFromFile,
+      deductPendingReimbursements: prefs.deductPendingReimbursements,
     }
   }
 }
