@@ -40,6 +40,10 @@ export interface ExistingCategory {
   catalogKey: string | null
   /** Rows filed under it, subcategories included. Decides what retiring does. */
   transactionCount: number
+  /** What the row shows today; compared to the catalogue when given. */
+  icon?: string | null
+  defaultNature?: CategoryNature | null
+  defaultRhythm?: CategoryRhythm | null
 }
 
 export interface ExistingSubcategory {
@@ -48,6 +52,31 @@ export interface ExistingSubcategory {
   name: string
   catalogKey: string | null
   transactionCount: number
+  nature?: CategoryNature | null
+  rhythm?: CategoryRhythm | null
+}
+
+/**
+ * A row that already carries its key, brought back in line with what the
+ * catalogue says of it today: a label reworded, an attribute revised. The
+ * user cannot rename or retune a catalogue row, so what differs is always a
+ * catalogue revision, never a choice of theirs to respect.
+ */
+export interface CategoryRefresh {
+  id: string
+  catalogKey: string
+  name: string
+  icon: string
+  defaultNature: CategoryNature | null
+  defaultRhythm: CategoryRhythm | null
+}
+
+export interface SubcategoryRefresh {
+  id: string
+  catalogKey: string
+  name: string
+  nature: CategoryNature | null
+  rhythm: CategoryRhythm | null
 }
 
 /**
@@ -95,6 +124,8 @@ export interface ProvisioningPlan {
   adoptSubcategories: SubcategoryAdoption[]
   retireCategories: Retirement[]
   retireSubcategories: Retirement[]
+  refreshCategories: CategoryRefresh[]
+  refreshSubcategories: SubcategoryRefresh[]
 }
 
 export function isEmptyPlan(plan: ProvisioningPlan): boolean {
@@ -104,7 +135,9 @@ export function isEmptyPlan(plan: ProvisioningPlan): boolean {
     plan.createSubcategories.length === 0 &&
     plan.adoptSubcategories.length === 0 &&
     plan.retireCategories.length === 0 &&
-    plan.retireSubcategories.length === 0
+    plan.retireSubcategories.length === 0 &&
+    plan.refreshCategories.length === 0 &&
+    plan.refreshSubcategories.length === 0
   )
 }
 
@@ -133,6 +166,8 @@ export function planCatalogProvisioning(
     adoptSubcategories: [],
     retireCategories: [],
     retireSubcategories: [],
+    refreshCategories: [],
+    refreshSubcategories: [],
   }
 
   // Keys the catalogue carries today; anything else with a key is retired.
@@ -181,12 +216,44 @@ export function planCatalogProvisioning(
       .map(sub => sub.catalogKey)
       .filter((key): key is string => !!key && knownKeys.has(key))
   )
+  const subcategoryByKey = new Map<string, ExistingSubcategory>()
+  for (const sub of subcategories) {
+    if (sub.catalogKey && knownKeys.has(sub.catalogKey)) {
+      subcategoryByKey.set(sub.catalogKey, sub)
+    }
+  }
   // A legacy row is adopted by at most one entry; without this, two catalogue
   // categories with labels that normalise alike would both claim it.
   const claimed = new Set<string>()
 
   for (const entry of catalog) {
     let existing = categoryByKey.get(entry.key)
+
+    if (existing) {
+      // Already the catalogue's: bring its label and attributes up to date
+      // when a revision changed them. Fields the caller did not load are not
+      // compared.
+      const other = otherOf(entry)
+      const wantedNature = other?.nature ?? null
+      const wantedRhythm = other?.rhythm ?? null
+      const stale =
+        existing.name !== entry.label ||
+        (existing.icon !== undefined && existing.icon !== entry.icon) ||
+        (existing.defaultNature !== undefined &&
+          existing.defaultNature !== wantedNature) ||
+        (existing.defaultRhythm !== undefined &&
+          existing.defaultRhythm !== wantedRhythm)
+      if (stale) {
+        plan.refreshCategories.push({
+          id: existing.id,
+          catalogKey: entry.key,
+          name: entry.label,
+          icon: entry.icon,
+          defaultNature: wantedNature,
+          defaultRhythm: wantedRhythm,
+        })
+      }
+    }
 
     if (!existing) {
       const wanted = normalizeName(entry.label)
@@ -222,7 +289,24 @@ export function planCatalogProvisioning(
       sub => sub.categoryId === existing.id
     )
     for (const sub of entry.subcategories) {
-      if (subcategoryKeys.has(sub.key)) continue
+      if (subcategoryKeys.has(sub.key)) {
+        const row = subcategoryByKey.get(sub.key)
+        if (
+          row &&
+          (row.name !== sub.label ||
+            (row.nature !== undefined && row.nature !== sub.nature) ||
+            (row.rhythm !== undefined && row.rhythm !== sub.rhythm))
+        ) {
+          plan.refreshSubcategories.push({
+            id: row.id,
+            catalogKey: sub.key,
+            name: sub.label,
+            nature: sub.nature,
+            rhythm: sub.rhythm,
+          })
+        }
+        continue
+      }
       const wanted = normalizeName(sub.label)
       const candidate = ownSubcategories.find(
         own =>

@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "categories": [
     {
       "key": "housing",
@@ -239,9 +239,9 @@
     {
       "key": "telecom",
       "type": "EXPENSE",
-      "label": "Télécom et numérique",
+      "label": "Télécom et outils numériques",
       "icon": "📱",
-      "description": "Rester connecté : forfait téléphone, box internet, logiciels, applications et services d'IA.",
+      "description": "Rester connecté et s'outiller : forfait téléphone, box internet, stockage, bureautique, assistant IA. Un logiciel qui sert un loisir, un sport ou un travail va avec eux, pas ici.",
       "subcategories": [
         {
           "key": "telecom.phone",
@@ -258,8 +258,9 @@
         {
           "key": "telecom.software",
           "label": "Logiciels, applications et IA",
-          "nature": "PLEASURE",
-          "rhythm": "COMMITTED"
+          "nature": "ESSENTIAL",
+          "rhythm": "COMMITTED",
+          "description": "Les outils généraux, sans pratique derrière : stockage en ligne, bureautique, gestion des comptes, assistant IA. Une appli de sport va en Loisirs avec le sport, un logiciel de montage avec le hobby, un abonnement de contenu dans Streaming."
         },
         {
           "key": "telecom.other",
@@ -462,15 +463,17 @@
       "subcategories": [
         {
           "key": "leisure.streaming",
-          "label": "Streaming et médias",
+          "label": "Streaming, musique et médias",
           "nature": "PLEASURE",
-          "rhythm": "COMMITTED"
+          "rhythm": "COMMITTED",
+          "description": "Du contenu à consommer : vidéo, musique, podcasts, presse en ligne. Netflix, Spotify, Apple Music, Apple TV+."
         },
         {
           "key": "leisure.gym",
-          "label": "Salle de sport et licences",
+          "label": "Salle, licences et applis de sport",
           "nature": "PLEASURE",
-          "rhythm": "COMMITTED"
+          "rhythm": "COMMITTED",
+          "description": "Ce qui fait pratiquer dans la durée : salle de sport, licence de club, et les applications d'entraînement ou de suivi, Hevy, Strava."
         },
         {
           "key": "leisure.sports",

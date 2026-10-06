@@ -71,6 +71,8 @@ describe('describePlan', () => {
           action: 'release',
         },
       ],
+      refreshCategories: [],
+      refreshSubcategories: [],
     }
 
     expect(describePlan(plan)).toEqual([
@@ -91,6 +93,8 @@ describe('describePlan', () => {
         createSubcategories: [],
         retireCategories: [],
         retireSubcategories: [],
+        refreshCategories: [],
+        refreshSubcategories: [],
       })
     ).toEqual([])
   })

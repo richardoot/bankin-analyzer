@@ -45,7 +45,9 @@ const catalog = (() => {
     '../dist/categories/catalog.data.json',
   ]) {
     try {
-      return JSON.parse(readFileSync(new URL(candidate, import.meta.url), 'utf8'))
+      return JSON.parse(
+        readFileSync(new URL(candidate, import.meta.url), 'utf8')
+      )
     } catch {
       // try the next location
     }
@@ -541,7 +543,7 @@ async function main() {
       description: 'Free Internet Fibre',
       amount: -34.99,
       type: 'EXPENSE',
-      category: 'Télécom et numérique',
+      category: 'Télécom et outils numériques',
       sub: 'Internet',
       account: 'Compte Courant',
     })
@@ -559,7 +561,7 @@ async function main() {
       description: 'Forfait mobile',
       amount: -19.99,
       type: 'EXPENSE',
-      category: 'Télécom et numérique',
+      category: 'Télécom et outils numériques',
       sub: 'Téléphone',
       account: 'Compte Courant',
     })
@@ -569,7 +571,7 @@ async function main() {
       amount: -13.49,
       type: 'EXPENSE',
       category: 'Loisirs et culture',
-      sub: 'Streaming et médias',
+      sub: 'Streaming, musique et médias',
       account: 'Compte Courant',
     })
     specs.push({
@@ -578,7 +580,7 @@ async function main() {
       amount: -10.99,
       type: 'EXPENSE',
       category: 'Loisirs et culture',
-      sub: 'Streaming et médias',
+      sub: 'Streaming, musique et médias',
       account: 'Compte Courant',
     })
     specs.push({
@@ -670,7 +672,7 @@ async function main() {
       amount: -39.9,
       type: 'EXPENSE',
       category: 'Loisirs et culture',
-      sub: 'Salle de sport et licences',
+      sub: 'Salle, licences et applis de sport',
       account: 'Compte Courant',
     })
 
@@ -1213,7 +1215,7 @@ async function main() {
     'Loisirs et culture': 160,
     Santé: 90,
     'Shopping et soins': 150,
-    'Télécom et numérique': 60,
+    'Télécom et outils numériques': 60,
     'Famille et amis': 100,
     'Impôts et taxes': 120,
     'Banque et crédits': 10,

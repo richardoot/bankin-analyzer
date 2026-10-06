@@ -26,6 +26,9 @@ export interface ProvisioningSummary {
   retiredDeleted: number
   /** Rows of a former catalogue version, still used, handed to the user. */
   retiredReleased: number
+  /** Rows already keyed whose label or attributes a revision changed. */
+  refreshedCategories: number
+  refreshedSubcategories: number
 }
 
 export function emptySummary(): ProvisioningSummary {
@@ -36,6 +39,8 @@ export function emptySummary(): ProvisioningSummary {
     adoptedSubcategories: 0,
     retiredDeleted: 0,
     retiredReleased: 0,
+    refreshedCategories: 0,
+    refreshedSubcategories: 0,
   }
 }
 
@@ -60,6 +65,9 @@ export async function planForUser(
         name: true,
         type: true,
         catalogKey: true,
+        icon: true,
+        defaultNature: true,
+        defaultRhythm: true,
         _count: { select: { transactions: true } },
       },
     }),
@@ -71,6 +79,8 @@ export async function planForUser(
         categoryId: true,
         name: true,
         catalogKey: true,
+        nature: true,
+        rhythm: true,
         _count: { select: { transactions: true } },
       },
     }),
@@ -121,6 +131,32 @@ export async function applyPlan(
       })
       summary.retiredReleased++
     }
+  }
+
+  // Revisions of the catalogue's own wording and attributes, on rows the
+  // user could not have changed themselves.
+  for (const refresh of plan.refreshCategories) {
+    await client.category.update({
+      where: { id: refresh.id },
+      data: {
+        name: refresh.name,
+        icon: refresh.icon,
+        defaultNature: refresh.defaultNature,
+        defaultRhythm: refresh.defaultRhythm,
+      },
+    })
+    summary.refreshedCategories++
+  }
+  for (const refresh of plan.refreshSubcategories) {
+    await client.subcategory.update({
+      where: { id: refresh.id },
+      data: {
+        name: refresh.name,
+        nature: refresh.nature,
+        rhythm: refresh.rhythm,
+      },
+    })
+    summary.refreshedSubcategories++
   }
 
   for (const adoption of plan.adoptCategories) {
