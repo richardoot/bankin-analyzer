@@ -99,6 +99,8 @@ describe('planCatalogProvisioning', () => {
     expect(plan.adoptSubcategories).toEqual([])
     expect(plan.retireCategories).toEqual([])
     expect(plan.retireSubcategories).toEqual([])
+    expect(plan.refreshCategories).toEqual([])
+    expect(plan.refreshSubcategories).toEqual([])
   })
 
   it('does nothing when the catalogue is already there', () => {
@@ -308,6 +310,70 @@ describe('planCatalogProvisioning', () => {
         { id: 'c9', name: 'Ancienne', catalogKey: 'former', action: 'delete' },
       ])
       expect(plan.retireSubcategories).toEqual([])
+    })
+  })
+
+  describe('a revised catalogue', () => {
+    it('brings a keyed row back in line with its new label and attributes', () => {
+      const plan = planCatalogProvisioning(
+        catalog,
+        [
+          {
+            ...legacy('c1', 'Logement (ancien libellé)', 'EXPENSE', 'housing'),
+            icon: '🏚️',
+            defaultNature: 'PLEASURE',
+            defaultRhythm: 'VARIABLE',
+          },
+          legacy('c2', 'Remboursements', 'INCOME', 'refunds'),
+          legacy('c3', 'Virement interne', 'TRANSFER', 'internal-transfer'),
+        ],
+        [
+          {
+            ...sub('s1', 'c1', 'Loyer ancien', 'housing.rent'),
+            nature: 'PLEASURE',
+            rhythm: 'COMMITTED',
+          },
+          sub('s2', 'c1', 'Autre', 'housing.other'),
+          sub('s3', 'c2', 'Autre', 'refunds.other'),
+        ]
+      )
+
+      expect(plan.refreshCategories).toEqual([
+        {
+          id: 'c1',
+          catalogKey: 'housing',
+          name: 'Logement',
+          icon: '🏠',
+          defaultNature: 'ESSENTIAL',
+          defaultRhythm: 'VARIABLE',
+        },
+      ])
+      expect(plan.refreshSubcategories).toEqual([
+        {
+          id: 's1',
+          catalogKey: 'housing.rent',
+          name: 'Loyer',
+          nature: 'ESSENTIAL',
+          rhythm: 'COMMITTED',
+        },
+      ])
+      // Nothing else to do: the rows exist, they were only out of date.
+      expect(plan.createSubcategories).toEqual([])
+      expect(plan.adoptCategories).toEqual([])
+    })
+
+    it('does not compare what the caller did not load', () => {
+      const plan = planCatalogProvisioning(
+        catalog,
+        [legacy('c1', 'Logement', 'EXPENSE', 'housing')],
+        [
+          sub('s1', 'c1', 'Loyer', 'housing.rent'),
+          sub('s2', 'c1', 'Autre', 'housing.other'),
+        ]
+      )
+
+      expect(plan.refreshCategories).toEqual([])
+      expect(plan.refreshSubcategories).toEqual([])
     })
   })
 

@@ -29,83 +29,85 @@ Règles :
 
 Révisé le 2026-09-30 après le premier passage de Richard dans l'assistant : Dons sortis de Famille (catégorie « Dons et solidarité »), Péage et Stationnement séparés, Train et Avion séparés, « Transports en commun ponctuels » nommé comme tel (le dictionnaire y envoie les « Transports en commun » d'un export Bankin', pas vers l'abonnement), « Concerts, festivals et spectacles » ajouté, « Cours, coaching et formation » renommé, « Famille » devenue « Famille et amis » avec la sous-catégorie « Prêt à un proche » : un prêt est une dépense de cette sous-catégorie plus une demande de remboursement au nom de la personne, que le registre neutralise (en attente si l'option de déduction est active, définitivement une fois réglée). Le transfert « Prêt à un proche » envisagé un moment a été écarté : il perdait l'axe personne que le registre porte.
 
-| Catégorie            | Sous-catégorie                    | Nature    | Rythme   |
-| -------------------- | --------------------------------- | --------- | -------- |
-| Logement             | Loyer ou crédit immobilier        | Essentiel | Engagé   |
-|                      | Charges et copropriété            | Essentiel | Engagé   |
-|                      | Électricité et gaz                | Essentiel | Engagé   |
-|                      | Eau                               | Essentiel | Engagé   |
-|                      | Assurance habitation              | Essentiel | Engagé   |
-|                      | Entretien et travaux              | Essentiel | Variable |
-|                      | Laverie et pressing               | Essentiel | Variable |
-|                      | Hébergement temporaire            | Plaisir   | Variable |
-|                      | Autre                             | Essentiel | Variable |
-| Alimentation         | Supermarché                       | Essentiel | Variable |
-|                      | Commerces de bouche et marché     | Essentiel | Variable |
-|                      | Livraison de courses              | Essentiel | Variable |
-|                      | Compléments alimentaires          | Essentiel | Variable |
-|                      | Autre                             | Essentiel | Variable |
-| Transport            | Carburant                         | Essentiel | Variable |
-|                      | Abonnement transports en commun   | Essentiel | Engagé   |
-|                      | Transports en commun ponctuels    | Essentiel | Variable |
-|                      | Train                             | Plaisir   | Variable |
-|                      | Avion                             | Plaisir   | Variable |
-|                      | Péage                             | Essentiel | Variable |
-|                      | Stationnement                     | Essentiel | Variable |
-|                      | Entretien et réparation           | Essentiel | Variable |
-|                      | Assurance auto                    | Essentiel | Engagé   |
-|                      | Crédit auto                       | Essentiel | Engagé   |
-|                      | Taxi et VTC                       | Plaisir   | Variable |
-|                      | Location de véhicule              | Plaisir   | Variable |
-|                      | Achat de véhicule                 | Essentiel | Variable |
-|                      | Autre                             | Essentiel | Variable |
-| Santé                | Médecin et spécialistes           | Essentiel | Variable |
-|                      | Pharmacie                         | Essentiel | Variable |
-|                      | Mutuelle                          | Essentiel | Engagé   |
-|                      | Optique et dentaire               | Essentiel | Variable |
-|                      | Autre                             | Essentiel | Variable |
-| Télécom et numérique | Téléphone                         | Essentiel | Engagé   |
-|                      | Internet                          | Essentiel | Engagé   |
-|                      | Logiciels, applications et IA     | Plaisir   | Engagé   |
-|                      | Autre                             | Essentiel | Engagé   |
-| Famille et amis      | Garde d'enfants                   | Essentiel | Engagé   |
-|                      | Scolarité et cantine              | Essentiel | Engagé   |
-|                      | Activités enfants                 | Essentiel | Variable |
-|                      | Pension alimentaire               | Essentiel | Engagé   |
-|                      | Aide à un proche                  | Essentiel | Variable |
-|                      | Prêt à un proche                  | Essentiel | Variable |
-|                      | Animaux                           | Essentiel | Variable |
-|                      | Autre                             | Essentiel | Variable |
-| Dons et solidarité   | Dons et associations              | Plaisir   | Variable |
-|                      | Autre                             | Plaisir   | Variable |
-| Impôts et taxes      | Impôt sur le revenu               | Essentiel | Engagé   |
-|                      | Taxe foncière                     | Essentiel | Engagé   |
-|                      | Autres taxes                      | Essentiel | Engagé   |
-|                      | Amendes                           | Essentiel | Variable |
-|                      | Autre                             | Essentiel | Engagé   |
-| Banque et crédits    | Frais bancaires                   | Essentiel | Engagé   |
-|                      | Crédit à la consommation          | Essentiel | Engagé   |
-|                      | Retrait d'espèces                 | Plaisir   | Variable |
-|                      | Autre                             | Essentiel | Variable |
-| Restaurants et bars  | Restaurant                        | Plaisir   | Variable |
-|                      | Fast-food et livraison            | Plaisir   | Variable |
-|                      | Café et bar                       | Plaisir   | Variable |
-|                      | Autre                             | Plaisir   | Variable |
-| Loisirs et culture   | Streaming et médias               | Plaisir   | Engagé   |
-|                      | Salle de sport et licences        | Plaisir   | Engagé   |
-|                      | Sport et activités ponctuelles    | Plaisir   | Variable |
-|                      | Cours, coaching et formation      | Plaisir   | Variable |
-|                      | Sorties et culture                | Plaisir   | Variable |
-|                      | Concerts, festivals et spectacles | Plaisir   | Variable |
-|                      | Jeux et hobbies                   | Plaisir   | Variable |
-|                      | Livres et presse                  | Plaisir   | Variable |
-|                      | Autre                             | Plaisir   | Variable |
-| Shopping et soins    | Vêtements                         | Plaisir   | Variable |
-|                      | High-tech                         | Plaisir   | Variable |
-|                      | Sport et équipement de loisir     | Plaisir   | Variable |
-|                      | Maison et déco                    | Plaisir   | Variable |
-|                      | Beauté et coiffeur                | Plaisir   | Variable |
-|                      | Autre                             | Plaisir   | Variable |
+| Catégorie                    | Sous-catégorie                     | Nature    | Rythme   |
+| ---------------------------- | ---------------------------------- | --------- | -------- |
+| Logement                     | Loyer ou crédit immobilier         | Essentiel | Engagé   |
+|                              | Charges et copropriété             | Essentiel | Engagé   |
+|                              | Électricité et gaz                 | Essentiel | Engagé   |
+|                              | Eau                                | Essentiel | Engagé   |
+|                              | Assurance habitation               | Essentiel | Engagé   |
+|                              | Entretien et travaux               | Essentiel | Variable |
+|                              | Laverie et pressing                | Essentiel | Variable |
+|                              | Hébergement temporaire             | Plaisir   | Variable |
+|                              | Autre                              | Essentiel | Variable |
+| Alimentation                 | Supermarché                        | Essentiel | Variable |
+|                              | Commerces de bouche et marché      | Essentiel | Variable |
+|                              | Livraison de courses               | Essentiel | Variable |
+|                              | Compléments alimentaires           | Essentiel | Variable |
+|                              | Autre                              | Essentiel | Variable |
+| Transport                    | Carburant                          | Essentiel | Variable |
+|                              | Abonnement transports en commun    | Essentiel | Engagé   |
+|                              | Transports en commun ponctuels     | Essentiel | Variable |
+|                              | Train                              | Plaisir   | Variable |
+|                              | Avion                              | Plaisir   | Variable |
+|                              | Péage                              | Essentiel | Variable |
+|                              | Stationnement                      | Essentiel | Variable |
+|                              | Entretien et réparation            | Essentiel | Variable |
+|                              | Assurance auto                     | Essentiel | Engagé   |
+|                              | Crédit auto                        | Essentiel | Engagé   |
+|                              | Taxi et VTC                        | Plaisir   | Variable |
+|                              | Location de véhicule               | Plaisir   | Variable |
+|                              | Achat de véhicule                  | Essentiel | Variable |
+|                              | Autre                              | Essentiel | Variable |
+| Santé                        | Médecin et spécialistes            | Essentiel | Variable |
+|                              | Pharmacie                          | Essentiel | Variable |
+|                              | Mutuelle                           | Essentiel | Engagé   |
+|                              | Optique et dentaire                | Essentiel | Variable |
+|                              | Autre                              | Essentiel | Variable |
+| Télécom et outils numériques | Téléphone                          | Essentiel | Engagé   |
+|                              | Internet                           | Essentiel | Engagé   |
+|                              | Logiciels, applications et IA      | Essentiel | Engagé   |
+|                              | Autre                              | Essentiel | Engagé   |
+| Famille et amis              | Garde d'enfants                    | Essentiel | Engagé   |
+|                              | Scolarité et cantine               | Essentiel | Engagé   |
+|                              | Activités enfants                  | Essentiel | Variable |
+|                              | Pension alimentaire                | Essentiel | Engagé   |
+|                              | Aide à un proche                   | Essentiel | Variable |
+|                              | Prêt à un proche                   | Essentiel | Variable |
+|                              | Animaux                            | Essentiel | Variable |
+|                              | Autre                              | Essentiel | Variable |
+| Dons et solidarité           | Dons et associations               | Plaisir   | Variable |
+|                              | Autre                              | Plaisir   | Variable |
+| Impôts et taxes              | Impôt sur le revenu                | Essentiel | Engagé   |
+|                              | Taxe foncière                      | Essentiel | Engagé   |
+|                              | Autres taxes                       | Essentiel | Engagé   |
+|                              | Amendes                            | Essentiel | Variable |
+|                              | Autre                              | Essentiel | Engagé   |
+| Banque et crédits            | Frais bancaires                    | Essentiel | Engagé   |
+|                              | Crédit à la consommation           | Essentiel | Engagé   |
+|                              | Retrait d'espèces                  | Plaisir   | Variable |
+|                              | Autre                              | Essentiel | Variable |
+| Restaurants et bars          | Restaurant                         | Plaisir   | Variable |
+|                              | Fast-food et livraison             | Plaisir   | Variable |
+|                              | Café et bar                        | Plaisir   | Variable |
+|                              | Autre                              | Plaisir   | Variable |
+| Loisirs et culture           | Streaming, musique et médias       | Plaisir   | Engagé   |
+|                              | Salle, licences et applis de sport | Plaisir   | Engagé   |
+|                              | Sport et activités ponctuelles     | Plaisir   | Variable |
+|                              | Cours, coaching et formation       | Plaisir   | Variable |
+|                              | Sorties et culture                 | Plaisir   | Variable |
+|                              | Concerts, festivals et spectacles  | Plaisir   | Variable |
+|                              | Jeux et hobbies                    | Plaisir   | Variable |
+|                              | Livres et presse                   | Plaisir   | Variable |
+|                              | Autre                              | Plaisir   | Variable |
+| Shopping et soins            | Vêtements                          | Plaisir   | Variable |
+|                              | High-tech                          | Plaisir   | Variable |
+|                              | Sport et équipement de loisir      | Plaisir   | Variable |
+|                              | Maison et déco                     | Plaisir   | Variable |
+|                              | Beauté et coiffeur                 | Plaisir   | Variable |
+|                              | Autre                              | Plaisir   | Variable |
+
+Révisé le 2026-10-06 (version 4), après l'examen de neuf abonnements avec Richard : « Télécom et numérique » devient « Télécom et outils numériques » et sa description dit qu'un logiciel au service d'un loisir, d'un sport ou d'un travail va avec eux ; « Logiciels, applications et IA » devient la sous-catégorie résiduelle des outils généraux, en nature essentielle ; « Streaming et médias » devient « Streaming, musique et médias » ; « Salle de sport et licences » devient « Salle, licences et applis de sport ». Le provisionnement sait désormais rafraîchir le libellé et les attributs d'une ligne déjà à clé quand le catalogue change (`refreshCategories`, `refreshSubcategories`), puisqu'une ligne du catalogue ne peut pas avoir été renommée par l'utilisateur. Le regroupement des abonnements est un chantier à part, `agent-os/product/recurrences.md` : une vue calculée des récurrences, pas une catégorie ni un tag.
 
 ## Catalogue des revenus (à valider)
 
@@ -216,6 +218,8 @@ pnpm ts-node src/scripts/migrate-legacy-categories.ts --email <email> --apply ma
 **Lot 5 livré le 2026-10-03.** Trois pièces, aucune entité nouvelle. (1) Le prompt lit le catalogue : `describeCatalog` donne à chaque catégorie sa description et à chaque sous-catégorie sa nature, son rythme et sa description (une sous-catégorie créée par l'utilisateur porte ses deux attributs sans description, une catégorie héritée son nom seul) ; le prompt système explique les deux axes et demande la sous-catégorie la plus précise avant « Autre ». (2) Les règles d'historique raisonnent en clés : `CategorizedHistoryRow` porte `categoryKey` et `subcategoryKey`, `filingKeyOf` compte ensemble deux lignes de même clé quels que soient leurs identifiants (avant et après une migration), avec repli sur l'identifiant pour une sous-catégorie personnalisée ; la synchronisation bancaire alimente ces clés. (3) Une mémoire de marchands partagée, `merchant-memory.ts` et `MerchantMemoryService` : un agrégat SQL de tout ce qui est classé sous une clé de catalogue, par libellé, signe et clé, avec un compte et un nombre d'utilisateurs, jamais un montant, une date ni un compte, mis en cache dix minutes ; le libellé est réduit au marchand (`merchantKey`, bruit bancaire retiré, mots triés), la recherche se fait par ressemblance comme pour les règles, et une proposition exige au moins deux utilisateurs, cinq classements et quatre cinquièmes d'accord ; `categorizeTransactions` la consulte avant le modèle et n'applique une clé que si l'utilisateur la porte, sinon la ligne va au modèle. `filingCategories` remplace le filtre de type dans les deux appelants. Vérifié : unitaires (`merchant-memory.spec.ts`, specs du catégoriseur, des règles, du service, de la synchro et de l'import), e2e, lint, typecheck. Le script `categorise-synced.ts` garde son index propre à l'utilisateur, il n'est pas touché.
 
 **Lot 2 bis livré le 2026-10-04.** `LegacySource.isCatalog` ; `readLegacySource` accepte une catégorie du catalogue et ne garde que ses sous-catégories sans clé (404 s'il n'y en a aucune) ; `readLegacyOverview` liste les catégories sans clé et celles qui portent une sous-catégorie sans clé ; le plan ne supprime jamais une catégorie du catalogue et refuse une ligne classée sur elle-même ; DTO et type frontend portent `isCatalog` et `catalogKey` ; page et bandeau adaptés ; le CLI cherche la catégorie par nom et type sans exiger l'absence de clé. Vérifié : spec du plan (2 cas), e2e (3 cas : liste, rangement avec suppression de la sous-catégorie et conservation de la catégorie, refus du classement sur soi-même), spec de la page, suites complètes, lint, typecheck.
+
+**Catalogue v4 livré le 2026-10-06.** Libellés et descriptions de Télécom, Logiciels, Streaming et Salle de sport ; nature de Logiciels en essentiel. Le planificateur compare les lignes à clé au catalogue et planifie un rafraîchissement du libellé, de l'icône et des attributs quand ils diffèrent ; l'exécuteur l'applique avant les adoptions ; le script l'affiche et le compte. Vérifié : spec du plan (2 cas), e2e (une ligne dont le libellé a dérivé revient en ligne), suites complètes. Appliqué en production par le script après déploiement.
 
 Ce que le lot 3 laisse au lot 4 : classer une transaction dans un transfert depuis l'écran (le type de la transaction doit changer, et le dashboard doit savoir quoi en faire) ; les modales ne proposent donc pas encore les catégories de transfert.
 

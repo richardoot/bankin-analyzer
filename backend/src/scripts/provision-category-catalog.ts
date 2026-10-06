@@ -81,6 +81,14 @@ export function describePlan(plan: ProvisioningPlan): string[] {
       `  create subcategory ${creation.subcategory.key} under ${creation.categoryId}`
     )
   }
+  for (const refresh of plan.refreshCategories) {
+    lines.push(`  refresh category  ${refresh.catalogKey} → "${refresh.name}"`)
+  }
+  for (const refresh of plan.refreshSubcategories) {
+    lines.push(
+      `  refresh subcategory ${refresh.catalogKey} → "${refresh.name}"`
+    )
+  }
   for (const retirement of [
     ...plan.retireCategories,
     ...plan.retireSubcategories,
@@ -127,7 +135,8 @@ export async function main(
         `${summary.adoptedCategories} adopted, ` +
         `${summary.createdSubcategories} subcategories created, ` +
         `${summary.adoptedSubcategories} adopted, ` +
-        `${summary.retiredDeleted} retired rows deleted, ${summary.retiredReleased} released`
+        `${summary.retiredDeleted} retired rows deleted, ${summary.retiredReleased} released, ` +
+        `${summary.refreshedCategories + summary.refreshedSubcategories} refreshed`
     )
   }
   console.log('')

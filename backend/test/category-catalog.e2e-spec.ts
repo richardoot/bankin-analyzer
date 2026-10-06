@@ -79,6 +79,41 @@ describe('Category catalogue (e2e)', () => {
     expect(transfer).toMatchObject({ type: 'TRANSFER', defaultNature: null })
   })
 
+  it('brings a catalogue row back in line when its wording drifted', async () => {
+    const userId = await ownerId()
+    // As if a former catalogue version had named and tuned it differently;
+    // the user cannot do this themselves, a catalogue row is locked.
+    const housing = await prisma.category.findUniqueOrThrow({
+      where: { userId_catalogKey: { userId, catalogKey: 'housing' } },
+    })
+    await prisma.category.update({
+      where: { id: housing.id },
+      data: { name: 'Habitat', icon: '🏚️' },
+    })
+    const rent = await prisma.subcategory.findUniqueOrThrow({
+      where: { userId_catalogKey: { userId, catalogKey: 'housing.rent' } },
+    })
+    await prisma.subcategory.update({
+      where: { id: rent.id },
+      data: { name: 'Loyer', nature: 'PLEASURE' },
+    })
+
+    const summary = await provisionCatalogForUser(prisma, userId)
+
+    expect(summary).toMatchObject({
+      refreshedCategories: 1,
+      refreshedSubcategories: 1,
+      createdCategories: 0,
+      createdSubcategories: 0,
+    })
+    expect(
+      await prisma.category.findUniqueOrThrow({ where: { id: housing.id } })
+    ).toMatchObject({ name: 'Logement', icon: '🏠' })
+    expect(
+      await prisma.subcategory.findUniqueOrThrow({ where: { id: rent.id } })
+    ).toMatchObject({ name: 'Loyer ou crédit immobilier', nature: 'ESSENTIAL' })
+  })
+
   it('is idempotent: a second run finds nothing to do', async () => {
     const userId = await ownerId()
 
@@ -91,6 +126,8 @@ describe('Category catalogue (e2e)', () => {
       adoptedSubcategories: 0,
       retiredDeleted: 0,
       retiredReleased: 0,
+      refreshedCategories: 0,
+      refreshedSubcategories: 0,
     })
     expect(await prisma.category.count({ where: { userId } })).toBe(
       CATALOG_CATEGORY_COUNT
@@ -140,6 +177,8 @@ describe('Category catalogue (e2e)', () => {
       adoptedSubcategories: 1,
       retiredDeleted: 0,
       retiredReleased: 0,
+      refreshedCategories: 0,
+      refreshedSubcategories: 0,
     })
 
     // Adopted in place: same id, catalogue key, icon and defaults.
