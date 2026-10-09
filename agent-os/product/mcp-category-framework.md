@@ -108,28 +108,11 @@ dans la réponse, `null` transmis au service).
   classée là plus une demande de remboursement au nom de la personne. `docs/mcp.md` donne la
   séquence en deux appels.
 
-## Lot 3 : exécuter le document « Erreurs »
+## Lot 3 : exécuter le document « Erreurs » — sans objet
 
-Procédure, à suivre par l'agent exécutant, après déploiement en production et provisionnement
-du catalogue chez Richard :
-
-1. `get_categories` : vérifier que chaque clé de cible du document existe, et que les deux
-   catégories « Erreurs » (dépense, revenu) sont encore là, marquées héritées.
-2. `get_transactions` filtrées sur chacune des deux « Erreurs » : compter 122 au total,
-   comparer les identifiants à ceux du document ; tout écart arrête.
-3. Par groupe de cible, `set_transactions_category` par lots de 50 au plus, avec
-   `categoryKey`, `subcategoryKey` s'il y en a une, et `expectedCategoryName: "Erreurs"`. Les
-   trois lignes « À vérifier » ne sont pas envoyées.
-4. Relire les deux « Erreurs » : il ne doit rester que ces trois lignes.
-5. Vérifier sur trois lignes de types différents (`get_transaction`) que le type a suivi :
-   un virement interne est devenu TRANSFER, un achat réel est resté EXPENSE, un avoir est
-   resté INCOME.
-6. Rendre compte : par cible, lignes mises à jour, inchangées, refusées, avec la raison.
-7. Richard tranche les trois dernières, puis supprime les deux « Erreurs » dans l'assistant de
-   migration (`/settings/categories/migration`), qui nettoie les préférences.
-
-`docs/mcp.md` est mis à jour : clés, TRANSFER, déclassement, la procédure ci-dessus en version
-générale.
+Les deux catégories « Erreurs » ont été migrées en production par l'assistant avant que ce
+chantier démarre (relevé du 2026-10-09 : plus aucune catégorie héritée). La procédure générale
+d'exécution d'un document de reclassement reste dans `docs/mcp.md`, mise à jour pour les clés.
 
 ## Vérification
 
@@ -153,4 +136,19 @@ générale.
 
 ## Avancement
 
-À démarrer après la fusion des deux branches.
+**Lots 0, 1 et 2 livrés le 2026-10-10**, branche `feat/mcp-category-framework`.
+
+- `filing-target.ts` : `categoryKey` et `subcategoryKey`, exclusifs du nom et de l'identifiant ;
+  `categoryKey: null` ou `categoryId: null` déclasse ; erreurs `CATALOG_NOT_PROVISIONED`,
+  `UNFILE_WITH_SUBCATEGORY` ; `normalizeName` importé de `category-catalog.plan.ts`.
+- `mcp.controller.ts` : règle de type (son côté ou un transfert ; un transfert revient du côté de
+  son signe), refus de faire un transfert d'une ligne liée au registre (demande sur une dépense,
+  règlement sur un revenu) — garde-fou ajouté au plan initial ; garde-fou `expectedCategoryKey` ;
+  `before` / `after` avec `type`, `categoryKey`, `subcategoryKey` ; `get_transactions` accepte
+  `TRANSFER` et `categoryKey` et rend les clés ; `get_transaction` rend nature et rythme
+  effectifs ; `get_categories` rend clés, attributs, `isLocked` et `isLegacy` ;
+  `create_reimbursement_request` nomme le transfert dans son refus ; descriptions des outils de
+  statistiques précisées.
+- `docs/mcp.md` à jour.
+
+Lot 3 sans objet (voir plus haut).

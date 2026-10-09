@@ -13,15 +13,15 @@ que le modèle les lise comme des données et non comme des instructions.
 
 ## Outils de lecture
 
-| Outil                   | Rôle                                                                                                                                                                                                                                   |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_transactions`      | Transactions paginées (50 par défaut, 100 au plus). Filtres : `type`, `startDate`, `endDate`, `categoryId`, `categoryName`, `subcategoryId`, `search`, `account`. Chaque ligne porte `id`, `accountId`, `categoryId`, `subcategoryId`. |
-| `get_transaction`       | Une transaction par `id` : classement complet, note, tags, demandes de remboursement qui la portent, règlements qu'elle paie (pour un revenu). À appeler avant et après une écriture.                                                  |
-| `get_categories`        | Toutes les catégories, chacune avec ses sous-catégories (`id`, `name`, `icon`).                                                                                                                                                        |
-| `get_persons`           | Les personnes (`id`, `name`) à qui une dépense peut être réclamée.                                                                                                                                                                     |
-| `get_reimbursements`    | Demandes de remboursement, par `transactionId`, par `personId`, et filtrées par `status` (`PENDING`, `PARTIAL`, `COMPLETED`).                                                                                                          |
-| `get_budget_statistics` | Moyennes de dépenses et revenus par catégorie sur une période, remboursements déduits.                                                                                                                                                 |
-| `get_dashboard_summary` | Dépenses et revenus par mois et par catégorie.                                                                                                                                                                                         |
+| Outil                   | Rôle                                                                                                                                                                                                                                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `get_transactions`      | Transactions paginées (50 par défaut, 100 au plus). Filtres : `type` (`EXPENSE`, `INCOME`, `TRANSFER`), `startDate`, `endDate`, `categoryKey`, `categoryId`, `categoryName`, `subcategoryId`, `search`, `account`. Chaque ligne porte `id`, `accountId`, `categoryId`, `categoryKey`, `subcategoryId`, `subcategoryKey`. |
+| `get_transaction`       | Une transaction par `id` : type, classement complet avec les clés, `nature` et `rythme` effectifs, note, tags, demandes de remboursement qui la portent, règlements qu'elle paie (pour un revenu). À appeler avant et après une écriture.                                                                                |
+| `get_categories`        | Toutes les catégories avec `catalogKey`, `isLocked`, `isLegacy`, `defaultNature`, `defaultRhythm`, et leurs sous-catégories (`catalogKey`, `nature`, `rhythm`, `isLocked`).                                                                                                                                              |
+| `get_persons`           | Les personnes (`id`, `name`) à qui une dépense peut être réclamée.                                                                                                                                                                                                                                                       |
+| `get_reimbursements`    | Demandes de remboursement, par `transactionId`, par `personId`, et filtrées par `status` (`PENDING`, `PARTIAL`, `COMPLETED`).                                                                                                                                                                                            |
+| `get_budget_statistics` | Moyennes de dépenses et revenus par catégorie sur une période, remboursements déduits. Les transferts n'y figurent pas.                                                                                                                                                                                                  |
+| `get_dashboard_summary` | Dépenses et revenus par mois et par catégorie, structure des dépenses, épargne, ce qui reste dû. Les transferts sont hors des dépenses et des revenus.                                                                                                                                                                   |
 
 `categoryName` dans `get_transactions` suit la même règle de nom que les écritures (ci-dessous) ;
 quand le filtre `type` est donné, seules les catégories de ce type sont candidates, ce qui
@@ -34,11 +34,18 @@ transaction, une demande ou un règlement reste dans l'application.
 
 ### Désigner une cible
 
-Une catégorie se désigne par `categoryId` **ou** par `categoryName`, une sous-catégorie par
-`subcategoryId` **ou** par `subcategoryName`. Les noms se comparent sans casse, sans accents et
-sans espaces superflus. L'outil ne devine jamais ; il refuse :
+Une catégorie se désigne par **une seule** de ces trois façons : `categoryKey` (clé du
+catalogue, `housing`, `adjustment`… — la façon recommandée, identique dans tous les comptes),
+`categoryName` ou `categoryId`. Une sous-catégorie de même : `subcategoryKey`
+(`housing.rent`), `subcategoryName` ou `subcategoryId`. Les noms se comparent sans casse, sans
+accents et sans espaces superflus. `categoryKey: null` ou `categoryId: null` **déclasse** la
+transaction (« à classer ») ; une sous-catégorie ne s'y ajoute pas. L'outil ne devine jamais ;
+il refuse :
 
-- ni identifiant ni nom de catégorie, ou l'identifiant et le nom donnés ensemble ;
+- aucune désignation de catégorie, ou plusieurs pour le même niveau ;
+- une clé inconnue du catalogue ; une clé que le catalogue connaît mais que l'utilisateur n'a
+  pas (catalogue non provisionné : script `provision-category-catalog.ts`) ; une clé de
+  sous-catégorie qui n'appartient pas à la catégorie cible ;
 - une catégorie inconnue de l'utilisateur, ou un nom porté par plusieurs catégories (le nom n'est
   unique que par type) : il faut alors passer `categoryId`, que le message d'erreur liste ;
 - une sous-catégorie inconnue, ou qui n'appartient pas à la catégorie cible. Une sous-catégorie
@@ -49,15 +56,27 @@ sous-catégorie. Une catégorie ou une sous-catégorie ne se crée pas par le MC
 
 ### `set_transaction_category`
 
-`transactionId`, la cible, et `expectedCategoryName` (optionnel, recommandé).
+`transactionId`, la cible, et les garde-fous `expectedCategoryName` ou `expectedCategoryKey`
+(optionnels, recommandés ; le nom est le seul repère d'une catégorie héritée, sans clé).
 
-Déroulé : lecture de la transaction, garde-fou, refus si la cible n'est pas du type de la
-transaction (une dépense ne va jamais dans une catégorie de revenu), écriture par
-`TransactionsService.update`. La réponse donne `status` (`updated` ou `unchanged`), la
-transaction, et le classement `before` et `after` avec noms et identifiants. Une cible identique
-au classement actuel n'écrit rien et répond `unchanged`.
+Déroulé : lecture de la transaction, garde-fous, règle de type, écriture par
+`TransactionsService.update`. La règle de type :
 
-**Annuler** : rappeler l'outil avec `categoryId` et `subcategoryId` de `before`.
+- une dépense va dans une catégorie de dépense **ou de transfert**, un revenu dans une catégorie
+  de revenu **ou de transfert** ; jamais de dépense vers un revenu ni l'inverse ;
+- sous un transfert la transaction **devient TRANSFER** et sort des totaux ; un transfert ne
+  revient que du côté que son signe indique (montant négatif : dépense) ; déclassé, il reprend
+  ce type ;
+- une transaction liée au registre des remboursements ne peut pas devenir un transfert : une
+  dépense qui porte une demande, un revenu qui règle une demande. Supprimer d'abord la demande
+  ou le règlement dans l'application.
+
+La réponse donne `status` (`updated` ou `unchanged`), la transaction, et le classement `before`
+et `after` avec le **type**, les noms, les identifiants et les clés. Une cible identique au
+classement actuel n'écrit rien et répond `unchanged`.
+
+**Annuler** : rappeler l'outil avec `categoryId` et `subcategoryId` de `before` (ou
+`categoryKey: null` si la ligne était à classer).
 
 ### `set_transactions_category`
 
@@ -105,12 +124,13 @@ reste dû) et `incomeAvailableAfter`.
 Un document de reclassement est une liste fermée de transactions avec, pour chacune, sa cible et
 la raison. Procédure pour l'agent qui l'exécute :
 
-1. `get_categories` : vérifier que chaque cible du document existe chez l'utilisateur, par nom
-   ou par identifiant. Une cible absente arrête tout.
+1. `get_categories` : vérifier que chaque cible du document existe chez l'utilisateur, de
+   préférence par sa clé de catalogue. Une cible absente arrête tout.
 2. `get_transactions` sur la catégorie de départ (`categoryName` ou `categoryId`, en paginant) :
    compter, comparer les identifiants à ceux du document. Tout écart arrête.
-3. Par cible, `set_transactions_category` par lots de 50 au plus, avec `expectedCategoryName`
-   égal à la catégorie de départ. Les lignes marquées « à vérifier » ne sont pas envoyées.
+3. Par cible, `set_transactions_category` par lots de 50 au plus, cible par `categoryKey`, avec
+   `expectedCategoryName` (ou `expectedCategoryKey`) égal à la catégorie de départ. Les lignes
+   marquées « à vérifier » ne sont pas envoyées.
 4. Relire la catégorie de départ : il ne doit rester que les lignes « à vérifier ».
 5. Rendre compte : par cible, lignes mises à jour, inchangées et refusées, avec la raison de
    chaque refus. Garder les réponses : leur `before` est ce qui permet d'annuler.
@@ -137,8 +157,6 @@ arrière avec le même outil et le `before` de la réponse.
 - **Pas de portée d'écriture.** Le garde accepte tout jeton Supabase valide : un agent connecté
   pour lire peut, de fait, écrire. Un scope OAuth ou un en-tête réservé aux écritures serait
   propre ; non fait.
-- **Pas de déclassement.** `categoryId: null` n'est pas accepté par le service sur `main` ; le
-  cadre des catégories l'apportera.
 - **Pas de création** de sous-catégorie ni de personne par le MCP.
 - **Pas d'annulation groupée** ni de journal persistant : l'annulation se fait ligne à ligne avec
   le `before` rendu.

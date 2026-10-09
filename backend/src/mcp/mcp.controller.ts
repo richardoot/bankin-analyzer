@@ -25,6 +25,7 @@ import type {
 import { TransactionsService } from '../transactions/transactions.service'
 import type { TransactionFilters } from '../transactions/transaction-filters'
 import { CategoriesService } from '../categories/categories.service'
+import { toCategoryResponse } from '../categories/dto'
 import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { BudgetsService } from '../budgets/budgets.service'
 import { DashboardService } from '../dashboard/dashboard.service'
@@ -87,8 +88,20 @@ async function answer(body: () => Promise<ToolResult>): Promise<ToolResult> {
 
 /** A transaction as read with its relations (see TRANSACTION_READ_INCLUDE). */
 type ReadTransaction = Transaction & {
-  category?: { id: string; name: string } | null
-  subcategoryRef?: { id: string; name: string } | null
+  category?: {
+    id: string
+    name: string
+    catalogKey?: string | null
+    defaultNature?: string | null
+    defaultRhythm?: string | null
+  } | null
+  subcategoryRef?: {
+    id: string
+    name: string
+    catalogKey?: string | null
+    nature?: string | null
+    rhythm?: string | null
+  } | null
   accountRef?: { name: string } | null
   tags?: Array<{ tag: { id: string; name: string } }>
   settlementsAsIncome?: Array<{
@@ -99,21 +112,36 @@ type ReadTransaction = Transaction & {
   }>
 }
 
-/** Where a transaction is filed, as a write reports it before and after. */
+/**
+ * Where a transaction is filed, as a write reports it before and after. The
+ * type is part of it: filing under a transfer category makes the row a
+ * TRANSFER, and unfiling it gives back the type its sign implies.
+ */
 interface Filing {
+  type: TransactionType
   category: string | null
   categoryId: string | null
+  categoryKey: string | null
   subcategory: string | null
   subcategoryId: string | null
+  subcategoryKey: string | null
 }
 
 function filingOf(tx: ReadTransaction): Filing {
   return {
+    type: tx.type,
     category: tx.category?.name ?? null,
     categoryId: tx.categoryId,
+    categoryKey: tx.category?.catalogKey ?? null,
     subcategory: tx.subcategoryRef?.name ?? null,
     subcategoryId: tx.subcategoryId,
+    subcategoryKey: tx.subcategoryRef?.catalogKey ?? null,
   }
+}
+
+/** The type a row has by its sign alone, the one it falls back to unfiled. */
+function signType(tx: Transaction): TransactionType {
+  return Number(tx.amount) < 0 ? 'EXPENSE' : 'INCOME'
 }
 
 function transactionHeader(tx: Transaction): {
@@ -133,7 +161,9 @@ function transactionHeader(tx: Transaction): {
 }
 
 function typeLabel(type: TransactionType): string {
-  return type === 'EXPENSE' ? 'une dépense (EXPENSE)' : 'un revenu (INCOME)'
+  if (type === 'EXPENSE') return 'une dépense (EXPENSE)'
+  if (type === 'INCOME') return 'un revenu (INCOME)'
+  return 'un transfert (TRANSFER)'
 }
 
 /** One row of a reclassing, as the batch tool reports it. */
@@ -172,16 +202,31 @@ function reimbursementSummary(r: ReimbursementResponseDto): {
 }
 
 const filingTargetShape = {
+  categoryKey: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      'Catégorie cible, par clé de catalogue (housing, adjustment, internal-transfer…, voir get_categories). ' +
+        'La façon recommandée de viser une catégorie. null déclasse la transaction (« à classer »). ' +
+        'Un seul de categoryKey, categoryName, categoryId.'
+    ),
   categoryId: z
     .string()
+    .nullable()
     .optional()
-    .describe('Catégorie cible, par identifiant (voir get_categories)'),
+    .describe(
+      'Catégorie cible, par identifiant (voir get_categories). null déclasse la transaction.'
+    ),
   categoryName: z
     .string()
     .optional()
+    .describe('Catégorie cible, par nom (casse, accents et espaces ignorés).'),
+  subcategoryKey: z
+    .string()
+    .optional()
     .describe(
-      'Catégorie cible, par nom (casse, accents et espaces ignorés). ' +
-        'categoryId ou categoryName est requis, pas les deux.'
+      'Sous-catégorie cible, par clé de catalogue (housing.rent…) ; elle doit appartenir à la catégorie cible.'
     ),
   subcategoryId: z
     .string()
@@ -201,6 +246,18 @@ const filingTargetShape = {
       'Garde-fou : nom de la catégorie actuelle de la transaction. ' +
         'Si la base dit autre chose, la ligne est refusée sans écriture. Chaîne vide pour une ligne non classée.'
     ),
+  expectedCategoryKey: z
+    .string()
+    .optional()
+    .describe(
+      'Garde-fou : clé de catalogue de la catégorie actuelle. Si la base dit autre chose, la ligne est refusée sans écriture.'
+    ),
+}
+
+/** The two guards a write may carry, checked against the row before anything is written. */
+interface FilingGuards {
+  expectedCategoryName?: string | undefined
+  expectedCategoryKey?: string | undefined
 }
 
 @Controller('mcp')
@@ -238,9 +295,13 @@ export class McpController {
   private async reclassOne(
     userId: string,
     transactionId: string,
-    target: { category: FilingCategory; subcategory: FilingSubcategory | null },
-    expectedCategoryName: string | undefined
+    target: {
+      category: FilingCategory | null
+      subcategory: FilingSubcategory | null
+    },
+    guards: FilingGuards
   ): Promise<ReclassOutcome> {
+    const { expectedCategoryName, expectedCategoryKey } = guards
     let tx: ReadTransaction
     try {
       tx = await this.transactionsService.findOne(transactionId, userId)
@@ -269,19 +330,62 @@ export class McpController {
       }
     }
 
-    // The sign is never crossed: an expense filed under an income category
-    // would be counted on the wrong side of every total.
-    if (target.category.type !== tx.type) {
+    if (
+      expectedCategoryKey !== undefined &&
+      expectedCategoryKey !== (before.categoryKey ?? '')
+    ) {
       return {
         transactionId,
         status: 'refused',
-        reason: `La transaction est ${typeLabel(tx.type)}, la catégorie « ${target.category.name} » est de type ${target.category.type}.`,
+        reason: `Garde-fou : la transaction est classée sous la clé « ${before.categoryKey ?? 'aucune'} », pas « ${expectedCategoryKey} ». Rien n'a été écrit.`,
       }
     }
 
+    // The sign is never crossed: an expense filed under an income category
+    // would be counted on the wrong side of every total. A transfer is the one
+    // way across — the row then leaves the totals — and a transfer goes back
+    // only to the side its sign says.
+    const own = signType(tx)
+    if (target.category) {
+      const allowed =
+        target.category.type === 'TRANSFER' || target.category.type === own
+      if (!allowed) {
+        return {
+          transactionId,
+          status: 'refused',
+          reason: `La transaction est ${typeLabel(tx.type)} de montant ${Number(tx.amount)} €, la catégorie « ${target.category.name} » est de type ${target.category.type}.`,
+        }
+      }
+    }
+
+    // A row that carries the reimbursement ledger cannot leave its side: an
+    // expense with requests on it, or an income paying some, would stop being
+    // read by the very totals the ledger nets.
+    const leavingSide =
+      tx.type !== 'TRANSFER' &&
+      (target.category === null ? false : target.category.type !== tx.type)
+    if (leavingSide) {
+      const requests = await this.reimbursementsService.findByTransaction(
+        tx.id,
+        userId
+      )
+      const settlements = tx.settlementsAsIncome ?? []
+      if (requests.length > 0 || settlements.length > 0) {
+        return {
+          transactionId,
+          status: 'refused',
+          reason:
+            requests.length > 0
+              ? `La transaction porte ${requests.length} demande(s) de remboursement : elle ne peut pas devenir un transfert. Supprimer d'abord les demandes.`
+              : `La transaction règle ${settlements.length} demande(s) de remboursement : elle ne peut pas devenir un transfert. Supprimer d'abord les règlements.`,
+        }
+      }
+    }
+
+    const categoryId = target.category?.id ?? null
     const subcategoryId = target.subcategory?.id ?? null
     if (
-      before.categoryId === target.category.id &&
+      before.categoryId === categoryId &&
       before.subcategoryId === subcategoryId
     ) {
       return {
@@ -296,14 +400,14 @@ export class McpController {
     const updated = (await this.transactionsService.update(
       transactionId,
       userId,
-      { categoryId: target.category.id, subcategoryId }
+      categoryId === null ? { categoryId: null } : { categoryId, subcategoryId }
     )) as ReadTransaction
     const after = filingOf(updated)
 
     this.logger.log(
       `reclass user=${userId} transaction=${transactionId} ` +
-        `before=${before.categoryId ?? '-'}/${before.subcategoryId ?? '-'} ` +
-        `after=${after.categoryId ?? '-'}/${after.subcategoryId ?? '-'}`
+        `before=${before.type}:${before.categoryId ?? '-'}/${before.subcategoryId ?? '-'} ` +
+        `after=${after.type}:${after.categoryId ?? '-'}/${after.subcategoryId ?? '-'}`
     )
 
     return {
@@ -328,9 +432,11 @@ export class McpController {
         'Chaque ligne porte son id et ceux de son classement, utilisables par les outils d ecriture.',
       {
         type: z
-          .enum(['EXPENSE', 'INCOME'])
+          .enum(['EXPENSE', 'INCOME', 'TRANSFER'])
           .optional()
-          .describe('Filtrer par type'),
+          .describe(
+            'Filtrer par type ; TRANSFER pour les mouvements hors totaux'
+          ),
         startDate: z
           .string()
           .optional()
@@ -340,6 +446,10 @@ export class McpController {
           .optional()
           .describe('Date de fin (ISO format YYYY-MM-DD)'),
         categoryId: z.string().optional().describe('Filtrer par categorie'),
+        categoryKey: z
+          .string()
+          .optional()
+          .describe('Filtrer par cle de catalogue (housing, adjustment…)'),
         categoryName: z
           .string()
           .optional()
@@ -371,20 +481,21 @@ export class McpController {
           if (params.search) filters.search = params.search
           if (params.account) filters.account = params.account
 
-          if (params.categoryName) {
+          if (params.categoryName || params.categoryKey) {
             const { categories } = await this.loadFilingTree(userId)
             const resolved = resolveFilingTarget(
-              params.type
+              params.type && params.categoryName
                 ? categories.filter(c => c.type === params.type)
                 : categories,
               [],
               {
                 categoryId: params.categoryId,
                 categoryName: params.categoryName,
+                categoryKey: params.categoryKey,
               }
             )
             if (!resolved.ok) return errorResponse(resolved.message)
-            filters.categoryId = resolved.category.id
+            if (resolved.category) filters.categoryId = resolved.category.id
           }
 
           const result = await this.transactionsService.findAllByUserPaginated(
@@ -409,8 +520,10 @@ export class McpController {
                 account: t.accountRef?.name,
                 categoryId: tx.categoryId,
                 category: t.category?.name,
+                categoryKey: t.category?.catalogKey ?? null,
                 subcategoryId: tx.subcategoryId,
                 subcategory: tx.subcategory,
+                subcategoryKey: t.subcategoryRef?.catalogKey ?? null,
                 isPointed: tx.isPointed,
               }
             }),
@@ -442,6 +555,12 @@ export class McpController {
             accountId: tx.accountId,
             account: tx.accountRef?.name,
             ...filingOf(tx),
+            // The subcategory's own attributes, or the category's defaults for
+            // a row filed at the category alone. Null on income and transfers.
+            nature:
+              tx.subcategoryRef?.nature ?? tx.category?.defaultNature ?? null,
+            rhythm:
+              tx.subcategoryRef?.rhythm ?? tx.category?.defaultRhythm ?? null,
             note: tx.note,
             isPointed: tx.isPointed,
             tags: (tx.tags ?? []).map(({ tag }) => ({
@@ -461,7 +580,10 @@ export class McpController {
     // ── Tool: get_categories ──
     server.tool(
       'get_categories',
-      'Recupere toutes les categories de transactions, chacune avec ses sous-categories',
+      'Recupere toutes les categories de transactions, chacune avec ses sous-categories. ' +
+        'Une categorie du catalogue porte sa cle (catalogKey), a viser de preference dans les ecritures ; ' +
+        'une categorie heritee (isLegacy) date d avant le catalogue et attend la migration. ' +
+        'Les categories TRANSFER sortent des totaux.',
       {},
       async () =>
         answer(async () => {
@@ -469,13 +591,18 @@ export class McpController {
             await this.loadFilingTree(userId)
           return dataResponse(
             categories.map(category => ({
-              ...category,
+              ...toCategoryResponse(category),
+              isLegacy: !category.catalogKey,
               subcategories: subcategories
                 .filter(s => s.categoryId === category.id)
                 .map(s => ({
                   id: s.id,
                   name: s.name,
                   icon: s.icon,
+                  catalogKey: s.catalogKey,
+                  isLocked: s.catalogKey !== null,
+                  nature: s.nature,
+                  rhythm: s.rhythm,
                 })),
             }))
           )
@@ -545,8 +672,10 @@ export class McpController {
     server.tool(
       'set_transaction_category',
       'Reclasse une transaction : change sa categorie et sa sous-categorie. ' +
-        'La cible doit etre du meme type que la transaction. Renvoie le classement avant et ' +
-        'apres ; pour annuler, rappeler l outil avec l ancien classement.',
+        'La cible se designe de preference par cle de catalogue (categoryKey, subcategoryKey). ' +
+        'Une depense va dans une categorie de depense ou de transfert, un revenu dans une categorie de revenu ou de transfert ; ' +
+        'sous un transfert la transaction devient TRANSFER et sort des totaux. categoryKey null la declasse. ' +
+        'Renvoie le classement avant et apres, type compris ; pour annuler, rappeler l outil avec l ancien classement.',
       {
         transactionId: z.string().describe('La transaction a reclasser'),
         ...filingTargetShape,
@@ -562,7 +691,7 @@ export class McpController {
             userId,
             params.transactionId,
             target,
-            params.expectedCategoryName
+            params
           )
           if (outcome.status === 'refused') return errorResponse(outcome.reason)
 
@@ -612,12 +741,7 @@ export class McpController {
           const results: ReclassOutcome[] = []
           for (const transactionId of params.transactionIds) {
             results.push(
-              await this.reclassOne(
-                userId,
-                transactionId,
-                target,
-                params.expectedCategoryName
-              )
+              await this.reclassOne(userId, transactionId, target, params)
             )
           }
 
@@ -626,10 +750,13 @@ export class McpController {
 
           return dataResponse({
             target: {
-              category: target.category.name,
-              categoryId: target.category.id,
+              category: target.category?.name ?? null,
+              categoryId: target.category?.id ?? null,
+              categoryKey: target.category?.catalogKey ?? null,
+              type: target.category?.type ?? null,
               subcategory: target.subcategory?.name ?? null,
               subcategoryId: target.subcategory?.id ?? null,
+              subcategoryKey: target.subcategory?.catalogKey ?? null,
             },
             counts,
             results,
@@ -826,7 +953,9 @@ export class McpController {
         'sur une periode donnee. Le serveur deduit automatiquement les remboursements recus des ' +
         'depenses (controlable via deductReimbursements). Les remboursements en attente ' +
         '(PENDING/PARTIAL) peuvent aussi etre deduits via deductPendingReimbursements. ' +
-        'Les montants retournes sont donc des montants nets apres deductions.',
+        'Les montants retournes sont donc des montants nets apres deductions. ' +
+        'Les transferts (epargne, virements internes, apports au compte joint, regularisations) ' +
+        'ne sont ni des depenses ni des revenus et n apparaissent pas dans ces totaux.',
       {
         startDate: z.string().describe('Date de debut (ISO format YYYY-MM-DD)'),
         endDate: z.string().describe('Date de fin (ISO format YYYY-MM-DD)'),
@@ -889,7 +1018,10 @@ export class McpController {
     // ── Tool: get_dashboard_summary ──
     server.tool(
       'get_dashboard_summary',
-      'Recupere le resume du dashboard avec depenses et revenus par mois et par categorie',
+      'Recupere le resume du dashboard avec depenses et revenus par mois et par categorie. ' +
+        'Les transferts sont exclus des depenses et des revenus ; ceux vers l epargne sont lus a part ' +
+        '(savingsTransfers). Contient aussi la structure des depenses (nature, rythme) et ce qui reste du ' +
+        '(pendingReceivables).',
       {
         startDate: z
           .string()
