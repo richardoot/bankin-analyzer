@@ -1,4 +1,9 @@
 import {
+  EFFECTIVE_RHYTHM,
+  recurringTransactionsJoin,
+} from '../recurrences/recurrence-rhythm.sql'
+import { RecurrencesService } from '../recurrences/recurrences.service'
+import {
   ConflictException,
   Injectable,
   NotFoundException,
@@ -85,7 +90,10 @@ function parseEventDate(value: string | null | undefined): Date | null {
 
 @Injectable()
 export class TagsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly recurrences: RecurrencesService
+  ) {}
 
   private toResponse(
     tag: Tag & { _count?: { transactions: number } }
@@ -341,6 +349,9 @@ export class TagsService {
     const eventDays = daysBetweenInclusive(tag.eventStartDate, tag.eventEndDate)
     if (eventDays <= 0) return null
 
+    // The baseline leaves out what is committed, recurrences included.
+    await this.recurrences.refreshQuietly(userId)
+
     // Reference window: the 12 months ending the day before the event starts.
     const refEnd = new Date(tag.eventStartDate.getTime() - MS_PER_DAY)
     let refStart = new Date(
@@ -394,6 +405,7 @@ export class TagsService {
       LEFT JOIN app.categories c ON c.id = t.category_id
       LEFT JOIN app.subcategories sc ON sc.id = t.subcategory_id
       LEFT JOIN app.accounts a ON a.id = t.account_id
+      ${recurringTransactionsJoin(userId)}
       WHERE t.user_id = ${userId}
         AND t.type = 'EXPENSE'
         AND t.date >= ${refStart}
@@ -402,8 +414,9 @@ export class TagsService {
         -- Only what the trip suspends. Rent, insurance, a subscription keep
         -- running while the user is away, so they are never deducted from an
         -- event's surplus. Unknown (legacy rows) counts as variable, which is
-        -- what every row used to be.
-        AND COALESCE(sc.rhythm, c.default_rhythm) IS DISTINCT FROM 'COMMITTED'
+        -- what every row used to be. A line of a detected recurrence is
+        -- committed whatever its subcategory says.
+        AND ${EFFECTIVE_RHYTHM} IS DISTINCT FROM 'COMMITTED'
         AND NOT EXISTS (
           SELECT 1
           FROM app.transaction_tags tt2

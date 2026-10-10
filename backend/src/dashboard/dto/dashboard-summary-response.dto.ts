@@ -142,6 +142,12 @@ export class SpendingStructureDto {
 
   unknownRhythm!: number
 
+  /**
+   * The part of `committed` made of lines of a detected recurrence —
+   * subscriptions and other charges that come back on their own.
+   */
+  recurring!: number
+
   /** The three buckets of each axis sum to this. */
   total!: number
 }

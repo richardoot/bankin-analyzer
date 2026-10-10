@@ -1,3 +1,9 @@
+import {
+  EFFECTIVE_RHYTHM,
+  IS_RECURRING,
+  recurringTransactionsJoin,
+} from '../recurrences/recurrence-rhythm.sql'
+import { RecurrencesService } from '../recurrences/recurrences.service'
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
@@ -62,7 +68,10 @@ interface DashboardAggregatedRow {
   is_exceptional: boolean
   /** The subcategory's, or the category's default; null on legacy rows. */
   nature: string | null
+  /** COMMITTED for a line of a recurrence, whatever its subcategory says. */
   rhythm: string | null
+  /** The line belongs to an active or stopped recurrence. */
+  is_recurring: boolean
   /** The category's catalogue key, to tell a savings transfer from another. */
   category_catalog_key: string | null
   transaction_count: number
@@ -106,16 +115,18 @@ function emptyStructure(): SpendingStructureDto {
     committed: 0,
     variable: 0,
     unknownRhythm: 0,
+    recurring: 0,
     total: 0,
   }
 }
 
 function addToStructure(
   target: SpendingStructureDto,
-  row: { nature: string | null; rhythm: string | null },
+  row: { nature: string | null; rhythm: string | null; is_recurring: boolean },
   amount: number
 ): void {
   target.total += amount
+  if (row.is_recurring) target.recurring += amount
   if (row.nature === 'ESSENTIAL') target.essential += amount
   else if (row.nature === 'PLEASURE') target.pleasure += amount
   else target.unknownNature += amount
@@ -133,6 +144,7 @@ function roundStructure(s: SpendingStructureDto): SpendingStructureDto {
     committed: r(s.committed),
     variable: r(s.variable),
     unknownRhythm: r(s.unknownRhythm),
+    recurring: r(s.recurring),
     total: r(s.total),
   }
 }
@@ -141,13 +153,17 @@ function roundStructure(s: SpendingStructureDto): SpendingStructureDto {
 export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly filterPreferences: FilterPreferencesService
+    private readonly filterPreferences: FilterPreferencesService,
+    private readonly recurrences: RecurrencesService
   ) {}
 
   async getSummary(
     userId: string,
     filters: DashboardFiltersDto
   ): Promise<DashboardSummaryDto> {
+    // The committed reading joins the recurrence cache: bring it up to date.
+    await this.recurrences.refreshQuietly(userId)
+
     // Use sentinel dates when no filter is provided
     const startDate = filters.startDate
       ? new Date(filters.startDate)
@@ -205,7 +221,8 @@ export class DashboardService {
           sc.icon AS subcategory_icon,
           (et.transaction_id IS NOT NULL) AS is_exceptional,
           COALESCE(sc.nature, c.default_nature)::text AS nature,
-          COALESCE(sc.rhythm, c.default_rhythm)::text AS rhythm,
+          ${EFFECTIVE_RHYTHM} AS rhythm,
+          ${IS_RECURRING} AS is_recurring,
           c.catalog_key AS category_catalog_key,
           COUNT(*)::int AS transaction_count,
           -- Net of reimbursements, computed per transaction so the credit
@@ -219,12 +236,13 @@ export class DashboardService {
         LEFT JOIN app.subcategories sc ON sc.id = t.subcategory_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
         LEFT JOIN exceptional_tx et ON et.transaction_id = t.id
+        ${recurringTransactionsJoin(userId)}
         ${REIMBURSEMENT_CREDIT_JOINS}
         WHERE t.user_id = ${userId}
           AND t.date >= ${startDate}
           AND t.date <= ${endDate}
           AND COALESCE(a.is_excluded_from_stats, false) = false
-        GROUP BY TO_CHAR(t.date, 'YYYY-MM'), c.id, COALESCE(c.name, 'Autre'), c.icon, c.catalog_key, t.type, COALESCE(t.subcategory, ''), sc.icon, sc.nature, sc.rhythm, c.default_nature, c.default_rhythm, (et.transaction_id IS NOT NULL)
+        GROUP BY TO_CHAR(t.date, 'YYYY-MM'), c.id, COALESCE(c.name, 'Autre'), c.icon, c.catalog_key, t.type, COALESCE(t.subcategory, ''), sc.icon, sc.nature, sc.rhythm, c.default_nature, c.default_rhythm, (et.transaction_id IS NOT NULL), ${IS_RECURRING}
       `),
       // Query 2: Distinct account names (including excluded from stats, for
       // filter panel). Sourced from the Account relation since the legacy

@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
 import { ConflictException, NotFoundException } from '@nestjs/common'
 import { TagsService } from './tags.service'
+import { RecurrencesService } from '../recurrences/recurrences.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { Prisma } from '../generated/prisma'
 
@@ -49,6 +50,10 @@ describe('TagsService', () => {
       providers: [
         TagsService,
         { provide: PrismaService, useValue: mockPrismaService },
+        {
+          provide: RecurrencesService,
+          useValue: { refreshQuietly: vi.fn() },
+        },
       ],
     }).compile()
 
@@ -281,11 +286,16 @@ describe('TagsService', () => {
       }
       // The baseline reads the rhythm and drops what keeps running away.
       const baseline = queries.find((q: string) => q.includes('everyday'))
-      const rhythmClause =
-        "COALESCE(sc.rhythm, c.default_rhythm) IS DISTINCT FROM 'COMMITTED'"
-      const withRhythm = queries.filter((q: string) => q.includes(rhythmClause))
+      // A line of a recurrence is committed whatever its subcategory says.
+      const rhythmClause = /END\s+IS DISTINCT FROM 'COMMITTED'/
+      const withRhythm = queries.filter((q: string) => rhythmClause.test(q))
       expect(withRhythm).toHaveLength(1)
-      expect(baseline ?? withRhythm[0]).toContain(rhythmClause)
+      const clause = baseline ?? withRhythm[0]
+      expect(clause).toMatch(rhythmClause)
+      expect(clause).toContain(
+        "WHEN rtx.transaction_id IS NOT NULL THEN 'COMMITTED'"
+      )
+      expect(clause).toContain('COALESCE(sc.rhythm, c.default_rhythm)')
     })
 
     it('returns zeroed analysis when the tag has no transactions', async () => {
