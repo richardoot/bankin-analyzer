@@ -178,6 +178,20 @@ function keySimilarity(left: Set<string>, right: Set<string>): number {
 }
 
 /**
+ * Whether two merchant keys name the same merchant — the one definition
+ * shared by this memory and the recurrences, so "the same merchant" never
+ * means two things. "begon patrice" and "begon chloe patrice torres" are one
+ * landlord whose transfer label sometimes carries who sent it.
+ */
+export function isSameMerchant(
+  left: string,
+  right: string,
+  threshold = DEFAULT_SIMILARITY_THRESHOLD
+): boolean {
+  return keySimilarity(wordsOf(left), wordsOf(right)) >= threshold
+}
+
+/**
  * Propose a catalogue filing for `description` from how everyone filed the
  * merchant, or `null` when nobody did, or not enough, or not alike.
  *
