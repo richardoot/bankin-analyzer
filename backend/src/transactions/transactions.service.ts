@@ -88,6 +88,21 @@ const TRANSACTION_READ_INCLUDE = {
       },
     },
   },
+  recurrences: {
+    select: {
+      recurrence: {
+        select: {
+          status: true,
+          period: true,
+          merchantKey: true,
+          amountBucket: true,
+          label: true,
+          name: true,
+        },
+      },
+    },
+  },
+  subscriptionLink: { select: { id: true } },
 } as const
 
 @Injectable()
@@ -825,7 +840,7 @@ export class TransactionsService {
       }
     }
 
-    return this.prisma.transaction.update({
+    const updated = await this.prisma.transaction.update({
       where: { id },
       data: updateData,
       include: {
@@ -834,6 +849,7 @@ export class TransactionsService {
         accountRef: { select: { name: true } },
       },
     })
+    return updated
   }
 
   /**
@@ -1095,8 +1111,9 @@ export class TransactionsService {
   async delete(id: string, userId: string): Promise<Transaction> {
     await this.findOne(id, userId) // Verify ownership
 
-    return this.prisma.transaction.delete({
+    const deleted = await this.prisma.transaction.delete({
       where: { id },
     })
+    return deleted
   }
 }

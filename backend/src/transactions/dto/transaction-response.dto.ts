@@ -29,6 +29,27 @@ export class TransactionTagSummaryDto {
   icon!: string | null
 }
 
+/** The recurring charge a transaction belongs to, as the list shows it. */
+export class TransactionRecurrenceSummaryDto {
+  /** ACTIVE: running. STOPPED: ended; the line was one of its charges. */
+  status!: 'ACTIVE' | 'STOPPED'
+
+  period!: 'WEEKLY' | 'FOUR_WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
+
+  /** With `amountBucket`, the key the transactions filter takes. */
+  merchantKey!: string
+
+  amountBucket!: number
+
+  label!: string
+
+  /** The service it pays for, as the recurrences page names it. */
+  name!: string
+
+  /** The user attached this line by hand; it can be detached. */
+  linked!: boolean
+}
+
 export class TransactionResponseDto {
   /** Transaction ID */
   id!: string
@@ -86,6 +107,14 @@ export class TransactionResponseDto {
   /** Tags attached to this transaction */
   @ApiProperty({ type: [TransactionTagSummaryDto], required: false })
   tags?: TransactionTagSummaryDto[]
+
+  /**
+   * The subscription or other recurring charge this line is part of, when
+   * detection or the user said so. A candidate, seen twice only, is not one
+   * yet and is left out.
+   */
+  @ApiProperty({ type: TransactionRecurrenceSummaryDto, required: false })
+  recurrence?: TransactionRecurrenceSummaryDto
 
   /** Creation date */
   createdAt!: Date

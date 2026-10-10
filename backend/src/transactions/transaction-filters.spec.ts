@@ -182,4 +182,31 @@ describe('buildTransactionWhere', () => {
     // overwriting one another at the top level.
     expect(where.AND).toHaveLength(3)
   })
+
+  describe('recurrence', () => {
+    it('reads a series by its bucket and merchant', () => {
+      expect(
+        parseTransactionFilters({ recurrence: '15:com netflix' }).recurrence
+      ).toEqual({ amountBucket: 15, merchantKey: 'com netflix' })
+    })
+
+    it('ignores a value that names no series', () => {
+      expect(
+        parseTransactionFilters({ recurrence: 'netflix' }).recurrence
+      ).toBeUndefined()
+      expect(parseTransactionFilters({ recurrence: '15:' }).recurrence).toBe(
+        undefined
+      )
+    })
+
+    it('keeps the lines linked to that series', () => {
+      const where = buildTransactionWhere('user-1', {
+        recurrence: { amountBucket: 15, merchantKey: 'com netflix' },
+      })
+
+      expect(where.recurrences).toEqual({
+        some: { recurrence: { amountBucket: 15, merchantKey: 'com netflix' } },
+      })
+    })
+  })
 })

@@ -75,6 +75,21 @@ const readInclude = {
       },
     },
   },
+  recurrences: {
+    select: {
+      recurrence: {
+        select: {
+          status: true,
+          period: true,
+          merchantKey: true,
+          amountBucket: true,
+          label: true,
+          name: true,
+        },
+      },
+    },
+  },
+  subscriptionLink: { select: { id: true } },
 }
 
 const mockPrismaService = {
