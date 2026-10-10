@@ -796,6 +796,293 @@ describe('McpController', () => {
     })
   })
 
+  describe('the category framework', () => {
+    const framework = [
+      ...categories,
+      {
+        id: 'cat-adjust',
+        name: 'Régularisation',
+        type: 'TRANSFER',
+        catalogKey: 'adjustment',
+      },
+      {
+        id: 'cat-housing',
+        name: 'Logement',
+        type: 'EXPENSE',
+        catalogKey: 'housing',
+      },
+      {
+        id: 'cat-refunds',
+        name: 'Remboursements',
+        type: 'INCOME',
+        catalogKey: 'refunds',
+      },
+    ]
+    const frameworkSubs = [
+      ...subcategories,
+      {
+        id: 'sub-rent',
+        name: 'Loyer ou crédit immobilier',
+        categoryId: 'cat-housing',
+        catalogKey: 'housing.rent',
+        icon: null,
+        nature: 'ESSENTIAL',
+        rhythm: 'COMMITTED',
+      },
+    ]
+    const refundIncome = (
+      overrides: Record<string, unknown> = {}
+    ): Record<string, unknown> =>
+      expense({
+        id: 'tx-r',
+        amount: 39.2,
+        type: 'INCOME',
+        categoryId: 'cat-refunds',
+        category: {
+          id: 'cat-refunds',
+          name: 'Remboursements',
+          catalogKey: 'refunds',
+        },
+        subcategoryId: null,
+        subcategoryRef: null,
+        ...overrides,
+      })
+
+    beforeEach(() => {
+      mockCategoriesService.findAllByUser.mockResolvedValue(framework)
+      mockSubcategoriesService.findAllByUser.mockResolvedValue(frameworkSubs)
+      mockReimbursementsService.findByTransaction.mockResolvedValue([])
+    })
+
+    it('files an income under a transfer category by key, and reports the type change', async () => {
+      mockTransactionsService.findOne.mockResolvedValue(refundIncome())
+      mockTransactionsService.update.mockResolvedValue(
+        refundIncome({
+          type: 'TRANSFER',
+          categoryId: 'cat-adjust',
+          category: {
+            id: 'cat-adjust',
+            name: 'Régularisation',
+            catalogKey: 'adjustment',
+          },
+        })
+      )
+      const tools = await registerTools()
+
+      const result = await tools.get('set_transaction_category')!({
+        transactionId: 'tx-r',
+        categoryKey: 'adjustment',
+        expectedCategoryKey: 'refunds',
+      })
+
+      expect(result.isError).toBeUndefined()
+      expect(mockTransactionsService.update).toHaveBeenCalledWith(
+        'tx-r',
+        mockUser.id,
+        { categoryId: 'cat-adjust', subcategoryId: null }
+      )
+      expect(parseData(result)).toMatchObject({
+        status: 'updated',
+        before: { type: 'INCOME', categoryKey: 'refunds' },
+        after: { type: 'TRANSFER', categoryKey: 'adjustment' },
+      })
+    })
+
+    it('refuses to make a transfer of an income that pays a reimbursement', async () => {
+      mockTransactionsService.findOne.mockResolvedValue(
+        refundIncome({
+          settlementsAsIncome: [
+            {
+              id: 'set-1',
+              amountUsed: 39.2,
+              personId: 'p1',
+              person: { name: 'Chloé' },
+            },
+          ],
+        })
+      )
+      const tools = await registerTools()
+
+      const result = await tools.get('set_transaction_category')!({
+        transactionId: 'tx-r',
+        categoryKey: 'adjustment',
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0]?.text).toContain('règle')
+      expect(mockTransactionsService.update).not.toHaveBeenCalled()
+    })
+
+    it('refuses to make a transfer of an expense that carries a request', async () => {
+      mockTransactionsService.findOne.mockResolvedValue(expense())
+      mockReimbursementsService.findByTransaction.mockResolvedValue([
+        { id: 'r1' },
+      ])
+      const tools = await registerTools()
+
+      const result = await tools.get('set_transaction_category')!({
+        transactionId: 'tx-1',
+        categoryKey: 'adjustment',
+      })
+
+      expect(result.isError).toBe(true)
+      expect(mockTransactionsService.update).not.toHaveBeenCalled()
+    })
+
+    it('sends a transfer back only to the side its sign says', async () => {
+      mockTransactionsService.findOne.mockResolvedValue(
+        refundIncome({
+          type: 'TRANSFER',
+          categoryId: 'cat-adjust',
+          category: {
+            id: 'cat-adjust',
+            name: 'Régularisation',
+            catalogKey: 'adjustment',
+          },
+        })
+      )
+      const tools = await registerTools()
+
+      const refused = await tools.get('set_transaction_category')!({
+        transactionId: 'tx-r',
+        categoryKey: 'housing',
+      })
+      expect(refused.isError).toBe(true)
+
+      mockTransactionsService.update.mockResolvedValue(refundIncome())
+      const accepted = await tools.get('set_transaction_category')!({
+        transactionId: 'tx-r',
+        categoryKey: 'refunds',
+      })
+      expect(accepted.isError).toBeUndefined()
+    })
+
+    it('unfiles a transaction on a null key', async () => {
+      mockTransactionsService.findOne.mockResolvedValue(expense())
+      mockTransactionsService.update.mockResolvedValue(
+        expense({
+          categoryId: null,
+          category: null,
+          subcategoryId: null,
+          subcategoryRef: null,
+        })
+      )
+      const tools = await registerTools()
+
+      const result = await tools.get('set_transaction_category')!({
+        transactionId: 'tx-1',
+        categoryKey: null,
+      })
+
+      expect(mockTransactionsService.update).toHaveBeenCalledWith(
+        'tx-1',
+        mockUser.id,
+        { categoryId: null }
+      )
+      expect(parseData(result)).toMatchObject({ after: { categoryId: null } })
+    })
+
+    it('refuses without writing when the key guard disagrees', async () => {
+      mockTransactionsService.findOne.mockResolvedValue(refundIncome())
+      const tools = await registerTools()
+
+      const result = await tools.get('set_transaction_category')!({
+        transactionId: 'tx-r',
+        categoryKey: 'adjustment',
+        expectedCategoryKey: 'housing',
+      })
+
+      expect(result.isError).toBe(true)
+      expect(mockTransactionsService.update).not.toHaveBeenCalled()
+    })
+
+    it('reads in keys: transactions, one transaction and the categories', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [refundIncome()],
+        total: 1,
+      })
+      mockTransactionsService.findOne.mockResolvedValue(
+        expense({
+          categoryId: 'cat-housing',
+          category: {
+            id: 'cat-housing',
+            name: 'Logement',
+            catalogKey: 'housing',
+            defaultNature: 'ESSENTIAL',
+            defaultRhythm: 'VARIABLE',
+          },
+          subcategoryId: 'sub-rent',
+          subcategoryRef: {
+            id: 'sub-rent',
+            name: 'Loyer ou crédit immobilier',
+            catalogKey: 'housing.rent',
+            nature: 'ESSENTIAL',
+            rhythm: 'COMMITTED',
+          },
+        })
+      )
+      const tools = await registerTools()
+
+      const list = parseData(
+        await tools.get('get_transactions')!({
+          categoryKey: 'refunds',
+          type: 'TRANSFER',
+        })
+      )
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 50 },
+        expect.objectContaining({ categoryId: 'cat-refunds', type: 'TRANSFER' })
+      )
+      expect(list.transactions[0]).toMatchObject({
+        categoryKey: 'refunds',
+        subcategoryKey: null,
+      })
+
+      const one = parseData(await tools.get('get_transaction')!({ id: 'tx-1' }))
+      expect(one).toMatchObject({
+        categoryKey: 'housing',
+        subcategoryKey: 'housing.rent',
+        nature: 'ESSENTIAL',
+        rhythm: 'COMMITTED',
+      })
+
+      const cats = parseData(await tools.get('get_categories')!({}))
+      const housing = cats.find((c: { id: string }) => c.id === 'cat-housing')
+      expect(housing).toMatchObject({
+        catalogKey: 'housing',
+        isLocked: true,
+        isLegacy: false,
+      })
+      expect(housing.subcategories[0]).toMatchObject({
+        catalogKey: 'housing.rent',
+        rhythm: 'COMMITTED',
+      })
+      expect(
+        cats.find((c: { id: string }) => c.id === 'cat-errors')
+      ).toMatchObject({ isLegacy: true })
+    })
+
+    it('refuses a reimbursement request on a transfer', async () => {
+      mockTransactionsService.findOne.mockResolvedValue(
+        expense({ type: 'TRANSFER' })
+      )
+      const tools = await registerTools()
+
+      const result = await tools.get('create_reimbursement_request')!({
+        transactionId: 'tx-1',
+        personId: 'p1',
+        amount: 10,
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0]?.text).toContain('transfert')
+      expect(mockReimbursementsService.create).not.toHaveBeenCalled()
+    })
+  })
+
   describe('set_transactions_category tool', () => {
     beforeEach(() => {
       givenFilingTree()

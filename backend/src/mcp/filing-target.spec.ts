@@ -142,3 +142,114 @@ describe('resolveFilingTarget', () => {
     expect(result).toMatchObject({ ok: false, error: 'SUBCATEGORY_AMBIGUOUS' })
   })
 })
+
+describe('resolveFilingTarget — catalogue keys', () => {
+  const keyed: FilingCategory[] = [
+    {
+      id: 'cat-housing',
+      name: 'Logement',
+      type: 'EXPENSE',
+      catalogKey: 'housing',
+    },
+    {
+      id: 'cat-adjust',
+      name: 'Régularisation',
+      type: 'TRANSFER',
+      catalogKey: 'adjustment',
+    },
+    { id: 'cat-legacy', name: 'Erreurs', type: 'EXPENSE', catalogKey: null },
+  ]
+  const keyedSubs: FilingSubcategory[] = [
+    {
+      id: 'sub-rent',
+      name: 'Loyer ou crédit immobilier',
+      categoryId: 'cat-housing',
+      catalogKey: 'housing.rent',
+    },
+    {
+      id: 'sub-own',
+      name: 'Garage',
+      categoryId: 'cat-housing',
+      catalogKey: null,
+    },
+  ]
+
+  it('resolves a category and a subcategory by their keys', () => {
+    expect(
+      resolveFilingTarget(keyed, keyedSubs, {
+        categoryKey: 'housing',
+        subcategoryKey: 'housing.rent',
+      })
+    ).toEqual({ ok: true, category: keyed[0], subcategory: keyedSubs[0] })
+  })
+
+  it('resolves a transfer category by key, alone', () => {
+    expect(
+      resolveFilingTarget(keyed, keyedSubs, { categoryKey: 'adjustment' })
+    ).toEqual({ ok: true, category: keyed[1], subcategory: null })
+  })
+
+  it('lets a key category take a subcategory of the user by name', () => {
+    expect(
+      resolveFilingTarget(keyed, keyedSubs, {
+        categoryKey: 'housing',
+        subcategoryName: 'garage',
+      })
+    ).toMatchObject({ ok: true, subcategory: { id: 'sub-own' } })
+  })
+
+  it('refuses a key and a name for the same level', () => {
+    expect(
+      resolveFilingTarget(keyed, keyedSubs, {
+        categoryKey: 'housing',
+        categoryName: 'Logement',
+      })
+    ).toMatchObject({ ok: false, error: 'CATEGORY_ID_AND_NAME' })
+    expect(
+      resolveFilingTarget(keyed, keyedSubs, {
+        categoryKey: 'housing',
+        subcategoryKey: 'housing.rent',
+        subcategoryName: 'Loyer',
+      })
+    ).toMatchObject({ ok: false, error: 'SUBCATEGORY_ID_AND_NAME' })
+  })
+
+  it('refuses a key the catalogue does not know', () => {
+    expect(
+      resolveFilingTarget(keyed, keyedSubs, { categoryKey: 'holidays' })
+    ).toMatchObject({ ok: false, error: 'CATEGORY_UNKNOWN' })
+  })
+
+  it('says the catalogue is not provisioned for a key the user lacks', () => {
+    expect(
+      resolveFilingTarget(keyed, keyedSubs, { categoryKey: 'food' })
+    ).toMatchObject({ ok: false, error: 'CATALOG_NOT_PROVISIONED' })
+  })
+
+  it('refuses a subcategory key of another category', () => {
+    expect(
+      resolveFilingTarget(keyed, keyedSubs, {
+        categoryKey: 'housing',
+        subcategoryKey: 'food.supermarket',
+      })
+    ).toMatchObject({ ok: false, error: 'SUBCATEGORY_NOT_IN_CATEGORY' })
+  })
+
+  it('unfiles on a null category key or id', () => {
+    expect(
+      resolveFilingTarget(keyed, keyedSubs, { categoryKey: null })
+    ).toEqual({ ok: true, category: null, subcategory: null })
+    expect(resolveFilingTarget(keyed, keyedSubs, { categoryId: null })).toEqual(
+      { ok: true, category: null, subcategory: null }
+    )
+  })
+
+  it('refuses a subcategory with an unfiling', () => {
+    expect(
+      resolveFilingTarget(keyed, keyedSubs, {
+        categoryKey: null,
+        subcategoryKey: 'housing.rent',
+      })
+    ).toMatchObject({ ok: false, error: 'UNFILE_WITH_SUBCATEGORY' })
+  })
+})

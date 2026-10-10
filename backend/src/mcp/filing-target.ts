@@ -9,29 +9,48 @@
  * than one row, is refused with a reason the agent can act on. Writing to the
  * wrong category is worse than not writing.
  *
+ * Since the category framework, a target can also be a **catalogue key**
+ * (`housing`, `housing.rent`): the same in every account, so a document written
+ * once applies to anyone, and an agent cannot misspell it into another heading.
+ * A key resolves against the user's own rows; one the catalogue knows but the
+ * user lacks means the catalogue was never provisioned, and says so.
+ *
+ * A target can also be **nothing**: `categoryId` or `categoryKey` given as
+ * `null` sends the transaction back to "à classer".
+ *
  * Pure on purpose: no Prisma, no request. The caller hands in the user's
  * categories and subcategories, which is also what keeps another user's ids out
  * of reach — an id that is not in the list is unknown, whoever it belongs to.
  */
 import type { TransactionType } from '../generated/prisma'
+import { catalogCategory, catalogSubcategory } from '../categories/catalog'
+import { normalizeName } from '../categories/category-catalog.plan'
+
+export { normalizeName }
 
 export interface FilingCategory {
   id: string
   name: string
   type: TransactionType
+  catalogKey?: string | null
 }
 
 export interface FilingSubcategory {
   id: string
   name: string
   categoryId: string
+  catalogKey?: string | null
 }
 
 export interface FilingTargetInput {
-  categoryId?: string | undefined
+  /** `null` unfiles the transaction. */
+  categoryId?: string | null | undefined
   categoryName?: string | undefined
+  /** A catalogue key; `null` unfiles the transaction. */
+  categoryKey?: string | null | undefined
   subcategoryId?: string | undefined
   subcategoryName?: string | undefined
+  subcategoryKey?: string | undefined
 }
 
 export type FilingTargetError =
@@ -43,24 +62,17 @@ export type FilingTargetError =
   | 'SUBCATEGORY_UNKNOWN'
   | 'SUBCATEGORY_AMBIGUOUS'
   | 'SUBCATEGORY_NOT_IN_CATEGORY'
+  | 'CATALOG_NOT_PROVISIONED'
+  | 'UNFILE_WITH_SUBCATEGORY'
 
 export type FilingTarget =
   | {
       ok: true
-      category: FilingCategory
+      /** Null when the target is "à classer". */
+      category: FilingCategory | null
       subcategory: FilingSubcategory | null
     }
   | { ok: false; error: FilingTargetError; message: string }
-
-/** Lowercase, no diacritics, inner whitespace collapsed, ends trimmed. */
-export function normalizeName(name: string): string {
-  return name
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim()
-}
 
 function refuse(error: FilingTargetError, message: string): FilingTarget {
   return { ok: false, error, message }
@@ -82,32 +94,73 @@ export function resolveFilingTarget(
   subcategories: readonly FilingSubcategory[],
   target: FilingTargetInput
 ): FilingTarget {
-  const hasCategoryId = isGiven(target.categoryId)
+  const unfile = target.categoryId === null || target.categoryKey === null
+  const hasCategoryId = isGiven(target.categoryId ?? undefined)
   const hasCategoryName = isGiven(target.categoryName)
+  const hasCategoryKey = isGiven(target.categoryKey ?? undefined)
   const hasSubcategoryId = isGiven(target.subcategoryId)
   const hasSubcategoryName = isGiven(target.subcategoryName)
+  const hasSubcategoryKey = isGiven(target.subcategoryKey)
 
-  if (hasCategoryId && hasCategoryName) {
+  const categoryWays =
+    Number(hasCategoryId) + Number(hasCategoryName) + Number(hasCategoryKey)
+  const subcategoryWays =
+    Number(hasSubcategoryId) +
+    Number(hasSubcategoryName) +
+    Number(hasSubcategoryKey)
+
+  if (unfile) {
+    if (categoryWays > 0) {
+      return refuse(
+        'CATEGORY_ID_AND_NAME',
+        'Une cible nulle déclasse la transaction : ne donner aucune autre désignation de catégorie.'
+      )
+    }
+    if (subcategoryWays > 0) {
+      return refuse(
+        'UNFILE_WITH_SUBCATEGORY',
+        'Une transaction déclassée n’a pas de sous-catégorie : ne pas en donner.'
+      )
+    }
+    return { ok: true, category: null, subcategory: null }
+  }
+
+  if (categoryWays > 1) {
     return refuse(
       'CATEGORY_ID_AND_NAME',
-      'Donner categoryId ou categoryName, pas les deux.'
+      'Donner un seul de categoryId, categoryName ou categoryKey.'
     )
   }
-  if (hasSubcategoryId && hasSubcategoryName) {
+  if (subcategoryWays > 1) {
     return refuse(
       'SUBCATEGORY_ID_AND_NAME',
-      'Donner subcategoryId ou subcategoryName, pas les deux.'
+      'Donner un seul de subcategoryId, subcategoryName ou subcategoryKey.'
     )
   }
-  if (!hasCategoryId && !hasCategoryName) {
+  if (categoryWays === 0) {
     return refuse(
       'CATEGORY_MISSING',
-      'La catégorie cible manque : donner categoryId ou categoryName.'
+      'La catégorie cible manque : donner categoryKey, categoryName ou categoryId, ou null pour déclasser.'
     )
   }
 
   let category: FilingCategory
-  if (hasCategoryId) {
+  if (hasCategoryKey) {
+    const key = target.categoryKey as string
+    const found = categories.find(c => c.catalogKey === key)
+    if (!found) {
+      return catalogCategory(key)
+        ? refuse(
+            'CATALOG_NOT_PROVISIONED',
+            `La catégorie du catalogue « ${key} » manque chez cet utilisateur : le catalogue n’est pas provisionné (script provision-category-catalog).`
+          )
+        : refuse(
+            'CATEGORY_UNKNOWN',
+            `« ${key} » n’est pas une clé de catégorie du catalogue.`
+          )
+    }
+    category = found
+  } else if (hasCategoryId) {
     const found = categories.find(c => c.id === target.categoryId)
     if (!found) {
       return refuse(
@@ -135,8 +188,35 @@ export function resolveFilingTarget(
     category = matches[0] as FilingCategory
   }
 
-  if (!hasSubcategoryId && !hasSubcategoryName) {
+  if (subcategoryWays === 0) {
     return { ok: true, category, subcategory: null }
+  }
+
+  if (hasSubcategoryKey) {
+    const key = target.subcategoryKey as string
+    const entry = catalogSubcategory(key)
+    if (!entry) {
+      return refuse(
+        'SUBCATEGORY_UNKNOWN',
+        `« ${key} » n’est pas une clé de sous-catégorie du catalogue.`
+      )
+    }
+    if (category.catalogKey !== entry.category.key) {
+      return refuse(
+        'SUBCATEGORY_NOT_IN_CATEGORY',
+        `La sous-catégorie « ${key} » appartient à « ${entry.category.key} », pas à la catégorie « ${category.name} ».`
+      )
+    }
+    const found = subcategories.find(
+      s => s.categoryId === category.id && s.catalogKey === key
+    )
+    if (!found) {
+      return refuse(
+        'CATALOG_NOT_PROVISIONED',
+        `La sous-catégorie du catalogue « ${key} » manque chez cet utilisateur : le catalogue n’est pas provisionné (script provision-category-catalog).`
+      )
+    }
+    return { ok: true, category, subcategory: found }
   }
 
   if (hasSubcategoryId) {
