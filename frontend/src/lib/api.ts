@@ -367,7 +367,22 @@ export interface TransactionDto {
   settlements?: TransactionSettlementSummaryDto[]
   /** Tags attached to this transaction */
   tags?: TransactionTagSummaryDto[]
+  /** The subscription or recurring charge this line is part of */
+  recurrence?: TransactionRecurrenceSummaryDto
   createdAt: string
+}
+
+/** The recurring charge a transaction belongs to (never a candidate). */
+export interface TransactionRecurrenceSummaryDto {
+  status: 'ACTIVE' | 'STOPPED'
+  period: RecurrencePeriod
+  merchantKey: string
+  amountBucket: number
+  label: string
+  /** The service it pays for, as the recurrences page names it */
+  name: string
+  /** Attached by hand; it can be detached */
+  linked: boolean
 }
 
 // Pagination types
@@ -410,6 +425,8 @@ export interface TransactionQueryParams {
    * side of a swap.
    */
   needsBankReview?: boolean | undefined
+  /** The lines of one recurring charge: `<amountBucket>:<merchantKey>`. */
+  recurrence?: string | undefined
   sortBy?: 'date' | 'amount' | undefined
   sortOrder?: 'asc' | 'desc' | undefined
 }
@@ -786,6 +803,76 @@ export interface ExceptionalEventDto {
  */
 export const UNCATEGORIZED_CATEGORY_ID = '__uncategorized__'
 
+export type RecurrencePeriod =
+  'WEEKLY' | 'FOUR_WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
+export type RecurrenceStatus = 'ACTIVE' | 'STOPPED' | 'CANDIDATE'
+export type RecurrenceDecisionKind = 'CONFIRMED' | 'DISMISSED'
+
+/** A charge that comes back on its own, as detection reads it. */
+export interface RecurrenceDto {
+  id: string
+  /** The user's subscription this series is; null when only detected */
+  subscriptionId: string | null
+  merchantKey: string
+  amountBucket: number
+  /** The most frequent bank label, made readable */
+  label: string
+  /** The service it pays for: the user's name, or the one read from its labels */
+  name: string
+  /** The user gave the name */
+  named: boolean
+  categoryId: string | null
+  categoryName: string | null
+  categoryIcon: string | null
+  subcategoryId: string | null
+  subcategoryName: string | null
+  nature: CategoryNature | null
+  period: RecurrencePeriod
+  amount: number
+  monthlyEquivalent: number
+  occurrences: number
+  /** Everything the series has cost, at every price it ran at. */
+  totalPaid: number
+  firstDate: string
+  lastDate: string
+  nextExpected: string
+  status: RecurrenceStatus
+  confirmed: boolean
+}
+
+/** A subscription the list names apart: set aside, or followed without a series. */
+export interface SubscriptionSummaryDto {
+  id: string
+  /** The user's name for it, or the merchant it was made for */
+  name: string
+  state: RecurrenceDecisionKind
+  createdAt: string
+}
+
+export interface RecurrenceListDto {
+  recurrences: RecurrenceDto[]
+  monthlyTotal: number
+  byCategory: Array<{
+    categoryId: string | null
+    name: string | null
+    monthlyTotal: number
+  }>
+  byNature: { essential: number; pleasure: number; unclassified: number }
+  /** What the user set aside, to take it back */
+  dismissed: SubscriptionSummaryDto[]
+  /** Followed subscriptions no series answers any more */
+  orphans: SubscriptionSummaryDto[]
+  computedAt: string | null
+}
+
+/** How the transactions page names one series in its filter. */
+export function recurrenceFilterKey(recurrence: {
+  amountBucket: number
+  merchantKey: string
+}): string {
+  return `${recurrence.amountBucket}:${recurrence.merchantKey}`
+}
+
 /** A category as offered in the filter panel: addressed by id, shown by name. */
 export interface CategoryOptionDto {
   id: string
@@ -814,6 +901,8 @@ export interface SpendingStructureDto {
   committed: number
   variable: number
   unknownRhythm: number
+  /** The part of `committed` made of lines of a detected recurrence. */
+  recurring: number
   total: number
 }
 
@@ -1781,6 +1870,7 @@ export const api = {
       searchParams.set('amountMax', params.amountMax.toString())
     if (params?.needsBankReview !== undefined)
       searchParams.set('needsBankReview', params.needsBankReview.toString())
+    if (params?.recurrence) searchParams.set('recurrence', params.recurrence)
     if (params?.sortBy) searchParams.set('sortBy', params.sortBy)
     if (params?.sortOrder) searchParams.set('sortOrder', params.sortOrder)
 
@@ -2022,6 +2112,112 @@ export const api = {
   },
 
   // Tags API
+  async getRecurrences(): Promise<RecurrenceListDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/recurrences`)
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch recurrences')
+    }
+
+    return response.json() as Promise<RecurrenceListDto>
+  },
+
+  async setRecurrenceDecision(dto: {
+    merchantKey: string
+    amountBucket: number | null
+    decision: RecurrenceDecisionKind
+  }): Promise<RecurrenceListDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/recurrences/decisions`,
+      { method: 'PUT', body: JSON.stringify(dto) }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to record the decision')
+    }
+
+    return response.json() as Promise<RecurrenceListDto>
+  },
+
+  async renameRecurrence(dto: {
+    merchantKey: string
+    amountBucket: number
+    name: string | null
+  }): Promise<RecurrenceListDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/recurrences/name`, {
+      method: 'PUT',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to rename the recurring charge')
+    }
+
+    return response.json() as Promise<RecurrenceListDto>
+  },
+
+  async linkTransactionToRecurrence(dto: {
+    transactionId: string
+    merchantKey: string
+    amountBucket: number
+  }): Promise<RecurrenceListDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/recurrences/links`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to attach the transaction')
+    }
+
+    return response.json() as Promise<RecurrenceListDto>
+  },
+
+  async unlinkTransactionFromRecurrence(
+    transactionId: string
+  ): Promise<RecurrenceListDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/recurrences/links/${encodeURIComponent(transactionId)}`,
+      { method: 'DELETE' }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to detach the transaction')
+    }
+
+    return response.json() as Promise<RecurrenceListDto>
+  },
+
+  async markTransactionRecurring(dto: {
+    transactionId: string
+    period: RecurrencePeriod
+  }): Promise<RecurrenceListDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/recurrences/from-transaction`,
+      { method: 'POST', body: JSON.stringify(dto) }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to mark the transaction as recurring')
+    }
+
+    return response.json() as Promise<RecurrenceListDto>
+  },
+
+  /** Forget a subscription: a dismissal taken back, or one without a series. */
+  async deleteSubscription(id: string): Promise<RecurrenceListDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/recurrences/subscriptions/${encodeURIComponent(id)}`,
+      { method: 'DELETE' }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to forget the subscription')
+    }
+
+    return response.json() as Promise<RecurrenceListDto>
+  },
+
   async getTags(): Promise<TagDto[]> {
     const response = await fetchWithAuth(`${API_BASE_URL}/tags`)
 

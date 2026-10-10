@@ -4,8 +4,9 @@
   import { usePersonsStore } from '@/stores/persons'
   import { useAccountsStore } from '@/stores/accounts'
   import { useTagsStore } from '@/stores/tags'
-  import { api } from '@/lib/api'
+  import { api, recurrenceFilterKey } from '@/lib/api'
   import type {
+    RecurrenceDto,
     TransactionDto,
     TransactionSettlementSummaryDto,
     ReimbursementDto,
@@ -17,6 +18,9 @@
   } from '@/lib/api'
   import CategorySubcategoryModal from '@/components/CategorySubcategoryModal.vue'
   import TransactionReimbursementModal from '@/components/transactions/TransactionReimbursementModal.vue'
+  import MarkRecurringModal, {
+    type MarkRecurringChoice,
+  } from '@/components/transactions/MarkRecurringModal.vue'
   import BulkCategoryModal from '@/components/transactions/BulkCategoryModal.vue'
   import TransactionRow from '@/components/transactions/TransactionRow.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
@@ -130,6 +134,7 @@
     'tag',
     'notPointed',
     'review',
+    'recurrence',
     'q',
     'from',
     'to',
@@ -192,6 +197,13 @@
    * check, not a filter meant to stay on across visits.
    */
   const needsBankReview = ref(firstParam(route.query.review) === '1')
+  /**
+   * The lines of one recurring charge, reached from the recurrences page.
+   * Named by `<amountBucket>:<merchantKey>`, which survives a recompute; the
+   * label only names the chip. One-off, like the review filter: not saved.
+   */
+  const recurrenceFilter = ref(firstParam(route.query.recurrence))
+  const recurrenceLabel = ref(firstParam(route.query.recurrenceLabel))
   // Advanced search filters (keyword, date window, amount range)
   const searchKeyword = ref(initialFilters.searchKeyword)
   const filterStartDate = ref(initialFilters.filterStartDate)
@@ -254,6 +266,7 @@
     amountMin.value = ''
     amountMax.value = ''
     needsBankReview.value = false
+    recurrenceFilter.value = null
     localStorage.removeItem(FILTERS_STORAGE_KEY)
   }
 
@@ -271,7 +284,8 @@
       filterEndDate.value !== '' ||
       amountMin.value !== '' ||
       amountMax.value !== '' ||
-      needsBankReview.value
+      needsBankReview.value ||
+      recurrenceFilter.value !== null
     )
   })
 
@@ -320,6 +334,12 @@
     if (needsBankReview.value) {
       chips.push({ key: 'review', label: 'À vérifier (banque)' })
     }
+    if (recurrenceFilter.value) {
+      chips.push({
+        key: 'recurrence',
+        label: `Charge récurrente${recurrenceLabel.value ? ` : ${recurrenceLabel.value}` : ''}`,
+      })
+    }
     if (searchKeyword.value.trim()) {
       chips.push({ key: 'q', label: `« ${searchKeyword.value.trim()} »` })
     }
@@ -360,6 +380,9 @@
         break
       case 'review':
         needsBankReview.value = false
+        break
+      case 'recurrence':
+        recurrenceFilter.value = null
         break
       case 'q':
         searchKeyword.value = ''
@@ -552,6 +575,7 @@
       amountMax:
         Number.isFinite(parsedMax) && parsedMax >= 0 ? parsedMax : undefined,
       needsBankReview: needsBankReview.value || undefined,
+      recurrence: recurrenceFilter.value || undefined,
     }
   })
 
@@ -896,6 +920,10 @@
     if (selectedTag.value) query.tag = selectedTag.value
     if (showOnlyNotPointed.value) query.notPointed = '1'
     if (needsBankReview.value) query.review = '1'
+    if (recurrenceFilter.value) {
+      query.recurrence = recurrenceFilter.value
+      if (recurrenceLabel.value) query.recurrenceLabel = recurrenceLabel.value
+    }
     if (searchKeyword.value.trim()) query.q = searchKeyword.value.trim()
     if (filterStartDate.value) query.from = filterStartDate.value
     if (filterEndDate.value) query.to = filterEndDate.value
@@ -938,6 +966,7 @@
       selectedTag,
       showOnlyNotPointed,
       needsBankReview,
+      recurrenceFilter,
       filterStartDate,
       filterEndDate,
       sortBy,
@@ -1015,6 +1044,75 @@
   }
 
   // Open reimbursement modal
+  /** Narrow the list to every charge of the series this line belongs to. */
+  function showRecurrence(tx: TransactionDto): void {
+    if (!tx.recurrence) return
+    recurrenceFilter.value = recurrenceFilterKey(tx.recurrence)
+    recurrenceLabel.value = tx.recurrence.name
+  }
+
+  /** The expense being marked as a recurring charge, while its modal is open. */
+  const markRecurringTx = ref<TransactionDto | null>(null)
+  const isMarkingRecurring = ref(false)
+  /** The series it can be attached to, loaded as the modal opens. */
+  const followedRecurrences = ref<RecurrenceDto[] | null>(null)
+
+  async function openMarkRecurring(tx: TransactionDto): Promise<void> {
+    markRecurringTx.value = tx
+    followedRecurrences.value = null
+    try {
+      followedRecurrences.value = (await api.getRecurrences()).recurrences
+    } catch {
+      followedRecurrences.value = []
+    }
+  }
+
+  async function confirmMarkRecurring(
+    choice: MarkRecurringChoice
+  ): Promise<void> {
+    const tx = markRecurringTx.value
+    if (!tx || isMarkingRecurring.value) return
+    isMarkingRecurring.value = true
+    try {
+      if (choice.kind === 'new') {
+        await api.markTransactionRecurring({
+          transactionId: tx.id,
+          period: choice.period,
+        })
+        toast.success(`« ${tx.description} » suivi comme abonnement`)
+      } else {
+        const list = await api.linkTransactionToRecurrence({
+          transactionId: tx.id,
+          merchantKey: choice.merchantKey,
+          amountBucket: choice.amountBucket,
+        })
+        const target = list.recurrences.find(
+          r =>
+            r.merchantKey === choice.merchantKey &&
+            r.amountBucket === choice.amountBucket
+        )
+        toast.success(`Rattaché à « ${target?.name ?? 'l’abonnement'} »`)
+      }
+      markRecurringTx.value = null
+      // The line now carries its badge.
+      await fetchTransactions()
+    } catch {
+      toast.error("L'abonnement n'a pas pu être enregistré")
+    } finally {
+      isMarkingRecurring.value = false
+    }
+  }
+
+  async function unlinkRecurrence(tx: TransactionDto): Promise<void> {
+    try {
+      await api.unlinkTransactionFromRecurrence(tx.id)
+      toast.success(`Détaché de « ${tx.recurrence?.name ?? 'l’abonnement'} »`)
+      await fetchTransactions()
+    } catch {
+      toast.error("La transaction n'a pas pu être détachée")
+    }
+  }
+
   function openReimbursementModal(tx: TransactionDto) {
     selectedTransaction.value = tx
     reimbursementModalRef.value?.resetForm()
@@ -1819,6 +1917,9 @@
                 @attach-tag="id => handleAttachTag(tx, id)"
                 @detach-tag="id => handleDetachTag(tx, id)"
                 @create-tag="name => handleCreateTag(tx, name)"
+                @mark-recurring="openMarkRecurring(tx)"
+                @unlink-recurrence="unlinkRecurrence(tx)"
+                @show-recurrence="showRecurrence(tx)"
               />
             </div>
 
@@ -1931,6 +2032,15 @@
     </div>
 
     <!-- Reimbursement Modal -->
+    <MarkRecurringModal
+      :open="markRecurringTx !== null"
+      :transaction="markRecurringTx"
+      :recurrences="followedRecurrences"
+      :loading="isMarkingRecurring"
+      @cancel="markRecurringTx = null"
+      @confirm="confirmMarkRecurring"
+    />
+
     <TransactionReimbursementModal
       ref="reimbursementModalRef"
       :is-open="showReimbursementModal"

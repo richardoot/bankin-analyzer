@@ -49,6 +49,91 @@ function mountRow(props: Record<string, unknown> = {}) {
 }
 
 describe('TransactionRow', () => {
+  describe('a line of a subscription', () => {
+    const recurrence = {
+      status: 'ACTIVE' as const,
+      period: 'MONTHLY' as const,
+      merchantKey: 'com netflix',
+      amountBucket: 15,
+      label: 'CB Netflix.com',
+      name: 'Netflix',
+      linked: false,
+    }
+
+    it('reads apart: an edge, a badge naming its rhythm, no offer to mark it again', async () => {
+      const wrapper = mountRow({ transaction: tx({ recurrence }) })
+
+      expect(wrapper.attributes('data-recurring')).toBe('true')
+      expect(wrapper.classes()).toContain('border-indigo-400')
+      const badge = wrapper.find('[data-testid="recurrence-badge"]')
+      expect(badge.text()).toBe('Netflix · mensuel')
+      expect(wrapper.find('[data-testid="unlink-recurrence"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.find('[data-testid="mark-recurring"]').exists()).toBe(
+        false
+      )
+
+      await badge.trigger('click')
+      expect(wrapper.emitted('show-recurrence')).toHaveLength(1)
+    })
+
+    it('says when the subscription has ended', () => {
+      const wrapper = mountRow({
+        transaction: tx({
+          recurrence: { ...recurrence, status: 'STOPPED', period: 'YEARLY' },
+        }),
+      })
+
+      expect(wrapper.classes()).toContain('border-gray-300')
+      expect(wrapper.find('[data-testid="recurrence-badge"]').text()).toMatch(
+        /^Netflix · annuel\s+· terminé$/
+      )
+    })
+
+    it('offers to detach a line the user attached by hand', async () => {
+      const wrapper = mountRow({
+        transaction: tx({ recurrence: { ...recurrence, linked: true } }),
+      })
+
+      const detach = wrapper.find('[data-testid="unlink-recurrence"]')
+      expect(detach.attributes('aria-label')).toBe('Détacher de Netflix')
+      await detach.trigger('click')
+      expect(wrapper.emitted('unlink-recurrence')).toHaveLength(1)
+    })
+
+    it('leaves an ordinary line as it was', () => {
+      const wrapper = mountRow()
+
+      expect(wrapper.attributes('data-recurring')).toBeUndefined()
+      expect(wrapper.classes()).toContain('border-transparent')
+      expect(wrapper.find('[data-testid="recurrence-badge"]').exists()).toBe(
+        false
+      )
+    })
+  })
+
+  it('offers to follow an expense as a subscription', async () => {
+    const wrapper = mountRow()
+
+    await wrapper.find('[data-testid="mark-recurring"]').trigger('click')
+
+    expect(wrapper.emitted('mark-recurring')).toHaveLength(1)
+  })
+
+  it('does not offer it on an income, nor while selecting', () => {
+    expect(
+      mountRow({ transaction: tx({ type: 'INCOME', amount: 100 }) })
+        .find('[data-testid="mark-recurring"]')
+        .exists()
+    ).toBe(false)
+    expect(
+      mountRow({ selectionMode: true })
+        .find('[data-testid="mark-recurring"]')
+        .exists()
+    ).toBe(false)
+  })
+
   it('renders each datum once per layout, from a single source', () => {
     const wrapper = mountRow()
     // Description and amount appear in both arrangements of the same row.

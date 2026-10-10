@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { mount, enableAutoUnmount } from '@vue/test-utils'
+import { mount, enableAutoUnmount, RouterLinkStub } from '@vue/test-utils'
 import SpendingStructureCard from './SpendingStructureCard.vue'
 import type { SpendingStructureDto } from '@/lib/api'
 
@@ -12,6 +12,7 @@ const actual: SpendingStructureDto = {
   committed: 900,
   variable: 600,
   unknownRhythm: 0,
+  recurring: 0,
   total: 1500,
 }
 
@@ -22,6 +23,7 @@ const everyday: SpendingStructureDto = {
   committed: 900,
   variable: 300,
   unknownRhythm: 0,
+  recurring: 0,
   total: 1200,
 }
 
@@ -39,10 +41,31 @@ function mountCard(
       periodMonths: 1,
       ...overrides,
     },
+    global: { stubs: { RouterLink: RouterLinkStub } },
   })
 }
 
 describe('SpendingStructureCard', () => {
+  it('names the recurring share of the committed spending and links to the list', () => {
+    const wrapper = mountCard({
+      everyday: { ...everyday, recurring: 240 },
+      periodMonths: 2,
+    })
+
+    const line = wrapper.find('[data-testid="recurring-share"]')
+    expect(line.text()).toContain('dont abonnements et charges récurrentes')
+    expect(line.text()).toContain('120,00')
+    expect(wrapper.findComponent(RouterLinkStub).props('to')).toBe(
+      '/recurrences'
+    )
+  })
+
+  it('says nothing about recurrences when none was detected', () => {
+    const wrapper = mountCard()
+
+    expect(wrapper.find('[data-testid="recurring-share"]').exists()).toBe(false)
+  })
+
   it('opens on the everyday reading and shares each axis out', () => {
     const wrapper = mountCard()
 

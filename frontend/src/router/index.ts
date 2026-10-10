@@ -105,6 +105,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Budget', requiresAuth: true },
   },
   {
+    path: '/recurrences',
+    name: 'recurrences',
+    component: () => import('@/views/RecurrencesPage.vue'),
+    meta: { title: 'Récurrences', requiresAuth: true },
+  },
+  {
     path: '/tags',
     name: 'tags',
     component: () => import('@/views/TagsPage.vue'),

@@ -33,6 +33,11 @@
       testId: 'nav-reimbursements-link',
     },
     { to: '/budget', label: 'Budget', testId: 'nav-budget-link' },
+    {
+      to: '/recurrences',
+      label: 'Récurrences',
+      testId: 'nav-recurrences-link',
+    },
     { to: '/tags', label: 'Étiquettes', testId: 'nav-tags-link' },
   ]
 

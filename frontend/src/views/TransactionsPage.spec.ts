@@ -19,7 +19,13 @@ vi.mock('@/lib/api', () => ({
     getTags: vi.fn(),
     attachTagToTransactions: vi.fn(),
     detachTagFromTransaction: vi.fn(),
+    markTransactionRecurring: vi.fn(),
+    getRecurrences: vi.fn(),
+    linkTransactionToRecurrence: vi.fn(),
+    unlinkTransactionFromRecurrence: vi.fn(),
   },
+  recurrenceFilterKey: (r: { amountBucket: number; merchantKey: string }) =>
+    `${r.amountBucket}:${r.merchantKey}`,
 }))
 
 // Mock the toast composable — capture calls for assertions
@@ -166,6 +172,111 @@ describe('TransactionsPage — optimistic updates', () => {
     await flushPromises()
     return wrapper
   }
+
+  describe('a line of a subscription', () => {
+    it('narrows the list to its series from its badge', async () => {
+      setupDefaultMocks()
+      const listed = await vi.mocked(api.getTransactions)()
+      const [first, ...others] = listed.data
+      if (!first) throw new Error('the default mocks list transactions')
+      const recurringLine = {
+        ...first,
+        recurrence: {
+          status: 'ACTIVE' as const,
+          period: 'MONTHLY' as const,
+          merchantKey: 'com netflix',
+          amountBucket: 15,
+          label: 'CB Netflix.com',
+          name: 'Netflix',
+          linked: false,
+        },
+      }
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        ...listed,
+        data: [recurringLine, ...others],
+      })
+      await router.replace({ query: {} })
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      await wrapper.find('[data-testid="recurrence-badge"]').trigger('click')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ recurrence: '15:com netflix' })
+      )
+      expect(wrapper.text()).toContain('Charge récurrente : Netflix')
+    })
+  })
+
+  describe('following an expense as a subscription', () => {
+    it('asks for the rhythm, then records it', async () => {
+      vi.mocked(api.markTransactionRecurring).mockResolvedValue(
+        {} as Awaited<ReturnType<typeof api.markTransactionRecurring>>
+      )
+      vi.mocked(api.getRecurrences).mockResolvedValue({
+        recurrences: [],
+      } as unknown as Awaited<ReturnType<typeof api.getRecurrences>>)
+      const wrapper = await mountPage()
+
+      await wrapper.find('[data-testid="mark-recurring"]').trigger('click')
+      await flushPromises()
+      await wrapper
+        .find('[data-testid="mark-recurring-confirm"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(api.markTransactionRecurring).toHaveBeenCalledWith({
+        transactionId: expect.any(String),
+        period: 'YEARLY',
+      })
+      expect(mockToast.success).toHaveBeenCalledWith(
+        expect.stringContaining('suivi comme abonnement')
+      )
+      expect(
+        wrapper.find('[data-testid="mark-recurring-confirm"]').exists()
+      ).toBe(false)
+    })
+  })
+
+  describe('the lines of one recurring charge', () => {
+    it('reads the series from the URL, names it in a chip, and asks for its lines', async () => {
+      setupDefaultMocks()
+      await router.replace({
+        query: { recurrence: '15:com netflix', recurrenceLabel: 'CB Netflix' },
+      })
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({ recurrence: '15:com netflix' })
+      )
+      expect(wrapper.text()).toContain('Charge récurrente : CB Netflix')
+      expect(router.currentRoute.value.query.recurrence).toBe('15:com netflix')
+    })
+  })
 
   describe('initial loading', () => {
     it('should fetch transactions, categories, and reimbursements on mount', async () => {

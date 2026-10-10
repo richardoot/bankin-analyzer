@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { computed, ref, watch } from 'vue'
   import type {
+    RecurrencePeriod,
     ReimbursementDto,
     TagDto,
     TransactionDto,
@@ -61,7 +62,18 @@
     'attach-tag': [id: string]
     'detach-tag': [id: string]
     'create-tag': [name: string]
+    'mark-recurring': []
+    'show-recurrence': []
+    'unlink-recurrence': []
   }>()
+
+  const RECURRENCE_PERIOD_LABELS: Record<RecurrencePeriod, string> = {
+    WEEKLY: 'hebdo',
+    FOUR_WEEKLY: '4 semaines',
+    MONTHLY: 'mensuel',
+    QUARTERLY: 'trimestriel',
+    YEARLY: 'annuel',
+  }
 
   // The draft starts from the stored note each time editing opens; the page
   // only learns about it on save.
@@ -115,10 +127,18 @@
 
 <template>
   <div
-    class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+    class="border-l-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
     :class="{
       'bg-primary-50/50 dark:bg-primary-900/10': selectionMode && selected,
+      // A subscription line reads apart at a glance: an indigo edge while
+      // it runs, a grey one once it has ended.
+      'border-indigo-400 dark:border-indigo-500':
+        transaction.recurrence?.status === 'ACTIVE',
+      'border-gray-300 dark:border-slate-600':
+        transaction.recurrence?.status === 'STOPPED',
+      'border-transparent': !transaction.recurrence,
     }"
+    :data-recurring="transaction.recurrence ? 'true' : undefined"
   >
     <!-- ==================== MOBILE CARD LAYOUT ==================== -->
     <div class="block md:hidden">
@@ -490,6 +510,63 @@
 
     <!-- Tags line (both layouts) -->
     <div class="flex flex-wrap items-center gap-1.5 mt-2 ml-12 md:ml-2">
+      <button
+        v-if="transaction.recurrence"
+        type="button"
+        class="inline-flex min-h-[28px] items-center gap-1 rounded-full px-2 text-xs font-medium transition-colors"
+        :class="
+          transaction.recurrence.status === 'ACTIVE'
+            ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50'
+            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600'
+        "
+        :title="`Voir toutes les échéances de ${transaction.recurrence.label}`"
+        data-testid="recurrence-badge"
+        @click="emit('show-recurrence')"
+      >
+        <svg
+          class="h-3.5 w-3.5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+          />
+        </svg>
+        {{ transaction.recurrence.name }} ·
+        {{ RECURRENCE_PERIOD_LABELS[transaction.recurrence.period] }}
+        <template v-if="transaction.recurrence.status === 'STOPPED'">
+          · terminé
+        </template>
+      </button>
+      <button
+        v-if="transaction.recurrence?.linked && !selectionMode"
+        type="button"
+        class="inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-slate-700 dark:hover:text-red-400"
+        :aria-label="`Détacher de ${transaction.recurrence.name}`"
+        title="Détacher de l'abonnement"
+        data-testid="unlink-recurrence"
+        @click="emit('unlink-recurrence')"
+      >
+        <svg
+          class="h-3.5 w-3.5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M6 18 18 6M6 6l12 12"
+          />
+        </svg>
+      </button>
       <TagChip
         v-for="t in transaction.tags ?? []"
         :key="t.id"
@@ -508,6 +585,32 @@
         @detach="id => emit('detach-tag', id)"
         @create="name => emit('create-tag', name)"
       />
+      <!-- Follow as a subscription: for a charge detection cannot see yet,
+           an annual plan paid once. -->
+      <button
+        v-if="isExpense && !selectionMode && !transaction.recurrence"
+        type="button"
+        class="inline-flex min-h-[28px] items-center gap-1 rounded-full px-2 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-slate-700"
+        title="Suivre comme abonnement"
+        data-testid="mark-recurring"
+        @click="emit('mark-recurring')"
+      >
+        <svg
+          class="h-3.5 w-3.5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+          />
+        </svg>
+        Abonnement
+      </button>
     </div>
 
     <!-- Reimbursements for this transaction (desktop only; mobile expands on demand) -->
