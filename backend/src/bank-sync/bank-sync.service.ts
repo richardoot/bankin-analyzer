@@ -24,6 +24,7 @@ import {
 import { recordEvent, timed } from '../common/metrics'
 import { randomUUID } from 'crypto'
 import { PrismaService } from '../prisma/prisma.service'
+import { RecurrencesService } from '../recurrences/recurrences.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import type { ResolvedAssignment } from '../ai-suggestions/transaction-categorizer'
 import {
@@ -265,7 +266,8 @@ export class BankSyncService {
     private readonly prisma: PrismaService,
     private readonly client: EnableBankingClient,
     private readonly credentialsService: EnableBankingCredentialsService,
-    private readonly aiSuggestions: AiSuggestionsService
+    private readonly aiSuggestions: AiSuggestionsService,
+    private readonly recurrences: RecurrencesService
   ) {}
 
   isConfigured(userId: string): Promise<boolean> {
@@ -1426,6 +1428,9 @@ export class BankSyncService {
       skippedTooOld: result.skippedTooOld,
       durationMs,
     })
+    // Warm the cache while nobody waits: the rows the sync wrote marked it
+    // stale, and even a sync that brought nothing moves the clock.
+    await this.recurrences.refreshQuietly(userId)
     const { aspspName: _named, ...outcome } = result
     return outcome
   }

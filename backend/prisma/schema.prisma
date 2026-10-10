@@ -35,6 +35,10 @@ model User {
   bankAuthorizationAttempts BankAuthorizationAttempt[]
   accountAliases        AccountAlias[]
   enableBankingCredential EnableBankingCredential?
+  recurrences           Recurrence[]
+  subscriptions         Subscription[]
+  subscriptionLinks     SubscriptionLink[]
+  recurrenceState       RecurrenceState?
 
   @@map("users")
   @@schema("app")
@@ -101,6 +105,8 @@ model Transaction {
   settlementsAsIncome   Settlement[]           @relation("SettlementIncome")
   tags                  TransactionTag[]
   reimbursementPayments ReimbursementPayment[] @relation("ReimbursementPaymentIncome")
+  recurrences           RecurrenceTransaction[]
+  subscriptionLink      SubscriptionLink?
 
   /// One bank reference may only be filed once per account. Postgres treats
   /// NULLs as distinct in a unique index, so the CSV rows — all of which have
@@ -1010,5 +1016,181 @@ model AccountAlias {
   @@unique([userId, label])
   @@index([accountId])
   @@map("account_aliases")
+  @@schema("app")
+}
+
+/// A charge that comes back on its own — a subscription, the rent, an
+/// insurance premium — as `recurrence.detection.ts` reads it from the
+/// expenses. A cache of what the transactions say, never something the user
+/// types: every row is replaced on each recompute, after a sync, an import
+/// or a reclassification. The user's own say lives in `Subscription`.
+///
+/// Materialised rather than computed on read because the dashboard and the
+/// tag baseline decide what is committed in SQL, line by line, and need a
+/// table to join.
+model Recurrence {
+  id           String @id @default(uuid())
+  userId       String @map("user_id")
+  merchantKey  String @map("merchant_key")
+  /// The latest amount rounded to the euro: tells apart two series one
+  /// merchant label carries (the Apple services, Netflix and Hevy via PayPal).
+  amountBucket Int    @map("amount_bucket")
+  label        String
+  /// The service it pays for: the user's name for it, or the one read
+  /// from its labels ("CB Strava Ireland Li" is Strava).
+  name         String @default("")
+
+  /// The filing of the latest charge. Not foreign keys: the row is
+  /// regenerated, and a deleted category simply stops being shown.
+  categoryId    String? @map("category_id")
+  subcategoryId String? @map("subcategory_id")
+
+  period            RecurrencePeriod
+  amount            Decimal          @db.Decimal(12, 2)
+  monthlyEquivalent Decimal          @map("monthly_equivalent") @db.Decimal(12, 2)
+  occurrences       Int
+  /// Everything the series has cost, at every price it ran at.
+  totalPaid         Decimal          @map("total_paid") @db.Decimal(12, 2)
+  firstDate         DateTime         @map("first_date")
+  lastDate          DateTime         @map("last_date")
+  nextExpected      DateTime         @map("next_expected")
+  status            RecurrenceStatus
+  computedAt        DateTime         @default(now()) @map("computed_at")
+
+  /// The user's subscription this series is, when the user has a say
+  /// about it. One series per subscription at most.
+  subscriptionId String? @unique @map("subscription_id")
+
+  user         User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription?           @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  transactions RecurrenceTransaction[]
+
+  @@unique([userId, merchantKey, amountBucket])
+  @@index([userId])
+  @@map("recurrences")
+  @@schema("app")
+}
+
+/// Which transactions a recurrence is made of — what the dashboard and the
+/// tag baseline join to count a line as committed whatever its subcategory.
+model RecurrenceTransaction {
+  recurrenceId  String @map("recurrence_id")
+  transactionId String @map("transaction_id")
+
+  recurrence  Recurrence  @relation(fields: [recurrenceId], references: [id], onDelete: Cascade)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@id([recurrenceId, transactionId])
+  @@index([transactionId])
+  @@map("recurrence_transactions")
+  @@schema("app")
+}
+
+enum RecurrencePeriod {
+  WEEKLY
+  /// Every 28 days, thirteen times a year: gyms.
+  FOUR_WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+
+  @@schema("app")
+}
+
+/// ACTIVE: on rhythm. STOPPED: missed two periods, kept six months so the
+/// user sees what ended. CANDIDATE: two charges only, shown apart until a
+/// third or a confirmation.
+enum RecurrenceStatus {
+  ACTIVE
+  STOPPED
+  CANDIDATE
+
+  @@schema("app")
+}
+
+/// CONFIRMED: the user follows it. DISMISSED: the user said it is not one.
+enum SubscriptionState {
+  CONFIRMED
+  DISMISSED
+
+  @@schema("app")
+}
+
+/// A recurring charge the user has a say about, with an identity of its own.
+///
+/// `recurrences` is a cache rebuilt on every recompute, its ids thrown away
+/// each time. A subscription is what stays: born of the user's first
+/// gesture on a series — following it, setting it aside, naming it, giving
+/// it a rhythm, attaching a payment to it — and referenced by id from then
+/// on, by the cache row that is its series and by the payments attached to
+/// it.
+///
+/// Detection recognises it by the spellings and the prices it covers, and
+/// widens both as the series lives on: a new label, a new price, and the
+/// subscription follows instead of losing its series. A followed
+/// subscription no series answers any more is listed as such, never lost
+/// silently.
+model Subscription {
+  id     String            @id @default(uuid())
+  userId String            @map("user_id")
+  state  SubscriptionState
+
+  /// The user's name for it, over the one read from its labels.
+  name   String?
+  /// The rhythm the user gave: one payment has no interval to read it from.
+  period RecurrencePeriod?
+
+  /// Merchant keys it recognises, as `merchantKey` writes them.
+  merchantKeys  String[] @map("merchant_keys")
+  /// Prices it recognises, rounded to the euro. Empty: every price.
+  amountBuckets Int[]    @map("amount_buckets")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recurrence  Recurrence?
+  links       SubscriptionLink[]
+
+  @@index([userId])
+  @@map("subscriptions")
+  @@schema("app")
+}
+
+/// An expense the user attached by hand to a subscription it does not look
+/// like: Strava renewed by card after a year paid by transfer, at a new
+/// price, under a label sharing one word with the first.
+model SubscriptionLink {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  subscriptionId String   @map("subscription_id")
+  transactionId  String   @unique @map("transaction_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  transaction  Transaction  @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([subscriptionId])
+  @@map("subscription_links")
+  @@schema("app")
+}
+
+/// How fresh a user's recurrences are. `version` is bumped by database
+/// triggers on every change to the user's transactions — whatever the path:
+/// the API, a cascade from a deleted category or account, a script — and a
+/// recompute records the version it read before reading the ledger. The
+/// cache is stale while `version` is ahead of `computedVersion`, or once a
+/// day has passed (time alone turns a running charge into an ended one).
+model RecurrenceState {
+  userId          String    @id @map("user_id")
+  version         BigInt    @default(0)
+  computedVersion BigInt?   @map("computed_version")
+  computedAt      DateTime? @map("computed_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("recurrence_states")
   @@schema("app")
 }

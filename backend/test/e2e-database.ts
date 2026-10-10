@@ -135,6 +135,12 @@ export interface E2eDatabaseOptions {
   reserve?: (count: number) => Promise<number[]>
   /** Test seam: shortens the deadline so the retry can be exercised quickly. */
   startTimeoutMs?: number
+  /**
+   * Stop before this migration (a directory name), so a test can seed the
+   * schema as it stood and then watch the migration carry the data over
+   * (`applyRemainingMigrations`).
+   */
+  stopBefore?: string
 }
 
 async function startServerOnFreePorts(
@@ -208,6 +214,10 @@ export interface E2eDatabase {
    * in PrismaService's place without noticing.
    */
   prisma: PrismaClient & { poolStats: PrismaService['poolStats'] }
+  /** Raw SQL, for seeding a schema the generated client no longer knows. */
+  query: (sql: string, values?: unknown[]) => Promise<void>
+  /** Apply the migrations `stopBefore` held back. */
+  applyRemainingMigrations: () => Promise<void>
   close: () => Promise<void>
 }
 
@@ -218,21 +228,30 @@ export async function createE2eDatabase(
 
   const pool = new Pool({ connectionString: server.database.connectionString })
 
-  for (const file of migrationFiles()) {
-    const sql = readFileSync(file, 'utf8')
-    try {
-      await pool.query(sql)
-    } catch (error) {
-      // Name the migration that broke: without it the failure surfaces as an
-      // opaque SQL error with no clue where it came from.
-      throw new Error(
-        `Migration ${path.basename(path.dirname(file))} failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        { cause: error }
-      )
+  const apply = async (files: string[]): Promise<void> => {
+    for (const file of files) {
+      const sql = readFileSync(file, 'utf8')
+      try {
+        await pool.query(sql)
+      } catch (error) {
+        // Name the migration that broke: without it the failure surfaces as
+        // an opaque SQL error with no clue where it came from.
+        throw new Error(
+          `Migration ${path.basename(path.dirname(file))} failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          { cause: error }
+        )
+      }
     }
   }
+  const files = migrationFiles()
+  const held = options.stopBefore
+    ? files.filter(
+        file => path.basename(path.dirname(file)) >= (options.stopBefore ?? '')
+      )
+    : []
+  await apply(files.filter(file => !held.includes(file)))
 
   const prisma = Object.assign(
     new PrismaClient({ adapter: new PrismaPg(pool) }),
@@ -247,6 +266,10 @@ export async function createE2eDatabase(
 
   return {
     prisma,
+    query: async (sql, values): Promise<void> => {
+      await pool.query(sql, values)
+    },
+    applyRemainingMigrations: (): Promise<void> => apply(held),
     close: async () => {
       await prisma.$disconnect()
       await pool.end()

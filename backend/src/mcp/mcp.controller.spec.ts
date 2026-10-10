@@ -11,6 +11,7 @@ import { SubcategoriesService } from '../subcategories/subcategories.service'
 import { PersonsService } from '../persons/persons.service'
 import { ReimbursementsService } from '../reimbursements/reimbursements.service'
 import { SettlementsService } from '../settlements/settlements.service'
+import { RecurrencesService } from '../recurrences/recurrences.service'
 import { NotFoundException, BadRequestException } from '@nestjs/common'
 
 /* ──────────────────────────────────────────────────────────────
@@ -96,6 +97,10 @@ const mockSettlementsService = {
   create: vi.fn(),
 }
 
+const mockRecurrencesService = {
+  list: vi.fn(),
+}
+
 /** The JSON inside a <user_financial_data> answer. */
 const parseData = (result: { content: Array<{ text: string }> }): any =>
   JSON.parse(
@@ -133,6 +138,7 @@ describe('McpController', () => {
           useValue: mockReimbursementsService,
         },
         { provide: SettlementsService, useValue: mockSettlementsService },
+        { provide: RecurrencesService, useValue: mockRecurrencesService },
       ],
     })
       .overrideGuard(McpAuthGuard)
@@ -165,6 +171,7 @@ describe('McpController', () => {
         'get_categories',
         'get_dashboard_summary',
         'get_persons',
+        'get_recurrences',
         'get_reimbursements',
         'get_transaction',
         'get_transactions',
@@ -671,6 +678,78 @@ describe('McpController', () => {
 
       expect(mockPersonsService.findAllByUser).toHaveBeenCalledWith(mockUser.id)
       expect(parsed).toEqual([{ id: 'person-1', name: 'Chloé' }])
+    })
+  })
+
+  describe('get_recurrences tool', () => {
+    const recurrence = (status: string, label: string) => ({
+      id: `rec-${label}`,
+      merchantKey: label.toLowerCase(),
+      amountBucket: 15,
+      label,
+      categoryId: 'cat-1',
+      categoryName: 'Loisirs et culture',
+      categoryIcon: null,
+      subcategoryId: 'sub-1',
+      subcategoryName: 'Streaming, musique et médias',
+      nature: 'PLEASURE',
+      period: 'MONTHLY',
+      amount: 14.99,
+      monthlyEquivalent: 14.99,
+      occurrences: 8,
+      firstDate: '2026-02-02T00:00:00.000Z',
+      lastDate: '2026-09-01T00:00:00.000Z',
+      nextExpected: '2026-10-01T00:00:00.000Z',
+      status,
+      confirmed: false,
+    })
+
+    beforeEach(() => {
+      mockRecurrencesService.list.mockResolvedValue({
+        recurrences: [
+          recurrence('ACTIVE', 'Netflix'),
+          recurrence('CANDIDATE', 'Spotify'),
+        ],
+        monthlyTotal: 14.99,
+        byCategory: [
+          {
+            categoryId: 'cat-1',
+            name: 'Loisirs et culture',
+            monthlyTotal: 14.99,
+          },
+        ],
+        byNature: { essential: 0, pleasure: 14.99, unclassified: 0 },
+        dismissed: [],
+        computedAt: '2026-10-07T00:00:00.000Z',
+      })
+    })
+
+    it('answers the list with its monthly total, dates cut to the day', async () => {
+      const tools = await registerTools()
+
+      const parsed = parseData(await tools.get('get_recurrences')!({}))
+
+      expect(mockRecurrencesService.list).toHaveBeenCalledWith(mockUser.id)
+      expect(parsed.monthlyTotal).toBe(14.99)
+      expect(parsed.recurrences).toHaveLength(2)
+      expect(parsed.recurrences[0]).toMatchObject({
+        label: 'Netflix',
+        category: 'Loisirs et culture',
+        lastDate: '2026-09-01',
+        nextExpected: '2026-10-01',
+      })
+    })
+
+    it('filters by status', async () => {
+      const tools = await registerTools()
+
+      const parsed = parseData(
+        await tools.get('get_recurrences')!({ status: 'CANDIDATE' })
+      )
+
+      expect(parsed.recurrences.map((r: { label: string }) => r.label)).toEqual(
+        ['Spotify']
+      )
     })
   })
 
