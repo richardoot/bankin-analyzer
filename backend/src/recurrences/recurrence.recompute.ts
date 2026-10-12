@@ -28,6 +28,14 @@ type Reader = Pick<
   'transaction' | 'subscription' | 'subscriptionLink'
 >
 
+/**
+ * Room for a rebuild that reads a whole history from the production
+ * database, a network hop away, while another user's request waits on the
+ * same pool: Prisma's 5 s default is enough locally, not there. The wait
+ * for the user's lock counts in `timeout`.
+ */
+const REBUILD_TRANSACTION = { maxWait: 10_000, timeout: 15_000 }
+
 /** A day: time alone turns a running charge into an ended one. */
 const MAX_AGE_MS = 24 * 60 * 60 * 1000
 
@@ -246,7 +254,7 @@ export async function recomputeRecurrences(
   return prisma.$transaction(async tx => {
     await lockUser(tx, userId)
     return rebuild(tx, userId, now)
-  })
+  }, REBUILD_TRANSACTION)
 }
 
 /**
@@ -267,5 +275,5 @@ export async function refreshRecurrences(
     if (isFresh(await readState(tx, userId), now)) return false
     await rebuild(tx, userId, now)
     return true
-  })
+  }, REBUILD_TRANSACTION)
 }

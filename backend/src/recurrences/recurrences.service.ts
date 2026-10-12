@@ -4,7 +4,9 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common'
+import * as Sentry from '@sentry/nestjs'
 import { PrismaService } from '../prisma/prisma.service'
+import { recordEvent, timed } from '../common/metrics'
 import { merchantKey } from '../ai-suggestions/merchant-memory'
 import type { Subscription, SubscriptionState } from '../generated/prisma'
 import {
@@ -42,7 +44,15 @@ export class RecurrencesService {
    * keep track of the changes, whichever path made them.
    */
   async refresh(userId: string): Promise<void> {
-    await refreshRecurrences(this.prisma, userId)
+    const { result: rebuilt, durationMs } = await timed(
+      'recurrences',
+      'recurrence refresh',
+      () => refreshRecurrences(this.prisma, userId)
+    )
+    // Only a rebuild is worth a line: the freshness check alone is one read.
+    if (rebuilt) {
+      recordEvent(this.logger, 'recurrence_rebuild', { userId, durationMs })
+    }
   }
 
   /**
@@ -54,6 +64,9 @@ export class RecurrencesService {
     try {
       await this.refresh(userId)
     } catch (error) {
+      // Swallowed for the reader, never for us: an answer built on a stale
+      // cache must still show up in Sentry.
+      Sentry.captureException(error, { tags: { feature: 'recurrences' } })
       this.logger.error(
         `Recurrence refresh failed for user ${userId}`,
         error instanceof Error ? error.stack : String(error)
