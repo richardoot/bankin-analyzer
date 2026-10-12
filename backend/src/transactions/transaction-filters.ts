@@ -41,6 +41,11 @@ export interface TransactionFilters {
    * person to say where it actually belongs.
    */
   needsBankReview?: boolean
+  /**
+   * The lines of one recurring charge, named by what survives a recompute —
+   * its merchant and amount bucket — rather than by a row id that does not.
+   */
+  recurrence?: { merchantKey: string; amountBucket: number }
 }
 
 /**
@@ -61,6 +66,17 @@ export interface RawTransactionFilters {
   amountMin?: string | number
   amountMax?: string | number
   needsBankReview?: string | boolean
+  /** `<amountBucket>:<merchantKey>`, e.g. `15:com netflix`. */
+  recurrence?: string
+}
+
+/** `15:com netflix` → the series; anything else is ignored. */
+function parseRecurrence(
+  value: string | undefined
+): TransactionFilters['recurrence'] | null {
+  const match = value?.match(/^(-?\d+):(.+)$/)
+  if (!match?.[1] || !match[2]) return null
+  return { amountBucket: Number(match[1]), merchantKey: match[2] }
 }
 
 /**
@@ -110,6 +126,9 @@ export function parseTransactionFilters(
       typeof raw.needsBankReview === 'boolean'
         ? raw.needsBankReview
         : raw.needsBankReview === 'true'
+
+  const recurrence = parseRecurrence(raw.recurrence)
+  if (recurrence) filters.recurrence = recurrence
 
   const min = parseAmountBound(raw.amountMin)
   if (min !== null) filters.amountMin = min
@@ -171,6 +190,9 @@ export function buildTransactionWhere(
     }),
     ...(filters?.tagId && {
       tags: { some: { tagId: filters.tagId } },
+    }),
+    ...(filters?.recurrence && {
+      recurrences: { some: { recurrence: filters.recurrence } },
     }),
     ...(filters?.needsBankReview && {
       source: TransactionSource.BANK_API,

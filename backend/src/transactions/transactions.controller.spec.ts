@@ -392,6 +392,43 @@ describe('TransactionsController', () => {
       expect(result.meta.hasPreviousPage).toBe(false)
     })
 
+    it('names the recurring charge a line belongs to, but not a candidate', async () => {
+      const link = (status: string) => ({
+        recurrence: {
+          status,
+          period: 'MONTHLY',
+          merchantKey: 'com netflix',
+          amountBucket: 15,
+          label: 'CB Netflix.com',
+          name: 'Netflix',
+        },
+      })
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [
+          {
+            ...mockTransaction,
+            recurrences: [link('ACTIVE')],
+            subscriptionLink: { id: 'link-1' },
+          },
+          { ...mockTransaction2, recurrences: [link('CANDIDATE')] },
+        ],
+        total: 2,
+      })
+
+      const result = await controller.findAll(mockUser, 1, 20)
+
+      expect(result.data[0]?.recurrence).toEqual({
+        status: 'ACTIVE',
+        period: 'MONTHLY',
+        merchantKey: 'com netflix',
+        amountBucket: 15,
+        label: 'CB Netflix.com',
+        name: 'Netflix',
+        linked: true,
+      })
+      expect(result.data[1]).not.toHaveProperty('recurrence')
+    })
+
     it('should map settlements summary for income transactions', async () => {
       const incomeWithSettlement = {
         ...mockTransaction,
@@ -708,6 +745,7 @@ describe('TransactionsController', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         'amount'
       )
 
@@ -725,6 +763,7 @@ describe('TransactionsController', () => {
           mockUser,
           1,
           20,
+          undefined,
           undefined,
           undefined,
           undefined,

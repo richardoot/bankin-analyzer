@@ -32,6 +32,7 @@ import { DashboardService } from '../dashboard/dashboard.service'
 import { PersonsService } from '../persons/persons.service'
 import { ReimbursementsService } from '../reimbursements/reimbursements.service'
 import { SettlementsService } from '../settlements/settlements.service'
+import { RecurrencesService } from '../recurrences/recurrences.service'
 import type { ReimbursementResponseDto } from '../reimbursements/dto'
 import { LEDGER_EPSILON, round2 } from '../reimbursements/reimbursement-ledger'
 import {
@@ -272,7 +273,8 @@ export class McpController {
     private readonly dashboardService: DashboardService,
     private readonly personsService: PersonsService,
     private readonly reimbursementsService: ReimbursementsService,
-    private readonly settlementsService: SettlementsService
+    private readonly settlementsService: SettlementsService,
+    private readonly recurrencesService: RecurrencesService
   ) {}
 
   private async loadFilingTree(userId: string): Promise<{
@@ -665,6 +667,49 @@ export class McpController {
               (!params.status || r.status === params.status)
           )
           return dataResponse(filtered.map(reimbursementSummary))
+        })
+    )
+
+    // ── Tool: get_recurrences ──
+    server.tool(
+      'get_recurrences',
+      'Recupere les charges recurrentes detectees (abonnements, loyer, assurances...) : ' +
+        'marchand, categorie, montant, periodicite, equivalent mensuel, dernier prelevement, ' +
+        'et le total mensuel des recurrences actives',
+      {
+        status: z
+          .enum(['ACTIVE', 'STOPPED', 'CANDIDATE'])
+          .optional()
+          .describe(
+            'ACTIVE : en cours ; STOPPED : arretee recemment ; CANDIDATE : deux prelevements seulement, a confirmer'
+          ),
+      },
+      async params =>
+        answer(async () => {
+          const list = await this.recurrencesService.list(userId)
+          return dataResponse({
+            monthlyTotal: list.monthlyTotal,
+            byCategory: list.byCategory,
+            recurrences: list.recurrences
+              .filter(r => !params.status || r.status === params.status)
+              .map(r => ({
+                name: r.name,
+                label: r.label,
+                merchantKey: r.merchantKey,
+                amountBucket: r.amountBucket,
+                category: r.categoryName,
+                subcategory: r.subcategoryName,
+                period: r.period,
+                amount: r.amount,
+                monthlyEquivalent: r.monthlyEquivalent,
+                occurrences: r.occurrences,
+                totalPaid: r.totalPaid,
+                firstDate: r.firstDate.slice(0, 10),
+                lastDate: r.lastDate.slice(0, 10),
+                nextExpected: r.nextExpected.slice(0, 10),
+                status: r.status,
+              })),
+          })
         })
     )
 

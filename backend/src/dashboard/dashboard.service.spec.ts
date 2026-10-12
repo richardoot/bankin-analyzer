@@ -3,6 +3,10 @@ import { Test } from '@nestjs/testing'
 import { DashboardService } from './dashboard.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
+import { RecurrencesService } from '../recurrences/recurrences.service'
+
+/** Brought up to date before every summary; a cache these tests do not read. */
+const mockRecurrences = { refreshQuietly: vi.fn() }
 
 describe('DashboardService', () => {
   let service: DashboardService
@@ -31,11 +35,13 @@ describe('DashboardService', () => {
       pending_credit: number
       nature: string | null
       rhythm: string | null
+      is_recurring: boolean
       category_catalog_key: string | null
     }> = {}
   ) => ({
     nature: overrides.nature ?? null,
     rhythm: overrides.rhythm ?? null,
+    is_recurring: overrides.is_recurring ?? false,
     category_catalog_key: overrides.category_catalog_key ?? null,
     month_key: overrides.month_key ?? '2024-01',
     // Rows are grouped and filtered by category id, so each name gets a
@@ -112,6 +118,7 @@ describe('DashboardService', () => {
           provide: FilterPreferencesService,
           useValue: mockFilterPreferencesService,
         },
+        { provide: RecurrencesService, useValue: mockRecurrences },
       ],
     }).compile()
 
@@ -1272,6 +1279,46 @@ describe('DashboardService', () => {
     })
   })
   describe('the structure of spending and the savings reading', () => {
+    it('counts a line of a recurrence as committed and reports it apart', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          // Simply Piano, filed under a variable subcategory: the query reads
+          // it as committed because it belongs to a recurrence.
+          createRow({
+            category_name: 'Loisirs et culture',
+            total_amount: 17.99,
+            nature: 'PLEASURE',
+            rhythm: 'COMMITTED',
+            is_recurring: true,
+          }),
+          createRow({
+            category_name: 'Loisirs et culture',
+            total_amount: 40,
+            nature: 'PLEASURE',
+            rhythm: 'VARIABLE',
+          }),
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.spendingStructure).toMatchObject({
+        committed: 17.99,
+        variable: 40,
+        recurring: 17.99,
+        total: 57.99,
+      })
+      const [aggregation] = mockPrismaService.$queryRaw.mock.calls[0] as [
+        { strings: string[] },
+      ]
+      const sql = aggregation.strings.join('')
+      expect(sql).toContain(
+        "WHEN rtx.transaction_id IS NOT NULL THEN 'COMMITTED'"
+      )
+      expect(sql).toContain("r.status IN ('ACTIVE', 'STOPPED')")
+    })
+
     it('reads each expense through its nature and rhythm, on both readings', async () => {
       mockPrismaService.$queryRaw
         .mockResolvedValueOnce([
@@ -1315,6 +1362,7 @@ describe('DashboardService', () => {
         committed: 1000,
         variable: 500,
         unknownRhythm: 50,
+        recurring: 0,
         total: 1550,
       })
       expect(result.everydaySpendingStructure).toEqual({
@@ -1324,6 +1372,7 @@ describe('DashboardService', () => {
         committed: 1000,
         variable: 200,
         unknownRhythm: 50,
+        recurring: 0,
         total: 1250,
       })
       // No transfer: nothing saved, and the free money is income less the

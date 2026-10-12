@@ -114,6 +114,40 @@ une récurrence), Hevy (annuel 3,49 € puis mensuel), une assurance auto
 trimestrielle, le loyer (mensuel, catégorie engagée : apparaît, la récurrence
 n'est pas réservée aux abonnements).
 
+### Écarts constatés au lot 0
+
+Les données réelles, relues le 2026-10-07, ont corrigé le plan sur six points ;
+le code fait foi.
+
+- **Fenêtres d'intervalle plus larges.** Un loyer viré à la main part entre le
+  1er et le 7 ; un prélèvement du samedi tombe le lundi : les écarts mensuels
+  réels vont de 27 à 36 jours. Mensuel 24 à 38, hebdomadaire 5 à 9, trimestriel
+  80 à 100, annuel 358 à 372 (resserré : un abonnement annuel se renouvelle à
+  sa date, un achat un an plus tard non). Une seule échéance manquante (écart jusqu'à deux
+  périodes) ne coupe pas la série : Apple n'a pas de ligne en février 2026.
+- **Regroupement des clés proches.** Le loyer s'écrit « Vir Sepa
+  <bailleur> » ou « … Virement De <colocataire> Réf » : deux `merchantKey`. Les clés
+  sont fusionnées par `isSameMerchant` (Jaccard ≥ 0,5), exportée de
+  `merchant-memory.ts` pour que les deux usages partagent la définition.
+- **Libellés partagés : PayPal autant qu'Apple.** Netflix et Hevy passent par
+  « Prlv Sepa Paypal Europe S.a.r.l ». Le regroupement par montant les sépare.
+- **Changement de tarif = chaînage.** Les montants sont regroupés en grappes
+  (5 % ou 1 €) ; une série qui s'arrête quand une autre du même marchand et de
+  même période commence, une période plus tard, est la même charge à un
+  nouveau prix (Netflix 14,99 → 21,99 → 14,99, AMV 48,50 → 37,30). Une seule
+  récurrence, affichée au dernier montant. Une décision prise sur un ancien
+  montant s'applique toujours (elle est comparée à tous les montants de la
+  chaîne).
+- **Pas de candidate annuelle à une occurrence.** Une ligne seule n'a pas
+  d'intervalle ; toute dépense ponctuelle serait candidate. Une annuelle
+  devient récurrence à sa deuxième occurrence.
+- **Cas réels différents de ceux annoncés.** Pas de Free Mobile dans les
+  dépenses de Richard (le doublon du même mois est testé en synthèse) ; l'AMV
+  est mensuelle (deux contrats prélevés le même jour, chacun révisé), pas
+  trimestrielle (le trimestriel est testé en synthèse) ; Hevy via PayPal (deux
+  lignes à cinq mois d'écart) n'est pas une récurrence, et c'est le bon
+  résultat.
+
 ## Modèle
 
 Trois tables techniques, dans le schéma `app`, une migration Prisma.
@@ -201,6 +235,164 @@ Chaque lot livre ses tests avant le suivant.
 - En prod après fusion : la migration passe au déploiement ; un premier recalcul
   par le script pour les deux comptes, les suivants viennent avec la
   synchronisation nocturne.
+
+## État au 2026-10-07
+
+Lots 0 à 3 codés sur `feat/recurrences`, non commités. Écarts au plan :
+
+- **STOPPED compte aussi comme preuve d'engagement** (`status IN ('ACTIVE',
+'STOPPED')`) : un abonnement arrêté en juin était engagé chaque mois où il
+  a couru ; ses mois passés ne doivent pas redevenir variables le jour où il
+  s'arrête. Les candidates ne prouvent rien.
+- **Recalcul après chaque synchronisation, même vide** : le temps qui passe
+  fait passer une récurrence en « arrêtée ».
+- **Filtre de la page Transactions par série**, pas par marchand :
+  `?recurrence=<amountBucket>:<merchantKey>`, clé stable d'un recalcul à
+  l'autre (l'id de la ligne, lui, change).
+- Champ `recurring` dans `SpendingStructureDto` : la part de l'engagé faite
+  de récurrences, sur la période ; la carte l'affiche par mois.
+
+### Un rythme ne suffit pas : achats d'habitude (2026-10-08)
+
+Le premier dry-run en lecture seule sur les dépenses de prod de Richard
+(1 242 lignes, 15 mois) trouvait 34 récurrences, dont des achats d'habitude à
+prix stable : laverie, péages, supermarchés, billets SNCF, un café. Le
+diagnostic série par série a montré deux signes qui trahissent une habitude,
+devenus deux règles (`isCredible`) :
+
+- **Peu de lignes hors série.** Un abonnement est prélevé à son rythme et
+  nulle part ailleurs ; une habitude a plus de lignes au même prix à côté de
+  la série que dedans (19 passages de péage autour d'une série « mensuelle »
+  de 4). Les lignes d'une autre vraie série au même prix (3 ou plus) ne
+  comptent pas.
+- **Échéances manquées limitées.** Aucune sous 4 écarts, puis une pour 10.
+  Une échéance sautée est un prélèvement raté ; une suite d'échéances
+  sautées n'est pas un rythme (un café tous les 42, 42 et 63 jours).
+
+Écartées après examen : le jour de prélèvement stable (Fitness Park et Basic
+Fit prélèvent tous les 28 jours, leur jour du mois dérive) et l'exclusion des
+paiements par carte (Apple, Claude, le coaching sont payés par carte).
+
+**Période « toutes les 4 semaines »** (`FOUR_WEEKLY`, 13 fois par an) : une
+série mensuelle dont la moyenne des écarts est ≤ 29 jours sur au moins trois
+écarts. Fitness Park : 54,17 €/mois au lieu de 50.
+
+Dry-run après les règles : 23 récurrences, 14 actives, 901,23 €/mois.
+Restent : loyer, EDF, coaching, Claude.ai puis Anthropic, Fitness Park et
+Basic Fit (4 semaines), Orange fibre et mobiles, AMV ×2, PayPal ×3 (dont
+Netflix), Apple mensuel et annuel, Bouygues, Matmut, tenue de compte. À
+surveiller : une candidate Auchan The Corner (ne compte pas dans l'engagé),
+deux arrêtées courtes « CB Amz » (4 lignes) et Carrefour City (3 lignes).
+
+### Suivi des abonnements en cours et passés (2026-10-08)
+
+La page `/recurrences` a deux onglets : **En cours** (actives et candidates,
+avec depuis quand et le total payé) et **Terminés** (date de début et de fin,
+durée, total payé, dernier tarif ; le plus récemment terminé en tête).
+
+Pour que le passé tienne :
+
+- **Tout l'historique est lu**, plus seulement 15 mois ; une charge arrêtée
+  reste listée pour de bon (elle était gardée six mois). Ses mois restent
+  engagés dans le dashboard.
+- **`totalPaid`** sur chaque récurrence (colonne `total_paid`) : la somme de
+  ses lignes, à tous ses tarifs.
+- **Un passé désordonné ne tue plus une série** : une chaîne qui a plus
+  d'échéances manquées qu'elle n'en a le droit est coupée à chacune, et
+  chaque morceau est jugé seul (`splitAtMisses`).
+- **Orthographes reliées par un pont** : une orthographe qui ressemble à
+  l'orthographe principale de deux marchands les réunit s'ils partagent deux
+  mots (« begon patrice » relie les virements de loyer signés par l'un ou
+  l'autre ; « amazon » seul ne relie pas « amazon prime » et « amazon
+  payments »).
+
+Dry-run sur tout l'historique de Richard (depuis le 1er janvier 2025,
+lecture seule) : 15 en cours (888 €/mois), 2 candidates, 19 terminés — dont
+Basic Fit, l'ancien Fitness Park Bordeaux, ChatGPT puis Claude, Amnesty,
+l'acompte d'impôt, Orange fibre, EDF. Le loyer : 22 échéances, 14 400 €.
+Restent à écarter à la main : un « annuel » Auchan à 25,59 €, Poke Moon,
+les intérêts débiteurs.
+
+### Noms, rattachements à la main, marquage manuel (2026-10-08)
+
+- **Marquer une dépense comme abonnement** (page Transactions, « ↻
+  Abonnement ») avec la périodicité que l'utilisateur connaît : l'annuel
+  payé une fois, que la détection ne peut pas voir. Enregistré comme une
+  confirmation portant `period` (migration `20261008120000`).
+- **Fin plus tôt** : une récurrence est terminée dès que l'écart depuis son
+  dernier prélèvement dépasse la borne haute de sa fenêtre (9 / 38 / 100 /
+  372 jours), au lieu de deux périodes.
+- **Rattacher à la main** une dépense à une série qu'elle ne ressemble pas
+  (`recurrence_links`, migration `20261008160000`) : Strava payé par virement
+  à 46,99 € puis renouvelé par carte à 59,99 €, sous un libellé qui ne
+  partage qu'un mot. Ni le libellé ni le prix ne pouvaient les réunir.
+- **Nom de service** lu dans les libellés (`recurrence.naming.ts`) : préfixes
+  bancaires, formes juridiques, pays et références retirés ; les mots que
+  tous les libellés d'une série partagent, sinon les premiers du dernier
+  (« CB Strava Ireland Li » et « Vir Corner Strava Qwertys » → Strava).
+  L'utilisateur peut le remplacer ; son nom est porté par une confirmation.
+- **Liste des transactions** : une ligne d'abonnement porte un liseré et un
+  badge « <nom> · <rythme> » qui filtre sur la série ; une ligne rattachée à
+  la main peut être détachée.
+
+Une « entreprise » comme notion à part a été écartée pour l'instant : elle
+ne levait qu'un des trois obstacles du cas Strava (libellé, prix, une seule
+ligne par prix). Les rattachements et les noms en sont le point de départ si
+le besoin d'un nom de marchand apparaît ailleurs (classement, affichage).
+
+### Abonnements : une identité stable (2026-10-09)
+
+Ce que l'utilisateur dit d'une série (suivie, écartée, nommée, périodicité,
+paiements rattachés) était accroché à une clé floue, marchand + montant
+arrondi, que la série elle-même peut dépasser quand son libellé ou son prix
+change : la décision restait orpheline, sans que rien ne le montre. C'est
+désormais une table `subscriptions` à l'utilisateur (migration
+`20261009090000`, qui reprend `recurrence_decisions` et `recurrence_links`) :
+
+- **un id stable**, référencé par la ligne de cache de sa série
+  (`recurrences.subscription_id`, unique : une série par abonnement au plus)
+  et par ses paiements rattachés (`subscription_links`) ;
+- **les orthographes et les prix qu'il reconnaît** (`merchant_keys`,
+  `amount_buckets`, vide = tous les prix), que chaque recalcul élargit à ce
+  que sa série couvre : un nouveau libellé, un nouveau tarif, et
+  l'abonnement suit au lieu de perdre sa série ;
+- **l'état, le nom, la périodicité** comme champs séparés : nommer ne
+  confirme plus par effet de bord ;
+- **les orphelins visibles** : un abonnement suivi qu'aucune série ne
+  retrouve est listé à part (« Suivis sans échéance retrouvée ») et peut
+  être oublié.
+
+Il naît au premier geste de l'utilisateur sur une série ; une série
+seulement détectée reste du cache pur. La détection reçoit les abonnements
+et rend, à côté des récurrences, ce que chacun a reconnu (`detect` →
+`learned`), que le recalcul réécrit. Le harnais e2e sait s'arrêter avant une
+migration (`stopBefore`) pour tester la reprise des données.
+
+### Fraîcheur du cache et historiques de référence (2026-10-09)
+
+- **Le cache sait quand il est périmé.** Des triggers sur `transactions`
+  incrémentent une version par utilisateur à chaque changement qui compte
+  pour la détection (date, montant, libellé, type, classement), quel que
+  soit le chemin : API, cascade d'une catégorie ou d'un compte supprimé,
+  annulation d'une synchro ou d'un import, script. Un pointage ou une note
+  ne compte pas. Table `recurrence_states`, migration `20261009120000`.
+- **Recalcul à la lecture** (`refreshRecurrences`) : la liste, le
+  dashboard et l'analyse d'une étiquette reconstruisent le cache s'il est
+  en retard sur la version, ou âgé d'un jour (le temps seul arrête une
+  charge). Le recalcul lit la version avant le registre : un changement
+  arrivé pendant le recalcul laisse le cache périmé au lieu d'être perdu.
+  Plus de recalcul sur le chemin d'écriture ; la synchro de la nuit
+  réchauffe le cache. Un utilisateur jamais calculé l'est à sa première
+  lecture (plus de page vide après un déploiement).
+- **Seuils regroupés** dans `RULES` (`recurrence.detection.ts`), chacun
+  documenté par le cas réel qui l'a fixé.
+- **Historiques de référence** : les dépenses des deux comptes, anonymisées
+  (`src/scripts/export-recurrence-ledger.ts` : mots remplacés par des
+  pseudonymes à clé aléatoire jetée, de même longueur, sans collision ;
+  dates et montants conservés ; l'export refuse d'écrire si la détection
+  lit le fichier autrement que le registre réel), rejouées par
+  `recurrence.ledgers.spec.ts` contre une référence relue. Tout changement
+  de règle montre son effet exact sur deux historiques réels.
 
 ## Points ouverts
 

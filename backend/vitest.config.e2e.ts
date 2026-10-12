@@ -13,6 +13,10 @@ export default defineConfig({
     // Each file starts its own database server and replays the migrations
     // into it, which takes a second or so before the first test runs.
     testTimeout: 30000,
+    // Each file boots its own embedded Postgres and replays every migration;
+    // with every file at once that setup, and the shutdown after a
+    // write-heavy file, run past the 10 s default.
+    hookTimeout: 30000,
   },
   resolve: {
     alias: {

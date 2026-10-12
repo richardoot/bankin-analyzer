@@ -19,7 +19,10 @@ import {
 } from './enable-banking.client'
 import { EnableBankingCredentialsService } from './enable-banking-credentials.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
+import { RecurrencesService } from '../recurrences/recurrences.service'
 
+/** The recurrences refresh after a sync; a cache these tests do not read. */
+const mockRecurrences = { refreshQuietly: vi.fn() }
 const userId = 'user-1'
 
 /**
@@ -136,6 +139,7 @@ describe('BankSyncService — authorization', () => {
           useValue: mockCredentialsService,
         },
         { provide: AiSuggestionsService, useValue: mockAiSuggestions },
+        { provide: RecurrencesService, useValue: mockRecurrences },
       ],
     }).compile()
     service = module.get<BankSyncService>(BankSyncService)
@@ -1312,6 +1316,7 @@ describe('runScheduledSync', () => {
           useValue: mockCredentialsService,
         },
         { provide: AiSuggestionsService, useValue: mockAiSuggestions },
+        { provide: RecurrencesService, useValue: mockRecurrences },
       ],
     }).compile()
     service = module.get<BankSyncService>(BankSyncService)
@@ -1393,6 +1398,7 @@ describe('recordSyncFailure', () => {
           useValue: mockCredentialsService,
         },
         { provide: AiSuggestionsService, useValue: mockAiSuggestions },
+        { provide: RecurrencesService, useValue: mockRecurrences },
       ],
     }).compile()
     service = module.get<BankSyncService>(BankSyncService)

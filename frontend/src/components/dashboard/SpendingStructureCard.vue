@@ -11,8 +11,13 @@
    * the period left free once the committed spending and the savings were
    * out. And what is still owed to the user: money advanced to someone
    * leaves the expenses without leaving sight.
+   *
+   * Under the rhythm, the share of the committed spending made of charges
+   * that come back on their own — subscriptions, rent, insurance — with a
+   * way to the list of them.
    */
   import { computed, ref } from 'vue'
+  import { RouterLink } from 'vue-router'
   import type { SpendingStructureDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
 
@@ -210,6 +215,26 @@
             </span>
           </li>
         </ul>
+        <p
+          v-if="axis.key === 'rhythm' && structure.recurring > 0"
+          class="mt-2 text-xs text-gray-500 dark:text-gray-400"
+          data-testid="recurring-share"
+        >
+          dont abonnements et charges récurrentes :
+          <span
+            class="tabular-nums font-medium text-gray-700 dark:text-gray-300"
+          >
+            {{ perMonth(structure.recurring) }} / mois
+          </span>
+          ·
+          <RouterLink
+            to="/recurrences"
+            class="text-primary-600 hover:underline dark:text-primary-400"
+            data-testid="recurring-link"
+          >
+            voir la liste
+          </RouterLink>
+        </p>
       </div>
     </div>
 

@@ -31,6 +31,7 @@ import {
   ImportPreviewResultDto,
   TransactionResponseDto,
 } from './dto'
+import type { TransactionRecurrenceSummaryDto } from './dto/transaction-response.dto'
 import { PaginatedTransactionsResponseDto } from './dto/paginated-transactions-response.dto'
 import { createPaginationMeta } from '../common/dto/pagination.dto'
 import { SupabaseGuard, CurrentUser } from '../auth'
@@ -49,6 +50,41 @@ type TransactionWithRelations = Transaction & {
   tags?: {
     tag: { id: string; name: string; color: string | null; icon: string | null }
   }[]
+  recurrences?: {
+    recurrence: {
+      status: 'ACTIVE' | 'STOPPED' | 'CANDIDATE'
+      period: TransactionRecurrenceSummaryDto['period']
+      merchantKey: string
+      amountBucket: number
+      label: string
+      name: string
+    }
+  }[]
+  subscriptionLink?: { id: string } | null
+}
+
+/** The recurrence a line proves a commitment for; a candidate is none yet. */
+function recurrenceOf(tx: TransactionWithRelations): {
+  recurrence?: TransactionRecurrenceSummaryDto
+} {
+  const recurrence = committedRecurrence(tx)
+  return recurrence ? { recurrence } : {}
+}
+
+function committedRecurrence(
+  tx: TransactionWithRelations
+): TransactionRecurrenceSummaryDto | undefined {
+  const link = tx.recurrences?.find(
+    ({ recurrence }) => recurrence.status !== 'CANDIDATE'
+  )
+  if (!link) return undefined
+  const { status, name, ...rest } = link.recurrence
+  return {
+    ...rest,
+    name: name || rest.label,
+    status: status === 'ACTIVE' ? 'ACTIVE' : 'STOPPED',
+    linked: Boolean(tx.subscriptionLink),
+  }
 }
 
 @ApiTags('transactions')
@@ -97,6 +133,7 @@ export class TransactionsController {
             })),
           }
         : {}),
+      ...recurrenceOf(tx),
       createdAt: tx.createdAt,
     }
   }
@@ -193,6 +230,13 @@ export class TransactionsController {
       'reference to — cleared to "aucun", or a correction still pending.',
   })
   @ApiQuery({
+    name: 'recurrence',
+    required: false,
+    type: String,
+    description:
+      'Only the lines of one recurring charge: `<amountBucket>:<merchantKey>`.',
+  })
+  @ApiQuery({
     name: 'sortBy',
     required: false,
     enum: ['date', 'amount'],
@@ -220,6 +264,7 @@ export class TransactionsController {
     @Query('amountMin') amountMin?: string,
     @Query('amountMax') amountMax?: string,
     @Query('needsBankReview') needsBankReview?: string,
+    @Query('recurrence') recurrence?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: string
   ): Promise<PaginatedTransactionsResponseDto> {
@@ -261,6 +306,7 @@ export class TransactionsController {
       ...(amountMin !== undefined && { amountMin }),
       ...(amountMax !== undefined && { amountMax }),
       ...(needsBankReview !== undefined && { needsBankReview }),
+      ...(recurrence && { recurrence }),
     })
 
     const { data: transactions, total } =
