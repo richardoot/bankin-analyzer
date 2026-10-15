@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { MigrationPlanError } from './category-migration.plan'
-import { planLegacyMigration } from './legacy-migration.plan'
+import {
+  MigrationPlanError,
+  planLegacyMigration,
+} from './legacy-migration.plan'
 import type {
   LegacyDecision,
   LegacySource,

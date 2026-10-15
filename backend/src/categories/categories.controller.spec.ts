@@ -3,7 +3,6 @@ import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
 import { CategoriesController } from './categories.controller'
 import { CategoriesService } from './categories.service'
-import { CategoryMigrationService } from './category-migration.service'
 import { LegacyMigrationService } from './legacy-migration.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import { SupabaseGuard } from '../auth/guards/supabase.guard'
@@ -53,11 +52,6 @@ const mockCategoriesService = {
   findSubcategoriesWithoutIcons: vi.fn(),
 }
 
-const mockCategoryMigrationService = {
-  preview: vi.fn(),
-  migrate: vi.fn(),
-}
-
 const mockAiSuggestionsService = {
   generateAndSaveIcons: vi.fn(),
 }
@@ -74,10 +68,6 @@ describe('CategoriesController', () => {
         {
           provide: CategoriesService,
           useValue: mockCategoriesService,
-        },
-        {
-          provide: CategoryMigrationService,
-          useValue: mockCategoryMigrationService,
         },
         {
           provide: LegacyMigrationService,

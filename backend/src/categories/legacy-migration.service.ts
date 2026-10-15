@@ -4,7 +4,6 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { MigrationPlanError } from './category-migration.plan'
 import {
   LegacyCategoryNotFound,
   applyLegacyPlan,
@@ -13,7 +12,10 @@ import {
   readLegacySource,
   readTargets,
 } from './legacy-migration.apply'
-import { planLegacyMigration } from './legacy-migration.plan'
+import {
+  MigrationPlanError,
+  planLegacyMigration,
+} from './legacy-migration.plan'
 import type { LegacyDecision } from './legacy-migration.plan'
 import type {
   LegacyMigrationPreviewDto,

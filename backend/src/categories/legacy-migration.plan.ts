@@ -50,7 +50,11 @@
 import { TransactionType } from '../generated/prisma'
 import type { CategoryNature, CategoryRhythm } from '../generated/prisma'
 import { normalizeName } from './category-catalog.plan'
-import { MigrationPlanError, NO_SUBCATEGORY } from './category-migration.plan'
+
+/** The null id stands for "the transactions with no subcategory". */
+export const NO_SUBCATEGORY = null
+
+export class MigrationPlanError extends Error {}
 
 export type LegacyAction = 'CATALOG' | 'CUSTOM' | 'UNFILE' | 'KEEP'
 

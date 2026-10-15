@@ -8,7 +8,6 @@ import {
   Delete,
   Param,
   Body,
-  Query,
   UseGuards,
 } from '@nestjs/common'
 import {
@@ -19,19 +18,15 @@ import {
 } from '@nestjs/swagger'
 import { Throttle } from '@nestjs/throttler'
 import { CategoriesService } from './categories.service'
-import { CategoryMigrationService } from './category-migration.service'
 import { LegacyMigrationService } from './legacy-migration.service'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import {
   CategoryDeletionResultDto,
   CategoryDeletionSummaryDto,
-  CategoryMigrationPreviewDto,
-  CategoryMigrationResultDto,
   LegacyMigrationPreviewDto,
   LegacyMigrationRequestDto,
   LegacyMigrationResultDto,
   LegacyOverviewDto,
-  MigrateCategoryDto,
   CategoryResponseDto,
   CreateCategoryDto,
   UpdateCategoryDto,
@@ -47,7 +42,6 @@ import type { User } from '../generated/prisma'
 export class CategoriesController {
   constructor(
     private readonly categoriesService: CategoriesService,
-    private readonly categoryMigrationService: CategoryMigrationService,
     private readonly legacyMigrationService: LegacyMigrationService,
     private readonly aiSuggestionsService: AiSuggestionsService
   ) {}
@@ -156,43 +150,6 @@ export class CategoriesController {
     @Param('id') id: string
   ): Promise<CategoryDeletionSummaryDto> {
     return this.categoriesService.getDeletionSummary(user.id, id)
-  }
-
-  @Get(':id/migration-preview')
-  @ApiOperation({
-    summary:
-      'Plan moving a category into another: counts, name collisions, defaults',
-  })
-  @ApiResponse({ status: 200, type: CategoryMigrationPreviewDto })
-  @ApiResponse({ status: 400, description: 'Categories of different types' })
-  @ApiResponse({ status: 404, description: 'Category not found' })
-  async migrationPreview(
-    @CurrentUser() user: User,
-    @Param('id') id: string,
-    @Query('targetCategoryId') targetCategoryId: string
-  ): Promise<CategoryMigrationPreviewDto> {
-    return this.categoryMigrationService.preview(user.id, id, targetCategoryId)
-  }
-
-  @Post(':id/migrate')
-  @ApiOperation({
-    summary:
-      "Move a category's transactions into another. The source is kept, even empty",
-  })
-  @ApiResponse({ status: 201, type: CategoryMigrationResultDto })
-  @ApiResponse({ status: 400, description: 'The arrangement is impossible' })
-  @ApiResponse({ status: 404, description: 'Category not found' })
-  async migrate(
-    @CurrentUser() user: User,
-    @Param('id') id: string,
-    @Body() dto: MigrateCategoryDto
-  ): Promise<CategoryMigrationResultDto> {
-    return this.categoryMigrationService.migrate(
-      user.id,
-      id,
-      dto.targetCategoryId,
-      dto.actions
-    )
   }
 
   @Delete(':id')

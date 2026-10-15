@@ -55,7 +55,7 @@ import { Pool } from 'pg'
 import { PrismaClient } from '../generated/prisma'
 import type { TransactionType } from '../generated/prisma'
 import { normalizeName } from '../categories/category-catalog.plan'
-import { MigrationPlanError } from '../categories/category-migration.plan'
+import { MigrationPlanError } from '../categories/legacy-migration.plan'
 import {
   describeSideEffects,
   migrateLegacyCategory,
