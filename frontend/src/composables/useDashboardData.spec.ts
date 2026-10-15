@@ -15,14 +15,6 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
-    hiddenExpenseCategoryIds: [],
-    hiddenIncomeCategoryIds: [],
-    globalHiddenExpenseCategoryIds: [],
-    globalHiddenIncomeCategoryIds: [],
-    isExpenseCategoryHidden: vi.fn(() => false),
-    isIncomeCategoryHidden: vi.fn(() => false),
-    isExpenseCategoryGloballyHidden: vi.fn(() => false),
-    isIncomeCategoryGloballyHidden: vi.fn(() => false),
     deductPendingReimbursements: false,
     setDeductPendingReimbursements: vi.fn(),
     timePeriod: 'all',
@@ -169,8 +161,6 @@ describe('useDashboardData', () => {
       await fetchData()
 
       expect(api.getDashboardSummary).toHaveBeenCalledWith({
-        hiddenExpenseCategoryIds: [],
-        hiddenIncomeCategoryIds: [],
         startDate: undefined,
         endDate: undefined,
         deductReimbursements: true,

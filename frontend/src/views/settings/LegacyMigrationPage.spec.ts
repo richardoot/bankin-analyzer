@@ -43,7 +43,6 @@ const overview: LegacyOverviewDto = {
       type: 'EXPENSE',
       icon: '📱',
       transactionCount: 8,
-      isHidden: false,
       budgetPlanEntryCount: 1,
       isCatalog: false,
       catalogKey: null,
@@ -184,7 +183,6 @@ describe('LegacyMigrationPage', () => {
           type: 'EXPENSE',
           icon: '🏠',
           transactionCount: 22,
-          isHidden: false,
           budgetPlanEntryCount: 0,
           isCatalog: true,
           catalogKey: 'housing',
@@ -309,7 +307,6 @@ describe('LegacyMigrationPage', () => {
           mergesIntoExisting: false,
         },
       ],
-      dropsHiddenPreference: false,
     })
     vi.mocked(api.migrateLegacyCategory).mockResolvedValue({
       sourceCategoryId: 'cat-abos',
@@ -324,7 +321,6 @@ describe('LegacyMigrationPage', () => {
       budgetEntriesMoved: 0,
       budgetEntriesMerged: 0,
       budgetEntriesDropped: 0,
-      hiddenPreferenceDropped: false,
       sourceDeleted: false,
     })
 
@@ -426,7 +422,6 @@ describe('LegacyMigrationPage', () => {
       typeChangedTransactions: 0,
       deletesSourceCategory: true,
       budgetEntries: [],
-      dropsHiddenPreference: false,
     })
     vi.mocked(api.migrateLegacyCategory).mockResolvedValue({
       sourceCategoryId: 'cat-abos',
@@ -441,7 +436,6 @@ describe('LegacyMigrationPage', () => {
       budgetEntriesMoved: 1,
       budgetEntriesMerged: 0,
       budgetEntriesDropped: 0,
-      hiddenPreferenceDropped: false,
       sourceDeleted: true,
     })
 

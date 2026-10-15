@@ -24,23 +24,6 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ success: toastSuccess, error: toastError }),
 }))
 
-// The visibility switch writes through the filters store; the store itself is
-// covered elsewhere, here we only care that the page saves on every toggle.
-const saveToBackend = vi.fn().mockResolvedValue(true)
-const toggleGlobalHiddenExpenseCategory = vi.fn()
-const forgetCategory = vi.fn()
-const hiddenExpenseIds = new Set<string>()
-vi.mock('@/stores/filters', () => ({
-  useFiltersStore: () => ({
-    isExpenseCategoryGloballyHidden: (id: string) => hiddenExpenseIds.has(id),
-    isIncomeCategoryGloballyHidden: () => false,
-    toggleGlobalHiddenExpenseCategory,
-    toggleGlobalHiddenIncomeCategory: vi.fn(),
-    forgetCategory,
-    saveToBackend,
-  }),
-}))
-
 import { api } from '@/lib/api'
 import { nth } from '@/test/nth'
 
@@ -159,8 +142,6 @@ async function expandRow(
 beforeEach(() => {
   setActivePinia(createPinia())
   vi.clearAllMocks()
-  hiddenExpenseIds.clear()
-  saveToBackend.mockResolvedValue(true)
 })
 
 describe('CategoriesSettingsPage', () => {
@@ -210,18 +191,6 @@ describe('CategoriesSettingsPage', () => {
     expect(
       nth(rows, 0).find('[data-testid="migrate-category-cat-abos"]').exists()
     ).toBe(true)
-  })
-
-  it('saves the dashboard visibility immediately, with no global save button', async () => {
-    const wrapper = await mountPage()
-
-    const switches = wrapper.findAll('button[role="switch"]')
-    await nth(switches, 0).trigger('click')
-    await flushPromises()
-
-    expect(toggleGlobalHiddenExpenseCategory).toHaveBeenCalledWith('cat-food')
-    expect(saveToBackend).toHaveBeenCalledTimes(1)
-    expect(wrapper.text()).not.toContain('Enregistrer')
   })
 
   it('filters the list by search term, reaching subcategory names', async () => {
@@ -417,7 +386,6 @@ describe('CategoriesSettingsPage', () => {
       labelledTransactionCount: 0,
       budgetPlanEntries: [],
       reimbursementCount: 0,
-      isGloballyHidden: false,
     })
     vi.mocked(api.deleteCategory).mockResolvedValue({
       uncategorizedTransactions: 0,
@@ -438,7 +406,6 @@ describe('CategoriesSettingsPage', () => {
 
     expect(api.deleteCategory).toHaveBeenCalledWith('cat-abos')
     expect(wrapper.text()).not.toContain('Abonnements')
-    expect(forgetCategory).toHaveBeenCalledWith('cat-abos', 'EXPENSE')
     expect(toastSuccess).toHaveBeenCalled()
   })
 })

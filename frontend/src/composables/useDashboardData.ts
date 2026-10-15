@@ -167,7 +167,7 @@ export function useDashboardData() {
   )
   const monthLabels = computed(() => summaryData.value?.monthLabels ?? [])
 
-  // All categories (for filter panel), each carrying the id it is filtered by
+  // Every expense category the period carries, each with its id
   const allExpenseCategories = computed<CategoryOptionDto[]>(
     () => summaryData.value?.allExpenseCategories ?? []
   )
@@ -179,35 +179,6 @@ export function useDashboardData() {
   // reports its salary, and hiding the category would hide real income.
   const allIncomeCategories = computed<CategoryOptionDto[]>(
     () => summaryData.value?.allIncomeCategories ?? []
-  )
-
-  // Helper: Check if category is hidden (dashboard filter OR globally hidden)
-  function isExpenseCategoryHiddenOrGlobal(categoryId: string): boolean {
-    return (
-      filtersStore.isExpenseCategoryHidden(categoryId) ||
-      filtersStore.isExpenseCategoryGloballyHidden(categoryId)
-    )
-  }
-
-  function isIncomeCategoryHiddenOrGlobal(categoryId: string): boolean {
-    return (
-      filtersStore.isIncomeCategoryHidden(categoryId) ||
-      filtersStore.isIncomeCategoryGloballyHidden(categoryId)
-    )
-  }
-
-  // Available categories (excludes dashboard hidden AND globally hidden)
-  const availableExpenseCategories = computed<CategoryOptionDto[]>(() =>
-    allExpenseCategories.value.filter(
-      cat => !isExpenseCategoryHiddenOrGlobal(cat.id)
-    )
-  )
-
-  // Available income categories (excludes hidden, globally hidden, and associated)
-  const availableIncomeCategories = computed<CategoryOptionDto[]>(() =>
-    allIncomeCategories.value.filter(
-      cat => !isIncomeCategoryHiddenOrGlobal(cat.id)
-    )
   )
 
   /**
@@ -290,25 +261,9 @@ export function useDashboardData() {
         filtersStore.timePeriod
       )
 
-      // Combine dashboard filters with global hidden categories
-      const combinedHiddenExpenseCategoryIds = [
-        ...new Set([
-          ...filtersStore.hiddenExpenseCategoryIds,
-          ...filtersStore.globalHiddenExpenseCategoryIds,
-        ]),
-      ]
-      const combinedHiddenIncomeCategoryIds = [
-        ...new Set([
-          ...filtersStore.hiddenIncomeCategoryIds,
-          ...filtersStore.globalHiddenIncomeCategoryIds,
-        ]),
-      ]
-
       // Load dashboard summary, accounts, and category associations in parallel
       const [summary] = await Promise.all([
         api.getDashboardSummary({
-          hiddenExpenseCategoryIds: combinedHiddenExpenseCategoryIds,
-          hiddenIncomeCategoryIds: combinedHiddenIncomeCategoryIds,
           // Omitted when absent rather than sent as `undefined`: an unbounded
           // period is expressed by saying nothing, not by naming a date of
           // nothing.
@@ -332,13 +287,9 @@ export function useDashboardData() {
     }
   }
 
-  // Auto-refetch when filters change (dashboard or global)
+  // Auto-refetch when filters change
   watch(
     () => [
-      filtersStore.hiddenExpenseCategoryIds,
-      filtersStore.hiddenIncomeCategoryIds,
-      filtersStore.globalHiddenExpenseCategoryIds,
-      filtersStore.globalHiddenIncomeCategoryIds,
       filtersStore.timePeriod,
       filtersStore.customStartDate,
       filtersStore.customEndDate,
@@ -385,8 +336,6 @@ export function useDashboardData() {
     monthLabels,
     allExpenseCategories,
     allIncomeCategories,
-    availableExpenseCategories,
-    availableIncomeCategories,
     selectedCategory,
     selectedIncomeCategory,
     filteredExpensesByMonth,

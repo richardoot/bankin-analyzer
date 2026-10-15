@@ -13,17 +13,9 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
-// Mutable sets of globally-hidden category ids — tests reset them in
-// beforeEach.
-const hiddenExpenseCategoryIds = new Set<string>()
-const hiddenIncomeCategoryIds = new Set<string>()
 vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
     deductPendingReimbursements: false,
-    isExpenseCategoryGloballyHidden: (id: string) =>
-      hiddenExpenseCategoryIds.has(id),
-    isIncomeCategoryGloballyHidden: (id: string) =>
-      hiddenIncomeCategoryIds.has(id),
   }),
 }))
 
@@ -122,8 +114,6 @@ describe('NewBudgetPlanModal', () => {
     vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStats)
     vi.mocked(api.getBudgetPlans).mockResolvedValue([])
     vi.mocked(api.getCategories).mockResolvedValue(sampleCategories)
-    hiddenExpenseCategoryIds.clear()
-    hiddenIncomeCategoryIds.clear()
   })
 
   afterEach(() => {
@@ -513,115 +503,6 @@ describe('NewBudgetPlanModal', () => {
     wrapper.unmount()
   })
 
-  it('excludes globally-hidden categories from the averages preview and from the created plan', async () => {
-    hiddenExpenseCategoryIds.add('cat-transport')
-    vi.mocked(api.createBudgetPlan).mockResolvedValue(samplePlan)
-    const wrapper = mountModal()
-    await flushPromises()
-
-    // Step 1 → 2 (averages source by default)
-    const next = document.body.querySelector(
-      '[data-testid="next-step-button"]'
-    ) as HTMLButtonElement
-    next.click()
-    await flushPromises()
-
-    // On to the envelopes (step 3)
-    await clickNext()
-
-    // Hidden category isn't rendered, the other still is
-    expect(
-      document.body.querySelector('[data-testid="preview-row-Alimentation"]')
-    ).not.toBeNull()
-    expect(
-      document.body.querySelector('[data-testid="preview-row-Transport"]')
-    ).toBeNull()
-
-    // Submitting the plan only sends the visible categories
-    const create = document.body.querySelector(
-      '[data-testid="create-plan-button"]'
-    ) as HTMLButtonElement
-    create.click()
-    await flushPromises()
-
-    const dto = vi.mocked(api.createBudgetPlan).mock.calls[0]?.[0]
-    expect(dto?.entries).toEqual([{ categoryId: 'cat-food', amount: 250 }])
-    wrapper.unmount()
-  })
-
-  it('excludes globally-hidden categories when copying an existing plan', async () => {
-    hiddenExpenseCategoryIds.add('cat-transport')
-    vi.mocked(api.getBudgetPlans).mockResolvedValue([
-      {
-        id: 'plan-old',
-        name: 'Plan source',
-        startDate: '2026-01-01',
-        endDate: '2026-01-31',
-        monthCount: 1,
-        totalAmount: 350,
-        entryCount: 2,
-        createdAt: '2025-12-15T00:00:00Z',
-      },
-    ])
-    vi.mocked(api.getBudgetPlan).mockResolvedValue({
-      id: 'plan-old',
-      name: 'Plan source',
-      startDate: '2026-01-01',
-      endDate: '2026-01-31',
-      monthCount: 1,
-      totalAmount: 350,
-      entries: [
-        {
-          id: 'e1',
-          categoryId: 'cat-food',
-          categoryName: 'Alimentation',
-          amount: 250,
-        },
-        {
-          id: 'e2',
-          categoryId: 'cat-transport',
-          categoryName: 'Transport',
-          amount: 100,
-        },
-      ],
-      createdAt: '2025-12-15T00:00:00Z',
-      updatedAt: '2025-12-15T00:00:00Z',
-    })
-
-    const wrapper = mountModal()
-    await flushPromises()
-    ;(
-      document.body.querySelector(
-        '[data-testid="next-step-button"]'
-      ) as HTMLButtonElement
-    ).click()
-    await flushPromises()
-    ;(
-      document.body.querySelector(
-        '[data-testid="init-source-copy"]'
-      ) as HTMLButtonElement
-    ).click()
-    await flushPromises()
-
-    const select = document.body.querySelector(
-      '[data-testid="copy-plan-select"]'
-    ) as HTMLSelectElement
-    select.value = 'plan-old'
-    select.dispatchEvent(new Event('change'))
-    await flushPromises()
-
-    // On to the envelopes (step 3)
-    await clickNext()
-
-    expect(
-      document.body.querySelector('[data-testid="preview-row-Alimentation"]')
-    ).not.toBeNull()
-    expect(
-      document.body.querySelector('[data-testid="preview-row-Transport"]')
-    ).toBeNull()
-    wrapper.unmount()
-  })
-
   it('switches to "Partir de zéro" and creates a plan with no entries', async () => {
     vi.mocked(api.createBudgetPlan).mockResolvedValue(samplePlan)
     const wrapper = mountModal()
@@ -829,16 +710,14 @@ describe('NewBudgetPlanModal', () => {
     }
   })
 
-  it('computes the income reference as sum(visible income categories) / periodMonths', async () => {
-    // Two income categories: salary (visible) + a "remboursement frais pro"
-    // category the user has globally hidden. The reference must only count
-    // the salary.
-    hiddenIncomeCategoryIds.add('cat-pro')
+  it('computes the income reference as sum(income categories) / periodMonths', async () => {
+    // Two income categories: salary + a "remboursement frais pro". The
+    // reference sums them, rather than reading the backend's average.
     vi.mocked(api.getBudgetStatistics).mockResolvedValue({
       ...sampleStats,
       periodMonths: 6,
       totalIncome: 15000,
-      averageMonthlyIncome: 2500, // 15000 / 6 — backend doesn't know about the user's hide
+      averageMonthlyIncome: 1800, // deliberately not 15000 / 6
       incomeByCategory: [
         {
           categoryId: 'cat-salary',
@@ -873,10 +752,10 @@ describe('NewBudgetPlanModal', () => {
       '[data-testid="projected-savings"]'
     )
     const text = (indicator?.textContent ?? '').replace(/\s/g, ' ')
-    // Reference = 12000 / 6 = 2 000 € (hidden category excluded)
-    expect(text).toMatch(/2\s*000,00/)
-    // The naive backend total (2 500 €) must NOT appear
-    expect(text).not.toMatch(/2\s*500,00/)
+    // Reference = (12000 + 3000) / 6 = 2 500 €
+    expect(text).toMatch(/2\s*500,00/)
+    // The backend's average (1 800 €) must NOT appear
+    expect(text).not.toMatch(/1\s*800,00/)
     wrapper.unmount()
   })
 

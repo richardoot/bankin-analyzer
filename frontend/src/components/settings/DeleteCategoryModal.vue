@@ -328,16 +328,6 @@
                   </li>
                 </ul>
               </div>
-
-              <!-- Current settings, for the record -->
-              <p
-                v-if="summary.isGloballyHidden"
-                class="text-sm text-gray-600 dark:text-gray-400"
-                data-testid="deletion-settings"
-              >
-                Pour mémoire, cette catégorie est actuellement masquée du
-                dashboard.
-              </p>
             </template>
 
             <p class="text-sm text-gray-600 dark:text-gray-400">

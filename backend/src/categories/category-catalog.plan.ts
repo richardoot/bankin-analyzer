@@ -6,11 +6,10 @@
  *
  * A user who already has a "Logement" expense category does not need a
  * second one: the legacy row is *adopted* — it receives the catalogue key,
- * icon and defaults, and its transactions, budget lines and hidden-list
- * entries stay exactly where they are. Only its subcategories remain to be
- * reconciled, and those follow the same rule one level down: a legacy "Loyer"
- * under an adopted "Logement" becomes `housing.rent`, everything else waits
- * for the migration assistant.
+ * icon and defaults, and its transactions and budget lines stay exactly where
+ * they are. Only its subcategories remain to be reconciled, and those follow
+ * the same rule one level down: a legacy "Loyer" under an adopted "Logement"
+ * becomes `housing.rent`, everything else waits for the migration assistant.
  *
  * The match is on the label alone, normalised for case, accents and spacing.
  * That is deliberately narrow: "Alimentation & Restau." is not "Alimentation",

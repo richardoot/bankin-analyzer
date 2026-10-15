@@ -11,7 +11,7 @@ const stranger = e2eIdentity('stranger')
  * The migration assistant over the real API and the real SQL: a legacy
  * "Abonnements" the way Bankin' exports it, migrated into the catalogue with
  * every kind of decision at once, and everything that hangs off it —
- * envelopes, hidden preference, tags — checked afterwards.
+ * envelopes, tags — checked afterwards.
  */
 describe('Legacy category migration (e2e)', () => {
   let ctx: E2eContext
@@ -305,10 +305,6 @@ describe('Legacy category migration (e2e)', () => {
       await prisma.budgetPlanEntry.create({
         data: { budgetPlanId: plan.id, categoryId: category.id, amount: 60 },
       })
-      // Hidden by preference, the old way of keeping it out of the dashboard.
-      await prisma.filterPreferences.create({
-        data: { userId, globalHiddenExpenseCategoryIds: [category.id] },
-      })
 
       const decisions = [
         {
@@ -347,7 +343,6 @@ describe('Legacy category migration (e2e)', () => {
         unfiledTransactions: 0,
         typeChangedTransactions: 1,
         deletesSourceCategory: true,
-        dropsHiddenPreference: true,
         budgetEntries: [
           {
             planName: 'Budget 2026',
@@ -384,7 +379,6 @@ describe('Legacy category migration (e2e)', () => {
         budgetEntriesMoved: 1,
         budgetEntriesMerged: 0,
         budgetEntriesDropped: 0,
-        hiddenPreferenceDropped: true,
         sourceDeleted: true,
       })
 
@@ -445,11 +439,7 @@ describe('Legacy category migration (e2e)', () => {
       expect(entries[0]).toMatchObject({ categoryId: telecom.id })
       expect(entries[0]?.amount.toNumber()).toBe(60)
 
-      // The hidden preference went with the category, which is gone.
-      const preferences = await prisma.filterPreferences.findUniqueOrThrow({
-        where: { userId },
-      })
-      expect(preferences.globalHiddenExpenseCategoryIds).toEqual([])
+      // The category is gone.
       expect(
         await prisma.category.findUnique({ where: { id: category.id } })
       ).toBeNull()

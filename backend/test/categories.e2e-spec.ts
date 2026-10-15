@@ -116,9 +116,6 @@ describe('Categories (e2e)', () => {
     await prisma.budgetPlanEntry.create({
       data: { budgetPlanId: plan.id, categoryId, amount: 450 },
     })
-    await prisma.filterPreferences.create({
-      data: { userId, globalHiddenExpenseCategoryIds: [categoryId] },
-    })
 
     return {
       incomeCategoryId: income.id,
@@ -257,7 +254,6 @@ describe('Categories (e2e)', () => {
         subcategoryNames: [],
         budgetPlanEntries: [],
         reimbursementCount: 0,
-        isGloballyHidden: false,
       })
     })
 
@@ -275,7 +271,6 @@ describe('Categories (e2e)', () => {
         labelledTransactionCount: 1,
         subcategoryNames: ['Courses', 'Restaurant'],
         reimbursementCount: 1,
-        isGloballyHidden: true,
       })
       expect(response.body.budgetPlanEntries).toEqual([
         expect.objectContaining({ planName: 'Budget 2024', amount: 450 }),
@@ -337,9 +332,8 @@ describe('Categories (e2e)', () => {
         .expect(200)
 
       const categoryId = category.id
-      const [transaction, preferences, entries, counts] = await Promise.all([
+      const [transaction, entries, counts] = await Promise.all([
         prisma.transaction.findUnique({ where: { id: transactionId } }),
-        prisma.filterPreferences.findUnique({ where: { userId } }),
         prisma.budgetPlanEntry.findMany({ where: { budgetPlanId: planId } }),
         Promise.all([
           prisma.category.count({ where: { id: categoryId } }),
@@ -369,9 +363,6 @@ describe('Categories (e2e)', () => {
         await prisma.budgetPlan.findUnique({ where: { id: planId } })
       ).not.toBeNull()
       expect(entries).toHaveLength(0)
-
-      // And the id left the hidden list, which carries no FK to prune it.
-      expect(preferences?.globalHiddenExpenseCategoryIds).toEqual([])
     })
 
     it('should keep the reimbursement request, detached', async () => {

@@ -21,28 +21,11 @@ export class FilterPreferencesService {
       where: { userId },
       create: {
         userId,
-        hiddenExpenseCategoryIds: dto.hiddenExpenseCategoryIds ?? [],
-        hiddenIncomeCategoryIds: dto.hiddenIncomeCategoryIds ?? [],
-        globalHiddenExpenseCategoryIds:
-          dto.globalHiddenExpenseCategoryIds ?? [],
-        globalHiddenIncomeCategoryIds: dto.globalHiddenIncomeCategoryIds ?? [],
         isPanelExpanded: dto.isPanelExpanded ?? true,
         importCategoriesFromFile: dto.importCategoriesFromFile ?? true,
         deductPendingReimbursements: dto.deductPendingReimbursements ?? true,
       },
       update: {
-        ...(dto.hiddenExpenseCategoryIds !== undefined && {
-          hiddenExpenseCategoryIds: dto.hiddenExpenseCategoryIds,
-        }),
-        ...(dto.hiddenIncomeCategoryIds !== undefined && {
-          hiddenIncomeCategoryIds: dto.hiddenIncomeCategoryIds,
-        }),
-        ...(dto.globalHiddenExpenseCategoryIds !== undefined && {
-          globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
-        }),
-        ...(dto.globalHiddenIncomeCategoryIds !== undefined && {
-          globalHiddenIncomeCategoryIds: dto.globalHiddenIncomeCategoryIds,
-        }),
         ...(dto.isPanelExpanded !== undefined && {
           isPanelExpanded: dto.isPanelExpanded,
         }),

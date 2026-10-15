@@ -1,31 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
-import {
-  IsString,
-  IsArray,
-  IsOptional,
-  IsDateString,
-  IsBoolean,
-} from 'class-validator'
+import { IsOptional, IsDateString, IsBoolean } from 'class-validator'
 import { Type } from 'class-transformer'
 
 export class DashboardFiltersDto {
-  /**
-   * Hidden expense category ids. Transactions with no category are addressed
-   * by the `UNCATEGORIZED_CATEGORY_ID` sentinel.
-   */
-  @ApiPropertyOptional({ type: [String] })
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  hiddenExpenseCategoryIds?: string[]
-
-  /** Hidden income category ids (same sentinel rule as expenses) */
-  @ApiPropertyOptional({ type: [String] })
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  hiddenIncomeCategoryIds?: string[]
-
   /** Start date for filtering (ISO format: YYYY-MM-DD) */
   @IsOptional()
   @IsDateString()

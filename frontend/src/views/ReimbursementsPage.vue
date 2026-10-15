@@ -2,8 +2,7 @@
   import { ref, computed, onMounted } from 'vue'
   import { RouterLink } from 'vue-router'
   import { usePersonsStore } from '@/stores/persons'
-  import { useFiltersStore } from '@/stores/filters'
-  import { api, UNCATEGORIZED_CATEGORY_ID } from '@/lib/api'
+  import { api } from '@/lib/api'
   import type { ReimbursementDto, SettlementDto } from '@/lib/api'
   import { usePdfExport } from '@/composables/usePdfExport'
   import PageHeader from '@/components/ui/PageHeader.vue'
@@ -18,7 +17,6 @@
   const { exportReimbursementsToPdf } = usePdfExport()
 
   const personsStore = usePersonsStore()
-  const filtersStore = useFiltersStore()
 
   // Form state for adding person
   const newPersonName = ref('')
@@ -128,15 +126,8 @@
     >()
 
     // Only include reimbursements with remaining amount (not fully settled)
-    // and exclude hidden expense categories
     reimbursements.value
       .filter(r => r.amountRemaining > 0)
-      .filter(
-        r =>
-          !filtersStore.isExpenseCategoryGloballyHidden(
-            r.expenseCategoryId ?? UNCATEGORIZED_CATEGORY_ID
-          )
-      )
       .forEach(r => {
         if (!map.has(r.personId)) {
           map.set(r.personId, {
@@ -204,16 +195,8 @@
     }))
   })
 
-  // Total due (excluding hidden categories)
   const totalDue = computed(() =>
-    reimbursements.value
-      .filter(
-        r =>
-          !filtersStore.isExpenseCategoryGloballyHidden(
-            r.expenseCategoryId ?? UNCATEGORIZED_CATEGORY_ID
-          )
-      )
-      .reduce((sum, r) => sum + r.amountRemaining, 0)
+    reimbursements.value.reduce((sum, r) => sum + r.amountRemaining, 0)
   )
 
   // Fetch reimbursements (with transaction info)
@@ -248,14 +231,9 @@
   // Pending reimbursements handed to the settlement modal, which does its own
   // grouping by category.
   function getPendingForPerson(personId: string): ReimbursementDto[] {
-    return reimbursements.value
-      .filter(r => r.personId === personId && r.amountRemaining > 0)
-      .filter(
-        r =>
-          !filtersStore.isExpenseCategoryGloballyHidden(
-            r.expenseCategoryId ?? UNCATEGORIZED_CATEGORY_ID
-          )
-      )
+    return reimbursements.value.filter(
+      r => r.personId === personId && r.amountRemaining > 0
+    )
   }
 
   const settlementModalPendingReimbursements = computed(() =>

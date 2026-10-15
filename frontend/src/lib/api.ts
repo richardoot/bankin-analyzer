@@ -130,7 +130,6 @@ export interface CategoryDeletionSummaryDto {
   labelledTransactionCount: number
   budgetPlanEntries: BudgetPlanEntrySummaryDto[]
   reimbursementCount: number
-  isGloballyHidden: boolean
 }
 
 // ── Legacy migration (the assistant) ─────────────────────────────────────────
@@ -185,7 +184,6 @@ export interface LegacyCategoryDto {
   isCatalog: boolean
   catalogKey: string | null
   transactionCount: number
-  isHidden: boolean
   budgetPlanEntryCount: number
   lines: LegacyLineDto[]
 }
@@ -232,7 +230,6 @@ export interface LegacyMigrationPreviewDto {
   typeChangedTransactions: number
   deletesSourceCategory: boolean
   budgetEntries: LegacyBudgetEntryOutcomeDto[]
-  dropsHiddenPreference: boolean
 }
 
 export interface LegacyMigrationResultDto {
@@ -248,7 +245,6 @@ export interface LegacyMigrationResultDto {
   budgetEntriesMoved: number
   budgetEntriesMerged: number
   budgetEntriesDropped: number
-  hiddenPreferenceDropped: boolean
   sourceDeleted: boolean
 }
 
@@ -384,12 +380,7 @@ export interface TransactionQueryParams {
   sortOrder?: 'asc' | 'desc' | undefined
 }
 
-/** Hidden categories are addressed by Category id, never by name. */
 export interface FilterPreferencesDto {
-  hiddenExpenseCategoryIds: string[]
-  hiddenIncomeCategoryIds: string[]
-  globalHiddenExpenseCategoryIds: string[]
-  globalHiddenIncomeCategoryIds: string[]
   isPanelExpanded: boolean
   /**
    * Whether an import adopts the categories written in the file. On by
@@ -833,8 +824,6 @@ export interface CategoryOptionDto {
 }
 
 export interface DashboardFiltersDto {
-  hiddenExpenseCategoryIds?: string[]
-  hiddenIncomeCategoryIds?: string[]
   startDate?: string
   endDate?: string
   deductReimbursements?: boolean

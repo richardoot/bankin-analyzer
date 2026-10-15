@@ -76,7 +76,6 @@ export class LegacyMigrationService {
     const plan = this.plan(source, targets, decisions)
     const effects = await describeSideEffects(
       this.prisma,
-      userId,
       source,
       plan,
       targets

@@ -171,11 +171,11 @@ export class DashboardSummaryDto {
   /** Total income (excluding reimbursement categories) */
   totalIncome!: number
 
-  /** All expense categories present over the period, hidden ones included */
+  /** All expense categories present over the period */
   @ApiProperty({ type: [CategoryOptionDto] })
   allExpenseCategories!: CategoryOptionDto[]
 
-  /** All income categories present over the period, hidden ones included */
+  /** All income categories present over the period */
   @ApiProperty({ type: [CategoryOptionDto] })
   allIncomeCategories!: CategoryOptionDto[]
 
