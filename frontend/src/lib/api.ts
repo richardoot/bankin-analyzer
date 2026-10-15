@@ -688,7 +688,6 @@ export interface CreateImportHistoryDto {
   fileName?: string
 }
 
-// Category Associations DTOs (DB-based)
 // Dashboard DTOs
 export interface MonthlyDataDto {
   month: string
@@ -2446,7 +2445,6 @@ export const api = {
     }
   },
 
-  // Category Associations API
   // AI Suggestions API
   // Budget plans API
   async getBudgetPlans(): Promise<BudgetPlanSummaryDto[]> {

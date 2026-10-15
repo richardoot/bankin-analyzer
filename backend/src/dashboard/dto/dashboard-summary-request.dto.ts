@@ -14,9 +14,8 @@ export class DashboardFiltersDto {
   endDate?: string
 
   /**
-   * Whether to deduct received reimbursements (income transactions in
-   * reimbursement categories linked via CategoryAssociation) from expense
-   * totals.
+   * Whether to deduct received reimbursements (the cash paid back on a
+   * reimbursement request) from the expense transaction it hangs off.
    * @default true
    */
   @ApiPropertyOptional({ default: true })

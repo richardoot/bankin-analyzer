@@ -261,7 +261,7 @@ export function useDashboardData() {
         filtersStore.timePeriod
       )
 
-      // Load dashboard summary, accounts, and category associations in parallel
+      // Load dashboard summary and accounts in parallel
       const [summary] = await Promise.all([
         api.getDashboardSummary({
           // Omitted when absent rather than sent as `undefined`: an unbounded

@@ -67,9 +67,6 @@ describe('DashboardService', () => {
 
   const mockPrismaService = {
     $queryRaw: vi.fn(),
-    categoryAssociation: {
-      findMany: vi.fn(),
-    },
     tag: {
       findMany: vi.fn(),
     },
@@ -133,7 +130,6 @@ describe('DashboardService', () => {
     mockPrismaService.$queryRaw.mockResolvedValue([{ pending: 0 }])
 
     // Default mocks
-    mockPrismaService.categoryAssociation.findMany.mockResolvedValue([])
     mockPrismaService.tag.findMany.mockResolvedValue([])
   })
 

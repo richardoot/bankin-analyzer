@@ -8,7 +8,6 @@ vi.mock('@/lib/api', () => ({
   api: {
     getDashboardSummary: vi.fn(),
     getTransactions: vi.fn(),
-    getCategoryAssociations: vi.fn(),
     getAccounts: vi.fn(),
   },
 }))
@@ -38,28 +37,9 @@ vi.mock('@/stores/accounts', () => ({
   }),
 }))
 
-// Configurable mock for category associations
-let mockAssociations: Array<{
-  expenseCategoryId: string
-  incomeCategoryId: string
-}> = []
-
-vi.mock('@/stores/categoryAssociations', () => ({
-  useCategoryAssociationsStore: () => ({
-    get associations() {
-      return mockAssociations
-    },
-    isLoading: false,
-    error: null,
-    load: vi.fn().mockResolvedValue(undefined),
-    isIncomeCategoryAssociated: vi.fn(() => false),
-  }),
-}))
-
 describe('useDashboardData', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockAssociations = []
     mockAccountDivisors = {}
   })
 

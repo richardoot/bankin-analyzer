@@ -204,9 +204,8 @@ export class ImportHistoriesService {
     })
 
     // Then delete the import history. Categories and accounts are NOT cleaned
-    // up: both are user-configured entities (icons, subcategories, budgets,
-    // category associations on one side; account type/divisor/exclusion flags
-    // on the other) and must never disappear as a side effect of removing an
+    // up: both are user-configured entities (icons, subcategories, budgets on
+    // one side; account type/divisor/exclusion flags on the other) and must never disappear as a side effect of removing an
     // import. Cleanup, if ever needed, must be an explicit user action.
     await this.prisma.importHistory.delete({
       where: { id },
