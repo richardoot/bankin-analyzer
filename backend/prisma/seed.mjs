@@ -1326,10 +1326,6 @@ async function main() {
   await prisma.filterPreferences.create({
     data: {
       userId,
-      hiddenExpenseCategoryIds: [],
-      hiddenIncomeCategoryIds: [],
-      globalHiddenExpenseCategoryIds: [],
-      globalHiddenIncomeCategoryIds: [],
       isPanelExpanded: true,
     },
   })

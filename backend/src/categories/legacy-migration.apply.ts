@@ -14,7 +14,6 @@ import {
   catalogCategory,
   catalogSubcategory,
 } from './catalog'
-import { forgetCategoryInPreferences } from './forget-in-preferences'
 import { suggestFiling } from './legacy-migration.dictionary'
 import type { Suggestion } from './legacy-migration.dictionary'
 import { planLegacyMigration } from './legacy-migration.plan'
@@ -160,7 +159,6 @@ export interface LegacyCategoryView {
   isCatalog: boolean
   catalogKey: string | null
   transactionCount: number
-  isHidden: boolean
   budgetPlanEntryCount: number
   lines: LegacyLineView[]
 }
@@ -191,24 +189,17 @@ export async function readLegacyOverview(
   client: LegacyClient,
   userId: string
 ): Promise<LegacyCategoryView[]> {
-  const [legacy, preferences] = await Promise.all([
-    client.category.findMany({
-      where: {
-        userId,
-        OR: [
-          { catalogKey: null },
-          { subcategories: { some: { catalogKey: null } } },
-        ],
-      },
-      select: { id: true, catalogKey: true },
-      orderBy: [{ type: 'asc' }, { name: 'asc' }],
-    }),
-    client.filterPreferences.findUnique({ where: { userId } }),
-  ])
-  const hidden = new Set([
-    ...(preferences?.globalHiddenExpenseCategoryIds ?? []),
-    ...(preferences?.globalHiddenIncomeCategoryIds ?? []),
-  ])
+  const legacy = await client.category.findMany({
+    where: {
+      userId,
+      OR: [
+        { catalogKey: null },
+        { subcategories: { some: { catalogKey: null } } },
+      ],
+    },
+    select: { id: true, catalogKey: true },
+    orderBy: [{ type: 'asc' }, { name: 'asc' }],
+  })
 
   const views: LegacyCategoryView[] = []
   for (const { id, catalogKey } of legacy) {
@@ -241,7 +232,6 @@ export async function readLegacyOverview(
       transactionCount:
         source.uncategorizedCount +
         source.subcategories.reduce((sum, s) => sum + s.transactionCount, 0),
-      isHidden: hidden.has(source.id),
       budgetPlanEntryCount: source.budgetPlanEntries.length,
       lines,
     })
@@ -259,17 +249,13 @@ export interface BudgetEntryOutcome {
   mergesIntoExisting: boolean
 }
 
-/** What the plan will do to the envelopes and the hidden list, read ahead. */
+/** What the plan will do to the envelopes, read ahead. */
 export async function describeSideEffects(
   client: LegacyClient,
-  userId: string,
   source: LegacySourceWithBudget,
   plan: LegacyMigrationPlan,
   targets: TargetCategory[]
-): Promise<{
-  budgetEntries: BudgetEntryOutcome[]
-  dropsHiddenPreference: boolean
-}> {
+): Promise<{ budgetEntries: BudgetEntryOutcome[] }> {
   const target = plan.budgetTargetCategoryId
     ? targets.find(t => t.id === plan.budgetTargetCategoryId)
     : undefined
@@ -299,19 +285,7 @@ export async function describeSideEffects(
       existingPlans.has(entry.budgetPlanId),
   }))
 
-  const preferences = await client.filterPreferences.findUnique({
-    where: { userId },
-  })
-  const dropsHiddenPreference =
-    plan.deletesSourceCategory &&
-    [
-      ...(preferences?.hiddenExpenseCategoryIds ?? []),
-      ...(preferences?.hiddenIncomeCategoryIds ?? []),
-      ...(preferences?.globalHiddenExpenseCategoryIds ?? []),
-      ...(preferences?.globalHiddenIncomeCategoryIds ?? []),
-    ].includes(source.id)
-
-  return { budgetEntries, dropsHiddenPreference }
+  return { budgetEntries }
 }
 
 // ── Applying ────────────────────────────────────────────────────────────────
@@ -328,7 +302,6 @@ export interface LegacyMigrationOutcome {
   budgetEntriesMoved: number
   budgetEntriesMerged: number
   budgetEntriesDropped: number
-  hiddenPreferenceDropped: boolean
   sourceDeleted: boolean
 }
 
@@ -366,7 +339,6 @@ export async function applyLegacyPlan(
     budgetEntriesMoved: 0,
     budgetEntriesMerged: 0,
     budgetEntriesDropped: 0,
-    hiddenPreferenceDropped: false,
     sourceDeleted: false,
   }
   const targetById = new Map(targets.map(t => [t.id, t]))
@@ -486,12 +458,6 @@ export async function applyLegacyPlan(
     }
   }
 
-  outcome.hiddenPreferenceDropped = await forgetCategoryInPreferences(
-    tx,
-    userId,
-    source.id,
-    source.type
-  )
   // Whatever is left cascades: the remaining envelopes (dropped above), and
   // no subcategory, since every line was moved, unfiled or reparented.
   await tx.category.delete({ where: { id: source.id } })

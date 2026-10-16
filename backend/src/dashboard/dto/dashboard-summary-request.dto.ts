@@ -1,31 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
-import {
-  IsString,
-  IsArray,
-  IsOptional,
-  IsDateString,
-  IsBoolean,
-} from 'class-validator'
+import { IsOptional, IsDateString, IsBoolean } from 'class-validator'
 import { Type } from 'class-transformer'
 
 export class DashboardFiltersDto {
-  /**
-   * Hidden expense category ids. Transactions with no category are addressed
-   * by the `UNCATEGORIZED_CATEGORY_ID` sentinel.
-   */
-  @ApiPropertyOptional({ type: [String] })
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  hiddenExpenseCategoryIds?: string[]
-
-  /** Hidden income category ids (same sentinel rule as expenses) */
-  @ApiPropertyOptional({ type: [String] })
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  hiddenIncomeCategoryIds?: string[]
-
   /** Start date for filtering (ISO format: YYYY-MM-DD) */
   @IsOptional()
   @IsDateString()
@@ -37,9 +14,8 @@ export class DashboardFiltersDto {
   endDate?: string
 
   /**
-   * Whether to deduct received reimbursements (income transactions in
-   * reimbursement categories linked via CategoryAssociation) from expense
-   * totals.
+   * Whether to deduct received reimbursements (the cash paid back on a
+   * reimbursement request) from the expense transaction it hangs off.
    * @default true
    */
   @ApiPropertyOptional({ default: true })

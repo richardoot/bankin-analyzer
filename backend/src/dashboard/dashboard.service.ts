@@ -172,14 +172,6 @@ export class DashboardService {
       ? new Date(filters.endDate)
       : new Date('2099-12-31')
 
-    // Hidden categories are addressed by id, so a rename never un-hides one.
-    const hiddenExpenseCategoryIdsSet = new Set(
-      filters.hiddenExpenseCategoryIds ?? []
-    )
-    const hiddenIncomeCategoryIdsSet = new Set(
-      filters.hiddenIncomeCategoryIds ?? []
-    )
-
     const shouldDeductReimbursements = filters.deductReimbursements !== false
     // A debt still owed is money that comes back: a request says so. Whether
     // it is taken off the spending now or only once settled is the user's
@@ -294,8 +286,7 @@ export class DashboardService {
       `),
     ])
 
-    // Extract all categories from aggregated rows (before filtering hidden
-    // ones), keyed by the id the filter panel will send back.
+    // Extract all categories from aggregated rows, keyed by category id.
     const allExpenseCategories = new Map<string, string>()
     const allIncomeCategories = new Map<string, string>()
 
@@ -317,7 +308,7 @@ export class DashboardService {
     }
 
     // The structure of spending, on both readings. Accumulated on the rows
-    // the totals keep — hidden categories out — so the two agree.
+    // the totals keep, so the two agree.
     const structure = emptyStructure()
     const everydayStructure = emptyStructure()
     // Money leaving the everyday accounts towards savings, net of withdrawals.
@@ -384,20 +375,6 @@ export class DashboardService {
         if (SAVINGS_CATALOG_KEYS.has(row.category_catalog_key ?? '')) {
           savingsTransfers -= amount
         }
-        continue
-      }
-
-      // Skip hidden categories for aggregations
-      if (
-        row.type === 'EXPENSE' &&
-        hiddenExpenseCategoryIdsSet.has(categoryKey)
-      ) {
-        continue
-      }
-      if (
-        row.type === 'INCOME' &&
-        hiddenIncomeCategoryIdsSet.has(categoryKey)
-      ) {
         continue
       }
 

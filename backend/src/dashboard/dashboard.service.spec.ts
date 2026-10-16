@@ -67,9 +67,6 @@ describe('DashboardService', () => {
 
   const mockPrismaService = {
     $queryRaw: vi.fn(),
-    categoryAssociation: {
-      findMany: vi.fn(),
-    },
     tag: {
       findMany: vi.fn(),
     },
@@ -133,7 +130,6 @@ describe('DashboardService', () => {
     mockPrismaService.$queryRaw.mockResolvedValue([{ pending: 0 }])
 
     // Default mocks
-    mockPrismaService.categoryAssociation.findMany.mockResolvedValue([])
     mockPrismaService.tag.findMany.mockResolvedValue([])
   })
 
@@ -343,69 +339,6 @@ describe('DashboardService', () => {
       expect(result.totalExpenses).toBe(200)
     })
 
-    it('should exclude hidden expense categories from aggregations', async () => {
-      setupMocks([
-        createRow({
-          category_name: 'Alimentation',
-          type: 'EXPENSE',
-          total_amount: 100,
-        }),
-        createRow({
-          category_name: 'Loisirs',
-          type: 'EXPENSE',
-          total_amount: 500,
-        }),
-      ])
-
-      const result = await service.getSummary(mockUserId, {
-        hiddenExpenseCategoryIds: ['cat-Loisirs'],
-      })
-
-      expect(result.expensesByCategory).toEqual([
-        {
-          categoryId: 'cat-Alimentation',
-          category: 'Alimentation',
-          amount: 100,
-          icon: null,
-        },
-      ])
-      expect(result.totalExpenses).toBe(100)
-      // But allExpenseCategories should still include hidden categories
-      expect(optionNames(result.allExpenseCategories)).toContain('Loisirs')
-      expect(optionNames(result.allExpenseCategories)).toContain('Alimentation')
-    })
-
-    it('should exclude hidden income categories from aggregations', async () => {
-      setupMocks([
-        createRow({
-          category_name: 'Salaire',
-          type: 'INCOME',
-          total_amount: 2500,
-        }),
-        createRow({
-          category_name: 'Prime',
-          type: 'INCOME',
-          total_amount: 1000,
-        }),
-      ])
-
-      const result = await service.getSummary(mockUserId, {
-        hiddenIncomeCategoryIds: ['cat-Prime'],
-      })
-
-      expect(result.incomeByCategory).toEqual([
-        {
-          categoryId: 'cat-Salaire',
-          category: 'Salaire',
-          amount: 2500,
-          icon: null,
-        },
-      ])
-      expect(result.totalIncome).toBe(2500)
-      // But allIncomeCategories should still include hidden categories
-      expect(optionNames(result.allIncomeCategories)).toContain('Prime')
-    })
-
     it('should return all available accounts', async () => {
       setupMocks([createRow()], ['Compte Courant', 'Compte Joint', 'Livret A'])
 
@@ -484,31 +417,6 @@ describe('DashboardService', () => {
       ])
     })
 
-    it('should hide only the expense side when both types share a hidden name', async () => {
-      setupMocks([
-        createRow({
-          category_id: 'cat-remb-expense',
-          category_name: 'Remboursements',
-          type: 'EXPENSE',
-          total_amount: 300,
-        }),
-        createRow({
-          category_id: 'cat-remb-income',
-          category_name: 'Remboursements',
-          type: 'INCOME',
-          total_amount: 80,
-        }),
-      ])
-
-      const result = await service.getSummary(mockUserId, {
-        hiddenExpenseCategoryIds: ['cat-remb-expense'],
-      })
-
-      expect(result.expensesByCategory).toEqual([])
-      expect(result.incomeByCategory).toHaveLength(1)
-      expect(result.totalIncome).toBe(80)
-    })
-
     it('should expose the category id even without the breakdown', async () => {
       setupMocks([
         createRow({ category_name: 'Alimentation', total_amount: 100 }),
@@ -517,36 +425,6 @@ describe('DashboardService', () => {
       const result = await service.getSummary(mockUserId, {})
 
       expect(result.expensesByCategory[0]?.categoryId).toBe('cat-Alimentation')
-    })
-
-    it('should hide uncategorized transactions through the sentinel id', async () => {
-      setupMocks([
-        createRow({
-          category_id: null,
-          category_name: 'Autre',
-          type: 'EXPENSE',
-          total_amount: 100,
-        }),
-        createRow({
-          category_name: 'Alimentation',
-          type: 'EXPENSE',
-          total_amount: 40,
-        }),
-      ])
-
-      const result = await service.getSummary(mockUserId, {
-        hiddenExpenseCategoryIds: ['__uncategorized__'],
-      })
-
-      expect(result.expensesByCategory).toEqual([
-        {
-          categoryId: 'cat-Alimentation',
-          category: 'Alimentation',
-          amount: 40,
-          icon: null,
-        },
-      ])
-      expect(result.totalExpenses).toBe(40)
     })
 
     it('should format month labels correctly', async () => {
@@ -863,110 +741,6 @@ describe('DashboardService', () => {
         'Transport',
       ])
       expect(optionNames(result.allIncomeCategories)).toEqual(['Salaire'])
-    })
-
-    it('should hide multiple expense categories while keeping them in allExpenseCategories', async () => {
-      setupMocks([
-        createRow({
-          category_name: 'Alimentation',
-          type: 'EXPENSE',
-          total_amount: 300,
-        }),
-        createRow({
-          category_name: 'Loisirs',
-          type: 'EXPENSE',
-          total_amount: 200,
-        }),
-        createRow({
-          category_name: 'Transport',
-          type: 'EXPENSE',
-          total_amount: 100,
-        }),
-        createRow({
-          category_name: 'Loyer',
-          type: 'EXPENSE',
-          total_amount: 800,
-        }),
-      ])
-
-      const result = await service.getSummary(mockUserId, {
-        hiddenExpenseCategoryIds: ['cat-Loisirs', 'cat-Transport'],
-      })
-
-      // Only non-hidden categories in aggregations
-      expect(result.expensesByCategory).toEqual([
-        { categoryId: 'cat-Loyer', category: 'Loyer', amount: 800, icon: null },
-        {
-          categoryId: 'cat-Alimentation',
-          category: 'Alimentation',
-          amount: 300,
-          icon: null,
-        },
-      ])
-      expect(result.totalExpenses).toBe(1100)
-
-      // All categories still listed for filter panel
-      expect(optionNames(result.allExpenseCategories)).toEqual(
-        expect.arrayContaining([
-          'Alimentation',
-          'Loisirs',
-          'Transport',
-          'Loyer',
-        ])
-      )
-    })
-
-    it('should hide expense and income categories simultaneously', async () => {
-      setupMocks([
-        createRow({
-          category_name: 'Alimentation',
-          type: 'EXPENSE',
-          total_amount: 300,
-        }),
-        createRow({
-          category_name: 'Loisirs',
-          type: 'EXPENSE',
-          total_amount: 200,
-        }),
-        createRow({
-          category_name: 'Salaire',
-          type: 'INCOME',
-          total_amount: 3000,
-        }),
-        createRow({
-          category_name: 'Prime',
-          type: 'INCOME',
-          total_amount: 500,
-        }),
-      ])
-
-      const result = await service.getSummary(mockUserId, {
-        hiddenExpenseCategoryIds: ['cat-Loisirs'],
-        hiddenIncomeCategoryIds: ['cat-Prime'],
-      })
-
-      expect(result.expensesByCategory).toEqual([
-        {
-          categoryId: 'cat-Alimentation',
-          category: 'Alimentation',
-          amount: 300,
-          icon: null,
-        },
-      ])
-      expect(result.incomeByCategory).toEqual([
-        {
-          categoryId: 'cat-Salaire',
-          category: 'Salaire',
-          amount: 3000,
-          icon: null,
-        },
-      ])
-      expect(result.totalExpenses).toBe(300)
-      expect(result.totalIncome).toBe(3000)
-
-      // Hidden categories still in allCategories
-      expect(optionNames(result.allExpenseCategories)).toContain('Loisirs')
-      expect(optionNames(result.allIncomeCategories)).toContain('Prime')
     })
 
     it('should handle only income transactions with no expenses', async () => {
@@ -1664,31 +1438,6 @@ describe('DashboardService', () => {
       )
       expect(result.totalExceptionalExpenses).toBeCloseTo(sum, 2)
       expect(result.totalExceptionalExpenses).toBe(150.5)
-    })
-
-    it('excludes hidden categories from the exceptional total', async () => {
-      setupMocks([
-        createRow({
-          category_name: 'Voyages',
-          type: 'EXPENSE',
-          is_exceptional: true,
-          total_amount: 500,
-        }),
-        createRow({
-          category_name: 'Logement',
-          type: 'EXPENSE',
-          total_amount: 800,
-        }),
-      ])
-
-      const result = await service.getSummary(mockUserId, {
-        includeCategoryBreakdown: true,
-        hiddenExpenseCategoryIds: ['cat-Voyages'],
-      })
-
-      expect(result.totalExceptionalExpenses).toBe(0)
-      expect(result.expensesByCategory).toHaveLength(1)
-      expect(result.expensesByCategory[0]?.category).toBe('Logement')
     })
 
     it('never sets the everyday fields on income categories', async () => {

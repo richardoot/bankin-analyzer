@@ -5,7 +5,6 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { forgetCategoryInPreferences } from './forget-in-preferences'
 import { Prisma, TransactionType } from '../generated/prisma'
 import type { Category } from '../generated/prisma'
 import type {
@@ -67,8 +66,8 @@ export class CategoriesService {
 
   /**
    * Update a category. Everything that points at a category does so by id —
-   * transactions, budget plan entries, hidden-category
-   * preferences — so a rename carries over on its own, with nothing to replay.
+   * transactions, budget plan entries — so a rename carries over on its own,
+   * with nothing to replay.
    */
   async update(
     userId: string,
@@ -117,7 +116,6 @@ export class CategoriesService {
       subcategories,
       entries,
       reimbursementCount,
-      preferences,
     ] = await Promise.all([
       this.prisma.transaction.aggregate({
         where: { categoryId: id, userId },
@@ -150,13 +148,7 @@ export class CategoriesService {
       this.prisma.reimbursementRequest.count({
         where: { userId, transaction: { categoryId: id } },
       }),
-      this.prisma.filterPreferences.findUnique({ where: { userId } }),
     ])
-
-    const isExpense = category.type === TransactionType.EXPENSE
-    const globalHidden = isExpense
-      ? (preferences?.globalHiddenExpenseCategoryIds ?? [])
-      : (preferences?.globalHiddenIncomeCategoryIds ?? [])
 
     return {
       categoryId: category.id,
@@ -174,20 +166,16 @@ export class CategoriesService {
         endDate: entry.budgetPlan.endDate,
       })),
       reimbursementCount,
-      isGloballyHidden: globalHidden.includes(id),
     }
   }
 
   /**
    * Delete a category. The FKs carry most of the work — subcategories, budget
    * plan lines and the reimbursement pairing cascade away, transactions and
-   * reimbursement requests are detached — but two things need doing by hand:
-   *
-   *  - `Transaction.subcategory` is a denormalized label the dashboard groups
-   *    on. The subcategory row cascades away, this copy would not, and the
-   *    orphan label would keep showing under the uncategorized bucket.
-   *  - the hidden-category preferences hold plain ids with no FK, so the
-   *    deleted id would linger there.
+   * reimbursement requests are detached — but one thing needs doing by hand:
+   * `Transaction.subcategory` is a denormalized label the dashboard groups
+   * on. The subcategory row cascades away, this copy would not, and the
+   * orphan label would keep showing under the uncategorized bucket.
    */
   async remove(userId: string, id: string): Promise<CategoryDeletionResultDto> {
     const category = await this.findOwned(userId, id)
@@ -215,7 +203,6 @@ export class CategoriesService {
         })
       }
 
-      await forgetCategoryInPreferences(tx, userId, id, category.type)
       await tx.category.delete({ where: { id } })
 
       return {

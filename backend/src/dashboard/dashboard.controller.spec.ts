@@ -77,43 +77,11 @@ describe('DashboardController', () => {
       expect(service.getSummary).toHaveBeenCalledWith(mockUser.id, filters)
     })
 
-    it('should pass hidden categories filters to service', async () => {
-      mockDashboardService.getSummary.mockResolvedValue(mockSummary)
-
-      const filters = {
-        hiddenExpenseCategoryIds: ['cat-loisirs'],
-        hiddenIncomeCategoryIds: ['cat-prime'],
-      }
-
-      await controller.getSummary(mockUser, filters)
-
-      expect(service.getSummary).toHaveBeenCalledWith(mockUser.id, filters)
-    })
-
-    it('should pass category associations to service', async () => {
-      mockDashboardService.getSummary.mockResolvedValue(mockSummary)
-
-      const filters = {
-        categoryAssociations: [
-          { expenseCategory: 'Santé', incomeCategory: 'Remboursement' },
-        ],
-      }
-
-      await controller.getSummary(mockUser, filters)
-
-      expect(service.getSummary).toHaveBeenCalledWith(mockUser.id, filters)
-    })
-
     it('should pass all filters to service', async () => {
       mockDashboardService.getSummary.mockResolvedValue(mockSummary)
 
       const filters = {
         jointAccounts: ['Compte Joint'],
-        hiddenExpenseCategoryIds: ['cat-loisirs'],
-        hiddenIncomeCategoryIds: ['cat-prime'],
-        categoryAssociations: [
-          { expenseCategory: 'Santé', incomeCategory: 'Remboursement' },
-        ],
       }
 
       await controller.getSummary(mockUser, filters)

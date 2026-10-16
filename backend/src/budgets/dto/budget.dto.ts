@@ -158,9 +158,9 @@ export class BudgetStatisticsFiltersDto {
   endDate!: string
 
   /**
-   * Whether to deduct received reimbursements (income transactions in
-   * reimbursement categories linked via CategoryAssociation) from expense
-   * category totals. The deduction is computed server-side.
+   * Whether to deduct received reimbursements (the cash paid back on a
+   * reimbursement request) from the expense transaction it hangs off. The
+   * deduction is computed server-side.
    * @default true
    */
   @ApiPropertyOptional({ default: true })

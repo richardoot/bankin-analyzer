@@ -34,7 +34,6 @@ const emptySummary: CategoryDeletionSummaryDto = {
   labelledTransactionCount: 0,
   budgetPlanEntries: [],
   reimbursementCount: 0,
-  isGloballyHidden: false,
 }
 
 const fullSummary: CategoryDeletionSummaryDto = {
@@ -53,7 +52,6 @@ const fullSummary: CategoryDeletionSummaryDto = {
     },
   ],
   reimbursementCount: 3,
-  isGloballyHidden: true,
 }
 
 enableAutoUnmount(() => {})
@@ -107,14 +105,6 @@ describe('DeleteCategoryModal', () => {
     expect(destroyed).toContain('Courses, Restaurant')
     expect(destroyed).toContain('Budget 2024')
     expect(destroyed).toContain('450')
-  })
-
-  it('recalls the settings currently applied to the category', async () => {
-    const wrapper = await mountModal()
-
-    expect(wrapper.get('[data-testid="deletion-settings"]').text()).toContain(
-      'masquée du dashboard'
-    )
   })
 
   it('keeps the confirm button locked until the name is typed back', async () => {

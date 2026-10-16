@@ -44,7 +44,6 @@ describe('suggestMapping', () => {
         type: 'EXPENSE',
         icon: null,
         transactionCount: 3,
-        isHidden: false,
         budgetPlanEntryCount: 0,
         lines: [
           {

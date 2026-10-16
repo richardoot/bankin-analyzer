@@ -24,17 +24,6 @@ vi.mock('@/lib/api', () => ({
   UNCATEGORIZED_CATEGORY_ID: '__uncategorized__',
 }))
 
-// Mock the filters store. Hoisted so a test can decide what is hidden, which
-// is the only way to observe which category id the page actually filters on.
-const filtersMock = vi.hoisted(() => ({ hidden: new Set<string>() }))
-
-vi.mock('@/stores/filters', () => ({
-  useFiltersStore: () => ({
-    isExpenseCategoryGloballyHidden: (id: string) => filtersMock.hidden.has(id),
-    globalHiddenExpenseCategoryIds: [...filtersMock.hidden],
-  }),
-}))
-
 // Mock the pdf export composable
 vi.mock('@/composables/usePdfExport', () => ({
   usePdfExport: () => ({
@@ -65,7 +54,6 @@ describe('ReimbursementsPage', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
-    filtersMock.hidden.clear()
   })
 
   const mockPersons = [
@@ -625,23 +613,6 @@ describe('ReimbursementsPage', () => {
         expect(multi(wrapper).props('personName')).toBe('Alice Dupont')
         expect(multi(wrapper).props('pendingReimbursements')).toHaveLength(2)
         expect(single(wrapper).props('isOpen')).toBe(false)
-      })
-
-      it('withholds a debt whose expense category the user hid', async () => {
-        // The filter is named after the expense category, and every other
-        // grouping on this page uses it — the modal must not be handed a debt
-        // the user has hidden, nor keep one it has not.
-        filtersMock.hidden.add('cat2')
-        const wrapper = await mountWithDebts()
-
-        const personButton = wrapper
-          .findAll('button')
-          .find(button => button.text().includes('Enregistrer un règlement'))
-        await personButton?.trigger('click')
-
-        expect(multi(wrapper).props('pendingReimbursements')).toEqual([
-          expect.objectContaining({ id: 'r1', expenseCategoryId: 'cat1' }),
-        ])
       })
 
       it('reloads the reimbursements once a settlement lands', async () => {

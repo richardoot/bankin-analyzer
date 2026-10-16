@@ -9,7 +9,7 @@
    *     the category alone. The table opens pre-filled with the dictionary's
    *     guesses, each labelled with what it rests on, and the user corrects.
    *  3. Read what it will do — rows moved, sent back to filing, kept; type
-   *     changes; envelopes; the hidden preference — then confirm.
+   *     changes; envelopes — then confirm.
    *
    * The decisions travel as the server expects them; whether an arrangement
    * is possible is the server's call, and its reason is shown as is.
@@ -391,12 +391,6 @@
                     Sous-catégories à ranger
                   </span>
                   <span
-                    v-if="category.isHidden"
-                    class="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                  >
-                    Masquée
-                  </span>
-                  <span
                     class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400"
                   >
                     {{ category.transactionCount }} transaction{{
@@ -699,10 +693,6 @@
               >.
             </template>
             <template v-else>supprimée, rien de budgété ne la reçoit.</template>
-          </li>
-          <li v-if="preview.dropsHiddenPreference">
-            La catégorie était masquée du tableau de bord ; cette préférence
-            disparaît avec elle.
           </li>
           <li>
             <template v-if="preview.deletesSourceCategory">

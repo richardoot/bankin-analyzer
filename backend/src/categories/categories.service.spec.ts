@@ -59,10 +59,6 @@ const mockPrismaService = {
   reimbursementRequest: {
     count: vi.fn(),
   },
-  filterPreferences: {
-    findUnique: vi.fn(),
-    update: vi.fn(),
-  },
   // Deletion runs in a transaction; the mock hands the same client back so the
   // assertions below still see every call.
   $transaction: vi.fn(async (callback: (tx: unknown) => unknown) =>
@@ -72,13 +68,6 @@ const mockPrismaService = {
 
 /** Prisma returns Decimal for money columns; only toNumber() is exercised. */
 const decimal = (value: number) => ({ toNumber: () => value })
-
-const emptyPreferences = {
-  hiddenExpenseCategoryIds: [],
-  hiddenIncomeCategoryIds: [],
-  globalHiddenExpenseCategoryIds: [],
-  globalHiddenIncomeCategoryIds: [],
-}
 
 /** Every lookup of getDeletionSummary answered with "nothing attached". */
 function stubEmptySummary(): void {
@@ -91,7 +80,6 @@ function stubEmptySummary(): void {
   mockPrismaService.subcategory.findMany.mockResolvedValue([])
   mockPrismaService.budgetPlanEntry.findMany.mockResolvedValue([])
   mockPrismaService.reimbursementRequest.count.mockResolvedValue(0)
-  mockPrismaService.filterPreferences.findUnique.mockResolvedValue(null)
 }
 
 describe('CategoriesService', () => {
@@ -253,7 +241,7 @@ describe('CategoriesService', () => {
     })
 
     // Everything referencing a category — transactions, budget entries,
-    // associations, hidden-category preferences — does so by id, so a rename
+    // associations — does so by id, so a rename
     // is one UPDATE and nothing else. The Prisma mock exposes no other model,
     // so any attempt at a side write would throw here.
     it('should rename an income category the same single-statement way', async () => {
@@ -312,7 +300,6 @@ describe('CategoriesService', () => {
         labelledTransactionCount: 0,
         budgetPlanEntries: [],
         reimbursementCount: 0,
-        isGloballyHidden: false,
       })
     })
 
@@ -340,10 +327,6 @@ describe('CategoriesService', () => {
         },
       ])
       mockPrismaService.reimbursementRequest.count.mockResolvedValue(3)
-      mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
-        ...emptyPreferences,
-        globalHiddenExpenseCategoryIds: [mockCategory.id],
-      })
 
       const summary = await service.getDeletionSummary(
         mockCategory.userId,
@@ -365,7 +348,6 @@ describe('CategoriesService', () => {
         },
       ])
       expect(summary.reimbursementCount).toBe(3)
-      expect(summary.isGloballyHidden).toBe(true)
     })
 
     it('should throw NotFoundException when the category is not owned', async () => {
@@ -398,7 +380,6 @@ describe('CategoriesService', () => {
 
     it('should delete the category and report what it took with it', async () => {
       mockPrismaService.category.findFirst.mockResolvedValue(mockCategory)
-      mockPrismaService.filterPreferences.findUnique.mockResolvedValue(null)
       stubCounts(340, 2, 1)
 
       const result = await service.remove(mockCategory.userId, mockCategory.id)
@@ -417,7 +398,6 @@ describe('CategoriesService', () => {
       // The subcategory rows cascade away but this copy would not, and the
       // dashboard groups on it — the orphan label would outlive its category.
       mockPrismaService.category.findFirst.mockResolvedValue(mockCategory)
-      mockPrismaService.filterPreferences.findUnique.mockResolvedValue(null)
       stubCounts(340, 2, 0)
 
       await service.remove(mockCategory.userId, mockCategory.id)
@@ -434,45 +414,11 @@ describe('CategoriesService', () => {
 
     it('should not touch transactions when the category carries none', async () => {
       mockPrismaService.category.findFirst.mockResolvedValue(mockCategory)
-      mockPrismaService.filterPreferences.findUnique.mockResolvedValue(null)
       stubCounts(0, 0, 0)
 
       await service.remove(mockCategory.userId, mockCategory.id)
 
       expect(mockPrismaService.transaction.updateMany).not.toHaveBeenCalled()
-    })
-
-    it('should drop the deleted id from the hidden lists', async () => {
-      mockPrismaService.category.findFirst.mockResolvedValue(mockCategory)
-      mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
-        ...emptyPreferences,
-        hiddenExpenseCategoryIds: [mockCategory.id, 'cat-other'],
-        globalHiddenExpenseCategoryIds: [mockCategory.id],
-      })
-      stubCounts()
-
-      await service.remove(mockCategory.userId, mockCategory.id)
-
-      expect(mockPrismaService.filterPreferences.update).toHaveBeenCalledWith({
-        where: { userId: mockCategory.userId },
-        data: {
-          hiddenExpenseCategoryIds: ['cat-other'],
-          globalHiddenExpenseCategoryIds: [],
-        },
-      })
-    })
-
-    it('should leave the preferences alone when the id was not hidden', async () => {
-      mockPrismaService.category.findFirst.mockResolvedValue(mockCategory)
-      mockPrismaService.filterPreferences.findUnique.mockResolvedValue({
-        ...emptyPreferences,
-        hiddenExpenseCategoryIds: ['cat-other'],
-      })
-      stubCounts()
-
-      await service.remove(mockCategory.userId, mockCategory.id)
-
-      expect(mockPrismaService.filterPreferences.update).not.toHaveBeenCalled()
     })
 
     it('should throw NotFoundException when the category is not owned', async () => {

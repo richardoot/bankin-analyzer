@@ -122,9 +122,6 @@ export class LegacyCategoryDto {
 
   transactionCount!: number
 
-  /** Hidden from the dashboard by preference — the old way of neutralising transfers. */
-  isHidden!: boolean
-
   budgetPlanEntryCount!: number
 
   @ApiProperty({ type: [LegacyLineDto] })
@@ -209,9 +206,6 @@ export class LegacyMigrationPreviewDto {
 
   @ApiProperty({ type: [LegacyBudgetEntryOutcomeDto] })
   budgetEntries!: LegacyBudgetEntryOutcomeDto[]
-
-  /** The legacy category was hidden by preference; that preference goes with it. */
-  dropsHiddenPreference!: boolean
 }
 
 export class LegacyMigrationResultDto {
@@ -238,8 +232,6 @@ export class LegacyMigrationResultDto {
   budgetEntriesMerged!: number
 
   budgetEntriesDropped!: number
-
-  hiddenPreferenceDropped!: boolean
 
   sourceDeleted!: boolean
 }

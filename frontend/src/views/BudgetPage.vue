@@ -234,17 +234,11 @@
   } | null>(() => comparison.widerRange.value)
 
   const visibleExpenseCategories = computed(
-    () =>
-      statistics.value?.expensesByCategory?.filter(
-        cat => !filtersStore.isExpenseCategoryGloballyHidden(cat.categoryId)
-      ) ?? []
+    () => statistics.value?.expensesByCategory ?? []
   )
 
   const visibleIncomeCategories = computed(
-    () =>
-      statistics.value?.incomeByCategory?.filter(
-        cat => !filtersStore.isIncomeCategoryGloballyHidden(cat.categoryId)
-      ) ?? []
+    () => statistics.value?.incomeByCategory ?? []
   )
 
   const sortedCategories = computed(() => {

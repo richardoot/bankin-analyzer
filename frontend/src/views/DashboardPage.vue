@@ -3,7 +3,6 @@
   import { useRouter } from 'vue-router'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import CategoryPieChart from '@/components/charts/CategoryPieChart.vue'
-  import AdvancedFiltersPanel from '@/components/filters/AdvancedFiltersPanel.vue'
   import TimePeriodSelector from '@/components/filters/TimePeriodSelector.vue'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import CategoryBreakdownList from '@/components/dashboard/CategoryBreakdownList.vue'
@@ -43,8 +42,6 @@
     monthLabels,
     allExpenseCategories,
     allIncomeCategories,
-    availableExpenseCategories,
-    availableIncomeCategories,
     selectedCategory,
     selectedIncomeCategory,
     filteredExpensesByMonth,
@@ -190,12 +187,6 @@
         class="transition-opacity duration-200"
         :class="isRefreshing ? 'opacity-60' : 'opacity-100'"
       >
-        <!-- Advanced filters panel -->
-        <AdvancedFiltersPanel
-          :all-expense-categories="allExpenseCategories"
-          :all-income-categories="allIncomeCategories"
-        />
-
         <!-- Period + reimbursement toggles (harmonized in a single card) -->
         <div
           data-testid="dashboard-filters-card"
@@ -420,7 +411,7 @@
                     Dépenses par mois
                   </h3>
                   <select
-                    v-if="availableExpenseCategories.length > 0"
+                    v-if="allExpenseCategories.length > 0"
                     data-testid="expense-category-filter"
                     :value="selectedCategory ?? ''"
                     class="max-w-full min-h-[40px] sm:min-h-0 text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
@@ -428,7 +419,7 @@
                   >
                     <option value="">Toutes les catégories</option>
                     <option
-                      v-for="cat in availableExpenseCategories"
+                      v-for="cat in allExpenseCategories"
                       :key="cat.id"
                       :value="cat.id"
                     >
@@ -605,7 +596,7 @@
                     Revenus par mois
                   </h3>
                   <select
-                    v-if="availableIncomeCategories.length > 0"
+                    v-if="allIncomeCategories.length > 0"
                     data-testid="income-category-filter"
                     :value="selectedIncomeCategory ?? ''"
                     class="max-w-full min-h-[40px] sm:min-h-0 text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
@@ -613,7 +604,7 @@
                   >
                     <option value="">Toutes les catégories</option>
                     <option
-                      v-for="cat in availableIncomeCategories"
+                      v-for="cat in allIncomeCategories"
                       :key="cat.id"
                       :value="cat.id"
                     >

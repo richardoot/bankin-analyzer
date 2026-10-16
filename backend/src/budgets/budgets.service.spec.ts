@@ -40,9 +40,6 @@ describe('BudgetsService', () => {
 
   const mockPrismaService = {
     $queryRaw: vi.fn(),
-    categoryAssociation: {
-      findMany: vi.fn(),
-    },
   }
 
   // Off here so that the tests written before the preference existed keep
@@ -74,7 +71,6 @@ describe('BudgetsService', () => {
     )
 
     // Default mocks
-    mockPrismaService.categoryAssociation.findMany.mockResolvedValue([])
     mockPrismaService.$queryRaw.mockResolvedValue([])
   })
 
@@ -584,17 +580,6 @@ describe('BudgetsService', () => {
         }),
       ])
 
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-expense',
-          incomeCategoryId: 'cat-reimb',
-          expenseCategory: { id: 'cat-expense', name: 'Santé' },
-          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
-        },
-      ])
-
       const result = await service.getStatistics(mockUserId, {
         startDate: '2024-01-01',
         endDate: '2024-01-31',
@@ -630,31 +615,15 @@ describe('BudgetsService', () => {
           total_amount: 200,
         }),
       ]
-      const association = [
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-expense',
-          incomeCategoryId: 'cat-reimb',
-          expenseCategory: { id: 'cat-expense', name: 'Santé' },
-          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
-        },
-      ]
       const period = { startDate: '2024-01-01', endDate: '2024-01-31' }
 
       mockPrismaService.$queryRaw.mockResolvedValue(rows)
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue(
-        association
-      )
       const deducted = await service.getStatistics(mockUserId, {
         ...period,
         deductReimbursements: true,
       })
 
       mockPrismaService.$queryRaw.mockResolvedValue(rows)
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue(
-        association
-      )
       const gross = await service.getStatistics(mockUserId, {
         ...period,
         deductReimbursements: false,
@@ -675,17 +644,6 @@ describe('BudgetsService', () => {
         .mockResolvedValueOnce([
           { category_id: 'cat-reimb', pending_amount: 50 },
         ])
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-expense',
-          incomeCategoryId: 'cat-reimb',
-          expenseCategory: { id: 'cat-expense', name: 'Restaurant' },
-          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
-        },
-      ])
 
       await service.getStatistics(mockUserId, {
         startDate: '2026-01-01',
@@ -879,17 +837,6 @@ describe('BudgetsService', () => {
           },
         ])
 
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([
-        {
-          id: 'assoc-1',
-          userId: mockUserId,
-          expenseCategoryId: 'cat-expense',
-          incomeCategoryId: 'cat-reimb',
-          expenseCategory: { id: 'cat-expense', name: 'Sante' },
-          incomeCategory: { id: 'cat-reimb', name: 'Remboursement' },
-        },
-      ])
-
       const result = await service.getStatistics(mockUserId, {
         startDate: '2024-01-01',
         endDate: '2024-02-29',
@@ -923,8 +870,6 @@ describe('BudgetsService', () => {
       mockPrismaService.$queryRaw
         .mockResolvedValueOnce([createRow({ total_amount: 100 })])
         .mockResolvedValueOnce([]) // monthly breakdown
-
-      mockPrismaService.categoryAssociation.findMany.mockResolvedValue([])
 
       await service.getStatistics(mockUserId, {
         startDate: '2024-01-01',

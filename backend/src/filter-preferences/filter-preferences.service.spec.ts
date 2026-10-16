@@ -13,10 +13,6 @@ describe('FilterPreferencesService', () => {
   const mockFilterPreferences: FilterPreferences = {
     id: 'pref-1',
     userId: mockUserId,
-    hiddenExpenseCategoryIds: ['cat-loisirs'],
-    hiddenIncomeCategoryIds: ['cat-revenus-exceptionnels'],
-    globalHiddenExpenseCategoryIds: ['cat-epargne'],
-    globalHiddenIncomeCategoryIds: ['cat-cadeaux'],
     isPanelExpanded: true,
     importCategoriesFromFile: true,
     deductPendingReimbursements: true,
@@ -102,11 +98,9 @@ describe('FilterPreferencesService', () => {
   describe('upsert', () => {
     it('should create new preferences with all fields', async () => {
       const dto = {
-        hiddenExpenseCategoryIds: ['cat-shopping'],
-        hiddenIncomeCategoryIds: ['cat-primes'],
-        globalHiddenExpenseCategoryIds: ['cat-investissement'],
-        globalHiddenIncomeCategoryIds: ['cat-virement'],
         isPanelExpanded: false,
+        importCategoriesFromFile: false,
+        deductPendingReimbursements: false,
       }
 
       mockPrismaService.filterPreferences.upsert.mockResolvedValue({
@@ -116,31 +110,20 @@ describe('FilterPreferencesService', () => {
 
       const result = await service.upsert(mockUserId, dto)
 
-      expect(result.hiddenExpenseCategoryIds).toEqual(
-        dto.hiddenExpenseCategoryIds
-      )
-      expect(result.globalHiddenExpenseCategoryIds).toEqual(
-        dto.globalHiddenExpenseCategoryIds
-      )
       expect(result.isPanelExpanded).toBe(false)
+      expect(result.deductPendingReimbursements).toBe(false)
       expect(prisma.filterPreferences.upsert).toHaveBeenCalledWith({
         where: { userId: mockUserId },
         create: {
           userId: mockUserId,
-          hiddenExpenseCategoryIds: dto.hiddenExpenseCategoryIds,
-          hiddenIncomeCategoryIds: dto.hiddenIncomeCategoryIds,
-          globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
-          globalHiddenIncomeCategoryIds: dto.globalHiddenIncomeCategoryIds,
-          isPanelExpanded: dto.isPanelExpanded,
-          importCategoriesFromFile: true,
-          deductPendingReimbursements: true,
+          isPanelExpanded: false,
+          importCategoriesFromFile: false,
+          deductPendingReimbursements: false,
         },
         update: {
-          hiddenExpenseCategoryIds: dto.hiddenExpenseCategoryIds,
-          hiddenIncomeCategoryIds: dto.hiddenIncomeCategoryIds,
-          globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
-          globalHiddenIncomeCategoryIds: dto.globalHiddenIncomeCategoryIds,
-          isPanelExpanded: dto.isPanelExpanded,
+          isPanelExpanded: false,
+          importCategoriesFromFile: false,
+          deductPendingReimbursements: false,
         },
       })
     })
@@ -150,10 +133,6 @@ describe('FilterPreferencesService', () => {
 
       mockPrismaService.filterPreferences.upsert.mockResolvedValue({
         ...mockFilterPreferences,
-        hiddenExpenseCategoryIds: [],
-        hiddenIncomeCategoryIds: [],
-        globalHiddenExpenseCategoryIds: [],
-        globalHiddenIncomeCategoryIds: [],
         isPanelExpanded: true,
       })
 
@@ -163,10 +142,6 @@ describe('FilterPreferencesService', () => {
         where: { userId: mockUserId },
         create: {
           userId: mockUserId,
-          hiddenExpenseCategoryIds: [],
-          hiddenIncomeCategoryIds: [],
-          globalHiddenExpenseCategoryIds: [],
-          globalHiddenIncomeCategoryIds: [],
           isPanelExpanded: true,
           importCategoriesFromFile: true,
           deductPendingReimbursements: true,
@@ -175,14 +150,14 @@ describe('FilterPreferencesService', () => {
       })
     })
 
-    it('should update only globalHiddenExpenseCategoryIds when provided', async () => {
+    it('should update only deductPendingReimbursements when provided', async () => {
       const dto = {
-        globalHiddenExpenseCategoryIds: ['cat-epargne'],
+        deductPendingReimbursements: false,
       }
 
       mockPrismaService.filterPreferences.upsert.mockResolvedValue({
         ...mockFilterPreferences,
-        globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
+        deductPendingReimbursements: false,
       })
 
       await service.upsert(mockUserId, dto)
@@ -191,16 +166,12 @@ describe('FilterPreferencesService', () => {
         where: { userId: mockUserId },
         create: {
           userId: mockUserId,
-          hiddenExpenseCategoryIds: [],
-          hiddenIncomeCategoryIds: [],
-          globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
-          globalHiddenIncomeCategoryIds: [],
           isPanelExpanded: true,
           importCategoriesFromFile: true,
-          deductPendingReimbursements: true,
+          deductPendingReimbursements: false,
         },
         update: {
-          globalHiddenExpenseCategoryIds: dto.globalHiddenExpenseCategoryIds,
+          deductPendingReimbursements: false,
         },
       })
     })
@@ -221,10 +192,6 @@ describe('FilterPreferencesService', () => {
         where: { userId: mockUserId },
         create: {
           userId: mockUserId,
-          hiddenExpenseCategoryIds: [],
-          hiddenIncomeCategoryIds: [],
-          globalHiddenExpenseCategoryIds: [],
-          globalHiddenIncomeCategoryIds: [],
           isPanelExpanded: false,
           importCategoriesFromFile: true,
           deductPendingReimbursements: true,

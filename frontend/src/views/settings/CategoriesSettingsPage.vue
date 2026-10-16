@@ -13,7 +13,7 @@
    * sends it.
    */
   import { computed, onMounted, ref } from 'vue'
-  import { useFiltersStore } from '@/stores/filters'
+  import type { Ref } from 'vue'
   import { api } from '@/lib/api'
   import type {
     CategoryDto,
@@ -37,10 +37,8 @@
   import DeleteCategoryModal from '@/components/settings/DeleteCategoryModal.vue'
   import LegacyMigrationBanner from '@/components/settings/LegacyMigrationBanner.vue'
   import SettingsCard from '@/components/settings/SettingsCard.vue'
-  import ToggleSwitch from '@/components/ToggleSwitch.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 
-  const filtersStore = useFiltersStore()
   const toast = useToast()
 
   const categories = ref<CategoryDto[]>([])
@@ -76,24 +74,9 @@
   )
   const hasLegacy = computed(() => legacyCategories.value.length > 0)
 
-  // ── Visibility ────────────────────────────────────────────────────────────
-  // Dashboard → hides the category everywhere. A display preference only:
-  // keeping spending out of the budget and the averages is the exceptional
-  // tag's job, per transaction.
-  function isGloballyHidden(category: CategoryDto): boolean {
-    return category.type === 'EXPENSE'
-      ? filtersStore.isExpenseCategoryGloballyHidden(category.id)
-      : filtersStore.isIncomeCategoryGloballyHidden(category.id)
-  }
-
-  function isDashboardVisible(category: CategoryDto): boolean {
-    return !isGloballyHidden(category)
-  }
-
-  const savingVisibility = ref<Set<string>>(new Set())
-
+  /** Mark an id as saving in one of the per-row busy sets. */
   function markSaving(
-    set: typeof savingVisibility,
+    set: Ref<Set<string>>,
     id: string,
     active: boolean
   ): void {
@@ -103,42 +86,14 @@
     set.value = next
   }
 
-  async function toggleDashboardVisible(category: CategoryDto): Promise<void> {
-    if (savingVisibility.value.has(category.id)) return
-    const willBeVisible = !isDashboardVisible(category)
-
-    if (category.type === 'EXPENSE') {
-      filtersStore.toggleGlobalHiddenExpenseCategory(category.id)
-    } else {
-      filtersStore.toggleGlobalHiddenIncomeCategory(category.id)
-    }
-
-    markSaving(savingVisibility, category.id, true)
-    try {
-      const ok = await filtersStore.saveToBackend()
-      if (ok) {
-        toast.success(
-          willBeVisible
-            ? `« ${category.name} » de nouveau visible`
-            : `« ${category.name} » masquée`
-        )
-      } else {
-        toast.error('Erreur lors de l’enregistrement de la visibilité')
-      }
-    } finally {
-      markSaving(savingVisibility, category.id, false)
-    }
-  }
-
   // ── Search & quick filters ────────────────────────────────────────────────
-  type CategoryStateFilter = 'all' | 'hidden' | 'legacy'
+  type CategoryStateFilter = 'all' | 'legacy'
   const categorySearch = ref('')
   const categoryStateFilter = ref<CategoryStateFilter>('all')
   const categoryStateOptions = computed<
     { key: CategoryStateFilter; label: string }[]
   >(() => [
     { key: 'all', label: 'Toutes' },
-    { key: 'hidden', label: 'Masquées' },
     ...(hasLegacy.value ? [{ key: 'legacy' as const, label: 'À migrer' }] : []),
   ])
 
@@ -152,21 +107,14 @@
       )
       if (!inName && !inSubcategories) return false
     }
-    if (categoryStateFilter.value === 'hidden')
-      return isGloballyHidden(category)
     if (categoryStateFilter.value === 'legacy')
       return isLegacyCategory(category)
     return true
   }
 
-  /** Visible categories first, then hidden ones, alphabetical within each. */
+  /** Alphabetical. */
   function sortForDisplay(list: CategoryDto[]): CategoryDto[] {
-    return [...list].sort((a, b) => {
-      const aHidden = isGloballyHidden(a)
-      const bHidden = isGloballyHidden(b)
-      if (aHidden !== bHidden) return aHidden ? 1 : -1
-      return a.name.localeCompare(b.name, 'fr')
-    })
+    return [...list].sort((a, b) => a.name.localeCompare(b.name, 'fr'))
   }
 
   /**
@@ -334,8 +282,8 @@
   }
 
   // ── Rename (legacy only) ──────────────────────────────────────────────────
-  // Transactions, budget plans and the hidden-category preferences all point
-  // at the category by id, so they follow a rename on their own.
+  // Transactions and budget plans point at the category by id, so they follow
+  // a rename on their own.
   const renameDrafts = ref<Record<string, string>>({})
   const renameErrors = ref<Record<string, string | null>>({})
   const renameSaving = ref<Record<string, boolean>>({})
@@ -426,7 +374,6 @@
     expanded.value = new Set(
       [...expanded.value].filter(id => id !== category.id)
     )
-    filtersStore.forgetCategory(category.id, category.type)
 
     await loadSubcategories()
 
@@ -477,18 +424,6 @@
       </div>
 
       <div v-else class="space-y-6">
-        <p
-          class="hidden text-xs leading-relaxed text-gray-500 sm:block dark:text-gray-400"
-        >
-          <strong class="text-gray-700 dark:text-gray-300"
-            >Tableau de bord</strong
-          >
-          retire la catégorie de toutes les vues. Pour tenir une dépense
-          ponctuelle hors des moyennes et du budget, utilisez un tag
-          exceptionnel sur la transaction. Chaque changement est enregistré
-          immédiatement.
-        </p>
-
         <!-- Search + quick state filters -->
         <div
           v-if="totalCategoryCount > 0"
@@ -582,19 +517,11 @@
           :key="section.key"
           :data-testid="`category-section-${section.key}`"
         >
-          <div
-            class="mb-1 grid grid-cols-[1fr_3rem] items-end gap-3 px-3 sm:grid-cols-[1fr_5.5rem]"
+          <h3
+            class="mb-1 px-3 text-sm font-medium text-gray-700 dark:text-gray-300"
           >
-            <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
-              {{ section.title }}
-            </h3>
-            <span
-              class="text-center text-[11px] font-medium leading-tight text-gray-500 dark:text-gray-400"
-            >
-              <span class="sm:hidden">Visible</span>
-              <span class="hidden sm:inline">Tableau de bord</span>
-            </span>
-          </div>
+            {{ section.title }}
+          </h3>
 
           <ul
             class="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-100 dark:divide-slate-700/60 dark:border-slate-700/60"
@@ -605,7 +532,7 @@
               data-testid="category-row"
             >
               <div
-                class="grid grid-cols-[1fr_3rem] items-center gap-3 px-3 py-2.5 transition-colors hover:bg-gray-50 sm:grid-cols-[1fr_5.5rem] sm:py-2 dark:hover:bg-slate-800/50"
+                class="px-3 py-2.5 transition-colors hover:bg-gray-50 sm:py-2 dark:hover:bg-slate-800/50"
               >
                 <div class="flex min-w-0 items-center gap-2">
                   <button
@@ -635,14 +562,7 @@
                     </svg>
                   </button>
                   <CategoryIcon :icon="category.icon" :name="category.name">
-                    <span
-                      class="text-sm"
-                      :class="
-                        isDashboardVisible(category)
-                          ? 'text-gray-800 dark:text-gray-200'
-                          : 'text-gray-400 line-through dark:text-gray-500'
-                      "
-                    >
+                    <span class="text-sm text-gray-800 dark:text-gray-200">
                       {{ category.name }}
                     </span>
                   </CategoryIcon>
@@ -675,30 +595,11 @@
                     À migrer
                   </span>
                   <span
-                    v-if="!isDashboardVisible(category)"
-                    class="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                  >
-                    Masquée
-                  </span>
-                  <span
                     v-if="subcategoriesFor(category.id).length > 0"
                     class="hidden shrink-0 text-[10px] text-gray-400 sm:inline dark:text-gray-500"
                   >
                     {{ subcategoriesFor(category.id).length }} sous-cat.
                   </span>
-                </div>
-
-                <div class="flex justify-center">
-                  <ToggleSwitch
-                    :checked="isDashboardVisible(category)"
-                    :loading="savingVisibility.has(category.id)"
-                    :label="
-                      isDashboardVisible(category)
-                        ? `Masquer ${category.name} du tableau de bord`
-                        : `Afficher ${category.name} dans le tableau de bord`
-                    "
-                    @change="toggleDashboardVisible(category)"
-                  />
                 </div>
               </div>
 

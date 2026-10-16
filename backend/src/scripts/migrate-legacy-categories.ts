@@ -55,7 +55,7 @@ import { Pool } from 'pg'
 import { PrismaClient } from '../generated/prisma'
 import type { TransactionType } from '../generated/prisma'
 import { normalizeName } from '../categories/category-catalog.plan'
-import { MigrationPlanError } from '../categories/category-migration.plan'
+import { MigrationPlanError } from '../categories/legacy-migration.plan'
 import {
   describeSideEffects,
   migrateLegacyCategory,
@@ -364,13 +364,7 @@ export async function main(
       const targets = await readTargets(prisma, user.id)
       try {
         const plan = planLegacyMigration(source, targets, decisions)
-        const effects = await describeSideEffects(
-          prisma,
-          user.id,
-          source,
-          plan,
-          targets
-        )
+        const effects = await describeSideEffects(prisma, source, plan, targets)
         for (const move of plan.moves) {
           console.log(
             `  ${(move.sourceSubcategoryName ?? '(category alone)').padEnd(32)} ` +
@@ -403,8 +397,7 @@ export async function main(
           )
         }
         console.log(
-          `  ${plan.deletesSourceCategory ? 'category deleted afterwards' : 'category kept (partial)'}` +
-            (effects.dropsHiddenPreference ? ', hidden preference dropped' : '')
+          `  ${plan.deletesSourceCategory ? 'category deleted afterwards' : 'category kept (partial)'}`
         )
       } catch (error) {
         if (error instanceof MigrationPlanError) {

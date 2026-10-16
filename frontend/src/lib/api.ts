@@ -130,7 +130,6 @@ export interface CategoryDeletionSummaryDto {
   labelledTransactionCount: number
   budgetPlanEntries: BudgetPlanEntrySummaryDto[]
   reimbursementCount: number
-  isGloballyHidden: boolean
 }
 
 // ── Legacy migration (the assistant) ─────────────────────────────────────────
@@ -185,7 +184,6 @@ export interface LegacyCategoryDto {
   isCatalog: boolean
   catalogKey: string | null
   transactionCount: number
-  isHidden: boolean
   budgetPlanEntryCount: number
   lines: LegacyLineDto[]
 }
@@ -232,7 +230,6 @@ export interface LegacyMigrationPreviewDto {
   typeChangedTransactions: number
   deletesSourceCategory: boolean
   budgetEntries: LegacyBudgetEntryOutcomeDto[]
-  dropsHiddenPreference: boolean
 }
 
 export interface LegacyMigrationResultDto {
@@ -248,7 +245,6 @@ export interface LegacyMigrationResultDto {
   budgetEntriesMoved: number
   budgetEntriesMerged: number
   budgetEntriesDropped: number
-  hiddenPreferenceDropped: boolean
   sourceDeleted: boolean
 }
 
@@ -257,53 +253,6 @@ export interface SubcategoryDeletionResultDto {
   refiledTransactions: number
   fallbackSubcategoryId: string | null
   fallbackSubcategoryName: string | null
-}
-
-/** One decision of the mapping table. */
-export interface MigrationActionDto {
-  /** Null stands for the transactions with no subcategory. */
-  sourceSubcategoryId: string | null
-  action: 'MOVE' | 'MERGE' | 'KEEP'
-  /** Required by MERGE, meaningless otherwise. */
-  targetSubcategoryId?: string
-}
-
-export interface MigrationSourceSubcategoryDto {
-  id: string
-  name: string
-  transactionCount: number
-  /**
-   * The destination already has a subcategory of this name. Moving it would
-   * break the unique constraint, so the line has to merge — and the screen
-   * says why rather than silently removing the option.
-   */
-  nameTakenInTarget: boolean
-}
-
-export interface CategoryMigrationPreviewDto {
-  sourceCategoryId: string
-  sourceCategoryName: string
-  targetCategoryId: string
-  targetCategoryName: string
-  type: 'EXPENSE' | 'INCOME'
-  sourceSubcategories: MigrationSourceSubcategoryDto[]
-  targetSubcategories: { id: string; name: string }[]
-  uncategorizedCount: number
-  /** Confirming without touching anything sends these back unchanged. */
-  defaultActions: MigrationActionDto[]
-  budgetPlanEntries: BudgetPlanEntrySummaryDto[]
-}
-
-export interface CategoryMigrationResultDto {
-  sourceCategoryId: string
-  targetCategoryId: string
-  movedTransactions: number
-  movedSubcategories: number
-  mergedSubcategories: number
-  keptTransactions: number
-  keptSubcategories: number
-  /** The source is kept either way; this only says which case it is. */
-  sourceLeftEmpty: boolean
 }
 
 export interface CategoryDeletionResultDto {
@@ -431,12 +380,7 @@ export interface TransactionQueryParams {
   sortOrder?: 'asc' | 'desc' | undefined
 }
 
-/** Hidden categories are addressed by Category id, never by name. */
 export interface FilterPreferencesDto {
-  hiddenExpenseCategoryIds: string[]
-  hiddenIncomeCategoryIds: string[]
-  globalHiddenExpenseCategoryIds: string[]
-  globalHiddenIncomeCategoryIds: string[]
   isPanelExpanded: boolean
   /**
    * Whether an import adopts the categories written in the file. On by
@@ -744,7 +688,6 @@ export interface CreateImportHistoryDto {
   fileName?: string
 }
 
-// Category Associations DTOs (DB-based)
 // Dashboard DTOs
 export interface MonthlyDataDto {
   month: string
@@ -880,8 +823,6 @@ export interface CategoryOptionDto {
 }
 
 export interface DashboardFiltersDto {
-  hiddenExpenseCategoryIds?: string[]
-  hiddenIncomeCategoryIds?: string[]
   startDate?: string
   endDate?: string
   deductReimbursements?: boolean
@@ -1679,48 +1620,6 @@ export const api = {
     }
 
     return response.json() as Promise<CategoryDeletionSummaryDto>
-  },
-
-  async getCategoryMigrationPreview(
-    id: string,
-    targetCategoryId: string
-  ): Promise<CategoryMigrationPreviewDto> {
-    const response = await fetchWithAuth(
-      `${API_BASE_URL}/categories/${id}/migration-preview?targetCategoryId=${encodeURIComponent(targetCategoryId)}`
-    )
-
-    if (!response.ok) {
-      throw new Error('Impossible de preparer le deplacement')
-    }
-
-    return response.json() as Promise<CategoryMigrationPreviewDto>
-  },
-
-  async migrateCategory(
-    id: string,
-    targetCategoryId: string,
-    actions: MigrationActionDto[]
-  ): Promise<CategoryMigrationResultDto> {
-    const response = await fetchWithAuth(
-      `${API_BASE_URL}/categories/${id}/migrate`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ targetCategoryId, actions }),
-      }
-    )
-
-    if (!response.ok) {
-      // A refused arrangement carries a message the user can act on.
-      const detail = (await response.json().catch(() => null)) as {
-        message?: string | string[]
-      } | null
-      const message = Array.isArray(detail?.message)
-        ? detail.message.join(', ')
-        : detail?.message
-      throw new Error(message ?? 'Échec du déplacement')
-    }
-
-    return response.json() as Promise<CategoryMigrationResultDto>
   },
 
   async deleteCategory(id: string): Promise<CategoryDeletionResultDto> {
@@ -2546,7 +2445,6 @@ export const api = {
     }
   },
 
-  // Category Associations API
   // AI Suggestions API
   // Budget plans API
   async getBudgetPlans(): Promise<BudgetPlanSummaryDto[]> {

@@ -25,10 +25,6 @@ export class FilterPreferencesController {
 
     if (!prefs) {
       return {
-        hiddenExpenseCategoryIds: [],
-        hiddenIncomeCategoryIds: [],
-        globalHiddenExpenseCategoryIds: [],
-        globalHiddenIncomeCategoryIds: [],
         isPanelExpanded: true,
         importCategoriesFromFile: true,
         deductPendingReimbursements: true,
@@ -36,10 +32,6 @@ export class FilterPreferencesController {
     }
 
     return {
-      hiddenExpenseCategoryIds: prefs.hiddenExpenseCategoryIds,
-      hiddenIncomeCategoryIds: prefs.hiddenIncomeCategoryIds,
-      globalHiddenExpenseCategoryIds: prefs.globalHiddenExpenseCategoryIds,
-      globalHiddenIncomeCategoryIds: prefs.globalHiddenIncomeCategoryIds,
       isPanelExpanded: prefs.isPanelExpanded,
       importCategoriesFromFile: prefs.importCategoriesFromFile,
       deductPendingReimbursements: prefs.deductPendingReimbursements,
@@ -56,10 +48,6 @@ export class FilterPreferencesController {
     const prefs = await this.service.upsert(user.id, dto)
 
     return {
-      hiddenExpenseCategoryIds: prefs.hiddenExpenseCategoryIds,
-      hiddenIncomeCategoryIds: prefs.hiddenIncomeCategoryIds,
-      globalHiddenExpenseCategoryIds: prefs.globalHiddenExpenseCategoryIds,
-      globalHiddenIncomeCategoryIds: prefs.globalHiddenIncomeCategoryIds,
       isPanelExpanded: prefs.isPanelExpanded,
       importCategoriesFromFile: prefs.importCategoriesFromFile,
       deductPendingReimbursements: prefs.deductPendingReimbursements,

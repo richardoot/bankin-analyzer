@@ -36,15 +36,6 @@
 
   const filtersStore = useFiltersStore()
 
-  /** Drop categories the user has globally hidden so they don't pollute the preview. */
-  function isHidden(categoryId: string): boolean {
-    return filtersStore.isExpenseCategoryGloballyHidden(categoryId)
-  }
-
-  function isHiddenIncome(categoryId: string): boolean {
-    return filtersStore.isIncomeCategoryGloballyHidden(categoryId)
-  }
-
   // ── Step 1 state ─────────────────────────────────────────────────────────
   type Preset = 'next-month' | 'next-quarter' | 'next-year' | 'custom'
   const preset = ref<Preset>('next-month')
@@ -279,7 +270,7 @@
   function seedEntriesFrom(categories: CategoryAverageDto[]): void {
     previewEntries.value = new Map(
       categories
-        .filter(c => !isHidden(c.categoryId) && seedBasisAmount(c) > 0)
+        .filter(c => seedBasisAmount(c) > 0)
         .map(c => [c.categoryId, Math.round(seedBasisAmount(c))])
     )
   }
@@ -318,7 +309,7 @@
         loadAllExpenseCategories(),
       ])
       previewCategories.value = mergeCategoriesWithStats(
-        stats.expensesByCategory.filter(c => !isHidden(c.categoryId))
+        stats.expensesByCategory
       )
       seedEntriesFrom(stats.expensesByCategory)
       // Income reference comes "for free" with this query; keep it for the
@@ -369,13 +360,10 @@
   /**
    * Average monthly income over the lookback period.
    *
-   * Sum of every income category total, MINUS:
-   *   • reimbursement-associated income categories — already excluded by the
-   *     backend (they live in `reimbursementsByExpenseCategory`, not
-   *     `incomeByCategory`).
-   *   • income categories the user has globally hidden in their preferences
-   *     — applied here on the client.
-   * …divided by `periodMonths` (calendar months in the lookback).
+   * Sum of every income category total, minus reimbursement-associated
+   * income categories — already excluded by the backend (they live in
+   * `reimbursementsByExpenseCategory`, not `incomeByCategory`) — divided by
+   * `periodMonths` (calendar months in the lookback).
    *
    * Falls back to the backend's `averageMonthlyIncome` when no income
    * categories are returned (defensive — the backend always populates
@@ -386,12 +374,11 @@
     if (stats.incomeByCategory.length === 0) {
       return stats.averageMonthlyIncome
     }
-    let totalVisible = 0
+    let total = 0
     for (const cat of stats.incomeByCategory) {
-      if (isHiddenIncome(cat.categoryId)) continue
-      totalVisible += cat.totalAmount
+      total += cat.totalAmount
     }
-    return totalVisible / stats.periodMonths
+    return total / stats.periodMonths
   }
 
   /** Load every expense category owned by the user once. */
@@ -418,23 +405,21 @@
     statsExpenses: CategoryAverageDto[]
   ): CategoryAverageDto[] {
     const statsById = new Map(statsExpenses.map(c => [c.categoryId, c]))
-    const merged = allExpenseCategories.value
-      .filter(c => !isHidden(c.id))
-      .map<CategoryAverageDto>(cat => {
-        const stat = statsById.get(cat.id)
-        if (stat) return stat
-        // No stats data for this category — minimal placeholder so the row
-        // still renders (with "—" for the average and an empty input).
-        const placeholder: CategoryAverageDto = {
-          categoryId: cat.id,
-          categoryName: cat.name,
-          totalAmount: 0,
-          transactionCount: 0,
-          averagePerMonth: 0,
-        }
-        if (cat.icon) placeholder.categoryIcon = cat.icon
-        return placeholder
-      })
+    const merged = allExpenseCategories.value.map<CategoryAverageDto>(cat => {
+      const stat = statsById.get(cat.id)
+      if (stat) return stat
+      // No stats data for this category — minimal placeholder so the row
+      // still renders (with "—" for the average and an empty input).
+      const placeholder: CategoryAverageDto = {
+        categoryId: cat.id,
+        categoryName: cat.name,
+        totalAmount: 0,
+        transactionCount: 0,
+        averagePerMonth: 0,
+      }
+      if (cat.icon) placeholder.categoryIcon = cat.icon
+      return placeholder
+    })
     return merged.sort((a, b) => {
       const av = a.averagePerMonth
       const bv = b.averagePerMonth
@@ -457,8 +442,7 @@
         api.getBudgetPlan(copyFromPlanId.value),
         loadAllExpenseCategories(),
       ])
-      const visibleEntries = source.entries.filter(e => !isHidden(e.categoryId))
-      const copiedAsAverages: CategoryAverageDto[] = visibleEntries.map(e => {
+      const copiedAsAverages: CategoryAverageDto[] = source.entries.map(e => {
         const dto: CategoryAverageDto = {
           categoryId: e.categoryId,
           categoryName: e.categoryName,
@@ -473,7 +457,7 @@
       })
       previewCategories.value = mergeCategoriesWithStats(copiedAsAverages)
       previewEntries.value = new Map(
-        visibleEntries.map(e => [e.categoryId, e.amount])
+        source.entries.map(e => [e.categoryId, e.amount])
       )
     } catch (err) {
       error.value =

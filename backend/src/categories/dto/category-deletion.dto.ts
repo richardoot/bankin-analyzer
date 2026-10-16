@@ -57,9 +57,6 @@ export class CategoryDeletionSummaryDto {
 
   /** Reimbursement requests that would lose their category. They are kept. */
   reimbursementCount!: number
-
-  /** Whether the category is currently hidden from the dashboard */
-  isGloballyHidden!: boolean
 }
 
 export class CategoryDeletionResultDto {

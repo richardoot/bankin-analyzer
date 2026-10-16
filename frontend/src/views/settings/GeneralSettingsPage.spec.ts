@@ -24,10 +24,6 @@ enableAutoUnmount(afterEach)
 const preferences = (
   importCategoriesFromFile: boolean
 ): FilterPreferencesDto => ({
-  hiddenExpenseCategoryIds: [],
-  hiddenIncomeCategoryIds: [],
-  globalHiddenExpenseCategoryIds: [],
-  globalHiddenIncomeCategoryIds: [],
   isPanelExpanded: true,
   importCategoriesFromFile,
   deductPendingReimbursements: true,
@@ -67,7 +63,7 @@ describe('GeneralSettingsPage — import categories', () => {
     expect(wrapper.text()).toContain('reprises telles quelles')
   })
 
-  it('sends only this field, leaving the hidden lists alone', async () => {
+  it('sends only this field, leaving the other preferences alone', async () => {
     const wrapper = await mountPage()
 
     await toggle(wrapper).trigger('click')
