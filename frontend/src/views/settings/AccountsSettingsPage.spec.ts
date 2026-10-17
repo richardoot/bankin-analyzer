@@ -768,4 +768,25 @@ describe('AccountsSettingsPage — connecting a bank', () => {
 
     expect(toastError).toHaveBeenCalledWith('Redirect URI not allowed')
   })
+
+  it('drops the "Comptes sans banque" title when every account has a bank', async () => {
+    const wrapper = await mountPage({
+      accounts: [account({ id: 'acc-1', name: 'Perso Bourso' })],
+      configured: true,
+      connections: [
+        connection({
+          accounts: [
+            discoveredAccount({
+              accountId: 'acc-1',
+              accountLabel: 'Perso Bourso',
+            }),
+          ],
+        }),
+      ],
+    })
+
+    expect(
+      wrapper.find('[data-testid="unlinked-accounts-title"]').exists()
+    ).toBe(false)
+  })
 })

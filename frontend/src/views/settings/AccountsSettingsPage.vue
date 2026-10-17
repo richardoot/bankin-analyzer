@@ -598,8 +598,11 @@
         <!-- Every account not spoken for by a bank above — the whole list
              when there is no bank sync at all. -->
         <div>
+          <!-- Only over a list: with every account under a bank, the
+               title used to stand alone above nothing. -->
           <h3
-            v-if="configured"
+            v-if="configured && unlinkedAccounts.length > 0"
+            data-testid="unlinked-accounts-title"
             class="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
           >
             Comptes sans banque

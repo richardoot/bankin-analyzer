@@ -527,6 +527,14 @@
               >
                 <!-- Category header - clickable -->
                 <button
+                  type="button"
+                  :aria-expanded="
+                    isCategoryExpanded(
+                      person.personId,
+                      cat.categoryId ?? 'none'
+                    )
+                  "
+                  :aria-controls="`debts-${person.personId}-${cat.categoryId ?? 'none'}`"
                   class="w-full flex items-center justify-between py-2 px-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors text-sm min-h-[44px] sm:min-h-0"
                   @click="
                     toggleCategoryExpanded(
@@ -589,17 +597,18 @@
                   </span>
                 </button>
 
-                <!-- Transaction details - collapsible -->
+                <!-- Transaction details - collapsible. v-show, not a max-height
+                     animation: the cap cut off the lines past ~9 on a phone,
+                     and the hidden "Régler" buttons stayed tabbable. -->
                 <div
-                  class="transition-all duration-200 ease-in-out overflow-hidden"
-                  :class="
+                  v-show="
                     isCategoryExpanded(
                       person.personId,
                       cat.categoryId ?? 'none'
                     )
-                      ? 'max-h-[500px] opacity-100'
-                      : 'max-h-0 opacity-0'
                   "
+                  :id="`debts-${person.personId}-${cat.categoryId ?? 'none'}`"
+                  :data-testid="`debts-${person.personId}-${cat.categoryId ?? 'none'}`"
                 >
                   <div class="ml-3 sm:ml-5 mt-1 mb-2 space-y-1">
                     <div

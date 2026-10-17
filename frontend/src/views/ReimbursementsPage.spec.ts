@@ -504,6 +504,35 @@ describe('ReimbursementsPage', () => {
       expect(wrapper.text()).toContain('Sante')
     })
 
+    it('folds a category with v-show and says whether it is open', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
+      vi.mocked(api.getSettlements).mockResolvedValue([])
+      const wrapper = mount(ReimbursementsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            SettlementModal: true,
+            SettlementHistorySection: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      const toggle = wrapper.get('button[aria-controls="debts-1-cat1"]')
+      const region = wrapper.get('[data-testid="debts-1-cat1"]')
+      expect(toggle.attributes('aria-expanded')).toBe('false')
+      // happy-dom's isVisible() cannot see v-show: read the style.
+      expect(region.attributes('style')).toContain('display: none')
+
+      await toggle.trigger('click')
+
+      expect(toggle.attributes('aria-expanded')).toBe('true')
+      expect(region.attributes('style') ?? '').not.toContain('display: none')
+    })
+
     it('should not display summary when no reimbursements', async () => {
       const wrapper = await mountComponent()
 
