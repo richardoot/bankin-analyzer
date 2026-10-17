@@ -84,7 +84,8 @@
   }
 
   async function processFile(selectedFile: File) {
-    if (!selectedFile.name.endsWith('.csv')) {
+    // Case-insensitive: Windows and some banks name it `export.CSV`.
+    if (!selectedFile.name.toLowerCase().endsWith('.csv')) {
       error.value = 'Veuillez sélectionner un fichier CSV'
       return
     }
@@ -271,13 +272,14 @@
     partialImportError.value = null
     resetProgress()
 
-    // Start import history BEFORE importing transactions
-    const importHistory = await api.startImport({
-      totalInFile: parsedTransactions.value.length,
-      ...(file.value?.name && { fileName: file.value.name }),
-    })
-
     try {
+      // Start import history BEFORE importing transactions. Inside the try:
+      // a failure here used to leave the button stuck on "Import en cours…".
+      const importHistory = await api.startImport({
+        totalInFile: parsedTransactions.value.length,
+        ...(file.value?.name && { fileName: file.value.name }),
+      })
+
       // Chunked import with automatic retry, passing importHistoryId
       const result = await chunkedImportTransactions(
         parsedTransactions.value,
@@ -522,7 +524,7 @@
       <!-- File upload zone -->
       <div
         v-if="!showPreview"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border-2 border-dashed transition-colors"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border-2 border-dashed transition-colors focus-within:ring-2 focus-within:ring-primary-500 focus-within:ring-offset-2 dark:focus-within:ring-offset-slate-800"
         :class="
           isDragOver
             ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
@@ -548,16 +550,28 @@
               d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
             />
           </svg>
-          <span class="text-lg font-medium text-gray-700 dark:text-gray-300">
+          <!-- On a phone there is nothing to drag: say what a tap does. -->
+          <span
+            class="hidden text-lg font-medium text-gray-700 sm:inline dark:text-gray-300"
+          >
             Glissez-déposez votre fichier CSV ici
           </span>
-          <span class="text-sm text-gray-500 dark:text-gray-400 mt-1"
+          <span
+            class="text-lg font-medium text-gray-700 sm:hidden dark:text-gray-300"
+          >
+            Choisissez votre fichier CSV
+          </span>
+          <span
+            class="mt-1 hidden text-sm text-gray-500 sm:inline dark:text-gray-400"
             >ou cliquez pour parcourir</span
           >
+          <!-- sr-only, not hidden: the input stays in the tab order, and the
+               ring on the drop zone shows where the focus is. -->
           <input
             type="file"
             accept=".csv"
-            class="hidden"
+            class="sr-only"
+            data-testid="import-file-input"
             @change="handleFileSelect"
           />
         </label>
