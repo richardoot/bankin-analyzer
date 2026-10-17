@@ -38,6 +38,7 @@
   import EmptyState from '@/components/ui/EmptyState.vue'
   import StepIndicator from '@/components/ui/StepIndicator.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
 
   const router = useRouter()
   const toast = useToast()
@@ -413,19 +414,7 @@
                     </template>
                   </span>
                 </span>
-                <svg
-                  class="h-4 w-4 shrink-0 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
+                <IconChevronRight class="h-4 w-4 shrink-0 text-gray-400" />
               </button>
             </li>
           </ul>

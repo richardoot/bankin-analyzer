@@ -17,6 +17,7 @@
   import { formatCurrency } from '@/lib/formatters'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
 
   const router = useRouter()
 
@@ -652,14 +653,12 @@
           description="Choisissez une autre période, ou affichez tout l'historique."
         >
           <template #action>
-            <button
-              type="button"
+            <BaseButton
               data-testid="dashboard-show-all"
-              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
               @click="showAllPeriods"
             >
               Afficher tout
-            </button>
+            </BaseButton>
           </template>
         </EmptyState>
       </div>
@@ -690,20 +689,19 @@
             </svg>
           </template>
           <template #action>
-            <RouterLink
+            <BaseButton
               to="/settings/accounts"
               data-testid="onboarding-connect-bank"
-              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
             >
               Connecter une banque
-            </RouterLink>
-            <RouterLink
+            </BaseButton>
+            <BaseButton
               to="/import"
+              variant="secondary"
               data-testid="onboarding-import-csv"
-              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
             >
               Importer un CSV
-            </RouterLink>
+            </BaseButton>
           </template>
         </EmptyState>
       </div>

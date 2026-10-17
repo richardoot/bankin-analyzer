@@ -176,15 +176,14 @@
           />
         </div>
         <div class="sm:col-span-2">
-          <button
-            type="button"
+          <BaseButton
             data-testid="save-credential-button"
-            :disabled="!applicationIdInput || !file || saving"
-            class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-slate-700"
+            :disabled="!applicationIdInput || !file"
+            :loading="saving"
             @click="save"
           >
             {{ saving ? 'Enregistrement…' : 'Enregistrer' }}
-          </button>
+          </BaseButton>
         </div>
       </div>
 

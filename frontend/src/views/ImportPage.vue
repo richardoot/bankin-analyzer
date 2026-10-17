@@ -15,6 +15,9 @@
   import DuplicatesReviewModal from '@/components/DuplicatesReviewModal.vue'
   import StepIndicator from '@/components/ui/StepIndicator.vue'
   import { formatCurrency } from '@/lib/formatters'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconClose from '@/components/icons/IconClose.vue'
 
   /** A row the parser could not use, and why. */
   interface SkippedRow {
@@ -583,26 +586,9 @@
             {{ file?.name }}
           </p>
         </div>
-        <button
-          type="button"
-          aria-label="Retirer ce fichier"
-          class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-          @click="cancelImport"
-        >
-          <svg
-            class="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+        <BaseIconButton label="Retirer ce fichier" @click="cancelImport">
+          <IconClose />
+        </BaseIconButton>
       </div>
 
       <!-- Stats -->
@@ -675,15 +661,12 @@
 
       <!-- Actions -->
       <div class="flex gap-4">
-        <button
-          class="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-          @click="cancelImport"
-        >
+        <BaseButton variant="secondary" class="flex-1" @click="cancelImport">
           Annuler
-        </button>
-        <button
-          :disabled="isUploading || isPreviewLoading"
-          class="flex-1 px-4 py-3 bg-primary-600 dark:bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        </BaseButton>
+        <BaseButton
+          class="flex-1"
+          :loading="isUploading || isPreviewLoading"
           @click="submitImport"
         >
           <span v-if="isPreviewLoading">Analyse en cours…</span>
@@ -691,7 +674,7 @@
           <span v-else
             >Importer {{ parsedTransactions.length }} transactions</span
           >
-        </button>
+        </BaseButton>
       </div>
     </div>
 

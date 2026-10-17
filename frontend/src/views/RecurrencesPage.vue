@@ -32,6 +32,10 @@
   import { useToast } from '@/composables/useToast'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconPencil from '@/components/icons/IconPencil.vue'
+  import IconClose from '@/components/icons/IconClose.vue'
 
   const router = useRouter()
   const toast = useToast()
@@ -436,54 +440,23 @@
                       mois</span
                     >
                   </div>
-                  <button
-                    type="button"
-                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 dark:text-gray-500 dark:hover:bg-slate-800 dark:hover:text-gray-200"
+                  <BaseIconButton
                     :disabled="busyKey !== null"
-                    :aria-label="`Renommer ${row.name}`"
-                    title="Renommer"
+                    :label="`Renommer ${row.name}`"
                     data-testid="rename-recurrence"
                     @click="editingKey = rowKey(row)"
                   >
-                    <svg
-                      class="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-red-600 disabled:opacity-50 dark:text-gray-500 dark:hover:bg-slate-800 dark:hover:text-red-400"
+                    <IconPencil />
+                  </BaseIconButton>
+                  <BaseIconButton
+                    variant="danger"
                     :disabled="busyKey !== null"
-                    :aria-label="`Écarter ${row.name} : ce n'est pas un abonnement`"
-                    title="Écarter : ce n'est pas un abonnement"
+                    :label="`Écarter ${row.name} : ce n'est pas un abonnement`"
                     data-testid="dismiss-recurrence"
                     @click="decide(row, 'DISMISSED')"
                   >
-                    <svg
-                      class="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="M6 18 18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
+                    <IconClose />
+                  </BaseIconButton>
                 </div>
               </li>
             </ul>
@@ -527,39 +500,23 @@
                   </span>
                 </button>
                 <div class="flex gap-2">
-                  <button
-                    type="button"
-                    class="min-h-[44px] rounded-lg bg-primary-500 px-3 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+                  <BaseButton
+                    size="sm"
                     :disabled="busyKey !== null"
                     data-testid="confirm-recurrence"
                     @click="decide(row, 'CONFIRMED')"
                   >
                     Confirmer
-                  </button>
-                  <button
-                    type="button"
-                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-red-600 disabled:opacity-50 dark:text-gray-500 dark:hover:bg-slate-800 dark:hover:text-red-400"
+                  </BaseButton>
+                  <BaseIconButton
+                    variant="danger"
                     :disabled="busyKey !== null"
-                    :aria-label="`Écarter ${row.name} : ce n'est pas un abonnement`"
-                    title="Écarter : ce n'est pas un abonnement"
+                    :label="`Écarter ${row.name} : ce n'est pas un abonnement`"
                     data-testid="dismiss-recurrence"
                     @click="decide(row, 'DISMISSED')"
                   >
-                    <svg
-                      class="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="M6 18 18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
+                    <IconClose />
+                  </BaseIconButton>
                 </div>
               </li>
             </ul>
@@ -654,54 +611,23 @@
                       {{ PERIOD_LABELS[row.period] }}</span
                     >
                   </div>
-                  <button
-                    type="button"
-                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 dark:text-gray-500 dark:hover:bg-slate-800 dark:hover:text-gray-200"
+                  <BaseIconButton
                     :disabled="busyKey !== null"
-                    :aria-label="`Renommer ${row.name}`"
-                    title="Renommer"
+                    :label="`Renommer ${row.name}`"
                     data-testid="rename-recurrence"
                     @click="editingKey = rowKey(row)"
                   >
-                    <svg
-                      class="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-red-600 disabled:opacity-50 dark:text-gray-500 dark:hover:bg-slate-800 dark:hover:text-red-400"
+                    <IconPencil />
+                  </BaseIconButton>
+                  <BaseIconButton
+                    variant="danger"
                     :disabled="busyKey !== null"
-                    :aria-label="`Écarter ${row.name} : ce n'est pas un abonnement`"
-                    title="Écarter : ce n'est pas un abonnement"
+                    :label="`Écarter ${row.name} : ce n'est pas un abonnement`"
                     data-testid="dismiss-recurrence"
                     @click="decide(row, 'DISMISSED')"
                   >
-                    <svg
-                      class="h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      aria-hidden="true"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="M6 18 18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
+                    <IconClose />
+                  </BaseIconButton>
                 </div>
               </li>
             </ul>

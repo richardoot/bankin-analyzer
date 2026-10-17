@@ -15,6 +15,7 @@
   import type { AccountDto, AccountType } from '@/lib/api'
   import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
 
   const props = defineProps<{
     account: AccountDto
@@ -300,22 +301,23 @@
             @input="onDraftChange(($event.target as HTMLInputElement).value)"
           />
           <div class="flex gap-2">
-            <button
+            <BaseButton
               type="submit"
-              :disabled="!isDraftDirty() || renameSaving"
-              class="rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+              size="sm"
+              :disabled="!isDraftDirty()"
+              :loading="renameSaving"
             >
               {{ renameSaving ? 'Enregistrement…' : 'Renommer' }}
-            </button>
-            <button
+            </BaseButton>
+            <BaseButton
               v-if="isDraftDirty()"
-              type="button"
+              variant="secondary"
+              size="sm"
               :disabled="renameSaving"
-              class="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600"
               @click="cancelRename"
             >
               Annuler
-            </button>
+            </BaseButton>
           </div>
         </form>
         <p
@@ -431,23 +433,23 @@
         class="flex flex-col gap-2 border-t border-gray-100 pt-4 sm:flex-row sm:flex-wrap dark:border-slate-700/60"
       >
         <!-- Merging still needs a backend endpoint -->
-        <button
-          type="button"
+        <BaseButton
+          variant="secondary"
+          size="sm"
           disabled
           :title="UNAVAILABLE_HINT"
-          class="min-h-[44px] cursor-not-allowed rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-400 sm:min-h-0 dark:border-slate-700 dark:text-gray-500"
         >
           Fusionner avec un autre compte…
-        </button>
-        <button
-          type="button"
+        </BaseButton>
+        <BaseButton
+          variant="danger-outline"
+          size="sm"
           :disabled="saving"
-          class="min-h-[44px] rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
           data-testid="delete-account"
           @click="emit('ask-delete')"
         >
           Supprimer le compte…
-        </button>
+        </BaseButton>
       </div>
     </div>
   </li>

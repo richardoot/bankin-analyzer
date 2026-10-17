@@ -1,4 +1,6 @@
 <script setup lang="ts">
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import IconBolt from '@/components/icons/IconBolt.vue'
   /**
    * The public pitch. Only visitors ever see it — the router sends a
    * signed-in user to their dashboard — so the copy speaks to someone who
@@ -78,27 +80,14 @@
         <div
           class="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row"
         >
-          <RouterLink
+          <BaseButton
             to="/login?signup=true"
             data-testid="hero-primary-cta"
-            class="flex items-center gap-2 rounded-lg bg-primary-500 dark:bg-primary-600 px-6 py-3 text-base font-medium text-white shadow-lg shadow-primary-500/30 dark:shadow-primary-600/20 hover:bg-primary-600 dark:hover:bg-primary-500 transition-all hover:shadow-primary-500/40 dark:hover:shadow-primary-500/30"
+            class="px-6 py-3 shadow-lg shadow-primary-500/30 dark:shadow-primary-600/20"
           >
-            <svg
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
+            <IconBolt class="h-5 w-5" />
             Connecter ma banque
-          </RouterLink>
+          </BaseButton>
           <a
             href="#fonctionnalites"
             data-testid="hero-secondary-cta"

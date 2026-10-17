@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import TagAnalysisPage from './TagAnalysisPage.vue'
 import { api } from '@/lib/api'
 import type { TagAnalysisDto, TransactionDto } from '@/lib/api'
@@ -13,7 +13,8 @@ vi.mock('vue3-apexcharts/core', () => ({
   },
 }))
 
-vi.mock('vue-router', () => ({
+vi.mock('vue-router', async importOriginal => ({
+  ...(await importOriginal<typeof import('vue-router')>()),
   useRoute: () => ({ params: { id: 'tag-1' } }),
   useRouter: () => ({ push: vi.fn() }),
 }))
@@ -129,7 +130,9 @@ function mockAnalysis(analysis: TagAnalysisDto): void {
 }
 
 async function mountPage() {
-  const wrapper = mount(TagAnalysisPage)
+  const wrapper = mount(TagAnalysisPage, {
+    global: { stubs: { RouterLink: RouterLinkStub } },
+  })
   await flushPromises()
   return wrapper
 }

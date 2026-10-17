@@ -6,6 +6,7 @@
   import { useAuthStore } from '@/stores/auth'
   import DeleteAccountModal from '@/components/DeleteAccountModal.vue'
   import { formatDate } from '@/lib/formatters'
+  import BaseButton from '@/components/ui/BaseButton.vue'
 
   const router = useRouter()
   const authStore = useAuthStore()
@@ -118,15 +119,14 @@
 
       <!-- Actions -->
       <div class="border-t border-gray-200 dark:border-slate-700 pt-8">
-        <button
-          type="button"
-          :disabled="loading"
-          class="rounded-lg border border-red-300 dark:border-red-700 px-6 py-3 text-base font-medium text-red-700 dark:text-red-400 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+        <BaseButton
+          variant="danger-outline"
+          :loading="loading"
           @click="handleSignOut"
         >
           <span v-if="loading">Déconnexion...</span>
           <span v-else>Se déconnecter</span>
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -182,13 +182,9 @@
         Les actions dans cette zone sont irréversibles. Procédez avec
         précaution.
       </p>
-      <button
-        type="button"
-        class="rounded-lg bg-red-600 px-6 py-3 text-base font-medium text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800"
-        @click="isDeleteModalOpen = true"
-      >
+      <BaseButton variant="danger" @click="isDeleteModalOpen = true">
         Supprimer mon compte
-      </button>
+      </BaseButton>
     </div>
 
     <DeleteAccountModal

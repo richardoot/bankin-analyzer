@@ -6,6 +6,11 @@
   import { useToast } from '@/composables/useToast'
   import { formatDate, formatDateTime } from '@/lib/formatters'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconUpload from '@/components/icons/IconUpload.vue'
+  import IconTrash from '@/components/icons/IconTrash.vue'
+  import IconPlus from '@/components/icons/IconPlus.vue'
 
   const toast = useToast()
 
@@ -187,25 +192,10 @@
       <p class="mt-2 text-gray-600 dark:text-gray-400">
         Commencez par importer vos transactions depuis un fichier CSV.
       </p>
-      <RouterLink
-        to="/import"
-        class="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-white transition-colors hover:bg-primary-700"
-      >
-        <svg
-          class="h-5 w-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-          />
-        </svg>
+      <BaseButton to="/import" class="mt-6">
+        <IconUpload class="h-5 w-5" />
         Importer un CSV
-      </RouterLink>
+      </BaseButton>
     </div>
 
     <!-- History List -->
@@ -263,28 +253,14 @@
             </div>
           </div>
           <!-- Delete Button -->
-          <button
-            type="button"
+          <BaseIconButton
+            variant="danger"
             data-testid="delete-import-button"
-            :aria-label="`Supprimer l'import du ${formatDateTime(history.createdAt)}`"
-            class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 sm:h-9 sm:w-9"
-            title="Supprimer cet import"
+            :label="`Supprimer l'import du ${formatDateTime(history.createdAt)}`"
             @click="confirmDelete(history.id)"
           >
-            <svg
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-              />
-            </svg>
-          </button>
+            <IconTrash />
+          </BaseIconButton>
         </div>
 
         <!-- Stats Grid -->
@@ -393,25 +369,10 @@
 
     <!-- Quick Actions -->
     <div v-if="hasHistories" class="mt-8 text-center">
-      <RouterLink
-        to="/import"
-        class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-white transition-colors hover:bg-primary-700"
-      >
-        <svg
-          class="h-5 w-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-          />
-        </svg>
+      <BaseButton to="/import">
+        <IconPlus class="h-5 w-5" />
         Nouvel import
-      </RouterLink>
+      </BaseButton>
     </div>
 
     <ConfirmDialog

@@ -36,6 +36,7 @@
   import { useRouter, onBeforeRouteLeave } from 'vue-router'
   import { formatMonth } from '@/lib/formatters'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
 
   const filtersStore = useFiltersStore()
   const router = useRouter()
@@ -928,23 +929,17 @@
         Créez un budget pour commencer à suivre vos dépenses prévues.
       </p>
       <div class="mt-5 flex flex-wrap items-center justify-center gap-3">
-        <button
-          type="button"
-          data-testid="empty-create-button"
-          class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 dark:bg-primary-500 text-white text-sm font-medium rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
-          @click="openCreateModal"
-        >
+        <BaseButton data-testid="empty-create-button" @click="openCreateModal">
           Créer un budget
-        </button>
-        <button
+        </BaseButton>
+        <BaseButton
           v-if="planCount > 0"
-          type="button"
+          variant="ghost"
           data-testid="empty-history-button"
-          class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
           @click="isHistoryOpen = true"
         >
           Voir l'historique ({{ planCount }})
-        </button>
+        </BaseButton>
       </div>
     </div>
 

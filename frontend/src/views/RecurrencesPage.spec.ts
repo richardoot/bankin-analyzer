@@ -156,7 +156,7 @@ describe('RecurrencesPage', () => {
       "Écarter Netflix : ce n'est pas un abonnement"
     )
     expect(button.attributes('title')).toBe(
-      "Écarter : ce n'est pas un abonnement"
+      "Écarter Netflix : ce n'est pas un abonnement"
     )
   })
 

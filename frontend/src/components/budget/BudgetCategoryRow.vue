@@ -3,6 +3,7 @@
   import { formatCurrency } from '@/lib/formatters'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
 
   /**
    * One category of the budget table: the row and its drill-down panel.
@@ -58,20 +59,10 @@
         :aria-expanded="expanded"
         @click="emit('toggle-expand')"
       >
-        <svg
+        <IconChevronRight
           class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
           :class="{ 'rotate-90': expanded }"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M9 5l7 7-7 7"
-          />
-        </svg>
+        />
         <span v-if="category.categoryIcon" class="text-lg shrink-0">
           {{ category.categoryIcon }}
         </span>

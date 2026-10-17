@@ -38,6 +38,7 @@
   import EnableBankingCredentialCard from '@/components/settings/EnableBankingCredentialCard.vue'
   import { formatDate } from '@/lib/formatters'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
 
   const accountsStore = useAccountsStore()
   const toast = useToast()
@@ -417,15 +418,15 @@
                 </option>
               </select>
             </div>
-            <button
-              type="button"
+            <BaseButton
               data-testid="connect-button"
-              :disabled="!chosenBank || connecting"
-              class="min-h-[44px] w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white sm:min-h-0 sm:w-auto hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-slate-700"
+              class="w-full sm:w-auto"
+              :disabled="!chosenBank"
+              :loading="connecting"
               @click="connect"
             >
               {{ connecting ? 'Redirection…' : 'Connecter' }}
-            </button>
+            </BaseButton>
           </div>
 
           <p
@@ -468,13 +469,11 @@
                 </div>
 
                 <div class="w-full text-left sm:w-auto sm:text-right">
-                  <button
-                    type="button"
+                  <BaseButton
                     data-testid="sync-button"
-                    :disabled="
-                      connection.action !== 'fetch' || syncing === connection.id
-                    "
-                    class="min-h-[44px] w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300 sm:min-h-0 sm:w-auto dark:disabled:bg-slate-700"
+                    class="w-full sm:w-auto"
+                    :disabled="connection.action !== 'fetch'"
+                    :loading="syncing === connection.id"
                     @click="synchronise(connection)"
                   >
                     {{
@@ -482,7 +481,7 @@
                         ? 'Synchronisation…'
                         : 'Synchroniser'
                     }}
-                  </button>
+                  </BaseButton>
                   <!-- The server's own words for why the button is off: a
                      lapsed consent needs the user at their bank, an exhausted
                      quota needs tomorrow. -->

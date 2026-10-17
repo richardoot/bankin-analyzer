@@ -17,6 +17,11 @@
   import type { BankSyncRunDto, UndoRunOutcomeDto } from '@/lib/api'
   import { formatDateTime } from '@/lib/formatters'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconBolt from '@/components/icons/IconBolt.vue'
+  import IconUndo from '@/components/icons/IconUndo.vue'
+  import IconRefresh from '@/components/icons/IconRefresh.vue'
 
   const runs = ref<BankSyncRunDto[]>([])
   const isLoading = ref(true)
@@ -172,25 +177,10 @@
       <p class="mt-2 text-gray-600 dark:text-gray-400">
         Connectez une banque depuis les réglages pour commencer.
       </p>
-      <RouterLink
-        to="/settings/accounts"
-        class="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-white transition-colors hover:bg-primary-700"
-      >
-        <svg
-          class="h-5 w-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M13 10V3L4 14h7v7l9-11h-7z"
-          />
-        </svg>
+      <BaseButton to="/settings/accounts" class="mt-6">
+        <IconBolt class="h-5 w-5" />
         Connecter une banque
-      </RouterLink>
+      </BaseButton>
     </div>
 
     <!-- History List -->
@@ -253,30 +243,16 @@
             </div>
           </div>
           <!-- Undo Button -->
-          <button
+          <BaseIconButton
             v-if="!run.undoneAt && pendingUndo?.runId !== run.id"
-            type="button"
+            variant="danger"
             data-testid="ask-undo"
-            class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9"
-            title="Annuler cette synchronisation"
-            aria-label="Annuler cette synchronisation"
-            :disabled="previewingRunId === run.id"
+            label="Annuler cette synchronisation"
+            :loading="previewingRunId === run.id"
             @click="askUndo(run.id)"
           >
-            <svg
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"
-              />
-            </svg>
-          </button>
+            <IconUndo />
+          </BaseIconButton>
           <!-- Undo Confirmation -->
           <div
             v-else-if="pendingUndo?.runId === run.id"
@@ -293,22 +269,24 @@
                 >
               </template>
             </span>
-            <button
-              class="min-h-[40px] rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50 sm:min-h-0"
+            <BaseButton
+              variant="danger"
+              size="sm"
               data-testid="confirm-undo"
-              :disabled="isUndoing"
+              :loading="isUndoing"
               @click="confirmUndo"
             >
               {{ isUndoing ? 'Annulation...' : 'Oui' }}
-            </button>
-            <button
-              class="min-h-[40px] rounded-lg bg-gray-200 dark:bg-slate-700 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-300 dark:hover:bg-slate-600 sm:min-h-0"
+            </BaseButton>
+            <BaseButton
+              variant="secondary"
+              size="sm"
               data-testid="cancel-undo"
               :disabled="isUndoing"
               @click="cancelUndo"
             >
               Non
-            </button>
+            </BaseButton>
           </div>
         </div>
 
@@ -341,25 +319,10 @@
 
     <!-- Quick Actions -->
     <div v-if="hasRuns" class="mt-8 text-center">
-      <RouterLink
-        to="/settings/accounts"
-        class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-white transition-colors hover:bg-primary-700"
-      >
-        <svg
-          class="h-5 w-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-          />
-        </svg>
-        Gerer mes banques
-      </RouterLink>
+      <BaseButton to="/settings/accounts">
+        <IconRefresh class="h-5 w-5" />
+        Gérer mes banques
+      </BaseButton>
     </div>
   </PageShell>
 </template>

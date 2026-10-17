@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { useToast } from '@/composables/useToast'
+  import IconClose from '@/components/icons/IconClose.vue'
 
   const { toasts, remove, pause, resume } = useToast()
 </script>
@@ -84,19 +85,7 @@
           data-testid="toast-close"
           @click="remove(toast.id)"
         >
-          <svg
-            class="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
+          <IconClose class="h-4 w-4" />
         </button>
       </div>
     </TransitionGroup>

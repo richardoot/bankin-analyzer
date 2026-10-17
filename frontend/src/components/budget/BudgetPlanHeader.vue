@@ -3,6 +3,9 @@
   import type { BudgetPlanDto } from '@/lib/api'
   import { formatCurrency, formatDate } from '@/lib/formatters'
   import { planStatus } from './planStatus'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import IconClock from '@/components/icons/IconClock.vue'
+  import IconPlus from '@/components/icons/IconPlus.vue'
 
   /**
    * The plan introducing itself: name, status badge, date span, the
@@ -133,9 +136,10 @@
     </div>
 
     <div class="flex items-center gap-2 shrink-0">
-      <button
+      <BaseButton
         v-if="(planCount ?? 0) > 0"
-        type="button"
+        variant="secondary"
+        size="sm"
         data-testid="header-history-button"
         :disabled="isEditing"
         :title="
@@ -143,26 +147,13 @@
             ? 'Enregistrez ou annulez les modifications avant de changer de plan'
             : undefined
         "
-        class="inline-flex min-h-[40px] items-center gap-1.5 px-3 py-1.5 text-sm font-medium sm:min-h-0 text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         @click="emit('open-history')"
       >
-        <svg
-          class="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
+        <IconClock class="h-4 w-4" />
         Historique
-      </button>
-      <button
-        type="button"
+      </BaseButton>
+      <BaseButton
+        size="sm"
         data-testid="header-new-plan-button"
         :disabled="isEditing"
         :title="
@@ -170,24 +161,11 @@
             ? 'Enregistrez ou annulez les modifications avant de créer un plan'
             : undefined
         "
-        class="inline-flex min-h-[40px] items-center gap-1.5 px-3 py-1.5 text-sm font-medium sm:min-h-0 bg-primary-600 dark:bg-primary-500 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         @click="emit('create')"
       >
-        <svg
-          class="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 4v16m8-8H4"
-          />
-        </svg>
+        <IconPlus class="h-4 w-4" />
         Nouveau budget
-      </button>
+      </BaseButton>
     </div>
 
     <!-- Save indicator -->

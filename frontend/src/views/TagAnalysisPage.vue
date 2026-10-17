@@ -1,7 +1,7 @@
 <script setup lang="ts">
   import PageShell from '@/components/ui/PageShell.vue'
   import { computed, onMounted, ref } from 'vue'
-  import { useRoute, useRouter } from 'vue-router'
+  import { useRoute } from 'vue-router'
   import { api } from '@/lib/api'
   import type { TagAnalysisDto, TransactionDto } from '@/lib/api'
   import { formatCurrency, formatDate, formatMonth } from '@/lib/formatters'
@@ -9,9 +9,12 @@
   import CategoryPieChart from '@/components/charts/CategoryPieChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconChevronLeft from '@/components/icons/IconChevronLeft.vue'
+  import IconClose from '@/components/icons/IconClose.vue'
 
   const route = useRoute()
-  const router = useRouter()
   const toast = useToast()
 
   const tagId = computed(() => String(route.params.id))
@@ -119,25 +122,15 @@
 <template>
   <PageShell>
     <!-- Back -->
-    <button
-      class="mb-4 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400"
-      @click="router.push({ name: 'tags' })"
+    <BaseButton
+      :to="{ name: 'tags' }"
+      variant="ghost"
+      size="sm"
+      class="-ml-3 mb-4"
     >
-      <svg
-        class="h-4 w-4"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M15 19l-7-7 7-7"
-        />
-      </svg>
+      <IconChevronLeft class="h-4 w-4" />
       Étiquettes
-    </button>
+    </BaseButton>
 
     <!-- Loading -->
     <div
@@ -509,27 +502,15 @@
               >
                 {{ formatCurrency(tx.amount) }}
               </span>
-              <button
-                type="button"
-                class="p-1 text-gray-400 hover:text-red-500 rounded disabled:opacity-40 dark:text-gray-500"
-                :disabled="removingId === tx.id"
-                :title="`Retirer « ${analysis.tag.name} » de cette transaction`"
-                :aria-label="`Retirer l'étiquette de ${tx.description}`"
+              <BaseIconButton
+                size="sm"
+                variant="danger"
+                :label="`Retirer l'étiquette de ${tx.description}`"
+                :loading="removingId === tx.id"
                 @click="detach(tx)"
               >
-                <svg
-                  class="h-4 w-4"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    fill-rule="evenodd"
-                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-              </button>
+                <IconClose />
+              </BaseIconButton>
             </div>
           </div>
         </div>

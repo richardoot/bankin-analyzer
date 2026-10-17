@@ -4,6 +4,7 @@
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import { formatCurrency, formatMonth } from '@/lib/formatters'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
 
   const props = withDefaults(
     defineProps<{
@@ -111,20 +112,10 @@
         @click="toggleExpanded(rowKey(cat))"
       >
         <!-- Chevron -->
-        <svg
+        <IconChevronRight
           class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
           :class="{ 'rotate-90': isExpanded(rowKey(cat)) }"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M9 5l7 7-7 7"
-          />
-        </svg>
+        />
 
         <!-- Icon + name; the share sits beside the name on a desk and
              wraps under it on a phone, where it used to be hidden outright. -->

@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { formatCurrency } from '@/lib/formatters'
+  import BaseButton from '@/components/ui/BaseButton.vue'
 
   /**
    * The only way a budget change reaches the server. Sticky at the bottom
@@ -81,24 +82,26 @@
       </span>
     </p>
     <div class="flex shrink-0 items-center gap-2">
-      <button
-        type="button"
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        class="flex-1 sm:flex-none"
         data-testid="budget-cancel-button"
         :disabled="saving"
-        class="flex-1 px-3 py-2.5 text-sm font-medium sm:flex-none sm:py-1.5 text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
         @click="emit('cancel')"
       >
         Annuler
-      </button>
-      <button
-        type="button"
+      </BaseButton>
+      <BaseButton
+        size="sm"
+        class="flex-1 sm:flex-none"
         data-testid="budget-save-button"
-        :disabled="saving || dirtyCount === 0"
-        class="flex-1 px-4 py-2.5 text-sm font-medium bg-primary-600 sm:flex-none sm:py-1.5 dark:bg-primary-500 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        :disabled="dirtyCount === 0"
+        :loading="saving"
         @click="emit('save')"
       >
         {{ saving ? 'Enregistrement…' : 'Enregistrer' }}
-      </button>
+      </BaseButton>
     </div>
   </div>
 </template>

@@ -37,6 +37,10 @@
   import type { FilterChip } from '@/components/ui/FilterChips.vue'
   import { useToast } from '@/composables/useToast'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconClose from '@/components/icons/IconClose.vue'
+  import IconChevronLeft from '@/components/icons/IconChevronLeft.vue'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
 
   const toast = useToast()
 
@@ -1570,19 +1574,7 @@
           class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
           @click="resetFilters"
         >
-          <svg
-            class="h-5 w-5 md:h-4 md:w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
+          <IconClose class="h-5 w-5 md:h-4 md:w-4" />
           <span class="hidden md:inline md:ml-1.5">Réinitialiser</span>
         </button>
         <!-- Selection mode toggle -->
@@ -1885,13 +1877,9 @@
             >
               Réinitialiser les filtres
             </BaseButton>
-            <RouterLink
-              v-else
-              to="/import"
-              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
+            <BaseButton v-else to="/import"
+              >Importer des transactions</BaseButton
             >
-              Importer des transactions
-            </RouterLink>
           </template>
         </EmptyState>
 
@@ -2015,33 +2003,14 @@
               aria-label="Pagination"
             >
               <!-- Previous button -->
-              <button
-                type="button"
+              <BaseIconButton
                 :disabled="currentPage === 1"
-                aria-label="Page précédente"
+                label="Page précédente"
                 data-testid="pagination-previous"
-                class="inline-flex min-h-11 min-w-11 items-center justify-center px-3 py-1.5 text-sm rounded-lg transition-colors sm:min-h-0 sm:min-w-0"
-                :class="
-                  currentPage === 1
-                    ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
-                "
                 @click="goToPage(currentPage - 1)"
               >
-                <svg
-                  class="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M15 19l-7-7 7-7"
-                  />
-                </svg>
-              </button>
+                <IconChevronLeft />
+              </BaseIconButton>
 
               <span
                 class="text-sm font-medium tabular-nums text-gray-700 sm:hidden dark:text-gray-300"
@@ -2075,33 +2044,14 @@
               </template>
 
               <!-- Next button -->
-              <button
-                type="button"
+              <BaseIconButton
                 :disabled="currentPage === totalPages"
-                aria-label="Page suivante"
+                label="Page suivante"
                 data-testid="pagination-next"
-                class="inline-flex min-h-11 min-w-11 items-center justify-center px-3 py-1.5 text-sm rounded-lg transition-colors sm:min-h-0 sm:min-w-0"
-                :class="
-                  currentPage === totalPages
-                    ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
-                "
                 @click="goToPage(currentPage + 1)"
               >
-                <svg
-                  class="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
-              </button>
+                <IconChevronRight />
+              </BaseIconButton>
             </nav>
           </div>
         </div>

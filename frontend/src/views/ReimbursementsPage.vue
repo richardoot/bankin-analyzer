@@ -1,6 +1,5 @@
 <script setup lang="ts">
   import { ref, computed, onMounted } from 'vue'
-  import { RouterLink } from 'vue-router'
   import { usePersonsStore } from '@/stores/persons'
   import { api } from '@/lib/api'
   import type { ReimbursementDto, SettlementDto } from '@/lib/api'
@@ -16,6 +15,15 @@
   import { formatCurrency, formatDate } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconClipboard from '@/components/icons/IconClipboard.vue'
+  import IconDocumentDownload from '@/components/icons/IconDocumentDownload.vue'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
+  import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
+  import IconCheck from '@/components/icons/IconCheck.vue'
+  import IconClose from '@/components/icons/IconClose.vue'
+  import IconTrash from '@/components/icons/IconTrash.vue'
 
   const { exportReimbursementsToPdf } = usePdfExport()
   const toast = useToast()
@@ -403,25 +411,14 @@
       subtitle="Gérez les personnes et suivez les remboursements en cours"
     >
       <template #actions>
-        <RouterLink
+        <BaseButton
           to="/transactions"
-          class="inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors min-h-[44px] sm:min-h-0 w-full sm:w-auto"
+          variant="tinted"
+          class="w-full sm:w-auto"
         >
-          <svg
-            class="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-            />
-          </svg>
+          <IconClipboard class="h-4 w-4" />
           Voir les transactions
-        </RouterLink>
+        </BaseButton>
       </template>
     </PageHeader>
 
@@ -448,25 +445,14 @@
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
           Récapitulatif des remboursements
         </h2>
-        <button
-          class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+        <BaseButton
+          variant="tinted"
+          size="sm"
           @click="exportReimbursementsToPdf(summaryByPerson, totalDue)"
         >
-          <svg
-            class="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            />
-          </svg>
+          <IconDocumentDownload class="h-4 w-4" />
           Export PDF
-        </button>
+        </BaseButton>
       </div>
 
       <div class="space-y-4">
@@ -526,7 +512,7 @@
                 <span
                   class="text-gray-600 dark:text-gray-400 flex items-center gap-1.5 sm:gap-2 flex-wrap"
                 >
-                  <svg
+                  <IconChevronRight
                     class="w-3 h-3 text-gray-500 dark:text-gray-400 transition-transform duration-200 shrink-0"
                     :class="{
                       'rotate-90': isCategoryExpanded(
@@ -534,17 +520,7 @@
                         cat.categoryId ?? 'none'
                       ),
                     }"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
+                  />
                   <span class="truncate">{{ cat.categoryName }}</span>
                   <span
                     class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
@@ -613,14 +589,14 @@
                           (reçu : {{ formatCurrency(r.amountReceived) }})
                         </span>
                       </span>
-                      <button
-                        type="button"
-                        class="px-2 py-1 text-xs font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
+                      <BaseButton
+                        variant="tinted"
+                        size="sm"
                         :title="`Régler uniquement ${r.transaction?.description || 'cette transaction'}`"
                         @click="openSettlementModalForReimbursement(r)"
                       >
                         Régler
-                      </button>
+                      </BaseButton>
                     </span>
                   </div>
                 </div>
@@ -633,29 +609,17 @@
             v-if="person.totalRemaining > 0"
             class="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700"
           >
-            <button
-              type="button"
-              class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
+            <BaseButton
+              variant="tinted"
+              block
               @click="openSettlementModal(person.personId, person.personName)"
             >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+              <IconCheckCircle class="h-4 w-4" />
               Enregistrer un règlement ({{
                 formatCurrency(person.totalRemaining)
               }}
               en attente)
-            </button>
+            </BaseButton>
           </div>
         </div>
 
@@ -702,12 +666,7 @@
           </svg>
         </template>
         <template #action>
-          <RouterLink
-            to="/transactions"
-            class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 hover:bg-primary-700 dark:hover:bg-primary-600 rounded-lg transition-colors"
-          >
-            Aller aux transactions
-          </RouterLink>
+          <BaseButton to="/transactions">Aller aux transactions</BaseButton>
         </template>
       </EmptyState>
     </div>
@@ -749,19 +708,14 @@
             :disabled="isAddingPerson"
           />
         </div>
-        <button
+        <BaseButton
           type="submit"
-          :disabled="!newPersonName.trim() || isAddingPerson"
-          class="px-6 py-2 text-sm font-medium text-white rounded-lg transition-colors"
-          :class="
-            newPersonName.trim() && !isAddingPerson
-              ? 'bg-amber-600 dark:bg-amber-500 hover:bg-amber-700 dark:hover:bg-amber-600'
-              : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
-          "
+          :disabled="!newPersonName.trim()"
+          :loading="isAddingPerson"
         >
           <span v-if="isAddingPerson">Ajout...</span>
           <span v-else>Ajouter</span>
-        </button>
+        </BaseButton>
       </form>
 
       <!-- Persons list -->
@@ -820,46 +774,21 @@
                 @keyup.enter="saveEditPerson(person.id)"
                 @keyup.escape="cancelEditPerson"
               />
-              <button
-                type="button"
-                aria-label="Enregistrer le nom"
-                class="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+              <BaseIconButton
+                size="sm"
+                variant="primary"
+                label="Enregistrer le nom"
                 @click="saveEditPerson(person.id)"
               >
-                <svg
-                  class="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </button>
-              <button
-                type="button"
-                aria-label="Annuler le renommage"
-                class="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                <IconCheck />
+              </BaseIconButton>
+              <BaseIconButton
+                size="sm"
+                label="Annuler le renommage"
                 @click="cancelEditPerson"
               >
-                <svg
-                  class="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
+                <IconClose />
+              </BaseIconButton>
             </div>
           </template>
           <!-- Display mode -->
@@ -891,27 +820,14 @@
                 </p>
               </div>
               <!-- Delete button -->
-              <button
-                type="button"
-                class="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
-                title="Supprimer"
-                :aria-label="`Supprimer ${person.name}`"
+              <BaseIconButton
+                size="sm"
+                variant="danger"
+                :label="`Supprimer ${person.name}`"
                 @click="showDeleteConfirmation(person.id, person.name)"
               >
-                <svg
-                  class="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-              </button>
+                <IconTrash />
+              </BaseIconButton>
             </div>
           </template>
         </div>

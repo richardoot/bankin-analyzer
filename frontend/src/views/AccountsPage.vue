@@ -27,6 +27,7 @@
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
 
   const accountsStore = useAccountsStore()
   const toast = useToast()
@@ -322,12 +323,13 @@
         >
           {{ isSyncingAll ? 'Synchronisation…' : 'Tout synchroniser' }}
         </BaseButton>
-        <RouterLink
+        <BaseButton
           to="/settings/accounts"
-          class="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700"
+          variant="secondary"
+          class="flex-1 sm:flex-none"
         >
           Connecter une banque
-        </RouterLink>
+        </BaseButton>
       </template>
     </PageHeader>
 
@@ -513,19 +515,7 @@
                     }}
                   </span>
                 </span>
-                <svg
-                  class="h-4 w-4 shrink-0 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
+                <IconChevronRight class="h-4 w-4 shrink-0 text-gray-400" />
               </span>
             </RouterLink>
           </li>
@@ -556,12 +546,9 @@
           description="Connectez votre banque pour synchroniser vos transactions automatiquement — ou continuez avec les imports CSV ci-dessous."
         >
           <template #action>
-            <RouterLink
-              to="/settings/accounts"
-              class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600"
+            <BaseButton to="/settings/accounts"
+              >Connecter une banque</BaseButton
             >
-              Connecter une banque
-            </RouterLink>
           </template>
         </EmptyState>
       </section>
@@ -584,12 +571,9 @@
               <template v-else>Aucun import pour l'instant.</template>
             </p>
           </div>
-          <RouterLink
-            to="/import"
-            class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700"
-          >
+          <BaseButton to="/import" variant="secondary" size="sm">
             Importer un CSV
-          </RouterLink>
+          </BaseButton>
         </div>
 
         <ul
@@ -609,19 +593,7 @@
               >
                 {{ account.name }}
               </span>
-              <svg
-                class="h-4 w-4 shrink-0 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
+              <IconChevronRight class="h-4 w-4 shrink-0 text-gray-400" />
             </RouterLink>
           </li>
         </ul>

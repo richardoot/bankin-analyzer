@@ -355,7 +355,7 @@ describe('ReimbursementsPage', () => {
       })
       await flushPromises()
 
-      const deleteButton = wrapper.find('button[title="Supprimer"]')
+      const deleteButton = wrapper.find('button[aria-label^="Supprimer "]')
       await deleteButton.trigger('click')
 
       expect(wrapper.text()).toContain('Supprimer cette personne ?')
@@ -383,7 +383,7 @@ describe('ReimbursementsPage', () => {
       })
       await flushPromises()
 
-      const deleteButton = wrapper.find('button[title="Supprimer"]')
+      const deleteButton = wrapper.find('button[aria-label^="Supprimer "]')
       await deleteButton.trigger('click')
 
       expect(wrapper.text()).toContain('Supprimer cette personne ?')
@@ -420,7 +420,7 @@ describe('ReimbursementsPage', () => {
       })
       await flushPromises()
 
-      const deleteButton = wrapper.find('button[title="Supprimer"]')
+      const deleteButton = wrapper.find('button[aria-label^="Supprimer "]')
       await deleteButton.trigger('click')
 
       // Find and click the Supprimer button in modal

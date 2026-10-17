@@ -41,6 +41,10 @@
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconClose from '@/components/icons/IconClose.vue'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
 
   const toast = useToast()
 
@@ -405,10 +409,11 @@
       description="Le catalogue impose les catégories ; à l'intérieur, vos sous-catégories restent les vôtres. Choisissez où chaque catégorie apparaît."
     >
       <template #action>
-        <button
-          type="button"
-          class="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:w-auto dark:border-primary-800 dark:text-primary-300 dark:hover:bg-primary-900/20"
-          :disabled="isGeneratingIcons || missingIconCount === 0"
+        <BaseButton
+          variant="tinted"
+          class="w-full sm:w-auto"
+          :disabled="missingIconCount === 0"
+          :loading="isGeneratingIcons"
           :title="
             missingIconCount === 0
               ? 'Tout a une icône'
@@ -425,7 +430,7 @@
                 : `Générer les icônes (${missingIconCount})`
             }}
           </span>
-        </button>
+        </BaseButton>
       </template>
 
       <div v-if="isLoadingCategories && totalCategoryCount === 0" class="py-8">
@@ -472,27 +477,15 @@
               aria-label="Rechercher une catégorie"
               class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-9 text-base text-gray-800 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:py-2 sm:text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:placeholder-gray-500"
             />
-            <button
+            <BaseIconButton
               v-if="categorySearch"
-              type="button"
-              aria-label="Effacer la recherche"
-              class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              size="sm"
+              label="Effacer la recherche"
+              class="absolute right-1 top-1/2 -translate-y-1/2"
               @click="categorySearch = ''"
             >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+              <IconClose />
+            </BaseIconButton>
           </div>
 
           <SegmentedControl
@@ -543,32 +536,21 @@
                 class="px-3 py-2.5 transition-colors hover:bg-gray-50 sm:py-2 dark:hover:bg-slate-800/50"
               >
                 <div class="flex min-w-0 items-center gap-2">
-                  <button
-                    type="button"
-                    class="shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300"
+                  <BaseIconButton
+                    size="sm"
                     :aria-expanded="isExpanded(category.id)"
-                    :aria-label="
+                    :label="
                       isExpanded(category.id)
                         ? `Replier ${category.name}`
                         : `Déplier ${category.name}`
                     "
                     @click="toggleExpanded(category.id)"
                   >
-                    <svg
-                      class="h-4 w-4 transition-transform"
+                    <IconChevronRight
+                      class="transition-transform"
                       :class="isExpanded(category.id) ? 'rotate-90' : ''"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </button>
+                    />
+                  </BaseIconButton>
                   <CategoryIcon :icon="category.icon" :name="category.name">
                     <span class="text-sm text-gray-800 dark:text-gray-200">
                       {{ category.name }}
@@ -660,29 +642,27 @@
                         "
                       />
                       <div class="flex gap-2">
-                        <button
+                        <BaseButton
                           type="submit"
-                          :disabled="
-                            !isRenameDirty(category) ||
-                            renameSaving[category.id]
-                          "
-                          class="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          size="sm"
+                          :disabled="!isRenameDirty(category)"
+                          :loading="renameSaving[category.id]"
                         >
                           {{
                             renameSaving[category.id]
                               ? 'Enregistrement…'
                               : 'Renommer'
                           }}
-                        </button>
-                        <button
+                        </BaseButton>
+                        <BaseButton
                           v-if="isRenameDirty(category)"
-                          type="button"
+                          variant="secondary"
+                          size="sm"
                           :disabled="renameSaving[category.id]"
-                          class="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600"
                           @click="cancelRename(category.id)"
                         >
                           Annuler
-                        </button>
+                        </BaseButton>
                       </div>
                     </form>
                     <p
@@ -750,19 +730,7 @@
                         :data-testid="`delete-subcategory-${sub.id}`"
                         @click="askDeleteSubcategory(sub)"
                       >
-                        <svg
-                          class="h-3 w-3"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
+                        <IconClose class="h-3 w-3" />
                       </button>
                     </li>
                   </ul>
@@ -822,16 +790,14 @@
                         </option>
                       </select>
                     </template>
-                    <button
+                    <BaseButton
                       type="submit"
-                      :disabled="
-                        !newSubcategoryNames[category.id]?.trim() ||
-                        creatingSubcategory.has(category.id)
-                      "
-                      class="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      size="sm"
+                      :disabled="!newSubcategoryNames[category.id]?.trim()"
+                      :loading="creatingSubcategory.has(category.id)"
                     >
                       Ajouter
-                    </button>
+                    </BaseButton>
                   </form>
                 </div>
 
@@ -839,14 +805,15 @@
                   v-if="isLegacyCategory(category)"
                   class="flex flex-wrap gap-2 border-t border-gray-200 pt-3 dark:border-slate-700"
                 >
-                  <button
-                    type="button"
+                  <BaseButton
+                    variant="danger-outline"
+                    size="sm"
+                    class="flex-1 sm:flex-none"
                     :data-testid="`delete-category-${category.id}`"
-                    class="min-h-[40px] flex-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 sm:min-h-0 sm:flex-none dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
                     @click="askDelete(category)"
                   >
                     Supprimer
-                  </button>
+                  </BaseButton>
                 </div>
               </div>
             </li>

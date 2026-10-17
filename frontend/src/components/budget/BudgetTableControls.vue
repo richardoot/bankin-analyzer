@@ -4,6 +4,8 @@
   import { SORT_OPTIONS, type SortOrder } from './sortOptions'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import IconPencil from '@/components/icons/IconPencil.vue'
 
   /**
    * Everything that steers the category table without being a row of it:
@@ -72,29 +74,17 @@
         Dépenses par catégorie
       </h2>
       <div class="flex flex-wrap items-center gap-2">
-        <button
+        <BaseButton
           v-if="!editing"
-          type="button"
+          variant="tinted"
+          size="sm"
           data-testid="budget-edit-button"
-          class="inline-flex min-h-[40px] items-center gap-1.5 px-3 py-1.5 text-sm font-medium sm:min-h-0 text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/50 transition-colors"
           @click="emit('enter-edit')"
         >
-          <svg
-            class="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-            />
-          </svg>
+          <IconPencil class="h-4 w-4" />
           <span class="sm:hidden">Modifier</span>
           <span class="hidden sm:inline">Modifier les budgets</span>
-        </button>
+        </BaseButton>
         <label
           for="budget-sort"
           class="text-sm text-gray-500 dark:text-gray-400 shrink-0"
@@ -183,20 +173,20 @@
       >
         Appliquer toutes les moyennes
       </button>
-      <button
-        type="button"
-        class="min-h-[36px] px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors sm:min-h-0"
+      <BaseButton
+        variant="secondary"
+        size="sm"
         @click="emit('adjust-percent', -5)"
       >
         −5%
-      </button>
-      <button
-        type="button"
-        class="min-h-[36px] px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors sm:min-h-0"
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
+        size="sm"
         @click="emit('adjust-percent', 5)"
       >
         +5%
-      </button>
+      </BaseButton>
       <button
         type="button"
         class="col-span-2 min-h-[36px] px-2.5 py-1 text-xs font-medium text-red-600 sm:col-auto sm:ml-auto sm:min-h-0 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border border-transparent hover:border-red-200 dark:hover:border-red-800 rounded-md transition-colors"

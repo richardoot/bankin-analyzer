@@ -3,6 +3,7 @@
   import { ref, onMounted } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
   import { supabase } from '@/lib/supabase'
+  import BaseButton from '@/components/ui/BaseButton.vue'
 
   const route = useRoute()
   const router = useRouter()
@@ -120,12 +121,14 @@
         >
           <p class="text-sm text-red-700 dark:text-red-400">{{ error }}</p>
         </div>
-        <button
-          class="w-full mt-4 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-xl transition-colors"
+        <BaseButton
+          variant="secondary"
+          block
+          class="mt-4"
           @click="router.push('/dashboard')"
         >
           Retour
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Consent form -->
@@ -220,21 +223,18 @@
 
         <!-- Buttons -->
         <div class="flex gap-3">
-          <button
+          <BaseButton
+            variant="secondary"
+            class="flex-1"
             :disabled="isSubmitting"
-            class="flex-1 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-xl transition-colors disabled:opacity-50"
             @click="deny"
           >
             Refuser
-          </button>
-          <button
-            :disabled="isSubmitting"
-            class="flex-1 px-4 py-3 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 hover:bg-primary-700 dark:hover:bg-primary-600 rounded-xl transition-colors disabled:opacity-50"
-            @click="approve"
-          >
+          </BaseButton>
+          <BaseButton class="flex-1" :loading="isSubmitting" @click="approve">
             <span v-if="isSubmitting">Autorisation...</span>
             <span v-else>Autoriser</span>
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>

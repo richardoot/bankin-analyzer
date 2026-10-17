@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import PageShell from '@/components/ui/PageShell.vue'
   import { useRoute } from 'vue-router'
+  import IconArrowLeft from '@/components/icons/IconArrowLeft.vue'
 
   const route = useRoute()
   const email = route.query.email as string | undefined
@@ -85,19 +86,7 @@
             to="/login"
             class="inline-flex items-center gap-2 text-sm font-medium text-primary-600 dark:text-primary-500 hover:text-primary-700 dark:hover:text-primary-400"
           >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-              />
-            </svg>
+            <IconArrowLeft class="h-4 w-4" />
             Retour à la connexion
           </RouterLink>
         </div>

@@ -3,6 +3,7 @@
   import { computed } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
   import StepIndicator from '@/components/ui/StepIndicator.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
 
   const route = useRoute()
   const router = useRouter()
@@ -145,18 +146,12 @@
 
       <!-- Actions -->
       <div class="flex gap-4">
-        <button
-          class="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-          @click="goToImport"
-        >
+        <BaseButton variant="secondary" class="flex-1" @click="goToImport">
           Nouvel import
-        </button>
-        <button
-          class="flex-1 px-4 py-3 bg-primary-600 dark:bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
-          @click="goToDashboard"
+        </BaseButton>
+        <BaseButton class="flex-1" @click="goToDashboard"
+          >Voir le dashboard</BaseButton
         >
-          Voir le dashboard
-        </button>
       </div>
     </div>
   </PageShell>

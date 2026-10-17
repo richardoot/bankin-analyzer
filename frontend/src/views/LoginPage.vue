@@ -4,6 +4,7 @@
   import { useRouter, useRoute } from 'vue-router'
   import { useAuthStore } from '@/stores/auth'
   import BaseField from '@/components/ui/BaseField.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
 
   const router = useRouter()
   const route = useRoute()
@@ -145,15 +146,16 @@
             autocomplete="new-password"
           />
 
-          <button
+          <BaseButton
             type="submit"
-            :disabled="loading"
+            block
+            class="py-3"
+            :loading="loading"
             data-testid="login-submit-button"
-            class="w-full rounded-lg bg-primary-500 px-4 py-3 text-base font-medium text-white transition-colors hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span v-if="loading">Chargement...</span>
             <span v-else>{{ isSignUp ? "S'inscrire" : 'Se connecter' }}</span>
-          </button>
+          </BaseButton>
         </form>
 
         <!-- Separator -->
@@ -172,12 +174,13 @@
         </div>
 
         <!-- Google Login -->
-        <button
-          type="button"
+        <BaseButton
+          variant="secondary"
+          block
+          class="mt-6 gap-3 py-3"
           :disabled="loading"
           aria-label="Se connecter avec Google"
           data-testid="login-google-button"
-          class="mt-6 flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-base font-medium text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
           @click="handleGoogleLogin"
         >
           <svg class="h-5 w-5" viewBox="0 0 24 24">
@@ -199,7 +202,7 @@
             />
           </svg>
           Continuer avec Google
-        </button>
+        </BaseButton>
 
         <!-- Toggle mode -->
         <div class="mt-6 text-center">
