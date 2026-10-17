@@ -675,5 +675,68 @@ describe('ReimbursementsPage', () => {
       // Check that the component renders without crashing
       expect(wrapper.exists()).toBe(true)
     })
+
+    const mountWith = async () => {
+      const wrapper = mount(ReimbursementsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            SettlementModal: true,
+            SettlementHistorySection: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+      return wrapper
+    }
+
+    it('says the reimbursements failed instead of "nothing owed", and retries', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue([])
+      vi.mocked(api.getSettlements).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockRejectedValueOnce(
+        new Error('Le serveur est injoignable.')
+      )
+
+      const wrapper = await mountWith()
+
+      expect(
+        wrapper.find('[data-testid="reimbursements-error"]').text()
+      ).toContain("Les remboursements n'ont pas pu être chargés.")
+      expect(wrapper.text()).not.toContain('Aucun remboursement en cours')
+
+      vi.mocked(api.getReimbursements).mockResolvedValueOnce(mockReimbursements)
+      await wrapper
+        .find('[data-testid="reimbursements-retry"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="reimbursements-error"]').exists()
+      ).toBe(false)
+      expect(wrapper.text()).toContain('Alice Dupont')
+    })
+
+    it('says the settlement history failed, and retries', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+      vi.mocked(api.getSettlements).mockRejectedValueOnce(new Error('boom'))
+
+      const wrapper = await mountWith()
+
+      expect(wrapper.find('[data-testid="settlements-error"]').exists()).toBe(
+        true
+      )
+
+      vi.mocked(api.getSettlements).mockResolvedValueOnce([])
+      await wrapper.find('[data-testid="settlements-retry"]').trigger('click')
+      await flushPromises()
+
+      expect(api.getSettlements).toHaveBeenCalledTimes(2)
+      expect(wrapper.find('[data-testid="settlements-error"]').exists()).toBe(
+        false
+      )
+    })
   })
 })

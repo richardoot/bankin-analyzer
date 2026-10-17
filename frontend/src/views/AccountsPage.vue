@@ -26,6 +26,13 @@
   const toast = useToast()
 
   const configured = ref(false)
+  /**
+   * The bank side could not be read. Distinct from `configured`: a failed
+   * request says nothing about whether a bank is connected, and must never
+   * read as "Aucune banque connectée".
+   */
+  const banksFailed = ref(false)
+  const isRetrying = ref(false)
   const connections = ref<BankConnectionDto[]>([])
   const latestImportDate = ref<string | null>(null)
   const isLoading = ref(true)
@@ -185,13 +192,43 @@
     // Both at once: the status only decides whether the list is shown.
     // Without a configured application there is nothing to synchronise,
     // so connections left over from removed credentials stay out of sight.
-    const [status, list] = await Promise.all([
-      api.getBankSyncStatus().catch(() => null),
-      api.getBankConnections().catch(() => []),
+    const [status, list] = await Promise.allSettled([
+      api.getBankSyncStatus(),
+      api.getBankConnections(),
     ])
-    configured.value = status?.configured ?? false
-    connections.value = configured.value ? list : []
+    if (status.status === 'rejected') {
+      // Keep what was on screen: a refresh that fails is not a disconnect.
+      banksFailed.value = true
+      return
+    }
+    configured.value = status.value.configured
+    if (!configured.value) {
+      banksFailed.value = false
+      connections.value = []
+      return
+    }
+    if (list.status === 'rejected') {
+      banksFailed.value = true
+      return
+    }
+    banksFailed.value = false
+    connections.value = list.value
   }
+
+  /** Both halves of the page again, after a failed load. */
+  async function retry(): Promise<void> {
+    isRetrying.value = true
+    try {
+      await Promise.allSettled([refresh(), accountsStore.load()])
+      void loadLogos()
+    } finally {
+      isRetrying.value = false
+    }
+  }
+
+  const loadFailed = computed(
+    () => banksFailed.value || accountsStore.error !== null
+  )
 
   async function synchronise(connection: BankConnectionDto): Promise<boolean> {
     syncing.value = connection.id
@@ -313,6 +350,31 @@
       </div>
 
       <div v-else class="space-y-6">
+        <!-- A failed load is said as such, with the way out -->
+        <div
+          v-if="loadFailed"
+          role="alert"
+          data-testid="accounts-load-error"
+          class="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 sm:flex-row sm:items-center sm:justify-between dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+        >
+          <p class="text-sm">
+            <template v-if="banksFailed"
+              >Vos connexions bancaires n'ont pas pu être chargées.</template
+            >
+            <template v-else>Vos comptes n'ont pas pu être chargés.</template>
+            Ce qui s'affiche peut être incomplet.
+          </p>
+          <BaseButton
+            variant="danger-outline"
+            size="sm"
+            data-testid="accounts-retry"
+            :loading="isRetrying"
+            @click="retry"
+          >
+            Réessayer
+          </BaseButton>
+        </div>
+
         <!-- One card per bank connection -->
         <section
           v-for="connection in connections"
@@ -515,7 +577,8 @@
 
         <!-- Bank sync not configured at all -->
         <section
-          v-if="!configured"
+          v-if="!configured && !banksFailed"
+          data-testid="no-bank-connected"
           class="rounded-xl bg-white shadow-sm dark:bg-slate-900 dark:shadow-slate-900/20"
         >
           <EmptyState
@@ -595,7 +658,7 @@
             </li>
           </ul>
           <p
-            v-else
+            v-else-if="accountsStore.error === null"
             class="mt-4 border-t border-gray-100 pt-3 text-sm text-gray-500 dark:border-slate-800 dark:text-gray-400"
           >
             Aucun compte alimenté à la main. Un import CSV en créera.

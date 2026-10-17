@@ -1010,7 +1010,9 @@
       clearSelection()
     } catch (err) {
       transactionsError.value =
-        err instanceof Error ? err.message : 'Failed to fetch transactions'
+        err instanceof Error
+          ? err.message
+          : 'Impossible de charger les transactions'
     } finally {
       isLoadingTransactions.value = false
     }
@@ -1796,9 +1798,26 @@
         <div
           v-if="transactionsError"
           role="alert"
-          class="p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 text-red-700 dark:text-red-400"
+          data-testid="transactions-error"
+          class="flex flex-col gap-3 p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 sm:flex-row sm:items-center sm:justify-between"
         >
-          {{ transactionsError }}
+          <p class="text-sm">
+            {{ transactionsError }}
+            <span
+              v-if="transactions.length > 0"
+              class="block text-xs opacity-80"
+              >La liste ci-dessous est celle du dernier chargement réussi.</span
+            >
+          </p>
+          <button
+            type="button"
+            data-testid="transactions-retry"
+            :disabled="isLoadingTransactions"
+            class="inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
+            @click="fetchTransactions()"
+          >
+            Réessayer
+          </button>
         </div>
 
         <!-- Loading state -->
@@ -1811,7 +1830,8 @@
         </div>
 
         <!-- Table -->
-        <template v-else-if="!transactionsError">
+        <!-- A failed refresh keeps the last list on screen under the banner. -->
+        <template v-else-if="!transactionsError || transactions.length > 0">
           <EmptyState
             v-if="transactions.length === 0"
             :title="

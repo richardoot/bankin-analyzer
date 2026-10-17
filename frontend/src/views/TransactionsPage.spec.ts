@@ -291,6 +291,29 @@ describe('TransactionsPage — optimistic updates', () => {
       const wrapper = await mountPage()
       expect(wrapper.text()).toContain('Cafe')
     })
+
+    it('keeps the last list under the error and retries on demand', async () => {
+      const wrapper = await mountPage()
+
+      vi.mocked(api.getTransactions).mockRejectedValueOnce(
+        new Error('Impossible de charger les transactions')
+      )
+      await wrapper.find('[data-testid="sort-by-date"]').trigger('click')
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="transactions-error"]').text()
+      ).toContain('Impossible de charger les transactions')
+      expect(wrapper.text()).toContain('Cafe')
+
+      await wrapper.find('[data-testid="transactions-retry"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="transactions-error"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.text()).toContain('Cafe')
+    })
   })
 
   describe('togglePointed', () => {

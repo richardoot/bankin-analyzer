@@ -139,6 +139,35 @@ describe('TagAnalysisPage', () => {
     vi.clearAllMocks()
   })
 
+  it('offers a retry when the analysis fails to load', async () => {
+    vi.mocked(api.getTagAnalysis).mockRejectedValueOnce(new Error('boom'))
+    vi.mocked(api.getTransactions).mockResolvedValue({
+      data: [],
+      meta: {
+        total: 0,
+        page: 1,
+        limit: 100,
+        totalPages: 0,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
+    })
+
+    const wrapper = await mountPage()
+    expect(wrapper.find('[data-testid="tag-analysis-error"]').exists()).toBe(
+      true
+    )
+
+    mockAnalysis(analysisWithBaseline)
+    await wrapper.find('[data-testid="tag-analysis-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="tag-analysis-error"]').exists()).toBe(
+      false
+    )
+    expect(wrapper.text()).toContain('Surcoût réel')
+  })
+
   describe('real surplus', () => {
     it('shows the surplus, the reference spend and the reference window', async () => {
       mockAnalysis(analysisWithBaseline)

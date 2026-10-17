@@ -297,7 +297,9 @@ export function useDashboardData() {
       filtersStore.deductPendingReimbursements,
     ],
     () => {
-      if (summaryData.value) {
+      // Not before the first fetch has run — but after a failed one, a new
+      // period is also a way to try again.
+      if (summaryData.value || error.value) {
         // Skip refetch if 'custom' is selected but the range is incomplete
         if (
           filtersStore.timePeriod === 'custom' &&
@@ -311,7 +313,11 @@ export function useDashboardData() {
     { deep: true }
   )
 
+  // Something came back once: a later fetch is a refresh, not a first load.
+  const hasLoaded = computed(() => summaryData.value !== null)
+
   return {
+    hasLoaded,
     monthlyData,
     expensesByMonth,
     incomeByMonth,

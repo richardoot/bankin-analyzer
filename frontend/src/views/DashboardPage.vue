@@ -12,6 +12,7 @@
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
   import { useDashboardData } from '@/composables/useDashboardData'
+  import { useFiltersStore } from '@/stores/filters'
   import { formatCurrency } from '@/lib/formatters'
 
   const router = useRouter()
@@ -53,30 +54,31 @@
     isLoading,
     error,
     fetchData,
-    monthlyData,
+    hasLoaded,
   } = useDashboardData()
+  const filtersStore = useFiltersStore()
 
-  // Track if we have initial data loaded (for showing full loader vs subtle refresh indicator)
-  const hasInitialData = computed(
-    () =>
-      monthlyData.value.length > 0 ||
-      totalExpenses.value > 0 ||
-      totalIncome.value > 0
-  )
-
-  // Show full loader only on initial load
-  const showFullLoader = computed(
-    () => isLoading.value && !hasInitialData.value
-  )
+  // A first answer came back: later fetches are refreshes, shown over the
+  // current figures, never by swapping the page — and its filters — for a
+  // skeleton. An empty period counts as an answer.
+  const showFullLoader = computed(() => isLoading.value && !hasLoaded.value)
 
   // Show subtle refresh indicator when reloading with existing data
-  const isRefreshing = computed(() => isLoading.value && hasInitialData.value)
+  const isRefreshing = computed(() => isLoading.value && hasLoaded.value)
 
-  // Nothing on the period: the sections make way for the onboarding block
+  // Nothing on the period: the sections make way for an empty state
   // instead of rendering as empty charts above it.
   const hasAnyData = computed(
     () => totalExpenses.value > 0 || totalIncome.value > 0
   )
+
+  // An empty unbounded period means no transaction at all — the onboarding.
+  // Any other empty period only means nothing happened in it.
+  const isEmptyPeriod = computed(() => filtersStore.timePeriod !== 'all')
+
+  function showAllPeriods(): void {
+    filtersStore.setTimePeriod('all')
+  }
 
   // Real vs everyday breakdown, persisted so the choice survives a reload.
   const BREAKDOWN_MODE_KEY = 'dashboard-breakdown-mode'
@@ -160,13 +162,32 @@
 
       <LegacyMigrationBanner class="mb-6" />
 
-      <!-- Error state -->
+      <!-- Error state: says what failed and offers the way out; the filters
+           and whatever was already on screen stay put underneath. -->
       <div
         v-if="error"
         role="alert"
-        class="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg"
+        data-testid="dashboard-error"
+        class="mb-6 flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 sm:flex-row sm:items-center sm:justify-between dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
       >
-        {{ error }}
+        <p class="text-sm">
+          <span class="font-medium"
+            >Le tableau de bord n'a pas pu être chargé.</span
+          >
+          {{ error }}
+          <span v-if="hasAnyData" class="block text-xs opacity-80"
+            >Les chiffres affichés sont ceux du dernier chargement réussi.</span
+          >
+        </p>
+        <button
+          type="button"
+          data-testid="dashboard-retry"
+          :disabled="isLoading"
+          class="inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
+          @click="fetchData()"
+        >
+          {{ isLoading ? 'Nouvelle tentative…' : 'Réessayer' }}
+        </button>
       </div>
 
       <!-- Initial load: the page's own shape, not a spinner. -->
@@ -183,7 +204,7 @@
 
       <!-- Content (shown when we have data or finished loading) -->
       <div
-        v-if="!error && !showFullLoader"
+        v-if="!showFullLoader"
         class="transition-opacity duration-200"
         :class="isRefreshing ? 'opacity-60' : 'opacity-100'"
       >
@@ -653,9 +674,33 @@
           </section>
         </template>
 
+        <!-- A quiet period, for a user who has data elsewhere in time -->
+        <div
+          v-else-if="!error && isEmptyPeriod"
+          data-testid="dashboard-empty-period"
+          class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
+        >
+          <EmptyState
+            title="Aucune transaction sur cette période"
+            description="Choisissez une autre période, ou affichez tout l'historique."
+          >
+            <template #action>
+              <button
+                type="button"
+                data-testid="dashboard-show-all"
+                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
+                @click="showAllPeriods"
+              >
+                Afficher tout
+              </button>
+            </template>
+          </EmptyState>
+        </div>
+
         <!-- Zero transactions: one question, two explicit ways in -->
         <div
-          v-else
+          v-else-if="!error"
+          data-testid="dashboard-onboarding"
           class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
         >
           <EmptyState

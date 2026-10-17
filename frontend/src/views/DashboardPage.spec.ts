@@ -27,14 +27,20 @@ vi.mock('@/lib/api', () => ({
 }))
 
 // Mock the filters store
+const filtersState = vi.hoisted(() => ({
+  timePeriod: 'all' as string,
+  setTimePeriod: vi.fn(),
+}))
 vi.mock('@/stores/filters', () => ({
   useFiltersStore: () => ({
     deductPendingReimbursements: false,
     setDeductPendingReimbursements: vi.fn(),
     loadFromBackend: vi.fn(),
     isSyncing: false,
-    timePeriod: 'all',
-    setTimePeriod: vi.fn(),
+    get timePeriod() {
+      return filtersState.timePeriod
+    },
+    setTimePeriod: filtersState.setTimePeriod,
     getDateRangeFromPeriod: vi.fn(() => ({ startDate: null, endDate: null })),
   }),
 }))
@@ -68,6 +74,7 @@ const router = createRouter({
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    filtersState.timePeriod = 'all'
   })
 
   const mockSummary: DashboardSummaryDto = {
@@ -215,6 +222,49 @@ describe('DashboardPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('Network error')
+  })
+
+  it('offers a retry on failure and keeps the filters mounted', async () => {
+    vi.mocked(api.getDashboardSummary).mockRejectedValueOnce(
+      new Error('Network error')
+    )
+
+    const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+    await flushPromises()
+
+    expect(
+      wrapper.find('[data-testid="dashboard-filters-card"]').exists()
+    ).toBe(true)
+    // A failure is not an empty account: no onboarding.
+    expect(wrapper.find('[data-testid="dashboard-onboarding"]').exists()).toBe(
+      false
+    )
+
+    vi.mocked(api.getDashboardSummary).mockResolvedValueOnce(mockSummary)
+    await wrapper.find('[data-testid="dashboard-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(api.getDashboardSummary).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="dashboard-error"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="kpi-card-expenses"]').exists()).toBe(
+      true
+    )
+  })
+
+  it('tells an empty period apart from an empty account', async () => {
+    filtersState.timePeriod = '3m'
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(mockEmptySummary)
+
+    const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Aucune transaction sur cette période')
+    expect(wrapper.find('[data-testid="dashboard-onboarding"]').exists()).toBe(
+      false
+    )
+
+    await wrapper.find('[data-testid="dashboard-show-all"]').trigger('click')
+    expect(filtersState.setTimePeriod).toHaveBeenCalledWith('all')
   })
 
   it('should display monthly average KPI cards (expenses, income, savings)', async () => {

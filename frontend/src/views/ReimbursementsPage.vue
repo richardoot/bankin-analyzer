@@ -208,7 +208,9 @@
       reimbursements.value = data
     } catch (err) {
       reimbursementsError.value =
-        err instanceof Error ? err.message : 'Failed to fetch reimbursements'
+        err instanceof Error
+          ? err.message
+          : 'Impossible de charger les remboursements'
     } finally {
       isLoadingReimbursements.value = false
     }
@@ -222,7 +224,9 @@
       settlements.value = await api.getSettlements()
     } catch (err) {
       settlementsError.value =
-        err instanceof Error ? err.message : 'Failed to fetch settlements'
+        err instanceof Error
+          ? err.message
+          : 'Impossible de charger les règlements'
     } finally {
       isLoadingSettlements.value = false
     }
@@ -412,6 +416,30 @@
           </RouterLink>
         </template>
       </PageHeader>
+
+      <!-- A failed load is said as such — never as "nothing owed". -->
+      <div
+        v-if="reimbursementsError"
+        role="alert"
+        data-testid="reimbursements-error"
+        class="mb-6 rounded-xl bg-white p-6 text-center shadow-sm dark:bg-slate-900"
+      >
+        <p class="text-sm text-gray-700 dark:text-gray-300">
+          Les remboursements n'ont pas pu être chargés.
+        </p>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {{ reimbursementsError }}
+        </p>
+        <button
+          type="button"
+          data-testid="reimbursements-retry"
+          :disabled="isLoadingReimbursements"
+          class="mt-3 inline-flex min-h-[40px] items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50 dark:bg-primary-500 dark:hover:bg-primary-600"
+          @click="fetchReimbursements"
+        >
+          Réessayer
+        </button>
+      </div>
 
       <!-- Summary Section: the balances are what the page is opened for -->
       <div
@@ -646,7 +674,11 @@
 
       <!-- Empty state for reimbursements -->
       <div
-        v-else-if="!isLoadingReimbursements && reimbursements.length === 0"
+        v-else-if="
+          !isLoadingReimbursements &&
+          !reimbursementsError &&
+          reimbursements.length === 0
+        "
         class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
       >
         <EmptyState
@@ -887,8 +919,30 @@
       </div>
 
       <!-- Settlement History Section -->
+      <div
+        v-if="settlementsError"
+        role="alert"
+        data-testid="settlements-error"
+        class="mt-8 rounded-xl bg-white p-6 text-center shadow-sm dark:bg-slate-900"
+      >
+        <p class="text-sm text-gray-700 dark:text-gray-300">
+          L'historique des règlements n'a pas pu être chargé.
+        </p>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {{ settlementsError }}
+        </p>
+        <button
+          type="button"
+          data-testid="settlements-retry"
+          :disabled="isLoadingSettlements"
+          class="mt-3 inline-flex min-h-[40px] items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50 dark:bg-primary-500 dark:hover:bg-primary-600"
+          @click="fetchSettlements"
+        >
+          Réessayer
+        </button>
+      </div>
       <SettlementHistorySection
-        v-if="settlements.length > 0 || isLoadingSettlements"
+        v-else-if="settlements.length > 0 || isLoadingSettlements"
         :settlements="settlements"
         :is-loading="isLoadingSettlements"
         class="mt-8"

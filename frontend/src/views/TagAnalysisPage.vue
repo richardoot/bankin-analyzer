@@ -180,9 +180,19 @@
       <!-- Error -->
       <div
         v-else-if="error"
+        role="alert"
+        data-testid="tag-analysis-error"
         class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-400"
       >
-        {{ error }}
+        <p>{{ error }}</p>
+        <button
+          type="button"
+          data-testid="tag-analysis-retry"
+          class="mt-3 inline-flex min-h-[40px] items-center justify-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
+          @click="load"
+        >
+          Réessayer
+        </button>
       </div>
 
       <template v-else-if="analysis">

@@ -136,6 +136,46 @@ describe('AccountsPage', () => {
     expect(wrapper.find('[data-testid="connection-c1"]').exists()).toBe(false)
   })
 
+  it('never reads a failed load as "no bank connected", and retries', async () => {
+    vi.mocked(api.getBankSyncStatus).mockRejectedValueOnce(
+      new Error('Le serveur est injoignable.')
+    )
+
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="no-bank-connected"]').exists()).toBe(
+      false
+    )
+    expect(wrapper.get('[data-testid="accounts-load-error"]').text()).toContain(
+      "Vos connexions bancaires n'ont pas pu être chargées."
+    )
+
+    vi.mocked(api.getBankConnections).mockResolvedValue([
+      connection({ id: 'c1' }),
+    ])
+    await wrapper.get('[data-testid="accounts-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="accounts-load-error"]').exists()).toBe(
+      false
+    )
+    expect(wrapper.find('[data-testid="connection-c1"]').exists()).toBe(true)
+  })
+
+  it('still says "no bank connected" when sync is simply not set up', async () => {
+    vi.mocked(api.getBankSyncStatus).mockResolvedValue({ configured: false })
+    vi.mocked(api.getBankConnections).mockRejectedValue(new Error('nope'))
+
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="no-bank-connected"]').exists()).toBe(
+      true
+    )
+    expect(wrapper.find('[data-testid="accounts-load-error"]').exists()).toBe(
+      false
+    )
+  })
+
   it('links an account row to its filtered transactions', async () => {
     vi.mocked(api.getAccounts).mockResolvedValue([account('a2', 'PEL')])
 
