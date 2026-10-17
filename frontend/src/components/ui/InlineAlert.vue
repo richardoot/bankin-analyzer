@@ -21,12 +21,15 @@
       title?: string | undefined
       retryLabel?: string | undefined
       retrying?: boolean | undefined
+      /** A test id for the retry button, when a spec drives it. */
+      retryTestId?: string | undefined
     }>(),
     {
       variant: 'error',
       title: undefined,
       retryLabel: undefined,
       retrying: false,
+      retryTestId: undefined,
     }
   )
 
@@ -82,6 +85,7 @@
         variant="secondary"
         size="sm"
         :loading="retrying"
+        :data-testid="retryTestId"
         @click="emit('retry')"
       >
         {{ retryLabel }}

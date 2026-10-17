@@ -36,6 +36,7 @@
   import FilterDisclosure from '@/components/ui/FilterDisclosure.vue'
   import type { FilterChip } from '@/components/ui/FilterChips.vue'
   import { useToast } from '@/composables/useToast'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
 
   const toast = useToast()
 
@@ -1844,28 +1845,20 @@
       <!-- No overflow-hidden here: it clipped the tag popover of the last
              rows. The corners are rounded on the edge children instead. -->
       <!-- Error state -->
-      <div
+      <InlineAlert
         v-if="transactionsError"
-        role="alert"
         data-testid="transactions-error"
-        class="flex flex-col gap-3 rounded-t-xl p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 sm:flex-row sm:items-center sm:justify-between"
+        class="rounded-b-none rounded-t-xl border-x-0 border-t-0"
+        retry-label="Réessayer"
+        retry-test-id="transactions-retry"
+        :retrying="isLoadingTransactions"
+        @retry="fetchTransactions()"
       >
-        <p class="text-sm">
-          {{ transactionsError }}
-          <span v-if="transactions.length > 0" class="block text-xs opacity-80"
-            >La liste ci-dessous est celle du dernier chargement réussi.</span
-          >
-        </p>
-        <button
-          type="button"
-          data-testid="transactions-retry"
-          :disabled="isLoadingTransactions"
-          class="inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
-          @click="fetchTransactions()"
+        {{ transactionsError }}
+        <span v-if="transactions.length > 0" class="block text-xs opacity-80"
+          >La liste ci-dessous est celle du dernier chargement réussi.</span
         >
-          Réessayer
-        </button>
-      </div>
+      </InlineAlert>
 
       <!-- Loading state -->
       <div v-if="isLoadingTransactions" class="space-y-3 p-4" aria-busy="true">

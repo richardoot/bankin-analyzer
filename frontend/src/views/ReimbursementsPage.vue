@@ -15,6 +15,7 @@
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
   import { formatCurrency, formatDate } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
 
   const { exportReimbursementsToPdf } = usePdfExport()
   const toast = useToast()
@@ -425,28 +426,18 @@
     </PageHeader>
 
     <!-- A failed load is said as such — never as "nothing owed". -->
-    <div
+    <InlineAlert
       v-if="reimbursementsError"
-      role="alert"
+      class="mb-6"
       data-testid="reimbursements-error"
-      class="mb-6 rounded-xl bg-white p-6 text-center shadow-sm dark:bg-slate-900"
+      title="Les remboursements n'ont pas pu être chargés."
+      retry-label="Réessayer"
+      retry-test-id="reimbursements-retry"
+      :retrying="isLoadingReimbursements"
+      @retry="fetchReimbursements"
     >
-      <p class="text-sm text-gray-700 dark:text-gray-300">
-        Les remboursements n'ont pas pu être chargés.
-      </p>
-      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        {{ reimbursementsError }}
-      </p>
-      <button
-        type="button"
-        data-testid="reimbursements-retry"
-        :disabled="isLoadingReimbursements"
-        class="mt-3 inline-flex min-h-[40px] items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50 dark:bg-primary-500 dark:hover:bg-primary-600"
-        @click="fetchReimbursements"
-      >
-        Réessayer
-      </button>
-    </div>
+      {{ reimbursementsError }}
+    </InlineAlert>
 
     <!-- Summary Section: the balances are what the page is opened for -->
     <div
@@ -933,28 +924,18 @@
     </div>
 
     <!-- Settlement History Section -->
-    <div
+    <InlineAlert
       v-if="settlementsError"
-      role="alert"
+      class="mt-8"
       data-testid="settlements-error"
-      class="mt-8 rounded-xl bg-white p-6 text-center shadow-sm dark:bg-slate-900"
+      title="L'historique des règlements n'a pas pu être chargé."
+      retry-label="Réessayer"
+      retry-test-id="settlements-retry"
+      :retrying="isLoadingSettlements"
+      @retry="fetchSettlements"
     >
-      <p class="text-sm text-gray-700 dark:text-gray-300">
-        L'historique des règlements n'a pas pu être chargé.
-      </p>
-      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        {{ settlementsError }}
-      </p>
-      <button
-        type="button"
-        data-testid="settlements-retry"
-        :disabled="isLoadingSettlements"
-        class="mt-3 inline-flex min-h-[40px] items-center justify-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50 dark:bg-primary-500 dark:hover:bg-primary-600"
-        @click="fetchSettlements"
-      >
-        Réessayer
-      </button>
-    </div>
+      {{ settlementsError }}
+    </InlineAlert>
     <SettlementHistorySection
       v-else-if="settlements.length > 0 || isLoadingSettlements"
       :settlements="settlements"

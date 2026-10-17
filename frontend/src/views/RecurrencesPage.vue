@@ -31,6 +31,7 @@
   import { formatCurrency, formatDate, formatMonth } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
 
   const router = useRouter()
   const toast = useToast()
@@ -263,22 +264,14 @@
       <SkeletonBlock :lines="6" />
     </div>
 
-    <div
+    <InlineAlert
       v-else-if="failed"
-      class="rounded-xl bg-white p-6 text-center shadow-sm dark:bg-slate-900"
       data-testid="recurrences-error"
+      retry-label="Réessayer"
+      @retry="load"
     >
-      <p class="text-sm text-gray-700 dark:text-gray-300">
-        Les récurrences n'ont pas pu être chargées.
-      </p>
-      <button
-        type="button"
-        class="mt-3 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
-        @click="load"
-      >
-        Réessayer
-      </button>
-    </div>
+      Les récurrences n'ont pas pu être chargées.
+    </InlineAlert>
 
     <template v-else-if="list">
       <section

@@ -26,6 +26,7 @@
   import BaseButton from '@/components/ui/BaseButton.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
 
   const accountsStore = useAccountsStore()
   const toast = useToast()
@@ -338,29 +339,20 @@
 
     <div v-else class="space-y-6">
       <!-- A failed load is said as such, with the way out -->
-      <div
+      <InlineAlert
         v-if="loadFailed"
-        role="alert"
         data-testid="accounts-load-error"
-        class="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 sm:flex-row sm:items-center sm:justify-between dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+        retry-label="Réessayer"
+        retry-test-id="accounts-retry"
+        :retrying="isRetrying"
+        @retry="retry"
       >
-        <p class="text-sm">
-          <template v-if="banksFailed"
-            >Vos connexions bancaires n'ont pas pu être chargées.</template
-          >
-          <template v-else>Vos comptes n'ont pas pu être chargés.</template>
-          Ce qui s'affiche peut être incomplet.
-        </p>
-        <BaseButton
-          variant="danger-outline"
-          size="sm"
-          data-testid="accounts-retry"
-          :loading="isRetrying"
-          @click="retry"
+        <template v-if="banksFailed"
+          >Vos connexions bancaires n'ont pas pu être chargées.</template
         >
-          Réessayer
-        </BaseButton>
-      </div>
+        <template v-else>Vos comptes n'ont pas pu être chargés.</template>
+        Ce qui s'affiche peut être incomplet.
+      </InlineAlert>
 
       <!-- One card per bank connection -->
       <section

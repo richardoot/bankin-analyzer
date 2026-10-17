@@ -16,6 +16,7 @@
   import { useFiltersStore } from '@/stores/filters'
   import { formatCurrency } from '@/lib/formatters'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
 
   const router = useRouter()
 
@@ -162,31 +163,21 @@
 
     <!-- Error state: says what failed and offers the way out; the filters
            and whatever was already on screen stay put underneath. -->
-    <div
+    <InlineAlert
       v-if="error"
-      role="alert"
       data-testid="dashboard-error"
-      class="mb-6 flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 sm:flex-row sm:items-center sm:justify-between dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+      class="mb-6"
+      title="Le tableau de bord n'a pas pu être chargé."
+      :retry-label="isLoading ? 'Nouvelle tentative…' : 'Réessayer'"
+      retry-test-id="dashboard-retry"
+      :retrying="isLoading"
+      @retry="fetchData()"
     >
-      <p class="text-sm">
-        <span class="font-medium"
-          >Le tableau de bord n'a pas pu être chargé.</span
-        >
-        {{ error }}
-        <span v-if="hasAnyData" class="block text-xs opacity-80"
-          >Les chiffres affichés sont ceux du dernier chargement réussi.</span
-        >
-      </p>
-      <button
-        type="button"
-        data-testid="dashboard-retry"
-        :disabled="isLoading"
-        class="inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
-        @click="fetchData()"
+      {{ error }}
+      <span v-if="hasAnyData" class="block text-xs opacity-80"
+        >Les chiffres affichés sont ceux du dernier chargement réussi.</span
       >
-        {{ isLoading ? 'Nouvelle tentative…' : 'Réessayer' }}
-      </button>
-    </div>
+    </InlineAlert>
 
     <!-- Initial load: the page's own shape, not a spinner. -->
     <div v-if="showFullLoader" class="space-y-6" aria-busy="true">

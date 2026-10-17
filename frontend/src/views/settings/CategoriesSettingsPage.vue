@@ -40,6 +40,7 @@
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
 
   const toast = useToast()
 
@@ -433,23 +434,16 @@
         </p>
       </div>
 
-      <div
+      <InlineAlert
         v-else-if="categoriesLoadFailed && totalCategoryCount === 0"
-        role="alert"
         data-testid="categories-load-error"
-        class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+        retry-label="Réessayer"
+        retry-test-id="categories-retry"
+        :retrying="isLoadingCategories"
+        @retry="reloadAll"
       >
-        <p>Les catégories n'ont pas pu être chargées.</p>
-        <button
-          type="button"
-          data-testid="categories-retry"
-          :disabled="isLoadingCategories"
-          class="mt-3 inline-flex min-h-[40px] items-center justify-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
-          @click="reloadAll"
-        >
-          Réessayer
-        </button>
-      </div>
+        Les catégories n'ont pas pu être chargées.
+      </InlineAlert>
 
       <div v-else class="space-y-6">
         <!-- Search + quick state filters -->

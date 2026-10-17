@@ -35,6 +35,7 @@
   } from '@/composables/useBudgetComparison'
   import { useRouter, onBeforeRouteLeave } from 'vue-router'
   import { formatMonth } from '@/lib/formatters'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
 
   const filtersStore = useFiltersStore()
   const router = useRouter()
@@ -1046,25 +1047,16 @@
           >
             Mise à jour des chiffres…
           </p>
-          <div
+          <InlineAlert
             v-else-if="statisticsError"
-            role="alert"
             data-testid="budget-statistics-error"
-            class="flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+            retry-label="Réessayer"
+            retry-test-id="budget-statistics-retry"
+            @retry="refreshStatistics"
           >
-            <p>
-              Les chiffres n'ont pas pu être mis à jour : ils correspondent
-              encore aux réglages précédents. {{ statisticsError }}
-            </p>
-            <button
-              type="button"
-              data-testid="budget-statistics-retry"
-              class="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
-              @click="refreshStatistics"
-            >
-              Réessayer
-            </button>
-          </div>
+            Les chiffres n'ont pas pu être mis à jour : ils correspondent encore
+            aux réglages précédents. {{ statisticsError }}
+          </InlineAlert>
         </div>
       </div>
 

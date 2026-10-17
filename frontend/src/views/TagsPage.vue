@@ -8,6 +8,7 @@
   import type { TagDto } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
   import { formatCurrency } from '@/lib/formatters'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
 
   const router = useRouter()
   const tagsStore = useTagsStore()
@@ -364,23 +365,16 @@
     </div>
 
     <!-- Failed load: not the same as having no tag -->
-    <div
+    <InlineAlert
       v-else-if="loadFailed && tagsStore.tags.length === 0"
-      role="alert"
       data-testid="tags-load-error"
-      class="rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+      retry-label="Réessayer"
+      retry-test-id="tags-retry"
+      :retrying="tagsStore.isLoading"
+      @retry="loadTags"
     >
-      <p>Les étiquettes n'ont pas pu être chargées.</p>
-      <button
-        type="button"
-        data-testid="tags-retry"
-        :disabled="tagsStore.isLoading"
-        class="mt-3 inline-flex min-h-[40px] items-center justify-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
-        @click="loadTags"
-      >
-        Réessayer
-      </button>
-    </div>
+      Les étiquettes n'ont pas pu être chargées.
+    </InlineAlert>
 
     <!-- Empty -->
     <div
