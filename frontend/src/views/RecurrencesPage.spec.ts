@@ -110,8 +110,7 @@ describe('RecurrencesPage', () => {
     )
 
     const badges = wrapper.findAll('[data-testid="joint-badge"]')
-    expect(badges).toHaveLength(1)
-    expect(badges[0].text()).toBe('Joint ÷2')
+    expect(badges.map(b => b.text())).toEqual(['Joint ÷2'])
   })
 
   it('groups the active charges by category, heaviest first', async () => {
