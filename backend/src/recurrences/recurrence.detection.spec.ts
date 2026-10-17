@@ -294,6 +294,20 @@ describe('detectRecurrences — rules', () => {
     expect(only(detectRecurrences(netflix, { now })).totalPaid).toBe(133.92)
   })
 
+  it('shows the share of a charge paid from a joint account, and keeps the bank price as its key', () => {
+    const lines = monthly('edf', months, 120, 'Prlv Sepa Edf').map(line => ({
+      ...line,
+      divisor: 2,
+    }))
+
+    expect(only(detectRecurrences(lines, { now }))).toMatchObject({
+      amount: 60,
+      monthlyEquivalent: 60,
+      totalPaid: 360,
+      amountBucket: 120,
+    })
+  })
+
   it('ignores lines whose label is only bank noise', () => {
     const lines = monthly('noise', months, 10, 'CB 12/09/26 *1234')
 

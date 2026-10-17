@@ -53,6 +53,12 @@ export interface RecurrenceExpense {
   date: Date
   /** Signed or not; only its size is read. */
   amount: number
+  /**
+   * The account's divisor (a joint account's ÷2): what the user's share of
+   * the charge is. Shown amounts are divided by it; prices are told apart on
+   * the bank's amount, so a series keeps its identity if the divisor moves.
+   */
+  divisor?: number
   description: string
   categoryId: string | null
   subcategoryId: string | null
@@ -95,11 +101,11 @@ export interface DetectedRecurrence {
   categoryId: string | null
   subcategoryId: string | null
   period: RecurrencePeriod
-  /** The latest amount charged, positive. */
+  /** The user's share of the latest charge, positive. */
   amount: number
   monthlyEquivalent: number
   occurrences: number
-  /** Everything the series has cost, every price it ran at. */
+  /** Everything the series has cost the user, every price it ran at. */
   totalPaid: number
   firstDate: Date
   lastDate: Date
@@ -246,6 +252,8 @@ interface Line {
   id: string
   time: number
   amount: number
+  /** The user's share of `amount`: the account divisor applied. */
+  share: number
   description: string
   categoryId: string | null
   subcategoryId: string | null
@@ -679,10 +687,10 @@ function toRecurrence(
     categoryId: latest.categoryId,
     subcategoryId: latest.subcategoryId,
     period: chain.period,
-    amount: latest.amount,
-    monthlyEquivalent: roundCents(latest.amount * rule.perMonth),
+    amount: roundCents(latest.share),
+    monthlyEquivalent: roundCents(latest.share * rule.perMonth),
     occurrences: chain.lines.length,
-    totalPaid: roundCents(chain.lines.reduce((sum, l) => sum + l.amount, 0)),
+    totalPaid: roundCents(chain.lines.reduce((sum, l) => sum + l.share, 0)),
     firstDate: new Date(firstOf(chain)),
     lastDate: new Date(lastOf(chain)),
     nextExpected: addStep(lastOf(chain), chain.period),
@@ -797,6 +805,7 @@ export function detect(
       id: expense.id,
       time: expense.date.getTime(),
       amount: Math.abs(expense.amount),
+      share: Math.abs(expense.amount) / (expense.divisor || 1),
       description: expense.description,
       categoryId: expense.categoryId,
       subcategoryId: expense.subcategoryId,

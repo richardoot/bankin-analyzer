@@ -89,6 +89,7 @@ async function detectFor(
       description: true,
       categoryId: true,
       subcategoryId: true,
+      accountRef: { select: { divisor: true } },
     },
   })
   const subscriptions = await prisma.subscription.findMany({
@@ -109,7 +110,11 @@ async function detectFor(
   })
 
   const result = detect(
-    expenses.map(expense => ({ ...expense, amount: Number(expense.amount) })),
+    expenses.map(({ accountRef, ...expense }) => ({
+      ...expense,
+      amount: Number(expense.amount),
+      divisor: accountRef.divisor,
+    })),
     { now, subscriptions, links }
   )
   return { result, subscriptions }
