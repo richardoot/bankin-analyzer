@@ -23,6 +23,7 @@ vi.mock('@/lib/api', () => ({
     getRecurrences: vi.fn(),
     linkTransactionToRecurrence: vi.fn(),
     unlinkTransactionFromRecurrence: vi.fn(),
+    deleteReimbursement: vi.fn(),
   },
   recurrenceFilterKey: (r: { amountBucket: number; merchantKey: string }) =>
     `${r.amountBucket}:${r.merchantKey}`,
@@ -787,6 +788,34 @@ describe('TransactionsPage — optimistic updates', () => {
       expect(selection).not.toHaveProperty('ids')
     })
 
+    it('confirms a bulk pointing with a toast', async () => {
+      vi.mocked(api.bulkUpdateTransactions).mockResolvedValue({ updated: 3 })
+      const wrapper = await mountWithPage(3, 412)
+      await selectWholePage(wrapper)
+
+      await wrapper.get('[data-testid="bulk-pointed"]').trigger('click')
+      await flushPromises()
+
+      expect(mockToast.success).toHaveBeenCalledWith(
+        '3 transaction(s) pointée(s)'
+      )
+    })
+
+    it('says so when a bulk pointing fails', async () => {
+      vi.mocked(api.bulkUpdateTransactions).mockRejectedValue(
+        new Error('Impossible de modifier les transactions')
+      )
+      const wrapper = await mountWithPage(3, 412)
+      await selectWholePage(wrapper)
+
+      await wrapper.get('[data-testid="bulk-pointed"]').trigger('click')
+      await flushPromises()
+
+      expect(mockToast.error).toHaveBeenCalledWith(
+        'Impossible de modifier les transactions'
+      )
+    })
+
     it('falls back to ids when the selection is just this page', async () => {
       vi.mocked(api.bulkUpdateTransactions).mockResolvedValue({ updated: 3 })
       const wrapper = await mountWithPage(3, 412)
@@ -818,6 +847,95 @@ describe('TransactionsPage — optimistic updates', () => {
       expect(
         wrapper.find('[data-testid="whole-filter-selected-banner"]').exists()
       ).toBe(false)
+    })
+  })
+
+  describe('deleting a reimbursement', () => {
+    const reimbursement = {
+      id: 'r-1',
+      transactionId: 'tx-1',
+      personId: 'p-1',
+      personName: 'Alice',
+      categoryId: null,
+      categoryName: null,
+      expenseCategoryId: 'cat-1',
+      expenseCategoryName: 'Alimentation',
+      amount: 2,
+      amountReceived: 0,
+      amountRemaining: 2,
+      status: 'PENDING' as const,
+      note: null,
+      createdAt: '2026-01-15T00:00:00.000Z',
+      updatedAt: '2026-01-15T00:00:00.000Z',
+    }
+
+    const mountWithReimbursement = async () => {
+      setupDefaultMocks()
+      vi.mocked(api.getReimbursements).mockResolvedValue([reimbursement])
+      await router.replace({ query: {} })
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+      return wrapper
+    }
+
+    it('asks before deleting, then deletes and says so', async () => {
+      vi.mocked(api.deleteReimbursement).mockResolvedValue(undefined)
+      const wrapper = await mountWithReimbursement()
+
+      const cross = wrapper.findAll(
+        'button[aria-label="Supprimer le remboursement de Alice"]'
+      )
+      expect(cross.length).toBeGreaterThan(0)
+      await cross.map(b => b)[0]?.trigger('click')
+      await flushPromises()
+
+      // Nothing deleted yet: the question comes first.
+      expect(api.deleteReimbursement).not.toHaveBeenCalled()
+      expect(wrapper.text()).toContain('Supprimer ce remboursement ?')
+
+      const confirm = wrapper
+        .findAll('button')
+        .filter(b => b.text() === 'Supprimer')
+      await confirm.map(b => b)[0]?.trigger('click')
+      await flushPromises()
+
+      expect(api.deleteReimbursement).toHaveBeenCalledWith('r-1')
+      expect(mockToast.success).toHaveBeenCalledWith('Remboursement supprimé')
+    })
+
+    it('keeps the question open and says so when the deletion fails', async () => {
+      vi.mocked(api.deleteReimbursement).mockRejectedValue(
+        new Error('Impossible de supprimer le remboursement')
+      )
+      const wrapper = await mountWithReimbursement()
+
+      await wrapper
+        .findAll('button[aria-label="Supprimer le remboursement de Alice"]')
+        .map(b => b)[0]
+        ?.trigger('click')
+      await flushPromises()
+      await wrapper
+        .findAll('button')
+        .filter(b => b.text() === 'Supprimer')
+        .map(b => b)[0]
+        ?.trigger('click')
+      await flushPromises()
+
+      expect(mockToast.error).toHaveBeenCalledWith(
+        'Impossible de supprimer le remboursement'
+      )
+      expect(wrapper.text()).toContain('Supprimer ce remboursement ?')
     })
   })
 

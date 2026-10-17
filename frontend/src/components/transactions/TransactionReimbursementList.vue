@@ -76,7 +76,9 @@
         :class="
           dense ? 'p-1.5' : 'p-1 hover:bg-red-50 dark:hover:bg-red-900/20'
         "
+        type="button"
         title="Supprimer"
+        :aria-label="`Supprimer le remboursement de ${reimb.personName}`"
         @click.stop="emit('delete', reimb.id)"
       >
         <svg

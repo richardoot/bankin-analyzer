@@ -29,6 +29,8 @@
   import EmptyState from '@/components/ui/EmptyState.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
+  import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+  import { formatCurrency } from '@/lib/formatters'
   import FilterChips from '@/components/ui/FilterChips.vue'
   import FilterDisclosure from '@/components/ui/FilterDisclosure.vue'
   import type { FilterChip } from '@/components/ui/FilterChips.vue'
@@ -847,14 +849,25 @@
 
     try {
       isBulkUpdating.value = true
-      await api.bulkUpdateTransactions(bulkSelection(), {
-        isPointed: pointed,
-      })
+      const { updated: count } = await api.bulkUpdateTransactions(
+        bulkSelection(),
+        { isPointed: pointed }
+      )
       // Refresh transactions to get updated data
       await fetchTransactions()
       exitSelectionMode()
+      toast.success(
+        pointed
+          ? `${count} transaction(s) pointée(s)`
+          : `${count} transaction(s) dépointée(s)`
+      )
     } catch (err) {
       console.error('Failed to bulk update pointed:', err)
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'Échec de la mise à jour du pointage'
+      )
     } finally {
       isBulkUpdating.value = false
     }
@@ -1127,13 +1140,41 @@
     selectedTransaction.value = null
   }
 
-  // Delete reimbursement
-  async function handleDeleteReimbursement(id: string) {
+  // Delete reimbursement — asked first: one click on a 26 px cross used to
+  // drop the debt for good.
+  const reimbursementToDelete = ref<ReimbursementDto | null>(null)
+  const isDeletingReimbursement = ref(false)
+
+  function handleDeleteReimbursement(id: string) {
+    reimbursementToDelete.value =
+      reimbursements.value.find(r => r.id === id) ?? null
+  }
+
+  function cancelDeleteReimbursement() {
+    if (isDeletingReimbursement.value) return
+    reimbursementToDelete.value = null
+  }
+
+  async function confirmDeleteReimbursement() {
+    const target = reimbursementToDelete.value
+    if (!target) return
+    isDeletingReimbursement.value = true
     try {
-      await api.deleteReimbursement(id)
-      reimbursements.value = reimbursements.value.filter(r => r.id !== id)
+      await api.deleteReimbursement(target.id)
+      reimbursements.value = reimbursements.value.filter(
+        r => r.id !== target.id
+      )
+      reimbursementToDelete.value = null
+      toast.success('Remboursement supprimé')
     } catch (err) {
       console.error('Failed to delete reimbursement:', err)
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'Impossible de supprimer le remboursement'
+      )
+    } finally {
+      isDeletingReimbursement.value = false
     }
   }
 
@@ -2060,6 +2101,21 @@
       @cancel="markRecurringTx = null"
       @confirm="confirmMarkRecurring"
     />
+
+    <ConfirmDialog
+      :open="reimbursementToDelete !== null"
+      title="Supprimer ce remboursement ?"
+      :loading="isDeletingReimbursement"
+      @confirm="confirmDeleteReimbursement"
+      @cancel="cancelDeleteReimbursement"
+    >
+      Le remboursement attendu de
+      <span class="font-medium text-gray-900 dark:text-gray-100">{{
+        reimbursementToDelete?.personName
+      }}</span>
+      ({{ formatCurrency(reimbursementToDelete?.amount ?? 0) }}) ne sera plus
+      suivi.
+    </ConfirmDialog>
 
     <TransactionReimbursementModal
       ref="reimbursementModalRef"

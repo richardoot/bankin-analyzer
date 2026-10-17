@@ -13,6 +13,7 @@
   import { api } from '@/lib/api'
   import type { TransactionDto, PersonDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
+  import { useToast } from '@/composables/useToast'
 
   const props = defineProps<{
     isOpen: boolean
@@ -27,6 +28,8 @@
       reimbursement: Awaited<ReturnType<typeof api.createReimbursement>>,
     ]
   }>()
+
+  const toast = useToast()
 
   // Escape closes, Tab stays inside, focus returns to the opener after.
   const modalPanelRef = ref<HTMLElement | null>(null)
@@ -83,6 +86,12 @@
       emit('created', newReimbursement)
     } catch (err) {
       console.error('Failed to create reimbursement:', err)
+      // The modal stays open with the form as typed, so the user can retry.
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'Impossible de créer le remboursement'
+      )
     } finally {
       isCreating.value = false
     }

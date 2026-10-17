@@ -4,6 +4,11 @@ import TransactionReimbursementModal from './TransactionReimbursementModal.vue'
 import { api } from '@/lib/api'
 import type { TransactionDto, PersonDto } from '@/lib/api'
 
+const mockToastError = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/useToast', () => ({
+  useToast: () => ({ error: mockToastError, success: vi.fn() }),
+}))
+
 vi.mock('@/lib/api', () => ({
   api: {
     createReimbursement: vi.fn(),
@@ -95,5 +100,29 @@ describe('TransactionReimbursementModal', () => {
       amount: 30,
       note: 'moitie',
     })
+  })
+
+  it('says why when the debt cannot be created, and stays open', async () => {
+    const wrapper = mountModal()
+    vi.mocked(api.createReimbursement).mockRejectedValue(
+      new Error('Impossible de créer le remboursement')
+    )
+    const vm = wrapper.vm as unknown as {
+      form: { personId: string; amount: number; note: string }
+    }
+    vm.form.personId = 'person-1'
+    vm.form.amount = 30
+    await wrapper.vm.$nextTick()
+    const submit = wrapper
+      .findAll('button')
+      .find(b => b.text().includes('Confirmer'))
+    if (!submit) throw new Error('no submit button rendered')
+    await submit.trigger('click')
+    await flushPromises()
+
+    expect(mockToastError).toHaveBeenCalledWith(
+      'Impossible de créer le remboursement'
+    )
+    expect(wrapper.emitted('created')).toBeUndefined()
   })
 })
