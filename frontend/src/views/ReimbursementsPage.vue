@@ -24,6 +24,7 @@
   import IconCheck from '@/components/icons/IconCheck.vue'
   import IconClose from '@/components/icons/IconClose.vue'
   import IconTrash from '@/components/icons/IconTrash.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
 
   const { exportReimbursementsToPdf } = usePdfExport()
   const toast = useToast()
@@ -691,20 +692,24 @@
       <!-- Add person form -->
       <form class="flex flex-wrap gap-3 mb-6" @submit.prevent="handleAddPerson">
         <div class="flex-1 min-w-[200px]">
-          <input
+          <BaseField
             v-model="newPersonName"
             type="text"
+            size="sm"
+            label="Nom de la personne"
+            label-hidden
             placeholder="Nom de la personne"
-            class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
             :disabled="isAddingPerson"
           />
         </div>
         <div class="flex-1 min-w-[200px]">
-          <input
+          <BaseField
             v-model="newPersonEmail"
             type="email"
+            size="sm"
+            label="Email (optionnel)"
+            label-hidden
             placeholder="Email (optionnel)"
-            class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
             :disabled="isAddingPerson"
           />
         </div>
@@ -766,11 +771,13 @@
                   {{ person.name.charAt(0).toUpperCase() }}
                 </span>
               </div>
-              <input
+              <BaseField
                 v-model="editingPersonName"
                 type="text"
-                aria-label="Nom de la personne"
-                class="flex-1 px-3 py-1.5 border border-amber-300 dark:border-amber-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
+                size="sm"
+                label="Nom de la personne"
+                label-hidden
+                class="flex-1"
                 @keyup.enter="saveEditPerson(person.id)"
                 @keyup.escape="cancelEditPerson"
               />

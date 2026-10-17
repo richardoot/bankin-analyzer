@@ -418,11 +418,9 @@ describe('DashboardPage', () => {
       const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
       await flushPromises()
 
-      expect(
-        wrapper
-          .get('[data-testid="expense-category-filter"]')
-          .attributes('aria-label')
-      ).toBe('Catégorie des dépenses par mois')
+      const select = wrapper.get('[data-testid="expense-category-filter"]')
+      const label = wrapper.get(`label[for="${select.attributes('id')}"]`)
+      expect(label.text()).toBe('Catégorie des dépenses par mois')
     })
 
     it('should have "Toutes les catégories" as default option', async () => {

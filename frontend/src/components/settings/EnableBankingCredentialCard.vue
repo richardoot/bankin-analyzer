@@ -11,6 +11,7 @@
   import { useToast } from '@/composables/useToast'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
 
   const emit = defineEmits<{ changed: [] }>()
 
@@ -144,18 +145,12 @@
 
       <div v-else class="mt-4 grid gap-3 sm:grid-cols-2">
         <div>
-          <label
-            for="eb-app-id"
-            class="text-sm font-medium text-gray-700 dark:text-gray-300"
-          >
-            Identifiant d'application (App ID)
-          </label>
-          <input
-            id="eb-app-id"
+          <BaseField
             v-model="applicationIdInput"
+            label="Identifiant d'application (App ID)"
+            size="sm"
             type="text"
             data-testid="application-id-input"
-            class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100"
             placeholder="ex. 3fae2b1c-…"
           />
         </div>

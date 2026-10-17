@@ -39,6 +39,7 @@
   import { formatDate } from '@/lib/formatters'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
 
   const accountsStore = useAccountsStore()
   const toast = useToast()
@@ -396,17 +397,12 @@
             class="mb-8 flex flex-wrap items-end gap-3 rounded-xl bg-gray-50 p-4 dark:bg-slate-800"
           >
             <div class="min-w-0 flex-1 basis-56">
-              <label
-                for="bank-picker"
-                class="text-sm font-medium text-gray-700 dark:text-gray-300"
-              >
-                Connecter une banque
-              </label>
-              <select
-                id="bank-picker"
+              <BaseField
                 v-model="chosenBank"
+                as="select"
+                size="sm"
+                label="Connecter une banque"
                 data-testid="bank-picker"
-                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100"
               >
                 <option value="">— choisir —</option>
                 <option
@@ -416,7 +412,7 @@
                 >
                   {{ bank.name }}{{ bank.beta ? ' (beta)' : '' }}
                 </option>
-              </select>
+              </BaseField>
             </div>
             <BaseButton
               data-testid="connect-button"

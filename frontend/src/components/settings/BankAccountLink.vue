@@ -15,6 +15,7 @@
    */
   import type { AccountDto, DiscoveredAccountDto } from '@/lib/api'
   import AccountCard from '@/components/settings/AccountCard.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
 
   defineProps<{
     discovered: DiscoveredAccountDto
@@ -97,19 +98,14 @@
     </template>
     <template #bank-link>
       <div>
-        <label
-          class="text-sm text-gray-600 dark:text-gray-400"
-          :for="`link-${discovered.linkId}`"
-        >
-          Correspond à
-        </label>
-        <select
-          :id="`link-${discovered.linkId}`"
+        <BaseField
+          as="select"
+          size="sm"
+          label="Correspond à"
           data-testid="account-select"
-          :value="discovered.accountId ?? ''"
+          :model-value="discovered.accountId ?? ''"
           :disabled="saving"
-          class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100"
-          @change="emit('assign', ($event.target as HTMLSelectElement).value)"
+          @update:model-value="emit('assign', String($event))"
         >
           <option value="">— aucun —</option>
           <option
@@ -119,7 +115,7 @@
           >
             {{ option.name }}
           </option>
-        </select>
+        </BaseField>
       </div>
     </template>
   </AccountCard>
@@ -168,19 +164,14 @@
     </div>
 
     <div class="mt-3">
-      <label
-        class="text-sm text-gray-600 dark:text-gray-400"
-        :for="`link-${discovered.linkId}`"
-      >
-        Correspond à
-      </label>
-      <select
-        :id="`link-${discovered.linkId}`"
+      <BaseField
+        as="select"
+        size="sm"
+        label="Correspond à"
         data-testid="account-select"
-        :value="discovered.accountId ?? ''"
+        :model-value="discovered.accountId ?? ''"
         :disabled="saving"
-        class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100"
-        @change="emit('assign', ($event.target as HTMLSelectElement).value)"
+        @update:model-value="emit('assign', String($event))"
       >
         <option value="">— aucun —</option>
         <option
@@ -190,7 +181,7 @@
         >
           {{ option.name }}
         </option>
-      </select>
+      </BaseField>
 
       <!-- Stated against the evidence a person can judge, never as "these
          look alike". -->

@@ -16,6 +16,7 @@
   import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
 
   const props = defineProps<{
     account: AccountDto
@@ -281,24 +282,19 @@
     >
       <!-- Name -->
       <div>
-        <label
-          class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-          :for="`account-name-${account.id}`"
-        >
-          Nom du compte
-        </label>
         <form
-          class="flex flex-col gap-2 sm:flex-row sm:items-center"
+          class="flex flex-col gap-2 sm:flex-row sm:items-end"
           @submit.prevent="submitRename"
         >
-          <input
-            :id="`account-name-${account.id}`"
+          <BaseField
+            label="Nom du compte"
+            size="sm"
             type="text"
-            :value="draft()"
+            class="flex-1"
+            :model-value="draft()"
             :disabled="renameSaving"
             maxlength="100"
-            class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-            @input="onDraftChange(($event.target as HTMLInputElement).value)"
+            @update:model-value="onDraftChange(String($event))"
           />
           <div class="flex gap-2">
             <BaseButton
@@ -359,21 +355,16 @@
 
       <!-- Divisor -->
       <div>
-        <label
-          class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-          :for="`account-divisor-${account.id}`"
-        >
-          Diviseur des montants
-        </label>
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-          <input
-            :id="`account-divisor-${account.id}`"
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
+          <BaseField
+            label="Diviseur des montants"
+            size="sm"
             type="number"
             min="1"
             max="10"
-            :value="account.divisor"
+            class="w-20"
+            :model-value="account.divisor"
             :disabled="saving"
-            class="w-20 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
             @change="setDivisor(($event.target as HTMLInputElement).value)"
           />
           <p class="text-xs text-gray-500 dark:text-gray-400">

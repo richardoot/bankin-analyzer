@@ -37,6 +37,7 @@
   import { formatMonth } from '@/lib/formatters'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
+  import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 
   const filtersStore = useFiltersStore()
   const router = useRouter()
@@ -966,28 +967,16 @@
           <div
             class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 sm:flex sm:flex-wrap sm:items-center sm:gap-6 dark:border-slate-700"
           >
-            <button
-              type="button"
-              role="switch"
-              :aria-checked="deductReimbursements"
-              class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-              @click="deductReimbursements = !deductReimbursements"
+            <label
+              for="budget-deduct-reimbursements"
+              class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
             >
-              <span
-                class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
-                :class="
-                  deductReimbursements
-                    ? 'bg-primary-500'
-                    : 'bg-gray-300 dark:bg-slate-600'
-                "
-              >
-                <span
-                  class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
-                  :class="
-                    deductReimbursements ? 'translate-x-4' : 'translate-x-0.5'
-                  "
-                />
-              </span>
+              <ToggleSwitch
+                id="budget-deduct-reimbursements"
+                :checked="deductReimbursements"
+                label="Déduire les remboursements reçus"
+                @change="deductReimbursements = $event"
+              />
               <span
                 class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
               >
@@ -996,33 +985,17 @@
                   >Déduire les remboursements reçus</span
                 >
               </span>
-            </button>
-            <button
-              type="button"
-              role="switch"
-              :aria-checked="deductPendingReimbursements"
-              class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-              @click="
-                deductPendingReimbursements = !deductPendingReimbursements
-              "
+            </label>
+            <label
+              for="budget-deduct-pending"
+              class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
             >
-              <span
-                class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
-                :class="
-                  deductPendingReimbursements
-                    ? 'bg-primary-500'
-                    : 'bg-gray-300 dark:bg-slate-600'
-                "
-              >
-                <span
-                  class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
-                  :class="
-                    deductPendingReimbursements
-                      ? 'translate-x-4'
-                      : 'translate-x-0.5'
-                  "
-                />
-              </span>
+              <ToggleSwitch
+                id="budget-deduct-pending"
+                :checked="deductPendingReimbursements"
+                label="Déduire les remboursements en attente"
+                @change="deductPendingReimbursements = $event"
+              />
               <span
                 class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
               >
@@ -1031,7 +1004,7 @@
                   >Déduire les remboursements en attente</span
                 >
               </span>
-            </button>
+            </label>
           </div>
 
           <p

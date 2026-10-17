@@ -18,6 +18,8 @@
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
+  import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 
   const router = useRouter()
 
@@ -117,18 +119,6 @@
   onMounted(() => {
     fetchData()
   })
-
-  function handleCategoryChange(event: Event) {
-    const target = event.target as HTMLSelectElement
-    const value = target.value
-    setSelectedCategory(value === '' ? null : value)
-  }
-
-  function handleIncomeCategoryChange(event: Event) {
-    const target = event.target as HTMLSelectElement
-    const value = target.value
-    setSelectedIncomeCategory(value === '' ? null : value)
-  }
 </script>
 
 <template>
@@ -208,29 +198,17 @@
         <div
           class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-4 sm:flex sm:flex-wrap sm:items-center sm:gap-6 dark:border-slate-700"
         >
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="deductReimbursements"
-            data-testid="toggle-deduct-reimbursements"
-            class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-            @click="deductReimbursements = !deductReimbursements"
+          <label
+            for="dashboard-deduct-reimbursements"
+            class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
           >
-            <span
-              class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
-              :class="
-                deductReimbursements
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-slate-600'
-              "
-            >
-              <span
-                class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
-                :class="
-                  deductReimbursements ? 'translate-x-4' : 'translate-x-0.5'
-                "
-              />
-            </span>
+            <ToggleSwitch
+              id="dashboard-deduct-reimbursements"
+              :checked="deductReimbursements"
+              label="Déduire les remboursements reçus"
+              data-testid="toggle-deduct-reimbursements"
+              @change="deductReimbursements = $event"
+            />
             <span
               class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
             >
@@ -239,32 +217,18 @@
                 >Déduire les remboursements reçus</span
               >
             </span>
-          </button>
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="deductPendingReimbursements"
-            data-testid="toggle-deduct-pending"
-            class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-            @click="deductPendingReimbursements = !deductPendingReimbursements"
+          </label>
+          <label
+            for="dashboard-deduct-pending"
+            class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
           >
-            <span
-              class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
-              :class="
-                deductPendingReimbursements
-                  ? 'bg-primary-500'
-                  : 'bg-gray-300 dark:bg-slate-600'
-              "
-            >
-              <span
-                class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
-                :class="
-                  deductPendingReimbursements
-                    ? 'translate-x-4'
-                    : 'translate-x-0.5'
-                "
-              />
-            </span>
+            <ToggleSwitch
+              id="dashboard-deduct-pending"
+              :checked="deductPendingReimbursements"
+              label="Déduire les remboursements en attente"
+              data-testid="toggle-deduct-pending"
+              @change="deductPendingReimbursements = $event"
+            />
             <span
               class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
             >
@@ -273,7 +237,7 @@
                 >Déduire les remboursements en attente</span
               >
             </span>
-          </button>
+          </label>
         </div>
       </div>
 
@@ -417,13 +381,18 @@
                 >
                   Dépenses par mois
                 </h3>
-                <select
+                <BaseField
                   v-if="allExpenseCategories.length > 0"
+                  as="select"
+                  size="sm"
+                  label="Catégorie des dépenses par mois"
+                  label-hidden
                   data-testid="expense-category-filter"
-                  aria-label="Catégorie des dépenses par mois"
-                  :value="selectedCategory ?? ''"
-                  class="max-w-full min-h-[40px] sm:min-h-0 text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
-                  @change="handleCategoryChange"
+                  class="max-w-full"
+                  :model-value="selectedCategory ?? ''"
+                  @update:model-value="
+                    setSelectedCategory($event ? String($event) : null)
+                  "
                 >
                   <option value="">Toutes les catégories</option>
                   <option
@@ -433,7 +402,7 @@
                   >
                     {{ cat.name }}
                   </option>
-                </select>
+                </BaseField>
               </div>
               <div v-if="totalExpenses > 0" class="relative">
                 <MonthlyBarChart
@@ -583,13 +552,18 @@
                 >
                   Revenus par mois
                 </h3>
-                <select
+                <BaseField
                   v-if="allIncomeCategories.length > 0"
+                  as="select"
+                  size="sm"
+                  label="Catégorie des revenus par mois"
+                  label-hidden
                   data-testid="income-category-filter"
-                  aria-label="Catégorie des revenus par mois"
-                  :value="selectedIncomeCategory ?? ''"
-                  class="max-w-full min-h-[40px] sm:min-h-0 text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
-                  @change="handleIncomeCategoryChange"
+                  class="max-w-full"
+                  :model-value="selectedIncomeCategory ?? ''"
+                  @update:model-value="
+                    setSelectedIncomeCategory($event ? String($event) : null)
+                  "
                 >
                   <option value="">Toutes les catégories</option>
                   <option
@@ -599,7 +573,7 @@
                   >
                     {{ cat.name }}
                   </option>
-                </select>
+                </BaseField>
               </div>
               <div v-if="totalIncome > 0" class="relative">
                 <MonthlyBarChart

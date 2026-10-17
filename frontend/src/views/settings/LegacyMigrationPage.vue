@@ -39,6 +39,7 @@
   import StepIndicator from '@/components/ui/StepIndicator.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
 
   const router = useRouter()
   const toast = useToast()
@@ -480,10 +481,12 @@
             </div>
 
             <div class="grid gap-2 sm:grid-cols-[1fr_minmax(10rem,14rem)]">
-              <select
+              <BaseField
                 v-model="draft.choice"
-                :aria-label="`Destination de ${lineLabel(draft.line)}`"
-                class="min-h-[44px] w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 sm:min-h-0 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                as="select"
+                size="sm"
+                :label="`Destination de ${lineLabel(draft.line)}`"
+                label-hidden
                 data-testid="line-choice"
               >
                 <option value="UNFILE">
@@ -517,28 +520,32 @@
                     {{ target.name }} › sous-catégorie personnelle…
                   </option>
                 </optgroup>
-              </select>
+              </BaseField>
 
-              <select
+              <BaseField
                 v-model="draft.tagId"
-                :aria-label="`Tag pour ${lineLabel(draft.line)}`"
-                class="min-h-[44px] w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 sm:min-h-0 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                as="select"
+                size="sm"
+                :label="`Tag pour ${lineLabel(draft.line)}`"
+                label-hidden
                 data-testid="line-tag"
               >
                 <option :value="null">Sans tag</option>
                 <option v-for="tag in tags" :key="tag.id" :value="tag.id">
                   {{ tag.icon ? tag.icon + ' ' : '' }}{{ tag.name }}
                 </option>
-              </select>
+              </BaseField>
             </div>
 
-            <input
+            <BaseField
               v-if="draft.choice.startsWith('CUSTOM:')"
               v-model="draft.customName"
+              size="sm"
               type="text"
               placeholder="Nom de la sous-catégorie personnelle"
-              :aria-label="`Nom de la sous-catégorie pour ${lineLabel(draft.line)}`"
-              class="mt-2 w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+              :label="`Nom de la sous-catégorie pour ${lineLabel(draft.line)}`"
+              label-hidden
+              class="mt-2"
               data-testid="line-custom-name"
             />
 

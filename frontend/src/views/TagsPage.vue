@@ -15,6 +15,8 @@
   import IconChevronDown from '@/components/icons/IconChevronDown.vue'
   import IconPencil from '@/components/icons/IconPencil.vue'
   import IconTrash from '@/components/icons/IconTrash.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
+  import BaseCheckbox from '@/components/ui/BaseCheckbox.vue'
 
   const router = useRouter()
   const tagsStore = useTagsStore()
@@ -234,11 +236,14 @@
       </button>
       <div v-show="!isMobile || createOpen" class="mt-3 md:mt-0">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <input
+          <BaseField
             v-model="newName"
+            size="sm"
             type="text"
+            label="Nom de l'étiquette"
+            label-hidden
+            class="flex-1"
             placeholder="Nom de l'étiquette (ex : Vacances Italie)"
-            class="min-h-[44px] flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 focus:ring-2 focus:ring-primary-500 sm:min-h-0 sm:text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
             @keyup.enter="createTag"
           />
           <div class="flex flex-wrap items-center gap-2 sm:gap-1.5">
@@ -269,20 +274,12 @@
 
         <!-- Exceptional event settings -->
         <div class="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-          <label
-            class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
-          >
-            <input
-              v-model="newIsExceptional"
-              type="checkbox"
-              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              data-testid="new-tag-exceptional"
-            />
-            Dépense exceptionnelle
-            <span class="text-xs text-gray-400">
-              — exclue des moyennes du quotidien
-            </span>
-          </label>
+          <BaseCheckbox
+            v-model="newIsExceptional"
+            label="Dépense exceptionnelle"
+            description="Exclue des moyennes du quotidien"
+            data-testid="new-tag-exceptional"
+          />
 
           <div v-if="newIsExceptional" class="mt-3 pl-6">
             <p class="text-xs text-gray-500 dark:text-gray-400">
@@ -291,18 +288,22 @@
               des vacances ; laissez vide pour une fête à la maison.
             </p>
             <div class="mt-2 flex flex-wrap items-center gap-2">
-              <input
+              <BaseField
                 v-model="newEventStart"
                 type="date"
-                class="min-h-[40px] min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 sm:min-h-0 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                aria-label="Début de la période d'absence"
+                size="sm"
+                label="Début de la période d'absence"
+                label-hidden
+                class="min-w-0 flex-1 sm:flex-none"
               />
               <span class="text-gray-400 text-sm">→</span>
-              <input
+              <BaseField
                 v-model="newEventEnd"
                 type="date"
-                class="min-h-[40px] min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 sm:min-h-0 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                aria-label="Fin de la période d'absence"
+                size="sm"
+                label="Fin de la période d'absence"
+                label-hidden
+                class="min-w-0 flex-1 sm:flex-none"
               />
             </div>
 
@@ -375,10 +376,12 @@
       >
         <!-- Edit mode -->
         <div v-if="editingId === tag.id" class="space-y-2">
-          <input
+          <BaseField
             v-model="editName"
             type="text"
-            class="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+            size="sm"
+            label="Nom de l'étiquette"
+            label-hidden
             @keyup.enter="saveEdit(tag.id)"
             @keyup.escape="cancelEdit"
           />
@@ -399,32 +402,30 @@
               @click="editColor = c"
             ></button>
           </div>
-          <label
-            class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer"
-          >
-            <input
-              v-model="editIsExceptional"
-              type="checkbox"
-              class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-            />
-            Dépense exceptionnelle
-          </label>
+          <BaseCheckbox
+            v-model="editIsExceptional"
+            label="Dépense exceptionnelle"
+          />
           <div v-if="editIsExceptional" class="space-y-1">
             <p class="text-[11px] text-gray-400">
               Période d'absence (facultatif)
             </p>
             <div class="flex items-center gap-1">
-              <input
+              <BaseField
                 v-model="editEventStart"
                 type="date"
-                class="flex-1 min-w-0 px-1.5 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                aria-label="Début de la période d'absence"
+                size="sm"
+                label="Début de la période d'absence"
+                label-hidden
+                class="min-w-0 flex-1"
               />
-              <input
+              <BaseField
                 v-model="editEventEnd"
                 type="date"
-                class="flex-1 min-w-0 px-1.5 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                aria-label="Fin de la période d'absence"
+                size="sm"
+                label="Fin de la période d'absence"
+                label-hidden
+                class="min-w-0 flex-1"
               />
             </div>
             <p class="text-[11px] text-gray-400 pt-1">

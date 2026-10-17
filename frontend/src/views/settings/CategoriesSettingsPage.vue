@@ -45,6 +45,7 @@
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import IconClose from '@/components/icons/IconClose.vue'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
 
   const toast = useToast()
 
@@ -470,12 +471,14 @@
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
             </svg>
-            <input
+            <BaseField
               v-model="categorySearch"
               type="text"
+              size="sm"
               placeholder="Rechercher une catégorie ou une sous-catégorie…"
-              aria-label="Rechercher une catégorie"
-              class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-9 text-base text-gray-800 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:py-2 sm:text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:placeholder-gray-500"
+              label="Rechercher une catégorie"
+              label-hidden
+              class="pl-9 pr-9"
             />
             <BaseIconButton
               v-if="categorySearch"
@@ -616,29 +619,21 @@
                   </div>
 
                   <div>
-                    <label
-                      :for="`category-name-${category.id}`"
-                      class="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                    >
-                      Nom
-                    </label>
                     <form
-                      class="flex flex-col gap-2 sm:flex-row sm:items-center"
+                      class="flex flex-col gap-2 sm:flex-row sm:items-end"
                       @submit.prevent="submitRename(category)"
                     >
-                      <input
-                        :id="`category-name-${category.id}`"
+                      <BaseField
+                        label="Nom"
+                        size="sm"
                         type="text"
                         maxlength="100"
-                        :value="renameDraftFor(category)"
+                        class="flex-1"
+                        :model-value="renameDraftFor(category)"
                         :disabled="renameSaving[category.id]"
                         data-testid="rename-input"
-                        class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                        @input="
-                          onRenameDraftChange(
-                            category.id,
-                            ($event.target as HTMLInputElement).value
-                          )
+                        @update:model-value="
+                          onRenameDraftChange(category.id, String($event))
                         "
                       />
                       <div class="flex gap-2">
@@ -745,22 +740,28 @@
                     class="flex flex-col gap-2 sm:flex-row"
                     @submit.prevent="addSubcategory(category)"
                   >
-                    <input
-                      v-model="newSubcategoryNames[category.id]"
+                    <BaseField
+                      :model-value="newSubcategoryNames[category.id] ?? ''"
+                      size="sm"
                       type="text"
+                      class="flex-1"
                       :placeholder="`Ajouter une sous-catégorie à ${category.name}…`"
-                      :aria-label="`Nouvelle sous-catégorie de ${category.name}`"
-                      class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                      :label="`Nouvelle sous-catégorie de ${category.name}`"
+                      label-hidden
+                      @update:model-value="
+                        newSubcategoryNames[category.id] = String($event)
+                      "
                     />
                     <template v-if="kindOf(category) === 'EXPENSE'">
-                      <select
-                        :value="natureDraftFor(category)"
-                        :aria-label="`Nature de la nouvelle sous-catégorie de ${category.name}`"
-                        class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                        @change="
-                          newSubcategoryNature[category.id] = (
-                            $event.target as HTMLSelectElement
-                          ).value as CategoryNature
+                      <BaseField
+                        as="select"
+                        size="sm"
+                        :label="`Nature de la nouvelle sous-catégorie de ${category.name}`"
+                        label-hidden
+                        :model-value="natureDraftFor(category)"
+                        @update:model-value="
+                          newSubcategoryNature[category.id] =
+                            $event as CategoryNature
                         "
                       >
                         <option
@@ -770,15 +771,16 @@
                         >
                           {{ label }}
                         </option>
-                      </select>
-                      <select
-                        :value="rhythmDraftFor(category)"
-                        :aria-label="`Rythme de la nouvelle sous-catégorie de ${category.name}`"
-                        class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                        @change="
-                          newSubcategoryRhythm[category.id] = (
-                            $event.target as HTMLSelectElement
-                          ).value as CategoryRhythm
+                      </BaseField>
+                      <BaseField
+                        as="select"
+                        size="sm"
+                        :label="`Rythme de la nouvelle sous-catégorie de ${category.name}`"
+                        label-hidden
+                        :model-value="rhythmDraftFor(category)"
+                        @update:model-value="
+                          newSubcategoryRhythm[category.id] =
+                            $event as CategoryRhythm
                         "
                       >
                         <option
@@ -788,7 +790,7 @@
                         >
                           {{ label }}
                         </option>
-                      </select>
+                      </BaseField>
                     </template>
                     <BaseButton
                       type="submit"
