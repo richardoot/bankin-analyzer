@@ -105,6 +105,16 @@
           ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
           : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
   )
+  /** The desktop category pill, in the same palette as the mobile icon. */
+  const categoryPillClass = computed(() =>
+    !props.transaction.categoryName
+      ? 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
+      : isTransfer.value
+        ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50'
+        : isExpense.value
+          ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
+          : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
+  )
 
   const reimbursementSummary = computed(() => {
     const total = props.reimbursements.reduce((sum, r) => sum + r.amount, 0)
@@ -399,13 +409,7 @@
       <div class="col-span-2">
         <button
           class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full transition-colors"
-          :class="
-            transaction.categoryName
-              ? isExpense
-                ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
-                : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
-              : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
-          "
+          :class="categoryPillClass"
           @click="emit('open-category')"
         >
           {{ transaction.categoryIcon ? transaction.categoryIcon + ' ' : ''

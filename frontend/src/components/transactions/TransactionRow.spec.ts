@@ -131,6 +131,23 @@ describe('TransactionRow', () => {
     }
   })
 
+  it('paints a transfer category indigo in both layouts, never red or green', () => {
+    const wrapper = mountRow({ transaction: tx({ type: 'TRANSFER' }) })
+    const category = wrapper
+      .findAll('button')
+      .filter(b => b.text().includes('Alimentation'))
+      .filter(b => b.classes().some(c => c.startsWith('bg-')))
+    const icon = wrapper.find('button.rounded-xl')
+
+    for (const el of [...category, icon]) {
+      expect(el.classes()).toContain('bg-indigo-100')
+      expect(el.classes().some(c => /^(bg|text)-(red|green)-/.test(c))).toBe(
+        false
+      )
+    }
+    expect(category).toHaveLength(1)
+  })
+
   it('offers to follow an expense as a subscription', async () => {
     const wrapper = mountRow()
 
