@@ -30,6 +30,7 @@
   const search = ref('')
   const root = ref<HTMLElement | null>(null)
   const searchInput = ref<HTMLInputElement | null>(null)
+  const trigger = ref<HTMLButtonElement | null>(null)
 
   const selectedSet = computed(() => new Set(props.selectedTagIds))
 
@@ -73,6 +74,22 @@
     }
   }
 
+  /** Escape closes and hands the keyboard back to the trigger. */
+  function closeFromKeyboard(): void {
+    open.value = false
+    trigger.value?.focus()
+  }
+
+  /**
+   * Tabbing out of the panel closes it — it used to stay open behind the
+   * focus. A null target is a click on the panel's own padding (or outside,
+   * which the mousedown handler already covers), so it is left alone.
+   */
+  function onFocusOut(e: FocusEvent): void {
+    const next = e.relatedTarget as Node | null
+    if (next && root.value && !root.value.contains(next)) open.value = false
+  }
+
   function toggleOpen(): void {
     if (!open.value && root.value) {
       const { left } = root.value.getBoundingClientRect()
@@ -97,9 +114,17 @@
 </script>
 
 <template>
-  <div ref="root" class="relative inline-block">
+  <div
+    ref="root"
+    class="relative inline-block"
+    @focusout="onFocusOut"
+    @keydown.esc.stop="open && closeFromKeyboard()"
+  >
     <button
+      ref="trigger"
       type="button"
+      :aria-expanded="open"
+      aria-haspopup="true"
       class="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-dashed border-gray-300 px-2.5 py-0.5 text-xs font-medium sm:min-h-0 sm:px-2 sm:text-[10px] text-gray-500 hover:border-primary-400 hover:text-primary-600 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-400 dark:border-slate-600 dark:text-slate-400 dark:hover:border-primary-500"
       aria-label="Ajouter une étiquette"
       @click="toggleOpen"
@@ -122,6 +147,7 @@
         v-model="search"
         type="text"
         placeholder="Rechercher ou créer…"
+        aria-label="Rechercher ou créer une étiquette"
         class="mb-2 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-2 text-base text-gray-700 sm:py-1 sm:text-xs focus:border-primary-400 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
         @keydown.enter.prevent="canCreate ? create() : null"
       />
@@ -132,6 +158,7 @@
             type="button"
             class="flex min-h-[40px] w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs hover:bg-gray-100 sm:min-h-0 disabled:opacity-50 dark:hover:bg-slate-700"
             :disabled="busy"
+            :aria-pressed="selectedSet.has(tag.id)"
             @click="toggle(tag)"
           >
             <span

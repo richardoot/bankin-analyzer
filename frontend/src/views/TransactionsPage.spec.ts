@@ -754,6 +754,28 @@ describe('TransactionsPage — optimistic updates', () => {
       await flushPromises()
     }
 
+    it('pages on a phone through previous / « n / N » / next', async () => {
+      const wrapper = await mountWithPage(3, 412)
+
+      expect(wrapper.get('[data-testid="pagination-compact"]').text()).toBe(
+        '1 / 138'
+      )
+      const next = wrapper.get('[data-testid="pagination-next"]')
+      expect(next.attributes('aria-label')).toBe('Page suivante')
+      expect(
+        wrapper
+          .get('[data-testid="pagination-previous"]')
+          .attributes('disabled')
+      ).toBeDefined()
+
+      await next.trigger('click')
+      await flushPromises()
+
+      expect(wrapper.get('[data-testid="pagination-compact"]').text()).toBe(
+        '2 / 138'
+      )
+    })
+
     it('offers to reach the rest of the filter once the page is fully ticked', async () => {
       const wrapper = await mountWithPage(3, 412)
       await selectWholePage(wrapper)

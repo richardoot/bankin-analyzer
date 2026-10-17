@@ -1833,14 +1833,16 @@
 
       <!-- Transactions Table -->
       <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 overflow-hidden"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
       >
+        <!-- No overflow-hidden here: it clipped the tag popover of the last
+             rows. The corners are rounded on the edge children instead. -->
         <!-- Error state -->
         <div
           v-if="transactionsError"
           role="alert"
           data-testid="transactions-error"
-          class="flex flex-col gap-3 p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 sm:flex-row sm:items-center sm:justify-between"
+          class="flex flex-col gap-3 rounded-t-xl p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 sm:flex-row sm:items-center sm:justify-between"
         >
           <p class="text-sm">
             {{ transactionsError }}
@@ -1903,7 +1905,7 @@
           <div v-else>
             <!-- Table header -->
             <div
-              class="hidden md:grid gap-2 px-4 py-3 bg-gray-50 dark:bg-slate-800 text-sm font-medium text-gray-500 dark:text-gray-400 border-b dark:border-slate-700"
+              class="hidden md:grid gap-2 rounded-t-xl px-4 py-3 bg-gray-50 dark:bg-slate-800 text-sm font-medium text-gray-500 dark:text-gray-400 border-b dark:border-slate-700"
               :class="isSelectionMode ? 'grid-cols-12' : 'grid-cols-11'"
             >
               <div v-if="isSelectionMode" class="col-span-1 flex items-center">
@@ -1952,7 +1954,10 @@
             </div>
 
             <!-- Transactions rows -->
-            <div class="divide-y dark:divide-slate-700">
+            <div
+              class="divide-y dark:divide-slate-700"
+              :class="totalPages > 1 ? '' : '[&>*:last-child]:rounded-b-xl'"
+            >
               <TransactionRow
                 v-for="tx in transactions"
                 :key="tx.id"
@@ -1987,12 +1992,15 @@
             <!-- Pagination -->
             <div
               v-if="totalPages > 1"
-              class="flex items-center justify-between px-4 py-4 border-t dark:border-slate-700"
+              data-testid="pagination"
+              class="flex flex-col-reverse gap-3 px-4 py-4 border-t border-gray-100 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700"
             >
               <div
-                class="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400"
+                class="flex items-center justify-center gap-3 text-sm text-gray-500 sm:justify-start dark:text-gray-400"
               >
-                <span>Page {{ currentPage }} sur {{ totalPages }}</span>
+                <span class="hidden sm:inline"
+                  >Page {{ currentPage }} sur {{ totalPages }}</span
+                >
                 <label class="inline-flex items-center gap-1.5">
                   <span class="sr-only">Transactions par page</span>
                   <select
@@ -2011,11 +2019,19 @@
                 </label>
               </div>
 
-              <div class="flex items-center gap-1">
+              <!-- On a phone: previous / « 3 / 12 » / next, never wider than
+                   the screen. The numbered strip is for wider screens. -->
+              <nav
+                class="flex items-center justify-between gap-1 sm:justify-end"
+                aria-label="Pagination"
+              >
                 <!-- Previous button -->
                 <button
+                  type="button"
                   :disabled="currentPage === 1"
-                  class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+                  aria-label="Page précédente"
+                  data-testid="pagination-previous"
+                  class="inline-flex min-h-11 min-w-11 items-center justify-center px-3 py-1.5 text-sm rounded-lg transition-colors sm:min-h-0 sm:min-w-0"
                   :class="
                     currentPage === 1
                       ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
@@ -2038,17 +2054,26 @@
                   </svg>
                 </button>
 
+                <span
+                  class="text-sm font-medium tabular-nums text-gray-700 sm:hidden dark:text-gray-300"
+                  data-testid="pagination-compact"
+                >
+                  {{ currentPage }} / {{ totalPages }}
+                </span>
+
                 <!-- Page numbers -->
                 <template v-for="page in visiblePages" :key="page">
                   <span
                     v-if="page < 0"
-                    class="px-2 py-1.5 text-sm text-gray-500 dark:text-gray-400"
+                    class="hidden px-2 py-1.5 text-sm text-gray-500 sm:inline dark:text-gray-400"
                   >
                     ...
                   </span>
                   <button
                     v-else
-                    class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+                    type="button"
+                    :aria-current="page === currentPage ? 'page' : undefined"
+                    class="hidden px-3 py-1.5 text-sm rounded-lg transition-colors sm:inline-block"
                     :class="
                       page === currentPage
                         ? 'bg-primary-600 dark:bg-primary-500 text-white'
@@ -2062,8 +2087,11 @@
 
                 <!-- Next button -->
                 <button
+                  type="button"
                   :disabled="currentPage === totalPages"
-                  class="px-3 py-1.5 text-sm rounded-lg transition-colors"
+                  aria-label="Page suivante"
+                  data-testid="pagination-next"
+                  class="inline-flex min-h-11 min-w-11 items-center justify-center px-3 py-1.5 text-sm rounded-lg transition-colors sm:min-h-0 sm:min-w-0"
                   :class="
                     currentPage === totalPages
                       ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
@@ -2085,7 +2113,7 @@
                     />
                   </svg>
                 </button>
-              </div>
+              </nav>
             </div>
           </div>
         </template>
