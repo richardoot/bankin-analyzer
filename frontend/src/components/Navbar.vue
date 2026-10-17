@@ -91,14 +91,14 @@
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div class="flex h-16 items-center justify-between">
         <!-- Logo + Navigation -->
-        <div class="flex items-center gap-8">
+        <div class="flex min-w-0 items-center gap-6 xl:gap-8">
           <!-- Logo -->
           <!-- The public homepage is for visitors; a signed-in user's home is
                their dashboard. -->
           <RouterLink
             :to="isAuthenticated ? '/dashboard' : '/'"
             data-testid="navbar-logo"
-            class="flex items-center gap-2"
+            class="flex shrink-0 items-center gap-2 whitespace-nowrap"
             @click="closeMobileMenu"
           >
             <svg
@@ -115,19 +115,22 @@
               />
             </svg>
             <span
-              class="text-xl font-semibold text-slate-900 dark:text-slate-100"
+              class="text-xl font-semibold text-slate-900 lg:max-xl:sr-only dark:text-slate-100"
               >Finance Analyzer</span
             >
           </RouterLink>
 
           <!-- Desktop Navigation Links -->
-          <div v-if="isAuthenticated" class="hidden items-center gap-1 md:flex">
+          <div
+            v-if="isAuthenticated"
+            class="hidden items-center gap-0.5 lg:flex xl:gap-1"
+          >
             <RouterLink
               v-for="link in navLinks"
               :key="link.to"
               :to="link.to"
               :data-testid="link.testId"
-              class="rounded-md px-3 py-2 text-sm font-medium transition-colors"
+              class="whitespace-nowrap rounded-md px-2.5 py-2 text-sm font-medium transition-colors xl:px-3"
               :class="
                 isActiveRoute(link.to)
                   ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
@@ -140,7 +143,7 @@
         </div>
 
         <!-- Desktop User Actions -->
-        <div class="hidden items-center gap-4 md:flex">
+        <div class="hidden items-center gap-4 lg:flex">
           <!-- Theme Toggle -->
           <button
             type="button"
@@ -202,7 +205,7 @@
         </div>
 
         <!-- Mobile menu button -->
-        <div class="flex items-center gap-2 md:hidden">
+        <div class="flex items-center gap-2 lg:hidden">
           <!-- Mobile Theme Toggle -->
           <button
             type="button"
@@ -285,14 +288,14 @@
     <!-- Mobile menu -->
     <div
       v-if="isMobileMenuOpen"
-      class="fixed inset-0 top-16 z-[-1] bg-black/30 md:hidden"
+      class="fixed inset-0 top-16 z-[-1] bg-black/30 lg:hidden"
       aria-hidden="true"
       @click="closeMobileMenu"
     />
     <div
       v-if="isMobileMenuOpen"
       id="mobile-menu"
-      class="max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain border-t border-slate-100 bg-white pb-[env(safe-area-inset-bottom)] md:hidden dark:border-slate-800 dark:bg-slate-900"
+      class="max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain border-t border-slate-100 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden dark:border-slate-800 dark:bg-slate-900"
     >
       <div class="px-4 py-3">
         <template v-if="isAuthenticated">
