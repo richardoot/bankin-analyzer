@@ -1,4 +1,6 @@
 <script setup lang="ts">
+  import IconSpinner from '@/components/icons/IconSpinner.vue'
+
   /**
    * Small accessible on/off switch. Emits `change` with the next value so the
    * parent stays in control of (possibly async) state updates.
@@ -50,26 +52,7 @@
       class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
       :class="checked ? 'translate-x-4' : 'translate-x-0.5'"
     >
-      <svg
-        v-if="loading"
-        class="h-4 w-4 animate-spin text-gray-400"
-        fill="none"
-        viewBox="0 0 24 24"
-      >
-        <circle
-          class="opacity-25"
-          cx="12"
-          cy="12"
-          r="10"
-          stroke="currentColor"
-          stroke-width="4"
-        />
-        <path
-          class="opacity-75"
-          fill="currentColor"
-          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-        />
-      </svg>
+      <IconSpinner v-if="loading" class="h-4 w-4 text-gray-400" />
     </span>
   </button>
 </template>

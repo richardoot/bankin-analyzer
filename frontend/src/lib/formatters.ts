@@ -165,6 +165,6 @@ export function formatMonth(
   const date = parseIsoDate(value)
   if (!date) return '—'
   const names = options.style === 'long' ? MONTHS_FR_LONG : MONTHS_FR
-  const name = names[date.getMonth()]
+  const name = names[date.getMonth()] ?? ''
   return options.year === false ? name : `${name} ${date.getFullYear()}`
 }

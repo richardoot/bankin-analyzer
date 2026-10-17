@@ -13,7 +13,7 @@
   import { useAccountsStore } from '@/stores/accounts'
   import { useToast } from '@/composables/useToast'
   import type { AccountDto, AccountType } from '@/lib/api'
-  import ToggleSwitch from '@/components/ToggleSwitch.vue'
+  import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
 
   const props = defineProps<{
     account: AccountDto

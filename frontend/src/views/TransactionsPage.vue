@@ -24,7 +24,7 @@
   import BulkCategoryModal from '@/components/transactions/BulkCategoryModal.vue'
   import TransactionRow from '@/components/transactions/TransactionRow.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
-  import ToggleSwitch from '@/components/ToggleSwitch.vue'
+  import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'

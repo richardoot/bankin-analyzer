@@ -7,7 +7,7 @@
   import { onMounted, ref } from 'vue'
   import { useThemeStore } from '@/stores/theme'
   import SettingsCard from '@/components/settings/SettingsCard.vue'
-  import ToggleSwitch from '@/components/ToggleSwitch.vue'
+  import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
   import { api } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
 
