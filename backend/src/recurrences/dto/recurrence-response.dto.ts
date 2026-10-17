@@ -29,6 +29,8 @@ export class RecurrenceDto {
   status!: 'ACTIVE' | 'STOPPED' | 'CANDIDATE'
   /** The user said it is a recurring charge */
   confirmed!: boolean
+  /** Divisor of the account the latest charge was paid from; above 1 for a joint account */
+  divisor!: number
 }
 
 export class RecurrenceCategoryTotalDto {

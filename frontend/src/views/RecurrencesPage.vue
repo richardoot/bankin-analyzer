@@ -18,6 +18,7 @@
   import EmptyState from '@/components/ui/EmptyState.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import RecurrenceNameEditor from '@/components/recurrences/RecurrenceNameEditor.vue'
+  import DivisorBadge from '@/components/recurrences/DivisorBadge.vue'
   import {
     api,
     recurrenceFilterKey,
@@ -421,11 +422,14 @@
                     :aria-label="`Voir les transactions de ${row.name}`"
                     @click="openTransactions(row)"
                   >
-                    <span
-                      class="block truncate font-medium text-gray-900 hover:underline dark:text-gray-100"
-                      data-testid="recurrence-name"
-                      >{{ row.name }}</span
-                    >
+                    <span class="flex min-w-0 items-center gap-1.5">
+                      <span
+                        class="truncate font-medium text-gray-900 hover:underline dark:text-gray-100"
+                        data-testid="recurrence-name"
+                        >{{ row.name }}</span
+                      >
+                      <DivisorBadge :divisor="row.divisor" />
+                    </span>
                     <span
                       v-if="row.name !== row.label"
                       class="block truncate text-[11px] text-gray-400 dark:text-gray-500"
@@ -541,10 +545,13 @@
                     class="min-w-0 flex-1 text-left"
                     @click="openTransactions(row)"
                   >
-                    <span
-                      class="block truncate text-sm font-medium text-gray-900 dark:text-gray-100"
-                      >{{ row.name }}</span
-                    >
+                    <span class="flex min-w-0 items-center gap-1.5">
+                      <span
+                        class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                        >{{ row.name }}</span
+                      >
+                      <DivisorBadge :divisor="row.divisor" />
+                    </span>
                     <span class="text-xs text-gray-500 dark:text-gray-400">
                       {{ formatCurrency(row.amount) }}
                       {{ PERIOD_LABELS[row.period] }} · le
@@ -639,11 +646,14 @@
                     :aria-label="`Voir les transactions de ${row.name}`"
                     @click="openTransactions(row)"
                   >
-                    <span
-                      class="block truncate font-medium text-gray-900 hover:underline dark:text-gray-100"
-                      data-testid="recurrence-name"
-                      >{{ row.name }}</span
-                    >
+                    <span class="flex min-w-0 items-center gap-1.5">
+                      <span
+                        class="truncate font-medium text-gray-900 hover:underline dark:text-gray-100"
+                        data-testid="recurrence-name"
+                        >{{ row.name }}</span
+                      >
+                      <DivisorBadge :divisor="row.divisor" />
+                    </span>
                     <span
                       v-if="row.name !== row.label"
                       class="block truncate text-[11px] text-gray-400 dark:text-gray-500"

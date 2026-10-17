@@ -781,6 +781,8 @@ export interface RecurrenceDto {
   nextExpected: string
   status: RecurrenceStatus
   confirmed: boolean
+  /** Divisor of the account the latest charge was paid from; above 1 for a joint account. */
+  divisor: number
 }
 
 /** A subscription the list names apart: set aside, or followed without a series. */

@@ -8,6 +8,7 @@ import * as Sentry from '@sentry/nestjs'
 import { PrismaService } from '../prisma/prisma.service'
 import { recordEvent, timed } from '../common/metrics'
 import { merchantKey } from '../ai-suggestions/merchant-memory'
+import { Prisma } from '../generated/prisma'
 import type { Subscription, SubscriptionState } from '../generated/prisma'
 import {
   recomputeRecurrences,
@@ -93,7 +94,7 @@ export class RecurrencesService {
     const subcategoryIds = [
       ...new Set(rows.flatMap(r => (r.subcategoryId ? [r.subcategoryId] : []))),
     ]
-    const [categories, subcategories] = await Promise.all([
+    const [categories, subcategories, divisorById] = await Promise.all([
       this.prisma.category.findMany({
         where: { userId, id: { in: categoryIds } },
         select: { id: true, name: true, icon: true, defaultNature: true },
@@ -102,6 +103,7 @@ export class RecurrencesService {
         where: { userId, id: { in: subcategoryIds } },
         select: { id: true, name: true, nature: true },
       }),
+      this.latestDivisors(userId),
     ])
     const categoryById = new Map(categories.map(c => [c.id, c]))
     const subcategoryById = new Map(subcategories.map(s => [s.id, s]))
@@ -141,6 +143,7 @@ export class RecurrencesService {
         nextExpected: row.nextExpected.toISOString(),
         status: row.status,
         confirmed: subscription?.state === 'CONFIRMED',
+        divisor: divisorById.get(row.id) ?? 1,
       }
     })
 
@@ -194,6 +197,26 @@ export class RecurrencesService {
         .map(summarize),
       computedAt: rows[0]?.computedAt.toISOString() ?? null,
     }
+  }
+
+  /**
+   * By recurrence, the divisor of the account its latest charge was paid
+   * from: what tells a joint-account series apart in the list.
+   */
+  private async latestDivisors(userId: string): Promise<Map<string, number>> {
+    const rows = await this.prisma.$queryRaw<
+      { recurrence_id: string; divisor: number }[]
+    >(Prisma.sql`
+      SELECT DISTINCT ON (rt.recurrence_id)
+        rt.recurrence_id, a.divisor
+      FROM app.recurrence_transactions rt
+      JOIN app.recurrences r ON r.id = rt.recurrence_id
+      JOIN app.transactions t ON t.id = rt.transaction_id
+      JOIN app.accounts a ON a.id = t.account_id
+      WHERE r.user_id = ${userId}
+      ORDER BY rt.recurrence_id, t.date DESC, t.id DESC
+    `)
+    return new Map(rows.map(row => [row.recurrence_id, Number(row.divisor)]))
   }
 
   /**

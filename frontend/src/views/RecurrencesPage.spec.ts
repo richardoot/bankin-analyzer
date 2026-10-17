@@ -44,6 +44,7 @@ function recurrence(overrides: Partial<RecurrenceDto> = {}): RecurrenceDto {
     nextExpected: '2026-10-01T00:00:00.000Z',
     status: 'ACTIVE',
     confirmed: false,
+    divisor: 1,
     ...overrides,
   }
 }
@@ -101,6 +102,16 @@ describe('RecurrencesPage', () => {
     const total = wrapper.find('[data-testid="recurrences-total"]').text()
     expect(total).toContain('2 charges actives')
     expect(total).toContain('674,99')
+  })
+
+  it('marks a charge paid from a joint account', async () => {
+    const wrapper = await mountPage(
+      listOf([recurrence(), { ...rent, divisor: 2 }])
+    )
+
+    const badges = wrapper.findAll('[data-testid="joint-badge"]')
+    expect(badges).toHaveLength(1)
+    expect(badges[0].text()).toBe('Joint ÷2')
   })
 
   it('groups the active charges by category, heaviest first', async () => {
