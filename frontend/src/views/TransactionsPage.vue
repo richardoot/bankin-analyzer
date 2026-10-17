@@ -1780,7 +1780,9 @@
                 <button
                   :disabled="isBulkUpdating"
                   class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg disabled:opacity-50"
+                  type="button"
                   title="Pointer"
+                  aria-label="Pointer la sélection"
                   @click="bulkTogglePointed(true)"
                 >
                   <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
@@ -1794,7 +1796,9 @@
                 <button
                   :disabled="isBulkUpdating"
                   class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg disabled:opacity-50"
+                  type="button"
                   title="Dépointer"
+                  aria-label="Dépointer la sélection"
                   @click="bulkTogglePointed(false)"
                 >
                   <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
@@ -1808,7 +1812,9 @@
                 <button
                   :disabled="isBulkUpdating"
                   class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-primary-700 dark:text-primary-400 bg-primary-100 dark:bg-primary-900/30 border border-primary-300 dark:border-primary-700 rounded-lg disabled:opacity-50"
+                  type="button"
                   title="Changer de catégorie"
+                  aria-label="Changer la catégorie de la sélection"
                   @click="openBulkCategoryModal"
                 >
                   <svg

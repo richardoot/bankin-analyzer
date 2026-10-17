@@ -7,7 +7,7 @@
     type TransactionDto,
     type SettlementDto,
   } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, parseDecimal } from '@/lib/formatters'
   import IncomeTransactionPicker from './IncomeTransactionPicker.vue'
   import {
     availableAmountOf,
@@ -83,7 +83,7 @@
   }
 
   function onAmountCommit(event: Event): void {
-    const raw = Number.parseFloat((event.target as HTMLInputElement).value)
+    const raw = parseDecimal((event.target as HTMLInputElement).value)
     const value = Number.isFinite(raw) ? raw : 0
     amount.value = round2(
       Math.min(Math.max(0, value), Math.min(amountDue.value, pot.value))
@@ -169,6 +169,7 @@
           ref="modalPanelRef"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="single-settlement-modal-title"
           class="relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-slate-900 dark:shadow-slate-900/30"
         >
           <!-- Header -->
@@ -177,6 +178,7 @@
           >
             <div class="min-w-0">
               <h2
+                id="single-settlement-modal-title"
                 class="text-xl font-semibold text-gray-900 dark:text-gray-100"
               >
                 Régler ce remboursement
@@ -211,6 +213,7 @@
           <div class="flex-1 overflow-y-auto p-4 sm:p-6">
             <div
               v-if="error"
+              role="alert"
               class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm"
             >
               {{ error }}
@@ -290,10 +293,8 @@
                 <div class="flex items-center gap-1 shrink-0">
                   <input
                     id="single-settlement-amount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    :max="Math.min(amountDue, pot)"
+                    type="text"
+                    inputmode="decimal"
                     :value="amount"
                     :aria-label="`Montant affecté à ${line.description}`"
                     class="w-24 min-h-[40px] px-2 py-1 text-right border border-gray-300 sm:min-h-0 sm:w-28 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"

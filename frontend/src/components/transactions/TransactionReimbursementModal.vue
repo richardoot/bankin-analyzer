@@ -183,11 +183,13 @@
         <div class="space-y-4">
           <div>
             <label
+              for="reimbursement-person"
               class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
             >
               Personne *
             </label>
             <select
+              id="reimbursement-person"
               v-model="form.personId"
               class="w-full min-h-[44px] px-3 py-2 border border-gray-300 sm:min-h-0 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
             >
@@ -204,11 +206,13 @@
 
           <div>
             <label
+              for="reimbursement-amount"
               class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
             >
               Montant *
             </label>
             <input
+              id="reimbursement-amount"
               v-model.number="form.amount"
               type="number"
               step="0.01"
@@ -239,6 +243,7 @@
                   <input
                     v-model.number="customDivisor"
                     type="number"
+                    aria-label="Diviseur personnalisé"
                     min="1"
                     max="100"
                     class="w-14 min-h-[40px] px-1.5 py-1 text-xs sm:min-h-0 sm:w-12 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
@@ -258,11 +263,13 @@
 
           <div>
             <label
+              for="reimbursement-note"
               class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
             >
               Note (optionnel)
             </label>
             <input
+              id="reimbursement-note"
               v-model="form.note"
               type="text"
               placeholder="Ajouter une note..."

@@ -1,0 +1,38 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { setActivePinia, createPinia } from 'pinia'
+import TimePeriodSelector from './TimePeriodSelector.vue'
+import { useFiltersStore } from '@/stores/filters'
+
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ isAuthenticated: false }),
+}))
+vi.mock('@/lib/api', () => ({
+  api: { getFilterPreferences: vi.fn(), updateFilterPreferences: vi.fn() },
+}))
+
+describe('TimePeriodSelector', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('says which period is on, and moves it on click', async () => {
+    const wrapper = mount(TimePeriodSelector)
+    const store = useFiltersStore()
+    store.setTimePeriod('6m')
+    await wrapper.vm.$nextTick()
+
+    const pressed = () =>
+      wrapper
+        .findAll('[data-testid^="period-"]')
+        .filter(b => b.attributes('aria-pressed') === 'true')
+        .map(b => b.attributes('data-testid'))
+    expect(pressed()).toEqual(['period-6m'])
+    expect(wrapper.get('[role="group"]').attributes('aria-label')).toBe(
+      'Période'
+    )
+
+    await wrapper.get('[data-testid="period-1y"]').trigger('click')
+    expect(pressed()).toEqual(['period-1y'])
+  })
+})

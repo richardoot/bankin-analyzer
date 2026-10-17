@@ -592,6 +592,8 @@
             </p>
           </div>
           <button
+            type="button"
+            aria-label="Retirer ce fichier"
             class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             @click="cancelImport"
           >

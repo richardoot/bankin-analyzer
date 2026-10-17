@@ -62,10 +62,13 @@
 
       <!-- Person filter -->
       <div v-if="persons.length > 1" class="flex items-center gap-2">
-        <label class="text-sm text-gray-600 dark:text-gray-400 shrink-0"
+        <label
+          for="settlement-history-person"
+          class="text-sm text-gray-600 dark:text-gray-400 shrink-0"
           >Filtrer :</label
         >
         <select
+          id="settlement-history-person"
           v-model="selectedPersonId"
           class="flex-1 sm:flex-initial px-3 py-2 sm:py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400 min-h-[44px] sm:min-h-0"
         >
@@ -197,6 +200,7 @@
                 type="button"
                 class="p-2.5 min-h-[44px] min-w-[44px] text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
                 title="Voir les détails"
+                aria-label="Voir les détails du règlement"
                 @click="emit('viewDetails', settlement)"
               >
                 <svg
@@ -223,6 +227,7 @@
                 type="button"
                 class="p-2.5 min-h-[44px] min-w-[44px] text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                 title="Annuler le règlement"
+                aria-label="Annuler le règlement"
                 @click="emit('delete', settlement.id)"
               >
                 <svg
@@ -318,6 +323,7 @@
                 type="button"
                 class="p-2 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
                 title="Voir les détails"
+                aria-label="Voir les détails du règlement"
                 @click="emit('viewDetails', settlement)"
               >
                 <svg
@@ -344,6 +350,7 @@
                 type="button"
                 class="p-2 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                 title="Annuler le règlement"
+                aria-label="Annuler le règlement"
                 @click="emit('delete', settlement.id)"
               >
                 <svg

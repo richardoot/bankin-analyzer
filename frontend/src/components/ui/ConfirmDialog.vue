@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import { useId } from 'vue'
   import BaseModal from '@/components/ui/BaseModal.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
 
@@ -24,12 +25,16 @@
   )
 
   const emit = defineEmits<{ confirm: []; cancel: [] }>()
+
+  // The question is the dialog's name: a screen reader announces it on open.
+  const titleId = useId()
 </script>
 
 <template>
   <BaseModal
     :open="open"
     :closable="!loading"
+    :labelled-by="titleId"
     max-width="md"
     @close="emit('cancel')"
   >
@@ -54,6 +59,7 @@
     </div>
 
     <h3
+      :id="titleId"
       class="text-lg font-semibold text-gray-900 dark:text-gray-100 text-center mb-2"
     >
       {{ title }}

@@ -15,6 +15,7 @@
   import PlanStepEnvelopes from './wizard/PlanStepEnvelopes.vue'
   import type { EnvelopeRow } from './wizard/PlanStepEnvelopes.vue'
   import { useFiltersStore } from '@/stores/filters'
+  import { parseDecimal } from '@/lib/formatters'
 
   // ── Props / emits ────────────────────────────────────────────────────────
   const props = defineProps<{
@@ -545,7 +546,7 @@
 
   // ── Manual entry edit ────────────────────────────────────────────────────
   function setEntryAmount(catId: string, value: string) {
-    const num = parseFloat(value)
+    const num = parseDecimal(value)
     if (Number.isFinite(num) && num > 0) {
       previewEntries.value.set(catId, num)
     } else {
@@ -597,7 +598,7 @@
       savingsTarget.value = null
       return
     }
-    const parsed = Number(trimmed)
+    const parsed = parseDecimal(trimmed)
     savingsTarget.value = Number.isFinite(parsed) && parsed >= 0 ? parsed : null
   }
 

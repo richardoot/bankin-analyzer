@@ -832,11 +832,14 @@
                 <input
                   v-model="editingPersonName"
                   type="text"
+                  aria-label="Nom de la personne"
                   class="flex-1 px-3 py-1.5 border border-amber-300 dark:border-amber-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
                   @keyup.enter="saveEditPerson(person.id)"
                   @keyup.escape="cancelEditPerson"
                 />
                 <button
+                  type="button"
+                  aria-label="Enregistrer le nom"
                   class="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
                   @click="saveEditPerson(person.id)"
                 >
@@ -855,6 +858,8 @@
                   </svg>
                 </button>
                 <button
+                  type="button"
+                  aria-label="Annuler le renommage"
                   class="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
                   @click="cancelEditPerson"
                 >
@@ -904,8 +909,10 @@
                 </div>
                 <!-- Delete button -->
                 <button
+                  type="button"
                   class="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
                   title="Supprimer"
+                  :aria-label="`Supprimer ${person.name}`"
                   @click="showDeleteConfirmation(person.id, person.name)"
                 >
                   <svg

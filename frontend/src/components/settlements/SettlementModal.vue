@@ -8,7 +8,7 @@
     type SettlementDto,
     type SettlementReimbursementItemDto,
   } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, parseDecimal } from '@/lib/formatters'
   import IncomeTransactionPicker from './IncomeTransactionPicker.vue'
   import {
     availableAmountOf,
@@ -264,7 +264,7 @@
    * clamped, so writing back on every keystroke would eat a half-typed "0.".
    */
   function onAmountCommit(reimbursementId: string, event: Event): void {
-    const value = Number.parseFloat((event.target as HTMLInputElement).value)
+    const value = parseDecimal((event.target as HTMLInputElement).value)
     setLineAmount(reimbursementId, Number.isFinite(value) ? value : 0)
   }
 
@@ -287,7 +287,7 @@
   }
 
   function onCategoryAmountCommit(group: CategoryGroup, event: Event): void {
-    const value = Number.parseFloat((event.target as HTMLInputElement).value)
+    const value = parseDecimal((event.target as HTMLInputElement).value)
     applyToGroup(group, Number.isFinite(value) ? Math.max(0, value) : 0)
   }
 
@@ -434,6 +434,7 @@
           ref="modalPanelRef"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="settlement-modal-title"
           class="relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-slate-900 dark:shadow-slate-900/30"
         >
           <!-- Header -->
@@ -442,6 +443,7 @@
           >
             <div class="min-w-0">
               <h2
+                id="settlement-modal-title"
                 class="text-xl font-semibold text-gray-900 dark:text-gray-100"
               >
                 Enregistrer un règlement
@@ -484,6 +486,7 @@
           <div class="flex-1 overflow-y-auto p-4 sm:p-6">
             <div
               v-if="error"
+              role="alert"
               class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm"
             >
               {{ error }}
@@ -748,10 +751,8 @@
                       </div>
                       <div class="flex items-center gap-1 shrink-0">
                         <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          :max="group.selectedDue"
+                          type="text"
+                          inputmode="decimal"
                           :value="group.allocated"
                           :aria-label="`Montant affecté à ${group.categoryName}`"
                           class="w-20 min-h-[40px] px-2 py-1 text-right border border-gray-300 sm:min-h-0 sm:w-24 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
@@ -791,10 +792,8 @@
                           </div>
                           <div class="flex items-center gap-1 shrink-0">
                             <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              :max="line.amountDue"
+                              type="text"
+                              inputmode="decimal"
                               :value="stateOf(line.reimbursementId).amount"
                               :aria-label="`Montant affecté à ${line.description}`"
                               class="w-20 min-h-[40px] px-2 py-1 text-right border border-gray-300 sm:min-h-0 sm:w-24 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"

@@ -291,6 +291,7 @@
               data-testid="ask-undo"
               class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9"
               title="Annuler cette synchronisation"
+              aria-label="Annuler cette synchronisation"
               :disabled="previewingRunId === run.id"
               @click="askUndo(run.id)"
             >

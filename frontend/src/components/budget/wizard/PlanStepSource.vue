@@ -36,12 +36,17 @@
 <template>
   <div class="space-y-5">
     <div>
-      <label
+      <p
+        id="plan-source-label"
         class="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
       >
         Comment initialiser les montants ?
-      </label>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      </p>
+      <div
+        role="group"
+        aria-labelledby="plan-source-label"
+        class="grid grid-cols-1 sm:grid-cols-3 gap-2"
+      >
         <button
           v-for="opt in [
             { value: 'averages', label: 'Reprendre les moyennes' },
@@ -50,6 +55,7 @@
           ]"
           :key="opt.value"
           type="button"
+          :aria-pressed="initSource === opt.value"
           :data-testid="`init-source-${opt.value}`"
           class="px-3 py-2 text-sm font-medium rounded-lg border transition-colors text-left"
           :class="
@@ -67,12 +73,15 @@
     <!-- Lookback selector + reimbursement toggles for averages -->
     <div v-if="initSource === 'averages'" class="space-y-3">
       <div>
-        <label
+        <p
+          id="plan-lookback-label"
           class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
         >
           Période de référence pour les moyennes
-        </label>
+        </p>
         <div
+          role="group"
+          aria-labelledby="plan-lookback-label"
           class="inline-flex rounded-lg bg-gray-100 dark:bg-slate-700/50 p-1"
         >
           <button
@@ -83,6 +92,7 @@
             ]"
             :key="opt.value"
             type="button"
+            :aria-pressed="lookback === opt.value"
             class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
             :class="
               lookback === opt.value
@@ -98,10 +108,15 @@
 
       <!-- Which historical figure seeds the envelopes -->
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+        <span
+          id="plan-seed-basis-label"
+          class="text-xs font-medium text-gray-600 dark:text-gray-400"
+        >
           Base des enveloppes
         </span>
         <div
+          role="group"
+          aria-labelledby="plan-seed-basis-label"
           class="inline-flex rounded-lg bg-gray-100 dark:bg-slate-700/50 p-0.5"
         >
           <button
@@ -111,6 +126,7 @@
             ]"
             :key="opt.value"
             type="button"
+            :aria-pressed="seedBasis === opt.value"
             :data-testid="`seed-basis-${opt.value}`"
             class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
             :class="

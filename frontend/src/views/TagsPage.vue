@@ -26,6 +26,19 @@
     '#ec4899',
     '#64748b',
   ]
+  /** Spoken names of the swatches: a hex code is not a name. */
+  const COLOR_NAMES: Record<string, string> = {
+    [DEFAULT_COLOR]: 'Rouge',
+    '#f97316': 'Orange',
+    '#eab308': 'Jaune',
+    '#22c55e': 'Vert',
+    '#14b8a6': 'Sarcelle',
+    '#06b6d4': 'Cyan',
+    '#6366f1': 'Indigo',
+    '#a855f7': 'Violet',
+    '#ec4899': 'Rose',
+    '#64748b': 'Gris',
+  }
 
   // Create form state
   // The creation form is a screen of controls on a phone; it folds
@@ -247,19 +260,20 @@
               class="min-h-[44px] flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 focus:ring-2 focus:ring-primary-500 sm:min-h-0 sm:text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
               @keyup.enter="createTag"
             />
-            <div class="flex items-center gap-2 sm:gap-1.5">
+            <div class="flex flex-wrap items-center gap-2 sm:gap-1.5">
               <button
                 v-for="c in COLORS"
                 :key="c"
                 type="button"
-                class="h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 sm:h-6 sm:w-6"
+                :aria-pressed="newColor === c"
+                class="h-8 w-8 shrink-0 rounded-full border-2 transition-transform hover:scale-110 sm:h-6 sm:w-6"
                 :class="
                   newColor === c
                     ? 'border-gray-900 dark:border-white'
                     : 'border-transparent'
                 "
                 :style="{ backgroundColor: c }"
-                :aria-label="`Couleur ${c}`"
+                :aria-label="`Couleur ${COLOR_NAMES[c] ?? c}`"
                 @click="newColor = c"
               ></button>
             </div>
@@ -395,12 +409,14 @@
               @keyup.enter="saveEdit(tag.id)"
               @keyup.escape="cancelEdit"
             />
-            <div class="flex items-center gap-1">
+            <div class="flex flex-wrap items-center gap-1">
               <button
                 v-for="c in COLORS"
                 :key="c"
                 type="button"
-                class="h-7 w-7 rounded-full border-2 sm:h-5 sm:w-5"
+                :aria-label="`Couleur ${COLOR_NAMES[c] ?? c}`"
+                :aria-pressed="editColor === c"
+                class="h-7 w-7 shrink-0 rounded-full border-2 sm:h-5 sm:w-5"
                 :class="
                   editColor === c
                     ? 'border-gray-900 dark:border-white'

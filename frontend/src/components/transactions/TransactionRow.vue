@@ -262,6 +262,7 @@
                   : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
               "
               :title="transaction.isPointed ? 'Dépointer' : 'Pointer'"
+              :aria-label="transaction.isPointed ? 'Dépointer' : 'Pointer'"
               @click="emit('toggle-pointed')"
             >
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -440,6 +441,7 @@
               : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
           "
           :title="transaction.isPointed ? 'Dépointer' : 'Pointer'"
+          :aria-label="transaction.isPointed ? 'Dépointer' : 'Pointer'"
           @click="emit('toggle-pointed')"
         >
           <svg

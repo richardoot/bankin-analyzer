@@ -209,6 +209,7 @@
           ref="modalPanelRef"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="duplicates-modal-title"
           class="relative z-10 flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-slate-900 dark:shadow-slate-900/30"
         >
           <!-- Header -->
@@ -234,6 +235,7 @@
                 </svg>
               </div>
               <h2
+                id="duplicates-modal-title"
                 class="text-xl font-semibold text-gray-900 dark:text-gray-100"
               >
                 Doublons détectés

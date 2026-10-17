@@ -275,4 +275,24 @@ describe('SingleSettlementModal', () => {
       { reimbursementId: 'r-carrefour', amountSettled: 30 },
     ])
   })
+
+  it('reads an amount typed with a comma', async () => {
+    const wrapper = await mountModal({
+      income: [makeIncome({ amount: 500 })],
+    })
+
+    await pickFirstTransaction(wrapper)
+    const field = wrapper.get('#single-settlement-amount')
+    expect(field.attributes('inputmode')).toBe('decimal')
+    await field.setValue('12,5')
+    await field.trigger('change')
+    await flushPromises()
+
+    await confirmButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(submittedLines()).toEqual([
+      { reimbursementId: 'r-carrefour', amountSettled: 12.5 },
+    ])
+  })
 })

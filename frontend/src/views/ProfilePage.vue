@@ -80,44 +80,44 @@
         <!-- Profile Info -->
         <div class="space-y-6 py-8">
           <div>
-            <label
+            <p
               class="block text-sm font-medium text-gray-500 dark:text-gray-400"
             >
               Adresse email
-            </label>
+            </p>
             <p class="mt-1 text-lg text-gray-900 dark:text-gray-100">
               {{ user?.email }}
             </p>
           </div>
 
           <div>
-            <label
+            <p
               class="block text-sm font-medium text-gray-500 dark:text-gray-400"
             >
               Identifiant unique
-            </label>
+            </p>
             <p class="mt-1 font-mono text-sm text-gray-600 dark:text-gray-400">
               {{ user?.id }}
             </p>
           </div>
 
           <div v-if="createdAt">
-            <label
+            <p
               class="block text-sm font-medium text-gray-500 dark:text-gray-400"
             >
               Membre depuis
-            </label>
+            </p>
             <p class="mt-1 text-lg text-gray-900 dark:text-gray-100">
               {{ createdAt }}
             </p>
           </div>
 
           <div v-if="user?.email_confirmed_at">
-            <label
+            <p
               class="block text-sm font-medium text-gray-500 dark:text-gray-400"
             >
               Statut du compte
-            </label>
+            </p>
             <p
               class="mt-1 flex items-center gap-2 text-lg text-gray-900 dark:text-gray-100"
             >

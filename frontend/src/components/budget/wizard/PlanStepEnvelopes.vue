@@ -42,7 +42,7 @@
   <div class="space-y-5">
     <div>
       <div class="flex items-center justify-between mb-2 gap-3">
-        <label
+        <p
           class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 flex items-center gap-2"
         >
           Montants
@@ -68,7 +68,7 @@
             </svg>
             mise à jour…
           </span>
-        </label>
+        </p>
         <span class="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
           Total : <strong>{{ formatCurrency(previewTotal) }}</strong>
         </span>
@@ -127,9 +127,8 @@
             <input
               id="savings-target"
               data-testid="savings-target-input"
-              type="number"
-              min="0"
-              step="10"
+              type="text"
+              inputmode="decimal"
               :value="savingsTarget ?? ''"
               placeholder="—"
               class="w-28 pl-2 pr-7 py-1 text-sm text-right bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-md text-gray-900 dark:text-gray-100 tabular-nums"
@@ -273,9 +272,9 @@
           </span>
           <div class="relative shrink-0">
             <input
-              type="number"
-              min="0"
-              step="1"
+              type="text"
+              inputmode="decimal"
+              :aria-label="`Enveloppe ${row.category.categoryName}`"
               :value="row.amount > 0 ? row.amount : ''"
               placeholder="—"
               class="w-24 pl-2 pr-7 py-1 text-sm text-right bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-md text-gray-900 dark:text-gray-100 tabular-nums"

@@ -73,10 +73,14 @@
           <span class="sm:hidden">Modifier</span>
           <span class="hidden sm:inline">Modifier les budgets</span>
         </button>
-        <label class="text-sm text-gray-500 dark:text-gray-400 shrink-0">
+        <label
+          for="budget-sort"
+          class="text-sm text-gray-500 dark:text-gray-400 shrink-0"
+        >
           Trier :
         </label>
         <select
+          id="budget-sort"
           v-model="sortOrder"
           class="min-h-[40px] min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 sm:min-h-0 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
         >
@@ -104,6 +108,7 @@
       </span>
       <button
         type="button"
+        :aria-pressed="selectedMonth === null"
         data-testid="budget-month-average"
         class="min-h-[36px] shrink-0 whitespace-nowrap rounded-md border px-2.5 py-1 text-xs font-medium transition-colors sm:min-h-0"
         :class="
@@ -120,6 +125,7 @@
         v-for="option in monthOptions"
         :key="option.ym"
         type="button"
+        :aria-pressed="selectedMonth === option.ym"
         :data-testid="`budget-month-${option.ym}`"
         class="min-h-[36px] shrink-0 whitespace-nowrap rounded-md border px-2.5 py-1 text-xs font-medium transition-colors sm:min-h-0"
         :class="
@@ -213,6 +219,7 @@
         >
           <button
             type="button"
+            :aria-pressed="breakdownMode === 'everyday'"
             data-testid="budget-mode-everyday"
             class="min-h-[36px] rounded-md px-2.5 py-1 transition-colors sm:min-h-0"
             :class="
@@ -226,6 +233,7 @@
           </button>
           <button
             type="button"
+            :aria-pressed="breakdownMode === 'real'"
             data-testid="budget-mode-real"
             class="min-h-[36px] rounded-md px-2.5 py-1 transition-colors sm:min-h-0"
             :class="

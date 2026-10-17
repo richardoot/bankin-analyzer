@@ -237,6 +237,7 @@
             v-for="opt in options"
             :key="opt.value"
             type="button"
+            :aria-pressed="preset === opt.value"
             :data-testid="`comparison-option-${opt.value}`"
             class="block w-full px-3 py-2.5 text-left text-sm transition-colors sm:py-2"
             :class="
@@ -266,10 +267,13 @@
       class="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3"
     >
       <div class="flex min-w-0 items-center gap-2">
-        <label class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
+        <label
+          for="comparison-custom-start"
+          class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
           >Du :</label
         >
         <input
+          id="comparison-custom-start"
           type="date"
           :value="customStartDate"
           data-testid="comparison-custom-start"
@@ -283,10 +287,13 @@
         />
       </div>
       <div class="flex min-w-0 items-center gap-2">
-        <label class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
+        <label
+          for="comparison-custom-end"
+          class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
           >Au :</label
         >
         <input
+          id="comparison-custom-end"
           type="date"
           :value="customEndDate"
           data-testid="comparison-custom-end"

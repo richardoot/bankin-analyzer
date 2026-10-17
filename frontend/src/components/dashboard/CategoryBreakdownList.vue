@@ -116,13 +116,15 @@
     <div
       v-for="cat in categories"
       :key="rowKey(cat)"
-      class="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden"
+      class="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700"
     >
-      <!-- Row -->
+      <!-- Row. No overflow-hidden on the card: it cut the keyboard focus
+           ring off; the row rounds its own corners instead. -->
       <button
         type="button"
         :data-testid="`category-row-${cat.category}`"
-        class="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors"
+        class="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+        :class="isExpanded(rowKey(cat)) ? 'rounded-t-lg' : 'rounded-lg'"
         :aria-expanded="isExpanded(rowKey(cat))"
         @click="toggleExpanded(rowKey(cat))"
       >
@@ -201,7 +203,7 @@
       <!-- Drill-down panel -->
       <div
         v-if="isExpanded(rowKey(cat))"
-        class="border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 px-4 py-4"
+        class="rounded-b-lg border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 px-4 py-4"
       >
         <!-- Subcategories table -->
         <div

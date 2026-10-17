@@ -36,6 +36,7 @@
   <BaseModal
     :open="isOpen"
     :closable="!props.loading"
+    labelled-by="delete-account-title"
     max-width="md"
     @close="handleClose"
   >
@@ -58,7 +59,10 @@
             />
           </svg>
         </div>
-        <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+        <h2
+          id="delete-account-title"
+          class="text-xl font-semibold text-gray-900 dark:text-gray-100"
+        >
           Supprimer mon compte
         </h2>
       </div>

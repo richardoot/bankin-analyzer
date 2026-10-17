@@ -57,11 +57,15 @@
       <!-- A 5-column grid on a phone: the inline pill wrapped to a second
            line at 375px and its rounded ends landed mid-row. -->
       <div
+        role="group"
+        aria-label="Période"
         class="grid grid-cols-5 rounded-lg bg-gray-100 p-1 sm:inline-flex sm:flex-wrap dark:bg-slate-700/50"
       >
         <button
           v-for="(period, index) in periods"
           :key="period.value"
+          type="button"
+          :aria-pressed="filtersStore.timePeriod === period.value"
           :data-testid="`period-${period.value}`"
           class="relative min-h-[44px] px-1 py-2 text-sm font-medium transition-all duration-200 focus:outline-none sm:min-h-0 sm:px-4 focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-800"
           :class="[

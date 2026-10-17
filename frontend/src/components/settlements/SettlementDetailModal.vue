@@ -68,6 +68,7 @@
           ref="modalPanelRef"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="settlement-detail-modal-title"
           class="relative z-10 flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-slate-900 dark:shadow-slate-900/30"
         >
           <!-- Header -->
@@ -76,6 +77,7 @@
           >
             <div class="min-w-0">
               <h2
+                id="settlement-detail-modal-title"
                 class="text-xl font-semibold text-gray-900 dark:text-gray-100"
               >
                 Détails du règlement

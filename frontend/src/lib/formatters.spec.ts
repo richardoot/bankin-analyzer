@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatCurrency } from './formatters'
+import { formatCurrency, parseDecimal } from './formatters'
 
 describe('formatCurrency', () => {
   it('formats positive numbers', () => {
@@ -38,5 +38,23 @@ describe('formatCurrency', () => {
   it('returns EUR currency format', () => {
     const result = formatCurrency(100)
     expect(result).toContain('€')
+  })
+})
+
+describe('parseDecimal', () => {
+  it('reads a comma as the decimal separator', () => {
+    expect(parseDecimal('12,5')).toBe(12.5)
+    expect(parseDecimal('12.5')).toBe(12.5)
+  })
+
+  it('ignores thousands spaces, no-break ones included', () => {
+    expect(parseDecimal('1 234,50')).toBe(1234.5)
+    expect(parseDecimal('1\u202f234,50')).toBe(1234.5)
+  })
+
+  it('says NaN for an empty or non-numeric field', () => {
+    expect(parseDecimal('')).toBeNaN()
+    expect(parseDecimal('  ')).toBeNaN()
+    expect(parseDecimal('abc')).toBeNaN()
   })
 })

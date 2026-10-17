@@ -434,6 +434,7 @@
                   <select
                     v-if="allExpenseCategories.length > 0"
                     data-testid="expense-category-filter"
+                    aria-label="Catégorie des dépenses par mois"
                     :value="selectedCategory ?? ''"
                     class="max-w-full min-h-[40px] sm:min-h-0 text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
                     @change="handleCategoryChange"
@@ -513,6 +514,7 @@
                 >
                   <button
                     type="button"
+                    :aria-pressed="breakdownMode === 'real'"
                     data-testid="breakdown-mode-real"
                     class="px-2.5 py-1 rounded-md transition-colors"
                     :class="
@@ -526,6 +528,7 @@
                   </button>
                   <button
                     type="button"
+                    :aria-pressed="breakdownMode === 'everyday'"
                     data-testid="breakdown-mode-everyday"
                     class="px-2.5 py-1 rounded-md transition-colors"
                     :class="
@@ -619,6 +622,7 @@
                   <select
                     v-if="allIncomeCategories.length > 0"
                     data-testid="income-category-filter"
+                    aria-label="Catégorie des revenus par mois"
                     :value="selectedIncomeCategory ?? ''"
                     class="max-w-full min-h-[40px] sm:min-h-0 text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
                     @change="handleIncomeCategoryChange"

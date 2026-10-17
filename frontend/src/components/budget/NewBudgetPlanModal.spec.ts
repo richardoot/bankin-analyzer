@@ -531,7 +531,7 @@ describe('NewBudgetPlanModal', () => {
     expect(rows.length).toBe(sampleCategories.length)
     rows.forEach(row => {
       const input = row.querySelector(
-        'input[type="number"]'
+        'input[inputmode="decimal"]'
       ) as HTMLInputElement
       expect(input.value).toBe('')
     })
@@ -595,7 +595,7 @@ describe('NewBudgetPlanModal', () => {
     // is left empty so the user must opt in explicitly.
     expect(loisirsRow?.textContent).toContain("Pas d'historique")
     const loisirsInput = loisirsRow?.querySelector(
-      'input[type="number"]'
+      'input[inputmode="decimal"]'
     ) as HTMLInputElement
     expect(loisirsInput.value).toBe('')
   })

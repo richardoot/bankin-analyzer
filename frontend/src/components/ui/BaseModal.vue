@@ -22,8 +22,13 @@
       maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | undefined
       /** When closing must wait (a request in flight), the caller says so. */
       closable?: boolean | undefined
+      /**
+       * The id of the element naming the dialog, when it is not `title` —
+       * a dialog drawing its own heading (ConfirmDialog, a custom header).
+       */
+      labelledBy?: string | undefined
     }>(),
-    { maxWidth: 'md', closable: true }
+    { maxWidth: 'md', closable: true, labelledBy: undefined }
   )
 
   const emit = defineEmits<{ close: [] }>()
@@ -63,7 +68,7 @@
         ref="panelRef"
         role="dialog"
         aria-modal="true"
-        :aria-labelledby="title ? titleId : undefined"
+        :aria-labelledby="title ? titleId : labelledBy"
         class="relative z-10 flex max-h-[90dvh] w-full flex-col rounded-t-2xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl sm:rounded-2xl sm:p-6 sm:pb-6 dark:bg-slate-900 dark:shadow-slate-900/30"
         :class="widthClass"
       >

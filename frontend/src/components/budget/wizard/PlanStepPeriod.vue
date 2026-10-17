@@ -24,12 +24,15 @@
   <div class="space-y-5">
     <!-- Presets -->
     <div>
-      <label
+      <p
+        id="plan-range-label"
         class="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
       >
         Plage
-      </label>
+      </p>
       <div
+        role="group"
+        aria-labelledby="plan-range-label"
         class="inline-flex flex-wrap gap-1.5 rounded-lg bg-gray-100 dark:bg-slate-700/50 p-1"
       >
         <button
@@ -41,6 +44,7 @@
           ]"
           :key="opt.value"
           type="button"
+          :aria-pressed="preset === opt.value"
           class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
           :class="
             preset === opt.value

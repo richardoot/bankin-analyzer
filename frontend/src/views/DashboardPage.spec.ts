@@ -413,6 +413,18 @@ describe('DashboardPage', () => {
       expect(select.exists()).toBe(true)
     })
 
+    it('names both category selects for assistive tech', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      expect(
+        wrapper
+          .get('[data-testid="expense-category-filter"]')
+          .attributes('aria-label')
+      ).toBe('Catégorie des dépenses par mois')
+    })
+
     it('should have "Toutes les catégories" as default option', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 

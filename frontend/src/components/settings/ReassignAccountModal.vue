@@ -109,9 +109,13 @@
       ref="modalPanelRef"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="reassign-modal-title"
       class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900"
     >
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+      <h2
+        id="reassign-modal-title"
+        class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+      >
         Corriger « {{ pending.bankAccountName }} »
       </h2>
       <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
