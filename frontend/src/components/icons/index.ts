@@ -1,0 +1,26 @@
+/**
+ * The shared icon set: outline, 24-unit, currentColor. A screen imports
+ * what it draws instead of pasting a path; a new icon is one more file
+ * here, never an inline <svg>.
+ */
+export { default as IconArrowLeft } from './IconArrowLeft.vue'
+export { default as IconCalendar } from './IconCalendar.vue'
+export { default as IconCheck } from './IconCheck.vue'
+export { default as IconCheckCircle } from './IconCheckCircle.vue'
+export { default as IconChevronDown } from './IconChevronDown.vue'
+export { default as IconChevronLeft } from './IconChevronLeft.vue'
+export { default as IconChevronRight } from './IconChevronRight.vue'
+export { default as IconChevronUp } from './IconChevronUp.vue'
+export { default as IconClock } from './IconClock.vue'
+export { default as IconClose } from './IconClose.vue'
+export { default as IconEye } from './IconEye.vue'
+export { default as IconEyeOff } from './IconEyeOff.vue'
+export { default as IconInfo } from './IconInfo.vue'
+export { default as IconPencil } from './IconPencil.vue'
+export { default as IconPlus } from './IconPlus.vue'
+export { default as IconRefresh } from './IconRefresh.vue'
+export { default as IconSearch } from './IconSearch.vue'
+export { default as IconSpinner } from './IconSpinner.vue'
+export { default as IconTrash } from './IconTrash.vue'
+export { default as IconWarning } from './IconWarning.vue'
+export { default as IconXCircle } from './IconXCircle.vue'
