@@ -91,7 +91,7 @@
           id="bulk-category-modal-title"
           class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
         >
-          Deplacer {{ selectedCount }} transaction{{
+          Déplacer {{ selectedCount }} transaction{{
             selectedCount > 1 ? 's' : ''
           }}
         </h3>
@@ -154,11 +154,11 @@
           class="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-lg px-3 py-2 mb-4"
         >
           <template v-if="selectedSubcategoryId">
-            Les sous-categories actuelles seront remplacees par celle choisie
+            Les sous-catégories actuelles seront remplacées par celle choisie
             ci-dessus.
           </template>
           <template v-else>
-            Les sous-categories actuelles seront retirees : elles
+            Les sous-catégories actuelles seront retirées : elles
             n'appartiennent pas à la catégorie choisie.
           </template>
         </p>
@@ -182,7 +182,7 @@
             @click="handleApply"
           >
             <span v-if="isUpdating">Application...</span>
-            <span v-else>Deplacer {{ selectedCount }}</span>
+            <span v-else>Déplacer {{ selectedCount }}</span>
           </button>
         </div>
       </div>

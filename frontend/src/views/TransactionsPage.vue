@@ -467,7 +467,7 @@
       selectedSettlement.value = await api.getSettlement(summary.id)
       showSettlementDetailModal.value = true
     } catch {
-      toast.error('Impossible de charger le detail du règlement')
+      toast.error('Impossible de charger le détail du règlement')
     } finally {
       isLoadingSettlement.value = false
     }
@@ -908,7 +908,7 @@
       exitSelectionMode()
       showBulkCategoryModal.value = false
       toast.success(
-        `${updated} transaction${updated > 1 ? 's' : ''} deplacee${updated > 1 ? 's' : ''}`
+        `${updated} transaction${updated > 1 ? 's' : ''} déplacée${updated > 1 ? 's' : ''}`
       )
     } catch (err) {
       console.error('Failed to bulk update category:', err)
@@ -1375,7 +1375,7 @@
               :title="
                 selectedCategory
                   ? undefined
-                  : 'Selectionnez d\'abord une catégorie'
+                  : 'Sélectionnez d\'abord une catégorie'
               "
               class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/60 dark:disabled:text-gray-500"
             >
@@ -1452,7 +1452,7 @@
               <input
                 v-model="filterStartDate"
                 type="date"
-                aria-label="Date de debut"
+                aria-label="Date de début"
                 data-testid="transactions-start-date-filter"
                 class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
               />
@@ -1510,19 +1510,19 @@
           <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
             <span
               class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-              >Etat</span
+              >État</span
             >
             <div
               class="inline-flex h-11 md:h-9 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 dark:border-slate-600 dark:bg-slate-800"
             >
               <ToggleSwitch
                 :checked="showOnlyNotPointed"
-                label="Afficher uniquement les transactions non pointees"
+                label="Afficher uniquement les transactions non pointées"
                 @change="showOnlyNotPointed = $event"
               />
               <span
                 class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-300"
-                >Non pointees</span
+                >Non pointées</span
               >
             </div>
           </div>
@@ -1540,13 +1540,13 @@
             >
               <ToggleSwitch
                 :checked="needsBankReview"
-                label="Afficher uniquement les transactions a reaffecter"
+                label="Afficher uniquement les transactions à réaffecter"
                 data-testid="needs-bank-review-toggle"
                 @change="needsBankReview = $event"
               />
               <span
                 class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-300"
-                >A reaffecter</span
+                >À réaffecter</span
               >
             </div>
           </div>
@@ -1644,7 +1644,7 @@
           class="font-semibold underline underline-offset-2 hover:no-underline"
           @click="selectWholeFilter"
         >
-          Selectionner les {{ matchingCount }} transactions du filtre
+          Sélectionner les {{ matchingCount }} transactions du filtre
         </button>
       </div>
 
@@ -1662,7 +1662,7 @@
           class="font-semibold underline underline-offset-2 hover:no-underline"
           @click="clearSelection"
         >
-          Annuler la selection
+          Annuler la sélection
         </button>
       </div>
 
@@ -1689,7 +1689,7 @@
               class="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-200"
               @click="exitSelectionMode"
             >
-              Quitter la selection
+              Quitter la sélection
             </button>
           </div>
 
@@ -1721,7 +1721,7 @@
                   clip-rule="evenodd"
                 />
               </svg>
-              Depointer
+              Dépointer
             </button>
             <button
               :disabled="isBulkUpdating"
@@ -1766,7 +1766,7 @@
                 <span
                   class="text-sm font-medium text-primary-700 dark:text-primary-300"
                 >
-                  {{ selectedCount }} select.
+                  {{ selectedCount }} sélect.
                 </span>
                 <button
                   class="text-sm text-primary-600 dark:text-primary-400 underline"
@@ -1794,7 +1794,7 @@
                 <button
                   :disabled="isBulkUpdating"
                   class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg disabled:opacity-50"
-                  title="Depointer"
+                  title="Dépointer"
                   @click="bulkTogglePointed(false)"
                 >
                   <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">

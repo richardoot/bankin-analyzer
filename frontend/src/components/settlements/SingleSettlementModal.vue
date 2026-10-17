@@ -179,11 +179,11 @@
               <h2
                 class="text-xl font-semibold text-gray-900 dark:text-gray-100"
               >
-                Regler ce remboursement
+                Régler ce remboursement
               </h2>
               <p class="mt-1 text-sm text-gray-600 dark:text-gray-400 truncate">
                 {{ reimbursement.personName }} &middot; retrouvez la transaction
-                recue qui le solde
+                reçue qui le solde
               </p>
             </div>
             <button
@@ -285,7 +285,7 @@
                   class="text-sm text-gray-700 dark:text-gray-300"
                   for="single-settlement-amount"
                 >
-                  Montant a imputer
+                  Montant à imputer
                 </label>
                 <div class="flex items-center gap-1 shrink-0">
                   <input
@@ -295,7 +295,7 @@
                     min="0"
                     :max="Math.min(amountDue, pot)"
                     :value="amount"
-                    :aria-label="`Montant affecte a ${line.description}`"
+                    :aria-label="`Montant affecté à ${line.description}`"
                     class="w-24 min-h-[40px] px-2 py-1 text-right border border-gray-300 sm:min-h-0 sm:w-28 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
                     @change="onAmountCommit"
                   />
@@ -314,7 +314,7 @@
                   class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                   :aria-label="`Solder ${line.description}`"
                 />
-                Solder cette ligne malgre l'ecart de
+                Solder cette ligne malgré l'écart de
                 {{ formatCurrency(shortfall) }}
               </label>
             </div>
@@ -343,7 +343,7 @@
                 <span
                   class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"
                 />
-                Creation...
+                Création…
               </span>
               <span v-else>Confirmer le règlement</span>
             </button>

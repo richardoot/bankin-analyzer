@@ -457,7 +457,7 @@ describe('ReimbursementsPage', () => {
       await flushPromises()
 
       expect(wrapper.text()).toContain('Récapitulatif des remboursements')
-      expect(wrapper.text()).toContain('Total General')
+      expect(wrapper.text()).toContain('Total général')
     })
 
     it('should display person totals in summary', async () => {
@@ -593,7 +593,7 @@ describe('ReimbursementsPage', () => {
         const wrapper = await mountWithDebts()
 
         await wrapper
-          .get('button[title="Regler uniquement Pharmacie"]')
+          .get('button[title="Régler uniquement Pharmacie"]')
           .trigger('click')
 
         expect(single(wrapper).props('isOpen')).toBe(true)
@@ -627,7 +627,7 @@ describe('ReimbursementsPage', () => {
         vi.mocked(api.getReimbursements).mockClear()
 
         await wrapper
-          .get('button[title="Regler uniquement Monoprix"]')
+          .get('button[title="Régler uniquement Monoprix"]')
           .trigger('click')
         single(wrapper).vm.$emit('confirm', {
           id: 'settlement-1',

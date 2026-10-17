@@ -55,7 +55,7 @@
       case 'IN_PROGRESS':
         return 'En cours'
       case 'FAILED':
-        return 'Echoue'
+        return 'Échoué'
       default:
         return status
     }
@@ -208,7 +208,7 @@
           class="mt-4 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
           @click="fetchData"
         >
-          Reessayer
+          Réessayer
         </button>
       </div>
 
@@ -366,7 +366,7 @@
                 {{ history.duplicatesSkipped.toLocaleString('fr-FR') }}
               </p>
               <p class="text-sm text-amber-600 dark:text-amber-500">
-                doublons ignores
+                doublons ignorés
               </p>
             </div>
 
@@ -378,7 +378,7 @@
                 {{ history.categoriesCreated.toLocaleString('fr-FR') }}
               </p>
               <p class="text-sm text-primary-600 dark:text-primary-500">
-                nouvelles categories
+                nouvelles catégories
               </p>
             </div>
           </div>

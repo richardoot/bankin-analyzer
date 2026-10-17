@@ -31,7 +31,7 @@
       if (fetchError || !data) {
         error.value =
           fetchError?.message ??
-          "Impossible de recuperer les details d'autorisation"
+          "Impossible de récupérer les détails de l'autorisation"
         return
       }
 
@@ -111,9 +111,7 @@
         <div
           class="w-8 h-8 border-3 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-400 rounded-full animate-spin mx-auto"
         />
-        <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">
-          Chargement...
-        </p>
+        <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">Chargement…</p>
       </div>
 
       <!-- Error -->
@@ -141,7 +139,7 @@
             {{ clientName }}
           </p>
           <p class="text-sm text-gray-500 dark:text-gray-400 mt-3">
-            souhaite acceder a votre compte avec les permissions suivantes :
+            souhaite accéder à votre compte avec les permissions suivantes :
           </p>
         </div>
 
@@ -216,7 +214,7 @@
             />
           </svg>
           <p class="text-xs text-amber-700 dark:text-amber-400">
-            Cette application pourra consulter vos transactions, categories,
+            Cette application pourra consulter vos transactions, catégories,
             budgets et statistiques. Elle ne pourra pas modifier vos données.
           </p>
         </div>

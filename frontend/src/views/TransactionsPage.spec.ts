@@ -340,15 +340,15 @@ describe('TransactionsPage — optimistic updates', () => {
       })
 
       // While API is pending, the button should already reflect the new state
-      // (title changes from "Pointer" to "Depointer")
-      expect(wrapper.find('button[title="Depointer"]').exists()).toBe(true)
+      // (title changes from "Pointer" to "Dépointer")
+      expect(wrapper.find('button[title="Dépointer"]').exists()).toBe(true)
 
       // Now resolve API
       resolveApi(makeTx({ isPointed: true }))
       await flushPromises()
 
       // State should remain pointed
-      expect(wrapper.find('button[title="Depointer"]').exists()).toBe(true)
+      expect(wrapper.find('button[title="Dépointer"]').exists()).toBe(true)
     })
 
     it('should rollback to original state and show error toast on API failure', async () => {

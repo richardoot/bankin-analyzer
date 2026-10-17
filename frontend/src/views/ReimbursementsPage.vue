@@ -509,8 +509,8 @@
                     {{ person.personName }}
                   </h3>
                   <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Reçu : {{ formatCurrency(person.totalReceived) }} | En
-                    attente: {{ formatCurrency(person.totalRemaining) }}
+                    Reçu : {{ formatCurrency(person.totalReceived) }} · En
+                    attente : {{ formatCurrency(person.totalRemaining) }}
                   </p>
                 </div>
               </div>
@@ -567,7 +567,7 @@
                       v-if="cat.status === 'COMPLETED'"
                       class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 shrink-0"
                     >
-                      Regle
+                      Réglé
                     </span>
                     <span
                       v-else-if="cat.status === 'PARTIAL'"
@@ -624,16 +624,16 @@
                             v-if="r.amountReceived > 0"
                             class="text-primary-600 dark:text-primary-400 ml-1"
                           >
-                            (recu: {{ formatCurrency(r.amountReceived) }})
+                            (reçu : {{ formatCurrency(r.amountReceived) }})
                           </span>
                         </span>
                         <button
                           type="button"
                           class="px-2 py-1 text-xs font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
-                          :title="`Regler uniquement ${r.transaction?.description || 'cette transaction'}`"
+                          :title="`Régler uniquement ${r.transaction?.description || 'cette transaction'}`"
                           @click="openSettlementModalForReimbursement(r)"
                         >
-                          Regler
+                          Régler
                         </button>
                       </span>
                     </div>
@@ -678,7 +678,7 @@
             class="border-t-2 border-amber-200 dark:border-amber-700 pt-4 flex items-center justify-between"
           >
             <span class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-              >Total General</span
+              >Total général</span
             >
             <span class="text-xl font-bold text-amber-700 dark:text-amber-400">
               {{ formatCurrency(totalDue) }}

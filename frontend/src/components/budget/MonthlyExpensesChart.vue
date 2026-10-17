@@ -48,7 +48,7 @@
 
   const MONTHS_FR = [
     'Jan',
-    'Fev',
+    'Fév',
     'Mar',
     'Avr',
     'Mai',
@@ -58,7 +58,7 @@
     'Sep',
     'Oct',
     'Nov',
-    'Dec',
+    'Déc',
   ]
 
   function getCurrentYearMonth(): string {
@@ -332,7 +332,7 @@
         }
         if (epargne !== null) {
           const color = epargne >= 0 ? '#34d399' : '#f87171'
-          html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">Epargne</span><span style="color:${color};font-weight:600">${formatCurrency(epargne)}</span></div>`
+          html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">Épargne</span><span style="color:${color};font-weight:600">${formatCurrency(epargne)}</span></div>`
         }
         html += `</div>`
         return html

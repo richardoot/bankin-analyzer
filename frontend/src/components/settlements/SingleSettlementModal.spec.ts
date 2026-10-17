@@ -143,7 +143,7 @@ describe('SingleSettlementModal', () => {
     const wrapper = await mountModal()
 
     // No stepper, no selection: the line is already known.
-    expect(wrapper.text()).not.toContain('etape 1 sur 2')
+    expect(wrapper.text()).not.toContain('étape 1 sur 2')
     expect(api.getTransactions).toHaveBeenCalledWith({
       type: 'INCOME',
       limit: 100,

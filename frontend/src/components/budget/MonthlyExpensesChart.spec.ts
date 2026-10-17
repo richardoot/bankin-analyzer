@@ -122,7 +122,7 @@ describe('MonthlyExpensesChart', () => {
 
     const chart = wrapper.findComponent({ name: 'VueApexCharts' })
     const categories = chart.props('options').xaxis.categories
-    expect(categories).toEqual(['Nov', 'Dec', 'Jan', 'Fev', 'Mar', 'Avr'])
+    expect(categories).toEqual(['Nov', 'Déc', 'Jan', 'Fév', 'Mar', 'Avr'])
   })
 
   it('should add income annotation line when averageIncome > 0', () => {
@@ -189,7 +189,7 @@ describe('MonthlyExpensesChart', () => {
     expect(html).toContain('2500.00')
     expect(html).toContain('Dépenses')
     expect(html).toContain('vs Budget')
-    expect(html).toContain('Epargne')
+    expect(html).toContain('Épargne')
   })
 
   it('tooltip should show "(en cours)" for current month', () => {

@@ -261,7 +261,7 @@
                   ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
                   : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
               "
-              :title="transaction.isPointed ? 'Depointer' : 'Pointer'"
+              :title="transaction.isPointed ? 'Dépointer' : 'Pointer'"
               @click="emit('toggle-pointed')"
             >
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -320,7 +320,7 @@
           "
           class="inline-flex min-h-[36px] items-center px-2.5 text-xs text-green-500 dark:text-green-400"
         >
-          Assigne
+          Assigné
         </span>
         <!-- Settlement links (one per person settled by this income) -->
         <TransactionSettlementLinks
@@ -439,7 +439,7 @@
               ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
               : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
           "
-          :title="transaction.isPointed ? 'Depointer' : 'Pointer'"
+          :title="transaction.isPointed ? 'Dépointer' : 'Pointer'"
           @click="emit('toggle-pointed')"
         >
           <svg
@@ -490,7 +490,7 @@
           v-else-if="isExpense"
           class="text-xs text-green-600 dark:text-green-400 font-medium"
         >
-          Assigne
+          Assigné
         </span>
         <!-- Settlement links (one per person settled by this income) -->
         <div

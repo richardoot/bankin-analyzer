@@ -163,7 +163,7 @@
               class="bg-white dark:bg-slate-700 rounded-lg p-2 border border-gray-200 dark:border-slate-600"
             >
               <div class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">
-                Restant a assigner
+                Restant à assigner
               </div>
               <div
                 class="text-lg font-semibold"
@@ -297,7 +297,7 @@
             "
             @click="handleSubmit"
           >
-            <span v-if="isCreating">Creation...</span>
+            <span v-if="isCreating">Création…</span>
             <span v-else>Confirmer</span>
           </button>
         </div>

@@ -57,13 +57,13 @@
       class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4"
     >
       <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        Historique des Règlements
+        Historique des règlements
       </h2>
 
       <!-- Person filter -->
       <div v-if="persons.length > 1" class="flex items-center gap-2">
         <label class="text-sm text-gray-600 dark:text-gray-400 shrink-0"
-          >Filtrer:</label
+          >Filtrer :</label
         >
         <select
           v-model="selectedPersonId"
@@ -196,7 +196,7 @@
               <button
                 type="button"
                 class="p-2.5 min-h-[44px] min-w-[44px] text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
-                title="Voir les details"
+                title="Voir les détails"
                 @click="emit('viewDetails', settlement)"
               >
                 <svg
@@ -317,7 +317,7 @@
               <button
                 type="button"
                 class="p-2 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
-                title="Voir les details"
+                title="Voir les détails"
                 @click="emit('viewDetails', settlement)"
               >
                 <svg

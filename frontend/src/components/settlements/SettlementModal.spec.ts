@@ -174,7 +174,7 @@ async function mountModal(options: {
 /** Tick one debt line (or a whole category) by its accessible name. */
 async function tick(wrapper: VueWrapper, label: string): Promise<void> {
   await wrapper
-    .get(`input[aria-label="Selectionner ${label}"]`)
+    .get(`input[aria-label="Sélectionner ${label}"]`)
     .trigger('change')
 }
 
@@ -220,7 +220,7 @@ async function setAmount(
   label: string,
   value: string
 ): Promise<void> {
-  const input = wrapper.find(`input[aria-label="Montant affecte a ${label}"]`)
+  const input = wrapper.find(`input[aria-label="Montant affecté à ${label}"]`)
   await input.setValue(value)
   await input.trigger('change')
   await flushPromises()
@@ -253,7 +253,7 @@ describe('SettlementModal', () => {
 
     // The receipt search is a step away, so no transaction is fetched yet.
     expect(api.getTransactions).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('que voulez-vous regler')
+    expect(wrapper.text()).toContain('que voulez-vous régler')
     // Grouped by expense category, every line visible and none ticked. The
     // income hint is null on these fixtures, as it is on most real debts:
     // grouping on it collapsed the whole list under one heading.
@@ -653,7 +653,7 @@ describe('SettlementModal', () => {
     // 20 EUR cascaded onto 57 EUR of debt, then one line pushed to its full due.
     await setAmount(wrapper, 'Carrefour', '30')
 
-    expect(wrapper.text()).toContain('Depassement')
+    expect(wrapper.text()).toContain('Dépassement')
     expect(
       wrapper.find('button[class*="bg-primary-600"]').attributes('disabled')
     ).toBeDefined()
@@ -684,7 +684,7 @@ describe('SettlementModal', () => {
     await wrapper.setProps({ isOpen: true })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('que voulez-vous regler')
+    expect(wrapper.text()).toContain('que voulez-vous régler')
     expect(
       wrapper.get('[data-testid="settlement-selection-total"]').text()
     ).toContain('0,00')

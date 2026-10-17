@@ -452,10 +452,10 @@
                   >&middot; étape {{ currentStep }}/2</span
                 >
                 <span v-if="currentStep === 1" class="hidden sm:inline">
-                  &middot; etape 1 sur 2 : que voulez-vous regler ?</span
+                  &middot; étape 1 sur 2 : que voulez-vous régler ?</span
                 >
                 <span v-else class="hidden sm:inline">
-                  &middot; etape 2 sur 2 : d'ou vient l'argent ?</span
+                  &middot; étape 2 sur 2 : d'où vient l'argent ?</span
                 >
               </p>
             </div>
@@ -493,7 +493,7 @@
             <div v-if="currentStep === 1" data-testid="settlement-step-select">
               <p class="mb-3 text-sm text-gray-600 dark:text-gray-400">
                 Quels remboursements en attente de {{ personName }}
-                souhaitez-vous regler ?
+                souhaitez-vous régler ?
               </p>
 
               <div class="flex justify-end gap-3 mb-2 text-sm">
@@ -511,7 +511,7 @@
                   class="inline-flex min-h-[40px] items-center text-gray-600 hover:underline sm:min-h-0 dark:text-gray-400"
                   @click="clearSelection"
                 >
-                  Tout decocher
+                  Tout décocher
                 </button>
               </div>
 
@@ -528,7 +528,7 @@
                     <button
                       type="button"
                       class="-my-2 shrink-0 p-2.5 text-gray-500 sm:my-0 sm:p-1 dark:text-gray-400"
-                      :aria-label="`Deplier ${group.categoryName}`"
+                      :aria-label="`Déplier ${group.categoryName}`"
                       :aria-expanded="expandedCategories.has(group.key)"
                       @click="toggleExpanded(group.key)"
                     >
@@ -557,7 +557,7 @@
                         group.selectedCount > 0 &&
                         group.selectedCount < group.lines.length
                       "
-                      :aria-label="`Selectionner ${group.categoryName}`"
+                      :aria-label="`Sélectionner ${group.categoryName}`"
                       @change="toggleCategorySelection(group)"
                     />
                     <div class="flex-1 min-w-0">
@@ -567,7 +567,7 @@
                         {{ group.categoryName }}
                       </div>
                       <div class="text-xs text-gray-500 dark:text-gray-400">
-                        {{ group.lines.length }} ligne(s) &middot; du
+                        {{ group.lines.length }} ligne(s) &middot; dû
                         {{ formatCurrency(group.due) }}
                       </div>
                     </div>
@@ -593,7 +593,7 @@
                         type="checkbox"
                         class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 shrink-0"
                         :checked="isSelected(line.reimbursementId)"
-                        :aria-label="`Selectionner ${line.description}`"
+                        :aria-label="`Sélectionner ${line.description}`"
                         @change="toggleLineSelection(line.reimbursementId)"
                       />
                       <div class="flex-1 min-w-0">
@@ -636,7 +636,7 @@
                   class="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap"
                   data-testid="settlement-selected-total"
                 >
-                  {{ formatCurrency(selectedDueTotal) }} a couvrir
+                  {{ formatCurrency(selectedDueTotal) }} à couvrir
                 </span>
               </div>
 
@@ -680,7 +680,7 @@
                   <h3
                     class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
                   >
-                    Repartition
+                    Répartition
                   </h3>
                   <div class="flex gap-3 text-sm">
                     <button
@@ -696,7 +696,7 @@
                       class="inline-flex min-h-[40px] items-center text-gray-600 hover:underline sm:min-h-0 dark:text-gray-400"
                       @click="clearAmounts"
                     >
-                      Tout remettre a zero
+                      Tout remettre à zéro
                     </button>
                   </div>
                 </div>
@@ -714,7 +714,7 @@
                       <button
                         type="button"
                         class="-my-2 shrink-0 p-2.5 text-gray-500 sm:my-0 sm:p-1 dark:text-gray-400"
-                        :aria-label="`Deplier ${group.categoryName}`"
+                        :aria-label="`Déplier ${group.categoryName}`"
                         :aria-expanded="expandedCategories.has(group.key)"
                         @click="toggleExpanded(group.key)"
                       >
@@ -742,7 +742,7 @@
                           {{ group.categoryName }}
                         </div>
                         <div class="text-xs text-gray-500 dark:text-gray-400">
-                          {{ group.lines.length }} ligne(s) &middot; du
+                          {{ group.lines.length }} ligne(s) &middot; dû
                           {{ formatCurrency(group.selectedDue) }}
                         </div>
                       </div>
@@ -753,7 +753,7 @@
                           min="0"
                           :max="group.selectedDue"
                           :value="group.allocated"
-                          :aria-label="`Montant affecte a ${group.categoryName}`"
+                          :aria-label="`Montant affecté à ${group.categoryName}`"
                           class="w-20 min-h-[40px] px-2 py-1 text-right border border-gray-300 sm:min-h-0 sm:w-24 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
                           @change="onCategoryAmountCommit(group, $event)"
                         />
@@ -786,7 +786,7 @@
                             <div
                               class="text-xs text-gray-500 dark:text-gray-400"
                             >
-                              du {{ formatCurrency(line.amountDue) }}
+                              dû {{ formatCurrency(line.amountDue) }}
                             </div>
                           </div>
                           <div class="flex items-center gap-1 shrink-0">
@@ -796,7 +796,7 @@
                               min="0"
                               :max="line.amountDue"
                               :value="stateOf(line.reimbursementId).amount"
-                              :aria-label="`Montant affecte a ${line.description}`"
+                              :aria-label="`Montant affecté à ${line.description}`"
                               class="w-20 min-h-[40px] px-2 py-1 text-right border border-gray-300 sm:min-h-0 sm:w-24 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
                               @change="
                                 onAmountCommit(line.reimbursementId, $event)
@@ -826,7 +826,7 @@
                             :aria-label="`Solder ${line.description}`"
                             @change="toggleForceComplete(line.reimbursementId)"
                           />
-                          Solder cette ligne malgre l'ecart de
+                          Solder cette ligne malgré l'écart de
                           {{
                             formatCurrency(
                               round2(
@@ -847,7 +847,7 @@
                           class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
                           @click="spreadGroupProrata(group)"
                         >
-                          Repartir au prorata
+                          Répartir au prorata
                         </button>
                       </div>
                     </div>
@@ -889,7 +889,7 @@
               }"
             >
               <span class="text-sm text-gray-700 dark:text-gray-300">
-                Affecte {{ formatCurrency(allocatedTotal) }}
+                Affecté {{ formatCurrency(allocatedTotal) }}
               </span>
               <span
                 class="text-sm font-semibold"
@@ -902,7 +902,7 @@
                 }"
               >
                 <template v-if="isOverAllocated">
-                  Depassement de
+                  Dépassement de
                   {{ formatCurrency(Math.abs(remainingToAllocate)) }}
                 </template>
                 <template v-else-if="remainingToAllocate >= 0.01">
@@ -958,7 +958,7 @@
                     <span
                       class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"
                     />
-                    Creation...
+                    Création…
                   </span>
                   <span v-else>Confirmer le règlement</span>
                 </button>

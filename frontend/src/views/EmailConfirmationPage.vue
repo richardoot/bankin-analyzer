@@ -39,7 +39,7 @@
 
         <!-- Description -->
         <p class="mt-4 text-gray-600 dark:text-gray-400">
-          Nous avons envoye un lien de confirmation a
+          Nous avons envoyé un lien de confirmation à
           <span
             v-if="email"
             class="font-medium text-gray-900 dark:text-gray-100"
@@ -74,7 +74,7 @@
             </div>
             <div class="ml-3">
               <p class="text-sm text-blue-700 dark:text-blue-300">
-                Si vous ne trouvez pas l'email, verifiez votre dossier spam.
+                Si vous ne trouvez pas l'email, vérifiez votre dossier spam.
               </p>
             </div>
           </div>
@@ -99,7 +99,7 @@
                 d="M10 19l-7-7m0 0l7-7m-7 7h18"
               />
             </svg>
-            Retour a la connexion
+            Retour à la connexion
           </RouterLink>
         </div>
       </div>

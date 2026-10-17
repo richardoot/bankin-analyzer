@@ -315,7 +315,7 @@
         id="settlement-search"
         v-model="searchQuery"
         type="text"
-        placeholder="Rechercher une transaction..."
+        placeholder="Rechercher une transaction…"
         data-testid="settlement-search"
         class="w-full min-h-[44px] pl-10 pr-4 py-2 text-base sm:min-h-0 sm:text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
       />
@@ -436,7 +436,7 @@
         class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent"
       />
       <p class="mt-2 text-gray-600 dark:text-gray-400">
-        Chargement des transactions...
+        Chargement des transactions…
       </p>
     </div>
 
@@ -503,7 +503,7 @@
         <h3
           class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
         >
-          Toutes les transactions recues
+          Toutes les transactions reçues
         </h3>
         <div class="space-y-2 sm:max-h-64 sm:overflow-y-auto">
           <button
@@ -544,8 +544,8 @@
         data-testid="settlement-no-results"
         class="py-8 text-center text-gray-500 dark:text-gray-400"
       >
-        Aucune transaction recue ne correspond. Affinez la recherche ou
-        elargissez la periode.
+        Aucune transaction reçue ne correspond. Affinez la recherche ou
+        élargissez la période.
       </p>
 
       <!--
@@ -559,10 +559,10 @@
       >
         {{ totalMatching }} transactions correspondent.
         <template v-if="searchedByName">
-          Les plus recentes et celles au nom de
-          {{ context.personName }} sont affichees.
+          Les plus récentes et celles au nom de
+          {{ context.personName }} sont affichées.
         </template>
-        <template v-else>Les 100 plus recentes sont affichees.</template>
+        <template v-else>Les 100 plus récentes sont affichées.</template>
         Affinez la recherche pour atteindre les autres.
       </p>
     </div>

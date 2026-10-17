@@ -236,7 +236,7 @@
               <h2
                 class="text-xl font-semibold text-gray-900 dark:text-gray-100"
               >
-                Doublons detectes
+                Doublons détectés
               </h2>
             </div>
             <button
@@ -265,7 +265,7 @@
             <!-- Summary -->
             <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
               <h3 class="font-medium text-gray-900 dark:text-gray-100 mb-3">
-                Resume
+                Résumé
               </h3>
               <div class="grid grid-cols-3 gap-2 sm:gap-4 text-sm">
                 <div class="text-center">
@@ -293,7 +293,7 @@
                     {{ previewResult.externalDuplicateCount }}
                   </div>
                   <div class="text-gray-600 dark:text-gray-400">
-                    Deja importees
+                    Déjà importées
                   </div>
                 </div>
               </div>
@@ -338,7 +338,7 @@
               </div>
               <p class="text-sm text-gray-500 dark:text-gray-400">
                 Ces transactions apparaissent plusieurs fois dans votre fichier.
-                Selectionnez celles a importer.
+                Sélectionnez celles à importer.
               </p>
 
               <div
@@ -352,7 +352,7 @@
                   <span
                     class="text-sm font-medium text-amber-800 dark:text-amber-400"
                   >
-                    Groupe {{ groupIdx + 1 }}: {{ group.indices.length }}
+                    Groupe {{ groupIdx + 1 }} : {{ group.indices.length }}
                     transactions identiques
                   </span>
                 </div>
@@ -436,8 +436,8 @@
                 </label>
               </div>
               <p class="text-sm text-gray-500 dark:text-gray-400">
-                Ces transactions existent deja dans votre historique. Cochez
-                pour les importer quand meme.
+                Ces transactions existent déjà dans votre historique. Cochez
+                pour les importer quand même.
               </p>
 
               <div
@@ -451,7 +451,7 @@
                   <span
                     class="text-sm font-medium text-red-800 dark:text-red-400"
                   >
-                    Transaction #{{ dup.uploaded.index + 1 }} existe deja
+                    Transaction #{{ dup.uploaded.index + 1 }} existe déjà
                   </span>
                 </div>
 
@@ -469,19 +469,19 @@
                     <div class="space-y-1 text-sm">
                       <div>
                         <span class="text-gray-500 dark:text-gray-400"
-                          >Date:</span
+                          >Date :</span
                         >
                         {{ formatDate(dup.uploaded.date) }}
                       </div>
                       <div class="truncate">
                         <span class="text-gray-500 dark:text-gray-400"
-                          >Description:</span
+                          >Description :</span
                         >
                         {{ dup.uploaded.description }}
                       </div>
                       <div>
                         <span class="text-gray-500 dark:text-gray-400"
-                          >Montant:</span
+                          >Montant :</span
                         >
                         <span
                           :class="
@@ -495,7 +495,7 @@
                       </div>
                       <div>
                         <span class="text-gray-500 dark:text-gray-400"
-                          >Catégorie:</span
+                          >Catégorie :</span
                         >
                         {{ dup.uploaded.category }}
                       </div>
@@ -512,19 +512,19 @@
                     <div class="space-y-1 text-sm">
                       <div>
                         <span class="text-gray-500 dark:text-gray-400"
-                          >Date:</span
+                          >Date :</span
                         >
                         {{ formatDate(dup.existing.date) }}
                       </div>
                       <div class="truncate">
                         <span class="text-gray-500 dark:text-gray-400"
-                          >Description:</span
+                          >Description :</span
                         >
                         {{ dup.existing.description }}
                       </div>
                       <div>
                         <span class="text-gray-500 dark:text-gray-400"
-                          >Montant:</span
+                          >Montant :</span
                         >
                         <span
                           :class="
@@ -538,12 +538,12 @@
                       </div>
                       <div>
                         <span class="text-gray-500 dark:text-gray-400"
-                          >Catégorie:</span
+                          >Catégorie :</span
                         >
                         {{ dup.existing.categoryName || '-' }}
                       </div>
                       <div class="text-xs text-gray-500 dark:text-gray-400">
-                        Importe le {{ formatDate(dup.existing.createdAt) }}
+                        Importé le {{ formatDate(dup.existing.createdAt) }}
                       </div>
                     </div>
                   </div>
@@ -561,7 +561,7 @@
                       @change="toggleExternalIndex(dup.uploaded.index)"
                     />
                     <span class="text-sm text-gray-700 dark:text-gray-300"
-                      >Importer quand meme</span
+                      >Importer quand même</span
                     >
                   </label>
                 </div>
@@ -577,11 +577,11 @@
               <span class="font-medium text-green-600 dark:text-green-400">{{
                 totalToImport
               }}</span>
-              a importer,
+              à importer,
               <span class="font-medium text-gray-500 dark:text-gray-400">{{
                 totalSkipped
               }}</span>
-              ignores
+              ignorés
             </div>
             <div class="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
               <button
@@ -600,7 +600,7 @@
               >
                 {{
                   loading
-                    ? 'Import en cours...'
+                    ? 'Import en cours…'
                     : `Importer ${totalToImport} transactions`
                 }}
               </button>

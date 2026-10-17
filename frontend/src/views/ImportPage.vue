@@ -329,7 +329,7 @@
         // The import history stays in IN_PROGRESS status
         // User can delete it from the history page if needed
         partialImportError.value = err
-        error.value = `Import échoué au chunk ${err.details.failedAtChunk + 1}/${err.details.chunksTotal}. ${err.details.imported} transactions importées sur ${err.details.total}.`
+        error.value = `Import interrompu au lot ${err.details.failedAtChunk + 1}/${err.details.chunksTotal}. ${err.details.imported} transactions importées sur ${err.details.total}.`
       } else {
         error.value =
           err instanceof Error ? err.message : "Erreur lors de l'import"
@@ -700,8 +700,8 @@
             class="flex-1 px-4 py-3 bg-primary-600 dark:bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             @click="submitImport"
           >
-            <span v-if="isPreviewLoading">Analyse en cours...</span>
-            <span v-else-if="isUploading">Import en cours...</span>
+            <span v-if="isPreviewLoading">Analyse en cours…</span>
+            <span v-else-if="isUploading">Import en cours…</span>
             <span v-else
               >Importer {{ parsedTransactions.length }} transactions</span
             >

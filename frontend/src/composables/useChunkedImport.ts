@@ -60,7 +60,7 @@ export class PartialImportError extends Error {
     }
   ) {
     super(
-      `Import failed at chunk ${details.failedAtChunk + 1}/${details.chunksTotal}`
+      `Import interrompu au lot ${details.failedAtChunk + 1}/${details.chunksTotal}`
     )
     this.name = 'PartialImportError'
   }
@@ -213,7 +213,7 @@ export function useChunkedImport() {
       totalChunks: 0,
       completedChunks: 0,
       percent: 0,
-      message: 'Analyse des transactions...',
+      message: 'Analyse des transactions…',
     }
 
     // Pre-deduplicate
@@ -227,7 +227,7 @@ export function useChunkedImport() {
       totalChunks: chunks.length,
       completedChunks: 0,
       percent: 0,
-      message: `Preview 0/${chunks.length}...`,
+      message: `Analyse 0/${chunks.length}…`,
     }
 
     const results: ImportPreviewResultDto[] = []
@@ -241,7 +241,7 @@ export function useChunkedImport() {
         totalChunks: chunks.length,
         completedChunks: i + 1,
         percent: Math.round(((i + 1) / chunks.length) * 100),
-        message: `Preview ${i + 1}/${chunks.length}...`,
+        message: `Analyse ${i + 1}/${chunks.length}…`,
       }
     }
 
@@ -250,7 +250,7 @@ export function useChunkedImport() {
       totalChunks: chunks.length,
       completedChunks: chunks.length,
       percent: 100,
-      message: 'Analyse terminee',
+      message: 'Analyse terminée',
     }
 
     return consolidatePreviewResults(
@@ -276,7 +276,7 @@ export function useChunkedImport() {
       totalChunks: 0,
       completedChunks: 0,
       percent: 0,
-      message: "Preparation de l'import...",
+      message: "Préparation de l'import…",
     }
 
     // Apply forceImport flags to selected transactions
@@ -295,7 +295,7 @@ export function useChunkedImport() {
       totalChunks: chunks.length,
       completedChunks: 0,
       percent: 0,
-      message: `Import 0/${chunks.length}...`,
+      message: `Lot 0/${chunks.length}…`,
     }
 
     let totalImported = 0
@@ -312,10 +312,10 @@ export function useChunkedImport() {
             const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1)
             progress.value = {
               ...progress.value,
-              message: `Retry ${attempt}/${MAX_RETRIES} chunk ${i + 1}...`,
+              message: `Nouvelle tentative (${attempt}/${MAX_RETRIES}) pour le lot ${i + 1}…`,
               error: {
                 chunkIndex: i,
-                message: lastError?.message || 'Unknown error',
+                message: lastError?.message || 'Erreur inconnue',
                 retryCount: attempt,
               },
             }
@@ -332,7 +332,7 @@ export function useChunkedImport() {
             totalChunks: chunks.length,
             completedChunks: i + 1,
             percent: Math.round(((i + 1) / chunks.length) * 100),
-            message: `Import ${i + 1}/${chunks.length}...`,
+            message: `Lot ${i + 1}/${chunks.length}…`,
           }
         } catch (error) {
           lastError = error as Error
@@ -345,10 +345,10 @@ export function useChunkedImport() {
           totalChunks: chunks.length,
           completedChunks: i,
           percent: Math.round((i / chunks.length) * 100),
-          message: `Echec au chunk ${i + 1}/${chunks.length}`,
+          message: `Échec au lot ${i + 1}/${chunks.length}`,
           error: {
             chunkIndex: i,
-            message: lastError?.message || 'Unknown error',
+            message: lastError?.message || 'Erreur inconnue',
             retryCount: MAX_RETRIES,
           },
         }
@@ -370,7 +370,7 @@ export function useChunkedImport() {
       totalChunks: chunks.length,
       completedChunks: chunks.length,
       percent: 100,
-      message: 'Import termine',
+      message: 'Import terminé',
     }
 
     return {

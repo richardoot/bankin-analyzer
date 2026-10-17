@@ -175,7 +175,7 @@
           class="mt-4 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
           @click="fetchData"
         >
-          Reessayer
+          Réessayer
         </button>
       </div>
 
@@ -202,7 +202,7 @@
           Aucune synchronisation effectuée
         </h3>
         <p class="mt-2 text-gray-600 dark:text-gray-400">
-          Connectez une banque depuis les reglages pour commencer.
+          Connectez une banque depuis les réglages pour commencer.
         </p>
         <RouterLink
           to="/settings/accounts"
@@ -315,13 +315,13 @@
               data-testid="undo-confirmation"
             >
               <span class="text-sm text-red-600 dark:text-red-400">
-                Annuler ? {{ pendingUndo.preview.deleted }} supprimee(s),
-                {{ pendingUndo.preview.unlinked }} dissociee(s)
+                Annuler ? {{ pendingUndo.preview.deleted }} supprimée(s),
+                {{ pendingUndo.preview.unlinked }} dissociée(s)
                 <template v-if="pendingUndo.preview.blocked > 0">
                   ,
                   <strong data-testid="undo-blocked-note"
-                    >{{ pendingUndo.preview.blocked }} laissee(s) de
-                    cote</strong
+                    >{{ pendingUndo.preview.blocked }} laissée(s) de
+                    côté</strong
                   >
                 </template>
               </span>
