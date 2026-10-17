@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { useToast } from './useToast'
+import { useToast, toastDuration } from './useToast'
 
 describe('useToast', () => {
   beforeEach(() => {
@@ -78,5 +78,41 @@ describe('useToast', () => {
     const ids = toasts.value.map(t => t.id)
     const uniqueIds = new Set(ids)
     expect(uniqueIds.size).toBe(3)
+  })
+
+  it('keeps an error on screen longer than a confirmation', () => {
+    const { toasts, error } = useToast()
+    error('Échec')
+
+    vi.advanceTimersByTime(4000)
+    expect(toasts.value).toHaveLength(1)
+
+    vi.advanceTimersByTime(4000)
+    expect(toasts.value).toHaveLength(0)
+  })
+
+  it('gives a long message more time, within a cap', () => {
+    const long = 'x'.repeat(200)
+    expect(toastDuration('success', long)).toBeGreaterThan(
+      toastDuration('success', 'Court')
+    )
+    expect(toastDuration('error', 'x'.repeat(2000))).toBe(15000)
+  })
+
+  it('holds a toast while paused, then lets it run out the rest', () => {
+    const { toasts, success, pause, resume } = useToast()
+    success('Hover me')
+    const id = toasts.value.map(t => t.id)[0] ?? -1
+
+    vi.advanceTimersByTime(3000)
+    pause(id)
+    vi.advanceTimersByTime(10000)
+    expect(toasts.value).toHaveLength(1)
+
+    resume(id)
+    vi.advanceTimersByTime(999)
+    expect(toasts.value).toHaveLength(1)
+    vi.advanceTimersByTime(1)
+    expect(toasts.value).toHaveLength(0)
   })
 })
