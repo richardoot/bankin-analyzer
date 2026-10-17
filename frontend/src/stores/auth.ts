@@ -45,7 +45,9 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = data.session?.user ?? null
     } catch (err) {
       error.value =
-        err instanceof Error ? err.message : 'Failed to initialize auth'
+        err instanceof Error
+          ? err.message
+          : "Impossible d'initialiser la session"
     } finally {
       // The session alone decides what the router may show. The app's own
       // user row and the filter preferences follow in the background: no
@@ -107,7 +109,7 @@ export const useAuthStore = defineStore('auth', () => {
         throw signInError
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to sign in'
+      error.value = err instanceof Error ? err.message : 'Connexion impossible'
       throw err
     } finally {
       loading.value = false
@@ -126,7 +128,8 @@ export const useAuthStore = defineStore('auth', () => {
         throw signUpError
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to sign up'
+      error.value =
+        err instanceof Error ? err.message : 'Inscription impossible'
       throw err
     } finally {
       loading.value = false
@@ -142,7 +145,8 @@ export const useAuthStore = defineStore('auth', () => {
         throw signOutError
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to sign out'
+      error.value =
+        err instanceof Error ? err.message : 'Déconnexion impossible'
       throw err
     } finally {
       loading.value = false
@@ -165,7 +169,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
     } catch (err) {
       error.value =
-        err instanceof Error ? err.message : 'Failed to sign in with Google'
+        err instanceof Error ? err.message : 'Connexion avec Google impossible'
       throw err
     } finally {
       loading.value = false
@@ -187,7 +191,7 @@ export const useAuthStore = defineStore('auth', () => {
       dbUser.value = null
     } catch (err) {
       error.value =
-        err instanceof Error ? err.message : 'Failed to delete account'
+        err instanceof Error ? err.message : 'Impossible de supprimer le compte'
       throw err
     } finally {
       loading.value = false

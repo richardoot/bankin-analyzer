@@ -11,7 +11,7 @@ export const usePersonsStore = defineStore('persons', () => {
   async function fetchPersons(): Promise<void> {
     await run(async () => {
       persons.value = await api.getPersons()
-    }, 'Failed to fetch persons')
+    }, 'Impossible de charger les personnes')
   }
 
   async function addPerson(name: string, email?: string): Promise<boolean> {
@@ -23,7 +23,7 @@ export const usePersonsStore = defineStore('persons', () => {
       persons.value.push(newPerson)
       persons.value.sort((a, b) => a.name.localeCompare(b.name))
       return true
-    }, 'Failed to create person')
+    }, 'Impossible de créer la personne')
     return result ?? false
   }
 
@@ -43,7 +43,7 @@ export const usePersonsStore = defineStore('persons', () => {
         persons.value.sort((a, b) => a.name.localeCompare(b.name))
       }
       return true
-    }, 'Failed to update person')
+    }, 'Impossible de modifier la personne')
     return result ?? false
   }
 
@@ -52,7 +52,7 @@ export const usePersonsStore = defineStore('persons', () => {
       await api.deletePerson(id)
       persons.value = persons.value.filter(p => p.id !== id)
       return true
-    }, 'Failed to delete person')
+    }, 'Impossible de supprimer la personne')
     return result ?? false
   }
 

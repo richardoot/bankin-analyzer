@@ -41,7 +41,7 @@ export const useAccountsStore = defineStore('accounts', () => {
   async function load(): Promise<void> {
     await run(async () => {
       accounts.value = await api.getAccounts()
-    }, 'Failed to load accounts')
+    }, 'Impossible de charger les comptes')
   }
 
   // Update account type
@@ -56,7 +56,7 @@ export const useAccountsStore = defineStore('accounts', () => {
         accounts.value[index] = updated
       }
       return true
-    }, 'Failed to update account')
+    }, 'Impossible de modifier le compte')
     return result ?? false
   }
 
@@ -76,7 +76,7 @@ export const useAccountsStore = defineStore('accounts', () => {
         accounts.value[index] = updated
       }
       return true
-    }, 'Failed to update account')
+    }, 'Impossible de modifier le compte')
     return result ?? false
   }
 
