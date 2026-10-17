@@ -24,6 +24,13 @@ vi.mock('@/lib/api', () => ({
   UNCATEGORIZED_CATEGORY_ID: '__uncategorized__',
 }))
 
+const mockToast = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+}))
+vi.mock('@/composables/useToast', () => ({ useToast: () => mockToast }))
+
 // Mock the pdf export composable
 vi.mock('@/composables/usePdfExport', () => ({
   usePdfExport: () => ({
@@ -622,11 +629,17 @@ describe('ReimbursementsPage', () => {
         await wrapper
           .get('button[title="Regler uniquement Monoprix"]')
           .trigger('click')
-        single(wrapper).vm.$emit('confirm', { id: 'settlement-1' })
+        single(wrapper).vm.$emit('confirm', {
+          id: 'settlement-1',
+          amountUsed: 30,
+        })
         await flushPromises()
 
         // Without this the page would keep showing a debt that is now settled.
         expect(api.getReimbursements).toHaveBeenCalled()
+        expect(mockToast.success).toHaveBeenCalledWith(
+          expect.stringContaining('enregistré')
+        )
       })
     })
 
@@ -716,6 +729,60 @@ describe('ReimbursementsPage', () => {
         wrapper.find('[data-testid="reimbursements-error"]').exists()
       ).toBe(false)
       expect(wrapper.text()).toContain('Alice Dupont')
+    })
+
+    describe('cancelling a settlement', () => {
+      const settlement = {
+        id: 's1',
+        personId: '1',
+        personName: 'Alice Dupont',
+        incomeTransactionId: 't9',
+        incomeTransactionDescription: 'Virement Alice',
+        incomeTransactionDate: '2024-02-01',
+        incomeTransactionAmount: 45,
+        amountUsed: 45,
+        note: null,
+        createdAt: '2024-02-01T00:00:00.000Z',
+        reimbursements: [],
+      }
+
+      const askToCancel = async () => {
+        vi.mocked(api.getPersons).mockResolvedValue([])
+        vi.mocked(api.getReimbursements).mockResolvedValue([])
+        vi.mocked(api.getSettlements).mockResolvedValue([settlement])
+        const wrapper = await mountWith()
+        wrapper
+          .findComponent({ name: 'SettlementHistorySection' })
+          .vm.$emit('delete', 's1')
+        await flushPromises()
+        const confirm = wrapper
+          .findAll('button')
+          .find(b => b.text() === 'Oui, annuler')
+        await confirm?.trigger('click')
+        await flushPromises()
+        return wrapper
+      }
+
+      it('closes the question only once the server agreed', async () => {
+        vi.mocked(api.deleteSettlement).mockResolvedValue(undefined)
+        const wrapper = await askToCancel()
+
+        expect(api.deleteSettlement).toHaveBeenCalledWith('s1')
+        expect(mockToast.success).toHaveBeenCalled()
+        expect(wrapper.text()).not.toContain('Annuler ce règlement ?')
+      })
+
+      it('keeps the question open and says why when it fails', async () => {
+        vi.mocked(api.deleteSettlement).mockRejectedValue(
+          new Error("Impossible d'annuler le règlement")
+        )
+        const wrapper = await askToCancel()
+
+        expect(mockToast.error).toHaveBeenCalledWith(
+          "Impossible d'annuler le règlement"
+        )
+        expect(wrapper.text()).toContain('Annuler ce règlement ?')
+      })
     })
 
     it('says the settlement history failed, and retries', async () => {

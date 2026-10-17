@@ -29,7 +29,9 @@ async function mountCard(applicationId: string | null = null) {
   vi.mocked(api.getEnableBankingCredential).mockResolvedValue({
     applicationId,
   })
-  const wrapper = mount(EnableBankingCredentialCard)
+  const wrapper = mount(EnableBankingCredentialCard, {
+    global: { stubs: { Teleport: true } },
+  })
   await flushPromises()
   return wrapper
 }
@@ -153,6 +155,19 @@ describe('EnableBankingCredentialCard', () => {
     await wrapper
       .find('[data-testid="remove-credential-button"]')
       .trigger('click')
+    await flushPromises()
+
+    // Asked first: the key cannot be recovered.
+    expect(api.removeEnableBankingCredential).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain(
+      'Supprimer votre application Enable Banking ?'
+    )
+    const confirm = wrapper
+      .findAll('button')
+      .filter(b => b.text() === 'Supprimer')
+      .map(b => b)
+      .pop()
+    await confirm?.trigger('click')
     await flushPromises()
 
     expect(api.removeEnableBankingCredential).toHaveBeenCalled()

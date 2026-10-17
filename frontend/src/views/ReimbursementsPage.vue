@@ -13,8 +13,10 @@
   import SettlementHistorySection from '@/components/settlements/SettlementHistorySection.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
   import { formatCurrency } from '@/lib/formatters'
+  import { useToast } from '@/composables/useToast'
 
   const { exportReimbursementsToPdf } = usePdfExport()
+  const toast = useToast()
 
   const personsStore = usePersonsStore()
 
@@ -55,6 +57,7 @@
 
   // Settlement delete confirmation
   const settlementToDelete = ref<string | null>(null)
+  const isDeletingSettlement = ref(false)
 
   // Summary by person
   interface CategorySummary {
@@ -265,6 +268,9 @@
   // Handle settlement created
   async function handleSettlementCreated(settlement: SettlementDto) {
     settlements.value.unshift(settlement)
+    toast.success(
+      `Règlement de ${formatCurrency(settlement.amountUsed)} enregistré`
+    )
     // Refresh reimbursements to get updated amounts
     await fetchReimbursements()
   }
@@ -288,6 +294,7 @@
 
   // Cancel settlement deletion
   function cancelDeleteSettlement() {
+    if (isDeletingSettlement.value) return
     settlementToDelete.value = null
   }
 
@@ -295,18 +302,26 @@
   async function confirmDeleteSettlement() {
     if (!settlementToDelete.value) return
 
+    // The dialog stays open, busy, until the server has answered: closing
+    // it first made a failure look like a cancellation.
     const idToDelete = settlementToDelete.value
-    settlementToDelete.value = null
-    showSettlementDetailModal.value = false
-    selectedSettlement.value = null
-
+    isDeletingSettlement.value = true
     try {
       await api.deleteSettlement(idToDelete)
       settlements.value = settlements.value.filter(s => s.id !== idToDelete)
+      settlementToDelete.value = null
+      showSettlementDetailModal.value = false
+      selectedSettlement.value = null
+      toast.success('Règlement annulé, les montants sont de nouveau en attente')
       // Refresh reimbursements to restore amounts
       await fetchReimbursements()
     } catch (err) {
       console.error('Failed to delete settlement:', err)
+      toast.error(
+        err instanceof Error ? err.message : "Impossible d'annuler le règlement"
+      )
+    } finally {
+      isDeletingSettlement.value = false
     }
   }
 
@@ -998,6 +1013,7 @@
       title="Annuler ce règlement ?"
       confirm-label="Oui, annuler"
       cancel-label="Non, conserver"
+      :loading="isDeletingSettlement"
       @confirm="confirmDeleteSettlement"
       @cancel="cancelDeleteSettlement"
     >

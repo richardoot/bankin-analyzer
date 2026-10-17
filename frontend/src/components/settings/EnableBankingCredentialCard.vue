@@ -9,6 +9,8 @@
   import { onMounted, ref } from 'vue'
   import { api } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 
   const emit = defineEmits<{ changed: [] }>()
 
@@ -18,6 +20,8 @@
   const file = ref<File | null>(null)
   const saving = ref(false)
   const removing = ref(false)
+  /** The private key is never given back: removing it is asked first. */
+  const confirmingRemove = ref(false)
   const tutorialOpen = ref(false)
 
   const toast = useToast()
@@ -89,6 +93,7 @@
     try {
       await api.removeEnableBankingCredential()
       applicationId.value = null
+      confirmingRemove.value = false
       toast.success('Application Enable Banking supprimée')
       emit('changed')
     } catch (err) {
@@ -126,15 +131,15 @@
           Configurée — identifiant d'application :
           <code class="font-mono break-all">{{ applicationId }}</code>
         </p>
-        <button
-          type="button"
+        <BaseButton
+          variant="danger-outline"
+          size="sm"
           data-testid="remove-credential-button"
           :disabled="removing"
-          class="rounded-lg border border-primary-300 px-3 py-1.5 text-sm font-medium text-primary-800 hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-primary-700 dark:text-primary-200 dark:hover:bg-primary-900/40"
-          @click="remove"
+          @click="confirmingRemove = true"
         >
-          {{ removing ? 'Suppression…' : 'Supprimer' }}
-        </button>
+          Supprimer
+        </BaseButton>
       </div>
 
       <div v-else class="mt-4 grid gap-3 sm:grid-cols-2">
@@ -280,5 +285,17 @@
         </p>
       </details>
     </template>
+
+    <ConfirmDialog
+      :open="confirmingRemove"
+      title="Supprimer votre application Enable Banking ?"
+      :loading="removing"
+      @confirm="remove"
+      @cancel="confirmingRemove = false"
+    >
+      La synchronisation bancaire s'arrêtera. La clé privée n'est jamais
+      redonnée : pour reconnecter une banque, il faudra en télécharger une
+      nouvelle depuis le Control Panel d'Enable Banking et l'enregistrer ici.
+    </ConfirmDialog>
   </div>
 </template>

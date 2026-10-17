@@ -1,6 +1,10 @@
 <script setup lang="ts">
   import { ref, onMounted, computed } from 'vue'
   import { api, type ImportHistoryDto } from '@/lib/api'
+  import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+  import { useToast } from '@/composables/useToast'
+
+  const toast = useToast()
 
   const histories = ref<ImportHistoryDto[]>([])
   const latestDate = ref<string | null>(null)
@@ -10,6 +14,11 @@
   const isDeleting = ref(false)
 
   const hasHistories = computed(() => histories.value.length > 0)
+
+  /** The import the dialog is asking about. */
+  const importToDelete = computed(
+    () => histories.value.find(h => h.id === deleteConfirmId.value) ?? null
+  )
 
   const formatDateTime = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString('fr-FR', {
@@ -110,18 +119,26 @@
   }
 
   const cancelDelete = (): void => {
+    if (isDeleting.value) return
     deleteConfirmId.value = null
   }
 
-  const deleteImport = async (id: string): Promise<void> => {
+  // The backend deletes every transaction of the import along with it; the
+  // dialog says so, with the count, before anything goes.
+  const deleteImport = async (): Promise<void> => {
+    const id = deleteConfirmId.value
+    if (!id) return
     try {
       isDeleting.value = true
       await api.deleteImport(id)
       deleteConfirmId.value = null
+      toast.success('Import supprimé, avec ses transactions')
       await fetchData()
     } catch (e) {
-      error.value =
-        e instanceof Error ? e.message : 'Erreur lors de la suppression'
+      // A toast, not the page's error block: the list stays as it was.
+      toast.error(
+        e instanceof Error ? e.message : "Impossible de supprimer l'import"
+      )
     } finally {
       isDeleting.value = false
     }
@@ -296,7 +313,9 @@
             </div>
             <!-- Delete Button -->
             <button
-              v-if="deleteConfirmId !== history.id"
+              type="button"
+              data-testid="delete-import-button"
+              :aria-label="`Supprimer l'import du ${formatDateTime(history.createdAt)}`"
               class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 sm:h-9 sm:w-9"
               title="Supprimer cet import"
               @click="confirmDelete(history.id)"
@@ -315,29 +334,6 @@
                 />
               </svg>
             </button>
-            <!-- Delete Confirmation -->
-            <div
-              v-else
-              class="flex w-full items-center justify-end gap-2 sm:w-auto"
-            >
-              <span class="text-sm text-red-600 dark:text-red-400"
-                >Supprimer ?</span
-              >
-              <button
-                class="min-h-[40px] rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50 sm:min-h-0"
-                :disabled="isDeleting"
-                @click="deleteImport(history.id)"
-              >
-                {{ isDeleting ? 'Suppression...' : 'Oui' }}
-              </button>
-              <button
-                class="min-h-[40px] rounded-lg bg-gray-200 dark:bg-slate-700 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-300 dark:hover:bg-slate-600 sm:min-h-0"
-                :disabled="isDeleting"
-                @click="cancelDelete"
-              >
-                Non
-              </button>
-            </div>
           </div>
 
           <!-- Stats Grid -->
@@ -467,5 +463,34 @@
         </RouterLink>
       </div>
     </div>
+
+    <ConfirmDialog
+      :open="importToDelete !== null"
+      title="Supprimer cet import ?"
+      :confirm-label="
+        importToDelete && importToDelete.transactionsImported > 0
+          ? 'Tout supprimer'
+          : 'Supprimer'
+      "
+      :loading="isDeleting"
+      @confirm="deleteImport"
+      @cancel="cancelDelete"
+    >
+      <template
+        v-if="importToDelete && importToDelete.transactionsImported > 0"
+      >
+        Les
+        <span class="font-medium text-gray-900 dark:text-gray-100"
+          >{{ importToDelete.transactionsImported }} transactions</span
+        >
+        importées par cet import seront supprimées aussi, avec leurs catégories,
+        notes et étiquettes. Vos comptes et catégories restent. Cette action est
+        irréversible.
+      </template>
+      <template v-else>
+        Cet import n'a ajouté aucune transaction ; seule sa trace dans
+        l'historique disparaîtra.
+      </template>
+    </ConfirmDialog>
   </div>
 </template>
