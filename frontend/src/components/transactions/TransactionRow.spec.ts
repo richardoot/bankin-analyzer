@@ -113,6 +113,24 @@ describe('TransactionRow', () => {
     })
   })
 
+  it('greys a transfer amount in both layouts, apart from spending and earning', () => {
+    const amounts = (wrapper: ReturnType<typeof mountRow>) =>
+      wrapper.findAll('span').filter(s => /^-42,50\s€$/.test(s.text()))
+
+    const transfer = amounts(
+      mountRow({ transaction: tx({ type: 'TRANSFER' }) })
+    )
+    expect(transfer).toHaveLength(2)
+    for (const s of transfer) {
+      expect(s.classes()).toContain('text-gray-500')
+      expect(s.classes()).not.toContain('text-red-600')
+    }
+
+    for (const s of amounts(mountRow())) {
+      expect(s.classes()).toContain('text-red-600')
+    }
+  })
+
   it('offers to follow an expense as a subscription', async () => {
     const wrapper = mountRow()
 

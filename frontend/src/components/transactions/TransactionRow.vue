@@ -390,13 +390,7 @@
 
       <!-- Amount -->
       <div class="col-span-1 text-sm font-semibold text-right">
-        <span
-          :class="
-            isExpense
-              ? 'text-red-600 dark:text-red-500'
-              : 'text-green-600 dark:text-green-500'
-          "
-        >
+        <span :class="amountClass">
           {{ formatCurrency(transaction.amount) }}
         </span>
       </div>
