@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { onMounted, ref } from 'vue'
   import { useIsMobile } from '@/composables/useMediaQuery'
+  import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import { useRouter } from 'vue-router'
   import { useTagsStore } from '@/stores/tags'
@@ -198,46 +199,26 @@
 </script>
 
 <template>
-  <div
-    class="min-h-screen bg-gray-50 dark:bg-slate-800 py-6 sm:py-8 transition-colors"
-  >
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-      <PageHeader
-        title="Étiquettes"
-        subtitle="Regroupez des transactions (événement, vacances…) et analysez-les."
-      />
+  <PageShell>
+    <PageHeader
+      title="Étiquettes"
+      subtitle="Regroupez des transactions (événement, vacances…) et analysez-les."
+    />
 
-      <!-- Create form -->
-      <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4 mb-6 dark:shadow-slate-900/20"
+    <!-- Create form -->
+    <div
+      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4 mb-6 dark:shadow-slate-900/20"
+    >
+      <button
+        type="button"
+        data-testid="toggle-create-tag"
+        class="flex min-h-[44px] w-full items-center justify-between gap-2 text-sm font-medium text-gray-800 md:hidden dark:text-gray-200"
+        :aria-expanded="createOpen"
+        @click="createOpen = !createOpen"
       >
-        <button
-          type="button"
-          data-testid="toggle-create-tag"
-          class="flex min-h-[44px] w-full items-center justify-between gap-2 text-sm font-medium text-gray-800 md:hidden dark:text-gray-200"
-          :aria-expanded="createOpen"
-          @click="createOpen = !createOpen"
-        >
-          <span class="inline-flex items-center gap-2">
-            <svg
-              class="h-4 w-4 text-primary-600 dark:text-primary-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            Nouvelle étiquette
-          </span>
+        <span class="inline-flex items-center gap-2">
           <svg
-            class="h-4 w-4 text-gray-500 transition-transform"
-            :class="{ 'rotate-180': createOpen }"
+            class="h-4 w-4 text-primary-600 dark:text-primary-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -247,389 +228,405 @@
               stroke-linecap="round"
               stroke-linejoin="round"
               stroke-width="2"
-              d="M19 9l-7 7-7-7"
+              d="M12 4v16m8-8H4"
             />
           </svg>
-        </button>
-        <div v-show="!isMobile || createOpen" class="mt-3 md:mt-0">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <input
-              v-model="newName"
-              type="text"
-              placeholder="Nom de l'étiquette (ex : Vacances Italie)"
-              class="min-h-[44px] flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 focus:ring-2 focus:ring-primary-500 sm:min-h-0 sm:text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-              @keyup.enter="createTag"
-            />
-            <div class="flex flex-wrap items-center gap-2 sm:gap-1.5">
-              <button
-                v-for="c in COLORS"
-                :key="c"
-                type="button"
-                :aria-pressed="newColor === c"
-                class="h-8 w-8 shrink-0 rounded-full border-2 transition-transform hover:scale-110 sm:h-6 sm:w-6"
-                :class="
-                  newColor === c
-                    ? 'border-gray-900 dark:border-white'
-                    : 'border-transparent'
-                "
-                :style="{ backgroundColor: c }"
-                :aria-label="`Couleur ${COLOR_NAMES[c] ?? c}`"
-                @click="newColor = c"
-              ></button>
-            </div>
+          Nouvelle étiquette
+        </span>
+        <svg
+          class="h-4 w-4 text-gray-500 transition-transform"
+          :class="{ 'rotate-180': createOpen }"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M19 9l-7 7-7-7"
+          />
+        </svg>
+      </button>
+      <div v-show="!isMobile || createOpen" class="mt-3 md:mt-0">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <input
+            v-model="newName"
+            type="text"
+            placeholder="Nom de l'étiquette (ex : Vacances Italie)"
+            class="min-h-[44px] flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 focus:ring-2 focus:ring-primary-500 sm:min-h-0 sm:text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+            @keyup.enter="createTag"
+          />
+          <div class="flex flex-wrap items-center gap-2 sm:gap-1.5">
             <button
+              v-for="c in COLORS"
+              :key="c"
               type="button"
-              class="min-h-[44px] rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 sm:min-h-0"
-              :disabled="!newName.trim() || creating"
-              @click="createTag"
-            >
-              Créer
-            </button>
+              :aria-pressed="newColor === c"
+              class="h-8 w-8 shrink-0 rounded-full border-2 transition-transform hover:scale-110 sm:h-6 sm:w-6"
+              :class="
+                newColor === c
+                  ? 'border-gray-900 dark:border-white'
+                  : 'border-transparent'
+              "
+              :style="{ backgroundColor: c }"
+              :aria-label="`Couleur ${COLOR_NAMES[c] ?? c}`"
+              @click="newColor = c"
+            ></button>
           </div>
-
-          <!-- Exceptional event settings -->
-          <div class="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-            <label
-              class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
-            >
-              <input
-                v-model="newIsExceptional"
-                type="checkbox"
-                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                data-testid="new-tag-exceptional"
-              />
-              Dépense exceptionnelle
-              <span class="text-xs text-gray-400">
-                — exclue des moyennes du quotidien
-              </span>
-            </label>
-
-            <div v-if="newIsExceptional" class="mt-3 pl-6">
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                Période d'absence (facultatif) — pendant ces dates vos dépenses
-                habituelles sont suspendues. Renseignez-la pour un déplacement
-                ou des vacances ; laissez vide pour une fête à la maison.
-              </p>
-              <div class="mt-2 flex flex-wrap items-center gap-2">
-                <input
-                  v-model="newEventStart"
-                  type="date"
-                  class="min-h-[40px] min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 sm:min-h-0 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                  aria-label="Début de la période d'absence"
-                />
-                <span class="text-gray-400 text-sm">→</span>
-                <input
-                  v-model="newEventEnd"
-                  type="date"
-                  class="min-h-[40px] min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 sm:min-h-0 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                  aria-label="Fin de la période d'absence"
-                />
-              </div>
-
-              <div class="mt-3 flex flex-wrap items-center gap-2">
-                <label
-                  for="new-tag-budget"
-                  class="text-xs text-gray-500 dark:text-gray-400"
-                >
-                  Enveloppe du projet (facultatif) — un total, pas un montant
-                  mensuel
-                </label>
-                <div class="relative">
-                  <input
-                    id="new-tag-budget"
-                    v-model="newBudget"
-                    type="number"
-                    min="0"
-                    step="10"
-                    placeholder="—"
-                    data-testid="new-tag-budget"
-                    class="w-28 pl-2 pr-6 py-1 text-sm text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 tabular-nums"
-                  />
-                  <span
-                    class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"
-                  >
-                    €
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+          <button
+            type="button"
+            class="min-h-[44px] rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 sm:min-h-0"
+            :disabled="!newName.trim() || creating"
+            @click="createTag"
+          >
+            Créer
+          </button>
         </div>
-      </div>
 
-      <!-- Loading -->
-      <div
-        v-if="tagsStore.isLoading && tagsStore.tags.length === 0"
-        class="py-12 text-center text-gray-500 dark:text-gray-400"
-      >
-        Chargement…
-      </div>
-
-      <!-- Failed load: not the same as having no tag -->
-      <div
-        v-else-if="loadFailed && tagsStore.tags.length === 0"
-        role="alert"
-        data-testid="tags-load-error"
-        class="rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
-      >
-        <p>Les étiquettes n'ont pas pu être chargées.</p>
-        <button
-          type="button"
-          data-testid="tags-retry"
-          :disabled="tagsStore.isLoading"
-          class="mt-3 inline-flex min-h-[40px] items-center justify-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
-          @click="loadTags"
-        >
-          Réessayer
-        </button>
-      </div>
-
-      <!-- Empty -->
-      <div
-        v-else-if="tagsStore.tags.length === 0"
-        class="py-12 text-center text-gray-500 dark:text-gray-400"
-      >
-        Aucune étiquette pour l'instant. Créez-en une ci-dessus, puis
-        attribuez-la à des transactions.
-      </div>
-
-      <!-- Tag cards -->
-      <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <div
-          v-for="tag in tagsStore.tags"
-          :key="tag.id"
-          class="group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4 dark:shadow-slate-900/20 border border-transparent hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
-        >
-          <!-- Edit mode -->
-          <div v-if="editingId === tag.id" class="space-y-2">
+        <!-- Exceptional event settings -->
+        <div class="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
+          <label
+            class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
+          >
             <input
-              v-model="editName"
-              type="text"
-              class="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-              @keyup.enter="saveEdit(tag.id)"
-              @keyup.escape="cancelEdit"
+              v-model="newIsExceptional"
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              data-testid="new-tag-exceptional"
             />
-            <div class="flex flex-wrap items-center gap-1">
-              <button
-                v-for="c in COLORS"
-                :key="c"
-                type="button"
-                :aria-label="`Couleur ${COLOR_NAMES[c] ?? c}`"
-                :aria-pressed="editColor === c"
-                class="h-7 w-7 shrink-0 rounded-full border-2 sm:h-5 sm:w-5"
-                :class="
-                  editColor === c
-                    ? 'border-gray-900 dark:border-white'
-                    : 'border-transparent'
-                "
-                :style="{ backgroundColor: c }"
-                @click="editColor = c"
-              ></button>
-            </div>
-            <label
-              class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer"
-            >
+            Dépense exceptionnelle
+            <span class="text-xs text-gray-400">
+              — exclue des moyennes du quotidien
+            </span>
+          </label>
+
+          <div v-if="newIsExceptional" class="mt-3 pl-6">
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              Période d'absence (facultatif) — pendant ces dates vos dépenses
+              habituelles sont suspendues. Renseignez-la pour un déplacement ou
+              des vacances ; laissez vide pour une fête à la maison.
+            </p>
+            <div class="mt-2 flex flex-wrap items-center gap-2">
               <input
-                v-model="editIsExceptional"
-                type="checkbox"
-                class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                v-model="newEventStart"
+                type="date"
+                class="min-h-[40px] min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 sm:min-h-0 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                aria-label="Début de la période d'absence"
               />
-              Dépense exceptionnelle
-            </label>
-            <div v-if="editIsExceptional" class="space-y-1">
-              <p class="text-[11px] text-gray-400">
-                Période d'absence (facultatif)
-              </p>
-              <div class="flex items-center gap-1">
-                <input
-                  v-model="editEventStart"
-                  type="date"
-                  class="flex-1 min-w-0 px-1.5 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                  aria-label="Début de la période d'absence"
-                />
-                <input
-                  v-model="editEventEnd"
-                  type="date"
-                  class="flex-1 min-w-0 px-1.5 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                  aria-label="Fin de la période d'absence"
-                />
-              </div>
-              <p class="text-[11px] text-gray-400 pt-1">
-                Enveloppe du projet (total)
-              </p>
+              <span class="text-gray-400 text-sm">→</span>
+              <input
+                v-model="newEventEnd"
+                type="date"
+                class="min-h-[40px] min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 sm:min-h-0 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                aria-label="Fin de la période d'absence"
+              />
+            </div>
+
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              <label
+                for="new-tag-budget"
+                class="text-xs text-gray-500 dark:text-gray-400"
+              >
+                Enveloppe du projet (facultatif) — un total, pas un montant
+                mensuel
+              </label>
               <div class="relative">
                 <input
-                  v-model="editBudget"
+                  id="new-tag-budget"
+                  v-model="newBudget"
                   type="number"
                   min="0"
                   step="10"
                   placeholder="—"
-                  data-testid="edit-tag-budget"
-                  class="w-full px-1.5 pr-6 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 tabular-nums text-right"
-                  aria-label="Enveloppe du projet"
+                  data-testid="new-tag-budget"
+                  class="w-28 pl-2 pr-6 py-1 text-sm text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 tabular-nums"
                 />
                 <span
-                  class="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 pointer-events-none"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"
                 >
                   €
                 </span>
               </div>
             </div>
-            <div class="flex justify-end gap-2 pt-1">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div
+      v-if="tagsStore.isLoading && tagsStore.tags.length === 0"
+      class="py-12 text-center text-gray-500 dark:text-gray-400"
+    >
+      Chargement…
+    </div>
+
+    <!-- Failed load: not the same as having no tag -->
+    <div
+      v-else-if="loadFailed && tagsStore.tags.length === 0"
+      role="alert"
+      data-testid="tags-load-error"
+      class="rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+    >
+      <p>Les étiquettes n'ont pas pu être chargées.</p>
+      <button
+        type="button"
+        data-testid="tags-retry"
+        :disabled="tagsStore.isLoading"
+        class="mt-3 inline-flex min-h-[40px] items-center justify-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
+        @click="loadTags"
+      >
+        Réessayer
+      </button>
+    </div>
+
+    <!-- Empty -->
+    <div
+      v-else-if="tagsStore.tags.length === 0"
+      class="py-12 text-center text-gray-500 dark:text-gray-400"
+    >
+      Aucune étiquette pour l'instant. Créez-en une ci-dessus, puis attribuez-la
+      à des transactions.
+    </div>
+
+    <!-- Tag cards -->
+    <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div
+        v-for="tag in tagsStore.tags"
+        :key="tag.id"
+        class="group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4 dark:shadow-slate-900/20 border border-transparent hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+      >
+        <!-- Edit mode -->
+        <div v-if="editingId === tag.id" class="space-y-2">
+          <input
+            v-model="editName"
+            type="text"
+            class="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+            @keyup.enter="saveEdit(tag.id)"
+            @keyup.escape="cancelEdit"
+          />
+          <div class="flex flex-wrap items-center gap-1">
+            <button
+              v-for="c in COLORS"
+              :key="c"
+              type="button"
+              :aria-label="`Couleur ${COLOR_NAMES[c] ?? c}`"
+              :aria-pressed="editColor === c"
+              class="h-7 w-7 shrink-0 rounded-full border-2 sm:h-5 sm:w-5"
+              :class="
+                editColor === c
+                  ? 'border-gray-900 dark:border-white'
+                  : 'border-transparent'
+              "
+              :style="{ backgroundColor: c }"
+              @click="editColor = c"
+            ></button>
+          </div>
+          <label
+            class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer"
+          >
+            <input
+              v-model="editIsExceptional"
+              type="checkbox"
+              class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            Dépense exceptionnelle
+          </label>
+          <div v-if="editIsExceptional" class="space-y-1">
+            <p class="text-[11px] text-gray-400">
+              Période d'absence (facultatif)
+            </p>
+            <div class="flex items-center gap-1">
+              <input
+                v-model="editEventStart"
+                type="date"
+                class="flex-1 min-w-0 px-1.5 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+                aria-label="Début de la période d'absence"
+              />
+              <input
+                v-model="editEventEnd"
+                type="date"
+                class="flex-1 min-w-0 px-1.5 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
+                aria-label="Fin de la période d'absence"
+              />
+            </div>
+            <p class="text-[11px] text-gray-400 pt-1">
+              Enveloppe du projet (total)
+            </p>
+            <div class="relative">
+              <input
+                v-model="editBudget"
+                type="number"
+                min="0"
+                step="10"
+                placeholder="—"
+                data-testid="edit-tag-budget"
+                class="w-full px-1.5 pr-6 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 tabular-nums text-right"
+                aria-label="Enveloppe du projet"
+              />
+              <span
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 pointer-events-none"
+              >
+                €
+              </span>
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 pt-1">
+            <button
+              class="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
+              @click="cancelEdit"
+            >
+              Annuler
+            </button>
+            <button
+              class="px-2 py-1 text-xs font-medium text-white bg-primary-600 rounded hover:bg-primary-700"
+              @click="saveEdit(tag.id)"
+            >
+              Enregistrer
+            </button>
+          </div>
+        </div>
+
+        <!-- Display mode -->
+        <template v-else>
+          <button
+            type="button"
+            class="w-full pr-16 text-left sm:pr-0"
+            @click="openAnalysis(tag)"
+          >
+            <div class="flex items-center gap-2">
+              <span
+                class="inline-block h-3 w-3 rounded-full shrink-0"
+                :style="{ backgroundColor: tag.color ?? '#9ca3af' }"
+              ></span>
+              <span
+                class="font-semibold text-gray-900 dark:text-gray-100 truncate"
+              >
+                {{ tag.name }}
+              </span>
+            </div>
+            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              {{ tag.transactionCount }} transaction(s)
+            </p>
+            <div
+              v-if="tag.isExceptional"
+              class="mt-2 flex flex-wrap items-center gap-1.5"
+            >
+              <span
+                class="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400"
+                title="Exclue des moyennes du quotidien du tableau de bord"
+              >
+                Exceptionnel
+              </span>
+              <span
+                v-if="tag.eventStartDate && tag.eventEndDate"
+                class="text-[11px] text-gray-400"
+              >
+                {{ formatPeriod(tag.eventStartDate, tag.eventEndDate) }}
+              </span>
+              <span
+                v-if="tag.budgetAmount !== null"
+                :data-testid="`tag-budget-${tag.name}`"
+                class="inline-flex items-center rounded-full bg-primary-100 dark:bg-primary-900/40 px-2 py-0.5 text-[11px] font-medium text-primary-700 dark:text-primary-400 tabular-nums"
+                title="Enveloppe allouée au projet"
+              >
+                {{ formatCurrency(tag.budgetAmount) }}
+              </span>
+            </div>
+            <span
+              class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-600 dark:text-primary-400"
+            >
+              Analyser
+              <svg
+                class="h-3 w-3"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </span>
+          </button>
+
+          <!-- Card actions -->
+          <div
+            class="absolute top-2 right-2 flex items-center gap-1 transition-opacity sm:top-3 sm:right-3 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
+          >
+            <button
+              class="inline-flex h-9 w-9 items-center justify-center rounded text-gray-400 hover:text-primary-500 sm:h-auto sm:w-auto sm:p-1"
+              aria-label="Modifier"
+              @click.stop="startEdit(tag)"
+            >
+              <svg
+                class="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                />
+              </svg>
+            </button>
+            <button
+              class="inline-flex h-9 w-9 items-center justify-center rounded text-gray-400 hover:text-red-500 sm:h-auto sm:w-auto sm:p-1"
+              aria-label="Supprimer"
+              @click.stop="confirmingDeleteId = tag.id"
+            >
+              <svg
+                class="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Delete confirmation -->
+          <div
+            v-if="confirmingDeleteId === tag.id"
+            class="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-white/95 dark:bg-slate-900/95 p-4 text-center"
+          >
+            <p class="text-sm text-gray-700 dark:text-gray-300">
+              Supprimer « {{ tag.name }} » ?
+            </p>
+            <p class="text-xs text-gray-400">
+              Les transactions ne sont pas supprimées.
+            </p>
+            <div class="flex gap-2">
               <button
-                class="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
-                @click="cancelEdit"
+                class="px-3 py-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                @click.stop="confirmingDeleteId = null"
               >
                 Annuler
               </button>
               <button
-                class="px-2 py-1 text-xs font-medium text-white bg-primary-600 rounded hover:bg-primary-700"
-                @click="saveEdit(tag.id)"
+                class="px-3 py-1 text-xs font-medium text-white bg-red-600 rounded hover:bg-red-700"
+                @click.stop="confirmDelete(tag)"
               >
-                Enregistrer
+                Supprimer
               </button>
             </div>
           </div>
-
-          <!-- Display mode -->
-          <template v-else>
-            <button
-              type="button"
-              class="w-full pr-16 text-left sm:pr-0"
-              @click="openAnalysis(tag)"
-            >
-              <div class="flex items-center gap-2">
-                <span
-                  class="inline-block h-3 w-3 rounded-full shrink-0"
-                  :style="{ backgroundColor: tag.color ?? '#9ca3af' }"
-                ></span>
-                <span
-                  class="font-semibold text-gray-900 dark:text-gray-100 truncate"
-                >
-                  {{ tag.name }}
-                </span>
-              </div>
-              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                {{ tag.transactionCount }} transaction(s)
-              </p>
-              <div
-                v-if="tag.isExceptional"
-                class="mt-2 flex flex-wrap items-center gap-1.5"
-              >
-                <span
-                  class="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400"
-                  title="Exclue des moyennes du quotidien du tableau de bord"
-                >
-                  Exceptionnel
-                </span>
-                <span
-                  v-if="tag.eventStartDate && tag.eventEndDate"
-                  class="text-[11px] text-gray-400"
-                >
-                  {{ formatPeriod(tag.eventStartDate, tag.eventEndDate) }}
-                </span>
-                <span
-                  v-if="tag.budgetAmount !== null"
-                  :data-testid="`tag-budget-${tag.name}`"
-                  class="inline-flex items-center rounded-full bg-primary-100 dark:bg-primary-900/40 px-2 py-0.5 text-[11px] font-medium text-primary-700 dark:text-primary-400 tabular-nums"
-                  title="Enveloppe allouée au projet"
-                >
-                  {{ formatCurrency(tag.budgetAmount) }}
-                </span>
-              </div>
-              <span
-                class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-600 dark:text-primary-400"
-              >
-                Analyser
-                <svg
-                  class="h-3 w-3"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
-              </span>
-            </button>
-
-            <!-- Card actions -->
-            <div
-              class="absolute top-2 right-2 flex items-center gap-1 transition-opacity sm:top-3 sm:right-3 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
-            >
-              <button
-                class="inline-flex h-9 w-9 items-center justify-center rounded text-gray-400 hover:text-primary-500 sm:h-auto sm:w-auto sm:p-1"
-                aria-label="Modifier"
-                @click.stop="startEdit(tag)"
-              >
-                <svg
-                  class="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                  />
-                </svg>
-              </button>
-              <button
-                class="inline-flex h-9 w-9 items-center justify-center rounded text-gray-400 hover:text-red-500 sm:h-auto sm:w-auto sm:p-1"
-                aria-label="Supprimer"
-                @click.stop="confirmingDeleteId = tag.id"
-              >
-                <svg
-                  class="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <!-- Delete confirmation -->
-            <div
-              v-if="confirmingDeleteId === tag.id"
-              class="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-white/95 dark:bg-slate-900/95 p-4 text-center"
-            >
-              <p class="text-sm text-gray-700 dark:text-gray-300">
-                Supprimer « {{ tag.name }} » ?
-              </p>
-              <p class="text-xs text-gray-400">
-                Les transactions ne sont pas supprimées.
-              </p>
-              <div class="flex gap-2">
-                <button
-                  class="px-3 py-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
-                  @click.stop="confirmingDeleteId = null"
-                >
-                  Annuler
-                </button>
-                <button
-                  class="px-3 py-1 text-xs font-medium text-white bg-red-600 rounded hover:bg-red-700"
-                  @click.stop="confirmDelete(tag)"
-                >
-                  Supprimer
-                </button>
-              </div>
-            </div>
-          </template>
-        </div>
+        </template>
       </div>
     </div>
-  </div>
+  </PageShell>
 </template>

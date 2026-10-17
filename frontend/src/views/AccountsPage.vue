@@ -17,6 +17,7 @@
   import { useAccountsStore } from '@/stores/accounts'
   import { useToast } from '@/composables/useToast'
   import { formatCurrency } from '@/lib/formatters'
+  import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
@@ -315,331 +316,221 @@
 </script>
 
 <template>
-  <div
-    class="min-h-screen bg-gray-50 py-6 sm:py-8 transition-colors dark:bg-slate-800"
-  >
-    <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-      <PageHeader
-        title="Comptes"
-        subtitle="Vos comptes, groupés par ce qui les alimente"
-      >
-        <template #actions>
-          <BaseButton
-            v-if="fetchableConnections.length > 0"
-            data-testid="sync-all-button"
-            class="flex-1 sm:flex-none"
-            :loading="isSyncingAll"
-            :disabled="syncing !== null && !isSyncingAll"
-            @click="synchroniseAll"
-          >
-            {{ isSyncingAll ? 'Synchronisation…' : 'Tout synchroniser' }}
-          </BaseButton>
-          <RouterLink
-            to="/settings/accounts"
-            class="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700"
-          >
-            Connecter une banque
-          </RouterLink>
-        </template>
-      </PageHeader>
+  <PageShell>
+    <PageHeader
+      title="Comptes"
+      subtitle="Vos comptes, groupés par ce qui les alimente"
+    >
+      <template #actions>
+        <BaseButton
+          v-if="fetchableConnections.length > 0"
+          data-testid="sync-all-button"
+          class="flex-1 sm:flex-none"
+          :loading="isSyncingAll"
+          :disabled="syncing !== null && !isSyncingAll"
+          @click="synchroniseAll"
+        >
+          {{ isSyncingAll ? 'Synchronisation…' : 'Tout synchroniser' }}
+        </BaseButton>
+        <RouterLink
+          to="/settings/accounts"
+          class="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700"
+        >
+          Connecter une banque
+        </RouterLink>
+      </template>
+    </PageHeader>
 
-      <!-- Loading: the page's own shape -->
-      <div v-if="isLoading" class="space-y-6" aria-busy="true">
-        <SkeletonBlock class="h-40 rounded-xl" />
-        <SkeletonBlock class="h-40 rounded-xl" />
+    <!-- Loading: the page's own shape -->
+    <div v-if="isLoading" class="space-y-6" aria-busy="true">
+      <SkeletonBlock class="h-40 rounded-xl" />
+      <SkeletonBlock class="h-40 rounded-xl" />
+    </div>
+
+    <div v-else class="space-y-6">
+      <!-- A failed load is said as such, with the way out -->
+      <div
+        v-if="loadFailed"
+        role="alert"
+        data-testid="accounts-load-error"
+        class="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 sm:flex-row sm:items-center sm:justify-between dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+      >
+        <p class="text-sm">
+          <template v-if="banksFailed"
+            >Vos connexions bancaires n'ont pas pu être chargées.</template
+          >
+          <template v-else>Vos comptes n'ont pas pu être chargés.</template>
+          Ce qui s'affiche peut être incomplet.
+        </p>
+        <BaseButton
+          variant="danger-outline"
+          size="sm"
+          data-testid="accounts-retry"
+          :loading="isRetrying"
+          @click="retry"
+        >
+          Réessayer
+        </BaseButton>
       </div>
 
-      <div v-else class="space-y-6">
-        <!-- A failed load is said as such, with the way out -->
-        <div
-          v-if="loadFailed"
-          role="alert"
-          data-testid="accounts-load-error"
-          class="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 sm:flex-row sm:items-center sm:justify-between dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
-        >
-          <p class="text-sm">
-            <template v-if="banksFailed"
-              >Vos connexions bancaires n'ont pas pu être chargées.</template
+      <!-- One card per bank connection -->
+      <section
+        v-for="connection in connections"
+        :key="connection.id"
+        :data-testid="`connection-${connection.id}`"
+        class="rounded-xl bg-white p-4 shadow-sm sm:p-6 dark:bg-slate-900 dark:shadow-slate-900/20"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="flex min-w-0 items-start gap-3">
+            <!-- Fond blanc même en sombre : les logos de banque sont
+                   dessinés pour un fond clair. -->
+            <div
+              class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white p-1 ring-1 ring-gray-200 dark:ring-slate-600"
+              data-testid="bank-logo-tile"
             >
-            <template v-else>Vos comptes n'ont pas pu être chargés.</template>
-            Ce qui s'affiche peut être incomplet.
-          </p>
+              <img
+                v-if="logoUrl(connection.aspspName)"
+                :src="logoUrl(connection.aspspName)!"
+                :alt="`Logo ${connection.aspspName}`"
+                class="h-full w-full object-contain"
+              />
+              <span
+                v-else
+                aria-hidden="true"
+                class="text-sm font-semibold text-gray-400"
+              >
+                {{ connection.aspspName.charAt(0).toUpperCase() }}
+              </span>
+            </div>
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h2
+                  class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+                >
+                  {{ connection.aspspName }}
+                </h2>
+                <span
+                  class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                  :class="BADGE_CLASSES[badgeOf(connection).tone]"
+                  data-testid="connection-badge"
+                >
+                  {{ badgeOf(connection).label }}
+                </span>
+              </div>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                <template v-if="connection.lastSyncAt">
+                  Dernière synchro :
+                  {{ formatDateTime(connection.lastSyncAt) }}
+                </template>
+                <template v-else>Jamais synchronisée</template>
+              </p>
+              <!-- Ce que la dernière synchro (souvent la nocturne, qui n'a
+                   pas d'écran) a laissé comme message d'échec. Un succès
+                   l'efface. -->
+              <p
+                v-if="connection.lastSyncError"
+                data-testid="sync-error"
+                class="mt-1 text-xs text-red-600 dark:text-red-400"
+              >
+                Dernière synchronisation en échec<template
+                  v-if="connection.lastSyncErrorAt"
+                >
+                  le
+                  {{ formatDateTime(connection.lastSyncErrorAt) }}</template
+                >
+                : {{ connection.lastSyncError }}
+              </p>
+              <!-- La raison de la policy, jamais tue : quota, intervalle,
+                   demande de la banque. -->
+              <p
+                v-if="connection.action === 'skip'"
+                class="mt-1 text-xs text-amber-700 dark:text-amber-400"
+                data-testid="skip-reason"
+              >
+                {{ connection.reason }}
+              </p>
+              <p
+                v-if="outcomeById.get(connection.id)"
+                class="mt-1 text-xs text-primary-700 dark:text-primary-400"
+                aria-live="polite"
+                data-testid="sync-outcome"
+              >
+                {{ outcomeLabel(outcomeById.get(connection.id)!) }}
+              </p>
+            </div>
+          </div>
+
           <BaseButton
+            v-if="connection.action === 'fetch'"
+            variant="secondary"
+            size="sm"
+            data-testid="sync-one-button"
+            :loading="syncing === connection.id"
+            :disabled="
+              isSyncingAll || (syncing !== null && syncing !== connection.id)
+            "
+            @click="synchroniseOne(connection)"
+          >
+            Synchroniser
+          </BaseButton>
+          <BaseButton
+            v-else-if="connection.action === 'reconnect'"
             variant="danger-outline"
             size="sm"
-            data-testid="accounts-retry"
-            :loading="isRetrying"
-            @click="retry"
+            data-testid="reconnect-button"
+            @click="reconnect(connection)"
           >
-            Réessayer
+            Reconnecter
           </BaseButton>
         </div>
 
-        <!-- One card per bank connection -->
-        <section
-          v-for="connection in connections"
-          :key="connection.id"
-          :data-testid="`connection-${connection.id}`"
-          class="rounded-xl bg-white p-4 shadow-sm sm:p-6 dark:bg-slate-900 dark:shadow-slate-900/20"
+        <!-- Les comptes de cette banque : un clic mène à leurs transactions -->
+        <ul
+          v-if="linkedAccountsOf(connection).length > 0"
+          class="mt-4 divide-y divide-gray-100 border-t border-gray-100 dark:divide-slate-800 dark:border-slate-800"
         >
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="flex min-w-0 items-start gap-3">
-              <!-- Fond blanc même en sombre : les logos de banque sont
-                   dessinés pour un fond clair. -->
-              <div
-                class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white p-1 ring-1 ring-gray-200 dark:ring-slate-600"
-                data-testid="bank-logo-tile"
-              >
-                <img
-                  v-if="logoUrl(connection.aspspName)"
-                  :src="logoUrl(connection.aspspName)!"
-                  :alt="`Logo ${connection.aspspName}`"
-                  class="h-full w-full object-contain"
-                />
-                <span
-                  v-else
-                  aria-hidden="true"
-                  class="text-sm font-semibold text-gray-400"
-                >
-                  {{ connection.aspspName.charAt(0).toUpperCase() }}
-                </span>
-              </div>
-              <div class="min-w-0">
-                <div class="flex flex-wrap items-center gap-2">
-                  <h2
-                    class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-                  >
-                    {{ connection.aspspName }}
-                  </h2>
-                  <span
-                    class="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                    :class="BADGE_CLASSES[badgeOf(connection).tone]"
-                    data-testid="connection-badge"
-                  >
-                    {{ badgeOf(connection).label }}
-                  </span>
-                </div>
-                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  <template v-if="connection.lastSyncAt">
-                    Dernière synchro :
-                    {{ formatDateTime(connection.lastSyncAt) }}
-                  </template>
-                  <template v-else>Jamais synchronisée</template>
-                </p>
-                <!-- Ce que la dernière synchro (souvent la nocturne, qui n'a
-                   pas d'écran) a laissé comme message d'échec. Un succès
-                   l'efface. -->
-                <p
-                  v-if="connection.lastSyncError"
-                  data-testid="sync-error"
-                  class="mt-1 text-xs text-red-600 dark:text-red-400"
-                >
-                  Dernière synchronisation en échec<template
-                    v-if="connection.lastSyncErrorAt"
-                  >
-                    le
-                    {{ formatDateTime(connection.lastSyncErrorAt) }}</template
-                  >
-                  : {{ connection.lastSyncError }}
-                </p>
-                <!-- La raison de la policy, jamais tue : quota, intervalle,
-                   demande de la banque. -->
-                <p
-                  v-if="connection.action === 'skip'"
-                  class="mt-1 text-xs text-amber-700 dark:text-amber-400"
-                  data-testid="skip-reason"
-                >
-                  {{ connection.reason }}
-                </p>
-                <p
-                  v-if="outcomeById.get(connection.id)"
-                  class="mt-1 text-xs text-primary-700 dark:text-primary-400"
-                  aria-live="polite"
-                  data-testid="sync-outcome"
-                >
-                  {{ outcomeLabel(outcomeById.get(connection.id)!) }}
-                </p>
-              </div>
-            </div>
-
-            <BaseButton
-              v-if="connection.action === 'fetch'"
-              variant="secondary"
-              size="sm"
-              data-testid="sync-one-button"
-              :loading="syncing === connection.id"
-              :disabled="
-                isSyncingAll || (syncing !== null && syncing !== connection.id)
-              "
-              @click="synchroniseOne(connection)"
-            >
-              Synchroniser
-            </BaseButton>
-            <BaseButton
-              v-else-if="connection.action === 'reconnect'"
-              variant="danger-outline"
-              size="sm"
-              data-testid="reconnect-button"
-              @click="reconnect(connection)"
-            >
-              Reconnecter
-            </BaseButton>
-          </div>
-
-          <!-- Les comptes de cette banque : un clic mène à leurs transactions -->
-          <ul
-            v-if="linkedAccountsOf(connection).length > 0"
-            class="mt-4 divide-y divide-gray-100 border-t border-gray-100 dark:divide-slate-800 dark:border-slate-800"
-          >
-            <li
-              v-for="account in linkedAccountsOf(connection)"
-              :key="account.id"
-            >
-              <RouterLink
-                :to="{
-                  path: '/transactions',
-                  query: { account: account.name },
-                }"
-                class="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/50"
-              >
-                <span
-                  class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
-                >
-                  {{ account.name }}
-                </span>
-                <span class="flex shrink-0 items-center gap-3">
-                  <span
-                    v-if="balanceByAccountId.get(account.id)"
-                    :data-testid="`balance-${account.name}`"
-                    class="text-right leading-tight"
-                  >
-                    <span
-                      class="block text-sm font-semibold tabular-nums"
-                      :class="
-                        balanceByAccountId.get(account.id)!.amount < 0
-                          ? 'text-red-600 dark:text-red-400'
-                          : 'text-gray-900 dark:text-gray-100'
-                      "
-                    >
-                      {{
-                        formatCurrency(
-                          balanceByAccountId.get(account.id)!.amount
-                        )
-                      }}
-                    </span>
-                    <span
-                      v-if="
-                        formatBalanceDate(
-                          balanceByAccountId.get(account.id)!.at
-                        )
-                      "
-                      class="block text-[10px] text-gray-500 dark:text-gray-400"
-                    >
-                      au
-                      {{
-                        formatBalanceDate(
-                          balanceByAccountId.get(account.id)!.at
-                        )
-                      }}
-                    </span>
-                  </span>
-                  <svg
-                    class="h-4 w-4 shrink-0 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </span>
-              </RouterLink>
-            </li>
-          </ul>
-          <p
-            v-else
-            class="mt-4 border-t border-gray-100 pt-3 text-sm text-gray-500 dark:border-slate-800 dark:text-gray-400"
-          >
-            Aucun compte relié pour l'instant —
+          <li v-for="account in linkedAccountsOf(connection)" :key="account.id">
             <RouterLink
-              to="/settings/accounts"
-              class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
+              :to="{
+                path: '/transactions',
+                query: { account: account.name },
+              }"
+              class="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/50"
             >
-              choisissez lesquels lire
-            </RouterLink>
-            .
-          </p>
-        </section>
-
-        <!-- Bank sync not configured at all -->
-        <section
-          v-if="!configured && !banksFailed"
-          data-testid="no-bank-connected"
-          class="rounded-xl bg-white shadow-sm dark:bg-slate-900 dark:shadow-slate-900/20"
-        >
-          <EmptyState
-            title="Aucune banque connectée"
-            description="Connectez votre banque pour synchroniser vos transactions automatiquement — ou continuez avec les imports CSV ci-dessous."
-          >
-            <template #action>
-              <RouterLink
-                to="/settings/accounts"
-                class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600"
+              <span
+                class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
               >
-                Connecter une banque
-              </RouterLink>
-            </template>
-          </EmptyState>
-        </section>
-
-        <!-- CSV / manual accounts -->
-        <section
-          data-testid="manual-accounts"
-          class="rounded-xl bg-white p-4 shadow-sm sm:p-6 dark:bg-slate-900 dark:shadow-slate-900/20"
-        >
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2
-                class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-              >
-                Comptes CSV / manuels
-              </h2>
-              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                <template v-if="latestImportDate">
-                  Dernière transaction importée :
-                  {{ formatDate(latestImportDate) }}
-                </template>
-                <template v-else>Aucun import pour l'instant.</template>
-              </p>
-            </div>
-            <RouterLink
-              to="/import"
-              class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700"
-            >
-              Importer un CSV
-            </RouterLink>
-          </div>
-
-          <ul
-            v-if="manualAccounts.length > 0"
-            class="mt-4 divide-y divide-gray-100 border-t border-gray-100 dark:divide-slate-800 dark:border-slate-800"
-          >
-            <li v-for="account in manualAccounts" :key="account.id">
-              <RouterLink
-                :to="{
-                  path: '/transactions',
-                  query: { account: account.name },
-                }"
-                class="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/50"
-              >
+                {{ account.name }}
+              </span>
+              <span class="flex shrink-0 items-center gap-3">
                 <span
-                  class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                  v-if="balanceByAccountId.get(account.id)"
+                  :data-testid="`balance-${account.name}`"
+                  class="text-right leading-tight"
                 >
-                  {{ account.name }}
+                  <span
+                    class="block text-sm font-semibold tabular-nums"
+                    :class="
+                      balanceByAccountId.get(account.id)!.amount < 0
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-gray-900 dark:text-gray-100'
+                    "
+                  >
+                    {{
+                      formatCurrency(balanceByAccountId.get(account.id)!.amount)
+                    }}
+                  </span>
+                  <span
+                    v-if="
+                      formatBalanceDate(balanceByAccountId.get(account.id)!.at)
+                    "
+                    class="block text-[10px] text-gray-500 dark:text-gray-400"
+                  >
+                    au
+                    {{
+                      formatBalanceDate(balanceByAccountId.get(account.id)!.at)
+                    }}
+                  </span>
                 </span>
                 <svg
                   class="h-4 w-4 shrink-0 text-gray-400"
@@ -654,42 +545,137 @@
                     d="M9 5l7 7-7 7"
                   />
                 </svg>
-              </RouterLink>
-            </li>
-          </ul>
-          <p
-            v-else-if="accountsStore.error === null"
-            class="mt-4 border-t border-gray-100 pt-3 text-sm text-gray-500 dark:border-slate-800 dark:text-gray-400"
-          >
-            Aucun compte alimenté à la main. Un import CSV en créera.
-          </p>
-        </section>
-
-        <!-- Where the rest lives -->
-        <nav
-          class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm"
-          aria-label="Pages liées aux comptes"
+              </span>
+            </RouterLink>
+          </li>
+        </ul>
+        <p
+          v-else
+          class="mt-4 border-t border-gray-100 pt-3 text-sm text-gray-500 dark:border-slate-800 dark:text-gray-400"
         >
-          <RouterLink
-            to="/bank-sync/history"
-            class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
-          >
-            Historique des synchronisations
-          </RouterLink>
-          <RouterLink
-            to="/import/history"
-            class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
-          >
-            Historique des imports
-          </RouterLink>
+          Aucun compte relié pour l'instant —
           <RouterLink
             to="/settings/accounts"
             class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
           >
-            Configurer les comptes
+            choisissez lesquels lire
           </RouterLink>
-        </nav>
-      </div>
+          .
+        </p>
+      </section>
+
+      <!-- Bank sync not configured at all -->
+      <section
+        v-if="!configured && !banksFailed"
+        data-testid="no-bank-connected"
+        class="rounded-xl bg-white shadow-sm dark:bg-slate-900 dark:shadow-slate-900/20"
+      >
+        <EmptyState
+          title="Aucune banque connectée"
+          description="Connectez votre banque pour synchroniser vos transactions automatiquement — ou continuez avec les imports CSV ci-dessous."
+        >
+          <template #action>
+            <RouterLink
+              to="/settings/accounts"
+              class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600"
+            >
+              Connecter une banque
+            </RouterLink>
+          </template>
+        </EmptyState>
+      </section>
+
+      <!-- CSV / manual accounts -->
+      <section
+        data-testid="manual-accounts"
+        class="rounded-xl bg-white p-4 shadow-sm sm:p-6 dark:bg-slate-900 dark:shadow-slate-900/20"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Comptes CSV / manuels
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              <template v-if="latestImportDate">
+                Dernière transaction importée :
+                {{ formatDate(latestImportDate) }}
+              </template>
+              <template v-else>Aucun import pour l'instant.</template>
+            </p>
+          </div>
+          <RouterLink
+            to="/import"
+            class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700"
+          >
+            Importer un CSV
+          </RouterLink>
+        </div>
+
+        <ul
+          v-if="manualAccounts.length > 0"
+          class="mt-4 divide-y divide-gray-100 border-t border-gray-100 dark:divide-slate-800 dark:border-slate-800"
+        >
+          <li v-for="account in manualAccounts" :key="account.id">
+            <RouterLink
+              :to="{
+                path: '/transactions',
+                query: { account: account.name },
+              }"
+              class="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/50"
+            >
+              <span
+                class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+              >
+                {{ account.name }}
+              </span>
+              <svg
+                class="h-4 w-4 shrink-0 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </RouterLink>
+          </li>
+        </ul>
+        <p
+          v-else-if="accountsStore.error === null"
+          class="mt-4 border-t border-gray-100 pt-3 text-sm text-gray-500 dark:border-slate-800 dark:text-gray-400"
+        >
+          Aucun compte alimenté à la main. Un import CSV en créera.
+        </p>
+      </section>
+
+      <!-- Where the rest lives -->
+      <nav
+        class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm"
+        aria-label="Pages liées aux comptes"
+      >
+        <RouterLink
+          to="/bank-sync/history"
+          class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
+        >
+          Historique des synchronisations
+        </RouterLink>
+        <RouterLink
+          to="/import/history"
+          class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
+        >
+          Historique des imports
+        </RouterLink>
+        <RouterLink
+          to="/settings/accounts"
+          class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
+        >
+          Configurer les comptes
+        </RouterLink>
+      </nav>
     </div>
-  </div>
+  </PageShell>
 </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import PageShell from '@/components/ui/PageShell.vue'
   import { ref, computed, onMounted } from 'vue'
   import { useRouter, useRoute } from 'vue-router'
   import { useAuthStore } from '@/stores/auth'
@@ -84,10 +85,8 @@
 </script>
 
 <template>
-  <div
-    class="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-gray-50 dark:bg-slate-800 px-4 transition-colors"
-  >
-    <div class="w-full max-w-md">
+  <PageShell width="narrow" center>
+    <div class="mx-auto w-full max-w-md">
       <div
         class="rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
       >
@@ -234,5 +233,5 @@
         </RouterLink>
       </div>
     </div>
-  </div>
+  </PageShell>
 </template>

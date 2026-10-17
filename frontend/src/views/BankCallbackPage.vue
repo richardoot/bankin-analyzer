@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import PageShell from '@/components/ui/PageShell.vue'
   /**
    * Where the bank sends the browser back, and where the authorization ends.
    *
@@ -52,10 +53,8 @@
 </script>
 
 <template>
-  <div
-    class="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-gray-50 px-4 transition-colors dark:bg-slate-800"
-  >
-    <div class="w-full max-w-md text-center">
+  <PageShell width="narrow" center>
+    <div class="mx-auto w-full max-w-md text-center">
       <div
         class="rounded-2xl bg-white p-8 shadow-lg dark:bg-slate-900 dark:shadow-slate-900/20"
       >
@@ -139,5 +138,5 @@
         </template>
       </div>
     </div>
-  </div>
+  </PageShell>
 </template>

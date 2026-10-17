@@ -6,6 +6,7 @@
   import TimePeriodSelector from '@/components/filters/TimePeriodSelector.vue'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import CategoryBreakdownList from '@/components/dashboard/CategoryBreakdownList.vue'
+  import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import LegacyMigrationBanner from '@/components/settings/LegacyMigrationBanner.vue'
   import SpendingStructureCard from '@/components/dashboard/SpendingStructureCard.vue'
@@ -128,623 +129,608 @@
 </script>
 
 <template>
-  <div
-    data-testid="dashboard-container"
-    class="min-h-screen bg-gray-50 dark:bg-slate-800 py-6 sm:py-8 transition-colors"
-  >
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <PageHeader title="Dashboard" subtitle="Vue d'ensemble de vos finances">
-        <template #actions>
-          <!-- Subtle refresh indicator -->
-          <div
-            v-if="isRefreshing"
-            class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400"
-          >
-            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-              <circle
-                class="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                stroke-width="4"
-              />
-              <path
-                class="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            <span>Mise à jour...</span>
-          </div>
-        </template>
-      </PageHeader>
-
-      <LegacyMigrationBanner class="mb-6" />
-
-      <!-- Error state: says what failed and offers the way out; the filters
-           and whatever was already on screen stay put underneath. -->
-      <div
-        v-if="error"
-        role="alert"
-        data-testid="dashboard-error"
-        class="mb-6 flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 sm:flex-row sm:items-center sm:justify-between dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
-      >
-        <p class="text-sm">
-          <span class="font-medium"
-            >Le tableau de bord n'a pas pu être chargé.</span
-          >
-          {{ error }}
-          <span v-if="hasAnyData" class="block text-xs opacity-80"
-            >Les chiffres affichés sont ceux du dernier chargement réussi.</span
-          >
-        </p>
-        <button
-          type="button"
-          data-testid="dashboard-retry"
-          :disabled="isLoading"
-          class="inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
-          @click="fetchData()"
-        >
-          {{ isLoading ? 'Nouvelle tentative…' : 'Réessayer' }}
-        </button>
-      </div>
-
-      <!-- Initial load: the page's own shape, not a spinner. -->
-      <div v-if="showFullLoader" class="space-y-6" aria-busy="true">
-        <SkeletonBlock class="h-24 rounded-xl" />
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-          <SkeletonBlock v-for="n in 3" :key="n" class="h-28 rounded-xl" />
-        </div>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <SkeletonBlock class="h-80 rounded-xl" />
-          <SkeletonBlock class="h-80 rounded-xl" />
-        </div>
-      </div>
-
-      <!-- Content (shown when we have data or finished loading) -->
-      <div
-        v-if="!showFullLoader"
-        class="transition-opacity duration-200"
-        :class="isRefreshing ? 'opacity-60' : 'opacity-100'"
-      >
-        <!-- Period + reimbursement toggles (harmonized in a single card) -->
+  <PageShell width="wide" data-testid="dashboard-container">
+    <PageHeader title="Dashboard" subtitle="Vue d'ensemble de vos finances">
+      <template #actions>
+        <!-- Subtle refresh indicator -->
         <div
-          data-testid="dashboard-filters-card"
-          class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5 mb-6 space-y-4"
+          v-if="isRefreshing"
+          class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400"
         >
-          <TimePeriodSelector />
+          <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            />
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+          <span>Mise à jour...</span>
+        </div>
+      </template>
+    </PageHeader>
 
-          <div
-            class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-4 sm:flex sm:flex-wrap sm:items-center sm:gap-6 dark:border-slate-700"
+    <LegacyMigrationBanner class="mb-6" />
+
+    <!-- Error state: says what failed and offers the way out; the filters
+           and whatever was already on screen stay put underneath. -->
+    <div
+      v-if="error"
+      role="alert"
+      data-testid="dashboard-error"
+      class="mb-6 flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 sm:flex-row sm:items-center sm:justify-between dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+    >
+      <p class="text-sm">
+        <span class="font-medium"
+          >Le tableau de bord n'a pas pu être chargé.</span
+        >
+        {{ error }}
+        <span v-if="hasAnyData" class="block text-xs opacity-80"
+          >Les chiffres affichés sont ceux du dernier chargement réussi.</span
+        >
+      </p>
+      <button
+        type="button"
+        data-testid="dashboard-retry"
+        :disabled="isLoading"
+        class="inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
+        @click="fetchData()"
+      >
+        {{ isLoading ? 'Nouvelle tentative…' : 'Réessayer' }}
+      </button>
+    </div>
+
+    <!-- Initial load: the page's own shape, not a spinner. -->
+    <div v-if="showFullLoader" class="space-y-6" aria-busy="true">
+      <SkeletonBlock class="h-24 rounded-xl" />
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+        <SkeletonBlock v-for="n in 3" :key="n" class="h-28 rounded-xl" />
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <SkeletonBlock class="h-80 rounded-xl" />
+        <SkeletonBlock class="h-80 rounded-xl" />
+      </div>
+    </div>
+
+    <!-- Content (shown when we have data or finished loading) -->
+    <div
+      v-if="!showFullLoader"
+      class="transition-opacity duration-200"
+      :class="isRefreshing ? 'opacity-60' : 'opacity-100'"
+    >
+      <!-- Period + reimbursement toggles (harmonized in a single card) -->
+      <div
+        data-testid="dashboard-filters-card"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5 mb-6 space-y-4"
+      >
+        <TimePeriodSelector />
+
+        <div
+          class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-4 sm:flex sm:flex-wrap sm:items-center sm:gap-6 dark:border-slate-700"
+        >
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="deductReimbursements"
+            data-testid="toggle-deduct-reimbursements"
+            class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
+            @click="deductReimbursements = !deductReimbursements"
           >
-            <button
-              type="button"
-              role="switch"
-              :aria-checked="deductReimbursements"
-              data-testid="toggle-deduct-reimbursements"
-              class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-              @click="deductReimbursements = !deductReimbursements"
-            >
-              <span
-                class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
-                :class="
-                  deductReimbursements
-                    ? 'bg-primary-500'
-                    : 'bg-gray-300 dark:bg-slate-600'
-                "
-              >
-                <span
-                  class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
-                  :class="
-                    deductReimbursements ? 'translate-x-4' : 'translate-x-0.5'
-                  "
-                />
-              </span>
-              <span
-                class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
-              >
-                <span class="sm:hidden">Déduire les remb. reçus</span>
-                <span class="hidden sm:inline"
-                  >Déduire les remboursements reçus</span
-                >
-              </span>
-            </button>
-            <button
-              type="button"
-              role="switch"
-              :aria-checked="deductPendingReimbursements"
-              data-testid="toggle-deduct-pending"
-              class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-              @click="
-                deductPendingReimbursements = !deductPendingReimbursements
+            <span
+              class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
+              :class="
+                deductReimbursements
+                  ? 'bg-primary-500'
+                  : 'bg-gray-300 dark:bg-slate-600'
               "
             >
               <span
-                class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
+                class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
+                :class="
+                  deductReimbursements ? 'translate-x-4' : 'translate-x-0.5'
+                "
+              />
+            </span>
+            <span
+              class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
+            >
+              <span class="sm:hidden">Déduire les remb. reçus</span>
+              <span class="hidden sm:inline"
+                >Déduire les remboursements reçus</span
+              >
+            </span>
+          </button>
+          <button
+            type="button"
+            role="switch"
+            :aria-checked="deductPendingReimbursements"
+            data-testid="toggle-deduct-pending"
+            class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
+            @click="deductPendingReimbursements = !deductPendingReimbursements"
+          >
+            <span
+              class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
+              :class="
+                deductPendingReimbursements
+                  ? 'bg-primary-500'
+                  : 'bg-gray-300 dark:bg-slate-600'
+              "
+            >
+              <span
+                class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
                 :class="
                   deductPendingReimbursements
-                    ? 'bg-primary-500'
-                    : 'bg-gray-300 dark:bg-slate-600'
+                    ? 'translate-x-4'
+                    : 'translate-x-0.5'
                 "
+              />
+            </span>
+            <span
+              class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
+            >
+              <span class="sm:hidden">Déduire les remb. en attente</span>
+              <span class="hidden sm:inline"
+                >Déduire les remboursements en attente</span
               >
-                <span
-                  class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
-                  :class="
-                    deductPendingReimbursements
-                      ? 'translate-x-4'
-                      : 'translate-x-0.5'
-                  "
-                />
-              </span>
-              <span
-                class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
-              >
-                <span class="sm:hidden">Déduire les remb. en attente</span>
-                <span class="hidden sm:inline"
-                  >Déduire les remboursements en attente</span
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <template v-if="hasAnyData">
+        <!-- KPI cards: monthly averages -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-8">
+          <!-- Average monthly expenses -->
+          <div
+            data-testid="kpi-card-expenses"
+            class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-5 border-l-4 border-red-500"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div
+                  class="text-sm font-medium text-gray-500 dark:text-gray-400"
                 >
-              </span>
-            </button>
+                  Dépenses moyennes / mois
+                </div>
+                <div
+                  class="mt-2 text-2xl font-bold text-red-600 dark:text-red-500"
+                >
+                  {{ formatCurrency(averageMonthlyExpenses) }}
+                </div>
+                <!-- Everyday baseline: what the lifestyle costs once the
+                     one-off events are set aside. -->
+                <div
+                  v-if="hasExceptionalExpenses"
+                  class="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                  title="Moyenne calculée hors dépenses étiquetées comme exceptionnelles, sur la même période"
+                >
+                  dont vie courante
+                  <span class="font-semibold text-gray-700 dark:text-gray-300">
+                    {{ formatCurrency(averageEverydayMonthlyExpenses) }}
+                  </span>
+                  / mois
+                </div>
+              </div>
+              <SparklineChart
+                v-if="expensesSparkline.length >= 2"
+                :data="expensesSparkline"
+                color="#ef4444"
+              />
+            </div>
+          </div>
+
+          <!-- Average monthly income -->
+          <div
+            data-testid="kpi-card-income"
+            class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-5 border-l-4 border-green-500"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div
+                  class="text-sm font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Revenus moyens / mois
+                </div>
+                <div
+                  class="mt-2 text-2xl font-bold text-green-600 dark:text-green-500"
+                >
+                  {{ formatCurrency(averageMonthlyIncome) }}
+                </div>
+              </div>
+              <SparklineChart
+                v-if="incomeSparkline.length >= 2"
+                :data="incomeSparkline"
+                color="#22c55e"
+              />
+            </div>
+          </div>
+
+          <!-- Average monthly savings -->
+          <div
+            data-testid="kpi-card-savings"
+            class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-5 border-l-4"
+            :class="
+              averageMonthlySavings >= 0
+                ? 'border-indigo-500'
+                : 'border-amber-500'
+            "
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div
+                  class="text-sm font-medium text-gray-500 dark:text-gray-400"
+                >
+                  Épargne moyenne / mois
+                </div>
+                <div
+                  class="mt-2 text-2xl font-bold"
+                  :class="
+                    averageMonthlySavings >= 0
+                      ? 'text-indigo-600 dark:text-indigo-400'
+                      : 'text-amber-600 dark:text-amber-400'
+                  "
+                >
+                  {{ formatCurrency(averageMonthlySavings) }}
+                </div>
+              </div>
+              <SparklineChart
+                v-if="savingsSparkline.length >= 2"
+                :data="savingsSparkline"
+                :color="averageMonthlySavings >= 0 ? '#6366f1' : '#f59e0b'"
+              />
+            </div>
           </div>
         </div>
 
-        <template v-if="hasAnyData">
-          <!-- KPI cards: monthly averages -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-8">
-            <!-- Average monthly expenses -->
+        <SpendingStructureCard
+          v-if="spendingStructure && everydaySpendingStructure"
+          class="mb-8"
+          :actual="spendingStructure"
+          :everyday="everydaySpendingStructure"
+          :savings-transfers="savingsTransfers"
+          :pending-receivables="pendingReceivables"
+          :savings-rate="savingsRate"
+          :remaining-to-live="remainingToLive"
+          :period-months="periodMonths"
+        />
+
+        <!-- Expenses section (primary) -->
+        <section data-testid="dashboard-expenses-section" class="mb-10">
+          <h2
+            class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4"
+          >
+            Dépenses
+          </h2>
+          <div
+            data-testid="dashboard-charts-section"
+            class="grid grid-cols-1 lg:grid-cols-2 gap-8"
+          >
+            <!-- Monthly expenses chart -->
             <div
-              data-testid="kpi-card-expenses"
-              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-5 border-l-4 border-red-500"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <div
-                    class="text-sm font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    Dépenses moyennes / mois
-                  </div>
-                  <div
-                    class="mt-2 text-2xl font-bold text-red-600 dark:text-red-500"
-                  >
-                    {{ formatCurrency(averageMonthlyExpenses) }}
-                  </div>
-                  <!-- Everyday baseline: what the lifestyle costs once the
-                     one-off events are set aside. -->
-                  <div
-                    v-if="hasExceptionalExpenses"
-                    class="mt-1 text-xs text-gray-500 dark:text-gray-400"
-                    title="Moyenne calculée hors dépenses étiquetées comme exceptionnelles, sur la même période"
-                  >
-                    dont vie courante
-                    <span
-                      class="font-semibold text-gray-700 dark:text-gray-300"
-                    >
-                      {{ formatCurrency(averageEverydayMonthlyExpenses) }}
-                    </span>
-                    / mois
-                  </div>
-                </div>
-                <SparklineChart
-                  v-if="expensesSparkline.length >= 2"
-                  :data="expensesSparkline"
-                  color="#ef4444"
-                />
-              </div>
-            </div>
-
-            <!-- Average monthly income -->
-            <div
-              data-testid="kpi-card-income"
-              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-5 border-l-4 border-green-500"
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <div
-                    class="text-sm font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    Revenus moyens / mois
-                  </div>
-                  <div
-                    class="mt-2 text-2xl font-bold text-green-600 dark:text-green-500"
-                  >
-                    {{ formatCurrency(averageMonthlyIncome) }}
-                  </div>
-                </div>
-                <SparklineChart
-                  v-if="incomeSparkline.length >= 2"
-                  :data="incomeSparkline"
-                  color="#22c55e"
-                />
-              </div>
-            </div>
-
-            <!-- Average monthly savings -->
-            <div
-              data-testid="kpi-card-savings"
-              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-5 border-l-4"
-              :class="
-                averageMonthlySavings >= 0
-                  ? 'border-indigo-500'
-                  : 'border-amber-500'
-              "
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <div
-                    class="text-sm font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    Épargne moyenne / mois
-                  </div>
-                  <div
-                    class="mt-2 text-2xl font-bold"
-                    :class="
-                      averageMonthlySavings >= 0
-                        ? 'text-indigo-600 dark:text-indigo-400'
-                        : 'text-amber-600 dark:text-amber-400'
-                    "
-                  >
-                    {{ formatCurrency(averageMonthlySavings) }}
-                  </div>
-                </div>
-                <SparklineChart
-                  v-if="savingsSparkline.length >= 2"
-                  :data="savingsSparkline"
-                  :color="averageMonthlySavings >= 0 ? '#6366f1' : '#f59e0b'"
-                />
-              </div>
-            </div>
-          </div>
-
-          <SpendingStructureCard
-            v-if="spendingStructure && everydaySpendingStructure"
-            class="mb-8"
-            :actual="spendingStructure"
-            :everyday="everydaySpendingStructure"
-            :savings-transfers="savingsTransfers"
-            :pending-receivables="pendingReceivables"
-            :savings-rate="savingsRate"
-            :remaining-to-live="remainingToLive"
-            :period-months="periodMonths"
-          />
-
-          <!-- Expenses section (primary) -->
-          <section data-testid="dashboard-expenses-section" class="mb-10">
-            <h2
-              class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4"
-            >
-              Dépenses
-            </h2>
-            <div
-              data-testid="dashboard-charts-section"
-              class="grid grid-cols-1 lg:grid-cols-2 gap-8"
-            >
-              <!-- Monthly expenses chart -->
-              <div
-                class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
-              >
-                <div
-                  class="mb-4 flex flex-wrap items-center justify-between gap-2"
-                >
-                  <h3
-                    class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-                  >
-                    Dépenses par mois
-                  </h3>
-                  <select
-                    v-if="allExpenseCategories.length > 0"
-                    data-testid="expense-category-filter"
-                    aria-label="Catégorie des dépenses par mois"
-                    :value="selectedCategory ?? ''"
-                    class="max-w-full min-h-[40px] sm:min-h-0 text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
-                    @change="handleCategoryChange"
-                  >
-                    <option value="">Toutes les catégories</option>
-                    <option
-                      v-for="cat in allExpenseCategories"
-                      :key="cat.id"
-                      :value="cat.id"
-                    >
-                      {{ cat.name }}
-                    </option>
-                  </select>
-                </div>
-                <div v-if="totalExpenses > 0" class="relative">
-                  <MonthlyBarChart
-                    :data="filteredExpensesByMonth"
-                    title="Dépenses"
-                    color="#ef4444"
-                  />
-                </div>
-                <div
-                  v-else
-                  class="py-12 text-center text-gray-500 dark:text-gray-400"
-                >
-                  Aucune dépense enregistrée
-                </div>
-              </div>
-
-              <!-- Expenses pie chart -->
-              <div
-                class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
-              >
-                <h3
-                  class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
-                >
-                  Dépenses par catégorie
-                </h3>
-                <div
-                  v-if="expensesByCategory.values.length > 0"
-                  class="h-64 sm:h-80"
-                >
-                  <CategoryPieChart
-                    :data="expensesByCategory"
-                    title="Dépenses"
-                  />
-                </div>
-                <div
-                  v-else
-                  class="py-12 text-center text-gray-500 dark:text-gray-400"
-                >
-                  Aucune dépense enregistrée
-                </div>
-              </div>
-            </div>
-
-            <!-- Category breakdown list (drill-down) -->
-            <div
-              v-if="expenseCategoriesDetailed.length > 0"
-              class="mt-6 bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
+              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
             >
               <div
-                class="flex flex-wrap items-start justify-between gap-3 mb-1"
+                class="mb-4 flex flex-wrap items-center justify-between gap-2"
               >
                 <h3
                   class="text-lg font-semibold text-gray-900 dark:text-gray-100"
                 >
-                  Détail par catégorie
+                  Dépenses par mois
                 </h3>
-
-                <!-- Real vs everyday selector -->
-                <div
-                  v-if="hasExceptionalExpenses"
-                  class="inline-flex rounded-lg border border-gray-200 dark:border-slate-700 p-0.5 text-xs"
-                  role="group"
-                  aria-label="Mode d'affichage des moyennes"
+                <select
+                  v-if="allExpenseCategories.length > 0"
+                  data-testid="expense-category-filter"
+                  aria-label="Catégorie des dépenses par mois"
+                  :value="selectedCategory ?? ''"
+                  class="max-w-full min-h-[40px] sm:min-h-0 text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
+                  @change="handleCategoryChange"
                 >
-                  <button
-                    type="button"
-                    :aria-pressed="breakdownMode === 'real'"
-                    data-testid="breakdown-mode-real"
-                    class="px-2.5 py-1 rounded-md transition-colors"
-                    :class="
-                      breakdownMode === 'real'
-                        ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
-                        : 'text-gray-500 dark:text-gray-400'
-                    "
-                    @click="setBreakdownMode('real')"
+                  <option value="">Toutes les catégories</option>
+                  <option
+                    v-for="cat in allExpenseCategories"
+                    :key="cat.id"
+                    :value="cat.id"
                   >
-                    Tout
-                  </button>
-                  <button
-                    type="button"
-                    :aria-pressed="breakdownMode === 'everyday'"
-                    data-testid="breakdown-mode-everyday"
-                    class="px-2.5 py-1 rounded-md transition-colors"
-                    :class="
-                      breakdownMode === 'everyday'
-                        ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
-                        : 'text-gray-500 dark:text-gray-400'
-                    "
-                    @click="setBreakdownMode('everyday')"
-                  >
-                    Vie courante
-                  </button>
-                </div>
+                    {{ cat.name }}
+                  </option>
+                </select>
               </div>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                <template v-if="breakdownMode === 'everyday'">
-                  Moyennes hors dépenses étiquetées comme exceptionnelles.
-                  Seules les catégories concernées par un événement changent de
-                  valeur.
-                </template>
-                <template v-else>
-                  Cliquez sur une catégorie pour voir ses sous-catégories et son
-                  évolution mensuelle.
-                </template>
-              </p>
-
-              <!-- What the exceptional share is made of -->
+              <div v-if="totalExpenses > 0" class="relative">
+                <MonthlyBarChart
+                  :data="filteredExpensesByMonth"
+                  title="Dépenses"
+                  color="#ef4444"
+                />
+              </div>
               <div
-                v-if="hasExceptionalExpenses && exceptionalEvents.length > 0"
-                class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5"
+                v-else
+                class="py-12 text-center text-gray-500 dark:text-gray-400"
               >
-                <p
-                  class="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1.5"
-                >
-                  Événements de la période —
-                  {{ formatCurrency(exceptionalEventsTotal) }}
-                </p>
-                <div class="flex flex-wrap gap-1.5">
-                  <button
-                    v-for="event in exceptionalEvents"
-                    :key="event.id"
-                    type="button"
-                    class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-amber-300 transition"
-                    @click="openTagAnalysis(event.id)"
-                  >
-                    <span
-                      class="inline-block h-2 w-2 rounded-full shrink-0"
-                      :style="{ backgroundColor: event.color ?? '#9ca3af' }"
-                    ></span>
-                    {{ event.name }}
-                    <span class="font-semibold tabular-nums">
-                      {{ formatCurrency(event.amount) }}
-                    </span>
-                  </button>
-                </div>
+                Aucune dépense enregistrée
               </div>
-
-              <CategoryBreakdownList
-                :categories="expenseCategoriesDetailed"
-                :month-labels="monthLabels"
-                :total="
-                  breakdownMode === 'everyday'
-                    ? totalEverydayExpenses
-                    : totalExpenses
-                "
-                :mode="breakdownMode"
-                color="#ef4444"
-              />
             </div>
-          </section>
 
-          <!-- Income section (secondary) -->
-          <section data-testid="dashboard-income-section">
-            <h2
-              class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4"
+            <!-- Expenses pie chart -->
+            <div
+              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
             >
-              Revenus
-            </h2>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <!-- Monthly income chart -->
-              <div
-                class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
+              <h3
+                class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
               >
-                <div
-                  class="mb-4 flex flex-wrap items-center justify-between gap-2"
-                >
-                  <h3
-                    class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-                  >
-                    Revenus par mois
-                  </h3>
-                  <select
-                    v-if="allIncomeCategories.length > 0"
-                    data-testid="income-category-filter"
-                    aria-label="Catégorie des revenus par mois"
-                    :value="selectedIncomeCategory ?? ''"
-                    class="max-w-full min-h-[40px] sm:min-h-0 text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
-                    @change="handleIncomeCategoryChange"
-                  >
-                    <option value="">Toutes les catégories</option>
-                    <option
-                      v-for="cat in allIncomeCategories"
-                      :key="cat.id"
-                      :value="cat.id"
-                    >
-                      {{ cat.name }}
-                    </option>
-                  </select>
-                </div>
-                <div v-if="totalIncome > 0" class="relative">
-                  <MonthlyBarChart
-                    :data="filteredIncomeByMonth"
-                    title="Revenus"
-                    color="#22c55e"
-                  />
-                </div>
-                <div
-                  v-else
-                  class="py-12 text-center text-gray-500 dark:text-gray-400"
-                >
-                  Aucun revenu enregistré
-                </div>
-              </div>
-
-              <!-- Income pie chart -->
+                Dépenses par catégorie
+              </h3>
               <div
-                class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
+                v-if="expensesByCategory.values.length > 0"
+                class="h-64 sm:h-80"
+              >
+                <CategoryPieChart :data="expensesByCategory" title="Dépenses" />
+              </div>
+              <div
+                v-else
+                class="py-12 text-center text-gray-500 dark:text-gray-400"
+              >
+                Aucune dépense enregistrée
+              </div>
+            </div>
+          </div>
+
+          <!-- Category breakdown list (drill-down) -->
+          <div
+            v-if="expenseCategoriesDetailed.length > 0"
+            class="mt-6 bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
+          >
+            <div class="flex flex-wrap items-start justify-between gap-3 mb-1">
+              <h3
+                class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+              >
+                Détail par catégorie
+              </h3>
+
+              <!-- Real vs everyday selector -->
+              <div
+                v-if="hasExceptionalExpenses"
+                class="inline-flex rounded-lg border border-gray-200 dark:border-slate-700 p-0.5 text-xs"
+                role="group"
+                aria-label="Mode d'affichage des moyennes"
+              >
+                <button
+                  type="button"
+                  :aria-pressed="breakdownMode === 'real'"
+                  data-testid="breakdown-mode-real"
+                  class="px-2.5 py-1 rounded-md transition-colors"
+                  :class="
+                    breakdownMode === 'real'
+                      ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
+                      : 'text-gray-500 dark:text-gray-400'
+                  "
+                  @click="setBreakdownMode('real')"
+                >
+                  Tout
+                </button>
+                <button
+                  type="button"
+                  :aria-pressed="breakdownMode === 'everyday'"
+                  data-testid="breakdown-mode-everyday"
+                  class="px-2.5 py-1 rounded-md transition-colors"
+                  :class="
+                    breakdownMode === 'everyday'
+                      ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
+                      : 'text-gray-500 dark:text-gray-400'
+                  "
+                  @click="setBreakdownMode('everyday')"
+                >
+                  Vie courante
+                </button>
+              </div>
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              <template v-if="breakdownMode === 'everyday'">
+                Moyennes hors dépenses étiquetées comme exceptionnelles. Seules
+                les catégories concernées par un événement changent de valeur.
+              </template>
+              <template v-else>
+                Cliquez sur une catégorie pour voir ses sous-catégories et son
+                évolution mensuelle.
+              </template>
+            </p>
+
+            <!-- What the exceptional share is made of -->
+            <div
+              v-if="hasExceptionalExpenses && exceptionalEvents.length > 0"
+              class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5"
+            >
+              <p
+                class="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1.5"
+              >
+                Événements de la période —
+                {{ formatCurrency(exceptionalEventsTotal) }}
+              </p>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  v-for="event in exceptionalEvents"
+                  :key="event.id"
+                  type="button"
+                  class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-amber-300 transition"
+                  @click="openTagAnalysis(event.id)"
+                >
+                  <span
+                    class="inline-block h-2 w-2 rounded-full shrink-0"
+                    :style="{ backgroundColor: event.color ?? '#9ca3af' }"
+                  ></span>
+                  {{ event.name }}
+                  <span class="font-semibold tabular-nums">
+                    {{ formatCurrency(event.amount) }}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <CategoryBreakdownList
+              :categories="expenseCategoriesDetailed"
+              :month-labels="monthLabels"
+              :total="
+                breakdownMode === 'everyday'
+                  ? totalEverydayExpenses
+                  : totalExpenses
+              "
+              :mode="breakdownMode"
+              color="#ef4444"
+            />
+          </div>
+        </section>
+
+        <!-- Income section (secondary) -->
+        <section data-testid="dashboard-income-section">
+          <h2
+            class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4"
+          >
+            Revenus
+          </h2>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Monthly income chart -->
+            <div
+              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
+            >
+              <div
+                class="mb-4 flex flex-wrap items-center justify-between gap-2"
               >
                 <h3
-                  class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
+                  class="text-lg font-semibold text-gray-900 dark:text-gray-100"
                 >
-                  Revenus par catégorie
+                  Revenus par mois
                 </h3>
-                <div
-                  v-if="incomeByCategory.values.length > 0"
-                  class="h-64 sm:h-80"
+                <select
+                  v-if="allIncomeCategories.length > 0"
+                  data-testid="income-category-filter"
+                  aria-label="Catégorie des revenus par mois"
+                  :value="selectedIncomeCategory ?? ''"
+                  class="max-w-full min-h-[40px] sm:min-h-0 text-sm border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400"
+                  @change="handleIncomeCategoryChange"
                 >
-                  <CategoryPieChart :data="incomeByCategory" title="Revenus" />
-                </div>
-                <div
-                  v-else
-                  class="py-12 text-center text-gray-500 dark:text-gray-400"
-                >
-                  Aucun revenu enregistré
-                </div>
+                  <option value="">Toutes les catégories</option>
+                  <option
+                    v-for="cat in allIncomeCategories"
+                    :key="cat.id"
+                    :value="cat.id"
+                  >
+                    {{ cat.name }}
+                  </option>
+                </select>
+              </div>
+              <div v-if="totalIncome > 0" class="relative">
+                <MonthlyBarChart
+                  :data="filteredIncomeByMonth"
+                  title="Revenus"
+                  color="#22c55e"
+                />
+              </div>
+              <div
+                v-else
+                class="py-12 text-center text-gray-500 dark:text-gray-400"
+              >
+                Aucun revenu enregistré
               </div>
             </div>
-          </section>
-        </template>
 
-        <!-- A quiet period, for a user who has data elsewhere in time -->
-        <div
-          v-else-if="!error && isEmptyPeriod"
-          data-testid="dashboard-empty-period"
-          class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
-        >
-          <EmptyState
-            title="Aucune transaction sur cette période"
-            description="Choisissez une autre période, ou affichez tout l'historique."
-          >
-            <template #action>
-              <button
-                type="button"
-                data-testid="dashboard-show-all"
-                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
-                @click="showAllPeriods"
+            <!-- Income pie chart -->
+            <div
+              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
+            >
+              <h3
+                class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
               >
-                Afficher tout
-              </button>
-            </template>
-          </EmptyState>
-        </div>
+                Revenus par catégorie
+              </h3>
+              <div
+                v-if="incomeByCategory.values.length > 0"
+                class="h-64 sm:h-80"
+              >
+                <CategoryPieChart :data="incomeByCategory" title="Revenus" />
+              </div>
+              <div
+                v-else
+                class="py-12 text-center text-gray-500 dark:text-gray-400"
+              >
+                Aucun revenu enregistré
+              </div>
+            </div>
+          </div>
+        </section>
+      </template>
 
-        <!-- Zero transactions: one question, two explicit ways in -->
-        <div
-          v-else-if="!error"
-          data-testid="dashboard-onboarding"
-          class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
+      <!-- A quiet period, for a user who has data elsewhere in time -->
+      <div
+        v-else-if="!error && isEmptyPeriod"
+        data-testid="dashboard-empty-period"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
+      >
+        <EmptyState
+          title="Aucune transaction sur cette période"
+          description="Choisissez une autre période, ou affichez tout l'historique."
         >
-          <EmptyState
-            title="Aucune transaction pour l'instant"
-            description="Importez vos transactions depuis un export CSV Bankin, ou connectez votre banque pour les synchroniser automatiquement."
-          >
-            <template #icon>
-              <svg
-                class="h-8 w-8"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1.5"
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                />
-              </svg>
-            </template>
-            <template #action>
-              <RouterLink
-                to="/settings/accounts"
-                data-testid="onboarding-connect-bank"
-                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
-              >
-                Connecter une banque
-              </RouterLink>
-              <RouterLink
-                to="/import"
-                data-testid="onboarding-import-csv"
-                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
-              >
-                Importer un CSV
-              </RouterLink>
-            </template>
-          </EmptyState>
-        </div>
+          <template #action>
+            <button
+              type="button"
+              data-testid="dashboard-show-all"
+              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
+              @click="showAllPeriods"
+            >
+              Afficher tout
+            </button>
+          </template>
+        </EmptyState>
+      </div>
+
+      <!-- Zero transactions: one question, two explicit ways in -->
+      <div
+        v-else-if="!error"
+        data-testid="dashboard-onboarding"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
+      >
+        <EmptyState
+          title="Aucune transaction pour l'instant"
+          description="Importez vos transactions depuis un export CSV Bankin, ou connectez votre banque pour les synchroniser automatiquement."
+        >
+          <template #icon>
+            <svg
+              class="h-8 w-8"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.5"
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              />
+            </svg>
+          </template>
+          <template #action>
+            <RouterLink
+              to="/settings/accounts"
+              data-testid="onboarding-connect-bank"
+              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
+            >
+              Connecter une banque
+            </RouterLink>
+            <RouterLink
+              to="/import"
+              data-testid="onboarding-import-csv"
+              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              Importer un CSV
+            </RouterLink>
+          </template>
+        </EmptyState>
       </div>
     </div>
-  </div>
+  </PageShell>
 </template>

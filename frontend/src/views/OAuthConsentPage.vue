@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import PageShell from '@/components/ui/PageShell.vue'
   import { ref, onMounted } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
   import { supabase } from '@/lib/supabase'
@@ -76,11 +77,9 @@
 </script>
 
 <template>
-  <div
-    class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-800 px-4"
-  >
+  <PageShell width="narrow" center>
     <div
-      class="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl dark:shadow-slate-900/40 overflow-hidden"
+      class="mx-auto w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl dark:shadow-slate-900/40 overflow-hidden"
     >
       <!-- Header -->
       <div class="px-8 pt-8 pb-4 text-center">
@@ -239,5 +238,5 @@
         </div>
       </div>
     </div>
-  </div>
+  </PageShell>
 </template>

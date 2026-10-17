@@ -25,6 +25,7 @@
   import TransactionRow from '@/components/transactions/TransactionRow.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
   import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
+  import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
@@ -1268,862 +1269,844 @@
 </script>
 
 <template>
-  <div
-    class="min-h-screen bg-gray-50 dark:bg-slate-800 py-6 sm:py-8 transition-colors"
-  >
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <PageHeader
-        title="Transactions"
-        subtitle="Gérez vos transactions, modifiez les catégories et assignez des remboursements"
-      />
+  <PageShell width="wide">
+    <PageHeader
+      title="Transactions"
+      subtitle="Gérez vos transactions, modifiez les catégories et assignez des remboursements"
+    />
 
-      <!-- Filters: every control on a desk, folded behind « Filtres » on a
+    <!-- Filters: every control on a desk, folded behind « Filtres » on a
            phone (the chips below stay as the summary of what is active). -->
-      <FilterDisclosure
-        data-testid="transactions-filter-area"
-        class="mb-6"
-        :active-count="activeFilterChips.length"
-      >
-        <!-- Keyword search bar -->
-        <template #search>
-          <div class="relative">
-            <svg
-              class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 dark:text-gray-400 pointer-events-none"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-            <input
-              v-model="searchKeyword"
-              type="search"
-              data-testid="transactions-search-input"
-              placeholder="Rechercher par mot-clé (libellé, note, sous-catégorie)..."
-              class="w-full pl-10 pr-3 py-3 md:py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+    <FilterDisclosure
+      data-testid="transactions-filter-area"
+      class="mb-6"
+      :active-count="activeFilterChips.length"
+    >
+      <!-- Keyword search bar -->
+      <template #search>
+        <div class="relative">
+          <svg
+            class="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 dark:text-gray-400 pointer-events-none"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             />
-          </div>
-        </template>
+          </svg>
+          <input
+            v-model="searchKeyword"
+            type="search"
+            data-testid="transactions-search-input"
+            placeholder="Rechercher par mot-clé (libellé, note, sous-catégorie)..."
+            class="w-full pl-10 pr-3 py-3 md:py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+          />
+        </div>
+      </template>
 
-        <!-- Filter groups: each control carries an uppercase label so the
+      <!-- Filter groups: each control carries an uppercase label so the
              different filters can be told apart at a glance. Naturally paired
              ranges (dates, amounts) are grouped with an inline separator, and
              vertical rules cluster the three families. -->
+      <div
+        class="grid grid-cols-2 gap-x-3 gap-y-3 md:flex md:flex-wrap md:items-end md:gap-x-4 md:gap-y-3"
+      >
+        <!-- Type -->
+        <div class="flex flex-col gap-1">
+          <span
+            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            >Type</span
+          >
+          <select
+            v-model="typeFilter"
+            data-testid="transactions-type-filter"
+            class="h-11 md:h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+          >
+            <option value="ALL">Toutes</option>
+            <option value="EXPENSE">Dépenses</option>
+            <option value="INCOME">Revenus</option>
+            <option value="TRANSFER">Transferts</option>
+          </select>
+        </div>
+
+        <!-- Category -->
+        <div class="flex flex-col gap-1">
+          <span
+            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            >Catégorie</span
+          >
+          <select
+            v-model="selectedCategory"
+            data-testid="transactions-category-filter"
+            class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+          >
+            <option :value="null">Toutes</option>
+            <option
+              v-for="cat in filteredCategories"
+              :key="cat.id"
+              :value="cat.id"
+            >
+              {{ cat.name }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Subcategory: locked until a category narrows down the choices -->
+        <div class="flex flex-col gap-1">
+          <span
+            class="text-[11px] font-semibold uppercase tracking-wide"
+            :class="
+              selectedCategory
+                ? 'text-gray-500 dark:text-gray-400'
+                : 'text-gray-300 dark:text-gray-600'
+            "
+            >Sous-catégorie</span
+          >
+          <select
+            v-model="selectedSubcategory"
+            :disabled="!selectedCategory"
+            data-testid="transactions-subcategory-filter"
+            :title="
+              selectedCategory
+                ? undefined
+                : 'Sélectionnez d\'abord une catégorie'
+            "
+            class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/60 dark:disabled:text-gray-500"
+          >
+            <option :value="null">
+              {{ selectedCategory ? 'Toutes' : 'Choisir une catégorie' }}
+            </option>
+            <option
+              v-for="sub in filteredSubcategories"
+              :key="sub.id"
+              :value="sub.id"
+            >
+              {{ sub.name }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Account -->
+        <div class="flex flex-col gap-1">
+          <span
+            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            >Compte</span
+          >
+          <select
+            v-model="selectedAccount"
+            data-testid="transactions-account-filter"
+            class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+          >
+            <option :value="null">Tous</option>
+            <option
+              v-for="account in accountsStore.sortedAccounts"
+              :key="account.id"
+              :value="account.name"
+            >
+              {{ account.name }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Tag -->
+        <div class="flex flex-col gap-1">
+          <span
+            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            >Étiquette</span
+          >
+          <select
+            v-model="selectedTag"
+            data-testid="transactions-tag-filter"
+            class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+          >
+            <option :value="null">Toutes</option>
+            <option v-for="tag in tagsStore.tags" :key="tag.id" :value="tag.id">
+              {{ tag.name }}
+            </option>
+          </select>
+        </div>
+
+        <!-- Divider between attribute filters and range filters -->
         <div
-          class="grid grid-cols-2 gap-x-3 gap-y-3 md:flex md:flex-wrap md:items-end md:gap-x-4 md:gap-y-3"
-        >
-          <!-- Type -->
-          <div class="flex flex-col gap-1">
-            <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-              >Type</span
-            >
-            <select
-              v-model="typeFilter"
-              data-testid="transactions-type-filter"
-              class="h-11 md:h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
-            >
-              <option value="ALL">Toutes</option>
-              <option value="EXPENSE">Dépenses</option>
-              <option value="INCOME">Revenus</option>
-              <option value="TRANSFER">Transferts</option>
-            </select>
-          </div>
+          class="hidden md:block w-px h-9 self-end bg-gray-200 dark:bg-slate-700"
+          aria-hidden="true"
+        ></div>
 
-          <!-- Category -->
-          <div class="flex flex-col gap-1">
-            <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-              >Catégorie</span
-            >
-            <select
-              v-model="selectedCategory"
-              data-testid="transactions-category-filter"
-              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
-            >
-              <option :value="null">Toutes</option>
-              <option
-                v-for="cat in filteredCategories"
-                :key="cat.id"
-                :value="cat.id"
-              >
-                {{ cat.name }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Subcategory: locked until a category narrows down the choices -->
-          <div class="flex flex-col gap-1">
-            <span
-              class="text-[11px] font-semibold uppercase tracking-wide"
-              :class="
-                selectedCategory
-                  ? 'text-gray-500 dark:text-gray-400'
-                  : 'text-gray-300 dark:text-gray-600'
-              "
-              >Sous-catégorie</span
-            >
-            <select
-              v-model="selectedSubcategory"
-              :disabled="!selectedCategory"
-              data-testid="transactions-subcategory-filter"
-              :title="
-                selectedCategory
-                  ? undefined
-                  : 'Sélectionnez d\'abord une catégorie'
-              "
-              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/60 dark:disabled:text-gray-500"
-            >
-              <option :value="null">
-                {{ selectedCategory ? 'Toutes' : 'Choisir une catégorie' }}
-              </option>
-              <option
-                v-for="sub in filteredSubcategories"
-                :key="sub.id"
-                :value="sub.id"
-              >
-                {{ sub.name }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Account -->
-          <div class="flex flex-col gap-1">
-            <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-              >Compte</span
-            >
-            <select
-              v-model="selectedAccount"
-              data-testid="transactions-account-filter"
-              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
-            >
-              <option :value="null">Tous</option>
-              <option
-                v-for="account in accountsStore.sortedAccounts"
-                :key="account.id"
-                :value="account.name"
-              >
-                {{ account.name }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Tag -->
-          <div class="flex flex-col gap-1">
-            <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-              >Étiquette</span
-            >
-            <select
-              v-model="selectedTag"
-              data-testid="transactions-tag-filter"
-              class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
-            >
-              <option :value="null">Toutes</option>
-              <option
-                v-for="tag in tagsStore.tags"
-                :key="tag.id"
-                :value="tag.id"
-              >
-                {{ tag.name }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Divider between attribute filters and range filters -->
-          <div
-            class="hidden md:block w-px h-9 self-end bg-gray-200 dark:bg-slate-700"
-            aria-hidden="true"
-          ></div>
-
-          <!-- Date window -->
-          <div class="col-span-2 flex flex-col gap-1">
-            <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-              >Période</span
-            >
-            <div class="flex items-center gap-1.5">
-              <input
-                v-model="filterStartDate"
-                type="date"
-                aria-label="Date de début"
-                data-testid="transactions-start-date-filter"
-                class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
-              />
-              <span class="shrink-0 text-gray-500 dark:text-gray-400">→</span>
-              <input
-                v-model="filterEndDate"
-                type="date"
-                aria-label="Date de fin"
-                data-testid="transactions-end-date-filter"
-                class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
-              />
-            </div>
-          </div>
-
-          <!-- Amount range -->
-          <div class="col-span-2 flex flex-col gap-1">
-            <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-              >Montant (€)</span
-            >
-            <div class="flex items-center gap-1.5">
-              <input
-                v-model="amountMin"
-                type="number"
-                inputmode="decimal"
-                min="0"
-                step="0.01"
-                placeholder="min"
-                aria-label="Montant minimum"
-                data-testid="transactions-amount-min-filter"
-                class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
-              />
-              <span class="shrink-0 text-gray-500 dark:text-gray-400">–</span>
-              <input
-                v-model="amountMax"
-                type="number"
-                inputmode="decimal"
-                min="0"
-                step="0.01"
-                placeholder="max"
-                aria-label="Montant maximum"
-                data-testid="transactions-amount-max-filter"
-                class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
-              />
-            </div>
-          </div>
-
-          <!-- Divider before options -->
-          <div
-            class="hidden md:block w-px h-9 self-end bg-gray-200 dark:bg-slate-700"
-            aria-hidden="true"
-          ></div>
-
-          <!-- State toggle -->
-          <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
-            <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-              >État</span
-            >
-            <div
-              class="inline-flex h-11 md:h-9 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 dark:border-slate-600 dark:bg-slate-800"
-            >
-              <ToggleSwitch
-                :checked="showOnlyNotPointed"
-                label="Afficher uniquement les transactions non pointées"
-                @change="showOnlyNotPointed = $event"
-              />
-              <span
-                class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-300"
-                >Non pointées</span
-              >
-            </div>
-          </div>
-
-          <!-- A row a bank sync inserted or claimed and then lost the
-               reference to: cleared to "aucun", or a correction still
-               pending on the other side of a swap. -->
-          <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
-            <span
-              class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-              >Synchro bancaire</span
-            >
-            <div
-              class="inline-flex h-11 md:h-9 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 dark:border-slate-600 dark:bg-slate-800"
-            >
-              <ToggleSwitch
-                :checked="needsBankReview"
-                label="Afficher uniquement les transactions à réaffecter"
-                data-testid="needs-bank-review-toggle"
-                @change="needsBankReview = $event"
-              />
-              <span
-                class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-300"
-                >À réaffecter</span
-              >
-            </div>
+        <!-- Date window -->
+        <div class="col-span-2 flex flex-col gap-1">
+          <span
+            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            >Période</span
+          >
+          <div class="flex items-center gap-1.5">
+            <input
+              v-model="filterStartDate"
+              type="date"
+              aria-label="Date de début"
+              data-testid="transactions-start-date-filter"
+              class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+            />
+            <span class="shrink-0 text-gray-500 dark:text-gray-400">→</span>
+            <input
+              v-model="filterEndDate"
+              type="date"
+              aria-label="Date de fin"
+              data-testid="transactions-end-date-filter"
+              class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+            />
           </div>
         </div>
 
-        <!-- Toolbar: result count + actions -->
-        <template #summary>
-          <span aria-live="polite">
-            <span class="md:hidden">{{ totalTransactions }} résultat(s)</span>
-            <span class="hidden md:inline"
-              >{{ totalTransactions }} transaction(s)</span
-            >
-          </span>
-        </template>
-
-        <template #actions>
-          <!-- Reset filters button -->
-          <button
-            v-if="hasActiveFilters"
-            class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-            @click="resetFilters"
+        <!-- Amount range -->
+        <div class="col-span-2 flex flex-col gap-1">
+          <span
+            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            >Montant (€)</span
           >
-            <svg
-              class="h-5 w-5 md:h-4 md:w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-            <span class="hidden md:inline md:ml-1.5">Réinitialiser</span>
-          </button>
-          <!-- Selection mode toggle -->
-          <button
-            class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium rounded-lg transition-colors"
-            :class="
-              isSelectionMode
-                ? 'text-primary-700 dark:text-primary-300 bg-primary-100 dark:bg-primary-900/40 border border-primary-300 dark:border-primary-700'
-                : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600'
-            "
-            data-testid="toggle-selection-mode"
-            @click="toggleSelectionMode"
+          <div class="flex items-center gap-1.5">
+            <input
+              v-model="amountMin"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              step="0.01"
+              placeholder="min"
+              aria-label="Montant minimum"
+              data-testid="transactions-amount-min-filter"
+              class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+            />
+            <span class="shrink-0 text-gray-500 dark:text-gray-400">–</span>
+            <input
+              v-model="amountMax"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              step="0.01"
+              placeholder="max"
+              aria-label="Montant maximum"
+              data-testid="transactions-amount-max-filter"
+              class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+            />
+          </div>
+        </div>
+
+        <!-- Divider before options -->
+        <div
+          class="hidden md:block w-px h-9 self-end bg-gray-200 dark:bg-slate-700"
+          aria-hidden="true"
+        ></div>
+
+        <!-- State toggle -->
+        <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
+          <span
+            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            >État</span
           >
-            <svg
-              class="h-5 w-5 md:h-4 md:w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div
+            class="inline-flex h-11 md:h-9 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 dark:border-slate-600 dark:bg-slate-800"
+          >
+            <ToggleSwitch
+              :checked="showOnlyNotPointed"
+              label="Afficher uniquement les transactions non pointées"
+              @change="showOnlyNotPointed = $event"
+            />
+            <span
+              class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-300"
+              >Non pointées</span
             >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-              />
-            </svg>
-            <span class="hidden md:inline md:ml-1.5">{{
-              isSelectionMode ? 'Mode sélection actif' : 'Sélection multiple'
-            }}</span>
-          </button>
-        </template>
-      </FilterDisclosure>
+          </div>
+        </div>
 
-      <!-- What the list is currently filtered on, each chip removable -->
-      <FilterChips
-        v-if="activeFilterChips.length > 0"
-        :chips="activeFilterChips"
-        class="mb-4 -mt-2"
-        @remove="removeFilterChip"
-        @clear="resetFilters"
-      />
+        <!-- A row a bank sync inserted or claimed and then lost the
+               reference to: cleared to "aucun", or a correction still
+               pending on the other side of a swap. -->
+        <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
+          <span
+            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            >Synchro bancaire</span
+          >
+          <div
+            class="inline-flex h-11 md:h-9 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 dark:border-slate-600 dark:bg-slate-800"
+          >
+            <ToggleSwitch
+              :checked="needsBankReview"
+              label="Afficher uniquement les transactions à réaffecter"
+              data-testid="needs-bank-review-toggle"
+              @change="needsBankReview = $event"
+            />
+            <span
+              class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-300"
+              >À réaffecter</span
+            >
+          </div>
+        </div>
+      </div>
 
-      <!--
+      <!-- Toolbar: result count + actions -->
+      <template #summary>
+        <span aria-live="polite">
+          <span class="md:hidden">{{ totalTransactions }} résultat(s)</span>
+          <span class="hidden md:inline"
+            >{{ totalTransactions }} transaction(s)</span
+          >
+        </span>
+      </template>
+
+      <template #actions>
+        <!-- Reset filters button -->
+        <button
+          v-if="hasActiveFilters"
+          class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+          @click="resetFilters"
+        >
+          <svg
+            class="h-5 w-5 md:h-4 md:w-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+          <span class="hidden md:inline md:ml-1.5">Réinitialiser</span>
+        </button>
+        <!-- Selection mode toggle -->
+        <button
+          class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 p-2 md:px-3 md:py-1.5 text-sm font-medium rounded-lg transition-colors"
+          :class="
+            isSelectionMode
+              ? 'text-primary-700 dark:text-primary-300 bg-primary-100 dark:bg-primary-900/40 border border-primary-300 dark:border-primary-700'
+              : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600'
+          "
+          data-testid="toggle-selection-mode"
+          @click="toggleSelectionMode"
+        >
+          <svg
+            class="h-5 w-5 md:h-4 md:w-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+            />
+          </svg>
+          <span class="hidden md:inline md:ml-1.5">{{
+            isSelectionMode ? 'Mode sélection actif' : 'Sélection multiple'
+          }}</span>
+        </button>
+      </template>
+    </FilterDisclosure>
+
+    <!-- What the list is currently filtered on, each chip removable -->
+    <FilterChips
+      v-if="activeFilterChips.length > 0"
+      :chips="activeFilterChips"
+      class="mb-4 -mt-2"
+      @remove="removeFilterChip"
+      @clear="resetFilters"
+    />
+
+    <!--
         Ticking every box selects the page, not the filter. Saying so — and
         offering the escalation explicitly — is what stops a bulk action from
         silently covering an eighth of what the user meant.
       -->
+    <div
+      v-if="isSelectionMode && canSelectWholeFilter"
+      data-testid="select-whole-filter-banner"
+      class="flex flex-wrap items-center gap-x-2 gap-y-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-xl px-4 py-3 mb-4 text-sm text-amber-800 dark:text-amber-300"
+    >
+      <span>
+        Les <strong>{{ selectedIds.size }}</strong> transactions de cette page
+        sont sélectionnées.
+      </span>
+      <button
+        type="button"
+        data-testid="select-whole-filter"
+        class="font-semibold underline underline-offset-2 hover:no-underline"
+        @click="selectWholeFilter"
+      >
+        Sélectionner les {{ matchingCount }} transactions du filtre
+      </button>
+    </div>
+
+    <div
+      v-else-if="isSelectionMode && isWholeFilterSelected"
+      data-testid="whole-filter-selected-banner"
+      class="flex flex-wrap items-center gap-x-2 gap-y-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-xl px-4 py-3 mb-4 text-sm text-amber-800 dark:text-amber-300"
+    >
+      <span>
+        Les <strong>{{ matchingCount }}</strong> transactions du filtre sont
+        sélectionnées, au-delà de cette page.
+      </span>
+      <button
+        type="button"
+        class="font-semibold underline underline-offset-2 hover:no-underline"
+        @click="clearSelection"
+      >
+        Annuler la sélection
+      </button>
+    </div>
+
+    <!-- Bulk Actions Bar - Desktop (inline) -->
+    <Transition
+      enter-active-class="transition-all duration-200 ease-out"
+      enter-from-class="opacity-0 -translate-y-2"
+      enter-to-class="opacity-100 translate-y-0"
+      leave-active-class="transition-all duration-150 ease-in"
+      leave-from-class="opacity-100 translate-y-0"
+      leave-to-class="opacity-0 -translate-y-2"
+    >
       <div
-        v-if="isSelectionMode && canSelectWholeFilter"
-        data-testid="select-whole-filter-banner"
-        class="flex flex-wrap items-center gap-x-2 gap-y-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-xl px-4 py-3 mb-4 text-sm text-amber-800 dark:text-amber-300"
+        v-if="isSelectionMode"
+        class="hidden md:flex bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-700 rounded-xl p-4 mb-6 items-center justify-between"
       >
-        <span>
-          Les <strong>{{ selectedIds.size }}</strong> transactions de cette page
-          sont sélectionnées.
-        </span>
-        <button
-          type="button"
-          data-testid="select-whole-filter"
-          class="font-semibold underline underline-offset-2 hover:no-underline"
-          @click="selectWholeFilter"
-        >
-          Sélectionner les {{ matchingCount }} transactions du filtre
-        </button>
-      </div>
-
-      <div
-        v-else-if="isSelectionMode && isWholeFilterSelected"
-        data-testid="whole-filter-selected-banner"
-        class="flex flex-wrap items-center gap-x-2 gap-y-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-xl px-4 py-3 mb-4 text-sm text-amber-800 dark:text-amber-300"
-      >
-        <span>
-          Les <strong>{{ matchingCount }}</strong> transactions du filtre sont
-          sélectionnées, au-delà de cette page.
-        </span>
-        <button
-          type="button"
-          class="font-semibold underline underline-offset-2 hover:no-underline"
-          @click="clearSelection"
-        >
-          Annuler la sélection
-        </button>
-      </div>
-
-      <!-- Bulk Actions Bar - Desktop (inline) -->
-      <Transition
-        enter-active-class="transition-all duration-200 ease-out"
-        enter-from-class="opacity-0 -translate-y-2"
-        enter-to-class="opacity-100 translate-y-0"
-        leave-active-class="transition-all duration-150 ease-in"
-        leave-from-class="opacity-100 translate-y-0"
-        leave-to-class="opacity-0 -translate-y-2"
-      >
-        <div
-          v-if="isSelectionMode"
-          class="hidden md:flex bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-700 rounded-xl p-4 mb-6 items-center justify-between"
-        >
-          <div class="flex items-center gap-4">
-            <span
-              class="text-sm font-medium text-primary-700 dark:text-primary-300"
-            >
-              {{ selectedCount }} transaction(s) sélectionnée(s)
-            </span>
-            <button
-              class="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-200"
-              @click="exitSelectionMode"
-            >
-              Quitter la sélection
-            </button>
-          </div>
-
-          <div class="flex items-center gap-2">
-            <button
-              :disabled="isBulkUpdating"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors disabled:opacity-50"
-              data-testid="bulk-pointed"
-              @click="bulkTogglePointed(true)"
-            >
-              <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fill-rule="evenodd"
-                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-              Pointer
-            </button>
-            <button
-              :disabled="isBulkUpdating"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
-              @click="bulkTogglePointed(false)"
-            >
-              <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fill-rule="evenodd"
-                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-              Dépointer
-            </button>
-            <button
-              :disabled="isBulkUpdating"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-100 dark:bg-primary-900/30 border border-primary-300 dark:border-primary-700 rounded-lg hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-colors disabled:opacity-50"
-              @click="openBulkCategoryModal"
-            >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"
-                />
-              </svg>
-              Changer de catégorie
-            </button>
-          </div>
-        </div>
-      </Transition>
-
-      <!-- Bulk Actions Bar - Mobile (fixed bottom) -->
-      <Teleport to="body">
-        <Transition
-          enter-active-class="transition-all duration-200 ease-out"
-          enter-from-class="opacity-0 translate-y-full"
-          enter-to-class="opacity-100 translate-y-0"
-          leave-active-class="transition-all duration-150 ease-in"
-          leave-from-class="opacity-100 translate-y-0"
-          leave-to-class="opacity-0 translate-y-full"
-        >
-          <div
-            v-if="isSelectionMode"
-            class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-primary-50 dark:bg-primary-900/50 border-t border-primary-200 dark:border-primary-700 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+        <div class="flex items-center gap-4">
+          <span
+            class="text-sm font-medium text-primary-700 dark:text-primary-300"
           >
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span
-                  class="text-sm font-medium text-primary-700 dark:text-primary-300"
-                >
-                  {{ selectedCount }} sélect.
-                </span>
-                <button
-                  class="text-sm text-primary-600 dark:text-primary-400 underline"
-                  @click="exitSelectionMode"
-                >
-                  Annuler
-                </button>
-              </div>
-
-              <div class="flex items-center gap-1">
-                <button
-                  :disabled="isBulkUpdating"
-                  class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg disabled:opacity-50"
-                  type="button"
-                  title="Pointer"
-                  aria-label="Pointer la sélection"
-                  @click="bulkTogglePointed(true)"
-                >
-                  <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fill-rule="evenodd"
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                      clip-rule="evenodd"
-                    />
-                  </svg>
-                </button>
-                <button
-                  :disabled="isBulkUpdating"
-                  class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg disabled:opacity-50"
-                  type="button"
-                  title="Dépointer"
-                  aria-label="Dépointer la sélection"
-                  @click="bulkTogglePointed(false)"
-                >
-                  <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fill-rule="evenodd"
-                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                      clip-rule="evenodd"
-                    />
-                  </svg>
-                </button>
-                <button
-                  :disabled="isBulkUpdating"
-                  class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-primary-700 dark:text-primary-400 bg-primary-100 dark:bg-primary-900/30 border border-primary-300 dark:border-primary-700 rounded-lg disabled:opacity-50"
-                  type="button"
-                  title="Changer de catégorie"
-                  aria-label="Changer la catégorie de la sélection"
-                  @click="openBulkCategoryModal"
-                >
-                  <svg
-                    class="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </Transition>
-      </Teleport>
-
-      <!-- Transactions Table -->
-      <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
-      >
-        <!-- No overflow-hidden here: it clipped the tag popover of the last
-             rows. The corners are rounded on the edge children instead. -->
-        <!-- Error state -->
-        <div
-          v-if="transactionsError"
-          role="alert"
-          data-testid="transactions-error"
-          class="flex flex-col gap-3 rounded-t-xl p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <p class="text-sm">
-            {{ transactionsError }}
-            <span
-              v-if="transactions.length > 0"
-              class="block text-xs opacity-80"
-              >La liste ci-dessous est celle du dernier chargement réussi.</span
-            >
-          </p>
+            {{ selectedCount }} transaction(s) sélectionnée(s)
+          </span>
           <button
-            type="button"
-            data-testid="transactions-retry"
-            :disabled="isLoadingTransactions"
-            class="inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
-            @click="fetchTransactions()"
+            class="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-200"
+            @click="exitSelectionMode"
           >
-            Réessayer
+            Quitter la sélection
           </button>
         </div>
 
-        <!-- Loading state -->
-        <div
-          v-if="isLoadingTransactions"
-          class="space-y-3 p-4"
-          aria-busy="true"
-        >
-          <SkeletonBlock v-for="n in 8" :key="n" class="h-12" />
-        </div>
-
-        <!-- Table -->
-        <!-- A failed refresh keeps the last list on screen under the banner. -->
-        <template v-else-if="!transactionsError || transactions.length > 0">
-          <EmptyState
-            v-if="transactions.length === 0"
-            :title="
-              hasActiveFilters
-                ? 'Aucune transaction ne correspond aux filtres actifs'
-                : 'Aucune transaction pour le moment'
-            "
+        <div class="flex items-center gap-2">
+          <button
+            :disabled="isBulkUpdating"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors disabled:opacity-50"
+            data-testid="bulk-pointed"
+            @click="bulkTogglePointed(true)"
           >
-            <template #action>
-              <BaseButton
-                v-if="hasActiveFilters"
-                variant="secondary"
-                data-testid="empty-state-reset-filters"
-                @click="resetFilters"
-              >
-                Réinitialiser les filtres
-              </BaseButton>
-              <RouterLink
-                v-else
-                to="/import"
-                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
-              >
-                Importer des transactions
-              </RouterLink>
-            </template>
-          </EmptyState>
-
-          <div v-else>
-            <!-- Table header -->
-            <div
-              class="hidden md:grid gap-2 rounded-t-xl px-4 py-3 bg-gray-50 dark:bg-slate-800 text-sm font-medium text-gray-500 dark:text-gray-400 border-b dark:border-slate-700"
-              :class="isSelectionMode ? 'grid-cols-12' : 'grid-cols-11'"
-            >
-              <div v-if="isSelectionMode" class="col-span-1 flex items-center">
-                <input
-                  type="checkbox"
-                  :checked="isAllSelected"
-                  :indeterminate="isPartiallySelected"
-                  class="h-4 w-4 text-primary-600 dark:text-primary-500 border-gray-300 dark:border-slate-600 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
-                  data-testid="select-all"
-                  @change="toggleSelectAll"
-                />
-              </div>
-              <div class="col-span-1">
-                <button
-                  type="button"
-                  data-testid="sort-by-date"
-                  class="inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                  :aria-label="`Trier par date, ${sortBy === 'date' && sortOrder === 'desc' ? 'croissant' : 'décroissant'}`"
-                  @click="toggleSort('date')"
-                >
-                  Date
-                  <span v-if="sortBy === 'date'" aria-hidden="true">{{
-                    sortOrder === 'desc' ? '↓' : '↑'
-                  }}</span>
-                </button>
-              </div>
-              <div class="col-span-3">Description</div>
-              <div class="col-span-2">Note</div>
-              <div class="col-span-1 text-right">
-                <button
-                  type="button"
-                  data-testid="sort-by-amount"
-                  class="inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                  :aria-label="`Trier par montant, ${sortBy === 'amount' && sortOrder === 'desc' ? 'croissant' : 'décroissant'}`"
-                  @click="toggleSort('amount')"
-                >
-                  Montant
-                  <span v-if="sortBy === 'amount'" aria-hidden="true">{{
-                    sortOrder === 'desc' ? '↓' : '↑'
-                  }}</span>
-                </button>
-              </div>
-              <div class="col-span-2">Catégorie</div>
-              <div class="col-span-1 text-center">Pointé</div>
-              <div class="col-span-1 text-center">Actions</div>
-            </div>
-
-            <!-- Transactions rows -->
-            <div
-              class="divide-y dark:divide-slate-700"
-              :class="totalPages > 1 ? '' : '[&>*:last-child]:rounded-b-xl'"
-            >
-              <TransactionRow
-                v-for="tx in transactions"
-                :key="tx.id"
-                :transaction="tx"
-                :reimbursements="getReimbursementsForTransaction(tx.id)"
-                :remaining-amount="getRemainingAmount(tx)"
-                :all-tags="tagsStore.tags"
-                :selection-mode="isSelectionMode"
-                :selected="selectedIds.has(tx.id)"
-                :is-editing-note="editingNoteId === tx.id"
-                :reimbursements-expanded="expandedReimbursementsTxId === tx.id"
-                :settlement-loading="isLoadingSettlement"
-                @toggle-select="toggleSelection(tx.id)"
-                @open-category="openCategoryModal(tx)"
-                @toggle-pointed="togglePointed(tx)"
-                @start-note="startEditNote(tx)"
-                @save-note="note => saveNote(tx, note)"
-                @cancel-note="cancelEditNote"
-                @open-reimbursement="openReimbursementModal(tx)"
-                @toggle-reimbursements="toggleReimbursementsExpand(tx.id)"
-                @open-settlement="openSettlementDetail"
-                @delete-reimbursement="handleDeleteReimbursement"
-                @attach-tag="id => handleAttachTag(tx, id)"
-                @detach-tag="id => handleDetachTag(tx, id)"
-                @create-tag="name => handleCreateTag(tx, name)"
-                @mark-recurring="openMarkRecurring(tx)"
-                @unlink-recurrence="unlinkRecurrence(tx)"
-                @show-recurrence="showRecurrence(tx)"
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                fill-rule="evenodd"
+                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                clip-rule="evenodd"
               />
+            </svg>
+            Pointer
+          </button>
+          <button
+            :disabled="isBulkUpdating"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+            @click="bulkTogglePointed(false)"
+          >
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                fill-rule="evenodd"
+                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            Dépointer
+          </button>
+          <button
+            :disabled="isBulkUpdating"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-100 dark:bg-primary-900/30 border border-primary-300 dark:border-primary-700 rounded-lg hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-colors disabled:opacity-50"
+            @click="openBulkCategoryModal"
+          >
+            <svg
+              class="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"
+              />
+            </svg>
+            Changer de catégorie
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Bulk Actions Bar - Mobile (fixed bottom) -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition-all duration-200 ease-out"
+        enter-from-class="opacity-0 translate-y-full"
+        enter-to-class="opacity-100 translate-y-0"
+        leave-active-class="transition-all duration-150 ease-in"
+        leave-from-class="opacity-100 translate-y-0"
+        leave-to-class="opacity-0 translate-y-full"
+      >
+        <div
+          v-if="isSelectionMode"
+          class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-primary-50 dark:bg-primary-900/50 border-t border-primary-200 dark:border-primary-700 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span
+                class="text-sm font-medium text-primary-700 dark:text-primary-300"
+              >
+                {{ selectedCount }} sélect.
+              </span>
+              <button
+                class="text-sm text-primary-600 dark:text-primary-400 underline"
+                @click="exitSelectionMode"
+              >
+                Annuler
+              </button>
             </div>
 
-            <!-- Pagination -->
-            <div
-              v-if="totalPages > 1"
-              data-testid="pagination"
-              class="flex flex-col-reverse gap-3 px-4 py-4 border-t border-gray-100 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700"
-            >
-              <div
-                class="flex items-center justify-center gap-3 text-sm text-gray-500 sm:justify-start dark:text-gray-400"
+            <div class="flex items-center gap-1">
+              <button
+                :disabled="isBulkUpdating"
+                class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg disabled:opacity-50"
+                type="button"
+                title="Pointer"
+                aria-label="Pointer la sélection"
+                @click="bulkTogglePointed(true)"
               >
-                <span class="hidden sm:inline"
-                  >Page {{ currentPage }} sur {{ totalPages }}</span
-                >
-                <label class="inline-flex items-center gap-1.5">
-                  <span class="sr-only">Transactions par page</span>
-                  <select
-                    v-model.number="pageSize"
-                    data-testid="page-size-select"
-                    class="h-8 rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 focus:ring-2 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300"
-                  >
-                    <option
-                      v-for="size in PAGE_SIZES"
-                      :key="size"
-                      :value="size"
-                    >
-                      {{ size }} / page
-                    </option>
-                  </select>
-                </label>
-              </div>
-
-              <!-- On a phone: previous / « 3 / 12 » / next, never wider than
-                   the screen. The numbered strip is for wider screens. -->
-              <nav
-                class="flex items-center justify-between gap-1 sm:justify-end"
-                aria-label="Pagination"
+                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fill-rule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+              </button>
+              <button
+                :disabled="isBulkUpdating"
+                class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-lg disabled:opacity-50"
+                type="button"
+                title="Dépointer"
+                aria-label="Dépointer la sélection"
+                @click="bulkTogglePointed(false)"
               >
-                <!-- Previous button -->
-                <button
-                  type="button"
-                  :disabled="currentPage === 1"
-                  aria-label="Page précédente"
-                  data-testid="pagination-previous"
-                  class="inline-flex min-h-11 min-w-11 items-center justify-center px-3 py-1.5 text-sm rounded-lg transition-colors sm:min-h-0 sm:min-w-0"
-                  :class="
-                    currentPage === 1
-                      ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
-                  "
-                  @click="goToPage(currentPage - 1)"
+                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fill-rule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clip-rule="evenodd"
+                  />
+                </svg>
+              </button>
+              <button
+                :disabled="isBulkUpdating"
+                class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] p-2 text-primary-700 dark:text-primary-400 bg-primary-100 dark:bg-primary-900/30 border border-primary-300 dark:border-primary-700 rounded-lg disabled:opacity-50"
+                type="button"
+                title="Changer de catégorie"
+                aria-label="Changer la catégorie de la sélection"
+                @click="openBulkCategoryModal"
+              >
+                <svg
+                  class="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  <svg
-                    class="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M15 19l-7-7 7-7"
-                    />
-                  </svg>
-                </button>
-
-                <span
-                  class="text-sm font-medium tabular-nums text-gray-700 sm:hidden dark:text-gray-300"
-                  data-testid="pagination-compact"
-                >
-                  {{ currentPage }} / {{ totalPages }}
-                </span>
-
-                <!-- Page numbers -->
-                <template v-for="page in visiblePages" :key="page">
-                  <span
-                    v-if="page < 0"
-                    class="hidden px-2 py-1.5 text-sm text-gray-500 sm:inline dark:text-gray-400"
-                  >
-                    ...
-                  </span>
-                  <button
-                    v-else
-                    type="button"
-                    :aria-current="page === currentPage ? 'page' : undefined"
-                    class="hidden px-3 py-1.5 text-sm rounded-lg transition-colors sm:inline-block"
-                    :class="
-                      page === currentPage
-                        ? 'bg-primary-600 dark:bg-primary-500 text-white'
-                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
-                    "
-                    @click="goToPage(page)"
-                  >
-                    {{ page }}
-                  </button>
-                </template>
-
-                <!-- Next button -->
-                <button
-                  type="button"
-                  :disabled="currentPage === totalPages"
-                  aria-label="Page suivante"
-                  data-testid="pagination-next"
-                  class="inline-flex min-h-11 min-w-11 items-center justify-center px-3 py-1.5 text-sm rounded-lg transition-colors sm:min-h-0 sm:min-w-0"
-                  :class="
-                    currentPage === totalPages
-                      ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
-                  "
-                  @click="goToPage(currentPage + 1)"
-                >
-                  <svg
-                    class="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </button>
-              </nav>
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"
+                  />
+                </svg>
+              </button>
             </div>
           </div>
-        </template>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Transactions Table -->
+    <div
+      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
+    >
+      <!-- No overflow-hidden here: it clipped the tag popover of the last
+             rows. The corners are rounded on the edge children instead. -->
+      <!-- Error state -->
+      <div
+        v-if="transactionsError"
+        role="alert"
+        data-testid="transactions-error"
+        class="flex flex-col gap-3 rounded-t-xl p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <p class="text-sm">
+          {{ transactionsError }}
+          <span v-if="transactions.length > 0" class="block text-xs opacity-80"
+            >La liste ci-dessous est celle du dernier chargement réussi.</span
+          >
+        </p>
+        <button
+          type="button"
+          data-testid="transactions-retry"
+          :disabled="isLoadingTransactions"
+          class="inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
+          @click="fetchTransactions()"
+        >
+          Réessayer
+        </button>
       </div>
+
+      <!-- Loading state -->
+      <div v-if="isLoadingTransactions" class="space-y-3 p-4" aria-busy="true">
+        <SkeletonBlock v-for="n in 8" :key="n" class="h-12" />
+      </div>
+
+      <!-- Table -->
+      <!-- A failed refresh keeps the last list on screen under the banner. -->
+      <template v-else-if="!transactionsError || transactions.length > 0">
+        <EmptyState
+          v-if="transactions.length === 0"
+          :title="
+            hasActiveFilters
+              ? 'Aucune transaction ne correspond aux filtres actifs'
+              : 'Aucune transaction pour le moment'
+          "
+        >
+          <template #action>
+            <BaseButton
+              v-if="hasActiveFilters"
+              variant="secondary"
+              data-testid="empty-state-reset-filters"
+              @click="resetFilters"
+            >
+              Réinitialiser les filtres
+            </BaseButton>
+            <RouterLink
+              v-else
+              to="/import"
+              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
+            >
+              Importer des transactions
+            </RouterLink>
+          </template>
+        </EmptyState>
+
+        <div v-else>
+          <!-- Table header -->
+          <div
+            class="hidden md:grid gap-2 rounded-t-xl px-4 py-3 bg-gray-50 dark:bg-slate-800 text-sm font-medium text-gray-500 dark:text-gray-400 border-b dark:border-slate-700"
+            :class="isSelectionMode ? 'grid-cols-12' : 'grid-cols-11'"
+          >
+            <div v-if="isSelectionMode" class="col-span-1 flex items-center">
+              <input
+                type="checkbox"
+                :checked="isAllSelected"
+                :indeterminate="isPartiallySelected"
+                class="h-4 w-4 text-primary-600 dark:text-primary-500 border-gray-300 dark:border-slate-600 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
+                data-testid="select-all"
+                @change="toggleSelectAll"
+              />
+            </div>
+            <div class="col-span-1">
+              <button
+                type="button"
+                data-testid="sort-by-date"
+                class="inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                :aria-label="`Trier par date, ${sortBy === 'date' && sortOrder === 'desc' ? 'croissant' : 'décroissant'}`"
+                @click="toggleSort('date')"
+              >
+                Date
+                <span v-if="sortBy === 'date'" aria-hidden="true">{{
+                  sortOrder === 'desc' ? '↓' : '↑'
+                }}</span>
+              </button>
+            </div>
+            <div class="col-span-3">Description</div>
+            <div class="col-span-2">Note</div>
+            <div class="col-span-1 text-right">
+              <button
+                type="button"
+                data-testid="sort-by-amount"
+                class="inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                :aria-label="`Trier par montant, ${sortBy === 'amount' && sortOrder === 'desc' ? 'croissant' : 'décroissant'}`"
+                @click="toggleSort('amount')"
+              >
+                Montant
+                <span v-if="sortBy === 'amount'" aria-hidden="true">{{
+                  sortOrder === 'desc' ? '↓' : '↑'
+                }}</span>
+              </button>
+            </div>
+            <div class="col-span-2">Catégorie</div>
+            <div class="col-span-1 text-center">Pointé</div>
+            <div class="col-span-1 text-center">Actions</div>
+          </div>
+
+          <!-- Transactions rows -->
+          <div
+            class="divide-y dark:divide-slate-700"
+            :class="totalPages > 1 ? '' : '[&>*:last-child]:rounded-b-xl'"
+          >
+            <TransactionRow
+              v-for="tx in transactions"
+              :key="tx.id"
+              :transaction="tx"
+              :reimbursements="getReimbursementsForTransaction(tx.id)"
+              :remaining-amount="getRemainingAmount(tx)"
+              :all-tags="tagsStore.tags"
+              :selection-mode="isSelectionMode"
+              :selected="selectedIds.has(tx.id)"
+              :is-editing-note="editingNoteId === tx.id"
+              :reimbursements-expanded="expandedReimbursementsTxId === tx.id"
+              :settlement-loading="isLoadingSettlement"
+              @toggle-select="toggleSelection(tx.id)"
+              @open-category="openCategoryModal(tx)"
+              @toggle-pointed="togglePointed(tx)"
+              @start-note="startEditNote(tx)"
+              @save-note="note => saveNote(tx, note)"
+              @cancel-note="cancelEditNote"
+              @open-reimbursement="openReimbursementModal(tx)"
+              @toggle-reimbursements="toggleReimbursementsExpand(tx.id)"
+              @open-settlement="openSettlementDetail"
+              @delete-reimbursement="handleDeleteReimbursement"
+              @attach-tag="id => handleAttachTag(tx, id)"
+              @detach-tag="id => handleDetachTag(tx, id)"
+              @create-tag="name => handleCreateTag(tx, name)"
+              @mark-recurring="openMarkRecurring(tx)"
+              @unlink-recurrence="unlinkRecurrence(tx)"
+              @show-recurrence="showRecurrence(tx)"
+            />
+          </div>
+
+          <!-- Pagination -->
+          <div
+            v-if="totalPages > 1"
+            data-testid="pagination"
+            class="flex flex-col-reverse gap-3 px-4 py-4 border-t border-gray-100 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700"
+          >
+            <div
+              class="flex items-center justify-center gap-3 text-sm text-gray-500 sm:justify-start dark:text-gray-400"
+            >
+              <span class="hidden sm:inline"
+                >Page {{ currentPage }} sur {{ totalPages }}</span
+              >
+              <label class="inline-flex items-center gap-1.5">
+                <span class="sr-only">Transactions par page</span>
+                <select
+                  v-model.number="pageSize"
+                  data-testid="page-size-select"
+                  class="h-8 rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 focus:ring-2 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300"
+                >
+                  <option v-for="size in PAGE_SIZES" :key="size" :value="size">
+                    {{ size }} / page
+                  </option>
+                </select>
+              </label>
+            </div>
+
+            <!-- On a phone: previous / « 3 / 12 » / next, never wider than
+                   the screen. The numbered strip is for wider screens. -->
+            <nav
+              class="flex items-center justify-between gap-1 sm:justify-end"
+              aria-label="Pagination"
+            >
+              <!-- Previous button -->
+              <button
+                type="button"
+                :disabled="currentPage === 1"
+                aria-label="Page précédente"
+                data-testid="pagination-previous"
+                class="inline-flex min-h-11 min-w-11 items-center justify-center px-3 py-1.5 text-sm rounded-lg transition-colors sm:min-h-0 sm:min-w-0"
+                :class="
+                  currentPage === 1
+                    ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
+                "
+                @click="goToPage(currentPage - 1)"
+              >
+                <svg
+                  class="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+              </button>
+
+              <span
+                class="text-sm font-medium tabular-nums text-gray-700 sm:hidden dark:text-gray-300"
+                data-testid="pagination-compact"
+              >
+                {{ currentPage }} / {{ totalPages }}
+              </span>
+
+              <!-- Page numbers -->
+              <template v-for="page in visiblePages" :key="page">
+                <span
+                  v-if="page < 0"
+                  class="hidden px-2 py-1.5 text-sm text-gray-500 sm:inline dark:text-gray-400"
+                >
+                  ...
+                </span>
+                <button
+                  v-else
+                  type="button"
+                  :aria-current="page === currentPage ? 'page' : undefined"
+                  class="hidden px-3 py-1.5 text-sm rounded-lg transition-colors sm:inline-block"
+                  :class="
+                    page === currentPage
+                      ? 'bg-primary-600 dark:bg-primary-500 text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
+                  "
+                  @click="goToPage(page)"
+                >
+                  {{ page }}
+                </button>
+              </template>
+
+              <!-- Next button -->
+              <button
+                type="button"
+                :disabled="currentPage === totalPages"
+                aria-label="Page suivante"
+                data-testid="pagination-next"
+                class="inline-flex min-h-11 min-w-11 items-center justify-center px-3 py-1.5 text-sm rounded-lg transition-colors sm:min-h-0 sm:min-w-0"
+                :class="
+                  currentPage === totalPages
+                    ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
+                "
+                @click="goToPage(currentPage + 1)"
+              >
+                <svg
+                  class="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </button>
+            </nav>
+          </div>
+        </div>
+      </template>
     </div>
 
     <!-- Reimbursement Modal -->
@@ -2200,5 +2183,5 @@
       hide-delete
       @close="closeSettlementDetail"
     />
-  </div>
+  </PageShell>
 </template>
