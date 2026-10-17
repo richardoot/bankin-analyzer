@@ -1,5 +1,7 @@
 <script setup lang="ts">
   import type { BudgetPlanSummaryDto } from '@/lib/api'
+  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+  import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
 
   /**
    * Étape 2 — d'où partent les enveloppes. Tout est v-model : la
@@ -21,6 +23,16 @@
   const initSource = defineModel<InitSource>('initSource', { required: true })
   const lookback = defineModel<LookbackOption>('lookback', { required: true })
   const seedBasis = defineModel<SeedBasis>('seedBasis', { required: true })
+
+  const LOOKBACKS: SegmentedOption<LookbackOption>[] = [
+    { value: '3m', label: '3 mois' },
+    { value: '6m', label: '6 mois' },
+    { value: '12m', label: '12 mois' },
+  ]
+  const SEED_BASES: SegmentedOption<SeedBasis>[] = [
+    { value: 'everyday', label: 'Vie courante', testId: 'seed-basis-everyday' },
+    { value: 'all', label: 'Tout', testId: 'seed-basis-all' },
+  ]
   const deductReimbursements = defineModel<boolean>('deductReimbursements', {
     required: true,
   })
@@ -79,31 +91,11 @@
         >
           Période de référence pour les moyennes
         </p>
-        <div
-          role="group"
-          aria-labelledby="plan-lookback-label"
-          class="inline-flex rounded-lg bg-gray-100 dark:bg-slate-700/50 p-1"
-        >
-          <button
-            v-for="opt in [
-              { value: '3m', label: '3 mois' },
-              { value: '6m', label: '6 mois' },
-              { value: '12m', label: '12 mois' },
-            ]"
-            :key="opt.value"
-            type="button"
-            :aria-pressed="lookback === opt.value"
-            class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
-            :class="
-              lookback === opt.value
-                ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-            "
-            @click="lookback = opt.value as LookbackOption"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
+        <SegmentedControl
+          v-model="lookback"
+          labelled-by="plan-lookback-label"
+          :options="LOOKBACKS"
+        />
       </div>
 
       <!-- Which historical figure seeds the envelopes -->
@@ -114,31 +106,12 @@
         >
           Base des enveloppes
         </span>
-        <div
-          role="group"
-          aria-labelledby="plan-seed-basis-label"
-          class="inline-flex rounded-lg bg-gray-100 dark:bg-slate-700/50 p-0.5"
-        >
-          <button
-            v-for="opt in [
-              { value: 'everyday', label: 'Vie courante' },
-              { value: 'all', label: 'Tout' },
-            ]"
-            :key="opt.value"
-            type="button"
-            :aria-pressed="seedBasis === opt.value"
-            :data-testid="`seed-basis-${opt.value}`"
-            class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
-            :class="
-              seedBasis === opt.value
-                ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-            "
-            @click="seedBasis = opt.value as SeedBasis"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
+        <SegmentedControl
+          v-model="seedBasis"
+          size="sm"
+          labelled-by="plan-seed-basis-label"
+          :options="SEED_BASES"
+        />
         <span
           v-if="hasExceptionalInLookback"
           data-testid="seed-basis-hint"

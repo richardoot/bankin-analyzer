@@ -15,6 +15,7 @@
   import { useDashboardData } from '@/composables/useDashboardData'
   import { useFiltersStore } from '@/stores/filters'
   import { formatCurrency } from '@/lib/formatters'
+  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 
   const router = useRouter()
 
@@ -494,41 +495,25 @@
               </h3>
 
               <!-- Real vs everyday selector -->
-              <div
+              <SegmentedControl
                 v-if="hasExceptionalExpenses"
-                class="inline-flex rounded-lg border border-gray-200 dark:border-slate-700 p-0.5 text-xs"
-                role="group"
-                aria-label="Mode d'affichage des moyennes"
-              >
-                <button
-                  type="button"
-                  :aria-pressed="breakdownMode === 'real'"
-                  data-testid="breakdown-mode-real"
-                  class="px-2.5 py-1 rounded-md transition-colors"
-                  :class="
-                    breakdownMode === 'real'
-                      ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
-                      : 'text-gray-500 dark:text-gray-400'
-                  "
-                  @click="setBreakdownMode('real')"
-                >
-                  Tout
-                </button>
-                <button
-                  type="button"
-                  :aria-pressed="breakdownMode === 'everyday'"
-                  data-testid="breakdown-mode-everyday"
-                  class="px-2.5 py-1 rounded-md transition-colors"
-                  :class="
-                    breakdownMode === 'everyday'
-                      ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
-                      : 'text-gray-500 dark:text-gray-400'
-                  "
-                  @click="setBreakdownMode('everyday')"
-                >
-                  Vie courante
-                </button>
-              </div>
+                :model-value="breakdownMode"
+                size="sm"
+                label="Mode d'affichage des moyennes"
+                :options="[
+                  {
+                    value: 'real',
+                    label: 'Tout',
+                    testId: 'breakdown-mode-real',
+                  },
+                  {
+                    value: 'everyday',
+                    label: 'Vie courante',
+                    testId: 'breakdown-mode-everyday',
+                  },
+                ]"
+                @update:model-value="setBreakdownMode($event)"
+              />
             </div>
             <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
               <template v-if="breakdownMode === 'everyday'">

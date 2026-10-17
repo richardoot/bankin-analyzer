@@ -20,6 +20,7 @@
   import { RouterLink } from 'vue-router'
   import type { SpendingStructureDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
+  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 
   const props = defineProps<{
     actual: SpendingStructureDto
@@ -124,40 +125,19 @@
           Contraint ou choisi, engagé ou variable, sur la période.
         </p>
       </div>
-      <div
-        class="inline-flex rounded-lg border border-gray-200 p-0.5 dark:border-slate-700"
-        role="group"
-        aria-label="Lecture"
-      >
-        <button
-          type="button"
-          :aria-pressed="reading === 'everyday'"
-          data-testid="reading-everyday"
-          class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-          :class="
-            reading === 'everyday'
-              ? 'bg-primary-500 text-white dark:bg-primary-600'
-              : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
-          "
-          @click="reading = 'everyday'"
-        >
-          Vie courante
-        </button>
-        <button
-          type="button"
-          :aria-pressed="reading === 'actual'"
-          data-testid="reading-actual"
-          class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-          :class="
-            reading === 'actual'
-              ? 'bg-primary-500 text-white dark:bg-primary-600'
-              : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
-          "
-          @click="reading = 'actual'"
-        >
-          Réel
-        </button>
-      </div>
+      <SegmentedControl
+        v-model="reading"
+        size="sm"
+        label="Lecture"
+        :options="[
+          {
+            value: 'everyday',
+            label: 'Vie courante',
+            testId: 'reading-everyday',
+          },
+          { value: 'actual', label: 'Réel', testId: 'reading-actual' },
+        ]"
+      />
     </div>
 
     <div class="grid gap-6 md:grid-cols-2">

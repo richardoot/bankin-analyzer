@@ -1,6 +1,9 @@
 <script setup lang="ts">
+  import { computed } from 'vue'
   import type { BreakdownMode } from '@/composables/useBudgetComparison'
   import { SORT_OPTIONS, type SortOrder } from './sortOptions'
+  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+  import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
 
   /**
    * Everything that steers the category table without being a row of it:
@@ -9,7 +12,7 @@
    * mode with its events band. Pure controls — every decision leaves as an
    * event, every figure arrives as a prop.
    */
-  defineProps<{
+  const props = defineProps<{
     editing: boolean
     monthOptions: {
       ym: string
@@ -35,6 +38,25 @@
     'set-mode': [mode: BreakdownMode]
     'open-tag': [tagId: string]
   }>()
+  const monthSegments = computed<SegmentedOption<string | null>[]>(() => [
+    {
+      value: null,
+      label: `Moyenne (${props.completeMonthsCount} mois)`,
+      testId: 'budget-month-average',
+    },
+    ...props.monthOptions.map(option => ({
+      value: option.ym,
+      label: option.short,
+      testId: `budget-month-${option.ym}`,
+      title: option.full,
+    })),
+  ])
+  const runningMonths = computed(
+    () =>
+      new Set<string | null>(
+        props.monthOptions.filter(m => m.isRunning).map(m => m.ym)
+      )
+  )
 
   const sortOrder = defineModel<SortOrder>('sortOrder', {
     default: 'amount-desc',
@@ -101,43 +123,26 @@
     <div
       v-if="monthOptions.length > 0"
       data-testid="budget-month-selector"
-      class="-mx-4 mb-4 flex items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0"
+      class="mb-4 flex flex-wrap items-center gap-2"
     >
       <span class="mr-1 shrink-0 text-xs text-gray-500 dark:text-gray-400">
         Période :
       </span>
-      <button
-        type="button"
-        :aria-pressed="selectedMonth === null"
-        data-testid="budget-month-average"
-        class="min-h-[36px] shrink-0 whitespace-nowrap rounded-md border px-2.5 py-1 text-xs font-medium transition-colors sm:min-h-0"
-        :class="
-          selectedMonth === null
-            ? 'bg-gray-900 text-white border-gray-900 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200'
-            : 'text-gray-600 dark:text-gray-400 bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700'
-        "
-        @click="emit('select-month', null)"
+      <SegmentedControl
+        :model-value="selectedMonth"
+        :options="monthSegments"
+        size="sm"
+        label="Période du tableau"
+        @update:model-value="emit('select-month', $event)"
       >
-        Moyenne
-        <span class="opacity-60">({{ completeMonthsCount }} mois)</span>
-      </button>
-      <button
-        v-for="option in monthOptions"
-        :key="option.ym"
-        type="button"
-        :aria-pressed="selectedMonth === option.ym"
-        :data-testid="`budget-month-${option.ym}`"
-        class="min-h-[36px] shrink-0 whitespace-nowrap rounded-md border px-2.5 py-1 text-xs font-medium transition-colors sm:min-h-0"
-        :class="
-          selectedMonth === option.ym
-            ? 'bg-gray-900 text-white border-gray-900 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200'
-            : 'text-gray-600 dark:text-gray-400 bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700'
-        "
-        @click="emit('select-month', option.ym)"
-      >
-        {{ option.short }}
-        <span v-if="option.isRunning" class="text-amber-500">●</span>
-      </button>
+        <template #option="{ option }">
+          <span
+            v-if="runningMonths.has(option.value)"
+            class="ml-1 text-amber-500"
+            >●</span
+          >
+        </template>
+      </SegmentedControl>
       <span
         data-testid="budget-actual-period"
         class="shrink-0 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400"
@@ -212,40 +217,20 @@
         <span class="text-xs font-medium text-amber-800 dark:text-amber-300">
           Suivi
         </span>
-        <div
-          class="inline-flex rounded-lg border border-amber-300 dark:border-amber-700 bg-white/70 dark:bg-slate-900/40 p-0.5 text-xs"
-          role="group"
-          aria-label="Mode de suivi du budget"
-        >
-          <button
-            type="button"
-            :aria-pressed="breakdownMode === 'everyday'"
-            data-testid="budget-mode-everyday"
-            class="min-h-[36px] rounded-md px-2.5 py-1 transition-colors sm:min-h-0"
-            :class="
-              breakdownMode === 'everyday'
-                ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
-                : 'text-gray-600 dark:text-gray-400'
-            "
-            @click="emit('set-mode', 'everyday')"
-          >
-            Vie courante
-          </button>
-          <button
-            type="button"
-            :aria-pressed="breakdownMode === 'real'"
-            data-testid="budget-mode-real"
-            class="min-h-[36px] rounded-md px-2.5 py-1 transition-colors sm:min-h-0"
-            :class="
-              breakdownMode === 'real'
-                ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
-                : 'text-gray-600 dark:text-gray-400'
-            "
-            @click="emit('set-mode', 'real')"
-          >
-            Tout
-          </button>
-        </div>
+        <SegmentedControl
+          :model-value="breakdownMode"
+          size="sm"
+          label="Mode de suivi du budget"
+          :options="[
+            {
+              value: 'everyday',
+              label: 'Vie courante',
+              testId: 'budget-mode-everyday',
+            },
+            { value: 'real', label: 'Tout', testId: 'budget-mode-real' },
+          ]"
+          @update:model-value="emit('set-mode', $event)"
+        />
         <span
           class="hidden text-xs leading-snug text-amber-700 sm:inline dark:text-amber-400"
         >

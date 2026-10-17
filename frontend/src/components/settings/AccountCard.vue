@@ -14,6 +14,7 @@
   import { useToast } from '@/composables/useToast'
   import type { AccountDto, AccountType } from '@/lib/api'
   import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
+  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 
   const props = defineProps<{
     account: AccountDto
@@ -338,29 +339,20 @@
         >
           Type de compte
         </span>
-        <div
-          class="inline-flex flex-wrap gap-1 rounded-lg border border-gray-200 p-1 dark:border-slate-700"
-          role="group"
-          :aria-label="`Type du compte ${account.name}`"
-        >
-          <button
-            v-for="option in ACCOUNT_TYPES"
-            :key="option.value"
-            type="button"
-            :aria-pressed="account.type === option.value"
-            :disabled="saving"
-            :title="option.hint"
-            class="min-h-[40px] rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 sm:min-h-0"
-            :class="
-              account.type === option.value
-                ? 'bg-primary-600 text-white'
-                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
-            "
-            @click="setType(option.value)"
-          >
-            {{ option.label }}
-          </button>
-        </div>
+        <SegmentedControl
+          :model-value="account.type"
+          size="sm"
+          :label="`Type du compte ${account.name}`"
+          :disabled="saving"
+          :options="
+            ACCOUNT_TYPES.map(t => ({
+              value: t.value,
+              label: t.label,
+              title: t.hint,
+            }))
+          "
+          @update:model-value="setType($event)"
+        />
       </div>
 
       <!-- Divisor -->

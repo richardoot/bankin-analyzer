@@ -25,10 +25,10 @@ describe('TimePeriodSelector', () => {
     const pressed = () =>
       wrapper
         .findAll('[data-testid^="period-"]')
-        .filter(b => b.attributes('aria-pressed') === 'true')
+        .filter(b => b.attributes('aria-checked') === 'true')
         .map(b => b.attributes('data-testid'))
     expect(pressed()).toEqual(['period-6m'])
-    expect(wrapper.get('[role="group"]').attributes('aria-label')).toBe(
+    expect(wrapper.get('[role="radiogroup"]').attributes('aria-label')).toBe(
       'Période'
     )
 

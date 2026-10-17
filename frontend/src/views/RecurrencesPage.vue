@@ -30,6 +30,7 @@
   } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
+  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 
   const router = useRouter()
   const toast = useToast()
@@ -330,29 +331,18 @@
       />
 
       <template v-else>
-        <div
-          class="mb-4 inline-flex rounded-lg border border-gray-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900"
-          role="tablist"
-          aria-label="Abonnements"
-        >
-          <button
-            v-for="option in tabs"
-            :key="option.key"
-            type="button"
-            role="tab"
-            :aria-selected="tab === option.key"
-            :data-testid="`tab-${option.key}`"
-            class="min-h-[44px] rounded-md px-4 text-sm font-medium transition-colors"
-            :class="
-              tab === option.key
-                ? 'bg-primary-500 text-white dark:bg-primary-600'
-                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800'
-            "
-            @click="tab = option.key"
-          >
-            {{ option.label }} ({{ option.count }})
-          </button>
-        </div>
+        <SegmentedControl
+          v-model="tab"
+          class="mb-4"
+          label="Abonnements"
+          :options="
+            tabs.map(t => ({
+              value: t.key,
+              label: `${t.label} (${t.count})`,
+              testId: `tab-${t.key}`,
+            }))
+          "
+        />
 
         <template v-if="tab === 'current'">
           <div

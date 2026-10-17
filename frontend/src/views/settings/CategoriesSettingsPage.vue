@@ -38,6 +38,8 @@
   import LegacyMigrationBanner from '@/components/settings/LegacyMigrationBanner.vue'
   import SettingsCard from '@/components/settings/SettingsCard.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+  import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
 
   const toast = useToast()
 
@@ -96,12 +98,14 @@
   type CategoryStateFilter = 'all' | 'legacy'
   const categorySearch = ref('')
   const categoryStateFilter = ref<CategoryStateFilter>('all')
-  const categoryStateOptions = computed<
-    { key: CategoryStateFilter; label: string }[]
-  >(() => [
-    { key: 'all', label: 'Toutes' },
-    ...(hasLegacy.value ? [{ key: 'legacy' as const, label: 'À migrer' }] : []),
-  ])
+  const categoryStateOptions = computed<SegmentedOption<CategoryStateFilter>[]>(
+    () => [
+      { value: 'all', label: 'Toutes' },
+      ...(hasLegacy.value
+        ? [{ value: 'legacy' as const, label: 'À migrer' }]
+        : []),
+    ]
+  )
 
   /** A category matches when its name does, or one of its subcategories'. */
   function matchesFilters(category: CategoryDto): boolean {
@@ -497,27 +501,13 @@
             </button>
           </div>
 
-          <div
-            class="flex shrink-0 rounded-lg border border-gray-200 p-0.5 sm:inline-flex dark:border-slate-700"
-            role="group"
-            aria-label="Filtrer les catégories par état"
-          >
-            <button
-              v-for="opt in categoryStateOptions"
-              :key="opt.key"
-              type="button"
-              :aria-pressed="categoryStateFilter === opt.key"
-              class="min-h-[40px] flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:min-h-0 sm:flex-none"
-              :class="
-                categoryStateFilter === opt.key
-                  ? 'bg-primary-500 text-white dark:bg-primary-600'
-                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
-              "
-              @click="categoryStateFilter = opt.key"
-            >
-              {{ opt.label }}
-            </button>
-          </div>
+          <SegmentedControl
+            v-model="categoryStateFilter"
+            size="sm"
+            full-width
+            label="Filtrer les catégories par état"
+            :options="categoryStateOptions"
+          />
         </div>
 
         <!-- No-match state -->
