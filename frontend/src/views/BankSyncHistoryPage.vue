@@ -15,6 +15,7 @@
   import { ref, onMounted, computed } from 'vue'
   import { api } from '@/lib/api'
   import type { BankSyncRunDto, UndoRunOutcomeDto } from '@/lib/api'
+  import { formatDateTime } from '@/lib/formatters'
 
   const runs = ref<BankSyncRunDto[]>([])
   const isLoading = ref(true)
@@ -47,16 +48,6 @@
   }
 
   onMounted(fetchData)
-
-  const formatDateTime = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
 
   const formatLatestSyncDate = computed(() => {
     if (!latestSyncDate.value) return null

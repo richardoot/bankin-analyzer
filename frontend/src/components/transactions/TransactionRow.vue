@@ -7,7 +7,7 @@
     TransactionDto,
     TransactionSettlementSummaryDto,
   } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
   import TagChip from '@/components/tags/TagChip.vue'
   import TagSelector from '@/components/tags/TagSelector.vue'
   import TransactionNoteEditor from './TransactionNoteEditor.vue'
@@ -125,14 +125,6 @@
   })
 
   const tagIds = computed(() => (props.transaction.tags ?? []).map(t => t.id))
-
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
 </script>
 
 <template>

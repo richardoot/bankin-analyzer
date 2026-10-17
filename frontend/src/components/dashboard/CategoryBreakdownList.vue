@@ -3,7 +3,7 @@
   import type { CategoryDataDto } from '@/lib/api'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatMonth } from '@/lib/formatters'
 
   const props = withDefaults(
     defineProps<{
@@ -38,27 +38,9 @@
     return expanded.value.has(key)
   }
 
-  const MONTH_LABELS_FR: Record<string, string> = {
-    '01': 'Jan',
-    '02': 'Fév',
-    '03': 'Mar',
-    '04': 'Avr',
-    '05': 'Mai',
-    '06': 'Juin',
-    '07': 'Juil',
-    '08': 'Août',
-    '09': 'Sep',
-    '10': 'Oct',
-    '11': 'Nov',
-    '12': 'Déc',
-  }
-
   // Display labels (Jan 2025 etc.) for the bar chart x-axis
   const displayLabels = computed(() =>
-    props.monthLabels.map(ym => {
-      const [, month] = ym.split('-')
-      return MONTH_LABELS_FR[month ?? ''] ?? ym
-    })
+    props.monthLabels.map(ym => formatMonth(ym, { year: false }))
   )
 
   function rowKey(cat: CategoryDataDto): string {

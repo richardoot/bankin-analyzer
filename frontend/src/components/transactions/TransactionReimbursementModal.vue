@@ -12,7 +12,7 @@
   import { useModalA11y } from '@/composables/useModalA11y'
   import { api } from '@/lib/api'
   import type { TransactionDto, PersonDto } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
 
   const props = defineProps<{
@@ -95,15 +95,6 @@
     } finally {
       isCreating.value = false
     }
-  }
-
-  function formatDate(dateStr: string): string {
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
   }
 
   // Reset the form whenever the modal transitions from closed to open.

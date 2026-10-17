@@ -22,7 +22,8 @@ vi.mock('@/composables/useChartTheme', () => ({
 }))
 
 // Mock formatCurrency
-vi.mock('@/lib/formatters', () => ({
+vi.mock('@/lib/formatters', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/formatters')>()),
   formatCurrency: (v: number) => `${v.toFixed(2)} €`,
 }))
 
@@ -122,7 +123,14 @@ describe('MonthlyExpensesChart', () => {
 
     const chart = wrapper.findComponent({ name: 'VueApexCharts' })
     const categories = chart.props('options').xaxis.categories
-    expect(categories).toEqual(['Nov', 'Déc', 'Jan', 'Fév', 'Mar', 'Avr'])
+    expect(categories).toEqual([
+      'Nov.',
+      'Déc.',
+      'Janv.',
+      'Févr.',
+      'Mars',
+      'Avr.',
+    ])
   })
 
   it('should add income annotation line when averageIncome > 0', () => {
@@ -165,7 +173,7 @@ describe('MonthlyExpensesChart', () => {
     const chart = wrapper.findComponent({ name: 'VueApexCharts' })
     const xAnnotations = chart.props('options').annotations?.xaxis ?? []
     expect(xAnnotations).toHaveLength(1)
-    expect(xAnnotations[0]?.x).toBe('Avr')
+    expect(xAnnotations[0]?.x).toBe('Avr.')
     expect(xAnnotations[0]?.label.text).toBe('En cours')
   })
 

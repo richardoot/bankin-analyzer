@@ -2,6 +2,7 @@
   import { ref, computed, watch } from 'vue'
   import { useModalA11y } from '@/composables/useModalA11y'
   import type { ImportPreviewResultDto } from '@/lib/api'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
 
   const props = defineProps<{
     isOpen: boolean
@@ -184,16 +185,7 @@
     emit('confirm', allSelected)
   }
 
-  function formatAmount(amount: number): string {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(amount)
-  }
-
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('fr-FR')
-  }
+  const formatAmount = formatCurrency
 </script>
 
 <template>

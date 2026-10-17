@@ -16,7 +16,11 @@
   import type { BankConnectionDto, SyncOutcomeDto } from '@/lib/api'
   import { useAccountsStore } from '@/stores/accounts'
   import { useToast } from '@/composables/useToast'
-  import { formatCurrency } from '@/lib/formatters'
+  import {
+    formatCurrency,
+    formatDate,
+    formatDateTime as formatDateTimeShared,
+  } from '@/lib/formatters'
   import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
@@ -89,11 +93,7 @@
   })
 
   function formatBalanceDate(value: string | null): string | null {
-    if (!value) return null
-    return new Date(value).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-    })
+    return value ? formatDate(value, 'medium') : null
   }
 
   // ── État par connexion, dérivé de ce que la policy backend a déjà décidé ──
@@ -156,22 +156,11 @@
 
   // ── Formats ───────────────────────────────────────────────────────────────
   function formatDateTime(value: string | null): string | null {
-    if (!value) return null
-    return new Date(value).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+    return value ? formatDateTimeShared(value) : null
   }
 
-  function formatDate(value: string | null): string | null {
-    if (!value) return null
-    return new Date(value).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    })
+  function formatLongDate(value: string | null): string | null {
+    return value ? formatDate(value, 'long') : null
   }
 
   function outcomeLabel(outcome: SyncOutcomeDto): string {
@@ -598,7 +587,7 @@
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
               <template v-if="latestImportDate">
                 Dernière transaction importée :
-                {{ formatDate(latestImportDate) }}
+                {{ formatLongDate(latestImportDate) }}
               </template>
               <template v-else>Aucun import pour l'instant.</template>
             </p>

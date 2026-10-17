@@ -4,7 +4,11 @@
   import '@/lib/apexcharts-features'
   import type { ApexOptions } from 'apexcharts'
   import { useChartTheme } from '@/composables/useChartTheme'
-  import { formatCurrency } from '@/lib/formatters'
+  import {
+    formatCompactCurrency,
+    formatCurrency,
+    formatMonth,
+  } from '@/lib/formatters'
   import { useIsMobile } from '@/composables/useMediaQuery'
 
   const props = defineProps<{
@@ -39,27 +43,7 @@
   // On a ~340px plot the full « Revenus 3 456,78 € » labels overlapped the
   // bars and each other; a phone gets « Rev. 3,5 k€ » on the left.
   const compact = (n: number): string =>
-    new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR',
-      notation: 'compact',
-      maximumFractionDigits: 1,
-    }).format(n)
-
-  const MONTHS_FR = [
-    'Jan',
-    'Fév',
-    'Mar',
-    'Avr',
-    'Mai',
-    'Juin',
-    'Juil',
-    'Août',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Déc',
-  ]
+    formatCompactCurrency(n, { compact: true })
 
   function getCurrentYearMonth(): string {
     const now = new Date()
@@ -70,10 +54,7 @@
 
   // Build display labels and detect current month index
   const displayLabels = computed(() =>
-    props.monthLabels.map(ym => {
-      const month = parseInt(ym.split('-')[1] ?? '1', 10)
-      return MONTHS_FR[month - 1] ?? ym
-    })
+    props.monthLabels.map(ym => formatMonth(ym, { year: false }))
   )
 
   const currentMonthIndex = computed(() =>
@@ -263,13 +244,7 @@
           fontSize: '11px',
         },
         formatter: (value: number) =>
-          isMobile.value
-            ? compact(value)
-            : new Intl.NumberFormat('fr-FR', {
-                style: 'currency',
-                currency: 'EUR',
-                maximumFractionDigits: 0,
-              }).format(value),
+          isMobile.value ? compact(value) : formatCompactCurrency(value),
       },
     },
     grid: {
@@ -290,24 +265,7 @@
         const isPlan = hasPlanRange.value && isPlanMonth(ym)
         const isComp = hasComparisonRange.value && isComparisonMonth(ym)
 
-        // Full month name
-        const fullMonths = [
-          'Janvier',
-          'Février',
-          'Mars',
-          'Avril',
-          'Mai',
-          'Juin',
-          'Juillet',
-          'Août',
-          'Septembre',
-          'Octobre',
-          'Novembre',
-          'Décembre',
-        ]
-        const parts = ym.split('-')
-        const monthIdx = parseInt(parts[1] ?? '1', 10)
-        const fullLabel = `${fullMonths[monthIdx - 1] ?? ym} ${parts[0]}`
+        const fullLabel = formatMonth(ym, { style: 'long' })
 
         const diffBudget =
           props.totalBudget > 0 ? val - props.totalBudget : null

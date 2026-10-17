@@ -4,6 +4,7 @@
   import { api, type ImportHistoryDto } from '@/lib/api'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import { useToast } from '@/composables/useToast'
+  import { formatDate, formatDateTime } from '@/lib/formatters'
 
   const toast = useToast()
 
@@ -21,33 +22,9 @@
     () => histories.value.find(h => h.id === deleteConfirmId.value) ?? null
   )
 
-  const formatDateTime = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
-
-  const formatDate = (dateString: string | null): string => {
-    if (!dateString) return '-'
-    return new Date(dateString).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
-
-  const formatLatestDate = computed(() => {
-    if (!latestDate.value) return null
-    return new Date(latestDate.value).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    })
-  })
+  const formatLatestDate = computed(() =>
+    latestDate.value ? formatDate(latestDate.value, 'long') : null
+  )
 
   const getStatusLabel = (status: string): string => {
     switch (status) {

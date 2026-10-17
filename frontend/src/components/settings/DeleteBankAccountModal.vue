@@ -12,6 +12,7 @@
   import { useModalA11y } from '@/composables/useModalA11y'
   import { useAccountsStore } from '@/stores/accounts'
   import type { AccountDeletionSummaryDto, AccountDto } from '@/lib/api'
+  import { formatDate } from '@/lib/formatters'
 
   const props = defineProps<{
     account: AccountDto | null
@@ -52,18 +53,12 @@
     () => isConfirmed.value && !isDeleting.value && !isLoadingSummary.value
   )
 
-  const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
-
   const rangeLabel = computed(() => {
     const first = summary.value?.firstTransactionDate
     const last = summary.value?.lastTransactionDate
     if (!first || !last) return null
-    const from = dateFormatter.format(new Date(first))
-    const to = dateFormatter.format(new Date(last))
+    const from = formatDate(first, 'long')
+    const to = formatDate(last, 'long')
     return from === to ? from : `du ${from} au ${to}`
   })
 

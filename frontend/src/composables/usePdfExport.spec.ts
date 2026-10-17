@@ -484,7 +484,7 @@ describe('usePdfExport', () => {
 
       // Should use default values
       expect(mockText).toHaveBeenCalledWith(
-        '      - [--/--/----] Transaction',
+        '      - [—] Transaction',
         30,
         expect.any(Number)
       )

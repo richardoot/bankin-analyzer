@@ -34,6 +34,7 @@
     type ComparisonRange,
   } from '@/composables/useBudgetComparison'
   import { useRouter, onBeforeRouteLeave } from 'vue-router'
+  import { formatMonth } from '@/lib/formatters'
 
   const filtersStore = useFiltersStore()
   const router = useRouter()
@@ -374,41 +375,9 @@
     void router.push(`/tags/${tagId}`)
   }
 
-  const MONTH_LABEL_FR: Record<string, string> = {
-    '01': 'Jan',
-    '02': 'Fév',
-    '03': 'Mar',
-    '04': 'Avr',
-    '05': 'Mai',
-    '06': 'Juin',
-    '07': 'Juil',
-    '08': 'Août',
-    '09': 'Sep',
-    '10': 'Oct',
-    '11': 'Nov',
-    '12': 'Déc',
-  }
-
-  const MONTH_FULL_FR: Record<string, string> = {
-    '01': 'Janvier',
-    '02': 'Février',
-    '03': 'Mars',
-    '04': 'Avril',
-    '05': 'Mai',
-    '06': 'Juin',
-    '07': 'Juillet',
-    '08': 'Août',
-    '09': 'Septembre',
-    '10': 'Octobre',
-    '11': 'Novembre',
-    '12': 'Décembre',
-  }
-
   /** "2026-08" → "Août 2026". */
-  function monthLabelFor(ym: string): string {
-    const [year, month] = ym.split('-')
-    return `${MONTH_FULL_FR[month ?? ''] ?? ym} ${year ?? ''}`.trim()
-  }
+  const monthLabelFor = (ym: string): string =>
+    formatMonth(ym, { style: 'long' })
 
   /**
    * The months the user can isolate, newest last, each flagged when it is the
@@ -418,7 +387,7 @@
   const monthOptions = computed(() =>
     comparison.selectableMonths.value.map(ym => ({
       ym,
-      short: `${MONTH_LABEL_FR[ym.split('-')[1] ?? ''] ?? ym}`,
+      short: formatMonth(ym, { year: false }),
       full: monthLabelFor(ym),
       isRunning: ym === currentYearMonth(),
     }))
@@ -504,10 +473,9 @@
   const showMonthlyMatrix = computed(() => matrixMonths.value.length >= 2)
 
   function categoryChartData(cat: CategoryAverageDto) {
-    const labels = (statistics.value?.monthLabels ?? []).map(ym => {
-      const [, m] = ym.split('-')
-      return MONTH_LABEL_FR[m ?? ''] ?? ym
-    })
+    const labels = (statistics.value?.monthLabels ?? []).map(ym =>
+      formatMonth(ym, { year: false })
+    )
     return { labels, values: comparison.seriesFor(cat) ?? [] }
   }
 

@@ -7,7 +7,7 @@
     type TransactionDto,
     type SettlementDto,
   } from '@/lib/api'
-  import { formatCurrency, parseDecimal } from '@/lib/formatters'
+  import { formatCurrency, formatDate, parseDecimal } from '@/lib/formatters'
   import IncomeTransactionPicker from './IncomeTransactionPicker.vue'
   import {
     availableAmountOf,
@@ -146,14 +146,6 @@
       if (isOpen) reset()
     }
   )
-
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
 </script>
 
 <template>

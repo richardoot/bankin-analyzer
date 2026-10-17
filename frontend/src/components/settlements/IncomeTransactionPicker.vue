@@ -6,7 +6,7 @@
     type CategoryDto,
     type SubcategoryDto,
   } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
   import {
     availableAmountOf,
     personSearchTerms,
@@ -277,14 +277,6 @@
     void loadIncomeTransactions()
     void loadFilterOptions()
   })
-
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
 </script>
 
 <template>

@@ -4,7 +4,7 @@
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import { api } from '@/lib/api'
   import type { BudgetPlanSummaryDto } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
 
   const props = defineProps<{
     open: boolean
@@ -75,17 +75,7 @@
   }
 
   function formatRange(start: string, end: string): string {
-    const s = new Date(`${start}T00:00:00`).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })
-    const e = new Date(`${end}T00:00:00`).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })
-    return `${s} → ${e}`
+    return `${formatDate(start, 'medium')} → ${formatDate(end, 'medium')}`
   }
 
   async function loadPlans() {

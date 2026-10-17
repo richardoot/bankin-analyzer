@@ -1,7 +1,7 @@
 <script setup lang="ts">
   import { ref, computed } from 'vue'
   import type { SettlementDto } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
 
   const props = defineProps<{
     settlements: SettlementDto[]
@@ -30,14 +30,6 @@
     if (!selectedPersonId.value) return props.settlements
     return props.settlements.filter(s => s.personId === selectedPersonId.value)
   })
-
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
 
   function getCategoryNames(settlement: SettlementDto): string {
     const uniqueCategories = new Set(

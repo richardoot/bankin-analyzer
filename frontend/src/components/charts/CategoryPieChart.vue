@@ -5,6 +5,7 @@
   import type { ApexOptions } from 'apexcharts'
   import { useChartTheme } from '@/composables/useChartTheme'
   import { useIsMobile } from '@/composables/useMediaQuery'
+  import { formatCompactCurrency, formatCurrency } from '@/lib/formatters'
 
   export interface ChartData {
     labels: string[]
@@ -147,12 +148,7 @@
         fontFamily: 'Inter, system-ui, sans-serif',
       },
       y: {
-        formatter: (value: number) => {
-          return new Intl.NumberFormat('fr-FR', {
-            style: 'currency',
-            currency: 'EUR',
-          }).format(value)
-        },
+        formatter: (value: number) => formatCurrency(value),
       },
     },
     plotOptions: {
@@ -178,13 +174,7 @@
               fontWeight: 700,
               color: donutValueColor.value,
               offsetY: 4,
-              formatter: (val: string) => {
-                return new Intl.NumberFormat('fr-FR', {
-                  style: 'currency',
-                  currency: 'EUR',
-                  maximumFractionDigits: 0,
-                }).format(Number(val))
-              },
+              formatter: (val: string) => formatCompactCurrency(Number(val)),
             },
             total: {
               show: true,
@@ -199,11 +189,7 @@
                   (sum, val) => sum + val,
                   0
                 )
-                return new Intl.NumberFormat('fr-FR', {
-                  style: 'currency',
-                  currency: 'EUR',
-                  maximumFractionDigits: 0,
-                }).format(total)
+                return formatCompactCurrency(total)
               },
             },
           },

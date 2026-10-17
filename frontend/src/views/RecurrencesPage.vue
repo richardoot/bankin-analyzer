@@ -28,7 +28,7 @@
     type RecurrenceListDto,
     type RecurrencePeriod,
   } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate, formatMonth } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 
@@ -55,20 +55,9 @@
     YEARLY: 'par an',
   }
 
-  const dateFormat = new Intl.DateTimeFormat('fr-FR', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-  const formatDate = (iso: string): string => dateFormat.format(new Date(iso))
-
-  const monthFormat = new Intl.DateTimeFormat('fr-FR', {
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-  const formatMonth = (iso: string): string => monthFormat.format(new Date(iso))
+  const formatMediumDate = (iso: string): string => formatDate(iso, 'medium')
+  const formatMonthInline = (iso: string): string =>
+    formatMonth(iso, { capitalize: false })
 
   /** What one charge covers, in months: the last one paid for its period too. */
   const PERIOD_MONTHS: Record<RecurrencePeriod, number> = {
@@ -431,7 +420,7 @@
                       row.categoryName ??
                       'Sans catégorie'
                     }}
-                    · depuis {{ formatMonth(row.firstDate) }} ·
+                    · depuis {{ formatMonthInline(row.firstDate) }} ·
                     {{ formatCurrency(row.totalPaid) }} payés
                   </span>
                 </button>
@@ -541,7 +530,7 @@
                   <span class="text-xs text-gray-500 dark:text-gray-400">
                     {{ formatCurrency(row.amount) }}
                     {{ PERIOD_LABELS[row.period] }} · le
-                    {{ formatDate(row.lastDate) }}
+                    {{ formatMediumDate(row.lastDate) }}
                   </span>
                 </button>
                 <div class="flex gap-2">
@@ -653,8 +642,8 @@
                       row.categoryName ??
                       'Sans catégorie'
                     }}
-                    · {{ formatMonth(row.firstDate) }} →
-                    {{ formatMonth(row.lastDate) }} ·
+                    · {{ formatMonthInline(row.firstDate) }} →
+                    {{ formatMonthInline(row.lastDate) }} ·
                     {{ formatDuration(row) }}
                   </span>
                 </button>

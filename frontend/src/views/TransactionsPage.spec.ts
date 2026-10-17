@@ -42,7 +42,8 @@ vi.mock('@/composables/useToast', () => ({
 }))
 
 // Mock the formatters
-vi.mock('@/lib/formatters', () => ({
+vi.mock('@/lib/formatters', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/formatters')>()),
   formatCurrency: (v: number) => `${v.toFixed(2)} €`,
 }))
 

@@ -145,6 +145,10 @@ describe('formatMonth', () => {
     expect(formatMonth('2026-02-10', { year: false })).toBe('Févr.')
   })
 
+  it('lowers the case inside a sentence', () => {
+    expect(formatMonth('2026-02', { capitalize: false })).toBe('févr. 2026')
+  })
+
   it('keeps the two tables in step', () => {
     expect(MONTHS_FR).toHaveLength(12)
     expect(MONTHS_FR_LONG).toHaveLength(12)

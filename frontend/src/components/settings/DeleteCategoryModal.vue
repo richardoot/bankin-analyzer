@@ -16,6 +16,11 @@
     type CategoryDeletionSummaryDto,
     type CategoryDto,
   } from '@/lib/api'
+  import {
+    formatCompactCurrency,
+    formatDate,
+    formatMonth,
+  } from '@/lib/formatters'
 
   const props = defineProps<{
     category: CategoryDto | null
@@ -80,35 +85,18 @@
       summary.value !== null
   )
 
-  const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
-
-  const monthFormatter = new Intl.DateTimeFormat('fr-FR', {
-    month: 'short',
-    year: 'numeric',
-  })
-
-  const currencyFormatter = new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'EUR',
-    maximumFractionDigits: 0,
-  })
-
   const rangeLabel = computed(() => {
     const first = summary.value?.firstTransactionDate
     const last = summary.value?.lastTransactionDate
     if (!first || !last) return null
-    const from = dateFormatter.format(new Date(first))
-    const to = dateFormatter.format(new Date(last))
+    const from = formatDate(first, 'long')
+    const to = formatDate(last, 'long')
     return from === to ? from : `du ${from} au ${to}`
   })
 
   function planWindow(entry: { startDate: string; endDate: string }): string {
-    const from = monthFormatter.format(new Date(entry.startDate))
-    const to = monthFormatter.format(new Date(entry.endDate))
+    const from = formatMonth(entry.startDate, { capitalize: false })
+    const to = formatMonth(entry.endDate, { capitalize: false })
     return from === to ? from : `${from} – ${to}`
   }
 
@@ -322,7 +310,7 @@
                         class="list-disc"
                       >
                         {{ entry.planName }} ({{ planWindow(entry) }}) :
-                        {{ currencyFormatter.format(entry.amount) }} / mois
+                        {{ formatCompactCurrency(entry.amount) }} / mois
                       </li>
                     </ul>
                   </li>

@@ -2,7 +2,7 @@
   import { ref, computed } from 'vue'
   import { useModalA11y } from '@/composables/useModalA11y'
   import type { SettlementDto } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate, formatDateTime } from '@/lib/formatters'
 
   const props = withDefaults(
     defineProps<{
@@ -33,24 +33,6 @@
       0
     )
   })
-
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
-
-  function formatDateTime(dateStr: string): string {
-    return new Date(dateStr).toLocaleString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
 </script>
 
 <template>

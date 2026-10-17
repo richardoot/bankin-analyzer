@@ -3,6 +3,7 @@
   import { useFiltersStore, type TimePeriod } from '@/stores/filters'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
+  import { formatDate } from '@/lib/formatters'
 
   const filtersStore = useFiltersStore()
 
@@ -25,16 +26,7 @@
     )
     if (!startDate || !endDate) return null
 
-    const formatDate = (dateStr: string) => {
-      const date = new Date(dateStr)
-      return date.toLocaleDateString('fr-FR', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      })
-    }
-
-    return `${formatDate(startDate)} - ${formatDate(endDate)}`
+    return `${formatDate(startDate, 'medium')} - ${formatDate(endDate, 'medium')}`
   })
 
   const isCustom = computed(() => filtersStore.timePeriod === 'custom')

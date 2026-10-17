@@ -13,7 +13,7 @@
   import SingleSettlementModal from '@/components/settlements/SingleSettlementModal.vue'
   import SettlementHistorySection from '@/components/settlements/SettlementHistorySection.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
 
   const { exportReimbursementsToPdf } = usePdfExport()
@@ -97,14 +97,8 @@
   }
 
   // Format transaction date
-  function formatTransactionDate(dateString: string | undefined): string {
-    if (!dateString) return '--/--/----'
-    try {
-      return new Date(dateString).toLocaleDateString('fr-FR')
-    } catch {
-      return '--/--/----'
-    }
-  }
+  const formatTransactionDate = (dateString: string | undefined): string =>
+    formatDate(dateString)
 
   const summaryByPerson = computed((): PersonSummary[] => {
     const map = new Map<

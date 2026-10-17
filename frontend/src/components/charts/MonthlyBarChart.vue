@@ -5,6 +5,7 @@
   import type { ApexOptions } from 'apexcharts'
   import { useChartTheme } from '@/composables/useChartTheme'
   import { useIsMobile } from '@/composables/useMediaQuery'
+  import { formatCompactCurrency, formatCurrency } from '@/lib/formatters'
 
   export interface ChartData {
     labels: string[]
@@ -82,14 +83,8 @@
           colors: labelColor.value,
           fontSize: isMobile.value ? '11px' : '12px',
         },
-        formatter: (value: number) => {
-          return new Intl.NumberFormat('fr-FR', {
-            style: 'currency',
-            currency: 'EUR',
-            maximumFractionDigits: isMobile.value ? 1 : 0,
-            ...(isMobile.value ? { notation: 'compact' as const } : {}),
-          }).format(value)
-        },
+        formatter: (value: number) =>
+          formatCompactCurrency(value, { compact: isMobile.value }),
       },
     },
     grid: {
@@ -100,12 +95,7 @@
     tooltip: {
       theme: isDark.value ? 'dark' : 'light',
       y: {
-        formatter: (value: number) => {
-          return new Intl.NumberFormat('fr-FR', {
-            style: 'currency',
-            currency: 'EUR',
-          }).format(value)
-        },
+        formatter: (value: number) => formatCurrency(value),
       },
     },
   }))

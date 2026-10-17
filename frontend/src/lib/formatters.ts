@@ -156,15 +156,22 @@ export function formatDateTime(
 /**
  * A month label from a `YYYY-MM` key, an ISO date or a Date: « Oct. 2026 »,
  * or « Octobre 2026 » with `style: 'long'`. Omit the year with
- * `year: false` for an axis that already says which year it is.
+ * `year: false` for an axis that already says which year it is. A label
+ * stands alone and starts with a capital; inside a sentence (« depuis
+ * oct. 2026 ») pass `capitalize: false`.
  */
 export function formatMonth(
   value: string | Date | null | undefined,
-  options: { style?: 'short' | 'long'; year?: boolean } = {}
+  options: {
+    style?: 'short' | 'long'
+    year?: boolean
+    capitalize?: boolean
+  } = {}
 ): string {
   const date = parseIsoDate(value)
   if (!date) return '—'
   const names = options.style === 'long' ? MONTHS_FR_LONG : MONTHS_FR
-  const name = names[date.getMonth()] ?? ''
+  const label = names[date.getMonth()] ?? ''
+  const name = options.capitalize === false ? label.toLowerCase() : label
   return options.year === false ? name : `${name} ${date.getFullYear()}`
 }

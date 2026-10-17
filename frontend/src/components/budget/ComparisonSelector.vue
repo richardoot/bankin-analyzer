@@ -5,6 +5,7 @@
     ComparisonRange,
   } from '@/composables/useBudgetComparison'
   import type { BudgetPlanDto } from '@/lib/api'
+  import { formatMonth } from '@/lib/formatters'
 
   const props = defineProps<{
     plan: BudgetPlanDto | null
@@ -25,42 +26,15 @@
     'update:range': [range: ComparisonRange | null]
   }>()
 
-  const MONTH_NAMES_FR = [
-    'Janv',
-    'Févr',
-    'Mars',
-    'Avr',
-    'Mai',
-    'Juin',
-    'Juil',
-    'Août',
-    'Sept',
-    'Oct',
-    'Nov',
-    'Déc',
-  ]
-
-  /** Format a YYYY-MM-DD date into "Janv 2026". */
-  function formatMonth(dateIso: string): string {
-    const parts = dateIso.split('-')
-    const year = Number(parts[0])
-    const month = Number(parts[1]) - 1
-    return `${MONTH_NAMES_FR[month] ?? '?'} ${year}`
-  }
-
-  /** Format a range as "Janv 2026" (single month) or "Janv–Mars 2026". */
+  /** Format a range as "Janv. 2026" (single month) or "Janv.–Mars 2026". */
   function formatRange(start: string, end: string): string {
-    const s = start.split('-')
-    const e = end.split('-')
-    const sy = Number(s[0])
-    const ey = Number(e[0])
-    const sm = Number(s[1]) - 1
-    const em = Number(e[1]) - 1
+    const sy = Number(start.split('-')[0])
+    const ey = Number(end.split('-')[0])
     if (sy === ey) {
-      if (sm === em) return `${MONTH_NAMES_FR[sm]} ${sy}`
-      return `${MONTH_NAMES_FR[sm]}–${MONTH_NAMES_FR[em]} ${sy}`
+      if (start.slice(0, 7) === end.slice(0, 7)) return formatMonth(start)
+      return `${formatMonth(start, { year: false })}–${formatMonth(end)}`
     }
-    return `${MONTH_NAMES_FR[sm]} ${sy} → ${MONTH_NAMES_FR[em]} ${ey}`
+    return `${formatMonth(start)} → ${formatMonth(end)}`
   }
 
   /** Last day of a given UTC month index */

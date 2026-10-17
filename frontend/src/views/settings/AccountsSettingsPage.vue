@@ -36,6 +36,7 @@
   import ReassignAccountModal from '@/components/settings/ReassignAccountModal.vue'
   import type { PendingReassignment } from '@/components/settings/ReassignAccountModal.vue'
   import EnableBankingCredentialCard from '@/components/settings/EnableBankingCredentialCard.vue'
+  import { formatDate } from '@/lib/formatters'
 
   const accountsStore = useAccountsStore()
   const toast = useToast()
@@ -466,11 +467,7 @@
                       {{ consentLabel(connection) }}
                       <span v-if="connection.lastSyncAt">
                         · dernière synchro
-                        {{
-                          new Date(connection.lastSyncAt).toLocaleDateString(
-                            'fr-FR'
-                          )
-                        }}
+                        {{ formatDate(connection.lastSyncAt) }}
                       </span>
                     </p>
                   </div>

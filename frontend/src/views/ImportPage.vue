@@ -14,6 +14,7 @@
   } from '@/composables/useChunkedImport'
   import DuplicatesReviewModal from '@/components/DuplicatesReviewModal.vue'
   import StepIndicator from '@/components/ui/StepIndicator.vue'
+  import { formatCurrency } from '@/lib/formatters'
 
   /** A row the parser could not use, and why. */
   interface SkippedRow {
@@ -367,12 +368,7 @@
     submitImport()
   }
 
-  function formatAmount(amount: number): string {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(amount)
-  }
+  const formatAmount = formatCurrency
 </script>
 
 <template>

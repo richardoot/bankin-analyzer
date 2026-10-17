@@ -15,7 +15,7 @@
   import PlanStepEnvelopes from './wizard/PlanStepEnvelopes.vue'
   import type { EnvelopeRow } from './wizard/PlanStepEnvelopes.vue'
   import { useFiltersStore } from '@/stores/filters'
-  import { parseDecimal } from '@/lib/formatters'
+  import { MONTHS_FR_LONG, parseDecimal } from '@/lib/formatters'
 
   // ── Props / emits ────────────────────────────────────────────────────────
   const props = defineProps<{
@@ -99,20 +99,6 @@
   const allExpenseCategories = ref<CategoryDto[]>([])
 
   // ── Helpers ──────────────────────────────────────────────────────────────
-  const MONTH_NAMES_FR = [
-    'Janvier',
-    'Février',
-    'Mars',
-    'Avril',
-    'Mai',
-    'Juin',
-    'Juillet',
-    'Août',
-    'Septembre',
-    'Octobre',
-    'Novembre',
-    'Décembre',
-  ]
 
   function ymToParts(ym: string): { year: number; month: number } | null {
     const match = /^(\d{4})-(\d{2})$/.exec(ym)
@@ -152,7 +138,7 @@
   function formatMonthLabel(ym: string): string {
     const parts = ymToParts(ym)
     if (!parts) return ym
-    return `${MONTH_NAMES_FR[parts.month - 1]} ${parts.year}`
+    return `${MONTHS_FR_LONG[parts.month - 1]} ${parts.year}`
   }
 
   function suggestedName(startYm: string, endYm: string): string {
@@ -161,7 +147,7 @@
     const s = ymToParts(startYm)
     const e = ymToParts(endYm)
     if (s && e && s.year === e.year) {
-      return `Budget ${MONTH_NAMES_FR[s.month - 1]}–${MONTH_NAMES_FR[e.month - 1]} ${s.year}`
+      return `Budget ${MONTHS_FR_LONG[s.month - 1]}–${MONTHS_FR_LONG[e.month - 1]} ${s.year}`
     }
     return `Budget ${formatMonthLabel(startYm)} → ${formatMonthLabel(endYm)}`
   }

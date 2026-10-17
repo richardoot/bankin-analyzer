@@ -4,7 +4,7 @@
   import { useRoute, useRouter } from 'vue-router'
   import { api } from '@/lib/api'
   import type { TagAnalysisDto, TransactionDto } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate, formatMonth } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
   import CategoryPieChart from '@/components/charts/CategoryPieChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
@@ -20,35 +20,6 @@
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const removingId = ref<string | null>(null)
-
-  const MONTHS_FR = [
-    'Janv',
-    'Févr',
-    'Mars',
-    'Avr',
-    'Mai',
-    'Juin',
-    'Juil',
-    'Août',
-    'Sept',
-    'Oct',
-    'Nov',
-    'Déc',
-  ]
-
-  function formatMonth(ym: string): string {
-    const parts = ym.split('-')
-    const m = parseInt(parts[1] ?? '1', 10)
-    return `${MONTHS_FR[m - 1] ?? ym} ${parts[0]}`
-  }
-
-  function formatDate(iso: string): string {
-    return new Date(iso).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
 
   const period = computed(() => {
     if (!analysis.value?.firstDate || !analysis.value?.lastDate) return '—'

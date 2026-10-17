@@ -31,7 +31,7 @@
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
   import FilterChips from '@/components/ui/FilterChips.vue'
   import FilterDisclosure from '@/components/ui/FilterDisclosure.vue'
   import type { FilterChip } from '@/components/ui/FilterChips.vue'
@@ -347,10 +347,16 @@
       chips.push({ key: 'q', label: `« ${searchKeyword.value.trim()} »` })
     }
     if (filterStartDate.value) {
-      chips.push({ key: 'from', label: `Du ${filterStartDate.value}` })
+      chips.push({
+        key: 'from',
+        label: `Du ${formatDate(filterStartDate.value, 'medium')}`,
+      })
     }
     if (filterEndDate.value) {
-      chips.push({ key: 'to', label: `Au ${filterEndDate.value}` })
+      chips.push({
+        key: 'to',
+        label: `Au ${formatDate(filterEndDate.value, 'medium')}`,
+      })
     }
     if (amountMin.value !== '') {
       chips.push({ key: 'min', label: `≥ ${amountMin.value} €` })

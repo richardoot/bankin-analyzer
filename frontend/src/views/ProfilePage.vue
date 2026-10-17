@@ -5,6 +5,7 @@
   import { useRouter } from 'vue-router'
   import { useAuthStore } from '@/stores/auth'
   import DeleteAccountModal from '@/components/DeleteAccountModal.vue'
+  import { formatDate } from '@/lib/formatters'
 
   const router = useRouter()
   const authStore = useAuthStore()
@@ -18,11 +19,7 @@
     if (!user.value?.created_at) {
       return null
     }
-    return new Date(user.value.created_at).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    })
+    return formatDate(user.value.created_at, 'long')
   })
 
   const handleSignOut = async (): Promise<void> => {

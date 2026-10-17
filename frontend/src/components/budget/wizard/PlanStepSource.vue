@@ -2,6 +2,7 @@
   import type { BudgetPlanSummaryDto } from '@/lib/api'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
+  import { formatDate } from '@/lib/formatters'
 
   /**
    * Étape 2 — d'où partent les enveloppes. Tout est v-model : la
@@ -215,7 +216,8 @@
       >
         <option :value="null">— Choisir un plan —</option>
         <option v-for="p in existingPlans" :key="p.id" :value="p.id">
-          {{ p.name }} ({{ p.startDate }} → {{ p.endDate }})
+          {{ p.name }} ({{ formatDate(p.startDate, 'medium') }} →
+          {{ formatDate(p.endDate, 'medium') }})
         </option>
       </select>
       <p

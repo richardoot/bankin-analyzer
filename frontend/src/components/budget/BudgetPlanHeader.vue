@@ -1,7 +1,7 @@
 <script setup lang="ts">
   import { computed } from 'vue'
   import type { BudgetPlanDto } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
   import { planStatus } from './planStatus'
 
   /**
@@ -34,13 +34,7 @@
 
   const emit = defineEmits<{ 'open-history': []; create: [] }>()
 
-  function formatDateLabel(iso: string): string {
-    return new Date(`${iso}T00:00:00`).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    })
-  }
+  const formatDateLabel = (iso: string): string => formatDate(iso, 'long')
 
   const currentPlanStatus = computed(() => planStatus(props.plan))
 
