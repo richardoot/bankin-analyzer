@@ -359,7 +359,11 @@
         Plan budgétaire
       </span>
       <span v-if="hasComparisonRange" class="flex items-center gap-1.5">
-        <span class="inline-block w-3 h-2 rounded-sm bg-primary-500"></span>
+        <!-- Same hue as COMP_COLOR, the bars it names. -->
+        <span
+          class="inline-block w-3 h-2 rounded-sm bg-indigo-500"
+          data-testid="legend-comparison-swatch"
+        ></span>
         Comparaison
       </span>
       <span class="flex items-center gap-1.5">

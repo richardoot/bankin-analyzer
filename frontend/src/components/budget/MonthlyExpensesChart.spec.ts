@@ -271,6 +271,23 @@ describe('MonthlyExpensesChart', () => {
       expect(withPlan.text()).toContain('Mois précédents')
     })
 
+    it('paints the comparison legend swatch in the hue of its bars', () => {
+      const wrapper = mount(MonthlyExpensesChart, {
+        props: {
+          ...defaultProps,
+          planStartMonth: '2026-03',
+          planEndMonth: '2026-04',
+          comparisonStartMonth: '2025-11',
+          comparisonEndMonth: '2026-01',
+        },
+      })
+      // COMP_COLOR is indigo-500 (#6366f1): the legend must say the same.
+      expect(
+        wrapper.get('[data-testid="legend-comparison-swatch"]').classes()
+      ).toContain('bg-indigo-500')
+      expect(getColors(wrapper)).toContain('#6366f1')
+    })
+
     it('falls back to the original gray-only coloring when no plan range is supplied', () => {
       const wrapper = mount(MonthlyExpensesChart, { props: defaultProps })
       const colors = getColors(wrapper)

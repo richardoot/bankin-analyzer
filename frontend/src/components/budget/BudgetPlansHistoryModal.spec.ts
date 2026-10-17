@@ -194,35 +194,64 @@ describe('BudgetPlansHistoryModal', () => {
     wrapper.unmount()
   })
 
-  describe('deletion', () => {
-    // happy-dom ships no window.confirm, so the stub is what the component
-    // reaches; vi.stubGlobal mirrors it onto window.
-    const stubConfirm = () => {
-      const stub = vi.fn<() => boolean>()
-      vi.stubGlobal('confirm', stub)
-      return stub
-    }
-    let confirmSpy: ReturnType<typeof stubConfirm>
+  it('opens a plan from the keyboard', async () => {
+    vi.mocked(api.getBudgetPlans).mockResolvedValue(makePlans())
 
+    const wrapper = mount(BudgetPlansHistoryModal, {
+      props: { open: true },
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    const row = document.body.querySelector(
+      '[data-testid="history-row-plan-past"]'
+    ) as HTMLTableRowElement
+    expect(row.getAttribute('tabindex')).toBe('0')
+    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    await flushPromises()
+
+    expect(wrapper.emitted('select')?.[0]).toEqual(['plan-past'])
+    wrapper.unmount()
+  })
+
+  describe('deletion', () => {
     beforeEach(() => {
       vi.mocked(api.getBudgetPlans).mockResolvedValue(makePlans())
       vi.mocked(api.deleteBudgetPlan).mockResolvedValue(undefined)
-      confirmSpy = stubConfirm()
     })
 
-    it('calls deleteBudgetPlan and emits "deleted" when the user confirms', async () => {
-      confirmSpy.mockReturnValue(true)
-
+    const mountOpen = async () => {
       const wrapper = mount(BudgetPlansHistoryModal, {
         props: { open: true },
         attachTo: document.body,
       })
       await flushPromises()
+      return wrapper
+    }
 
+    const clickTrash = async () => {
       const deleteBtn = document.body.querySelector(
         '[data-testid="delete-row-plan-past"]'
       ) as HTMLButtonElement
       deleteBtn.click()
+      await flushPromises()
+    }
+
+    /** The ConfirmDialog's own buttons, found by their label. */
+    const dialogButton = (label: string) =>
+      Array.from(document.body.querySelectorAll('button')).find(
+        b => b.textContent?.trim() === label
+      ) as HTMLButtonElement | undefined
+
+    it('asks in a dialog, then deletes and emits "deleted" on confirm', async () => {
+      const wrapper = await mountOpen()
+      await clickTrash()
+
+      // Asked first, in the app's own dialog rather than window.confirm.
+      expect(api.deleteBudgetPlan).not.toHaveBeenCalled()
+      expect(document.body.textContent).toContain('Supprimer ce budget ?')
+
+      dialogButton('Supprimer')?.click()
       await flushPromises()
 
       expect(api.deleteBudgetPlan).toHaveBeenCalledWith('plan-past')
@@ -235,19 +264,11 @@ describe('BudgetPlansHistoryModal', () => {
       wrapper.unmount()
     })
 
-    it('does nothing when the user cancels the confirm dialog', async () => {
-      confirmSpy.mockReturnValue(false)
+    it('does nothing when the user cancels the dialog', async () => {
+      const wrapper = await mountOpen()
+      await clickTrash()
 
-      const wrapper = mount(BudgetPlansHistoryModal, {
-        props: { open: true },
-        attachTo: document.body,
-      })
-      await flushPromises()
-
-      const deleteBtn = document.body.querySelector(
-        '[data-testid="delete-row-plan-past"]'
-      ) as HTMLButtonElement
-      deleteBtn.click()
+      dialogButton('Annuler')?.click()
       await flushPromises()
 
       expect(api.deleteBudgetPlan).not.toHaveBeenCalled()
@@ -260,18 +281,9 @@ describe('BudgetPlansHistoryModal', () => {
     })
 
     it('clicking the delete button does not trigger row selection', async () => {
-      confirmSpy.mockReturnValue(true)
-
-      const wrapper = mount(BudgetPlansHistoryModal, {
-        props: { open: true },
-        attachTo: document.body,
-      })
-      await flushPromises()
-
-      const deleteBtn = document.body.querySelector(
-        '[data-testid="delete-row-plan-past"]'
-      ) as HTMLButtonElement
-      deleteBtn.click()
+      const wrapper = await mountOpen()
+      await clickTrash()
+      dialogButton('Supprimer')?.click()
       await flushPromises()
 
       // Only "deleted" was emitted; "select" must not fire (the row click is

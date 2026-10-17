@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { computed, ref, watch } from 'vue'
+  import { computed, ref, useId, watch } from 'vue'
   import { useModalA11y } from '@/composables/useModalA11y'
   import { api } from '@/lib/api'
   import type {
@@ -25,6 +25,8 @@
     (e: 'close'): void
     (e: 'created', plan: BudgetPlanDto): void
   }>()
+
+  const titleId = useId()
 
   // Escape closes, Tab stays inside, focus returns to the opener after.
   const modalPanelRef = ref<HTMLElement | null>(null)
@@ -726,17 +728,21 @@
       data-testid="new-budget-plan-modal"
       role="dialog"
       aria-modal="true"
+      :aria-labelledby="titleId"
       @click.self="onClose"
     >
       <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-3xl max-h-[90dvh] flex flex-col"
       >
         <!-- Header -->
         <div
           class="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700"
         >
           <div class="min-w-0">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            <h2
+              :id="titleId"
+              class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+            >
               Nouveau budget
             </h2>
             <StepIndicator
@@ -747,6 +753,7 @@
           </div>
           <button
             type="button"
+            aria-label="Fermer"
             class="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
             :disabled="isSubmitting"
             @click="onClose"

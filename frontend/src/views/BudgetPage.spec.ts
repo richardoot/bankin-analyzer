@@ -176,6 +176,10 @@ describe('BudgetPage', () => {
       // (1 call for stats, 1 call for the year-ago availability probe).
       expect(wrapper.text()).toContain('Mai 2026')
       expect(api.getBudgetStatistics).toHaveBeenCalledTimes(2)
+      expect(api.getTagBudgetSummary).toHaveBeenLastCalledWith({
+        startDate: samplePlan.startDate,
+        endDate: samplePlan.endDate,
+      })
 
       wrapper.unmount()
     })
@@ -272,6 +276,35 @@ describe('BudgetPage', () => {
 
       expect(wrapper.text()).toContain('Sous-catégories')
       expect(wrapper.text()).toContain('Courses')
+    })
+
+    it('says so, with a retry, when a refetch of the figures fails', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+      vi.mocked(api.getBudgetStatistics).mockRejectedValueOnce(
+        new Error('Le serveur est injoignable.')
+      )
+
+      await wrapper.find('[data-testid="comparison-trigger"]').trigger('click')
+      await flushPromises()
+      await wrapper
+        .find('[data-testid="comparison-option-3m"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="budget-statistics-error"]').text()
+      ).toContain('Le serveur est injoignable.')
+
+      await wrapper
+        .find('[data-testid="budget-statistics-retry"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="budget-statistics-error"]').exists()
+      ).toBe(false)
+      wrapper.unmount()
     })
 
     it('widens the stats fetch range to envelop comparison + plan when comparison is selected', async () => {
@@ -373,6 +406,11 @@ describe('BudgetPage', () => {
       // 1 call for the new plan's stats + 1 call for the year-ago probe
       expect(api.getBudgetStatistics).toHaveBeenCalledTimes(2)
       expect(wrapper.text()).toContain('Avril 2026')
+      // The projects follow the plan shown, not the one before it.
+      expect(api.getTagBudgetSummary).toHaveBeenLastCalledWith({
+        startDate: '2026-04-01',
+        endDate: '2026-04-30',
+      })
 
       wrapper.unmount()
     })

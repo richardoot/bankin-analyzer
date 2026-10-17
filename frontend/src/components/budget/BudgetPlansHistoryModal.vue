@@ -1,6 +1,7 @@
 <script setup lang="ts">
-  import { computed, ref, watch } from 'vue'
+  import { computed, ref, useId, watch } from 'vue'
   import { useModalA11y } from '@/composables/useModalA11y'
+  import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import { api } from '@/lib/api'
   import type { BudgetPlanSummaryDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
@@ -29,6 +30,9 @@
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const deletingId = ref<string | null>(null)
+  /** The plan the confirmation is asking about. */
+  const planToDelete = ref<BudgetPlanSummaryDto | null>(null)
+  const titleId = useId()
 
   type Status = 'past' | 'current' | 'future'
 
@@ -128,20 +132,29 @@
     emit('close')
   }
 
-  async function onDelete(plan: BudgetPlanSummaryDto) {
-    const confirmed = window.confirm(
-      `Supprimer le budget « ${plan.name} » (${formatRange(plan.startDate, plan.endDate)}) ?\n\nCette action est irréversible.`
-    )
-    if (!confirmed) return
+  function onDelete(plan: BudgetPlanSummaryDto) {
+    planToDelete.value = plan
+  }
+
+  function cancelDelete() {
+    if (deletingId.value) return
+    planToDelete.value = null
+  }
+
+  async function confirmDelete() {
+    const plan = planToDelete.value
+    if (!plan) return
     deletingId.value = plan.id
     error.value = null
     try {
       await api.deleteBudgetPlan(plan.id)
       plans.value = plans.value.filter(p => p.id !== plan.id)
+      planToDelete.value = null
       emit('deleted', plan.id)
     } catch (err) {
+      planToDelete.value = null
       error.value =
-        err instanceof Error ? err.message : 'Échec de la suppression'
+        err instanceof Error ? err.message : 'Impossible de supprimer le budget'
     } finally {
       deletingId.value = null
     }
@@ -157,19 +170,24 @@
       data-testid="budget-history-modal"
       role="dialog"
       aria-modal="true"
+      :aria-labelledby="titleId"
       @click.self="onClose"
     >
       <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col"
+        class="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-3xl max-h-[90dvh] flex flex-col"
       >
         <div
           class="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700"
         >
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <h2
+            :id="titleId"
+            class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+          >
             Historique des budgets
           </h2>
           <button
             type="button"
+            aria-label="Fermer"
             class="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
             @click="onClose"
           >
@@ -198,6 +216,7 @@
           </div>
           <div
             v-else-if="error"
+            role="alert"
             class="m-5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 py-2 rounded-lg text-sm"
           >
             {{ error }}
@@ -228,13 +247,18 @@
                 v-for="plan in sortedPlans"
                 :key="plan.id"
                 :data-testid="`history-row-${plan.id}`"
-                class="cursor-pointer transition-colors"
+                tabindex="0"
+                :aria-current="plan.id === activePlanId ? 'true' : undefined"
+                :aria-label="`Afficher le budget ${plan.name}`"
+                class="cursor-pointer transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-500"
                 :class="
                   plan.id === activePlanId
                     ? 'bg-indigo-50 dark:bg-indigo-900/20'
                     : 'hover:bg-gray-50 dark:hover:bg-slate-800/40'
                 "
                 @click="selectPlan(plan.id)"
+                @keydown.enter.self.prevent="selectPlan(plan.id)"
+                @keydown.space.self.prevent="selectPlan(plan.id)"
               >
                 <td
                   class="px-5 py-3 font-medium text-gray-900 dark:text-gray-100"
@@ -334,4 +358,23 @@
       </div>
     </div>
   </Teleport>
+
+  <ConfirmDialog
+    :open="planToDelete !== null"
+    title="Supprimer ce budget ?"
+    :loading="deletingId !== null"
+    @confirm="confirmDelete"
+    @cancel="cancelDelete"
+  >
+    Le budget
+    <span class="font-medium text-gray-900 dark:text-gray-100"
+      >« {{ planToDelete?.name }} »</span
+    >
+    <template v-if="planToDelete">
+      ({{
+        formatRange(planToDelete.startDate, planToDelete.endDate)
+      }})</template
+    >
+    et ses enveloppes seront supprimés. Cette action est irréversible.
+  </ConfirmDialog>
 </template>

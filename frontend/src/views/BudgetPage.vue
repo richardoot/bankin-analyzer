@@ -637,7 +637,7 @@
     error.value = null
     try {
       await fetchPlan()
-      await fetchStatistics()
+      await Promise.all([fetchStatistics(), fetchProjects()])
     } catch (err) {
       error.value =
         err instanceof Error ? err.message : 'Erreur lors du rechargement'
@@ -661,7 +661,12 @@
       // one: keep the new plan on its average until the user picks again.
       selectedMonth.value = null
       isHistoryOpen.value = false
-      await Promise.all([fetchStatistics(), checkYearAgoAvailability()])
+      // The projects too: they are read over the plan's own window.
+      await Promise.all([
+        fetchStatistics(),
+        checkYearAgoAvailability(),
+        fetchProjects(),
+      ])
     } catch (err) {
       error.value =
         err instanceof Error ? err.message : 'Erreur lors du chargement du plan'
@@ -681,7 +686,11 @@
     selectedMonth.value = null
     isModalOpen.value = false
     planCount.value++
-    await Promise.all([fetchStatistics(), checkYearAgoAvailability()])
+    await Promise.all([
+      fetchStatistics(),
+      checkYearAgoAvailability(),
+      fetchProjects(),
+    ])
   }
 
   // ── Editing ──────────────────────────────────────────────────────────────
@@ -846,11 +855,35 @@
     )
   })
 
+  // A toggle or a new comparison refetches the figures. Shown while it runs,
+  // and said when it fails — otherwise a switch reads "on" over figures that
+  // are still "off". Only the latest request may write its outcome.
+  const isRefreshingStatistics = ref(false)
+  const statisticsError = ref<string | null>(null)
+  let statisticsRequest = 0
+
+  async function refreshStatistics(): Promise<void> {
+    const request = ++statisticsRequest
+    isRefreshingStatistics.value = true
+    statisticsError.value = null
+    try {
+      await fetchStatistics()
+    } catch (err) {
+      if (request !== statisticsRequest) return
+      statisticsError.value =
+        err instanceof Error
+          ? err.message
+          : 'Impossible de mettre à jour les chiffres'
+    } finally {
+      if (request === statisticsRequest) isRefreshingStatistics.value = false
+    }
+  }
+
   watch(
     [comparisonRange, deductReimbursements, deductPendingReimbursements],
     () => {
       if (!plan.value) return
-      void fetchStatistics()
+      void refreshStatistics()
     }
   )
 </script>
@@ -1036,6 +1069,34 @@
                     >Déduire les remboursements en attente</span
                   >
                 </span>
+              </button>
+            </div>
+
+            <p
+              v-if="isRefreshingStatistics"
+              role="status"
+              data-testid="budget-statistics-refreshing"
+              class="text-xs text-gray-500 dark:text-gray-400"
+            >
+              Mise à jour des chiffres…
+            </p>
+            <div
+              v-else-if="statisticsError"
+              role="alert"
+              data-testid="budget-statistics-error"
+              class="flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+            >
+              <p>
+                Les chiffres n'ont pas pu être mis à jour : ils correspondent
+                encore aux réglages précédents. {{ statisticsError }}
+              </p>
+              <button
+                type="button"
+                data-testid="budget-statistics-retry"
+                class="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-700 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-900/30"
+                @click="refreshStatistics"
+              >
+                Réessayer
               </button>
             </div>
           </div>
