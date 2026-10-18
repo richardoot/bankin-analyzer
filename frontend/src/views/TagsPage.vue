@@ -17,6 +17,7 @@
   import IconTrash from '@/components/icons/IconTrash.vue'
   import BaseField from '@/components/ui/BaseField.vue'
   import BaseCheckbox from '@/components/ui/BaseCheckbox.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const router = useRouter()
   const tagsStore = useTagsStore()
@@ -215,9 +216,7 @@
     />
 
     <!-- Create form -->
-    <div
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4 mb-6 dark:shadow-slate-900/20"
-    >
+    <BaseCard padding="sm" class="mb-6">
       <button
         type="button"
         data-testid="toggle-create-tag"
@@ -336,7 +335,7 @@
           </div>
         </div>
       </div>
-    </div>
+    </BaseCard>
 
     <!-- Loading -->
     <div
@@ -369,10 +368,11 @@
 
     <!-- Tag cards -->
     <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      <div
+      <BaseCard
         v-for="tag in tagsStore.tags"
         :key="tag.id"
-        class="group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4 dark:shadow-slate-900/20 border border-transparent hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+        padding="sm"
+        class="group relative border border-transparent hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
       >
         <!-- Edit mode -->
         <div v-if="editingId === tag.id" class="space-y-2">
@@ -575,7 +575,7 @@
             </div>
           </div>
         </template>
-      </div>
+      </BaseCard>
     </div>
   </PageShell>
 </template>

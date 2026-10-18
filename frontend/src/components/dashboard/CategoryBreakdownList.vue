@@ -5,6 +5,7 @@
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import { formatCurrency, formatMonth } from '@/lib/formatters'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
 
   const props = withDefaults(
     defineProps<{
@@ -183,11 +184,7 @@
           v-if="cat.subcategories && cat.subcategories.length > 0"
           class="mb-4"
         >
-          <h4
-            class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-          >
-            Sous-catégories
-          </h4>
+          <SectionLabel as="h4" class="mb-2"> Sous-catégories </SectionLabel>
           <div class="space-y-1">
             <div
               v-for="sub in cat.subcategories"
@@ -225,11 +222,9 @@
 
         <!-- Monthly evolution chart -->
         <div v-if="getSparklineData(cat).length >= 2">
-          <h4
-            class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-          >
+          <SectionLabel as="h4" class="mb-2">
             Évolution mensuelle
-          </h4>
+          </SectionLabel>
           <MonthlyBarChart
             :data="chartDataFor(cat)"
             :title="cat.category"

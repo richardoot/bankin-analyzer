@@ -46,6 +46,7 @@
   import IconClose from '@/components/icons/IconClose.vue'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
   import BaseField from '@/components/ui/BaseField.vue'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
 
   const toast = useToast()
 
@@ -694,11 +695,9 @@
 
                 <!-- Subcategories -->
                 <div v-if="acceptsSubcategories(category)">
-                  <h4
-                    class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                  >
+                  <SectionLabel as="h4" class="mb-2">
                     Sous-catégories
-                  </h4>
+                  </SectionLabel>
                   <ul
                     v-if="subcategoriesFor(category.id).length > 0"
                     class="mb-2 flex flex-wrap gap-1.5"

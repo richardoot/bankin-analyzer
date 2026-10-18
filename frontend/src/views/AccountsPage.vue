@@ -28,6 +28,7 @@
   import EmptyState from '@/components/ui/EmptyState.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const accountsStore = useAccountsStore()
   const toast = useToast()
@@ -357,11 +358,10 @@
       </InlineAlert>
 
       <!-- One card per bank connection -->
-      <section
+      <BaseCard
         v-for="connection in connections"
         :key="connection.id"
         :data-testid="`connection-${connection.id}`"
-        class="rounded-xl bg-white p-4 shadow-sm sm:p-6 dark:bg-slate-900 dark:shadow-slate-900/20"
       >
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="flex min-w-0 items-start gap-3">
@@ -533,13 +533,13 @@
           </RouterLink>
           .
         </p>
-      </section>
+      </BaseCard>
 
       <!-- Bank sync not configured at all -->
-      <section
+      <BaseCard
         v-if="!configured && !banksFailed"
+        padding="none"
         data-testid="no-bank-connected"
-        class="rounded-xl bg-white shadow-sm dark:bg-slate-900 dark:shadow-slate-900/20"
       >
         <EmptyState
           title="Aucune banque connectée"
@@ -551,13 +551,10 @@
             >
           </template>
         </EmptyState>
-      </section>
+      </BaseCard>
 
       <!-- CSV / manual accounts -->
-      <section
-        data-testid="manual-accounts"
-        class="rounded-xl bg-white p-4 shadow-sm sm:p-6 dark:bg-slate-900 dark:shadow-slate-900/20"
-      >
+      <BaseCard data-testid="manual-accounts">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -603,7 +600,7 @@
         >
           Aucun compte alimenté à la main. Un import CSV en créera.
         </p>
-      </section>
+      </BaseCard>
 
       <!-- Where the rest lives -->
       <nav

@@ -21,6 +21,7 @@
   import type { SpendingStructureDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const props = defineProps<{
     actual: SpendingStructureDto
@@ -112,10 +113,7 @@
 </script>
 
 <template>
-  <section
-    data-testid="spending-structure"
-    class="rounded-xl bg-white p-4 shadow-sm sm:p-6 dark:bg-slate-900 dark:shadow-slate-900/20"
-  >
+  <BaseCard data-testid="spending-structure">
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -270,5 +268,5 @@
         </dd>
       </div>
     </dl>
-  </section>
+  </BaseCard>
 </template>

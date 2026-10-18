@@ -41,6 +41,8 @@
   import IconClose from '@/components/icons/IconClose.vue'
   import IconChevronLeft from '@/components/icons/IconChevronLeft.vue'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
 
   const toast = useToast()
 
@@ -1328,10 +1330,7 @@
       >
         <!-- Type -->
         <div class="flex flex-col gap-1">
-          <span
-            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >Type</span
-          >
+          <SectionLabel as="span">Type</SectionLabel>
           <select
             v-model="typeFilter"
             data-testid="transactions-type-filter"
@@ -1346,10 +1345,7 @@
 
         <!-- Category -->
         <div class="flex flex-col gap-1">
-          <span
-            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >Catégorie</span
-          >
+          <SectionLabel as="span">Catégorie</SectionLabel>
           <select
             v-model="selectedCategory"
             data-testid="transactions-category-filter"
@@ -1403,10 +1399,7 @@
 
         <!-- Account -->
         <div class="flex flex-col gap-1">
-          <span
-            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >Compte</span
-          >
+          <SectionLabel as="span">Compte</SectionLabel>
           <select
             v-model="selectedAccount"
             data-testid="transactions-account-filter"
@@ -1425,10 +1418,7 @@
 
         <!-- Tag -->
         <div class="flex flex-col gap-1">
-          <span
-            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >Étiquette</span
-          >
+          <SectionLabel as="span">Étiquette</SectionLabel>
           <select
             v-model="selectedTag"
             data-testid="transactions-tag-filter"
@@ -1449,10 +1439,7 @@
 
         <!-- Date window -->
         <div class="col-span-2 flex flex-col gap-1">
-          <span
-            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >Période</span
-          >
+          <SectionLabel as="span">Période</SectionLabel>
           <div class="flex items-center gap-1.5">
             <input
               v-model="filterStartDate"
@@ -1474,10 +1461,7 @@
 
         <!-- Amount range -->
         <div class="col-span-2 flex flex-col gap-1">
-          <span
-            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >Montant (€)</span
-          >
+          <SectionLabel as="span">Montant (€)</SectionLabel>
           <div class="flex items-center gap-1.5">
             <input
               v-model="amountMin"
@@ -1513,10 +1497,7 @@
 
         <!-- State toggle -->
         <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
-          <span
-            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >État</span
-          >
+          <SectionLabel as="span">État</SectionLabel>
           <div
             class="inline-flex h-11 md:h-9 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 dark:border-slate-600 dark:bg-slate-800"
           >
@@ -1536,10 +1517,7 @@
                reference to: cleared to "aucun", or a correction still
                pending on the other side of a swap. -->
         <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
-          <span
-            class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >Synchro bancaire</span
-          >
+          <SectionLabel as="span">Synchro bancaire</SectionLabel>
           <div
             class="inline-flex h-11 md:h-9 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 dark:border-slate-600 dark:bg-slate-800"
           >
@@ -1831,9 +1809,7 @@
     </Teleport>
 
     <!-- Transactions Table -->
-    <div
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
-    >
+    <BaseCard padding="none">
       <!-- No overflow-hidden here: it clipped the tag popover of the last
              rows. The corners are rounded on the edge children instead. -->
       <!-- Error state -->
@@ -2056,7 +2032,7 @@
           </div>
         </div>
       </template>
-    </div>
+    </BaseCard>
 
     <!-- Reimbursement Modal -->
     <MarkRecurringModal

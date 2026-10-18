@@ -25,6 +25,7 @@
   import IconClose from '@/components/icons/IconClose.vue'
   import IconTrash from '@/components/icons/IconTrash.vue'
   import BaseField from '@/components/ui/BaseField.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const { exportReimbursementsToPdf } = usePdfExport()
   const toast = useToast()
@@ -438,10 +439,7 @@
     </InlineAlert>
 
     <!-- Summary Section: the balances are what the page is opened for -->
-    <div
-      v-if="reimbursements.length > 0"
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
-    >
+    <BaseCard v-if="reimbursements.length > 0">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
           Récapitulatif des remboursements
@@ -636,16 +634,16 @@
           </span>
         </div>
       </div>
-    </div>
+    </BaseCard>
 
     <!-- Empty state for reimbursements -->
-    <div
+    <BaseCard
       v-else-if="
         !isLoadingReimbursements &&
         !reimbursementsError &&
         reimbursements.length === 0
       "
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
+      padding="none"
     >
       <EmptyState
         title="Aucun remboursement en cours"
@@ -670,12 +668,10 @@
           <BaseButton to="/transactions">Aller aux transactions</BaseButton>
         </template>
       </EmptyState>
-    </div>
+    </BaseCard>
 
     <!-- Persons Section: configuration, below the balances it serves -->
-    <div
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6 mt-8"
-    >
+    <BaseCard class="mt-8">
       <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
         Personnes
       </h2>
@@ -844,7 +840,7 @@
       <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
         Aucune personne ajoutée. Commencez par ajouter une personne ci-dessus.
       </div>
-    </div>
+    </BaseCard>
 
     <!-- Settlement History Section -->
     <InlineAlert

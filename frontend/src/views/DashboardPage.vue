@@ -20,6 +20,7 @@
   import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseField from '@/components/ui/BaseField.vue'
   import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const router = useRouter()
 
@@ -189,9 +190,10 @@
       :class="isRefreshing ? 'opacity-60' : 'opacity-100'"
     >
       <!-- Period + reimbursement toggles (harmonized in a single card) -->
-      <div
+      <BaseCard
+        bordered
         data-testid="dashboard-filters-card"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5 mb-6 space-y-4"
+        class="mb-6 space-y-4"
       >
         <TimePeriodSelector />
 
@@ -239,15 +241,15 @@
             </span>
           </label>
         </div>
-      </div>
+      </BaseCard>
 
       <template v-if="hasAnyData">
         <!-- KPI cards: monthly averages -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-8">
           <!-- Average monthly expenses -->
-          <div
+          <BaseCard
             data-testid="kpi-card-expenses"
-            class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-5 border-l-4 border-red-500"
+            class="border-l-4 border-red-500"
           >
             <div class="flex items-start justify-between gap-3">
               <div>
@@ -281,12 +283,12 @@
                 color="#ef4444"
               />
             </div>
-          </div>
+          </BaseCard>
 
           <!-- Average monthly income -->
-          <div
+          <BaseCard
             data-testid="kpi-card-income"
-            class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-5 border-l-4 border-green-500"
+            class="border-l-4 border-green-500"
           >
             <div class="flex items-start justify-between gap-3">
               <div>
@@ -307,12 +309,12 @@
                 color="#22c55e"
               />
             </div>
-          </div>
+          </BaseCard>
 
           <!-- Average monthly savings -->
-          <div
+          <BaseCard
             data-testid="kpi-card-savings"
-            class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-5 border-l-4"
+            class="border-l-4"
             :class="
               averageMonthlySavings >= 0
                 ? 'border-indigo-500'
@@ -343,7 +345,7 @@
                 :color="averageMonthlySavings >= 0 ? '#6366f1' : '#f59e0b'"
               />
             </div>
-          </div>
+          </BaseCard>
         </div>
 
         <SpendingStructureCard
@@ -370,9 +372,7 @@
             class="grid grid-cols-1 lg:grid-cols-2 gap-8"
           >
             <!-- Monthly expenses chart -->
-            <div
-              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
-            >
+            <BaseCard>
               <div
                 class="mb-4 flex flex-wrap items-center justify-between gap-2"
               >
@@ -417,12 +417,10 @@
               >
                 Aucune dépense enregistrée
               </div>
-            </div>
+            </BaseCard>
 
             <!-- Expenses pie chart -->
-            <div
-              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
-            >
+            <BaseCard>
               <h3
                 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
               >
@@ -440,14 +438,11 @@
               >
                 Aucune dépense enregistrée
               </div>
-            </div>
+            </BaseCard>
           </div>
 
           <!-- Category breakdown list (drill-down) -->
-          <div
-            v-if="expenseCategoriesDetailed.length > 0"
-            class="mt-6 bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
-          >
+          <BaseCard v-if="expenseCategoriesDetailed.length > 0" class="mt-6">
             <div class="flex flex-wrap items-start justify-between gap-3 mb-1">
               <h3
                 class="text-lg font-semibold text-gray-900 dark:text-gray-100"
@@ -529,7 +524,7 @@
               :mode="breakdownMode"
               color="#ef4444"
             />
-          </div>
+          </BaseCard>
         </section>
 
         <!-- Income section (secondary) -->
@@ -541,9 +536,7 @@
           </h2>
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <!-- Monthly income chart -->
-            <div
-              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
-            >
+            <BaseCard>
               <div
                 class="mb-4 flex flex-wrap items-center justify-between gap-2"
               >
@@ -588,12 +581,10 @@
               >
                 Aucun revenu enregistré
               </div>
-            </div>
+            </BaseCard>
 
             <!-- Income pie chart -->
-            <div
-              class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6"
-            >
+            <BaseCard>
               <h3
                 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
               >
@@ -611,16 +602,16 @@
               >
                 Aucun revenu enregistré
               </div>
-            </div>
+            </BaseCard>
           </div>
         </section>
       </template>
 
       <!-- A quiet period, for a user who has data elsewhere in time -->
-      <div
+      <BaseCard
         v-else-if="!error && isEmptyPeriod"
+        padding="none"
         data-testid="dashboard-empty-period"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
       >
         <EmptyState
           title="Aucune transaction sur cette période"
@@ -635,13 +626,13 @@
             </BaseButton>
           </template>
         </EmptyState>
-      </div>
+      </BaseCard>
 
       <!-- Zero transactions: one question, two explicit ways in -->
-      <div
+      <BaseCard
         v-else-if="!error"
+        padding="none"
         data-testid="dashboard-onboarding"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
       >
         <EmptyState
           title="Aucune transaction pour l'instant"
@@ -678,7 +669,7 @@
             </BaseButton>
           </template>
         </EmptyState>
-      </div>
+      </BaseCard>
     </div>
   </PageShell>
 </template>

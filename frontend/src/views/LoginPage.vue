@@ -5,6 +5,7 @@
   import { useAuthStore } from '@/stores/auth'
   import BaseField from '@/components/ui/BaseField.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const router = useRouter()
   const route = useRoute()
@@ -88,9 +89,7 @@
 <template>
   <PageShell width="narrow" center>
     <div class="mx-auto w-full max-w-md">
-      <div
-        class="rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
-      >
+      <BaseCard variant="raised" padding="lg">
         <!-- Header -->
         <div class="mb-8 text-center">
           <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
@@ -224,7 +223,7 @@
             }}
           </button>
         </div>
-      </div>
+      </BaseCard>
 
       <!-- Back to home -->
       <div class="mt-6 text-center">

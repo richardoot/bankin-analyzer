@@ -5,6 +5,7 @@
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import IconEye from '@/components/icons/IconEye.vue'
   import IconTrash from '@/components/icons/IconTrash.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const props = defineProps<{
     settlements: SettlementDto[]
@@ -45,9 +46,7 @@
 </script>
 
 <template>
-  <div
-    class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
-  >
+  <BaseCard>
     <div
       class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4"
     >
@@ -305,5 +304,5 @@
         Aucun règlement pour cette personne
       </div>
     </div>
-  </div>
+  </BaseCard>
 </template>

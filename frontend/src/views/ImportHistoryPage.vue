@@ -11,6 +11,7 @@
   import IconUpload from '@/components/icons/IconUpload.vue'
   import IconTrash from '@/components/icons/IconTrash.vue'
   import IconPlus from '@/components/icons/IconPlus.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const toast = useToast()
 
@@ -149,9 +150,11 @@
     </div>
 
     <!-- Loading State -->
-    <div
+    <BaseCard
       v-if="isLoading"
-      class="flex items-center justify-center rounded-2xl bg-white dark:bg-slate-900 p-12 shadow-lg dark:shadow-slate-900/20"
+      variant="raised"
+      padding="none"
+      class="flex items-center justify-center p-12"
     >
       <div class="text-center">
         <div
@@ -161,7 +164,7 @@
           Chargement de l'historique...
         </p>
       </div>
-    </div>
+    </BaseCard>
 
     <!-- Error State -->
     <InlineAlert v-else-if="error" retry-label="Réessayer" @retry="fetchData">
@@ -169,9 +172,11 @@
     </InlineAlert>
 
     <!-- Empty State -->
-    <div
+    <BaseCard
       v-else-if="!hasHistories"
-      class="rounded-2xl bg-white dark:bg-slate-900 p-12 text-center shadow-lg dark:shadow-slate-900/20"
+      variant="raised"
+      padding="none"
+      class="p-12 text-center"
     >
       <svg
         class="mx-auto h-16 w-16 text-gray-500 dark:text-gray-400"
@@ -196,14 +201,15 @@
         <IconUpload class="h-5 w-5" />
         Importer un CSV
       </BaseButton>
-    </div>
+    </BaseCard>
 
     <!-- History List -->
     <div v-else class="space-y-4">
-      <div
+      <BaseCard
         v-for="history in histories"
         :key="history.id"
-        class="rounded-2xl bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-lg dark:shadow-slate-900/20 transition-shadow hover:shadow-xl dark:hover:shadow-slate-900/40"
+        variant="raised"
+        class="transition-shadow hover:shadow-xl dark:hover:shadow-slate-900/40"
       >
         <!-- Date Header -->
         <div
@@ -364,7 +370,7 @@
             </div>
           </div>
         </div>
-      </div>
+      </BaseCard>
     </div>
 
     <!-- Quick Actions -->

@@ -38,6 +38,7 @@
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const filtersStore = useFiltersStore()
   const router = useRouter()
@@ -947,10 +948,7 @@
     <!-- Plan content -->
     <template v-else>
       <!-- Filters card: reference period + reimbursement toggles -->
-      <div
-        data-testid="budget-filters-card"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5 mb-6"
-      >
+      <BaseCard bordered data-testid="budget-filters-card" class="mb-6">
         <div class="flex flex-col gap-3">
           <ComparisonSelector
             :plan="plan"
@@ -1026,12 +1024,12 @@
             aux réglages précédents. {{ statisticsError }}
           </InlineAlert>
         </div>
-      </div>
+      </BaseCard>
 
       <!-- Monthly expenses chart -->
-      <div
+      <BaseCard
         v-if="monthlyTotalExpenses.length >= 2 && statistics?.monthLabels"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6 mb-6"
+        class="mb-6"
       >
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
           Évolution des dépenses mensuelles
@@ -1050,7 +1048,7 @@
           :comparison-end-month="comparisonRange?.endMonth ?? ''"
           @select-month="onChartMonthSelected"
         />
-      </div>
+      </BaseCard>
 
       <!-- Savings summary -->
       <div class="mb-6">
@@ -1078,9 +1076,7 @@
       />
 
       <!-- Expense category list -->
-      <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5"
-      >
+      <BaseCard bordered>
         <BudgetTableControls
           v-model:sort-order="sortOrder"
           :editing="isEditing"
@@ -1189,7 +1185,7 @@
             @apply-budget="amount => setBudgetValue(cat.categoryId, amount)"
           />
         </div>
-      </div>
+      </BaseCard>
 
       <BudgetEditBar
         v-if="isEditing"

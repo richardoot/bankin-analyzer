@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { computed } from 'vue'
   import { formatCurrency } from '@/lib/formatters'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const props = defineProps<{
     /** Label describing the plan's date range, e.g. "Mai 2026" */
@@ -109,11 +110,7 @@
 <template>
   <div class="space-y-4" data-testid="savings-summary">
     <!-- ── Suivi (priorité visuelle quand des mois sont complétés) ── -->
-    <section
-      v-if="showFollowupBlock"
-      data-testid="summary-followup"
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5"
-    >
+    <BaseCard v-if="showFollowupBlock" bordered data-testid="summary-followup">
       <header class="flex items-baseline justify-between gap-3 mb-4">
         <div>
           <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
@@ -195,14 +192,10 @@
           </span>
         </div>
       </div>
-    </section>
+    </BaseCard>
 
     <!-- ── Planification (toujours quand comparaison active) ── -->
-    <section
-      v-if="showPlanningBlock"
-      data-testid="summary-planning"
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5"
-    >
+    <BaseCard v-if="showPlanningBlock" bordered data-testid="summary-planning">
       <header class="flex items-baseline justify-between gap-3 mb-4">
         <div>
           <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
@@ -290,13 +283,13 @@
           </span>
         </div>
       </div>
-    </section>
+    </BaseCard>
 
     <!-- ── Fallback minimal: aucun bloc activé ── -->
-    <section
+    <BaseCard
       v-if="!showFollowupBlock && !showPlanningBlock"
+      bordered
       data-testid="summary-plan-only"
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5"
     >
       <header class="mb-3">
         <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
@@ -318,6 +311,6 @@
           {{ formatCurrency(planBudgetTotal) }}
         </span>
       </div>
-    </section>
+    </BaseCard>
   </div>
 </template>

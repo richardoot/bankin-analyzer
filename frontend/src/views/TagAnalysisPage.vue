@@ -13,6 +13,7 @@
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import IconChevronLeft from '@/components/icons/IconChevronLeft.vue'
   import IconClose from '@/components/icons/IconClose.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const route = useRoute()
   const toast = useToast()
@@ -167,19 +168,19 @@
 
       <!-- Summary cards -->
       <div class="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
-        <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4">
+        <BaseCard padding="sm">
           <p class="text-xs text-gray-500 dark:text-gray-400">Dépenses</p>
           <p class="mt-1 text-xl font-bold text-red-600 dark:text-red-500">
             {{ formatCurrency(analysis.totalExpenses) }}
           </p>
-        </div>
-        <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4">
+        </BaseCard>
+        <BaseCard padding="sm">
           <p class="text-xs text-gray-500 dark:text-gray-400">Revenus</p>
           <p class="mt-1 text-xl font-bold text-green-600 dark:text-green-500">
             {{ formatCurrency(analysis.totalIncome) }}
           </p>
-        </div>
-        <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4">
+        </BaseCard>
+        <BaseCard padding="sm">
           <p class="text-xs text-gray-500 dark:text-gray-400">Solde net</p>
           <p
             class="mt-1 text-xl font-bold"
@@ -191,14 +192,14 @@
           >
             {{ formatCurrency(analysis.net) }}
           </p>
-        </div>
-        <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4">
+        </BaseCard>
+        <BaseCard padding="sm">
           <p class="text-xs text-gray-500 dark:text-gray-400">Transactions</p>
           <p class="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">
             {{ analysis.transactionCount }}
           </p>
           <p class="mt-1 text-[11px] text-gray-400">{{ period }}</p>
-        </div>
+        </BaseCard>
       </div>
 
       <!-- Real surplus -->
@@ -310,17 +311,19 @@
 
       <!-- Nudge towards a period when the surplus cannot be computed.
              Standalone condition: the envelope block above broke the chain. -->
-      <div
+      <BaseCard
         v-if="
           analysis.tag.isExceptional &&
           !(analysis.baseline && analysis.totalSurplus !== null)
         "
-        class="mb-6 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-xs text-gray-500 dark:text-gray-400"
+        bordered
+        padding="sm"
+        class="mb-6 text-xs text-gray-500 dark:text-gray-400"
       >
         Renseignez une période d'absence sur cette étiquette pour calculer le
         surcoût réel — ce que l'événement a coûté <em>en plus</em> d'une période
         ordinaire de même durée.
-      </div>
+      </BaseCard>
 
       <!-- Charts -->
       <div
@@ -328,7 +331,7 @@
         :class="hasMonthlyBreakdown ? 'lg:grid-cols-2' : ''"
       >
         <!-- Expenses by category -->
-        <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4">
+        <BaseCard padding="sm">
           <h2
             class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3"
           >
@@ -340,13 +343,10 @@
               title="Dépenses par catégorie"
             />
           </div>
-        </div>
+        </BaseCard>
 
         <!-- Monthly breakdown -->
-        <div
-          v-if="hasMonthlyBreakdown"
-          class="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4"
-        >
+        <BaseCard v-if="hasMonthlyBreakdown" padding="sm">
           <h2
             class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3"
           >
@@ -359,13 +359,11 @@
               color="#ef4444"
             />
           </div>
-        </div>
+        </BaseCard>
       </div>
 
       <!-- Per-category detail, with the everyday reference and the surplus -->
-      <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm overflow-hidden mb-6"
-      >
+      <BaseCard padding="none" class="overflow-hidden mb-6">
         <div
           class="px-4 py-3 border-b border-gray-200 dark:border-slate-700 text-sm font-semibold text-gray-700 dark:text-gray-300"
         >
@@ -457,12 +455,10 @@
           prélevées : sur ces catégories le surcoût est donc légèrement
           sous-estimé.
         </p>
-      </div>
+      </BaseCard>
 
       <!-- Transactions list -->
-      <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm overflow-hidden"
-      >
+      <BaseCard padding="none" class="overflow-hidden">
         <div
           class="px-4 py-3 border-b border-gray-200 dark:border-slate-700 text-sm font-semibold text-gray-700 dark:text-gray-300"
         >
@@ -514,7 +510,7 @@
             </div>
           </div>
         </div>
-      </div>
+      </BaseCard>
     </template>
   </PageShell>
 </template>

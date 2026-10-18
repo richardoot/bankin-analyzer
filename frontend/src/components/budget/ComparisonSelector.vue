@@ -6,6 +6,7 @@
   } from '@/composables/useBudgetComparison'
   import type { BudgetPlanDto } from '@/lib/api'
   import { formatMonth } from '@/lib/formatters'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
 
   const props = defineProps<{
     plan: BudgetPlanDto | null
@@ -163,11 +164,7 @@
 <template>
   <div class="space-y-2" data-testid="comparison-selector">
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-      <span
-        class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 shrink-0"
-      >
-        Comparer avec
-      </span>
+      <SectionLabel as="span" class="shrink-0"> Comparer avec </SectionLabel>
 
       <div class="relative w-full min-w-0 sm:w-auto">
         <button

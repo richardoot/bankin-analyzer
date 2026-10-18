@@ -4,6 +4,7 @@
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
 
   /**
    * One category of the budget table: the row and its drill-down panel.
@@ -309,11 +310,7 @@
 
       <!-- Subcategories -->
       <div v-if="category.subcategories && category.subcategories.length > 0">
-        <h3
-          class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-        >
-          Sous-catégories
-        </h3>
+        <SectionLabel as="h3" class="mb-2"> Sous-catégories </SectionLabel>
         <div class="space-y-1">
           <div
             v-for="sub in category.subcategories"
@@ -344,11 +341,7 @@
 
       <!-- Monthly evolution chart -->
       <div v-if="(category.monthlyAmounts?.length ?? 0) >= 2">
-        <h3
-          class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-        >
-          Évolution mensuelle
-        </h3>
+        <SectionLabel as="h3" class="mb-2"> Évolution mensuelle </SectionLabel>
         <MonthlyBarChart
           :data="chartData"
           :title="category.categoryName"

@@ -36,6 +36,7 @@
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import IconPencil from '@/components/icons/IconPencil.vue'
   import IconClose from '@/components/icons/IconClose.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const router = useRouter()
   const toast = useToast()
@@ -278,10 +279,7 @@
     </InlineAlert>
 
     <template v-else-if="list">
-      <section
-        class="mb-6 rounded-xl bg-white p-4 shadow-sm sm:p-6 dark:bg-slate-900"
-        data-testid="recurrences-total"
-      >
+      <BaseCard class="mb-6" data-testid="recurrences-total">
         <p class="text-sm text-gray-500 dark:text-gray-400">
           {{ active.length }}
           {{ active.length > 1 ? 'charges actives' : 'charge active' }}
@@ -304,7 +302,7 @@
             · Non classé {{ formatCurrency(list.byNature.unclassified) }}
           </template>
         </p>
-      </section>
+      </BaseCard>
 
       <EmptyState
         v-if="
@@ -352,10 +350,12 @@
             </select>
           </div>
 
-          <section
+          <BaseCard
             v-for="group in activeGroups"
             :key="group.key"
-            class="mb-4 overflow-hidden rounded-xl bg-white shadow-sm dark:bg-slate-900"
+            as="section"
+            padding="none"
+            class="mb-4 overflow-hidden"
             data-testid="recurrence-group"
           >
             <header
@@ -460,7 +460,7 @@
                 </div>
               </li>
             </ul>
-          </section>
+          </BaseCard>
 
           <section
             v-if="candidates.length > 0"
@@ -524,16 +524,18 @@
         </template>
 
         <template v-else>
-          <p
+          <BaseCard
             v-if="stopped.length === 0"
-            class="rounded-xl bg-white p-6 text-center text-sm text-gray-500 shadow-sm dark:bg-slate-900 dark:text-gray-400"
+            class="text-center text-sm text-gray-500 dark:text-gray-400"
             data-testid="ended-empty"
           >
             Aucun abonnement terminé.
-          </p>
-          <section
+          </BaseCard>
+          <BaseCard
             v-else
-            class="mb-4 overflow-hidden rounded-xl bg-white shadow-sm dark:bg-slate-900"
+            as="section"
+            padding="none"
+            class="mb-4 overflow-hidden"
             data-testid="recurrence-ended"
           >
             <header
@@ -631,12 +633,13 @@
                 </div>
               </li>
             </ul>
-          </section>
+          </BaseCard>
         </template>
 
-        <details
+        <BaseCard
           v-if="dismissed.length > 0"
-          class="mb-4 rounded-xl bg-white p-4 shadow-sm dark:bg-slate-900"
+          padding="sm"
+          class="mb-4"
           data-testid="recurrence-dismissed"
         >
           <summary
@@ -664,7 +667,7 @@
               </button>
             </li>
           </ul>
-        </details>
+        </BaseCard>
 
         <section
           v-if="orphans.length > 0"

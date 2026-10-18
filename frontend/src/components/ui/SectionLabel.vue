@@ -8,7 +8,8 @@
    */
   withDefaults(
     defineProps<{
-      as?: 'p' | 'span' | 'h2' | 'h3' | 'h4' | 'div' | 'dt' | undefined
+      as?:
+        'p' | 'span' | 'label' | 'h2' | 'h3' | 'h4' | 'div' | 'dt' | undefined
     }>(),
     { as: 'p' }
   )

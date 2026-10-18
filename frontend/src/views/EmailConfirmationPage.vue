@@ -2,6 +2,7 @@
   import PageShell from '@/components/ui/PageShell.vue'
   import { useRoute } from 'vue-router'
   import IconArrowLeft from '@/components/icons/IconArrowLeft.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const route = useRoute()
   const email = route.query.email as string | undefined
@@ -10,9 +11,7 @@
 <template>
   <PageShell width="narrow" center>
     <div class="mx-auto w-full max-w-md text-center">
-      <div
-        class="rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
-      >
+      <BaseCard variant="raised" padding="lg">
         <!-- Icon -->
         <div
           class="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30"
@@ -90,7 +89,7 @@
             Retour à la connexion
           </RouterLink>
         </div>
-      </div>
+      </BaseCard>
     </div>
   </PageShell>
 </template>

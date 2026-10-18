@@ -18,6 +18,7 @@
   import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import IconClose from '@/components/icons/IconClose.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   /** A row the parser could not use, and why. */
   interface SkippedRow {
@@ -573,10 +574,7 @@
     </div>
 
     <!-- Preview -->
-    <div
-      v-if="showPreview"
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
-    >
+    <BaseCard v-if="showPreview">
       <div class="flex items-center justify-between mb-6">
         <div>
           <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
@@ -676,7 +674,7 @@
           >
         </BaseButton>
       </div>
-    </div>
+    </BaseCard>
 
     <!-- Duplicates Review Modal -->
     <DuplicatesReviewModal

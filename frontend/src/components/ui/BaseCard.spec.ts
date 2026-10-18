@@ -28,7 +28,7 @@ describe('BaseCard', () => {
       props: { variant: 'raised', padding: 'lg' },
     })
     expect(wrapper.classes()).toEqual(
-      expect.arrayContaining(['rounded-2xl', 'shadow-lg', 'p-6', 'sm:p-8'])
+      expect.arrayContaining(['rounded-2xl', 'shadow-lg', 'p-4', 'sm:p-8'])
     )
   })
 

@@ -22,6 +22,7 @@
   import IconBolt from '@/components/icons/IconBolt.vue'
   import IconUndo from '@/components/icons/IconUndo.vue'
   import IconRefresh from '@/components/icons/IconRefresh.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const runs = ref<BankSyncRunDto[]>([])
   const isLoading = ref(true)
@@ -133,9 +134,11 @@
     </div>
 
     <!-- Loading State -->
-    <div
+    <BaseCard
       v-if="isLoading"
-      class="flex items-center justify-center rounded-2xl bg-white dark:bg-slate-900 p-12 shadow-lg dark:shadow-slate-900/20"
+      variant="raised"
+      padding="none"
+      class="flex items-center justify-center p-12"
     >
       <div class="text-center">
         <div
@@ -145,7 +148,7 @@
           Chargement de l'historique...
         </p>
       </div>
-    </div>
+    </BaseCard>
 
     <!-- Error State -->
     <InlineAlert v-else-if="error" retry-label="Réessayer" @retry="fetchData">
@@ -153,9 +156,11 @@
     </InlineAlert>
 
     <!-- Empty State -->
-    <div
+    <BaseCard
       v-else-if="!hasRuns"
-      class="rounded-2xl bg-white dark:bg-slate-900 p-12 text-center shadow-lg dark:shadow-slate-900/20"
+      variant="raised"
+      padding="none"
+      class="p-12 text-center"
       data-testid="bank-sync-history-empty"
     >
       <svg
@@ -181,14 +186,15 @@
         <IconBolt class="h-5 w-5" />
         Connecter une banque
       </BaseButton>
-    </div>
+    </BaseCard>
 
     <!-- History List -->
     <div v-else class="space-y-4">
-      <div
+      <BaseCard
         v-for="run in runs"
         :key="run.id"
-        class="rounded-2xl bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-lg dark:shadow-slate-900/20 transition-shadow hover:shadow-xl dark:hover:shadow-slate-900/40"
+        variant="raised"
+        class="transition-shadow hover:shadow-xl dark:hover:shadow-slate-900/40"
         data-testid="bank-sync-run"
       >
         <!-- Date Header -->
@@ -314,7 +320,7 @@
             </p>
           </div>
         </div>
-      </div>
+      </BaseCard>
     </div>
 
     <!-- Quick Actions -->

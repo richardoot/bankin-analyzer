@@ -7,6 +7,7 @@
   import DeleteAccountModal from '@/components/DeleteAccountModal.vue'
   import { formatDate } from '@/lib/formatters'
   import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const router = useRouter()
   const authStore = useAuthStore()
@@ -51,9 +52,7 @@
     />
 
     <!-- Profile Card -->
-    <div
-      class="rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
-    >
+    <BaseCard variant="raised" padding="lg">
       <!-- Avatar and Name -->
       <div
         class="flex items-center gap-6 border-b border-gray-200 dark:border-slate-700 pb-8"
@@ -128,12 +127,10 @@
           <span v-else>Se déconnecter</span>
         </BaseButton>
       </div>
-    </div>
+    </BaseCard>
 
     <!-- Quick Links -->
-    <div
-      class="mt-8 rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
-    >
+    <BaseCard variant="raised" padding="lg" class="mt-8">
       <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
         Accès rapide
       </h3>
@@ -169,7 +166,7 @@
           </div>
         </RouterLink>
       </div>
-    </div>
+    </BaseCard>
 
     <!-- Danger Zone -->
     <div

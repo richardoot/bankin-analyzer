@@ -16,6 +16,7 @@
   import { onMounted, ref } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
   import { api } from '@/lib/api'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const route = useRoute()
   const router = useRouter()
@@ -55,9 +56,7 @@
 <template>
   <PageShell width="narrow" center>
     <div class="mx-auto w-full max-w-md text-center">
-      <div
-        class="rounded-2xl bg-white p-8 shadow-lg dark:bg-slate-900 dark:shadow-slate-900/20"
-      >
+      <BaseCard variant="raised" padding="lg">
         <template v-if="state === 'working'">
           <h1
             class="text-xl font-semibold text-gray-900 dark:text-gray-100"
@@ -136,7 +135,7 @@
             Revenir aux comptes
           </RouterLink>
         </template>
-      </div>
+      </BaseCard>
     </div>
   </PageShell>
 </template>

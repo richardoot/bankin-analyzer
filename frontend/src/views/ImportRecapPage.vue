@@ -4,6 +4,7 @@
   import { useRoute, useRouter } from 'vue-router'
   import StepIndicator from '@/components/ui/StepIndicator.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const route = useRoute()
   const router = useRouter()
@@ -33,9 +34,7 @@
       :steps="['Dépôt', 'Aperçu', 'Doublons', 'Récapitulatif']"
       :current="4"
     />
-    <div
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-8"
-    >
+    <BaseCard padding="lg">
       <!-- Success icon -->
       <div class="flex justify-center mb-6">
         <div
@@ -153,6 +152,6 @@
           >Voir le dashboard</BaseButton
         >
       </div>
-    </div>
+    </BaseCard>
   </PageShell>
 </template>
