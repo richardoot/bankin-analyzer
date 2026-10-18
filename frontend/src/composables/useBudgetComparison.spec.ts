@@ -527,6 +527,60 @@ describe('useBudgetComparison', () => {
       expect(setup('real').planActualExceptionalAverage(food)).toBe(60)
     })
 
+    it('tells an event from a smoothed purchase traded for its slices', () => {
+      // February: 320 real, of which a 120 event and a 600 € purchase
+      // smoothed over 12 months (50 a month) bought that month — the
+      // everyday reading is 320 − 120 − 600 + 50… on a real of 920.
+      const home = cat('cat-home', 'Maison', [200, 920])
+      home.everydayMonthlyAmounts = [250, 250]
+      home.amortizedMonthlyAmounts = [50, 50]
+      const stats = makeStats(['2026-01', '2026-02'], [home])
+      stats.amortizedPurchases = [
+        {
+          transactionId: 'tx-old',
+          description: 'Ancien achat',
+          date: '2025-12-01',
+          months: 12,
+          netAmount: 600,
+          monthlyAmount: 50,
+          firstMonth: '2025-12',
+          lastMonth: '2026-11',
+          categoryId: 'cat-home',
+          subcategoryId: null,
+          amountInPeriod: 50,
+          sliceMonthsInPeriod: ['2026-01'],
+          dateInPeriod: false,
+        },
+        {
+          transactionId: 'tx-new',
+          description: 'Nouvel achat',
+          date: '2026-02-03',
+          months: 12,
+          netAmount: 600,
+          monthlyAmount: 50,
+          firstMonth: '2026-02',
+          lastMonth: '2027-01',
+          categoryId: 'cat-home',
+          subcategoryId: null,
+          amountInPeriod: 50,
+          sliceMonthsInPeriod: ['2026-02'],
+          dateInPeriod: true,
+        },
+      ]
+      const api = useBudgetComparison({
+        plan: ref(makePlan('2026-01-01', '2026-02-28')),
+        comparison: ref(null),
+        statistics: ref(stats),
+        mode: ref('everyday'),
+        now: () => new Date('2026-05-15T00:00:00Z'),
+      })
+
+      // January: no event, a slice of the old purchase. February: the
+      // 120 event only, the new purchase being no event: (0 + 120) / 2.
+      expect(api.planActualExceptionalAverage(home)).toBe(60)
+      expect(api.planActualAmortizedAverage(home)).toBe(50)
+    })
+
     it('reports no exceptional share when the backend sent no split', () => {
       const plain = cat('cat-x', 'X', [100, 100])
       expect(setup('everyday').planActualExceptionalAverage(plain)).toBe(0)

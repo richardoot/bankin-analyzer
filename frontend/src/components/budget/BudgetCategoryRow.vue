@@ -1,5 +1,11 @@
 <script setup lang="ts">
-  import type { CategoryAverageDto, SubcategoryAverageDto } from '@/lib/api'
+  import { computed } from 'vue'
+  import type {
+    AmortizedPurchaseDto,
+    CategoryAverageDto,
+    SubcategoryAverageDto,
+  } from '@/lib/api'
+  import { isAmortizationCarrier, smoothedSourceIds } from '@/lib/amortization'
   import { formatCurrency } from '@/lib/formatters'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
@@ -56,6 +62,16 @@
      * of the drill-down add up.
      */
     breakdownWindow?: { from: string; to: string } | null
+    /**
+     * Read « Vie courante »: the slices of smoothed purchases in « Réel »
+     * — the « dont X € lissés ». 0 otherwise.
+     */
+    amortizedAverage?: number | undefined
+    /**
+     * Read « Vie courante »: the category's smoothed purchases, so a link
+     * shows the ones whose slices its figure counts. Empty otherwise.
+     */
+    smoothedPurchases?: AmortizedPurchaseDto[] | undefined
   }>()
 
   const emit = defineEmits<{
@@ -77,6 +93,11 @@
       from: window.from,
       to: window.to,
       exceptional: props.breakdownMode === 'everyday' ? 'exclude' : undefined,
+      alsoIds: smoothedSourceIds(props.smoothedPurchases, {
+        categoryId: props.category.categoryId,
+        from: window.from.slice(0, 7),
+        to: window.to.slice(0, 7),
+      }),
       gross: true,
       label: `${props.category.categoryName} · ${window.label}`,
     })
@@ -104,19 +125,52 @@
   }
 
   /**
+   * Whether a line reads « Vie courante »: only a line a smoothed purchase
+   * touches carries its own everyday figures; every other line keeps the
+   * one it always had, events included.
+   */
+  function readsEveryday(sub: SubcategoryAverageDto): boolean {
+    return (
+      props.breakdownMode === 'everyday' && sub.everydayAmount !== undefined
+    )
+  }
+
+  /**
+   * The lines shown: in the real reading, not the ones the backend added for
+   * slices alone — that reading must look as it did before smoothing.
+   */
+  const subcategoryLines = computed(() =>
+    (props.category.subcategories ?? []).filter(
+      sub => props.breakdownMode !== 'real' || !isAmortizationCarrier(sub)
+    )
+  )
+
+  /**
    * A subcategory line opens the rows it sums, by the subcategory's id —
    * `none` for the rows filed under none. Its figure counts every row,
-   * events included, so the link never narrows on them.
+   * events included, so the link never narrows on them — unless the line
+   * reads « Vie courante », when it leaves the events out and adds the
+   * smoothed purchases whose slices it counts, like its figure.
    */
   function subcategoryLink(sub: SubcategoryAverageDto) {
     const window = props.breakdownWindow
     if (!window) return null
+    const everyday = readsEveryday(sub)
     return transactionsLink({
       type: 'EXPENSE',
       categoryId: props.category.categoryId,
       subcategoryId: sub.subcategoryId ?? NO_CATEGORY,
       from: window.from,
       to: window.to,
+      exceptional: everyday ? 'exclude' : undefined,
+      alsoIds: everyday
+        ? smoothedSourceIds(props.smoothedPurchases, {
+            categoryId: props.category.categoryId,
+            subcategoryId: sub.subcategoryId,
+            from: window.from.slice(0, 7),
+            to: window.to.slice(0, 7),
+          })
+        : undefined,
       gross: true,
       label: `${props.category.categoryName} · ${subcategoryName(sub)}`,
     })
@@ -310,6 +364,15 @@
             :data-testid="`budget-exceptional-link-${category.categoryName}`"
           />
         </span>
+        <!-- Read « Vie courante », the slices of smoothed purchases the
+             figure counts in place of the purchases themselves. -->
+        <span
+          v-if="breakdownMode === 'everyday' && (amortizedAverage ?? 0) > 0.005"
+          :data-testid="`budget-amortized-${category.categoryName}`"
+          class="block text-[10px] text-teal-700 dark:text-teal-400"
+        >
+          dont {{ formatCurrency(amortizedAverage ?? 0) }} lissés
+        </span>
         <BaseButton
           v-if="editing && actualAverage > 0"
           variant="ghost"
@@ -411,11 +474,11 @@
       </div>
 
       <!-- Subcategories -->
-      <div v-if="category.subcategories && category.subcategories.length > 0">
+      <div v-if="subcategoryLines.length > 0">
         <SectionLabel as="h3" class="mb-2"> Sous-catégories </SectionLabel>
         <div class="space-y-1">
           <div
-            v-for="sub in category.subcategories"
+            v-for="sub in subcategoryLines"
             :key="sub.subcategoryId ?? '(sans sous-catégorie)'"
             class="flex items-center gap-3 py-1.5 pl-3 pr-1 rounded text-sm bg-white dark:bg-slate-900"
           >
@@ -428,14 +491,33 @@
               {{ sub.transactionCount }} tx
             </span>
             <span
-              class="font-medium text-gray-900 dark:text-gray-100 tabular-nums shrink-0"
+              class="font-medium text-gray-900 dark:text-gray-100 tabular-nums shrink-0 text-right"
+              :data-testid="`budget-subcategory-amount-${category.categoryName}-${sub.subcategory || 'none'}`"
             >
-              {{ formatCurrency(sub.totalAmount) }}
+              {{
+                formatCurrency(
+                  readsEveryday(sub)
+                    ? (sub.everydayAmount ?? sub.totalAmount)
+                    : sub.totalAmount
+                )
+              }}
+              <span
+                v-if="readsEveryday(sub) && (sub.amortizedAmount ?? 0) > 0.005"
+                class="block text-[10px] font-normal text-teal-700 dark:text-teal-400"
+              >
+                dont {{ formatCurrency(sub.amortizedAmount ?? 0) }} lissés
+              </span>
             </span>
             <span
               class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0 hidden sm:inline"
             >
-              {{ formatCurrency(sub.averagePerMonth) }}/mois
+              {{
+                formatCurrency(
+                  readsEveryday(sub)
+                    ? (sub.everydayAveragePerMonth ?? sub.averagePerMonth)
+                    : sub.averagePerMonth
+                )
+              }}/mois
             </span>
             <TransactionsLink
               v-if="subcategoryLink(sub)"

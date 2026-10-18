@@ -1676,4 +1676,208 @@ describe('BudgetPage', () => {
       })
     })
   })
+
+  describe('smoothed purchases', () => {
+    /**
+     * Plan April→June 2026, read on 15 June. A phone bought in March is
+     * smoothed over 24 months: only its slices reach the plan, through a
+     * category with nothing real in it. A fridge bought in May is smoothed
+     * over 36: the real reading counts it whole in May, the everyday one a
+     * slice. No event anywhere.
+     */
+    const planAprJun: BudgetPlanDto = {
+      ...samplePlan,
+      id: 'plan-apr-jun',
+      name: 'Avr–Juin 2026',
+      startDate: '2026-04-01',
+      endDate: '2026-06-30',
+      monthCount: 3,
+      entries: [
+        {
+          id: 'e1',
+          categoryId: 'cat-home',
+          categoryName: 'Maison',
+          categoryIcon: '🏠',
+          amount: 250,
+        },
+      ],
+    }
+
+    const statistics: BudgetStatisticsDto = {
+      ...sampleStatistics,
+      periodMonths: 3,
+      monthLabels: ['2026-04', '2026-05', '2026-06'],
+      expensesByCategory: [
+        {
+          categoryId: 'cat-home',
+          categoryName: 'Maison',
+          categoryIcon: '🏠',
+          totalAmount: 1400,
+          transactionCount: 3,
+          averagePerMonth: 466.67,
+          exceptionalAmount: 0,
+          everydayAmount: 266.66,
+          monthlyAmounts: [200, 1200, 0],
+          everydayMonthlyAmounts: [200, 33.33, 33.33],
+          amortizedAmount: 66.66,
+          amortizedMonthlyAmounts: [0, 33.33, 33.33],
+        },
+        {
+          categoryId: 'cat-tech',
+          categoryName: 'High-tech',
+          categoryIcon: '📱',
+          totalAmount: 0,
+          transactionCount: 0,
+          averagePerMonth: 0,
+          exceptionalAmount: 0,
+          everydayAmount: 162.51,
+          monthlyAmounts: [0, 0, 0],
+          everydayMonthlyAmounts: [54.17, 54.17, 54.17],
+          amortizedAmount: 162.51,
+          amortizedMonthlyAmounts: [54.17, 54.17, 54.17],
+          subcategories: [
+            {
+              subcategoryId: 'sub-phone',
+              subcategory: 'Téléphone',
+              totalAmount: 0,
+              transactionCount: 0,
+              averagePerMonth: 0,
+              everydayAmount: 162.51,
+              everydayAveragePerMonth: 54.17,
+              amortizedAmount: 162.51,
+            },
+          ],
+        },
+      ],
+      amortizedPurchases: [
+        {
+          transactionId: 'tx-phone',
+          description: 'Apple Store iPhone',
+          date: '2026-03-10',
+          months: 24,
+          netAmount: 1300,
+          monthlyAmount: 54.17,
+          firstMonth: '2026-03',
+          lastMonth: '2028-02',
+          categoryId: 'cat-tech',
+          subcategoryId: 'sub-phone',
+          amountInPeriod: 162.51,
+          sliceMonthsInPeriod: ['2026-04', '2026-05', '2026-06'],
+          dateInPeriod: false,
+        },
+        {
+          transactionId: 'tx-fridge',
+          description: 'Darty frigo',
+          date: '2026-05-05',
+          months: 36,
+          netAmount: 1200,
+          monthlyAmount: 33.33,
+          firstMonth: '2026-05',
+          lastMonth: '2029-04',
+          categoryId: 'cat-home',
+          subcategoryId: null,
+          amountInPeriod: 66.66,
+          sliceMonthsInPeriod: ['2026-05', '2026-06'],
+          dateInPeriod: true,
+        },
+      ],
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-06-15T12:00:00Z'))
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue(planAprJun)
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(statistics)
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const linkOf = (el: { attributes: (name: string) => string | undefined }) =>
+      JSON.parse(el.attributes('data-to') ?? '{}') as {
+        query: Record<string, string>
+      }
+
+    it('lists the purchases being smoothed, with their slice and what is left', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const section = wrapper.get('[data-testid="budget-amortized"]')
+      expect(section.text()).toContain('Achats lissés en cours')
+      const phone = wrapper.get('[data-testid="budget-amortized-tx-phone"]')
+      expect(phone.text()).toMatch(/54,17/)
+      expect(phone.text()).toContain('21 mois restants')
+      expect(
+        linkOf(wrapper.get('[data-testid="budget-amortized-link-tx-phone"]'))
+          .query
+      ).toMatchObject({ ids: 'tx-phone' })
+      wrapper.unmount()
+    })
+
+    it('says the slices of a cell and links to their purchase, dated elsewhere', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const cell = wrapper.get('[data-testid="matrix-cell-High-tech-2026-04"]')
+      expect(
+        wrapper.get('[data-testid="matrix-amortized-High-tech-2026-04"]').text()
+      ).toMatch(/dont 54,17\s€ lissés/)
+      expect(linkOf(cell.get('a')).query).toMatchObject({
+        category: 'cat-tech',
+        from: '2026-04-01',
+        to: '2026-04-30',
+        exceptional: 'exclude',
+        also: 'tx-phone',
+      })
+      wrapper.unmount()
+    })
+
+    it('reads a smoothed purchase as a slice, not as an event', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      // The fridge's May is not « hors X € d'événements ».
+      expect(
+        wrapper.find('[data-testid="budget-exceptional-Maison"]').exists()
+      ).toBe(false)
+      expect(
+        wrapper.get('[data-testid="budget-amortized-Maison"]').text()
+        // May's slice over the two complete months.
+      ).toMatch(/dont 16,67\s€ lissés/)
+      // The mode is offered, and says the totals are no longer the cash.
+      expect(
+        wrapper.get('[data-testid="budget-everyday-amortized-note"]').text()
+      ).toContain("ne correspond plus à l'argent sorti du compte")
+      wrapper.unmount()
+    })
+
+    it('shows the real reading as it was: no carrier, no slice, no list', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      await wrapper.get('[data-testid="budget-mode-real"]').trigger('click')
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="budget-row-High-tech"]').exists()
+      ).toBe(false)
+      expect(
+        wrapper.find('[data-testid="matrix-row-High-tech"]').exists()
+      ).toBe(false)
+      expect(wrapper.find('[data-testid="budget-amortized"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.text()).not.toMatch(/dont [^€]*€ lissés/)
+      expect(
+        wrapper.get('[data-testid="matrix-cell-Maison-2026-05"]').text()
+      ).toMatch(/1\s?200/)
+      expect(
+        linkOf(
+          wrapper.get('[data-testid="matrix-cell-Maison-2026-05"]').get('a')
+        ).query.also
+      ).toBeUndefined()
+      wrapper.unmount()
+    })
+  })
 })

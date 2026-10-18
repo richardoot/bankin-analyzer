@@ -17,6 +17,11 @@
     label: string
     /** True for the month still running — its column is never complete. */
     isRunning: boolean
+    /**
+     * Read « Vie courante »: the smoothed purchases whose slice the month
+     * counts, so its total's link shows them whatever their date.
+     */
+    smoothedIds?: string[] | undefined
   }
 
   /** One row: a category, its envelope, and what it spent each month. */
@@ -28,6 +33,13 @@
     budget: number
     /** Spending per month, aligned index for index with `months`. */
     amounts: number[]
+    /**
+     * Read « Vie courante »: the slices of smoothed purchases inside each
+     * amount, same indexes — the « dont X € lissés ». Absent otherwise.
+     */
+    amortized?: number[] | undefined
+    /** The purchases behind those slices, per month, for the cell's link. */
+    smoothedIds?: (string[] | undefined)[] | undefined
   }
 
   const props = defineProps<{
@@ -98,6 +110,9 @@
       categoryId: row.categoryId,
       month: month?.ym,
       exceptional: props.exceptional,
+      // A slice counted here may come from a purchase dated in another
+      // month: the list shows that purchase too.
+      alsoIds: row.smoothedIds?.[index],
       gross: true,
       label: `${row.categoryName} · ${month?.label ?? ''}`,
     })
@@ -109,6 +124,7 @@
       type: 'EXPENSE',
       month: month?.ym,
       exceptional: props.exceptional,
+      alsoIds: month?.smoothedIds,
       gross: true,
       label: `Dépenses · ${month?.label ?? ''}`,
     })
@@ -117,18 +133,26 @@
   const CELL_LINK_CLASS =
     'block rounded px-0.5 -mx-0.5 hover:underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500'
 
+  /** The slices inside a cell, or 0: what « dont X € lissés » says. */
+  function amortizedAt(row: MatrixRow, index: number): number {
+    const amount = row.amortized?.[index] ?? 0
+    return amount > 0.005 ? amount : 0
+  }
+
   function cellTitle(row: MatrixRow, index: number): string {
     const amount = row.amounts[index] ?? 0
     const month = props.months[index]?.label ?? ''
+    const smoothed = amortizedAt(row, index)
+    const ofWhich = smoothed ? ` (dont ${formatCurrency(smoothed)} lissés)` : ''
     if (row.budget <= 0) {
-      return `${row.categoryName} · ${month} : ${formatCurrency(amount)} — pas d'enveloppe`
+      return `${row.categoryName} · ${month} : ${formatCurrency(amount)}${ofWhich} — pas d'enveloppe`
     }
     const gap = row.budget - amount
     const verdict =
       gap >= 0
         ? `${formatCurrency(gap)} sous l'enveloppe`
         : `${formatCurrency(-gap)} au-dessus`
-    return `${row.categoryName} · ${month} : ${formatCurrency(amount)} sur ${formatCurrency(row.budget)} — ${verdict}`
+    return `${row.categoryName} · ${month} : ${formatCurrency(amount)}${ofWhich} sur ${formatCurrency(row.budget)} — ${verdict}`
   }
 </script>
 
@@ -245,6 +269,13 @@
               >
                 {{ formatCurrency(row.amounts[index] ?? 0) }}
               </RouterLink>
+              <span
+                v-if="amortizedAt(row, index)"
+                class="block text-[10px] font-normal text-teal-700 dark:text-teal-400"
+                :data-testid="`matrix-amortized-${row.categoryName}-${month.ym}`"
+              >
+                dont {{ formatCurrency(amortizedAt(row, index)) }} lissés
+              </span>
             </td>
           </tr>
         </tbody>

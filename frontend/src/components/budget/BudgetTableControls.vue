@@ -29,6 +29,11 @@
     hasExceptional: boolean
     breakdownMode: BreakdownMode
     planEvents: { id: string; name: string; color: string | null }[]
+    /**
+     * A smoothed purchase has a slice in the plan: the everyday reading
+     * spreads it, so a total over the period no longer matches the cash.
+     */
+    hasAmortized?: boolean | undefined
     /** Which reference « Appliquer les moyennes » would copy into the envelopes. */
     averagesSource: 'historical' | 'actual' | 'none'
   }>()
@@ -220,9 +225,10 @@
     </div>
 
     <!-- Tracking mode: everyday keeps a one-off event from reading as an
-         overrun of the recurring budget. -->
+         overrun of the recurring budget, and spreads a smoothed purchase
+         over its months. -->
     <div
-      v-if="hasExceptional"
+      v-if="hasExceptional || hasAmortized"
       data-testid="budget-breakdown-mode"
       class="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800"
     >
@@ -245,6 +251,7 @@
           @update:model-value="emit('set-mode', $event)"
         />
         <span
+          v-if="hasExceptional"
           class="hidden text-xs leading-snug text-gray-600 sm:inline dark:text-gray-400"
         >
           {{
@@ -253,7 +260,23 @@
               : 'Les dépenses d’événements sont incluses : une enveloppe peut être dépassée par un projet ponctuel.'
           }}
         </span>
+        <span
+          v-else-if="breakdownMode === 'real'"
+          class="hidden text-xs leading-snug text-gray-600 sm:inline dark:text-gray-400"
+        >
+          Les achats lissés comptent en entier à leur date.
+        </span>
       </div>
+
+      <!-- Said on every screen: the figures are no longer the cash. -->
+      <p
+        v-if="hasAmortized && breakdownMode === 'everyday'"
+        data-testid="budget-everyday-amortized-note"
+        class="mt-2 text-xs leading-snug text-teal-800 dark:text-teal-300"
+      >
+        Les achats lissés y comptent par tranches mensuelles : un total sur la
+        période ne correspond plus à l'argent sorti du compte.
+      </p>
 
       <div
         v-if="planEvents.length > 0"

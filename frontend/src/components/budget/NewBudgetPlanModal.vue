@@ -58,6 +58,8 @@
   const copyFromPlanId = ref<string | null>(null)
   const previewEntries = ref<Map<string, number>>(new Map())
   const previewCategories = ref<CategoryAverageDto[]>([])
+  /** Months the lookback statistics divide by, for the events' share. */
+  const previewPeriodMonths = ref(0)
   // Reimbursement toggles for the averages preview. The debt-still-owed one
   // starts from the preference shared with the dashboard and the budget; the
   // choice made here is for this plan's baseline only.
@@ -264,11 +266,17 @@
     )
   }
 
-  /** Exceptional share excluded from a row, 0 when the basis is 'all'. */
+  /**
+   * Exceptional share excluded from a row, 0 when the basis is 'all'. Read
+   * from the events' own amount: the everyday average also spreads smoothed
+   * purchases, so its gap to the plain average is not the events alone.
+   */
   function excludedFromSeed(cat: CategoryAverageDto): number {
     if (seedBasis.value !== 'everyday') return 0
     if (cat.everydayAveragePerMonth === undefined) return 0
-    return cat.averagePerMonth - cat.everydayAveragePerMonth
+    if (cat.amortizedAmount === undefined || previewPeriodMonths.value <= 0)
+      return cat.averagePerMonth - cat.everydayAveragePerMonth
+    return (cat.exceptionalAmount ?? 0) / previewPeriodMonths.value
   }
 
   const hasExceptionalInLookback = computed(() =>
@@ -297,6 +305,7 @@
         statsPromise,
         loadAllExpenseCategories(),
       ])
+      previewPeriodMonths.value = stats.periodMonths
       previewCategories.value = mergeCategoriesWithStats(
         stats.expensesByCategory
       )

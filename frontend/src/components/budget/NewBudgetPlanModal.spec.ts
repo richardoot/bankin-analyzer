@@ -977,6 +977,39 @@ describe('NewBudgetPlanModal', () => {
       wrapper.unmount()
     })
 
+    it('does not read a smoothed purchase as an event to exclude', async () => {
+      // A 1 200 € purchase bought in the window, smoothed over 24 months:
+      // everyday reads 50 a month of it, the raw average 200. Only the
+      // events' own amount (none) is « exceptionnel ».
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...statsWithExceptional,
+        expensesByCategory: [
+          statsWithExceptional.expensesByCategory[0]!,
+          {
+            categoryId: 'cat-transport',
+            categoryName: 'Transport',
+            totalAmount: 1200,
+            transactionCount: 1,
+            averagePerMonth: 200,
+            exceptionalAmount: 0,
+            everydayAmount: 300,
+            everydayAveragePerMonth: 50,
+            amortizedAmount: 300,
+          },
+        ],
+      })
+      const wrapper = await openEnvelopes()
+
+      expect(amountFor('Transport')).toBe(50)
+      expect(
+        document.body.querySelector(
+          '[data-testid="preview-exceptional-Transport"]'
+        )
+      ).toBeNull()
+
+      wrapper.unmount()
+    })
+
     it('re-seeds on the raw average when switching to "Tout"', async () => {
       vi.mocked(api.getBudgetStatistics).mockResolvedValue(statsWithExceptional)
       const wrapper = await openEnvelopes()

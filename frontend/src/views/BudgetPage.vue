@@ -3,6 +3,7 @@
   import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
   import { api } from '@/lib/api'
   import type {
+    AmortizedPurchaseDto,
     BudgetPlanDto,
     BudgetStatisticsDto,
     CategoryAverageDto,
@@ -16,6 +17,12 @@
   import BudgetPlansHistoryModal from '@/components/budget/BudgetPlansHistoryModal.vue'
   import BudgetPlanHeader from '@/components/budget/BudgetPlanHeader.vue'
   import BudgetProjectsSection from '@/components/budget/BudgetProjectsSection.vue'
+  import BudgetAmortizedSection from '@/components/budget/BudgetAmortizedSection.vue'
+  import {
+    isAmortizationCarrier,
+    purchasesWithSlicesIn,
+    smoothedSourceIds,
+  } from '@/lib/amortization'
   import BudgetCategoryRow from '@/components/budget/BudgetCategoryRow.vue'
   import BudgetTableControls from '@/components/budget/BudgetTableControls.vue'
   import BudgetEditBar from '@/components/budget/BudgetEditBar.vue'
@@ -251,9 +258,63 @@
     endDate: string
   } | null>(() => comparison.widerRange.value)
 
-  const visibleExpenseCategories = computed(
-    () => statistics.value?.expensesByCategory ?? []
+  /**
+   * The expense categories the page reads. The real reading must look as it
+   * did before smoothing: a category only slices of smoothed purchases reach
+   * is left out there, its real figures being zero anyway.
+   */
+  const visibleExpenseCategories = computed(() => {
+    const categories = statistics.value?.expensesByCategory ?? []
+    return breakdownMode.value === 'real'
+      ? categories.filter(c => !isAmortizationCarrier(c))
+      : categories
+  })
+
+  /**
+   * The smoothed purchases the everyday reading spreads over the window —
+   * none in the real reading, which counts each one whole at its date. They
+   * feed the « Achats lissés en cours » list and the links of every figure
+   * that counts their slices.
+   */
+  const everydayPurchases = computed<AmortizedPurchaseDto[]>(() =>
+    breakdownMode.value === 'everyday'
+      ? (statistics.value?.amortizedPurchases ?? [])
+      : []
   )
+
+  /** Those with a slice inside the plan itself, not only its comparison. */
+  const planSmoothedPurchases = computed(() => {
+    const current = plan.value
+    if (!current) return []
+    return purchasesWithSlicesIn(everydayPurchases.value, {
+      from: current.startDate.slice(0, 7),
+      to: current.endDate.slice(0, 7),
+    })
+  })
+
+  /** The category's smoothed purchases, for the links of its row. */
+  function smoothedPurchasesOf(
+    category: CategoryAverageDto
+  ): AmortizedPurchaseDto[] {
+    return everydayPurchases.value.filter(
+      p => p.categoryId === category.categoryId
+    )
+  }
+
+  /**
+   * Whether a smoothed purchase has a slice in the plan, whichever reading
+   * is on: what offers the choice of reading and says what it changes.
+   */
+  const hasAmortizedInPlan = computed(() => {
+    const current = plan.value
+    if (!current) return false
+    return (
+      purchasesWithSlicesIn(statistics.value?.amortizedPurchases, {
+        from: current.startDate.slice(0, 7),
+        to: current.endDate.slice(0, 7),
+      }).length > 0
+    )
+  })
 
   const visibleIncomeCategories = computed(
     () => statistics.value?.incomeByCategory ?? []
@@ -407,6 +468,10 @@
         type: 'EXPENSE',
         month: ym,
         exceptional: everydayFilter.value,
+        alsoIds: smoothedSourceIds(everydayPurchases.value, {
+          from: ym,
+          to: ym,
+        }),
         gross: true,
         label: `Dépenses · ${formatMonth(ym, { capitalize: false })}`,
       })
@@ -420,6 +485,11 @@
         categoryId: cat.categoryId,
         month: ym,
         exceptional: everydayFilter.value,
+        alsoIds: smoothedSourceIds(everydayPurchases.value, {
+          categoryId: cat.categoryId,
+          from: ym,
+          to: ym,
+        }),
         gross: true,
         label: `${cat.categoryName} · ${formatMonth(ym, { capitalize: false })}`,
       })
@@ -533,6 +603,10 @@
       ym: option.ym,
       label: option.short,
       isRunning: option.isRunning,
+      smoothedIds: smoothedSourceIds(everydayPurchases.value, {
+        from: option.ym,
+        to: option.ym,
+      }),
     }))
   )
 
@@ -540,15 +614,31 @@
     const indices = comparison.selectableMonths.value.map(ym =>
       comparison.monthLabels.value.indexOf(ym)
     )
+    const everyday = breakdownMode.value === 'everyday'
+    const months = comparison.selectableMonths.value
     return sortedCategories.value.map(cat => {
       const series = comparison.seriesFor(cat)
-      return {
+      const row: MatrixRow = {
         categoryId: cat.categoryId,
         categoryName: cat.categoryName,
         categoryIcon: cat.categoryIcon ?? null,
         budget: getBudgetForCategory(cat.categoryId),
         amounts: indices.map(i => (i >= 0 ? (series?.[i] ?? 0) : 0)),
       }
+      // Read « Vie courante », a cell says the slices it holds and links
+      // to their purchases, whatever month they are dated in.
+      const slices = cat.amortizedMonthlyAmounts
+      if (everyday && slices) {
+        row.amortized = indices.map(i => (i >= 0 ? (slices[i] ?? 0) : 0))
+        row.smoothedIds = months.map(ym =>
+          smoothedSourceIds(everydayPurchases.value, {
+            categoryId: cat.categoryId,
+            from: ym,
+            to: ym,
+          })
+        )
+      }
+      return row
     })
   })
 
@@ -1189,6 +1279,7 @@
           :has-exceptional="hasExceptionalInPlan"
           :breakdown-mode="breakdownMode"
           :plan-events="planEvents"
+          :has-amortized="hasAmortizedInPlan"
           :averages-source="averagesSource"
           @enter-edit="enterEditMode"
           @select-month="selectMonth"
@@ -1203,6 +1294,11 @@
           :projects="projects"
           :plan="plan"
           @open-tag="openTagAnalysis"
+        />
+
+        <BudgetAmortizedSection
+          :purchases="planSmoothedPurchases"
+          :current-month="currentYearMonth()"
         />
 
         <!-- Column-count CSS variable drives both header & row grids so
@@ -1284,6 +1380,12 @@
             :actual-window="actualWindow"
             :month-keys="statistics?.monthLabels ?? []"
             :breakdown-window="breakdownWindow"
+            :amortized-average="
+              breakdownMode === 'everyday'
+                ? comparison.planActualAmortizedAverage(cat)
+                : 0
+            "
+            :smoothed-purchases="smoothedPurchasesOf(cat)"
             @select-month="ym => openCategoryMonth(cat, ym)"
             @toggle-expand="toggleCategoryExpanded(cat.categoryId)"
             @update-budget="value => updateBudgetInput(cat.categoryId, value)"

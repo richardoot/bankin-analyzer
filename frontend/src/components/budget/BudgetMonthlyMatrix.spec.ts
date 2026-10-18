@@ -181,4 +181,45 @@ describe('BudgetMonthlyMatrix', () => {
         .attributes('href')
     ).toContain('&exceptional=exclude&')
   })
+
+  it('says the slices of a smoothed purchase in a cell, and links to it', () => {
+    const wrapper = mount(BudgetMonthlyMatrix, {
+      props: {
+        months: months.map(m =>
+          m.ym === '2026-07' ? { ...m, smoothedIds: ['tx-phone'] } : m
+        ),
+        rows: [
+          {
+            ...rows[0]!,
+            amortized: [0, 54.17, 0],
+            smoothedIds: [undefined, ['tx-phone'], undefined],
+          },
+        ],
+        selectedMonth: null,
+        exceptional: 'exclude',
+      },
+      global: { plugins: [router] },
+    })
+
+    const cell = wrapper.get('[data-testid="matrix-cell-Alimentation-2026-07"]')
+    expect(
+      wrapper
+        .get('[data-testid="matrix-amortized-Alimentation-2026-07"]')
+        .text()
+    ).toMatch(/dont 54,17\s€ lissés/)
+    expect(cell.attributes('title')).toContain('lissés')
+    expect(cell.get('a').attributes('href')).toContain('&also=tx-phone&')
+    // A month without a slice says nothing.
+    expect(
+      wrapper
+        .find('[data-testid="matrix-amortized-Alimentation-2026-06"]')
+        .exists()
+    ).toBe(false)
+    expect(
+      wrapper
+        .get('[data-testid="matrix-total-2026-07"]')
+        .get('a')
+        .attributes('href')
+    ).toContain('&also=tx-phone&')
+  })
 })
