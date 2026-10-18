@@ -278,6 +278,47 @@ export class TransactionsController {
     description: 'The rows one bank sync run inserted or claimed.',
   })
   @ApiQuery({
+    name: 'exceptional',
+    required: false,
+    enum: ['exclude', 'only'],
+    description:
+      '`exclude`: no exceptional tag of the user (the « Vie courante » ' +
+      'reading); `only`: at least one. Anything else is refused.',
+  })
+  @ApiQuery({
+    name: 'nature',
+    required: false,
+    enum: ['ESSENTIAL', 'PLEASURE', 'none'],
+    description:
+      "The subcategory's nature, else the category's default; `none` when " +
+      'neither says (« à migrer »).',
+  })
+  @ApiQuery({
+    name: 'rhythm',
+    required: false,
+    enum: ['COMMITTED', 'VARIABLE', 'none'],
+    description:
+      'COMMITTED for a line of an active or stopped recurrence, else the ' +
+      "subcategory's rhythm, else the category's default; `none` when " +
+      'nothing says.',
+  })
+  @ApiQuery({
+    name: 'categoryIds',
+    required: false,
+    type: String,
+    description:
+      'Any of these categories, comma-separated (at most 200); `none` for ' +
+      'the rows filed nowhere.',
+  })
+  @ApiQuery({
+    name: 'recurrences',
+    required: false,
+    type: String,
+    description:
+      'The lines of any of these recurring charges, comma-separated ' +
+      '`<amountBucket>:<merchantKey>` (at most 200).',
+  })
+  @ApiQuery({
     name: 'sortBy',
     required: false,
     enum: ['date', 'amount'],
@@ -313,7 +354,12 @@ export class TransactionsController {
     @Query('reimbursement') reimbursement?: string,
     @Query('settlementId') settlementId?: string,
     @Query('importId') importId?: string,
-    @Query('syncRunId') syncRunId?: string
+    @Query('syncRunId') syncRunId?: string,
+    @Query('exceptional') exceptional?: string,
+    @Query('nature') nature?: string,
+    @Query('rhythm') rhythm?: string,
+    @Query('categoryIds') categoryIds?: string,
+    @Query('recurrences') recurrences?: string
   ): Promise<PaginatedTransactionsResponseDto> {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
@@ -360,6 +406,11 @@ export class TransactionsController {
       ...(settlementId && { settlementId }),
       ...(importId && { importId }),
       ...(syncRunId && { syncRunId }),
+      ...(exceptional && { exceptional }),
+      ...(nature && { nature }),
+      ...(rhythm && { rhythm }),
+      ...(categoryIds && { categoryIds }),
+      ...(recurrences && { recurrences }),
     })
 
     const { data: transactions, total } =

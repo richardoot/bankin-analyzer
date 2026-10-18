@@ -33,12 +33,18 @@
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import { formatCurrency, formatDate } from '@/lib/formatters'
   import {
+    EXCEPTIONAL_LABEL,
+    NATURE_LABEL,
     NO_CATEGORY,
+    RHYTHM_LABEL,
     hasTransactionsQuery,
     parseTransactionsQuery,
     sameTransactionsQuery,
     transactionsLink,
     transactionsQuery,
+    type ExceptionalFilter,
+    type NatureFilter,
+    type RhythmFilter,
     type TransactionsLinkFilters,
   } from '@/lib/transactionsLink'
   import FilterChips from '@/components/ui/FilterChips.vue'
@@ -222,6 +228,28 @@
     initialLink.recurrenceLabel ?? null
   )
   /**
+   * The rows of exceptional events, left out (the « Vie courante » reading
+   * of the Dashboard and the Budget) or kept alone. A link sets it, the
+   * filter panel offers it; not saved, like the review filter: it answers
+   * the figure it came from, it is not a way to read the list every day.
+   */
+  const exceptionalFilter = ref<ExceptionalFilter | null>(
+    initialLink.exceptional ?? null
+  )
+  /**
+   * The two attributes the Dashboard reads spending through — nature and
+   * rhythm — by the Dashboard's own rule. Not saved either.
+   */
+  const natureFilter = ref<NatureFilter | null>(initialLink.nature ?? null)
+  const rhythmFilter = ref<RhythmFilter | null>(initialLink.rhythm ?? null)
+  /**
+   * Several categories, several series at once: only a link names them —
+   * the « Autres » of a donut, a group of recurrences. The selects above
+   * keep picking one; these are named in a chip and dropped from it.
+   */
+  const categoryIdsFilter = ref<string[]>(initialLink.categoryIds ?? [])
+  const recurrencesFilter = ref<string[]>(initialLink.recurrences ?? [])
+  /**
    * The context a link can carry and the controls above cannot express: a
    * person's debts, a settlement, an import, a sync run, an exact list of
    * rows. Named in the banner above the list rather than in a chip, and
@@ -302,6 +330,11 @@
     needsBankReview.value = false
     recurrenceFilter.value = null
     recurrenceLabel.value = null
+    exceptionalFilter.value = null
+    natureFilter.value = null
+    rhythmFilter.value = null
+    categoryIdsFilter.value = []
+    recurrencesFilter.value = []
     clearContext()
     localStorage.removeItem(FILTERS_STORAGE_KEY)
   }
@@ -344,6 +377,11 @@
       amountMax.value !== '' ||
       needsBankReview.value ||
       recurrenceFilter.value !== null ||
+      exceptionalFilter.value !== null ||
+      natureFilter.value !== null ||
+      rhythmFilter.value !== null ||
+      categoryIdsFilter.value.length > 0 ||
+      recurrencesFilter.value.length > 0 ||
       hasContextFilter.value
     )
   })
@@ -378,6 +416,21 @@
   })
 
   /**
+   * « Catégories : A, B, C » for a short list, « 5 catégories » beyond: a
+   * chip is one line, not an inventory.
+   */
+  const categoriesChipLabel = computed(() => {
+    const ids = categoryIdsFilter.value
+    if (ids.length > 3) return `${ids.length} catégories`
+    const names = ids.map(id =>
+      id === NO_CATEGORY
+        ? 'Sans catégorie'
+        : (allCategories.value.find(c => c.id === id)?.name ?? '…')
+    )
+    return `Catégories : ${names.join(', ')}`
+  })
+
+  /**
    * The active filters as removable chips: what the list is currently NOT
    * showing, named in one line under the controls that caused it.
    */
@@ -401,6 +454,9 @@
         c => c.id === selectedCategory.value
       )?.name
       chips.push({ key: 'category', label: `Catégorie : ${name ?? '…'}` })
+    }
+    if (categoryIdsFilter.value.length > 0) {
+      chips.push({ key: 'categories', label: categoriesChipLabel.value })
     }
     if (selectedSubcategory.value === NO_CATEGORY) {
       chips.push({ key: 'subcategory', label: 'Sans sous-catégorie' })
@@ -430,6 +486,32 @@
       chips.push({
         key: 'recurrence',
         label: `Charge récurrente${recurrenceLabel.value ? ` : ${recurrenceLabel.value}` : ''}`,
+      })
+    }
+    if (recurrencesFilter.value.length > 0) {
+      const count = recurrencesFilter.value.length
+      chips.push({
+        key: 'recurrences',
+        label:
+          count === 1 ? '1 charge récurrente' : `${count} charges récurrentes`,
+      })
+    }
+    if (exceptionalFilter.value) {
+      chips.push({
+        key: 'exceptional',
+        label: EXCEPTIONAL_LABEL[exceptionalFilter.value],
+      })
+    }
+    if (natureFilter.value) {
+      chips.push({
+        key: 'nature',
+        label: `Nature : ${NATURE_LABEL[natureFilter.value]}`,
+      })
+    }
+    if (rhythmFilter.value) {
+      chips.push({
+        key: 'rhythm',
+        label: `Rythme : ${RHYTHM_LABEL[rhythmFilter.value]}`,
       })
     }
     if (searchKeyword.value.trim()) {
@@ -481,6 +563,21 @@
         break
       case 'recurrence':
         recurrenceFilter.value = null
+        break
+      case 'exceptional':
+        exceptionalFilter.value = null
+        break
+      case 'categories':
+        categoryIdsFilter.value = []
+        break
+      case 'recurrences':
+        recurrencesFilter.value = []
+        break
+      case 'nature':
+        natureFilter.value = null
+        break
+      case 'rhythm':
+        rhythmFilter.value = null
         break
       case 'q':
         searchKeyword.value = ''
@@ -720,6 +817,17 @@
       settlementId: settlementFilter.value || undefined,
       importId: importFilter.value || undefined,
       syncRunId: syncRunFilter.value || undefined,
+      exceptional: exceptionalFilter.value || undefined,
+      nature: natureFilter.value || undefined,
+      rhythm: rhythmFilter.value || undefined,
+      categoryIds:
+        categoryIdsFilter.value.length > 0
+          ? categoryIdsFilter.value
+          : undefined,
+      recurrences:
+        recurrencesFilter.value.length > 0
+          ? recurrencesFilter.value
+          : undefined,
     }
   })
 
@@ -1085,6 +1193,11 @@
       importId: importFilter.value ?? undefined,
       syncRunId: syncRunFilter.value ?? undefined,
       ids: idsFilter.value,
+      exceptional: exceptionalFilter.value ?? undefined,
+      nature: natureFilter.value ?? undefined,
+      rhythm: rhythmFilter.value ?? undefined,
+      categoryIds: categoryIdsFilter.value,
+      recurrences: recurrencesFilter.value,
       label: contextLabel.value ?? undefined,
       gross: grossAmounts.value,
       sort: sortBy.value,
@@ -1139,6 +1252,11 @@
     importFilter.value = link.importId ?? null
     syncRunFilter.value = link.syncRunId ?? null
     idsFilter.value = link.ids ?? []
+    exceptionalFilter.value = link.exceptional ?? null
+    natureFilter.value = link.nature ?? null
+    rhythmFilter.value = link.rhythm ?? null
+    categoryIdsFilter.value = link.categoryIds ?? []
+    recurrencesFilter.value = link.recurrences ?? []
     contextLabel.value = link.label ?? null
     grossAmounts.value = link.gross ?? false
     // Sort and page size are how the list reads, not what it shows: a link
@@ -1213,6 +1331,11 @@
       showOnlyNotPointed,
       needsBankReview,
       recurrenceFilter,
+      exceptionalFilter,
+      natureFilter,
+      rhythmFilter,
+      categoryIdsFilter,
+      recurrencesFilter,
       personFilter,
       reimbursementFilter,
       settlementFilter,
@@ -1682,6 +1805,54 @@
             <option v-for="tag in tagsStore.tags" :key="tag.id" :value="tag.id">
               {{ tag.name }}
             </option>
+          </select>
+        </div>
+
+        <!-- Exceptional events: the « Vie courante » reading of the
+               Dashboard and the Budget leaves them out. -->
+        <div class="flex flex-col gap-1">
+          <SectionLabel as="span">Événements</SectionLabel>
+          <select
+            v-model="exceptionalFilter"
+            data-testid="transactions-exceptional-filter"
+            aria-label="Événements exceptionnels"
+            class="h-11 md:h-9 w-full md:w-44 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
+          >
+            <option :value="null">Tous</option>
+            <option value="exclude">Hors événements</option>
+            <option value="only">Événements seulement</option>
+          </select>
+        </div>
+
+        <!-- Nature and rhythm, by the Dashboard's rule: the subcategory's,
+               else the category's; a recurrence makes a line committed. -->
+        <div class="flex flex-col gap-1">
+          <SectionLabel as="span">Nature</SectionLabel>
+          <select
+            v-model="natureFilter"
+            data-testid="transactions-nature-filter"
+            aria-label="Nature"
+            class="h-11 md:h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
+          >
+            <option :value="null">Toutes</option>
+            <option value="ESSENTIAL">Essentiel</option>
+            <option value="PLEASURE">Plaisir</option>
+            <option :value="NO_CATEGORY">À migrer</option>
+          </select>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <SectionLabel as="span">Rythme</SectionLabel>
+          <select
+            v-model="rhythmFilter"
+            data-testid="transactions-rhythm-filter"
+            aria-label="Rythme"
+            class="h-11 md:h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
+          >
+            <option :value="null">Tous</option>
+            <option value="COMMITTED">Engagé</option>
+            <option value="VARIABLE">Variable</option>
+            <option :value="NO_CATEGORY">À migrer</option>
           </select>
         </div>
 

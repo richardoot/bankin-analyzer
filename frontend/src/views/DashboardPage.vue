@@ -16,7 +16,11 @@
   import { useFiltersStore } from '@/stores/filters'
   import { formatCurrency, formatMonth } from '@/lib/formatters'
   import { UNCATEGORIZED_CATEGORY_ID } from '@/lib/api'
-  import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
+  import {
+    MAX_LINK_LIST,
+    NO_CATEGORY,
+    transactionsLink,
+  } from '@/lib/transactionsLink'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
   import { assignCategoryColors } from '@/lib/chartPalette'
   import { useChartTheme } from '@/composables/useChartTheme'
@@ -220,14 +224,41 @@
     )
   }
 
+  /**
+   * The donut of expenses reads « Vie courante » when the page does: its
+   * slices then leave the events out, and so do their links. Income has no
+   * events to leave out, the monthly bars always count everything.
+   */
   function openCategory(type: LinkType, id: string): void {
     void router.push(
       transactionsLink({
         type,
         categoryId: id,
         ...linkWindow.value,
+        exceptional:
+          type === 'EXPENSE' && breakdownMode.value === 'everyday'
+            ? 'exclude'
+            : undefined,
         gross: true,
         label: nameOf(type, id),
+      })
+    )
+  }
+
+  /** The « Autres » slice: every category it merges, at once. */
+  function openCategories(type: LinkType, ids: string[]): void {
+    if (ids.length === 0 || ids.length > MAX_LINK_LIST) return
+    void router.push(
+      transactionsLink({
+        type,
+        categoryIds: ids,
+        ...linkWindow.value,
+        exceptional:
+          type === 'EXPENSE' && breakdownMode.value === 'everyday'
+            ? 'exclude'
+            : undefined,
+        gross: true,
+        label: `${KIND_LABEL[type]} · Autres (${ids.length})`,
       })
     )
   }
@@ -548,6 +579,7 @@
           :remaining-to-live="remainingToLive"
           :period-months="periodMonths"
           :reading="breakdownMode === 'everyday' ? 'everyday' : 'actual'"
+          :window="linkWindow"
         />
 
         <!-- Expenses section (primary) -->
@@ -639,6 +671,7 @@
                   title="Dépenses"
                   :ids="expenseSliceIds"
                   @select="id => openCategory('EXPENSE', id)"
+                  @select-others="ids => openCategories('EXPENSE', ids)"
                 />
               </div>
               <div
@@ -803,6 +836,7 @@
                   title="Revenus"
                   :ids="incomeSliceIds"
                   @select="id => openCategory('INCOME', id)"
+                  @select-others="ids => openCategories('INCOME', ids)"
                 />
               </div>
               <div

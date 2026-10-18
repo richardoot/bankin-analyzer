@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { BadRequestException } from '@nestjs/common'
+import type { Prisma } from '../generated/prisma'
 import {
   parseTransactionFilters,
   buildTransactionWhere,
@@ -374,6 +375,200 @@ describe('buildTransactionWhere', () => {
         userId: 'user-1',
         syncRunId: 'r-1',
       })
+    })
+  })
+
+  describe('exceptional events', () => {
+    it('reads exclude and only, nothing for a blank, and refuses the rest', () => {
+      expect(parseTransactionFilters({ exceptional: 'exclude' })).toEqual({
+        exceptional: 'exclude',
+      })
+      expect(parseTransactionFilters({ exceptional: 'only' })).toEqual({
+        exceptional: 'only',
+      })
+      expect(parseTransactionFilters({ exceptional: '' })).toEqual({})
+      expect(() => parseTransactionFilters({ exceptional: 'yes' })).toThrow(
+        BadRequestException
+      )
+    })
+
+    it('keeps the rows with none of the user exceptional tags, or at least one', () => {
+      const tag = { tag: { userId: 'user-1', isExceptional: true } }
+      expect(
+        buildTransactionWhere('user-1', { exceptional: 'exclude' }).AND
+      ).toEqual([{ tags: { none: tag } }])
+      expect(
+        buildTransactionWhere('user-1', { exceptional: 'only' }).AND
+      ).toEqual([{ tags: { some: tag } }])
+    })
+
+    it('combines with a tag filter instead of overwriting it', () => {
+      const where = buildTransactionWhere('user-1', {
+        tagId: 't-1',
+        exceptional: 'exclude',
+      })
+      expect(where.tags).toEqual({ some: { tagId: 't-1' } })
+      expect(where.AND).toEqual([
+        {
+          tags: {
+            none: { tag: { userId: 'user-1', isExceptional: true } },
+          },
+        },
+      ])
+    })
+  })
+
+  describe('nature and rhythm', () => {
+    it('reads the enum values and none, and refuses the rest', () => {
+      expect(
+        parseTransactionFilters({ nature: 'ESSENTIAL', rhythm: 'none' })
+      ).toEqual({ nature: 'ESSENTIAL', rhythm: 'none' })
+      expect(() => parseTransactionFilters({ nature: 'essential' })).toThrow(
+        BadRequestException
+      )
+      expect(() => parseTransactionFilters({ rhythm: 'WEEKLY' })).toThrow(
+        BadRequestException
+      )
+    })
+
+    const subcategorySaysNothing = {
+      OR: [
+        { subcategoryId: null },
+        { subcategoryRef: { is: { nature: null } } },
+      ],
+    }
+
+    it('reads the subcategory, else the category default', () => {
+      expect(
+        buildTransactionWhere('user-1', { nature: 'PLEASURE' }).AND
+      ).toEqual([
+        {
+          OR: [
+            { subcategoryRef: { is: { nature: 'PLEASURE' } } },
+            {
+              AND: [
+                subcategorySaysNothing,
+                { category: { is: { defaultNature: 'PLEASURE' } } },
+              ],
+            },
+          ],
+        },
+      ])
+    })
+
+    it('reads « à migrer » as neither saying anything, no category included', () => {
+      expect(buildTransactionWhere('user-1', { nature: 'none' }).AND).toEqual([
+        {
+          AND: [
+            subcategorySaysNothing,
+            {
+              OR: [
+                { categoryId: null },
+                { category: { is: { defaultNature: null } } },
+              ],
+            },
+          ],
+        },
+      ])
+    })
+
+    const proven = {
+      recurrence: { userId: 'user-1', status: { in: ['ACTIVE', 'STOPPED'] } },
+    }
+
+    it('counts a proven recurrence as committed, whatever its subcategory says', () => {
+      const [clause] = buildTransactionWhere('user-1', { rhythm: 'COMMITTED' })
+        .AND as Prisma.TransactionWhereInput[]
+      expect(clause?.OR?.[0]).toEqual({ recurrences: { some: proven } })
+      expect(JSON.stringify(clause?.OR?.[1])).toContain(
+        '"defaultRhythm":"COMMITTED"'
+      )
+    })
+
+    it('keeps the lines of a proven recurrence out of variable and « à migrer »', () => {
+      for (const rhythm of ['VARIABLE', 'none'] as const) {
+        const [clause] = buildTransactionWhere('user-1', { rhythm })
+          .AND as Prisma.TransactionWhereInput[]
+        expect(
+          (clause?.AND as Prisma.TransactionWhereInput[] | undefined)?.[0]
+        ).toEqual({ recurrences: { none: proven } })
+      }
+    })
+  })
+
+  describe('several categories, several recurrences', () => {
+    it('reads a comma-separated query and a JSON array alike, none as null', () => {
+      expect(
+        parseTransactionFilters({ categoryIds: `${uuid(1)}, none,,${uuid(1)}` })
+      ).toEqual({ categoryIds: [uuid(1), null] })
+      expect(
+        parseTransactionFilters({ categoryIds: [uuid(2), 'not-an-id'] })
+      ).toEqual({ categoryIds: [uuid(2)] })
+      expect(
+        parseTransactionFilters({
+          recurrences: '15:com netflix,9:spotify,garbage',
+        })
+      ).toEqual({
+        recurrences: [
+          { amountBucket: 15, merchantKey: 'com netflix' },
+          { amountBucket: 9, merchantKey: 'spotify' },
+        ],
+      })
+    })
+
+    it('refuses more than the cap rather than truncating', () => {
+      const many = Array.from({ length: MAX_TRANSACTION_IDS + 1 }, (_, i) =>
+        uuid(i)
+      )
+      expect(() => parseTransactionFilters({ categoryIds: many })).toThrow(
+        BadRequestException
+      )
+      expect(() =>
+        parseTransactionFilters({
+          recurrences: many.map((_, i) => `${i}:shop`),
+        })
+      ).toThrow(BadRequestException)
+    })
+
+    it('matches any of the categories, the unfiled ones included when asked', () => {
+      expect(
+        buildTransactionWhere('user-1', {
+          categoryId: 'cat-9',
+          categoryIds: ['cat-1', null],
+        })
+      ).toMatchObject({
+        categoryId: 'cat-9',
+        AND: [
+          { OR: [{ categoryId: { in: ['cat-1'] } }, { categoryId: null }] },
+        ],
+      })
+    })
+
+    it('matches the lines of any of the series, scoped to the user', () => {
+      expect(
+        buildTransactionWhere('user-1', {
+          recurrences: [{ amountBucket: 15, merchantKey: 'netflix' }],
+        }).AND
+      ).toEqual([
+        {
+          recurrences: {
+            some: {
+              recurrence: {
+                userId: 'user-1',
+                OR: [{ amountBucket: 15, merchantKey: 'netflix' }],
+              },
+            },
+          },
+        },
+      ])
+    })
+
+    it('matches nothing when nothing usable was named', () => {
+      for (const filters of [{ categoryIds: [] }, { recurrences: [] }]) {
+        expect(buildTransactionWhere('user-1', filters).AND).toEqual([
+          { id: { in: [] } },
+        ])
+      }
     })
   })
 })

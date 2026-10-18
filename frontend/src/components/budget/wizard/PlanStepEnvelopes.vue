@@ -38,6 +38,11 @@
      * not something to walk away from to check a figure.
      */
     referenceWindow?: { from: string; to: string } | null
+    /**
+     * The averages are read « Vie courante », events left out: the links
+     * leave them out too.
+     */
+    everyday?: boolean
   }>()
 
   const emit = defineEmits<{
@@ -297,6 +302,7 @@
                       categoryId: row.category.categoryId,
                       from: referenceWindow.from,
                       to: referenceWindow.to,
+                      exceptional: everyday ? 'exclude' : undefined,
                       gross: true,
                       label: `${row.category.categoryName} · ${referenceIncomeLabel}`,
                     })

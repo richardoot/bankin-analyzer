@@ -6,7 +6,16 @@ import type { RecurrenceDto, RecurrenceListDto } from '@/lib/api'
 
 const push = vi.fn()
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => ({
+    push,
+    resolve: (to: { path: string }) => ({ href: to.path }),
+  }),
+  // The totals link to the Transactions page; the route is kept on the
+  // element so a test can read it.
+  RouterLink: {
+    props: ['to'],
+    template: '<a :data-to="JSON.stringify(to)" :href="to.path"><slot /></a>',
+  },
 }))
 
 const mockToast = {
@@ -440,5 +449,64 @@ describe('RecurrencesPage', () => {
     expect(wrapper.find('[data-testid="recurrences-error"]').exists()).toBe(
       true
     )
+  })
+
+  describe('totals open the lines of the series they add up', () => {
+    const routeOf = (
+      wrapper: Awaited<ReturnType<typeof mountPage>>,
+      testId: string
+    ): { path: string; query: Record<string, string> } =>
+      JSON.parse(
+        wrapper.get(`[data-testid="${testId}"]`).attributes('data-to') ?? '{}'
+      )
+
+    it('the active total, its nature split and each category group', async () => {
+      const wrapper = await mountPage(listOf([recurrence(), rent]))
+
+      expect(routeOf(wrapper, 'recurrences-total-link')).toEqual({
+        path: '/transactions',
+        query: {
+          recurrences: '15:europe paypal,660:martin paul',
+          label: 'Charges actives',
+          gross: '1',
+        },
+      })
+      expect(
+        routeOf(wrapper, 'recurrences-nature-link-essential').query
+      ).toMatchObject({
+        recurrences: '660:martin paul',
+        label: 'Charges actives · Essentiel',
+      })
+      expect(
+        routeOf(wrapper, 'recurrence-group-link-cat-leisure').query
+      ).toMatchObject({
+        recurrences: '15:europe paypal',
+        label: 'Charges actives · Loisirs et culture',
+      })
+      // Nothing unclassified: no figure, no link.
+      expect(
+        wrapper
+          .find('[data-testid="recurrences-nature-link-unclassified"]')
+          .exists()
+      ).toBe(false)
+    })
+
+    it('the total of the ended charges', async () => {
+      const gym = recurrence({
+        id: 'rec-gym',
+        merchantKey: 'fitness park',
+        amountBucket: 30,
+        name: 'Fitness Park',
+        status: 'STOPPED',
+      })
+      const wrapper = await mountPage(listOf([recurrence(), gym]))
+      await wrapper.find('[data-testid="tab-ended"]').trigger('click')
+
+      expect(routeOf(wrapper, 'recurrences-ended-link').query).toEqual({
+        recurrences: '30:fitness park',
+        label: 'Charges terminées',
+        gross: '1',
+      })
+    })
   })
 })

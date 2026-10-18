@@ -413,6 +413,22 @@ export interface TransactionQueryParams {
   importId?: string | undefined
   /** The rows one bank sync run inserted or claimed. */
   syncRunId?: string | undefined
+  /**
+   * `exclude`: none of the user's exceptional tags — the « Vie courante »
+   * reading; `only`: at least one.
+   */
+  exceptional?: 'exclude' | 'only' | undefined
+  /** The subcategory's nature, else the category's; `none`: « à migrer ». */
+  nature?: 'ESSENTIAL' | 'PLEASURE' | 'none' | undefined
+  /**
+   * COMMITTED for a line of a recurrence, else the subcategory's rhythm,
+   * else the category's; `none`: « à migrer ».
+   */
+  rhythm?: 'COMMITTED' | 'VARIABLE' | 'none' | undefined
+  /** Any of these categories, `none` for the unfiled rows (at most 200). */
+  categoryIds?: string[] | undefined
+  /** The lines of any of these series, `<amountBucket>:<merchantKey>`. */
+  recurrences?: string[] | undefined
   sortBy?: 'date' | 'amount' | undefined
   sortOrder?: 'asc' | 'desc' | undefined
 }
@@ -744,6 +760,9 @@ export interface MonthlyDataDto {
 }
 
 export interface SubcategoryDataDto {
+  /** The subcategory this line sums, or null for the rows filed under none. */
+  subcategoryId: string | null
+  /** Its name; empty for none. */
   subcategory: string
   icon?: string | null
   amount: number
@@ -987,6 +1006,9 @@ export interface UpdateBudgetPlanDto {
 }
 
 export interface SubcategoryAverageDto {
+  /** The subcategory this line sums, or null for the rows filed under none. */
+  subcategoryId: string | null
+  /** Its name; empty for none. */
   subcategory: string
   totalAmount: number
   transactionCount: number
@@ -1879,6 +1901,7 @@ export const api = {
       searchParams.set('settlementId', params.settlementId)
     if (params?.importId) searchParams.set('importId', params.importId)
     if (params?.syncRunId) searchParams.set('syncRunId', params.syncRunId)
+    if (params?.exceptional) searchParams.set('exceptional', params.exceptional)
     if (params?.sortBy) searchParams.set('sortBy', params.sortBy)
     if (params?.sortOrder) searchParams.set('sortOrder', params.sortOrder)
 

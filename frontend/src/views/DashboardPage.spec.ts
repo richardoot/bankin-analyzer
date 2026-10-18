@@ -726,7 +726,20 @@ describe('DashboardPage', () => {
         query: {
           type: 'EXPENSE',
           category: 'cat-Alimentation',
+          // The page opens « Vie courante »: the slice leaves events out.
+          exceptional: 'exclude',
           label: 'Alimentation',
+          gross: '1',
+        },
+      })
+      expensesDonut?.vm.$emit('select-others', ['cat-a', 'none'])
+      expect(push).toHaveBeenLastCalledWith({
+        path: '/transactions',
+        query: {
+          type: 'EXPENSE',
+          categories: 'cat-a,none',
+          exceptional: 'exclude',
+          label: 'Dépenses · Autres (2)',
           gross: '1',
         },
       })

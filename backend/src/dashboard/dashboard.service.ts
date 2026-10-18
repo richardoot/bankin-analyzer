@@ -63,6 +63,9 @@ interface DashboardAggregatedRow {
   category_name: string
   category_icon: string | null
   type: string
+  /** The subcategory the row is filed under, or null for none. */
+  subcategory_id: string | null
+  /** Its name, read off `subcategories`; empty when there is none. */
   subcategory: string
   subcategory_icon: string | null
   is_exceptional: boolean
@@ -81,6 +84,65 @@ interface DashboardAggregatedRow {
   received_credit: number
   /** Still owed on them, for reporting. */
   pending_credit: number
+}
+
+/** One breakdown line being summed: a subcategory, or none. */
+interface SubcategoryAccumulator {
+  subcategoryId: string | null
+  name: string
+  icon: string | null
+  total: number
+  count: number
+}
+
+/** The key « sans sous-catégorie » takes in a breakdown map. */
+const NO_SUBCATEGORY_KEY = ''
+
+/**
+ * Adds an aggregated row to its category's breakdown. Keyed by the
+ * subcategory's id — the legacy text column used to name the line, and a
+ * line named by text cannot open its rows.
+ */
+function addSubcategoryRow(
+  target: Map<string, SubcategoryAccumulator>,
+  row: Pick<
+    DashboardAggregatedRow,
+    'subcategory_id' | 'subcategory' | 'subcategory_icon' | 'transaction_count'
+  >,
+  amount: number
+): void {
+  const key = row.subcategory_id ?? NO_SUBCATEGORY_KEY
+  const current = target.get(key) ?? {
+    subcategoryId: row.subcategory_id,
+    name: row.subcategory_id ? row.subcategory : '',
+    icon: null,
+    total: 0,
+    count: 0,
+  }
+  current.total += amount
+  current.count += row.transaction_count ?? 0
+  current.icon = current.icon ?? row.subcategory_icon ?? null
+  target.set(key, current)
+}
+
+function toSubcategoryDtos(
+  subMap: Map<string, SubcategoryAccumulator>,
+  periodMonths: number
+): SubcategoryDataDto[] {
+  const round = (v: number): number => Math.round(v * 100) / 100
+  return Array.from(subMap.values())
+    .map(sd => {
+      const dto: SubcategoryDataDto = {
+        subcategoryId: sd.subcategoryId,
+        subcategory: sd.name,
+        amount: round(sd.total),
+        transactionCount: sd.count,
+        averagePerMonth: round(sd.total / periodMonths),
+      }
+      if (sd.icon) dto.icon = sd.icon
+      return dto
+    })
+    .sort((a, b) => b.amount - a.amount)
 }
 
 /** One row: what is still owed to the user across every open debt. */
@@ -209,7 +271,10 @@ export class DashboardService {
           COALESCE(c.name, 'Autre') AS category_name,
           c.icon AS category_icon,
           t.type::text AS type,
-          COALESCE(t.subcategory, '') AS subcategory,
+          -- The real subcategory, not the legacy text column: a row's
+          -- breakdown line is the one its link opens.
+          t.subcategory_id,
+          COALESCE(sc.name, '') AS subcategory,
           sc.icon AS subcategory_icon,
           (et.transaction_id IS NOT NULL) AS is_exceptional,
           COALESCE(sc.nature, c.default_nature)::text AS nature,
@@ -234,7 +299,7 @@ export class DashboardService {
           AND t.date >= ${startDate}
           AND t.date <= ${endDate}
           AND COALESCE(a.is_excluded_from_stats, false) = false
-        GROUP BY TO_CHAR(t.date, 'YYYY-MM'), c.id, COALESCE(c.name, 'Autre'), c.icon, c.catalog_key, t.type, COALESCE(t.subcategory, ''), sc.icon, sc.nature, sc.rhythm, c.default_nature, c.default_rhythm, (et.transaction_id IS NOT NULL), ${IS_RECURRING}
+        GROUP BY TO_CHAR(t.date, 'YYYY-MM'), c.id, COALESCE(c.name, 'Autre'), c.icon, c.catalog_key, t.type, t.subcategory_id, sc.name, sc.icon, sc.nature, sc.rhythm, c.default_nature, c.default_rhythm, (et.transaction_id IS NOT NULL), ${IS_RECURRING}
       `),
       // Query 2: Distinct account names (including excluded from stats, for
       // filter panel). Sourced from the Account relation since the legacy
@@ -349,11 +414,11 @@ export class DashboardService {
     const incomeMonthlyByCategory = new Map<string, Map<string, number>>()
     const expenseSubcatByCategory = new Map<
       string,
-      Map<string, { total: number; count: number; icon: string | null }>
+      Map<string, SubcategoryAccumulator>
     >()
     const incomeSubcatByCategory = new Map<
       string,
-      Map<string, { total: number; count: number; icon: string | null }>
+      Map<string, SubcategoryAccumulator>
     >()
     /** Gross exceptional expenses per category and per month. */
     const expenseExceptionalMonthlyByCategory = new Map<
@@ -460,23 +525,10 @@ export class DashboardService {
             : incomeSubcatByCategory
         let subMap = subcatTarget.get(categoryKey)
         if (!subMap) {
-          subMap = new Map<
-            string,
-            { total: number; count: number; icon: string | null }
-          >()
+          subMap = new Map<string, SubcategoryAccumulator>()
           subcatTarget.set(categoryKey, subMap)
         }
-        const subKey = row.subcategory ?? ''
-        const subCurrent = subMap.get(subKey) ?? {
-          total: 0,
-          count: 0,
-          icon: null,
-        }
-        subMap.set(subKey, {
-          total: subCurrent.total + amount,
-          count: subCurrent.count + (row.transaction_count ?? 0),
-          icon: subCurrent.icon ?? row.subcategory_icon ?? null,
-        })
+        addSubcategoryRow(subMap, row, amount)
       }
     }
 
@@ -579,19 +631,8 @@ export class DashboardService {
       // nothing.
       const subMap =
         expenseSubcatByCategory.get(categoryId) ??
-        new Map<string, { total: number; count: number; icon: string | null }>()
-      const subcategories: SubcategoryDataDto[] = Array.from(subMap.entries())
-        .map(([subcategory, sd]) => {
-          const dto: SubcategoryDataDto = {
-            subcategory,
-            amount: round(sd.total),
-            transactionCount: sd.count,
-            averagePerMonth: round(sd.total / periodMonthsCount),
-          }
-          if (sd.icon) dto.icon = sd.icon
-          return dto
-        })
-        .sort((a, b) => b.amount - a.amount)
+        new Map<string, SubcategoryAccumulator>()
+      const subcategories = toSubcategoryDtos(subMap, periodMonthsCount)
 
       const totalCount = Array.from(subMap.values()).reduce(
         (s, sd) => s + sd.count,
@@ -650,19 +691,8 @@ export class DashboardService {
 
       const subMap =
         incomeSubcatByCategory.get(categoryId) ??
-        new Map<string, { total: number; count: number; icon: string | null }>()
-      const subcategories: SubcategoryDataDto[] = Array.from(subMap.entries())
-        .map(([subcategory, sd]) => {
-          const dto: SubcategoryDataDto = {
-            subcategory,
-            amount: round(sd.total),
-            transactionCount: sd.count,
-            averagePerMonth: round(sd.total / periodMonthsCount),
-          }
-          if (sd.icon) dto.icon = sd.icon
-          return dto
-        })
-        .sort((a, b) => b.amount - a.amount)
+        new Map<string, SubcategoryAccumulator>()
+      const subcategories = toSubcategoryDtos(subMap, periodMonthsCount)
 
       const totalCount = Array.from(subMap.values()).reduce(
         (s, sd) => s + sd.count,

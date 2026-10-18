@@ -30,6 +30,37 @@ export type TransactionsLinkType = 'EXPENSE' | 'INCOME' | 'TRANSFER'
 /** The value that asks for « sans catégorie » / « sans sous-catégorie ». */
 export const NO_CATEGORY = 'none'
 
+/**
+ * The rows carrying an exceptional event's tag: left out (`exclude`, the
+ * « Vie courante » reading) or kept alone (`only`, the share it sets aside).
+ */
+export type ExceptionalFilter = 'exclude' | 'only'
+
+/**
+ * A row's nature — its subcategory's, else its category's default — and
+ * its rhythm, as the Dashboard reads them; `none` is « à migrer ».
+ */
+export type NatureFilter = 'ESSENTIAL' | 'PLEASURE' | typeof NO_CATEGORY
+export type RhythmFilter = 'COMMITTED' | 'VARIABLE' | typeof NO_CATEGORY
+
+export const NATURE_LABEL: Record<NatureFilter, string> = {
+  ESSENTIAL: 'Essentiel',
+  PLEASURE: 'Plaisir',
+  none: 'À migrer',
+}
+
+export const RHYTHM_LABEL: Record<RhythmFilter, string> = {
+  COMMITTED: 'Engagé',
+  VARIABLE: 'Variable',
+  none: 'À migrer',
+}
+
+/** How the Transactions page names that filter, in a chip. */
+export const EXCEPTIONAL_LABEL: Record<ExceptionalFilter, string> = {
+  exclude: 'Hors événements exceptionnels',
+  only: 'Événements exceptionnels seulement',
+}
+
 export const TRANSACTIONS_PAGE_SIZES = [20, 50, 100] as const
 
 export interface TransactionsLinkFilters {
@@ -68,6 +99,19 @@ export interface TransactionsLinkFilters {
   syncRunId?: string | undefined
   /** An exact list of rows. */
   ids?: string[] | undefined
+  /** The rows of an exceptional event, left out or kept alone. */
+  exceptional?: ExceptionalFilter | undefined
+  /** Essentiel, Plaisir, or « à migrer ». */
+  nature?: NatureFilter | undefined
+  /** Engagé, Variable, or « à migrer ». */
+  rhythm?: RhythmFilter | undefined
+  /**
+   * Any of these categories — `NO_CATEGORY` among them for the rows filed
+   * nowhere. Only links carry a list; the page's select picks one.
+   */
+  categoryIds?: string[] | undefined
+  /** The lines of any of these series, each `<amountBucket>:<merchantKey>`. */
+  recurrences?: string[] | undefined
   /** What the context banner says, when the filters alone would not. */
   label?: string | undefined
   /** The figure the link came from was netted and shared; the list is not. */
@@ -104,6 +148,11 @@ export const TRANSACTIONS_QUERY_KEYS = [
   'import',
   'syncRun',
   'ids',
+  'exceptional',
+  'nature',
+  'rhythm',
+  'categories',
+  'recurrences',
   'label',
   'gross',
   'sort',
@@ -140,6 +189,17 @@ function trimmed(value: string | number | undefined): string | undefined {
   if (value === undefined) return undefined
   const text = String(value).trim()
   return text === '' ? undefined : text
+}
+
+/**
+ * The most values a list may carry: the server refuses more rather than
+ * truncate. A sender with a longer list offers no link.
+ */
+export const MAX_LINK_LIST = 200
+
+/** A list trimmed, blanks out, duplicates out, in its first order. */
+function cleanList(values: string[] | undefined): string[] {
+  return [...new Set((values ?? []).map(v => v.trim()).filter(v => v !== ''))]
 }
 
 /**
@@ -193,6 +253,13 @@ export function transactionsQuery(
   if (syncRun) query.syncRun = syncRun
   const ids = (filters.ids ?? []).map(id => id.trim()).filter(id => id !== '')
   if (ids.length > 0) query.ids = ids.join(',')
+  if (filters.exceptional) query.exceptional = filters.exceptional
+  if (filters.nature) query.nature = filters.nature
+  if (filters.rhythm) query.rhythm = filters.rhythm
+  const categories = cleanList(filters.categoryIds)
+  if (categories.length > 0) query.categories = categories.join(',')
+  const recurrences = cleanList(filters.recurrences)
+  if (recurrences.length > 0) query.recurrences = recurrences.join(',')
   const label = trimmed(filters.label)
   if (label) query.label = label
   if (filters.gross) query.gross = '1'
@@ -276,6 +343,19 @@ export function parseTransactionsQuery(
     .map(id => id.trim())
     .filter(id => id !== '')
   if (ids.length > 0) filters.ids = ids
+  const exceptional = get('exceptional')
+  if (exceptional === 'exclude' || exceptional === 'only')
+    filters.exceptional = exceptional
+  const nature = get('nature')
+  if (nature === 'ESSENTIAL' || nature === 'PLEASURE' || nature === NO_CATEGORY)
+    filters.nature = nature
+  const rhythm = get('rhythm')
+  if (rhythm === 'COMMITTED' || rhythm === 'VARIABLE' || rhythm === NO_CATEGORY)
+    filters.rhythm = rhythm
+  const categories = cleanList((get('categories') ?? '').split(','))
+  if (categories.length > 0) filters.categoryIds = categories
+  const recurrences = cleanList((get('recurrences') ?? '').split(','))
+  if (recurrences.length > 0) filters.recurrences = recurrences
   const label = get('label')
   if (label?.trim()) filters.label = label.trim()
   if (get('gross') === '1') filters.gross = true

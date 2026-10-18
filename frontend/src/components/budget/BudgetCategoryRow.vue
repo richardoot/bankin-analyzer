@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import type { CategoryAverageDto } from '@/lib/api'
+  import type { CategoryAverageDto, SubcategoryAverageDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
@@ -7,7 +7,7 @@
   import SectionLabel from '@/components/ui/SectionLabel.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
-  import { transactionsLink } from '@/lib/transactionsLink'
+  import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
 
   /**
    * One category of the budget table: the row and its drill-down panel.
@@ -51,6 +51,11 @@
     actualWindow?: { from: string; to: string; label: string } | null
     /** The `YYYY-MM` behind each bar of the drill-down chart. */
     monthKeys?: string[] | undefined
+    /**
+     * The whole window the statistics cover — what the subcategory lines
+     * of the drill-down add up.
+     */
+    breakdownWindow?: { from: string; to: string } | null
   }>()
 
   const emit = defineEmits<{
@@ -61,14 +66,59 @@
     'select-month': [yearMonth: string]
   }>()
 
+  /**
+   * In « Vie courante » both reference figures leave the events out; their
+   * links do the same.
+   */
   function windowLink(window: { from: string; to: string; label: string }) {
     return transactionsLink({
       type: 'EXPENSE',
       categoryId: props.category.categoryId,
       from: window.from,
       to: window.to,
+      exceptional: props.breakdownMode === 'everyday' ? 'exclude' : undefined,
       gross: true,
       label: `${props.category.categoryName} · ${window.label}`,
+    })
+  }
+
+  /** The events' share of « Réel », on its own: what « dont / hors » names. */
+  function exceptionalLink(window: {
+    from: string
+    to: string
+    label: string
+  }) {
+    return transactionsLink({
+      type: 'EXPENSE',
+      categoryId: props.category.categoryId,
+      from: window.from,
+      to: window.to,
+      exceptional: 'only',
+      gross: true,
+      label: `${props.category.categoryName} · événements · ${window.label}`,
+    })
+  }
+
+  function subcategoryName(sub: SubcategoryAverageDto): string {
+    return sub.subcategory || 'sans sous-catégorie'
+  }
+
+  /**
+   * A subcategory line opens the rows it sums, by the subcategory's id —
+   * `none` for the rows filed under none. Its figure counts every row,
+   * events included, so the link never narrows on them.
+   */
+  function subcategoryLink(sub: SubcategoryAverageDto) {
+    const window = props.breakdownWindow
+    if (!window) return null
+    return transactionsLink({
+      type: 'EXPENSE',
+      categoryId: props.category.categoryId,
+      subcategoryId: sub.subcategoryId ?? NO_CATEGORY,
+      from: window.from,
+      to: window.to,
+      gross: true,
+      label: `${props.category.categoryName} · ${subcategoryName(sub)}`,
     })
   }
 </script>
@@ -251,6 +301,14 @@
         >
           {{ breakdownMode === 'everyday' ? 'hors' : 'dont' }}
           {{ formatCurrency(exceptionalAverage) }} d'événements
+          <TransactionsLink
+            v-if="actualWindow"
+            :to="exceptionalLink(actualWindow)"
+            :subject="`${category.categoryName} · événements · ${actualWindow.label}`"
+            icon-only
+            class="-my-2 h-6 w-6 align-middle"
+            :data-testid="`budget-exceptional-link-${category.categoryName}`"
+          />
         </span>
         <BaseButton
           v-if="editing && actualAverage > 0"
@@ -358,8 +416,8 @@
         <div class="space-y-1">
           <div
             v-for="sub in category.subcategories"
-            :key="sub.subcategory || '(sans sous-catégorie)'"
-            class="flex items-center gap-3 px-3 py-1.5 rounded text-sm bg-white dark:bg-slate-900"
+            :key="sub.subcategoryId ?? '(sans sous-catégorie)'"
+            class="flex items-center gap-3 py-1.5 pl-3 pr-1 rounded text-sm bg-white dark:bg-slate-900"
           >
             <span class="flex-1 truncate text-gray-700 dark:text-gray-300">
               {{ sub.subcategory || '(sans sous-catégorie)' }}
@@ -379,6 +437,14 @@
             >
               {{ formatCurrency(sub.averagePerMonth) }}/mois
             </span>
+            <TransactionsLink
+              v-if="subcategoryLink(sub)"
+              :to="subcategoryLink(sub)!"
+              :subject="`${category.categoryName} · ${subcategoryName(sub)}`"
+              icon-only
+              class="-my-1"
+              :data-testid="`budget-subcategory-link-${category.categoryName}-${sub.subcategory || 'none'}`"
+            />
           </div>
         </div>
       </div>

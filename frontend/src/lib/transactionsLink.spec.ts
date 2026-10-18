@@ -99,6 +99,11 @@ describe('parseTransactionsQuery', () => {
     importId: 'import-1',
     syncRunId: 'run-1',
     ids: ['tx-1', 'tx-2'],
+    exceptional: 'exclude',
+    nature: 'ESSENTIAL',
+    rhythm: 'none',
+    categoryIds: ['cat-2', 'none'],
+    recurrences: ['15:com netflix', '9:spotify'],
     label: 'Dettes ouvertes de Julien',
     gross: true,
     sort: 'amount',
@@ -137,6 +142,9 @@ describe('parseTransactionsQuery', () => {
         sort: 'merchant',
         dir: 'sideways',
         notPointed: 'yes',
+        exceptional: 'sometimes',
+        nature: 'essential',
+        rhythm: 'constructor',
       })
     ).toEqual({})
   })
@@ -145,6 +153,27 @@ describe('parseTransactionsQuery', () => {
     expect(
       parseTransactionsQuery({ q: ['  uber ', 'x'], account: ['A', 'B'] })
     ).toEqual({ q: 'uber', account: 'A' })
+  })
+
+  it('carries the exceptional events left out, or kept alone', () => {
+    expect(transactionsQuery({ exceptional: 'only' })).toEqual({
+      exceptional: 'only',
+    })
+    expect(parseTransactionsQuery({ exceptional: 'exclude' })).toEqual({
+      exceptional: 'exclude',
+    })
+  })
+
+  it('carries category and series lists comma-joined, deduplicated', () => {
+    expect(
+      transactionsQuery({
+        categoryIds: ['cat-1', ' cat-2 ', 'cat-1', ''],
+        recurrences: ['15:com netflix'],
+      })
+    ).toEqual({ categories: 'cat-1,cat-2', recurrences: '15:com netflix' })
+    expect(
+      parseTransactionsQuery({ categories: 'a,,b', recurrences: ' ' })
+    ).toEqual({ categoryIds: ['a', 'b'] })
   })
 
   it('reads an id list, blanks removed', () => {

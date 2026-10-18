@@ -26,7 +26,14 @@ export class BudgetResponseDto {
 }
 
 export class SubcategoryAverageDto {
-  /** Subcategory name */
+  /**
+   * The subcategory this line sums, or null for the category's rows filed
+   * under none — what a link to the line's transactions names.
+   */
+  @ApiProperty({ type: String, nullable: true })
+  subcategoryId!: string | null
+
+  /** Subcategory name, read off the subcategory (empty string if none) */
   subcategory!: string
 
   /** Total amount over the period */

@@ -396,11 +396,17 @@
    * and read in the active mode; the list is none of that, so each link
    * carries `gross` and the list says so.
    */
+  /** In « Vie courante » every figure leaves the events out: so do links. */
+  const everydayFilter = computed(() =>
+    breakdownMode.value === 'everyday' ? ('exclude' as const) : undefined
+  )
+
   function openMonthTransactions(ym: string): void {
     void router.push(
       transactionsLink({
         type: 'EXPENSE',
         month: ym,
+        exceptional: everydayFilter.value,
         gross: true,
         label: `Dépenses · ${formatMonth(ym, { capitalize: false })}`,
       })
@@ -413,11 +419,22 @@
         type: 'EXPENSE',
         categoryId: cat.categoryId,
         month: ym,
+        exceptional: everydayFilter.value,
         gross: true,
         label: `${cat.categoryName} · ${formatMonth(ym, { capitalize: false })}`,
       })
     )
   }
+
+  /** The whole window the statistics cover, behind the subcategory lines. */
+  const breakdownWindow = computed(() => {
+    const range = referenceDateRange.value
+    if (!range) return null
+    return {
+      from: range.startDate.slice(0, 10),
+      to: range.endDate.slice(0, 10),
+    }
+  })
 
   /** The comparison months, behind « Historique ». */
   const historicalWindow = computed(() => {
@@ -1156,6 +1173,7 @@
         :months="matrixMonths"
         :rows="matrixRows"
         :selected-month="selectedMonth"
+        :exceptional="everydayFilter"
       />
 
       <!-- Expense category list -->
@@ -1265,6 +1283,7 @@
             :historical-window="historicalWindow"
             :actual-window="actualWindow"
             :month-keys="statistics?.monthLabels ?? []"
+            :breakdown-window="breakdownWindow"
             @select-month="ym => openCategoryMonth(cat, ym)"
             @toggle-expand="toggleCategoryExpanded(cat.categoryId)"
             @update-budget="value => updateBudgetInput(cat.categoryId, value)"

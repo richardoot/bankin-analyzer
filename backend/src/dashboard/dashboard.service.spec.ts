@@ -27,6 +27,7 @@ describe('DashboardService', () => {
       category_name: string
       category_icon: string | null
       type: string
+      subcategory_id: string | null
       subcategory: string
       is_exceptional: boolean
       transaction_count: number
@@ -54,6 +55,14 @@ describe('DashboardService', () => {
     category_name: overrides.category_name ?? 'Alimentation',
     category_icon: overrides.category_icon ?? null,
     type: overrides.type ?? 'EXPENSE',
+    // A named line stands for a real subcategory, with an id derived from
+    // its name unless the test passes one; the unnamed line is « none ».
+    subcategory_id:
+      'subcategory_id' in overrides
+        ? (overrides.subcategory_id ?? null)
+        : overrides.subcategory
+          ? `sub-${overrides.subcategory}`
+          : null,
     subcategory: overrides.subcategory ?? '',
     is_exceptional: overrides.is_exceptional ?? false,
     // Since the deduction moved into SQL, `total_amount` arrives already net
@@ -1009,18 +1018,79 @@ describe('DashboardService', () => {
       expect(cat?.monthlyAmounts).toEqual([200, 150])
       expect(cat?.subcategories).toEqual([
         {
+          subcategoryId: 'sub-Courses',
           subcategory: 'Courses',
           amount: 250,
           transactionCount: 4,
           averagePerMonth: 125,
         },
         {
+          subcategoryId: 'sub-Restaurant',
           subcategory: 'Restaurant',
           amount: 100,
           transactionCount: 2,
           averagePerMonth: 50,
         },
       ])
+    })
+
+    it('keys the breakdown by subcategory id, with « none » as a null id', async () => {
+      setupMocks([
+        createRow({
+          month_key: '2024-01',
+          category_id: 'cat-1',
+          subcategory_id: 'sub-courses',
+          subcategory: 'Courses',
+          total_amount: 40,
+          transaction_count: 1,
+        }),
+        // Same subcategory, another month and the exceptional split: one line.
+        createRow({
+          month_key: '2024-02',
+          category_id: 'cat-1',
+          subcategory_id: 'sub-courses',
+          subcategory: 'Courses',
+          is_exceptional: true,
+          total_amount: 60,
+          transaction_count: 2,
+        }),
+        createRow({
+          month_key: '2024-02',
+          category_id: 'cat-1',
+          subcategory_id: null,
+          subcategory: '',
+          total_amount: 5,
+          transaction_count: 1,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-02-29',
+        includeCategoryBreakdown: true,
+      })
+
+      const cat = result.expensesByCategory[0]
+      expect(cat?.amount).toBe(105)
+      expect(
+        cat?.subcategories?.map(s => [
+          s.subcategoryId,
+          s.subcategory,
+          s.amount,
+          s.transactionCount,
+        ])
+      ).toEqual([
+        ['sub-courses', 'Courses', 100, 3],
+        [null, '', 5, 1],
+      ])
+
+      const [aggregation] = mockPrismaService.$queryRaw.mock.calls[0] as [
+        { strings: string[] },
+      ]
+      const sql = aggregation.strings.join('')
+      expect(sql).toContain("COALESCE(sc.name, '') AS subcategory")
+      expect(sql).toMatch(/GROUP BY[^\n]*t\.subcategory_id/)
+      expect(sql).not.toContain('COALESCE(t.subcategory')
     })
 
     it('should fill zero months between start and end dates', async () => {

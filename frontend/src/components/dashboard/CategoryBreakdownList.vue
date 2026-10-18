@@ -1,7 +1,11 @@
 <script setup lang="ts">
   import { computed, ref } from 'vue'
   import { useRouter } from 'vue-router'
-  import { UNCATEGORIZED_CATEGORY_ID, type CategoryDataDto } from '@/lib/api'
+  import {
+    UNCATEGORIZED_CATEGORY_ID,
+    type CategoryDataDto,
+    type SubcategoryDataDto,
+  } from '@/lib/api'
   import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
@@ -62,9 +66,52 @@
       categoryId: linkCategoryId(cat),
       from: props.window?.from,
       to: props.window?.to,
+      exceptional: everydayFilter.value,
       gross: true,
       label: cat.category,
     })
+  }
+
+  /**
+   * In « Vie courante » the row's figure leaves the events out; its link
+   * does the same. The real reading counts everything, and filters nothing.
+   */
+  const everydayFilter = computed(() =>
+    props.mode === 'everyday' ? ('exclude' as const) : undefined
+  )
+
+  /** The share the events carry, on its own: what « dont / hors » names. */
+  function exceptionalLink(cat: CategoryDataDto) {
+    return transactionsLink({
+      type: 'EXPENSE',
+      categoryId: linkCategoryId(cat),
+      from: props.window?.from,
+      to: props.window?.to,
+      exceptional: 'only',
+      gross: true,
+      label: `${cat.category} · événements exceptionnels`,
+    })
+  }
+
+  /**
+   * A subcategory line opens the rows it sums — by the subcategory's id,
+   * `none` for the line of the rows filed under none. Its figure counts
+   * every row, events included, so the link never narrows on them.
+   */
+  function subcategoryLink(cat: CategoryDataDto, sub: SubcategoryDataDto) {
+    return transactionsLink({
+      type: 'EXPENSE',
+      categoryId: linkCategoryId(cat),
+      subcategoryId: sub.subcategoryId ?? NO_CATEGORY,
+      from: props.window?.from,
+      to: props.window?.to,
+      gross: true,
+      label: `${cat.category} · ${subcategoryName(sub)}`,
+    })
+  }
+
+  function subcategoryName(sub: SubcategoryDataDto): string {
+    return sub.subcategory || 'sans sous-catégorie'
   }
 
   function openMonth(cat: CategoryDataDto, month: string): void {
@@ -73,6 +120,7 @@
         type: 'EXPENSE',
         categoryId: linkCategoryId(cat),
         month,
+        exceptional: everydayFilter.value,
         gross: true,
         label: `${cat.category} · ${formatMonth(month, { capitalize: false })}`,
       })
@@ -258,8 +306,9 @@
           <div class="space-y-1">
             <div
               v-for="sub in cat.subcategories"
-              :key="sub.subcategory || '(sans sous-catégorie)'"
-              class="flex items-center gap-3 px-3 py-1.5 rounded text-sm bg-white dark:bg-slate-900"
+              :key="sub.subcategoryId ?? '(sans sous-catégorie)'"
+              class="flex items-center gap-3 py-1.5 pl-3 pr-1 rounded text-sm bg-white dark:bg-slate-900"
+              :data-testid="`subcategory-line-${cat.category}-${sub.subcategory || 'none'}`"
             >
               <span
                 v-if="sub.icon"
@@ -286,6 +335,13 @@
               >
                 {{ formatCurrency(sub.averagePerMonth) }}/mois
               </span>
+              <TransactionsLink
+                :to="subcategoryLink(cat, sub)"
+                :subject="`${cat.category} · ${subcategoryName(sub)}`"
+                icon-only
+                class="-my-1"
+                :data-testid="`subcategory-link-${cat.category}-${sub.subcategory || 'none'}`"
+              />
             </div>
           </div>
         </div>
@@ -303,6 +359,27 @@
             :months="monthLabels"
             @select-month="month => openMonth(cat, month)"
           />
+        </div>
+
+        <!-- The events' share, and the rows behind it. A line of its own:
+             the figure in the row sits inside the toggle, where a link
+             cannot go. -->
+        <div
+          v-if="cat.exceptionalAmount && cat.exceptionalAmount > 0"
+          class="mt-3 flex flex-wrap items-center gap-x-2 text-xs text-amber-700 dark:text-amber-400"
+        >
+          <span class="tabular-nums">
+            Événements exceptionnels :
+            {{ formatCurrency(cat.exceptionalAmount) }}
+            {{ isEveryday ? '(exclus de la moyenne)' : '(inclus)' }}
+          </span>
+          <TransactionsLink
+            :to="exceptionalLink(cat)"
+            :subject="`${cat.category} · événements exceptionnels`"
+            :data-testid="`category-exceptional-link-${cat.category}`"
+          >
+            Voir
+          </TransactionsLink>
         </div>
 
         <!-- Reimbursement info -->

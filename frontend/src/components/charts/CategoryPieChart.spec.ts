@@ -243,11 +243,14 @@ describe('CategoryPieChart', () => {
       expect(wrapper.classes().join(' ')).toContain('cursor-pointer')
     })
 
-    it('says nothing for « Autres », which is many categories at once', () => {
+    it('hands « Autres » over as every category it merges, never as one', () => {
       const wrapper = mount(CategoryPieChart, {
         props: {
-          data: { labels: ['A', 'B', 'C'], values: [300, 200, 100] },
-          ids: ['id-a', 'id-b', 'id-c'],
+          data: {
+            labels: ['A', 'B', 'C', 'D'],
+            values: [300, 200, 100, 50],
+          },
+          ids: ['id-a', 'id-b', 'id-c', null],
           title: 'T',
           topN: 2,
         },
@@ -256,6 +259,8 @@ describe('CategoryPieChart', () => {
       selection(wrapper)?.(null, null, { dataPointIndex: 2 })
 
       expect(wrapper.emitted('select')).toBeUndefined()
+      // D has no id to hand over: the slice names what it can.
+      expect(wrapper.emitted('select-others')).toEqual([[['id-c']]])
     })
 
     it('stays mute without ids', () => {

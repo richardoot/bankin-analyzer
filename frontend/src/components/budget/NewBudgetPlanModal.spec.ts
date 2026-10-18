@@ -1179,7 +1179,7 @@ describe('NewBudgetPlanModal', () => {
       // A draft is open: the list opens beside it, never over it.
       expect(link?.getAttribute('target')).toBe('_blank')
       expect(link?.getAttribute('href')).toBe(
-        '/transactions?type=EXPENSE&category=cat-food&from=2025-11-01&to=2026-04-30&label=Alimentation+%C2%B7+6+mois+pr%C3%A9c%C3%A9dents&gross=1'
+        '/transactions?type=EXPENSE&category=cat-food&from=2025-11-01&to=2026-04-30&exceptional=exclude&label=Alimentation+%C2%B7+6+mois+pr%C3%A9c%C3%A9dents&gross=1'
       )
       expect(link?.getAttribute('aria-label')).toBe(
         'Voir les transactions de Alimentation'

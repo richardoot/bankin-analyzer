@@ -1392,6 +1392,113 @@ describe('TransactionsPage — optimistic updates', () => {
       expect(router.currentRoute.value.query).toEqual({})
     })
 
+    it('leaves the exceptional events out, says so in a chip, and lets it go', async () => {
+      const wrapper = await mountAt({
+        category: 'cat-1',
+        exceptional: 'exclude',
+      })
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ categoryId: 'cat-1', exceptional: 'exclude' })
+      )
+      const chips = wrapper.find('[data-testid="active-filter-chips"]')
+      expect(chips.text()).toContain('Hors événements exceptionnels')
+      expect(
+        (
+          wrapper.find('[data-testid="transactions-exceptional-filter"]')
+            .element as HTMLSelectElement
+        ).value
+      ).toBe('exclude')
+
+      await chips
+        .find('[aria-label="Retirer le filtre Hors événements exceptionnels"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ exceptional: undefined })
+      )
+      expect(router.currentRoute.value.query.exceptional).toBeUndefined()
+    })
+
+    it('offers the events alone from the filter panel, mirrored in the URL', async () => {
+      const wrapper = await mountAt({ type: 'EXPENSE' })
+
+      await wrapper
+        .find('[data-testid="transactions-exceptional-filter"]')
+        .setValue('only')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ exceptional: 'only' })
+      )
+      expect(router.currentRoute.value.query.exceptional).toBe('only')
+      expect(wrapper.text()).toContain('Événements exceptionnels seulement')
+    })
+
+    it('reads nature and rhythm from the URL, names them, and offers them in the panel', async () => {
+      const wrapper = await mountAt({ nature: 'PLEASURE', rhythm: 'none' })
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ nature: 'PLEASURE', rhythm: 'none' })
+      )
+      const chips = wrapper.find('[data-testid="active-filter-chips"]')
+      expect(chips.text()).toContain('Nature : Plaisir')
+      expect(chips.text()).toContain('Rythme : À migrer')
+
+      await wrapper
+        .find('[data-testid="transactions-rhythm-filter"]')
+        .setValue('COMMITTED')
+      await flushPromises()
+      expect(router.currentRoute.value.query.rhythm).toBe('COMMITTED')
+
+      await chips
+        .find('[aria-label="Retirer le filtre Nature : Plaisir"]')
+        .trigger('click')
+      await flushPromises()
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ nature: undefined, rhythm: 'COMMITTED' })
+      )
+    })
+
+    it('names several categories and several series in chips, each removable', async () => {
+      const wrapper = await mountAt({
+        categories: 'cat-1,none',
+        recurrences: '15:com netflix,9:spotify',
+      })
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          categoryIds: ['cat-1', 'none'],
+          recurrences: ['15:com netflix', '9:spotify'],
+        })
+      )
+      const chips = wrapper.find('[data-testid="active-filter-chips"]')
+      expect(chips.text()).toMatch(/Catégories : .+, Sans catégorie/)
+      expect(chips.text()).toContain('2 charges récurrentes')
+
+      await chips
+        .find('[aria-label="Retirer le filtre 2 charges récurrentes"]')
+        .trigger('click')
+      await flushPromises()
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          categoryIds: ['cat-1', 'none'],
+          recurrences: undefined,
+        })
+      )
+      expect(router.currentRoute.value.query.categories).toBe('cat-1,none')
+      expect(router.currentRoute.value.query.recurrences).toBeUndefined()
+    })
+
+    it('counts a long category list rather than naming it', async () => {
+      const wrapper = await mountAt({ categories: 'a,b,c,d,e' })
+
+      expect(
+        wrapper.find('[data-testid="active-filter-chips"]').text()
+      ).toContain('5 catégories')
+    })
+
     it('follows a link pushed while the page is open, and Back as well', async () => {
       const wrapper = await mountAt({ type: 'EXPENSE' })
       expect(api.getTransactions).toHaveBeenCalledTimes(1)
