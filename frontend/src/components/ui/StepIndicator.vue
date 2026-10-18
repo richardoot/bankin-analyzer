@@ -28,7 +28,7 @@
             index + 1 < current
               ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300'
               : index + 1 === current
-                ? 'bg-primary-600 text-white dark:bg-primary-500'
+                ? 'bg-primary-600 text-white'
                 : 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-gray-500'
           "
         >

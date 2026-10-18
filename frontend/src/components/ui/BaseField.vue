@@ -84,7 +84,7 @@
   }
 
   const controlClass = computed(() => [
-    'block w-full rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-500 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid]:border-red-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-400 dark:focus:border-primary-400 dark:focus:ring-primary-400/20',
+    'block w-full rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-500 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid]:border-red-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-400 dark:focus:border-primary-400',
     CONTROL_SIZES[props.size],
     props.labelHidden ? '' : 'mt-1',
   ])

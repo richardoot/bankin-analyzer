@@ -406,7 +406,7 @@
         >
           {{ progress.message }}
         </span>
-        <span class="text-sm text-primary-600 dark:text-primary-400"
+        <span class="text-sm text-primary-700 dark:text-primary-400"
           >{{ progress.percent }}%</span
         >
       </div>
@@ -414,13 +414,13 @@
         class="w-full bg-primary-100 dark:bg-primary-900/30 rounded-full h-2.5"
       >
         <div
-          class="bg-primary-600 dark:bg-primary-500 h-2.5 rounded-full transition-all duration-300"
+          class="bg-primary-600 h-2.5 rounded-full transition-all duration-300"
           :style="{ width: `${progress.percent}%` }"
         ></div>
       </div>
       <div
         v-if="progress.totalChunks > 1"
-        class="mt-2 text-xs text-primary-500 dark:text-primary-400"
+        class="mt-2 text-xs text-primary-700 dark:text-primary-400"
       >
         Chunk {{ progress.completedChunks }}/{{ progress.totalChunks }}
       </div>

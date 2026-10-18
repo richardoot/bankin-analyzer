@@ -1388,7 +1388,7 @@
             data-testid="transactions-search-input"
             aria-label="Rechercher une transaction (libellé, note, sous-catégorie)"
             placeholder="Rechercher…"
-            class="w-full pl-10 pr-3 py-3 md:py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+            class="w-full pl-10 pr-3 py-3 md:py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500"
           />
         </div>
       </template>
@@ -1406,7 +1406,7 @@
           <select
             v-model="typeFilter"
             data-testid="transactions-type-filter"
-            class="h-11 md:h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+            class="h-11 md:h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
           >
             <option value="ALL">Toutes</option>
             <option value="EXPENSE">Dépenses</option>
@@ -1421,7 +1421,7 @@
           <select
             v-model="selectedCategory"
             data-testid="transactions-category-filter"
-            class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+            class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
           >
             <option :value="null">Toutes</option>
             <option
@@ -1454,7 +1454,7 @@
                 ? undefined
                 : 'Sélectionnez d\'abord une catégorie'
             "
-            class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/60 dark:disabled:text-gray-500"
+            class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/60 dark:disabled:text-gray-500"
           >
             <option :value="null">
               {{ selectedCategory ? 'Toutes' : 'Choisir une catégorie' }}
@@ -1475,7 +1475,7 @@
           <select
             v-model="selectedAccount"
             data-testid="transactions-account-filter"
-            class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+            class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
           >
             <option :value="null">Tous</option>
             <option
@@ -1494,7 +1494,7 @@
           <select
             v-model="selectedTag"
             data-testid="transactions-tag-filter"
-            class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+            class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
           >
             <option :value="null">Toutes</option>
             <option v-for="tag in tagsStore.tags" :key="tag.id" :value="tag.id">
@@ -1518,7 +1518,7 @@
               type="date"
               aria-label="Date de début"
               data-testid="transactions-start-date-filter"
-              class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+              class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
             />
             <span class="shrink-0 text-gray-500 dark:text-gray-400">→</span>
             <input
@@ -1526,7 +1526,7 @@
               type="date"
               aria-label="Date de fin"
               data-testid="transactions-end-date-filter"
-              class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+              class="h-11 md:h-9 min-w-0 flex-1 md:w-36 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
             />
           </div>
         </div>
@@ -1544,7 +1544,7 @@
               placeholder="min"
               aria-label="Montant minimum"
               data-testid="transactions-amount-min-filter"
-              class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+              class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500"
             />
             <span class="shrink-0 text-gray-500 dark:text-gray-400">–</span>
             <input
@@ -1556,7 +1556,7 @@
               placeholder="max"
               aria-label="Montant maximum"
               data-testid="transactions-amount-max-filter"
-              class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+              class="h-11 md:h-9 min-w-0 flex-1 md:w-24 md:flex-none px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary-500"
             />
           </div>
         </div>
@@ -1849,7 +1849,7 @@
           v-if="isLoadingTransactions"
           role="status"
           data-testid="transactions-refreshing"
-          class="absolute inset-x-0 top-0 h-0.5 animate-pulse rounded-t-xl bg-primary-500"
+          class="absolute inset-x-0 top-0 h-0.5 animate-pulse rounded-t-xl bg-primary-600"
         >
           <span class="sr-only">Chargement des transactions…</span>
         </div>
@@ -1888,7 +1888,7 @@
                 :checked="isAllSelected"
                 :indeterminate="isPartiallySelected"
                 aria-label="Sélectionner toutes les transactions de la page"
-                class="h-4 w-4 text-primary-600 dark:text-primary-500 border-gray-300 dark:border-slate-600 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
+                class="h-4 w-4 text-primary-600 dark:text-primary-400 border-gray-300 dark:border-slate-600 rounded focus:ring-primary-500 dark:bg-slate-700"
                 data-testid="select-all"
                 @change="toggleSelectAll"
               />
@@ -2028,7 +2028,7 @@
                   class="relative hidden rounded-lg px-3 py-1.5 text-sm transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-1.5 pointer-coarse:before:content-[''] sm:inline-block"
                   :class="
                     page === currentPage
-                      ? 'bg-primary-600 dark:bg-primary-500 text-white'
+                      ? 'bg-primary-600 text-white'
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'
                   "
                   @click="goToPage(page)"

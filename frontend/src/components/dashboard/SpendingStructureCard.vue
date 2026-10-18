@@ -212,7 +212,7 @@
           ·
           <RouterLink
             to="/recurrences"
-            class="text-primary-600 hover:underline dark:text-primary-400"
+            class="text-primary-700 hover:underline dark:text-primary-400"
             data-testid="recurring-link"
           >
             voir la liste

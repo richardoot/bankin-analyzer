@@ -41,7 +41,7 @@
           :class="
             delta > 0
               ? 'text-red-600 dark:text-red-400'
-              : 'text-primary-600 dark:text-primary-400'
+              : 'text-primary-700 dark:text-primary-400'
           "
         >
           {{ delta > 0 ? '+' : '' }}{{ formatCurrency(delta) }} / mois
@@ -72,7 +72,7 @@
             :class="
               delta > 0
                 ? 'text-red-600 dark:text-red-400'
-                : 'text-primary-600 dark:text-primary-400'
+                : 'text-primary-700 dark:text-primary-400'
             "
           >
             ({{ delta > 0 ? '+' : '' }}{{ formatCurrency(delta) }})

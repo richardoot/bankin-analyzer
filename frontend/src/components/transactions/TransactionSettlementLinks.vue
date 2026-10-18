@@ -26,7 +26,7 @@
     v-for="settlement in settlements"
     :key="settlement.id"
     type="button"
-    class="relative inline-flex items-center gap-1 rounded text-primary-600 transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 pointer-coarse:before:content-[''] disabled:opacity-50 dark:text-primary-400"
+    class="relative inline-flex items-center gap-1 rounded text-primary-700 transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 pointer-coarse:before:content-[''] disabled:opacity-50 dark:text-primary-400"
     :class="
       dense
         ? 'min-h-[28px] px-2 text-xs hover:bg-primary-50 dark:hover:bg-primary-900/20'

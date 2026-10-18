@@ -163,7 +163,7 @@
       :class="[
         SIZES[size],
         isSelected(option)
-          ? 'bg-primary-600 text-white shadow-sm dark:bg-primary-500'
+          ? 'bg-primary-600 text-white shadow-sm'
           : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200',
       ]"
       @click="select(option)"

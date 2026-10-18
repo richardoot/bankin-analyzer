@@ -140,7 +140,7 @@
         class="min-h-[44px] rounded-md px-2 text-xs font-medium transition-colors"
         :class="
           mode === option.key
-            ? 'bg-primary-500 text-white dark:bg-primary-600'
+            ? 'bg-primary-600 text-white'
             : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800'
         "
         @click="mode = option.key as Mode"
@@ -165,7 +165,7 @@
             name="recurrence-period"
             :value="option.value"
             :data-testid="`period-${option.value}`"
-            class="h-4 w-4 text-primary-600"
+            class="h-4 w-4 text-primary-700"
           />
           {{ option.label }}
         </label>
@@ -205,7 +205,7 @@
             name="recurrence-target"
             :value="keyOf(recurrence)"
             :data-testid="`target-${keyOf(recurrence)}`"
-            class="h-4 w-4 text-primary-600"
+            class="h-4 w-4 text-primary-700"
           />
           <span class="min-w-0 flex-1">
             <span class="block truncate font-medium">{{

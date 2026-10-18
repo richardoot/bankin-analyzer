@@ -41,11 +41,7 @@
     :disabled="disabled || loading"
     :title="label"
     class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors pointer-coarse:before:absolute pointer-coarse:before:-inset-x-1 pointer-coarse:before:-inset-y-3 pointer-coarse:before:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-    :class="
-      checked
-        ? 'bg-primary-500 dark:bg-primary-600'
-        : 'bg-gray-300 dark:bg-slate-600'
-    "
+    :class="checked ? 'bg-primary-600' : 'bg-gray-300 dark:bg-slate-600'"
     @click="onClick(checked, disabled === true || loading === true)"
   >
     <span

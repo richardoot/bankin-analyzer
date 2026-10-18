@@ -119,7 +119,7 @@
         <div class="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-3">
           <div v-for="item in highlights" :key="item.value">
             <p
-              class="text-3xl font-bold text-primary-500 dark:text-primary-400"
+              class="text-3xl font-bold text-primary-700 dark:text-primary-400"
             >
               {{ item.value }}
             </p>

@@ -51,8 +51,7 @@
   )
 
   const VARIANTS: Record<NonNullable<typeof props.variant>, string> = {
-    primary:
-      'bg-primary-600 dark:bg-primary-500 text-white hover:bg-primary-700 dark:hover:bg-primary-600',
+    primary: 'bg-primary-600 text-white hover:bg-primary-700',
     secondary:
       'border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700',
     tinted:

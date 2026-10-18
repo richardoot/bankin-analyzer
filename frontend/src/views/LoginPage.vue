@@ -213,7 +213,7 @@
                 ? 'Passer au mode connexion'
                 : 'Passer au mode inscription'
             "
-            class="text-sm text-primary-600 dark:text-primary-500 hover:text-primary-700 dark:hover:text-primary-400"
+            class="text-sm text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300"
             @click="toggleMode"
           >
             {{

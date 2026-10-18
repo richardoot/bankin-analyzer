@@ -88,7 +88,7 @@
           class="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4"
         >
           <svg
-            class="w-8 h-8 text-primary-600 dark:text-primary-400"
+            class="w-8 h-8 text-primary-700 dark:text-primary-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

@@ -75,7 +75,7 @@
   const colorClasses = {
     primary: {
       box: 'bg-primary-100 dark:bg-primary-900/30',
-      icon: 'text-primary-600 dark:text-primary-400',
+      icon: 'text-primary-700 dark:text-primary-400',
     },
     blue: {
       box: 'bg-blue-100 dark:bg-blue-900/30',
@@ -200,7 +200,7 @@
         >
           <!-- Step number -->
           <div
-            class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30 text-2xl font-bold text-primary-600 dark:text-primary-400"
+            class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30 text-2xl font-bold text-primary-700 dark:text-primary-400"
             aria-hidden="true"
           >
             {{ step.number }}
@@ -247,7 +247,7 @@
         <div class="grid gap-10 lg:grid-cols-5 lg:gap-16">
           <div class="lg:col-span-2">
             <p
-              class="text-sm font-semibold uppercase tracking-wide text-primary-600 dark:text-primary-400"
+              class="text-sm font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-400"
             >
               Synchronisation bancaire
             </p>
@@ -270,7 +270,7 @@
               class="flex gap-3"
             >
               <span
-                class="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-500 dark:bg-primary-600 text-white"
+                class="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-600 text-white"
                 aria-hidden="true"
               >
                 <svg

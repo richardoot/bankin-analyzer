@@ -82,7 +82,7 @@
           </p>
           <RouterLink
             to="/settings/accounts"
-            class="mt-6 inline-block font-medium text-primary-600 hover:underline dark:text-primary-400"
+            class="mt-6 inline-block font-medium text-primary-700 hover:underline dark:text-primary-400"
           >
             Continuer
           </RouterLink>
@@ -105,7 +105,7 @@
           </p>
           <RouterLink
             to="/settings/accounts"
-            class="mt-6 inline-block font-medium text-primary-600 hover:underline dark:text-primary-400"
+            class="mt-6 inline-block font-medium text-primary-700 hover:underline dark:text-primary-400"
           >
             Revenir aux comptes
           </RouterLink>
@@ -130,7 +130,7 @@
           </p>
           <RouterLink
             to="/settings/accounts"
-            class="mt-6 inline-block font-medium text-primary-600 hover:underline dark:text-primary-400"
+            class="mt-6 inline-block font-medium text-primary-700 hover:underline dark:text-primary-400"
           >
             Revenir aux comptes
           </RouterLink>

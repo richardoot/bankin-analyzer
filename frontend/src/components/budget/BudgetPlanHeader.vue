@@ -176,7 +176,7 @@
     >
       <template v-if="isSaving">
         <svg
-          class="animate-spin h-4 w-4 text-primary-600 dark:text-primary-400"
+          class="animate-spin h-4 w-4 text-primary-700 dark:text-primary-400"
           fill="none"
           viewBox="0 0 24 24"
         >
@@ -198,7 +198,7 @@
       </template>
       <template v-else>
         <svg
-          class="h-4 w-4 text-primary-600 dark:text-primary-400"
+          class="h-4 w-4 text-primary-700 dark:text-primary-400"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -210,7 +210,7 @@
             d="M5 13l4 4L19 7"
           />
         </svg>
-        <span class="text-primary-600 dark:text-primary-400">Sauvegardé</span>
+        <span class="text-primary-700 dark:text-primary-400">Sauvegardé</span>
       </template>
     </div>
   </div>

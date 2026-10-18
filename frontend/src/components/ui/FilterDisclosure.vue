@@ -75,7 +75,7 @@
         <span
           v-if="count > 0"
           data-testid="filter-disclosure-count"
-          class="rounded-full bg-primary-600 px-1.5 text-xs font-semibold tabular-nums text-white dark:bg-primary-500"
+          class="rounded-full bg-primary-600 px-1.5 text-xs font-semibold tabular-nums text-white"
         >
           {{ count }}
         </span>

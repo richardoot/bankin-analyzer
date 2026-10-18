@@ -36,7 +36,7 @@
       @keyup.escape="emit('cancel')"
     />
     <button
-      class="p-1.5 text-primary-600 dark:text-primary-400 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20"
+      class="p-1.5 text-primary-700 dark:text-primary-400 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20"
       type="button"
       title="Sauvegarder"
       aria-label="Enregistrer la note"

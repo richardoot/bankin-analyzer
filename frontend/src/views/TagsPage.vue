@@ -232,7 +232,7 @@
         @click="createOpen = !createOpen"
       >
         <span class="inline-flex items-center gap-2">
-          <IconPlus class="h-4 w-4 text-primary-600 dark:text-primary-400" />
+          <IconPlus class="h-4 w-4 text-primary-700 dark:text-primary-400" />
           Nouvelle étiquette
         </span>
         <IconChevronDown
@@ -513,7 +513,7 @@
               </span>
             </div>
             <span
-              class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-600 dark:text-primary-400"
+              class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-700 dark:text-primary-400"
             >
               Analyser
               <svg

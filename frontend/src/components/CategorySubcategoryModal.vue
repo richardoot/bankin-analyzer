@@ -325,7 +325,7 @@
             class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
             :class="
               selectedCategoryId === null
-                ? 'bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400'
+                ? 'bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400'
                 : BADGE_IDLE
             "
           >
@@ -364,7 +364,7 @@
                 selectedCategoryId === cat.id
                   ? transactionType === 'EXPENSE'
                     ? 'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400'
-                    : 'bg-primary-100 text-primary-600 dark:bg-primary-500/20 dark:text-primary-400'
+                    : 'bg-primary-100 text-primary-700 dark:bg-primary-500/20 dark:text-primary-400'
                   : BADGE_IDLE,
               ]"
             >
@@ -494,7 +494,7 @@
               :class="
                 transactionType === 'EXPENSE'
                   ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
-                  : 'bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400'
+                  : 'bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-400'
               "
             >
               <span v-if="selectedCategory.icon" class="mr-0.5">{{

@@ -509,7 +509,7 @@
           Aucune catégorie ne correspond.
           <button
             type="button"
-            class="ml-1 font-medium text-primary-600 hover:underline dark:text-primary-400"
+            class="ml-1 font-medium text-primary-700 hover:underline dark:text-primary-400"
             @click="clearCategoryFilters"
           >
             Réinitialiser les filtres

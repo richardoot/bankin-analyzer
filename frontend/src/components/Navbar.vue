@@ -108,7 +108,7 @@
             @click="closeMobileMenu"
           >
             <svg
-              class="h-8 w-8 text-primary-600 dark:text-primary-500"
+              class="h-8 w-8 text-primary-700 dark:text-primary-400"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"

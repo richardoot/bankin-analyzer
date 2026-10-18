@@ -36,7 +36,7 @@
     danger:
       'text-gray-400 hover:bg-red-50 hover:text-red-600 dark:text-gray-500 dark:hover:bg-red-900/20 dark:hover:text-red-400',
     primary:
-      'text-primary-600 hover:bg-primary-50 hover:text-primary-700 dark:text-primary-400 dark:hover:bg-primary-900/20 dark:hover:text-primary-300',
+      'text-primary-700 hover:bg-primary-50 hover:text-primary-800 dark:text-primary-400 dark:hover:bg-primary-900/20 dark:hover:text-primary-300',
   }
 
   const SIZES: Record<NonNullable<typeof props.size>, string> = {

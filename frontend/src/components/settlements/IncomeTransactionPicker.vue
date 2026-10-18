@@ -317,7 +317,7 @@
       <button
         type="button"
         data-testid="settlement-toggle-filters"
-        class="inline-flex min-h-[40px] items-center text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
+        class="inline-flex min-h-[40px] items-center text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
         @click="showFilters = !showFilters"
       >
         {{ showFilters ? 'Masquer les filtres' : 'Plus de filtres' }}
@@ -484,7 +484,7 @@
           v-if="hiddenSuggestionCount > 0"
           type="button"
           data-testid="settlement-more-suggestions"
-          class="mt-2 inline-flex min-h-[40px] items-center text-sm text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
+          class="mt-2 inline-flex min-h-[40px] items-center text-sm text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
           @click="showAllSuggestions = true"
         >
           Voir les {{ hiddenSuggestionCount }} autres suggestions

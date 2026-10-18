@@ -353,7 +353,7 @@
           <template #action>
             <RouterLink
               to="/settings/categories"
-              class="text-sm font-medium text-primary-600 hover:underline dark:text-primary-400"
+              class="text-sm font-medium text-primary-700 hover:underline dark:text-primary-400"
             >
               Retour aux catégories
             </RouterLink>

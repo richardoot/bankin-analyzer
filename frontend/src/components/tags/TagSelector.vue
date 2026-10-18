@@ -47,7 +47,7 @@
   }>()
 
   const TRIGGER_BASE =
-    "relative inline-flex items-center text-gray-500 transition-colors pointer-coarse:before:absolute pointer-coarse:before:content-[''] hover:text-primary-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-slate-400"
+    "relative inline-flex items-center text-gray-500 transition-colors pointer-coarse:before:absolute pointer-coarse:before:content-[''] hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-slate-400"
   const TRIGGER_PILL =
     'min-h-[28px] gap-1 rounded-full border border-dashed border-gray-300 px-2 text-xs font-medium pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 hover:border-primary-400 dark:border-slate-600 dark:hover:border-primary-500'
   const TRIGGER_ICON =
@@ -238,7 +238,7 @@
       <button
         v-if="canCreate"
         type="button"
-        class="mt-1 flex min-h-[40px] w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium text-primary-600 sm:min-h-0 hover:bg-primary-50 disabled:opacity-50 dark:text-primary-400 dark:hover:bg-slate-700"
+        class="mt-1 flex min-h-[40px] w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium text-primary-700 sm:min-h-0 hover:bg-primary-50 disabled:opacity-50 dark:text-primary-400 dark:hover:bg-slate-700"
         :disabled="busy"
         @click="create"
       >

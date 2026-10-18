@@ -178,7 +178,7 @@
             :class="
               preset === 'none'
                 ? 'bg-gray-300 dark:bg-slate-600'
-                : 'bg-primary-500'
+                : 'bg-primary-600'
             "
           />
           <span class="min-w-0 flex-1 truncate text-left">{{

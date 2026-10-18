@@ -141,7 +141,7 @@
             "
           />
           <span
-            class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-primary-500/70 dark:text-primary-400/70 pointer-events-none"
+            class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 dark:text-gray-400 pointer-events-none"
           >
             €
           </span>

@@ -527,7 +527,7 @@
           Aucun compte relié pour l'instant —
           <RouterLink
             to="/settings/accounts"
-            class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
+            class="inline-flex min-h-[40px] items-center font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
           >
             choisissez lesquels lire
           </RouterLink>
@@ -609,19 +609,19 @@
       >
         <RouterLink
           to="/bank-sync/history"
-          class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
+          class="inline-flex min-h-[40px] items-center font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
         >
           Historique des synchronisations
         </RouterLink>
         <RouterLink
           to="/import/history"
-          class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
+          class="inline-flex min-h-[40px] items-center font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
         >
           Historique des imports
         </RouterLink>
         <RouterLink
           to="/settings/accounts"
-          class="inline-flex min-h-[40px] items-center font-medium text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
+          class="inline-flex min-h-[40px] items-center font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
         >
           Configurer les comptes
         </RouterLink>

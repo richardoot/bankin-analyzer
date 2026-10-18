@@ -135,7 +135,7 @@
             Budget alloué
           </span>
           <span
-            class="text-lg font-semibold text-primary-600 dark:text-primary-400 tabular-nums"
+            class="text-lg font-semibold text-primary-700 dark:text-primary-400 tabular-nums"
           >
             {{ formatCurrency(planBudgetTotal) }}
           </span>
@@ -239,7 +239,7 @@
             Budget alloué
           </span>
           <span
-            class="text-lg font-semibold text-primary-600 dark:text-primary-400 tabular-nums"
+            class="text-lg font-semibold text-primary-700 dark:text-primary-400 tabular-nums"
           >
             {{ formatCurrency(planBudgetTotal) }}
           </span>

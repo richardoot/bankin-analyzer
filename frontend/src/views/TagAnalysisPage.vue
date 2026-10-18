@@ -274,11 +274,7 @@
         >
           <div
             class="h-full rounded-full transition-all"
-            :class="
-              envelopeRatio > 1
-                ? 'bg-red-500'
-                : 'bg-primary-500 dark:bg-primary-400'
-            "
+            :class="envelopeRatio > 1 ? 'bg-red-500' : 'bg-primary-600'"
             :style="{ width: `${Math.min(envelopeRatio, 1) * 100}%` }"
           ></div>
         </div>

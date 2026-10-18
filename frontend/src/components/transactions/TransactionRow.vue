@@ -318,7 +318,7 @@
             type="checkbox"
             :checked="selected"
             :aria-label="`Sélectionner ${transaction.description}`"
-            class="h-5 w-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-700 dark:text-primary-500"
+            class="h-5 w-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-700 dark:text-primary-400"
             @change="emit('toggle-select')"
           />
         </div>
@@ -411,7 +411,7 @@
                 class="relative flex h-8 w-8 items-center justify-center rounded-lg transition-colors pointer-coarse:before:absolute pointer-coarse:before:-inset-1.5 pointer-coarse:before:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
                 :class="
                   transaction.isPointed
-                    ? 'bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400'
+                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
                     : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-slate-700'
                 "
                 :title="transaction.isPointed ? 'Dépointer' : 'Pointer'"
@@ -497,7 +497,7 @@
           type="checkbox"
           :checked="selected"
           :aria-label="`Sélectionner ${transaction.description}`"
-          class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-700 dark:text-primary-500 dark:focus:ring-primary-400"
+          class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-700 dark:text-primary-400"
           data-testid="select-row-desktop"
           @change="emit('toggle-select')"
         />
@@ -573,7 +573,7 @@
           class="relative flex h-8 w-8 items-center justify-center rounded-full transition-colors pointer-coarse:before:absolute pointer-coarse:before:-inset-1.5 pointer-coarse:before:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
           :class="
             transaction.isPointed
-              ? 'bg-primary-100 text-primary-600 hover:bg-primary-200 dark:bg-primary-900/30 dark:text-primary-400 dark:hover:bg-primary-900/50'
+              ? 'bg-primary-100 text-primary-700 hover:bg-primary-200 dark:bg-primary-900/30 dark:text-primary-400 dark:hover:bg-primary-900/50'
               : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-400 dark:hover:bg-slate-600'
           "
           :title="transaction.isPointed ? 'Dépointer' : 'Pointer'"
