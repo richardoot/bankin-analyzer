@@ -29,8 +29,10 @@
     { subject: undefined, size: 'sm', newTab: false, iconOnly: false }
   )
 
-  const router = useRouter()
-  const href = computed(() => router.resolve(props.to).href)
+  // A dialog mounted on its own in a spec has no router: the new-tab form
+  // then points nowhere rather than throwing from a computed.
+  const router = useRouter() as ReturnType<typeof useRouter> | undefined
+  const href = computed(() => router?.resolve(props.to).href ?? '#')
   const name = computed(() =>
     props.subject
       ? `Voir les transactions de ${props.subject}`

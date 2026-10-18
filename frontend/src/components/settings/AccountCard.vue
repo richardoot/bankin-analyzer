@@ -17,6 +17,8 @@
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseField from '@/components/ui/BaseField.vue'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   const props = defineProps<{
     account: AccountDto
@@ -281,6 +283,32 @@
       v-show="expanded"
       class="space-y-5 border-t border-gray-200 px-4 py-4 dark:border-slate-700"
     >
+      <!-- The rows the badge counts, one link away. Here rather than on
+           the badge: the header is a button, and a link in a button is
+           two gestures in one. -->
+      <div
+        v-if="needsReviewCount"
+        class="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+        data-testid="account-review-note"
+      >
+        {{ needsReviewCount }} transaction{{ needsReviewCount > 1 ? 's' : '' }}
+        à réaffecter : la banque n'y fait plus référence.
+        <TransactionsLink
+          :to="
+            transactionsLink({
+              account: account.name,
+              review: true,
+              label: `${account.name} · à réaffecter`,
+            })
+          "
+          :subject="`${account.name} à réaffecter`"
+          size="md"
+          data-testid="account-review-link"
+        >
+          Voir les transactions
+        </TransactionsLink>
+      </div>
+
       <!-- Name -->
       <div>
         <form

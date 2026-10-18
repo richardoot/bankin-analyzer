@@ -16,6 +16,8 @@
   import { useAccountsStore } from '@/stores/accounts'
   import type { AccountDeletionSummaryDto, AccountDto } from '@/lib/api'
   import { formatDate } from '@/lib/formatters'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   const props = defineProps<{
     account: AccountDto | null
@@ -125,6 +127,18 @@
                 : 'transaction sera supprimée'
             }}
             <template v-if="rangeLabel"> ({{ rangeLabel }})</template>
+            <TransactionsLink
+              v-if="summary.transactionCount > 0"
+              :to="
+                transactionsLink({ account: account.name, label: account.name })
+              "
+              :subject="account.name"
+              size="md"
+              data-testid="deletion-transactions-link"
+              @click="close"
+            >
+              Les voir
+            </TransactionsLink>
           </li>
           <li v-if="summary.reimbursementCount > 0">
             <strong>{{ summary.reimbursementCount }}</strong>
