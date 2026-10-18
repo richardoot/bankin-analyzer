@@ -6,6 +6,8 @@
   import SectionLabel from '@/components/ui/SectionLabel.vue'
   import type { ImportPreviewResultDto } from '@/lib/api'
   import { formatCurrency, formatDate } from '@/lib/formatters'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   /**
    * The decision « import this row or not » rests on a checkbox: the whole
@@ -434,8 +436,24 @@
                     {{ dup.existing.categoryName || '—' }}
                   </dd>
                 </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">
+                <div
+                  class="flex flex-wrap items-center gap-x-2 text-xs text-gray-500 dark:text-gray-400"
+                >
                   Importée le {{ formatDate(dup.existing.createdAt) }}
+                  <!-- An import is under way: the row opens beside it. -->
+                  <TransactionsLink
+                    :to="
+                      transactionsLink({
+                        ids: [dup.existing.id],
+                        label: dup.existing.description,
+                      })
+                    "
+                    :subject="dup.existing.description"
+                    new-tab
+                    :data-testid="`existing-transaction-link-${dup.uploaded.index}`"
+                  >
+                    La voir
+                  </TransactionsLink>
                 </div>
               </dl>
             </div>

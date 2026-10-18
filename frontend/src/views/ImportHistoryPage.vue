@@ -5,6 +5,8 @@
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import { useToast } from '@/composables/useToast'
   import { formatDate, formatDateTime } from '@/lib/formatters'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
@@ -295,6 +297,20 @@
             <p class="text-sm text-green-700 dark:text-green-300">
               transactions importées
             </p>
+            <TransactionsLink
+              v-if="history.transactionsImported > 0"
+              :to="
+                transactionsLink({
+                  importId: history.id,
+                  label: `Import du ${formatDate(history.createdAt)}`,
+                })
+              "
+              :subject="`l'import du ${formatDate(history.createdAt)}`"
+              class="mt-1"
+              :data-testid="`import-transactions-link-${history.id}`"
+            >
+              Les voir
+            </TransactionsLink>
           </div>
 
           <!-- Total in File -->

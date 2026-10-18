@@ -45,15 +45,13 @@
 
   onMounted(load)
 
-  /** The imported transactions, by the window the import covered. */
+  /** The rows this import wrote — exactly those, by the import's id. */
   const transactionsLink = computed(() => {
     const h = history.value
-    if (!h?.dateRangeStart || !h.dateRangeEnd) return linkToTransactions()
-    const [account] = h.accounts
+    if (!h) return linkToTransactions()
     return linkToTransactions({
-      from: h.dateRangeStart.slice(0, 10),
-      to: h.dateRangeEnd.slice(0, 10),
-      account: h.accounts.length === 1 ? account : undefined,
+      importId: h.id,
+      label: `Import du ${formatDate(h.createdAt)}`,
     })
   })
 

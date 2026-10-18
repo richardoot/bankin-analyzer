@@ -75,8 +75,9 @@ describe('ImportRecapPage', () => {
     const wrapper = await mountPage()
 
     const transactions = wrapper.get('[data-testid="recap-transactions"]')
-    expect(transactions.attributes('href')).toBe(
-      '/transactions?account=Compte+Courant&from=2024-01-03&to=2024-01-28'
+    // Exactly the rows this import wrote, by its id — not a date window.
+    expect(transactions.attributes('href')).toMatch(
+      /^\/transactions\?import=import-1&label=Import\+du\+/
     )
     expect(wrapper.get('[data-testid="back-link"]').attributes('href')).toBe(
       '/accounts'

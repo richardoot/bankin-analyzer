@@ -20,6 +20,8 @@
   import IconClose from '@/components/icons/IconClose.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import BackLink from '@/components/ui/BackLink.vue'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   /** A row the parser could not use, and why. */
   interface SkippedRow {
@@ -48,6 +50,8 @@
   const showDuplicatesModal = ref(false)
   const previewResult = ref<ImportPreviewResultDto | null>(null)
   const partialImportError = ref<PartialImportError | null>(null)
+  /** The history of the import under way, so a partial one can show its rows. */
+  const currentImportHistoryId = ref<string | null>(null)
 
   // AI Suggestions state
 
@@ -287,6 +291,8 @@
         ...(file.value?.name && { fileName: file.value.name }),
       })
 
+      currentImportHistoryId.value = importHistory.id
+
       // Chunked import with automatic retry, passing importHistoryId
       const result = await chunkedImportTransactions(
         parsedTransactions.value,
@@ -446,6 +452,21 @@
           <p class="text-xs text-amber-700 dark:text-amber-300 mt-2">
             Vous pouvez réessayer sans risque de dupliquer les transactions déjà
             importées.
+            <!-- An import is under way: the rows open beside it. -->
+            <TransactionsLink
+              v-if="currentImportHistoryId"
+              :to="
+                transactionsLink({
+                  importId: currentImportHistoryId,
+                  label: 'Import en cours',
+                })
+              "
+              subject="cet import"
+              new-tab
+              data-testid="partial-import-transactions-link"
+            >
+              Voir celles déjà importées
+            </TransactionsLink>
           </p>
           <div class="mt-3 flex gap-2">
             <BaseButton size="sm" @click="retryImport">
