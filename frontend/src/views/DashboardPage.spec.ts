@@ -380,6 +380,97 @@ describe('DashboardPage', () => {
     expect(wrapper.text()).toContain('Aucun revenu enregistré')
   })
 
+  describe('one reading for the page', () => {
+    const summaryWithEvents: DashboardSummaryDto = {
+      ...mockSummary,
+      expensesByCategory: [
+        {
+          categoryId: 'cat-Logement',
+          category: 'Logement',
+          amount: 800,
+          everydayAmount: 800,
+          exceptionalAmount: 0,
+          averagePerMonth: 800,
+          everydayAveragePerMonth: 800,
+        },
+        {
+          categoryId: 'cat-Voyages',
+          category: 'Voyages',
+          amount: 300,
+          everydayAmount: 0,
+          exceptionalAmount: 300,
+          averagePerMonth: 300,
+          everydayAveragePerMonth: 0,
+        },
+      ],
+      totalExpenses: 1100,
+      totalExceptionalExpenses: 300,
+      exceptionalEvents: [
+        { id: 'tag-1', name: 'Vacances', color: null, icon: null, amount: 300 },
+      ],
+    }
+
+    it('offers the mode once, in the filters card, and every figure follows it', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      // One control, inside the filters card; none in the cards below.
+      const controls = wrapper.findAll('[data-testid="breakdown-mode-real"]')
+      expect(controls).toHaveLength(1)
+      expect(
+        wrapper
+          .find('[data-testid="dashboard-filters-card"]')
+          .find('[data-testid="dashboard-breakdown-mode"]')
+          .exists()
+      ).toBe(true)
+      expect(wrapper.find('[data-testid="reading-actual"]').exists()).toBe(
+        false
+      )
+
+      // Everyday by default: the KPI reads 800, with the full figure beside.
+      expect(wrapper.find('[data-testid="kpi-expenses-value"]').text()).toMatch(
+        /800/
+      )
+      const other = wrapper.find('[data-testid="kpi-expenses-other-reading"]')
+      expect(other.text()).toContain('hors événements')
+      expect(other.text()).toMatch(/1\s100/)
+
+      await wrapper.find('[data-testid="breakdown-mode-real"]').trigger('click')
+      expect(wrapper.find('[data-testid="kpi-expenses-value"]').text()).toMatch(
+        /1\s100/
+      )
+      expect(
+        wrapper.find('[data-testid="kpi-expenses-other-reading"]').text()
+      ).toContain('dont vie courante')
+    })
+
+    it('colors the list the way the donut is drawn', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      const dot = wrapper.find('[data-testid="category-color-Logement"]')
+      expect(dot.exists()).toBe(true)
+      expect(dot.attributes('style')).toContain('background-color')
+    })
+
+    it('keeps the period bar in place: the migration banner sits below the filters', async () => {
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+      const filters = wrapper.find(
+        '[data-testid="dashboard-filters-card"]'
+      ).element
+      const banner = wrapper.findComponent({ name: 'LegacyMigrationBanner' })
+      expect(banner.exists()).toBe(true)
+      // The banner (or the comment standing in for it) comes after the card.
+      expect(
+        filters.compareDocumentPosition(banner.vm.$el as Node) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy()
+    })
+  })
+
   describe('pie charts', () => {
     it('should display pie chart section titles', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)

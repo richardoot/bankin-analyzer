@@ -1,11 +1,36 @@
 import { computed } from 'vue'
 import { useThemeStore } from '@/stores/theme'
 import type { ApexOptions } from 'apexcharts'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 
+type ChartAnimations = NonNullable<
+  NonNullable<ApexOptions['chart']>['animations']
+>
+
+/**
+ * What every chart shares: the theme's colors, and whether it may move.
+ * The global reduced-motion rule in style.css stops CSS animations, but an
+ * ApexCharts animation is driven from JavaScript and never sees it — so
+ * the preference is read here and handed to the chart's own options.
+ */
 export function useChartTheme() {
   const themeStore = useThemeStore()
 
   const isDark = computed(() => themeStore.isDark)
+
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+
+  /** `chart.animations` honoring the system's « less motion ». */
+  const chartAnimations = computed<ChartAnimations>(() => {
+    const enabled = !prefersReducedMotion.value
+    return {
+      enabled,
+      easing: 'easeinout',
+      speed: 600,
+      animateGradually: { enabled, delay: 100 },
+      dynamicAnimation: { enabled, speed: 300 },
+    }
+  })
 
   // Common chart theme options based on current theme
   const chartTheme = computed<Partial<ApexOptions>>(() => ({
@@ -36,6 +61,8 @@ export function useChartTheme() {
 
   return {
     isDark,
+    prefersReducedMotion,
+    chartAnimations,
     chartTheme,
     labelColor,
     strokeColor,

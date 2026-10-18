@@ -4,6 +4,7 @@
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
   import { formatDate } from '@/lib/formatters'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
 
   const filtersStore = useFiltersStore()
 
@@ -30,6 +31,15 @@
   })
 
   const isCustom = computed(() => filtersStore.timePeriod === 'custom')
+
+  /** Both dates set, in the wrong order: nothing is fetched, and it is said. */
+  const isInverted = computed(
+    () =>
+      isCustom.value &&
+      !!filtersStore.customStartDate &&
+      !!filtersStore.customEndDate &&
+      filtersStore.customEndDate < filtersStore.customStartDate
+  )
 
   const startInput = computed({
     get: () => filtersStore.customStartDate ?? '',
@@ -122,5 +132,13 @@
         />
       </div>
     </div>
+    <InlineAlert
+      v-if="isInverted"
+      variant="warning"
+      data-testid="custom-range-inverted"
+    >
+      La date de fin est antérieure à la date de début : choisissez une fin
+      après le début pour afficher la période.
+    </InlineAlert>
   </div>
 </template>

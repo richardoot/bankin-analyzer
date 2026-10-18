@@ -35,4 +35,21 @@ describe('TimePeriodSelector', () => {
     await wrapper.get('[data-testid="period-1y"]').trigger('click')
     expect(pressed()).toEqual(['period-1y'])
   })
+
+  it('says when a custom range is inverted', async () => {
+    const wrapper = mount(TimePeriodSelector)
+    const store = useFiltersStore()
+    store.setTimePeriod('custom')
+    store.setCustomDateRange('2026-03-01', '2026-01-31')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="custom-range-inverted"]').exists()).toBe(
+      true
+    )
+
+    store.setCustomDateRange('2026-01-01', '2026-01-31')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="custom-range-inverted"]').exists()).toBe(
+      false
+    )
+  })
 })

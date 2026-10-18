@@ -24,7 +24,7 @@
     }
   )
 
-  const { isDark, labelColor, chartTheme } = useChartTheme()
+  const { isDark, labelColor, chartTheme, chartAnimations } = useChartTheme()
   // A 300px chart with twelve full-currency ticks is unreadable at 375px:
   // shorter, compact axis labels, rotated month names.
   const isMobile = useIsMobile()
@@ -44,6 +44,7 @@
       },
       fontFamily: 'inherit',
       background: 'transparent',
+      animations: chartAnimations.value,
     },
     plotOptions: {
       bar: {
@@ -111,7 +112,6 @@
 <template>
   <div class="w-full">
     <VueApexCharts
-      :key="isDark ? 'dark' : 'light'"
       type="bar"
       :height="isMobile ? 220 : 300"
       :options="chartOptions"

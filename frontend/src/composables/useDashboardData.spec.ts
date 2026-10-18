@@ -605,6 +605,48 @@ describe('useDashboardData', () => {
       expect(exceptionalEvents.value[0]?.name).toBe('Vacances Italie')
     })
 
+    it('carries one reading for the whole page, persisted, everyday by default', async () => {
+      vi.mocked(localStorage.getItem).mockReturnValue(null)
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
+
+      const {
+        fetchData,
+        breakdownMode,
+        setBreakdownMode,
+        displayedAverageMonthlyExpenses,
+        displayedTotalExpenses,
+        displayedExpensesByCategory,
+        averageExceptionalMonthlyExpenses,
+      } = useDashboardData()
+      await fetchData()
+
+      expect(breakdownMode.value).toBe('everyday')
+      // 1600 everyday over 2 months; the donut drops the empty slice.
+      expect(displayedAverageMonthlyExpenses.value).toBe(800)
+      expect(displayedTotalExpenses.value).toBe(1600)
+      expect(displayedExpensesByCategory.value).toEqual({
+        labels: ['Logement'],
+        values: [1600],
+      })
+      expect(averageExceptionalMonthlyExpenses.value).toBe(300)
+
+      setBreakdownMode('real')
+      expect(displayedAverageMonthlyExpenses.value).toBe(1100)
+      expect(displayedTotalExpenses.value).toBe(2200)
+      expect(displayedExpensesByCategory.value).toEqual({
+        labels: ['Logement', 'Voyages'],
+        values: [1600, 600],
+      })
+      expect(localStorage.setItem).toHaveBeenCalledWith(
+        'dashboard-breakdown-mode',
+        'real'
+      )
+
+      // A fresh composable reads the choice back.
+      vi.mocked(localStorage.getItem).mockReturnValue('real')
+      expect(useDashboardData().breakdownMode.value).toBe('real')
+    })
+
     it('reports no exceptional spending when there is none', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue({
         ...summaryWithEvents,

@@ -16,11 +16,10 @@
    * that come back on their own — subscriptions, rent, insurance — with a
    * way to the list of them.
    */
-  import { computed, ref } from 'vue'
+  import { computed } from 'vue'
   import { RouterLink } from 'vue-router'
   import type { SpendingStructureDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
-  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
 
   const props = defineProps<{
@@ -32,12 +31,12 @@
     savingsRate: number | null
     remainingToLive: number | null
     periodMonths: number
+    /** Which of the two structures is read. */
+    reading: 'everyday' | 'actual'
   }>()
 
-  type Reading = 'everyday' | 'actual'
-  const reading = ref<Reading>('everyday')
   const structure = computed(() =>
-    reading.value === 'everyday' ? props.everyday : props.actual
+    props.reading === 'everyday' ? props.everyday : props.actual
   )
 
   interface Segment {
@@ -119,28 +118,17 @@
 
 <template>
   <BaseCard data-testid="spending-structure">
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Structure des dépenses
-        </h2>
-        <p class="text-xs text-gray-500 dark:text-gray-400">
-          Contraint ou choisi, engagé ou variable, sur la période.
-        </p>
-      </div>
-      <SegmentedControl
-        v-model="reading"
-        size="sm"
-        label="Lecture"
-        :options="[
-          {
-            value: 'everyday',
-            label: 'Vie courante',
-            testId: 'reading-everyday',
-          },
-          { value: 'actual', label: 'Réel', testId: 'reading-actual' },
-        ]"
-      />
+    <div class="mb-4">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        Structure des dépenses
+      </h2>
+      <p class="text-xs text-gray-500 dark:text-gray-400">
+        Contraint ou choisi, engagé ou variable, sur la période
+        <template v-if="reading === 'everyday'">
+          — vie courante, hors événements.</template
+        >
+        <template v-else> — tout compris, événements inclus.</template>
+      </p>
     </div>
 
     <div class="grid gap-6 md:grid-cols-2">

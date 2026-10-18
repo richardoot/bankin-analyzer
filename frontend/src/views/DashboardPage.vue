@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { onMounted, computed, ref } from 'vue'
+  import { onMounted, computed } from 'vue'
   import { useRouter } from 'vue-router'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import CategoryPieChart from '@/components/charts/CategoryPieChart.vue'
@@ -15,6 +15,8 @@
   import { useDashboardData } from '@/composables/useDashboardData'
   import { useFiltersStore } from '@/stores/filters'
   import { formatCurrency } from '@/lib/formatters'
+  import { assignCategoryColors } from '@/lib/chartPalette'
+  import { useChartTheme } from '@/composables/useChartTheme'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
@@ -28,8 +30,14 @@
     totalExpenses,
     totalIncome,
     averageMonthlyExpenses,
-    totalEverydayExpenses,
     averageEverydayMonthlyExpenses,
+    averageExceptionalMonthlyExpenses,
+    breakdownMode,
+    setBreakdownMode,
+    displayedTotalExpenses,
+    displayedAverageMonthlyExpenses,
+    displayedExpensesByCategory,
+    pendingPreferenceSyncError,
     exceptionalEvents,
     hasExceptionalExpenses,
     averageMonthlyIncome,
@@ -44,7 +52,6 @@
     expensesSparkline,
     incomeSparkline,
     savingsSparkline,
-    expensesByCategory,
     incomeByCategory,
     expenseCategoriesDetailed,
     monthLabels,
@@ -64,6 +71,7 @@
     hasLoaded,
   } = useDashboardData()
   const filtersStore = useFiltersStore()
+  const { isDark } = useChartTheme()
 
   // A first answer came back: later fetches are refreshes, shown over the
   // current figures, never by swapping the page — and its filters — for a
@@ -87,22 +95,20 @@
     filtersStore.setTimePeriod('all')
   }
 
-  // Real vs everyday breakdown, persisted so the choice survives a reload.
-  const BREAKDOWN_MODE_KEY = 'dashboard-breakdown-mode'
-  const breakdownMode = ref<'real' | 'everyday'>(
-    localStorage.getItem(BREAKDOWN_MODE_KEY) === 'everyday'
-      ? 'everyday'
-      : 'real'
+  /**
+   * The donut's colors, by category name, handed to the list under it so
+   * a slice and its row read as one. Same cap as the chart (its default
+   * topN of 7), same sort — the assignment is the chart's own.
+   */
+  const DONUT_TOP_N = 7
+  const categoryColors = computed(() =>
+    assignCategoryColors(
+      displayedExpensesByCategory.value.labels,
+      displayedExpensesByCategory.value.values,
+      DONUT_TOP_N,
+      isDark.value
+    )
   )
-
-  function setBreakdownMode(mode: 'real' | 'everyday'): void {
-    breakdownMode.value = mode
-    try {
-      localStorage.setItem(BREAKDOWN_MODE_KEY, mode)
-    } catch {
-      // Private browsing: the choice simply does not persist.
-    }
-  }
 
   /**
    * Sum of the listed events, so the banner header matches the chips below it.
@@ -150,8 +156,6 @@
         </div>
       </template>
     </PageHeader>
-
-    <LegacyMigrationBanner class="mb-6" />
 
     <!-- Error state: says what failed and offers the way out; the filters
            and whatever was already on screen stay put underneath. -->
@@ -241,7 +245,61 @@
             </span>
           </label>
         </div>
+        <!-- The two switches look alike but are not: one is a reading of
+             this screen, the other a preference the budget shares. -->
+        <p class="text-xs text-gray-500 dark:text-gray-400">
+          « En attente » est une préférence enregistrée, partagée avec le Budget
+          ; « reçus » ne vaut que pour cette lecture.
+        </p>
+        <InlineAlert
+          v-if="pendingPreferenceSyncError"
+          variant="warning"
+          data-testid="dashboard-pending-sync-error"
+        >
+          Le réglage « en attente » s'applique ici, mais n'a pas pu être
+          enregistré sur le serveur : {{ pendingPreferenceSyncError }}
+        </InlineAlert>
+
+        <!-- One reading for the whole page: the expenses KPI, the
+             structure, the donut and the list follow it together. -->
+        <div
+          v-if="hasExceptionalExpenses"
+          class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-100 pt-4 dark:border-slate-700"
+          data-testid="dashboard-breakdown-mode"
+        >
+          <span
+            id="dashboard-reading-label"
+            class="text-xs font-medium text-gray-700 dark:text-gray-300"
+          >
+            Lecture des dépenses
+          </span>
+          <SegmentedControl
+            :model-value="breakdownMode"
+            size="sm"
+            labelled-by="dashboard-reading-label"
+            :options="[
+              {
+                value: 'everyday',
+                label: 'Vie courante',
+                testId: 'breakdown-mode-everyday',
+              },
+              { value: 'real', label: 'Tout', testId: 'breakdown-mode-real' },
+            ]"
+            @update:model-value="setBreakdownMode($event)"
+          />
+          <span class="text-xs text-gray-500 dark:text-gray-400">
+            {{
+              breakdownMode === 'everyday'
+                ? 'Les dépenses d’événements sont mises à part.'
+                : 'Les dépenses d’événements sont comprises.'
+            }}
+          </span>
+        </div>
       </BaseCard>
+
+      <!-- Below the filters, not above: it arrives after the first fetch
+           and used to push the period bar down as it was being aimed at. -->
+      <LegacyMigrationBanner class="mb-6" />
 
       <template v-if="hasAnyData">
         <!-- KPI cards: monthly averages -->
@@ -260,21 +318,36 @@
                 </div>
                 <div
                   class="mt-2 text-2xl font-bold text-red-600 dark:text-red-400"
+                  data-testid="kpi-expenses-value"
                 >
-                  {{ formatCurrency(averageMonthlyExpenses) }}
+                  {{ formatCurrency(displayedAverageMonthlyExpenses) }}
                 </div>
-                <!-- Everyday baseline: what the lifestyle costs once the
-                     one-off events are set aside. -->
+                <!-- The other reading, so the gap between the two — the
+                     events — is always on screen. -->
                 <div
                   v-if="hasExceptionalExpenses"
                   class="mt-1 text-xs text-gray-500 dark:text-gray-400"
-                  title="Moyenne calculée hors dépenses étiquetées comme exceptionnelles, sur la même période"
+                  data-testid="kpi-expenses-other-reading"
                 >
-                  dont vie courante
-                  <span class="font-semibold text-gray-700 dark:text-gray-300">
-                    {{ formatCurrency(averageEverydayMonthlyExpenses) }}
-                  </span>
-                  / mois
+                  <template v-if="breakdownMode === 'everyday'">
+                    hors événements ·
+                    <span
+                      class="font-semibold text-gray-700 dark:text-gray-300"
+                    >
+                      {{ formatCurrency(averageMonthlyExpenses) }}
+                    </span>
+                    / mois tout compris
+                  </template>
+                  <template v-else>
+                    dont vie courante
+                    <span
+                      class="font-semibold text-gray-700 dark:text-gray-300"
+                    >
+                      {{ formatCurrency(averageEverydayMonthlyExpenses) }}
+                    </span>
+                    / mois, événements
+                    {{ formatCurrency(averageExceptionalMonthlyExpenses) }}
+                  </template>
                 </div>
               </div>
               <SparklineChart
@@ -356,6 +429,7 @@
           :savings-rate="savingsRate"
           :remaining-to-live="remainingToLive"
           :period-months="periodMonths"
+          :reading="breakdownMode === 'everyday' ? 'everyday' : 'actual'"
         />
 
         <!-- Expenses section (primary) -->
@@ -425,10 +499,14 @@
                 Dépenses par catégorie
               </h3>
               <div
-                v-if="expensesByCategory.values.length > 0"
+                v-if="displayedExpensesByCategory.values.length > 0"
                 class="h-64 sm:h-80"
               >
-                <CategoryPieChart :data="expensesByCategory" title="Dépenses" />
+                <CategoryPieChart
+                  :data="displayedExpensesByCategory"
+                  :top-n="DONUT_TOP_N"
+                  title="Dépenses"
+                />
               </div>
               <div
                 v-else
@@ -441,42 +519,17 @@
 
           <!-- Category breakdown list (drill-down) -->
           <BaseCard v-if="expenseCategoriesDetailed.length > 0" class="mt-6">
-            <div class="flex flex-wrap items-start justify-between gap-3 mb-1">
-              <h3
-                class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-              >
-                Détail par catégorie
-              </h3>
-
-              <!-- Real vs everyday selector -->
-              <SegmentedControl
-                v-if="hasExceptionalExpenses"
-                :model-value="breakdownMode"
-                size="sm"
-                label="Mode d'affichage des moyennes"
-                :options="[
-                  {
-                    value: 'real',
-                    label: 'Tout',
-                    testId: 'breakdown-mode-real',
-                  },
-                  {
-                    value: 'everyday',
-                    label: 'Vie courante',
-                    testId: 'breakdown-mode-everyday',
-                  },
-                ]"
-                @update:model-value="setBreakdownMode($event)"
-              />
-            </div>
+            <h3
+              class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1"
+            >
+              Détail par catégorie
+            </h3>
             <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              Cliquez sur une catégorie pour voir ses sous-catégories et son
+              évolution mensuelle.
               <template v-if="breakdownMode === 'everyday'">
-                Moyennes hors dépenses étiquetées comme exceptionnelles. Seules
-                les catégories concernées par un événement changent de valeur.
-              </template>
-              <template v-else>
-                Cliquez sur une catégorie pour voir ses sous-catégories et son
-                évolution mensuelle.
+                Moyennes hors dépenses d'événements : seules les catégories
+                concernées changent de valeur.
               </template>
             </p>
 
@@ -514,12 +567,9 @@
             <CategoryBreakdownList
               :categories="expenseCategoriesDetailed"
               :month-labels="monthLabels"
-              :total="
-                breakdownMode === 'everyday'
-                  ? totalEverydayExpenses
-                  : totalExpenses
-              "
+              :total="displayedTotalExpenses"
               :mode="breakdownMode"
+              :colors="categoryColors"
               color="#ef4444"
             />
           </BaseCard>

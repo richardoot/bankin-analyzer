@@ -20,9 +20,45 @@ export interface ChartData {
   values: number[]
 }
 
+/**
+ * The two readings of a period: as it was (« Tout »), or the lifestyle
+ * once the exceptional events are set aside (« Vie courante »).
+ */
+export type BreakdownMode = 'real' | 'everyday'
+
+const BREAKDOWN_MODE_KEY = 'dashboard-breakdown-mode'
+
+function readStoredBreakdownMode(): BreakdownMode {
+  try {
+    return localStorage.getItem(BREAKDOWN_MODE_KEY) === 'real'
+      ? 'real'
+      : 'everyday'
+  } catch {
+    return 'everyday'
+  }
+}
+
 export function useDashboardData() {
   const filtersStore = useFiltersStore()
   const accountsStore = useAccountsStore()
+
+  /**
+   * One reading for the whole page — the expenses KPI, the donut, the
+   * structure card and the category list follow it together. Persisted:
+   * it is a way of looking at the figures, not a question of the moment.
+   * Defaults to « Vie courante », as the budget does: a holiday must not
+   * read as a jump in what the lifestyle costs.
+   */
+  const breakdownMode = ref<BreakdownMode>(readStoredBreakdownMode())
+
+  function setBreakdownMode(mode: BreakdownMode): void {
+    breakdownMode.value = mode
+    try {
+      localStorage.setItem(BREAKDOWN_MODE_KEY, mode)
+    } catch {
+      // Private browsing: the choice simply does not persist.
+    }
+  }
 
   // Pre-aggregated data from backend
   const summaryData = ref<DashboardSummaryDto | null>(null)
@@ -44,6 +80,10 @@ export function useDashboardData() {
       void filtersStore.setDeductPendingReimbursements(value)
     },
   })
+  /** The last failure to keep the shared preference on the server, if any. */
+  const pendingPreferenceSyncError = computed<string | null>(
+    () => filtersStore.lastSyncError ?? null
+  )
 
   // Transform backend data to component format
   const monthlyData = computed<MonthlyData[]>(
@@ -131,6 +171,27 @@ export function useDashboardData() {
     () => totalExceptionalExpenses.value > 0
   )
 
+  const isEverydayMode = computed(() => breakdownMode.value === 'everyday')
+
+  // The figures that follow the reading. Income and savings stay as they
+  // are: money is money, only the expenses have an exceptional share.
+  const displayedTotalExpenses = computed(() =>
+    isEverydayMode.value ? totalEverydayExpenses.value : totalExpenses.value
+  )
+  const displayedAverageMonthlyExpenses = computed(() =>
+    isEverydayMode.value
+      ? averageEverydayMonthlyExpenses.value
+      : averageMonthlyExpenses.value
+  )
+  /** What the two readings differ by, per month: the events. */
+  const averageExceptionalMonthlyExpenses = computed(
+    () =>
+      Math.round(
+        (averageMonthlyExpenses.value - averageEverydayMonthlyExpenses.value) *
+          100
+      ) / 100
+  )
+
   // Per-month series for sparklines
   const expensesSparkline = computed(() =>
     monthlyData.value.map(d => d.netExpenses)
@@ -147,6 +208,20 @@ export function useDashboardData() {
     return {
       labels: data.map(d => d.category),
       values: data.map(d => d.amount),
+    }
+  })
+
+  /** The donut's data in the active reading; empty slices are left out. */
+  const displayedExpensesByCategory = computed<ChartData>(() => {
+    const data = (summaryData.value?.expensesByCategory ?? [])
+      .map(d => ({
+        label: d.category,
+        value: isEverydayMode.value ? (d.everydayAmount ?? d.amount) : d.amount,
+      }))
+      .filter(d => d.value > 0)
+    return {
+      labels: data.map(d => d.label),
+      values: data.map(d => d.value),
     }
   })
 
@@ -301,11 +376,10 @@ export function useDashboardData() {
       // period is also a way to try again.
       if (summaryData.value || error.value) {
         // Skip refetch if 'custom' is selected but the range is incomplete
-        if (
-          filtersStore.timePeriod === 'custom' &&
-          (!filtersStore.customStartDate || !filtersStore.customEndDate)
-        ) {
-          return
+        // or inverted — the selector says so on screen.
+        if (filtersStore.timePeriod === 'custom') {
+          const { customStartDate: start, customEndDate: end } = filtersStore
+          if (!start || !end || end < start) return
         }
         fetchData()
       }
@@ -318,6 +392,13 @@ export function useDashboardData() {
 
   return {
     hasLoaded,
+    breakdownMode,
+    setBreakdownMode,
+    displayedTotalExpenses,
+    displayedAverageMonthlyExpenses,
+    averageExceptionalMonthlyExpenses,
+    displayedExpensesByCategory,
+    pendingPreferenceSyncError,
     monthlyData,
     expensesByMonth,
     incomeByMonth,

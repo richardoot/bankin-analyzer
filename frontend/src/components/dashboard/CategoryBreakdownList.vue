@@ -19,10 +19,16 @@
        * birthdays) from the headline figures, leaving the recurring lifestyle.
        */
       mode?: 'real' | 'everyday'
+      /**
+       * The hue each category takes in the donut beside the list, by name:
+       * drawn as a dot before the name so the two can be read together.
+       */
+      colors?: Map<string, string> | undefined
     }>(),
     {
       color: '#ef4444',
       mode: 'real',
+      colors: undefined,
     }
   )
 
@@ -121,6 +127,13 @@
         <!-- Icon + name; the share sits beside the name on a desk and
              wraps under it on a phone, where it used to be hidden outright. -->
         <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2">
+          <span
+            v-if="colors?.get(cat.category)"
+            class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+            :style="{ backgroundColor: colors.get(cat.category) }"
+            :data-testid="`category-color-${cat.category}`"
+            aria-hidden="true"
+          />
           <span v-if="cat.icon" class="text-lg shrink-0">{{ cat.icon }}</span>
           <span
             class="min-w-0 flex-1 truncate font-medium text-gray-900 dark:text-gray-100"
