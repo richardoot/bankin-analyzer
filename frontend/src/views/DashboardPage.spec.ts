@@ -646,4 +646,117 @@ describe('DashboardPage', () => {
       expect(wrapper.findAll('.apexcharts-mock').length).toBeGreaterThan(0)
     })
   })
+
+  describe('links to the Transactions page', () => {
+    it('offers the period of each monthly chart, narrowed by the select, gross', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      const expenses = wrapper.get('[data-testid="expenses-transactions-link"]')
+      expect(expenses.attributes('href')).toBe(
+        '/transactions?type=EXPENSE&label=D%C3%A9penses+de+la+p%C3%A9riode&gross=1'
+      )
+      expect(expenses.attributes('aria-label')).toBe(
+        'Voir les transactions de la période'
+      )
+
+      await wrapper
+        .find('[data-testid="expense-category-filter"]')
+        .setValue('cat-Logement')
+      expect(expenses.attributes('href')).toContain('category=cat-Logement')
+      expect(expenses.attributes('href')).toContain('Logement')
+
+      expect(
+        wrapper
+          .get('[data-testid="income-transactions-link"]')
+          .attributes('href')
+      ).toContain('type=INCOME')
+    })
+
+    it('hands the donut the ids behind its labels, « sans catégorie » as a word', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue({
+        ...mockSummary,
+        expensesByCategory: [
+          ...mockSummary.expensesByCategory,
+          {
+            categoryId: '__uncategorized__',
+            category: 'Non classé',
+            amount: 1,
+          },
+        ],
+      })
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      const donuts = wrapper.findAllComponents({ name: 'CategoryPieChart' })
+      expect(donuts.map(d => d.props('ids'))).toEqual([
+        ['cat-Logement', 'cat-Alimentation', 'none'],
+        ['cat-Salaires'],
+      ])
+    })
+
+    it('opens a month from a bar and a category from a slice', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      const push = vi.spyOn(router, 'push').mockResolvedValue(undefined)
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      const [expensesBars] = wrapper.findAllComponents({
+        name: 'MonthlyBarChart',
+      })
+      expensesBars?.vm.$emit('select-month', '2024-01')
+      expect(push).toHaveBeenLastCalledWith({
+        path: '/transactions',
+        query: {
+          type: 'EXPENSE',
+          from: '2024-01-01',
+          to: '2024-01-31',
+          label: 'Dépenses · janv. 2024',
+          gross: '1',
+        },
+      })
+
+      const [expensesDonut] = wrapper.findAllComponents({
+        name: 'CategoryPieChart',
+      })
+      expensesDonut?.vm.$emit('select', 'cat-Alimentation')
+      expect(push).toHaveBeenLastCalledWith({
+        path: '/transactions',
+        query: {
+          type: 'EXPENSE',
+          category: 'cat-Alimentation',
+          label: 'Alimentation',
+          gross: '1',
+        },
+      })
+      push.mockRestore()
+    })
+
+    it('links each event chip to its tag over the period, beside the analysis', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue({
+        ...mockSummary,
+        totalExceptionalExpenses: 300,
+        exceptionalEvents: [
+          {
+            id: 'tag-1',
+            name: 'Vacances',
+            color: null,
+            icon: null,
+            amount: 300,
+          },
+        ],
+      })
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      const link = wrapper.get('[data-testid="event-transactions-link-tag-1"]')
+      expect(link.attributes('href')).toBe(
+        '/transactions?tag=tag-1&label=Vacances&gross=1'
+      )
+      expect(link.attributes('aria-label')).toBe(
+        'Voir les transactions de Vacances'
+      )
+    })
+  })
 })

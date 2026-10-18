@@ -19,11 +19,26 @@
       title: string
       /** Top N categories to display individually; the rest are merged into "Autres". 0 disables grouping. */
       topN?: number
+      /**
+       * The id behind each label, aligned with `data.labels`. Given, a
+       * slice becomes a way to its category: the chart emits `select` with
+       * the id and draws the slices with a pointer. « Autres » has no id
+       * and stays mute. The keyboard way is the list beside the chart.
+       */
+      ids?: (string | null)[] | undefined
     }>(),
     {
       topN: 7,
+      ids: undefined,
     }
   )
+
+  const emit = defineEmits<{
+    /** A slice was clicked — the id of its category. */
+    (e: 'select', id: string): void
+  }>()
+
+  const selectable = computed(() => props.ids !== undefined)
 
   const {
     isDark,
@@ -43,11 +58,13 @@
   const processedData = computed<{
     labels: string[]
     values: number[]
+    ids: (string | null)[]
     othersCount: number
   }>(() => {
     const pairs = props.data.labels.map((label, i) => ({
       label,
       value: props.data.values[i] ?? 0,
+      id: props.ids?.[i] ?? null,
     }))
     pairs.sort((a, b) => b.value - a.value)
 
@@ -56,6 +73,7 @@
       return {
         labels: pairs.map(p => p.label),
         values: pairs.map(p => p.value),
+        ids: pairs.map(p => p.id),
         othersCount: 0,
       }
     }
@@ -66,9 +84,15 @@
     return {
       labels: [...top.map(p => p.label), `Autres (${rest.length})`],
       values: [...top.map(p => p.value), othersValue],
+      ids: [...top.map(p => p.id), null],
       othersCount: rest.length,
     }
   })
+
+  function onSliceSelected(config?: { dataPointIndex: number }): void {
+    const id = processedData.value.ids[config?.dataPointIndex ?? -1]
+    if (id) emit('select', id)
+  }
 
   // The same assignment the category list uses, so a slice and its row
   // share a color by construction.
@@ -97,6 +121,15 @@
         opacity: isDark.value ? 0.3 : 0.15,
       },
       animations: chartAnimations.value,
+      ...(selectable.value && {
+        events: {
+          dataPointSelection: (
+            _event: unknown,
+            _context: unknown,
+            config?: { dataPointIndex: number }
+          ) => onSliceSelected(config),
+        },
+      }),
     },
     labels: processedData.value.labels,
     legend: {
@@ -194,7 +227,10 @@
 </script>
 
 <template>
-  <div class="w-full h-full">
+  <div
+    class="w-full h-full"
+    :class="selectable ? '[&_.apexcharts-pie-area]:cursor-pointer' : ''"
+  >
     <!-- No remount on a theme switch: the options are reactive and the
          chart updates in place, instead of replaying its whole intro. -->
     <VueApexCharts

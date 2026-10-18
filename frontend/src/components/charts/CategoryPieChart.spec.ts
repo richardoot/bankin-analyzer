@@ -209,4 +209,60 @@ describe('CategoryPieChart', () => {
       expect(colors[colors.length - 1]).toBe('#9ca3af')
     })
   })
+
+  describe('a slice as a way to its category', () => {
+    const selection = (wrapper: ReturnType<typeof mount>) =>
+      (
+        wrapper.findComponent({ name: 'VueApexCharts' }).props('options') as {
+          chart: {
+            events?: {
+              dataPointSelection: (
+                e: unknown,
+                c: unknown,
+                config?: { dataPointIndex: number }
+              ) => void
+            }
+          }
+        }
+      ).chart.events?.dataPointSelection
+
+    it('emits the id behind the clicked slice, sorted as drawn', () => {
+      const wrapper = mount(CategoryPieChart, {
+        props: {
+          data: { labels: ['A', 'B', 'C'], values: [100, 300, 200] },
+          ids: ['id-a', 'id-b', 'id-c'],
+          title: 'T',
+        },
+      })
+
+      // Drawn by value: B, C, A.
+      selection(wrapper)?.(null, null, { dataPointIndex: 0 })
+      selection(wrapper)?.(null, null, { dataPointIndex: 2 })
+
+      expect(wrapper.emitted('select')).toEqual([['id-b'], ['id-a']])
+      expect(wrapper.classes().join(' ')).toContain('cursor-pointer')
+    })
+
+    it('says nothing for « Autres », which is many categories at once', () => {
+      const wrapper = mount(CategoryPieChart, {
+        props: {
+          data: { labels: ['A', 'B', 'C'], values: [300, 200, 100] },
+          ids: ['id-a', 'id-b', 'id-c'],
+          title: 'T',
+          topN: 2,
+        },
+      })
+
+      selection(wrapper)?.(null, null, { dataPointIndex: 2 })
+
+      expect(wrapper.emitted('select')).toBeUndefined()
+    })
+
+    it('stays mute without ids', () => {
+      const wrapper = mount(CategoryPieChart, { props: defaultProps })
+
+      expect(selection(wrapper)).toBeUndefined()
+      expect(wrapper.classes().join(' ')).not.toContain('cursor-pointer')
+    })
+  })
 })
