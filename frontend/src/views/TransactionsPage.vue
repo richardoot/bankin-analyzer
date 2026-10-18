@@ -1637,7 +1637,6 @@
         <BaseIconButton
           v-if="hasActiveFilters"
           label="Réinitialiser les filtres"
-          variant="danger"
           class="md:hidden"
           @click="resetFilters"
         >
@@ -1645,7 +1644,7 @@
         </BaseIconButton>
         <BaseButton
           v-if="hasActiveFilters"
-          variant="danger-outline"
+          variant="secondary"
           class="max-md:hidden"
           @click="resetFilters"
         >

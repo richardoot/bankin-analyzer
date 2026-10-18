@@ -71,7 +71,7 @@
       case 'current':
         return 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
       case 'future':
-        return 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400'
+        return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
       case 'past':
         return 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400'
     }
@@ -185,7 +185,7 @@
         class="flex items-start gap-2 rounded-lg border p-3"
         :class="
           plan.id === activePlanId
-            ? 'border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-900/20'
+            ? 'border-primary-200 bg-primary-50 dark:border-primary-800 dark:bg-primary-900/20'
             : 'border-gray-200 dark:border-slate-700'
         "
       >
@@ -223,7 +223,7 @@
             </span>
             <span
               v-if="plan.id === activePlanId"
-              class="ml-1.5 text-xs text-indigo-600 dark:text-indigo-400"
+              class="ml-1.5 text-xs text-primary-700 dark:text-primary-400"
             >
               (affiché)
             </span>
@@ -269,7 +269,7 @@
           class="cursor-pointer transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-500"
           :class="
             plan.id === activePlanId
-              ? 'bg-indigo-50 dark:bg-indigo-900/20'
+              ? 'bg-primary-50 dark:bg-primary-900/20'
               : 'hover:bg-gray-50 dark:hover:bg-slate-800/40'
           "
           @click="selectPlan(plan.id)"
@@ -280,7 +280,7 @@
             {{ plan.name }}
             <span
               v-if="plan.id === activePlanId"
-              class="ml-1.5 text-xs text-indigo-600 dark:text-indigo-400"
+              class="ml-1.5 text-xs text-primary-700 dark:text-primary-400"
             >
               (affiché)
             </span>

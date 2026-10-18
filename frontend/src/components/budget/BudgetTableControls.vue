@@ -166,13 +166,14 @@
       >
         Actions rapides :
       </span>
-      <button
-        type="button"
-        class="col-span-2 min-h-[36px] px-2.5 py-1 text-xs font-medium text-indigo-700 sm:col-auto sm:min-h-0 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-md hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors"
+      <BaseButton
+        variant="tinted"
+        size="sm"
+        class="col-span-2 sm:col-auto"
         @click="emit('apply-averages')"
       >
         Appliquer toutes les moyennes
-      </button>
+      </BaseButton>
       <BaseButton
         variant="secondary"
         size="sm"
@@ -187,13 +188,16 @@
       >
         +5%
       </BaseButton>
-      <button
-        type="button"
-        class="col-span-2 min-h-[36px] px-2.5 py-1 text-xs font-medium text-red-600 sm:col-auto sm:ml-auto sm:min-h-0 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border border-transparent hover:border-red-200 dark:hover:border-red-800 rounded-md transition-colors"
+      <!-- Clears the draft only: « Annuler » still brings the plan back,
+           so this is a quiet secondary, not a destructive red. -->
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        class="col-span-2 sm:col-auto sm:ml-auto"
         @click="emit('reset')"
       >
         Réinitialiser
-      </button>
+      </BaseButton>
     </div>
 
     <!-- Tracking mode: everyday keeps a one-off event from reading as an
@@ -201,10 +205,10 @@
     <div
       v-if="hasExceptional"
       data-testid="budget-breakdown-mode"
-      class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5"
+      class="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800"
     >
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span class="text-xs font-medium text-amber-800 dark:text-amber-300">
+        <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
           Suivi
         </span>
         <SegmentedControl
@@ -222,7 +226,7 @@
           @update:model-value="emit('set-mode', $event)"
         />
         <span
-          class="hidden text-xs leading-snug text-amber-700 sm:inline dark:text-amber-400"
+          class="hidden text-xs leading-snug text-gray-600 sm:inline dark:text-gray-400"
         >
           {{
             breakdownMode === 'everyday'
@@ -236,7 +240,7 @@
         v-if="planEvents.length > 0"
         class="mt-2 flex flex-wrap items-center gap-1.5"
       >
-        <span class="text-xs text-amber-700 dark:text-amber-400">
+        <span class="text-xs text-gray-600 dark:text-gray-400">
           Événements de la période :
         </span>
         <button
@@ -244,7 +248,7 @@
           :key="event.id"
           type="button"
           :data-testid="`budget-event-${event.name}`"
-          class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-amber-300 transition"
+          class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-primary-300 transition dark:hover:ring-primary-700"
           @click="emit('open-tag', event.id)"
         >
           <span

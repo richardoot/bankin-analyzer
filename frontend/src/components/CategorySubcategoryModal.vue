@@ -392,7 +392,7 @@
               v-for="sub in matchingSubcategories(cat)"
               :key="sub.id"
               type="button"
-              class="rounded-full bg-white px-2 py-1 text-[11px] text-gray-700 ring-1 ring-gray-200 hover:bg-primary-50 dark:bg-slate-900 dark:text-gray-300 dark:ring-slate-700"
+              class="rounded-full bg-white px-2 py-1 text-[11px] text-gray-700 ring-1 ring-gray-200 hover:bg-primary-50 dark:bg-slate-900 dark:text-gray-300 dark:ring-slate-700 dark:hover:bg-primary-900/20"
               @click="selectCategory(cat.id, sub.id)"
             >
               › {{ sub.name }}
@@ -413,9 +413,7 @@
           type="button"
           :class="[
             CARD_BASE,
-            selectedCategoryId === cat.id
-              ? 'bg-indigo-50 ring-2 ring-indigo-500 dark:bg-indigo-500/10 dark:ring-indigo-400'
-              : CARD_IDLE,
+            selectedCategoryId === cat.id ? CARD_SELECTED : CARD_IDLE,
           ]"
           :aria-pressed="selectedCategoryId === cat.id"
           :data-testid="`pick-category-${cat.id}`"
@@ -426,7 +424,7 @@
             :class="[
               cat.icon ? 'text-lg' : 'text-sm',
               selectedCategoryId === cat.id
-                ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400'
+                ? 'bg-white text-gray-700 dark:bg-slate-700 dark:text-gray-200'
                 : BADGE_IDLE,
             ]"
           >

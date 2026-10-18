@@ -73,7 +73,7 @@
           class="px-3 py-2 text-sm font-medium rounded-lg border transition-colors text-left"
           :class="
             initSource === opt.value
-              ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
+              ? 'bg-primary-50 dark:bg-primary-900/30 border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300'
               : 'border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800'
           "
           @click="initSource = opt.value as InitSource"

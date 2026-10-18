@@ -150,7 +150,7 @@ describe('ImportPage', () => {
 
       // Should have both expense (red) and income (green) amounts
       expect(wrapper.html()).toContain('text-red-600') // expense
-      expect(wrapper.html()).toContain('text-green-600') // income
+      expect(wrapper.html()).toContain('text-green-700') // income
     })
 
     it('should convert Oui/Non to boolean isPointed', async () => {

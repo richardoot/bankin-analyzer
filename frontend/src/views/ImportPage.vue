@@ -447,30 +447,24 @@
           />
         </svg>
         <div class="flex-1">
-          <h3 class="font-medium text-amber-800 dark:text-amber-400">
+          <h3 class="font-medium text-amber-800 dark:text-amber-300">
             Import partiel
           </h3>
-          <p class="text-sm text-amber-700 dark:text-amber-400/80 mt-1">
+          <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">
             {{ partialImportError.details.imported }} transactions importées sur
             {{ partialImportError.details.total }}.
           </p>
-          <p class="text-xs text-amber-600 dark:text-amber-500 mt-2">
+          <p class="text-xs text-amber-700 dark:text-amber-300 mt-2">
             Vous pouvez réessayer sans risque de dupliquer les transactions déjà
             importées.
           </p>
           <div class="mt-3 flex gap-2">
-            <button
-              class="px-3 py-1.5 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 transition-colors"
-              @click="retryImport"
-            >
+            <BaseButton size="sm" @click="retryImport">
               Réessayer l'import
-            </button>
-            <button
-              class="px-3 py-1.5 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 text-sm rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-              @click="cancelImport"
-            >
+            </BaseButton>
+            <BaseButton size="sm" variant="secondary" @click="cancelImport">
               Annuler
-            </button>
+            </BaseButton>
           </div>
         </div>
       </div>
@@ -599,23 +593,18 @@
             Transactions
           </div>
         </div>
-        <div
-          class="bg-green-50 dark:bg-green-900/30 rounded-lg p-4 text-center"
-        >
-          <div class="text-2xl font-bold text-green-600 dark:text-green-400">
+        <!-- Three counts, none good nor bad: one neutral blue for all. -->
+        <div class="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 text-center">
+          <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
             {{ new Set(parsedTransactions.map(t => t.category)).size }}
           </div>
-          <div class="text-sm text-green-800 dark:text-green-300">
-            Catégories
-          </div>
+          <div class="text-sm text-blue-800 dark:text-blue-300">Catégories</div>
         </div>
-        <div
-          class="bg-amber-50 dark:bg-amber-900/30 rounded-lg p-4 text-center"
-        >
-          <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">
+        <div class="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 text-center">
+          <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
             {{ new Set(parsedTransactions.map(t => t.account)).size }}
           </div>
-          <div class="text-sm text-amber-800 dark:text-amber-300">Comptes</div>
+          <div class="text-sm text-blue-800 dark:text-blue-300">Comptes</div>
         </div>
       </div>
 
@@ -647,8 +636,8 @@
               class="font-semibold"
               :class="
                 tx.amount < 0
-                  ? 'text-red-600 dark:text-red-500'
-                  : 'text-green-600 dark:text-green-500'
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-green-700 dark:text-green-400'
               "
             >
               {{ formatAmount(tx.amount) }}

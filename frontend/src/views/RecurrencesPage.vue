@@ -656,15 +656,15 @@
               <span class="truncate text-gray-700 dark:text-gray-300">
                 {{ subscription.name }}
               </span>
-              <button
-                type="button"
-                class="min-h-[44px] rounded-lg px-2 text-xs text-primary-600 hover:bg-gray-100 disabled:opacity-50 dark:text-primary-400 dark:hover:bg-slate-800"
+              <BaseButton
+                size="sm"
+                variant="tinted"
                 :disabled="busyKey !== null"
                 data-testid="restore-recurrence"
                 @click="forget(subscription, 'Récurrence rétablie')"
               >
                 Rétablir
-              </button>
+              </BaseButton>
             </li>
           </ul>
         </BaseCard>
@@ -692,15 +692,15 @@
               <span class="truncate text-gray-800 dark:text-gray-200">
                 {{ subscription.name }}
               </span>
-              <button
-                type="button"
-                class="min-h-[44px] rounded-lg px-2 text-xs text-amber-800 hover:bg-amber-100 disabled:opacity-50 dark:text-amber-300 dark:hover:bg-amber-900/40"
+              <BaseButton
+                size="sm"
+                variant="secondary"
                 :disabled="busyKey !== null"
                 data-testid="forget-orphan"
                 @click="forget(subscription, `« ${subscription.name} » oublié`)"
               >
                 Oublier
-              </button>
+              </BaseButton>
             </li>
           </ul>
         </section>

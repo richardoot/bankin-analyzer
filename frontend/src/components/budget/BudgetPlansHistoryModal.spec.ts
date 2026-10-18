@@ -186,7 +186,7 @@ describe('BudgetPlansHistoryModal', () => {
     const activeRow = document.body.querySelector(
       '[data-testid="history-row-plan-current"]'
     ) as HTMLTableRowElement
-    expect(activeRow.className).toContain('bg-indigo-50')
+    expect(activeRow.className).toContain('bg-primary-50')
     expect(activeRow.textContent).toContain('(affiché)')
 
     wrapper.unmount()

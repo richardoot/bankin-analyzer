@@ -391,7 +391,7 @@
                   </span>
                   <span
                     v-if="category.isCatalog"
-                    class="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                    class="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
                     data-testid="tidy-badge"
                   >
                     Sous-catégories à ranger
@@ -445,17 +445,17 @@
           class="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
         >
           <span>Cette catégorie encodait un contexte. Créer le tag :</span>
-          <button
+          <BaseButton
             v-for="name in missingTagNames"
             :key="name"
-            type="button"
-            class="rounded-full border border-blue-300 px-2 py-0.5 font-medium hover:bg-blue-100 disabled:opacity-50 dark:border-blue-700 dark:hover:bg-blue-900/40"
-            :disabled="creatingTag === name"
+            variant="tinted"
+            size="sm"
+            :loading="creatingTag === name"
             :data-testid="`create-tag-${name}`"
             @click="createSuggestedTag(name)"
           >
             {{ creatingTag === name ? 'Création…' : `« ${name} »` }}
-          </button>
+          </BaseButton>
         </div>
 
         <ul class="space-y-3">
