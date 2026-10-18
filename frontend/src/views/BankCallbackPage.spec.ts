@@ -100,6 +100,16 @@ describe('BankCallbackPage', () => {
     expect(wrapper.text()).toContain('already been exchanged')
   })
 
+  it('announces the work in progress as a status', async () => {
+    vi.mocked(api.completeBankAuthorization).mockReturnValue(
+      new Promise(() => {})
+    )
+    const wrapper = await arriveWith('?code=abc')
+    expect(
+      wrapper.get('[data-testid="callback-working"]').attributes('role')
+    ).toBe('status')
+  })
+
   it('does not call the API when no code came back', async () => {
     const wrapper = await arriveWith('')
 

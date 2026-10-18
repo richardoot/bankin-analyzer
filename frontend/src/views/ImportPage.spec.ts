@@ -35,10 +35,11 @@ const router = createRouter({
     { path: '/', name: 'home', component: { template: '<div>Home</div>' } },
     { path: '/import', name: 'import', component: ImportPage },
     {
-      path: '/import/recap',
+      path: '/import/recap/:id',
       name: 'import-recap',
       component: { template: '<div>Recap</div>' },
     },
+    { path: '/accounts', name: 'accounts', component: { template: '<div />' } },
   ],
 })
 

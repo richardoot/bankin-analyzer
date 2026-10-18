@@ -57,17 +57,19 @@
   <PageShell width="narrow" center>
     <div class="mx-auto w-full max-w-md text-center">
       <BaseCard variant="raised" padding="lg">
-        <template v-if="state === 'working'">
-          <h1
-            class="text-xl font-semibold text-gray-900 dark:text-gray-100"
-            data-testid="callback-working"
-          >
+        <div
+          v-if="state === 'working'"
+          role="status"
+          aria-live="polite"
+          data-testid="callback-working"
+        >
+          <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
             Connexion en cours…
           </h1>
           <p class="mt-2 text-gray-600 dark:text-gray-400">
             Nous terminons l'autorisation auprès de votre banque.
           </p>
-        </template>
+        </div>
 
         <template v-else-if="state === 'done'">
           <h1
@@ -77,14 +79,14 @@
             {{ bank }} est connectée
           </h1>
           <p class="mt-2 text-gray-600 dark:text-gray-400">
-            Aucun compte n'est lu pour l'instant : dites lesquels sur la page
-            des comptes.
+            Aucun compte n'est lu pour l'instant : vous allez être conduit aux
+            réglages des comptes pour dire lesquels.
           </p>
           <RouterLink
             to="/settings/accounts"
-            class="mt-6 inline-block font-medium text-primary-700 hover:underline dark:text-primary-400"
+            class="mt-6 inline-flex min-h-[44px] items-center font-medium text-primary-700 hover:underline dark:text-primary-400"
           >
-            Continuer
+            Ouvrir les réglages des comptes
           </RouterLink>
         </template>
 
@@ -105,9 +107,9 @@
           </p>
           <RouterLink
             to="/settings/accounts"
-            class="mt-6 inline-block font-medium text-primary-700 hover:underline dark:text-primary-400"
+            class="mt-6 inline-flex min-h-[44px] items-center font-medium text-primary-700 hover:underline dark:text-primary-400"
           >
-            Revenir aux comptes
+            Revenir aux réglages des comptes
           </RouterLink>
         </template>
 
@@ -130,9 +132,9 @@
           </p>
           <RouterLink
             to="/settings/accounts"
-            class="mt-6 inline-block font-medium text-primary-700 hover:underline dark:text-primary-400"
+            class="mt-6 inline-flex min-h-[44px] items-center font-medium text-primary-700 hover:underline dark:text-primary-400"
           >
-            Revenir aux comptes
+            Revenir aux réglages des comptes
           </RouterLink>
         </template>
       </BaseCard>

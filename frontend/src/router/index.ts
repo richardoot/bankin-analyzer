@@ -77,11 +77,14 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Import de transactions', requiresAuth: true },
   },
   {
-    path: '/import/recap',
+    path: '/import/recap/:id',
     name: 'import-recap',
     component: () => import('@/views/ImportRecapPage.vue'),
     meta: { title: 'Récapitulatif d’import', requiresAuth: true },
   },
+  // The old recap carried its figures in the query string and nothing that
+  // names the import: a bookmark of it now lands on the history.
+  { path: '/import/recap', redirect: '/import/history' },
   {
     path: '/import/history',
     name: 'import-history',

@@ -23,10 +23,14 @@
   import IconUndo from '@/components/icons/IconUndo.vue'
   import IconRefresh from '@/components/icons/IconRefresh.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
+  import PageHeader from '@/components/ui/PageHeader.vue'
+  import BackLink from '@/components/ui/BackLink.vue'
 
   const runs = ref<BankSyncRunDto[]>([])
   const isLoading = ref(true)
   const error = ref<string | null>(null)
+  /** A preview or an undo that failed: said above the list, which stays. */
+  const actionError = ref<string | null>(null)
 
   const hasRuns = computed(() => runs.value.length > 0)
   const latestSyncDate = computed(() => runs.value[0]?.fetchedAt ?? null)
@@ -81,13 +85,15 @@
         }
 
   async function askUndo(runId: string): Promise<void> {
+    if (previewingRunId.value) return
     previewingRunId.value = runId
+    actionError.value = null
     try {
       const preview = await api.previewUndoBankSyncRun(runId)
       pendingUndo.value = { runId, preview }
     } catch (e) {
-      error.value =
-        e instanceof Error ? e.message : 'Previsualisation impossible'
+      actionError.value =
+        e instanceof Error ? e.message : 'Prévisualisation impossible'
     } finally {
       previewingRunId.value = null
     }
@@ -98,14 +104,15 @@
   }
 
   async function confirmUndo(): Promise<void> {
-    if (!pendingUndo.value) return
+    if (!pendingUndo.value || isUndoing.value) return
     try {
       isUndoing.value = true
+      actionError.value = null
       await api.undoBankSyncRun(pendingUndo.value.runId)
       pendingUndo.value = null
       await fetchData()
     } catch (e) {
-      error.value =
+      actionError.value =
         e instanceof Error ? e.message : "Erreur lors de l'annulation"
     } finally {
       isUndoing.value = false
@@ -115,23 +122,36 @@
 
 <template>
   <PageShell>
-    <!-- Header -->
-    <div class="mb-8">
-      <h1
-        class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
-      >
-        Historique des synchronisations
-      </h1>
-      <p
-        v-if="formatLatestSyncDate"
-        class="mt-2 text-gray-600 dark:text-gray-400"
-      >
-        Dernière synchronisation : {{ formatLatestSyncDate }}
-      </p>
-      <p v-else-if="!isLoading" class="mt-2 text-gray-600 dark:text-gray-400">
-        Aucune synchronisation effectuée pour le moment
-      </p>
-    </div>
+    <BackLink to="/accounts" class="mb-4">Comptes</BackLink>
+    <PageHeader
+      title="Historique des synchronisations"
+      :subtitle="
+        formatLatestSyncDate
+          ? `Dernière synchronisation : ${formatLatestSyncDate}`
+          : isLoading
+            ? undefined
+            : 'Aucune synchronisation effectuée pour le moment'
+      "
+    >
+      <template v-if="hasRuns" #actions>
+        <BaseButton
+          to="/settings/accounts"
+          variant="secondary"
+          class="w-full sm:w-auto"
+        >
+          <IconRefresh class="h-5 w-5" />
+          Gérer mes banques
+        </BaseButton>
+      </template>
+    </PageHeader>
+
+    <InlineAlert
+      v-if="actionError"
+      class="mb-4"
+      data-testid="bank-sync-action-error"
+    >
+      {{ actionError }}
+    </InlineAlert>
 
     <!-- Loading State -->
     <BaseCard
@@ -145,7 +165,7 @@
           class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-500"
         ></div>
         <p class="mt-4 text-gray-600 dark:text-gray-400">
-          Chargement de l'historique...
+          Chargement de l'historique…
         </p>
       </div>
     </BaseCard>
@@ -282,7 +302,7 @@
               :loading="isUndoing"
               @click="confirmUndo"
             >
-              {{ isUndoing ? 'Annulation...' : 'Oui' }}
+              {{ isUndoing ? 'Annulation…' : 'Oui' }}
             </BaseButton>
             <BaseButton
               variant="secondary"
@@ -319,14 +339,6 @@
           </div>
         </div>
       </BaseCard>
-    </div>
-
-    <!-- Quick Actions -->
-    <div v-if="hasRuns" class="mt-8 text-center">
-      <BaseButton to="/settings/accounts">
-        <IconRefresh class="h-5 w-5" />
-        Gérer mes banques
-      </BaseButton>
     </div>
   </PageShell>
 </template>

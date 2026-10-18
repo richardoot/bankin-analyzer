@@ -12,6 +12,8 @@
   import IconTrash from '@/components/icons/IconTrash.vue'
   import IconPlus from '@/components/icons/IconPlus.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
+  import PageHeader from '@/components/ui/PageHeader.vue'
+  import BackLink from '@/components/ui/BackLink.vue'
 
   const toast = useToast()
 
@@ -134,20 +136,24 @@
 
 <template>
   <PageShell>
-    <!-- Header -->
-    <div class="mb-8">
-      <h1
-        class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
-      >
-        Historique des imports
-      </h1>
-      <p v-if="formatLatestDate" class="mt-2 text-gray-600 dark:text-gray-400">
-        Dernière transaction importée : {{ formatLatestDate }}
-      </p>
-      <p v-else-if="!isLoading" class="mt-2 text-gray-600 dark:text-gray-400">
-        Aucun import effectué pour le moment
-      </p>
-    </div>
+    <BackLink to="/accounts" class="mb-4">Comptes</BackLink>
+    <PageHeader
+      title="Historique des imports"
+      :subtitle="
+        formatLatestDate
+          ? `Dernière transaction importée : ${formatLatestDate}`
+          : isLoading
+            ? undefined
+            : 'Aucun import effectué pour le moment'
+      "
+    >
+      <template v-if="hasHistories" #actions>
+        <BaseButton to="/import" class="w-full sm:w-auto">
+          <IconPlus class="h-5 w-5" />
+          Nouvel import
+        </BaseButton>
+      </template>
+    </PageHeader>
 
     <!-- Loading State -->
     <BaseCard
@@ -161,7 +167,7 @@
           class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-500"
         ></div>
         <p class="mt-4 text-gray-600 dark:text-gray-400">
-          Chargement de l'historique...
+          Chargement de l'historique…
         </p>
       </div>
     </BaseCard>
@@ -258,19 +264,29 @@
               </p>
             </div>
           </div>
-          <!-- Delete Button -->
-          <BaseIconButton
-            variant="danger"
-            data-testid="delete-import-button"
-            :label="`Supprimer l'import du ${formatDateTime(history.createdAt)}`"
-            @click="confirmDelete(history.id)"
-          >
-            <IconTrash />
-          </BaseIconButton>
+          <div class="flex items-center gap-2">
+            <BaseButton
+              :to="{ name: 'import-recap', params: { id: history.id } }"
+              variant="secondary"
+              size="sm"
+              data-testid="open-recap-button"
+            >
+              Récapitulatif
+            </BaseButton>
+            <!-- Delete Button -->
+            <BaseIconButton
+              variant="danger"
+              data-testid="delete-import-button"
+              :label="`Supprimer l'import du ${formatDateTime(history.createdAt)}`"
+              @click="confirmDelete(history.id)"
+            >
+              <IconTrash />
+            </BaseIconButton>
+          </div>
         </div>
 
         <!-- Stats Grid -->
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div class="grid grid-cols-3 gap-4">
           <!-- Transactions Imported -->
           <div class="rounded-lg bg-green-50 dark:bg-green-900/30 p-3">
             <p class="text-2xl font-bold text-green-700 dark:text-green-400">
@@ -298,16 +314,6 @@
             </p>
             <p class="text-sm text-amber-700 dark:text-amber-300">
               doublons ignorés
-            </p>
-          </div>
-
-          <!-- Categories Created -->
-          <div class="rounded-lg bg-blue-50 dark:bg-blue-900/30 p-3">
-            <p class="text-2xl font-bold text-blue-700 dark:text-blue-400">
-              {{ history.categoriesCreated.toLocaleString('fr-FR') }}
-            </p>
-            <p class="text-sm text-blue-700 dark:text-blue-300">
-              nouvelles catégories
             </p>
           </div>
         </div>
@@ -367,14 +373,6 @@
           </div>
         </div>
       </BaseCard>
-    </div>
-
-    <!-- Quick Actions -->
-    <div v-if="hasHistories" class="mt-8 text-center">
-      <BaseButton to="/import">
-        <IconPlus class="h-5 w-5" />
-        Nouvel import
-      </BaseButton>
     </div>
 
     <ConfirmDialog

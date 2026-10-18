@@ -19,6 +19,7 @@
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import IconClose from '@/components/icons/IconClose.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
+  import BackLink from '@/components/ui/BackLink.vue'
 
   /** A row the parser could not use, and why. */
   interface SkippedRow {
@@ -293,11 +294,6 @@
         importHistory.id
       )
 
-      // Get unique categories for the recap screen.
-      const uniqueCategories = new Set(
-        parsedTransactions.value.map(t => t.category)
-      )
-
       // Calculate date range from transactions
       const dates = parsedTransactions.value.map(t =>
         new Date(t.date).getTime()
@@ -310,24 +306,16 @@
       // it explicitly.
       await api.finalizeImport(importHistory.id, {
         transactionsImported: result.imported,
-        categoriesCreated: 0, // Categories are created on backend, we don't track new ones here
         duplicatesSkipped: result.duplicates,
         dateRangeStart,
         dateRangeEnd,
       })
 
-      // Prepare recap query params
-      const recapQuery = {
-        imported: result.imported.toString(),
-        duplicates: result.duplicates.toString(),
-        total: result.total.toString(),
-        categories: uniqueCategories.size.toString(),
-      }
-
-      // Navigate to recap page with result
+      // The recap reads the import back from the history: one source of
+      // truth, and a page that can be reopened later.
       router.push({
         name: 'import-recap',
-        query: recapQuery,
+        params: { id: importHistory.id },
       })
     } catch (err) {
       if (err instanceof PartialImportError) {
@@ -377,6 +365,7 @@
 
 <template>
   <PageShell width="narrow">
+    <BackLink to="/accounts" class="mb-4">Comptes</BackLink>
     <div class="text-center mb-8">
       <h1
         class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"

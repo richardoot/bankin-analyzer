@@ -697,7 +697,8 @@ export interface StartImportDto {
 
 export interface FinalizeImportDto {
   transactionsImported: number
-  categoriesCreated: number
+  /** Retired: an import creates no category since the catalogue. */
+  categoriesCreated?: number
   duplicatesSkipped: number
   dateRangeStart: string
   dateRangeEnd: string
@@ -2460,6 +2461,22 @@ export const api = {
     }
 
     return response.json() as Promise<ImportHistoryDto[]>
+  },
+
+  /** One import, read back from the history — the recap's source of truth. */
+  async getImportHistory(id: string): Promise<ImportHistoryDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/import-histories/${encodeURIComponent(id)}`
+    )
+
+    if (response.status === 404) {
+      throw new Error('Cet import est introuvable')
+    }
+    if (!response.ok) {
+      throw new Error("Impossible de charger le récapitulatif de l'import")
+    }
+
+    return response.json() as Promise<ImportHistoryDto>
   },
 
   async getLatestImportDate(): Promise<{ date: string | null }> {

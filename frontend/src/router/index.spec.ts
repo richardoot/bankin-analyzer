@@ -61,6 +61,16 @@ describe('router guard', () => {
     expect(router.currentRoute.value.name).toBe('reset-password')
   })
 
+  it('sends the old query-string recap to the history', async () => {
+    authState.isAuthenticated = true
+    await router.push('/import/recap?imported=3')
+    expect(router.currentRoute.value.name).toBe('import-history')
+
+    await router.push('/import/recap/abc')
+    expect(router.currentRoute.value.name).toBe('import-recap')
+    expect(router.currentRoute.value.params.id).toBe('abc')
+  })
+
   it('keeps the legal pages public', async () => {
     await router.push('/privacy')
 

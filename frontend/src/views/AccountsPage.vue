@@ -279,8 +279,15 @@
     }
   }
 
-  /** Repasser par l'autorisation de la banque, comme à la première connexion. */
+  /**
+   * Repasser par l'autorisation de la banque, comme à la première connexion.
+   * Un seul départ à la fois : deux clics ouvraient deux autorisations.
+   */
+  const reconnecting = ref<string | null>(null)
+
   async function reconnect(connection: BankConnectionDto): Promise<void> {
+    if (reconnecting.value) return
+    reconnecting.value = connection.id
     try {
       const { url } = await api.startBankAuthorization({
         aspspName: connection.aspspName,
@@ -289,6 +296,7 @@
       window.location.href = url
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Reconnexion impossible')
+      reconnecting.value = null
     }
   }
 
@@ -324,10 +332,14 @@
         >
           {{ isSyncingAll ? 'Synchronisation…' : 'Tout synchroniser' }}
         </BaseButton>
+        <!-- Only once a bank side exists: before that, the empty state
+             below carries the same call, and one is enough. -->
         <BaseButton
+          v-if="configured"
           to="/settings/accounts"
           variant="secondary"
           class="flex-1 sm:flex-none"
+          data-testid="connect-bank-header"
         >
           Connecter une banque
         </BaseButton>
@@ -461,6 +473,8 @@
             variant="danger-outline"
             size="sm"
             data-testid="reconnect-button"
+            :loading="reconnecting === connection.id"
+            :disabled="reconnecting !== null"
             @click="reconnect(connection)"
           >
             Reconnecter
@@ -524,12 +538,12 @@
           v-else
           class="mt-4 border-t border-gray-100 pt-3 text-sm text-gray-500 dark:border-slate-800 dark:text-gray-400"
         >
-          Aucun compte relié pour l'instant —
+          Aucun compte relié pour l'instant :
           <RouterLink
             to="/settings/accounts"
-            class="inline-flex min-h-[40px] items-center font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
+            class="inline-flex min-h-[44px] items-center font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
           >
-            choisissez lesquels lire
+            choisissez lesquels lire dans les réglages des comptes
           </RouterLink>
           .
         </p>
@@ -609,21 +623,21 @@
       >
         <RouterLink
           to="/bank-sync/history"
-          class="inline-flex min-h-[40px] items-center font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
+          class="inline-flex min-h-[44px] items-center font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
         >
           Historique des synchronisations
         </RouterLink>
         <RouterLink
           to="/import/history"
-          class="inline-flex min-h-[40px] items-center font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
+          class="inline-flex min-h-[44px] items-center font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
         >
           Historique des imports
         </RouterLink>
         <RouterLink
           to="/settings/accounts"
-          class="inline-flex min-h-[40px] items-center font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
+          class="inline-flex min-h-[44px] items-center font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
         >
-          Configurer les comptes
+          Réglages des comptes
         </RouterLink>
       </nav>
     </div>
