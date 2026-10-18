@@ -93,6 +93,7 @@ const readInclude = {
 }
 
 const mockPrismaService = {
+  $queryRaw: vi.fn(),
   transaction: {
     findMany: vi.fn(),
     findFirst: vi.fn(),
@@ -311,6 +312,50 @@ describe('TransactionsService', () => {
       expect(mockPrismaService.transaction.count).toHaveBeenCalledWith({
         where: expectedWhere,
       })
+    })
+
+    it('resolves the open debts off the ledger before narrowing the list', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        { transactionId: 'tx-open' },
+      ])
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockPrismaService.transaction.count.mockResolvedValue(0)
+
+      await service.findAllByUserPaginated(
+        mockUserId,
+        { page: 1, limit: 10 },
+        { reimbursement: { personId: 'person-1', open: true } }
+      )
+
+      expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(1)
+      expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: mockUserId, AND: [{ id: { in: ['tx-open'] } }] },
+        })
+      )
+    })
+
+    it('needs no ledger for every debt, open or not', async () => {
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockPrismaService.transaction.count.mockResolvedValue(0)
+
+      await service.findAllByUserPaginated(
+        mockUserId,
+        { page: 1, limit: 10 },
+        { reimbursement: { personId: 'person-1', open: false } }
+      )
+
+      expect(mockPrismaService.$queryRaw).not.toHaveBeenCalled()
+      expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId: mockUserId,
+            AND: [
+              { reimbursementRequests: { some: { personId: 'person-1' } } },
+            ],
+          },
+        })
+      )
     })
 
     it('should apply isPointed filter', async () => {

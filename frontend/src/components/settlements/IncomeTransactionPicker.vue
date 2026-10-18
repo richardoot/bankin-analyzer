@@ -14,6 +14,8 @@
     type SuggestionContext,
     type SuggestionReason,
   } from '@/lib/settlements'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   const props = defineProps<{
     /**
@@ -52,6 +54,25 @@
   const isTruncated = ref(false)
   /** Drives the wording: the list is not purely "the most recent" any more. */
   const searchedByName = ref(false)
+
+  /**
+   * The same filters, on the Transactions page: every income that matches,
+   * not the hundred shown. What the user typed goes along; the person's
+   * name variants do not — the page has one search box, not three.
+   */
+  const allMatchesLink = computed(() =>
+    transactionsLink({
+      type: 'INCOME',
+      categoryId: filterCategoryId.value ?? undefined,
+      subcategoryId: filterSubcategoryId.value ?? undefined,
+      from: filterStartDate.value,
+      to: filterEndDate.value,
+      min: filterAmountMin.value,
+      max: filterAmountMax.value,
+      q: searchQuery.value.trim() || undefined,
+      label: `Revenus pour ${props.context.personName}`,
+    })
+  )
   const error = ref<string | null>(null)
 
   interface RankedTransaction {
@@ -558,7 +579,16 @@
           {{ context.personName }} sont affichées.
         </template>
         <template v-else>Les 100 plus récentes sont affichées.</template>
-        Affinez la recherche pour atteindre les autres.
+        Affinez la recherche pour atteindre les autres, ou
+        <!-- A settlement is being composed: the list opens beside it. -->
+        <TransactionsLink
+          :to="allMatchesLink"
+          subject="ces revenus"
+          new-tab
+          data-testid="settlement-all-matches-link"
+        >
+          voyez-les toutes
+        </TransactionsLink>
       </p>
     </div>
   </div>

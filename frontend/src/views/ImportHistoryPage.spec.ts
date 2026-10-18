@@ -87,4 +87,13 @@ describe('ImportHistoryPage — deleting an import', () => {
     expect(toastError).toHaveBeenCalledWith("Impossible de supprimer l'import")
     expect(wrapper.text()).toContain('export.csv')
   })
+
+  it('links the rows an import wrote, by its id', async () => {
+    const wrapper = await mountPage()
+
+    const link = wrapper.get('[data-testid="import-transactions-link-imp-1"]')
+    expect(link.attributes('aria-label')).toBe(
+      "Voir les transactions de l'import du 01/02/2026"
+    )
+  })
 })

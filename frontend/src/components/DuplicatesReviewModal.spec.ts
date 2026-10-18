@@ -1,7 +1,17 @@
 import { describe, it, expect, afterEach } from 'vitest'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { mount, enableAutoUnmount } from '@vue/test-utils'
 import DuplicatesReviewModal from './DuplicatesReviewModal.vue'
 import type { ImportPreviewResultDto, UploadedTransactionDto } from '@/lib/api'
+
+// The link to the row already in the base needs a router to resolve.
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/', component: { template: '<div />' } },
+    { path: '/transactions', component: { template: '<div />' } },
+  ],
+})
 
 enableAutoUnmount(afterEach)
 
@@ -52,7 +62,7 @@ const preview: ImportPreviewResultDto = {
 function mountModal(result: ImportPreviewResultDto = preview) {
   return mount(DuplicatesReviewModal, {
     props: { isOpen: true, loading: false, previewResult: result },
-    global: { stubs: { Teleport: true } },
+    global: { plugins: [router], stubs: { Teleport: true } },
   })
 }
 
@@ -135,5 +145,13 @@ describe('DuplicatesReviewModal', () => {
     expect(
       wrapper.get('[data-testid="duplicates-confirm"]').attributes('disabled')
     ).toBeDefined()
+  })
+
+  it('opens the row already in the base, in a new tab: an import is under way', () => {
+    const wrapper = mountModal()
+
+    const link = wrapper.get('[data-testid="existing-transaction-link-9"]')
+    expect(link.attributes('target')).toBe('_blank')
+    expect(link.attributes('href')).toBe('/transactions?ids=tx-1&label=Netflix')
   })
 })

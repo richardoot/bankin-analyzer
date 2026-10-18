@@ -3,6 +3,8 @@
   import { formatCurrency } from '@/lib/formatters'
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import IconClose from '@/components/icons/IconClose.vue'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   /**
    * The reimbursements attached to one expense, declared once for both
@@ -71,6 +73,20 @@
         >
           (reçu : {{ formatCurrency(reimb.amountReceived) }})
         </span>
+        <!-- The income that repaid it, when cash came in. -->
+        <TransactionsLink
+          v-if="reimb.incomeTransactionIds.length > 0"
+          :to="
+            transactionsLink({
+              ids: reimb.incomeTransactionIds,
+              label: `Revenu ayant remboursé ${reimb.personName}`,
+            })
+          "
+          :subject="`ce que ${reimb.personName} a remboursé`"
+          icon-only
+          class="h-6 w-6"
+          :data-testid="`reimbursement-income-link-${reimb.id}`"
+        />
       </div>
       <BaseIconButton
         v-if="reimb.status !== 'COMPLETED'"

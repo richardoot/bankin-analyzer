@@ -1,8 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import AccountCard from './AccountCard.vue'
 import type { AccountDto } from '@/lib/api'
+
+// The links to the Transactions page need a router behind RouterLink.
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/', component: { template: '<div />' } },
+    { path: '/transactions', component: { template: '<div />' } },
+  ],
+})
 
 vi.mock('@/lib/api', () => ({
   api: { updateAccount: vi.fn() },
@@ -33,6 +43,7 @@ beforeEach(() => {
 describe('AccountCard', () => {
   it('emits toggle when the header is clicked', async () => {
     const wrapper = mount(AccountCard, {
+      global: { plugins: [router] },
       props: { account: account(), expanded: false },
     })
 
@@ -43,6 +54,7 @@ describe('AccountCard', () => {
 
   it('emits ask-delete when the delete button is pressed', async () => {
     const wrapper = mount(AccountCard, {
+      global: { plugins: [router] },
       props: { account: account(), expanded: true },
     })
 
@@ -53,6 +65,7 @@ describe('AccountCard', () => {
 
   it('shows no bank-summary row when nothing fills the slot', () => {
     const wrapper = mount(AccountCard, {
+      global: { plugins: [router] },
       props: { account: account(), expanded: false },
     })
 
@@ -63,6 +76,7 @@ describe('AccountCard', () => {
 
   it('renders bank-summary content even while collapsed', () => {
     const wrapper = mount(AccountCard, {
+      global: { plugins: [router] },
       props: { account: account(), expanded: false },
       slots: {
         'bank-summary': '<button data-testid="ingest-toggle">Lu</button>',
@@ -74,6 +88,7 @@ describe('AccountCard', () => {
 
   it('renders bank-link content only inside the expanded body', () => {
     const collapsed = mount(AccountCard, {
+      global: { plugins: [router] },
       props: { account: account(), expanded: false },
       slots: { 'bank-link': '<p data-testid="reassign">reassign</p>' },
     })
@@ -83,6 +98,7 @@ describe('AccountCard', () => {
     expect(hidden.element.closest('[style*="display: none"]')).not.toBeNull()
 
     const expanded = mount(AccountCard, {
+      global: { plugins: [router] },
       props: { account: account(), expanded: true },
       slots: { 'bank-link': '<p data-testid="reassign">reassign</p>' },
     })
@@ -95,6 +111,7 @@ describe('AccountCard', () => {
 
   it('badges a joint account with its divisor', () => {
     const wrapper = mount(AccountCard, {
+      global: { plugins: [router] },
       props: {
         account: account({ type: 'JOINT', divisor: 2 }),
         expanded: false,
@@ -106,6 +123,7 @@ describe('AccountCard', () => {
 
   it('badges an account still carrying rows a sync lost the reference to', () => {
     const wrapper = mount(AccountCard, {
+      global: { plugins: [router] },
       props: { account: account(), expanded: false, needsReviewCount: 8 },
     })
 
@@ -114,9 +132,26 @@ describe('AccountCard', () => {
 
   it('shows no such badge when nothing needs review', () => {
     const wrapper = mount(AccountCard, {
+      global: { plugins: [router] },
       props: { account: account(), expanded: false },
     })
 
     expect(wrapper.text()).not.toContain('à réaffecter')
+  })
+
+  it('links the rows to reassign from the expanded body, not from the header button', async () => {
+    const wrapper = mount(AccountCard, {
+      global: { plugins: [router] },
+      props: { account: account(), expanded: true, needsReviewCount: 3 },
+    })
+
+    expect(wrapper.get('button').find('a').exists()).toBe(false)
+    const link = wrapper.get('[data-testid="account-review-link"]')
+    expect(link.attributes('href')).toBe(
+      '/transactions?account=Compte+courant&review=1&label=Compte+courant+%C2%B7+%C3%A0+r%C3%A9affecter'
+    )
+    expect(link.attributes('aria-label')).toBe(
+      'Voir les transactions de Compte courant à réaffecter'
+    )
   })
 })

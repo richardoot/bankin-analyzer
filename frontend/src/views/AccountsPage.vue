@@ -29,6 +29,7 @@
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   const accountsStore = useAccountsStore()
   const toast = useToast()
@@ -488,10 +489,7 @@
         >
           <li v-for="account in linkedAccountsOf(connection)" :key="account.id">
             <RouterLink
-              :to="{
-                path: '/transactions',
-                query: { account: account.name },
-              }"
+              :to="transactionsLink({ account: account.name })"
               class="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/50"
             >
               <span
@@ -593,10 +591,7 @@
         >
           <li v-for="account in manualAccounts" :key="account.id">
             <RouterLink
-              :to="{
-                path: '/transactions',
-                query: { account: account.name },
-              }"
+              :to="transactionsLink({ account: account.name })"
               class="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/50"
             >
               <span

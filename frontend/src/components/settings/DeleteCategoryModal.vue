@@ -15,6 +15,8 @@
   import ConfirmByTyping from '@/components/ui/ConfirmByTyping.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import SectionLabel from '@/components/ui/SectionLabel.vue'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
   import {
     api,
     type CategoryDeletionSummaryDto,
@@ -198,6 +200,21 @@
                 sans catégorie »<template v-if="rangeLabel">
                   ({{ rangeLabel }})</template
                 >.
+                <TransactionsLink
+                  v-if="category"
+                  :to="
+                    transactionsLink({
+                      categoryId: category.id,
+                      label: category.name,
+                    })
+                  "
+                  :subject="category.name"
+                  size="md"
+                  data-testid="deletion-transactions-link"
+                  @click="close"
+                >
+                  Les voir
+                </TransactionsLink>
               </li>
               <li v-if="summary.labelledTransactionCount > 0">
                 Le libellé de sous-catégorie de

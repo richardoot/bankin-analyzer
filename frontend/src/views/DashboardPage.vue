@@ -14,7 +14,10 @@
   import EmptyState from '@/components/ui/EmptyState.vue'
   import { useDashboardData } from '@/composables/useDashboardData'
   import { useFiltersStore } from '@/stores/filters'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatMonth } from '@/lib/formatters'
+  import { UNCATEGORIZED_CATEGORY_ID } from '@/lib/api'
+  import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
   import { assignCategoryColors } from '@/lib/chartPalette'
   import { useChartTheme } from '@/composables/useChartTheme'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
@@ -43,6 +46,8 @@
     averageMonthlyIncome,
     averageMonthlySavings,
     periodMonths,
+    monthlyData,
+    incomeCategoriesDetailed,
     spendingStructure,
     everydaySpendingStructure,
     savingsTransfers,
@@ -121,6 +126,119 @@
 
   function openTagAnalysis(tagId: string): void {
     router.push({ name: 'tag-analysis', params: { id: tagId } })
+  }
+
+  /**
+   * Links to the Transactions page. Every figure here is netted and
+   * shared, so each link carries `gross`: the list will say it shows the
+   * full amounts. The period is the dashboard's own window — carried on
+   * the link, never synchronised with the list's filters.
+   */
+  const linkWindow = computed(() => {
+    const range = filtersStore.getDateRangeFromPeriod(filtersStore.timePeriod)
+    return {
+      from: range.startDate ?? undefined,
+      to: range.endDate ?? undefined,
+    }
+  })
+
+  /** The `YYYY-MM` behind each bar of the monthly charts. */
+  const monthKeys = computed(() => monthlyData.value.map(d => d.month))
+
+  function linkId(categoryId: string): string {
+    return categoryId === UNCATEGORIZED_CATEGORY_ID ? NO_CATEGORY : categoryId
+  }
+
+  /** A category's id from the name a chart draws, or null for « Autres ». */
+  function idByName(
+    categories: { categoryId: string; category: string }[],
+    name: string
+  ): string | null {
+    const found = categories.find(c => c.category === name)
+    return found ? linkId(found.categoryId) : null
+  }
+
+  const expenseSliceIds = computed(() =>
+    displayedExpensesByCategory.value.labels.map(label =>
+      idByName(expenseCategoriesDetailed.value, label)
+    )
+  )
+  const incomeSliceIds = computed(() =>
+    incomeByCategory.value.labels.map(label =>
+      idByName(incomeCategoriesDetailed.value, label)
+    )
+  )
+
+  type LinkType = 'EXPENSE' | 'INCOME'
+
+  function categoriesOf(type: LinkType): { id: string; name: string }[] {
+    return type === 'EXPENSE'
+      ? allExpenseCategories.value
+      : allIncomeCategories.value
+  }
+
+  function nameOf(type: LinkType, id: string | null): string | undefined {
+    if (id === NO_CATEGORY) return 'Sans catégorie'
+    return categoriesOf(type).find(c => c.id === id)?.name
+  }
+
+  const KIND_LABEL: Record<LinkType, string> = {
+    EXPENSE: 'Dépenses',
+    INCOME: 'Revenus',
+  }
+
+  /** The whole period, narrowed to the category the chart's select holds. */
+  function periodLink(type: LinkType) {
+    const selected =
+      type === 'EXPENSE' ? selectedCategory.value : selectedIncomeCategory.value
+    const name = nameOf(type, selected)
+    return transactionsLink({
+      type,
+      categoryId: selected ? linkId(selected) : undefined,
+      ...linkWindow.value,
+      gross: true,
+      label: name
+        ? `${KIND_LABEL[type]} · ${name}`
+        : `${KIND_LABEL[type]} de la période`,
+    })
+  }
+  const expensesLink = computed(() => periodLink('EXPENSE'))
+  const incomeLink = computed(() => periodLink('INCOME'))
+
+  function openMonth(type: LinkType, month: string): void {
+    const selected =
+      type === 'EXPENSE' ? selectedCategory.value : selectedIncomeCategory.value
+    const name = nameOf(type, selected) ?? KIND_LABEL[type]
+    void router.push(
+      transactionsLink({
+        type,
+        categoryId: selected ? linkId(selected) : undefined,
+        month,
+        gross: true,
+        label: `${name} · ${formatMonth(month, { capitalize: false })}`,
+      })
+    )
+  }
+
+  function openCategory(type: LinkType, id: string): void {
+    void router.push(
+      transactionsLink({
+        type,
+        categoryId: id,
+        ...linkWindow.value,
+        gross: true,
+        label: nameOf(type, id),
+      })
+    )
+  }
+
+  function eventLink(event: { id: string; name: string }) {
+    return transactionsLink({
+      tagId: event.id,
+      ...linkWindow.value,
+      gross: true,
+      label: event.name,
+    })
   }
 
   onMounted(() => {
@@ -477,11 +595,22 @@
                 </BaseField>
               </div>
               <div v-if="totalExpenses > 0" class="relative">
+                <!-- A bar opens its month; the link under the chart is the
+                     keyboard way to the same period. -->
                 <MonthlyBarChart
                   :data="filteredExpensesByMonth"
                   title="Dépenses"
                   color="#ef4444"
+                  :months="monthKeys"
+                  @select-month="month => openMonth('EXPENSE', month)"
                 />
+                <div class="mt-2 flex justify-end">
+                  <TransactionsLink
+                    :to="expensesLink"
+                    subject="la période"
+                    data-testid="expenses-transactions-link"
+                  />
+                </div>
               </div>
               <div
                 v-else
@@ -502,10 +631,14 @@
                 v-if="displayedExpensesByCategory.values.length > 0"
                 class="h-64 sm:h-80"
               >
+                <!-- A slice opens its category; the list below is the
+                     keyboard way to the same rows. -->
                 <CategoryPieChart
                   :data="displayedExpensesByCategory"
                   :top-n="DONUT_TOP_N"
                   title="Dépenses"
+                  :ids="expenseSliceIds"
+                  @select="id => openCategory('EXPENSE', id)"
                 />
               </div>
               <div
@@ -545,22 +678,35 @@
                 {{ formatCurrency(exceptionalEventsTotal) }}
               </p>
               <div class="flex flex-wrap gap-1.5">
-                <button
+                <!-- The chip opens the tag's analysis; the arrow beside it,
+                     its transactions over the period. -->
+                <span
                   v-for="event in exceptionalEvents"
                   :key="event.id"
-                  type="button"
-                  class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-primary-300 transition dark:hover:ring-primary-700"
-                  @click="openTagAnalysis(event.id)"
+                  class="inline-flex items-center gap-0.5 rounded-full bg-white pr-1 dark:bg-slate-900"
                 >
-                  <span
-                    class="inline-block h-2 w-2 rounded-full shrink-0"
-                    :style="{ backgroundColor: event.color ?? '#9ca3af' }"
-                  ></span>
-                  {{ event.name }}
-                  <span class="font-semibold tabular-nums">
-                    {{ formatCurrency(event.amount) }}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-primary-300 transition dark:hover:ring-primary-700"
+                    @click="openTagAnalysis(event.id)"
+                  >
+                    <span
+                      class="inline-block h-2 w-2 rounded-full shrink-0"
+                      :style="{ backgroundColor: event.color ?? '#9ca3af' }"
+                    ></span>
+                    {{ event.name }}
+                    <span class="font-semibold tabular-nums">
+                      {{ formatCurrency(event.amount) }}
+                    </span>
+                  </button>
+                  <TransactionsLink
+                    :to="eventLink(event)"
+                    :subject="event.name"
+                    icon-only
+                    class="h-6 w-6"
+                    :data-testid="`event-transactions-link-${event.id}`"
+                  />
+                </span>
               </div>
             </div>
 
@@ -570,6 +716,7 @@
               :total="displayedTotalExpenses"
               :mode="breakdownMode"
               :colors="categoryColors"
+              :window="linkWindow"
               color="#ef4444"
             />
           </BaseCard>
@@ -621,7 +768,16 @@
                   :data="filteredIncomeByMonth"
                   title="Revenus"
                   color="#22c55e"
+                  :months="monthKeys"
+                  @select-month="month => openMonth('INCOME', month)"
                 />
+                <div class="mt-2 flex justify-end">
+                  <TransactionsLink
+                    :to="incomeLink"
+                    subject="la période"
+                    data-testid="income-transactions-link"
+                  />
+                </div>
               </div>
               <div
                 v-else
@@ -642,7 +798,12 @@
                 v-if="incomeByCategory.values.length > 0"
                 class="h-64 sm:h-80"
               >
-                <CategoryPieChart :data="incomeByCategory" title="Revenus" />
+                <CategoryPieChart
+                  :data="incomeByCategory"
+                  title="Revenus"
+                  :ids="incomeSliceIds"
+                  @select="id => openCategory('INCOME', id)"
+                />
               </div>
               <div
                 v-else

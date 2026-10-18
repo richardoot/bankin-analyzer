@@ -19,9 +19,18 @@ const routerPush = vi.fn()
 /** The guard the page registers, captured so a test can run it. */
 let routeLeaveGuard: (() => boolean) | null = null
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: routerPush }),
+  useRouter: () => ({
+    push: routerPush,
+    resolve: (to: { path: string }) => ({ href: to.path }),
+  }),
   onBeforeRouteLeave: (guard: () => boolean) => {
     routeLeaveGuard = guard
+  },
+  // The rows link to the Transactions page; the route is kept on the
+  // element so a test can read it.
+  RouterLink: {
+    props: ['to'],
+    template: '<a :data-to="JSON.stringify(to)" :href="to.path"><slot /></a>',
   },
 }))
 
@@ -1430,6 +1439,127 @@ describe('BudgetPage', () => {
       expect(foodRow(wrapper).text()).toMatch(/320/)
 
       wrapper.unmount()
+    })
+  })
+
+  describe('links to the Transactions page', () => {
+    const planJunDec: BudgetPlanDto = {
+      ...samplePlan,
+      id: 'plan-jun-dec',
+      startDate: '2026-06-01',
+      endDate: '2026-12-31',
+      monthCount: 7,
+      totalAmount: 300,
+      entries: [
+        {
+          id: 'e1',
+          categoryId: 'cat-food',
+          categoryName: 'Alimentation',
+          categoryIcon: '🍽️',
+          amount: 300,
+        },
+      ],
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-08-20T12:00:00Z'))
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue(planJunDec)
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...sampleStatistics,
+        periodMonths: 7,
+        monthLabels: [
+          '2026-06',
+          '2026-07',
+          '2026-08',
+          '2026-09',
+          '2026-10',
+          '2026-11',
+          '2026-12',
+        ],
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            categoryIcon: '🍽️',
+            totalAmount: 900,
+            transactionCount: 12,
+            averagePerMonth: 128,
+            monthlyAmounts: [500, 200, 200, 0, 0, 0, 0],
+          },
+        ],
+      })
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('links the « Réel » figure to the plan so far, gross', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const link = wrapper.get(
+        '[data-testid="budget-actual-link-Alimentation"]'
+      )
+      expect(JSON.parse(link.attributes('data-to') ?? '{}')).toEqual({
+        path: '/transactions',
+        query: {
+          type: 'EXPENSE',
+          category: 'cat-food',
+          from: '2026-06-01',
+          to: '2026-08-20',
+          label: 'Alimentation · plan',
+          gross: '1',
+        },
+      })
+      expect(link.attributes('aria-label')).toBe(
+        'Voir les transactions de Alimentation · plan'
+      )
+    })
+
+    it('opens a month from a bar of the expenses chart', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      wrapper
+        .findComponent({ name: 'MonthlyExpensesChart' })
+        .vm.$emit('select-month', '2026-07')
+
+      expect(routerPush).toHaveBeenCalledWith({
+        path: '/transactions',
+        query: {
+          type: 'EXPENSE',
+          from: '2026-07-01',
+          to: '2026-07-31',
+          label: 'Dépenses · juil. 2026',
+          gross: '1',
+        },
+      })
+    })
+
+    it('opens a month from a bar of a category’s drill-down chart', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      await wrapper
+        .get('[data-testid="budget-row-Alimentation"] button')
+        .trigger('click')
+
+      wrapper
+        .findComponent({ name: 'BudgetCategoryRow' })
+        .vm.$emit('select-month', '2026-06')
+
+      expect(routerPush).toHaveBeenCalledWith({
+        path: '/transactions',
+        query: {
+          type: 'EXPENSE',
+          category: 'cat-food',
+          from: '2026-06-01',
+          to: '2026-06-30',
+          label: 'Alimentation · juin 2026',
+          gross: '1',
+        },
+      })
     })
   })
 })

@@ -21,7 +21,15 @@ vi.mock('@/lib/api', () => ({
 }))
 
 const push = vi.fn()
-vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push }),
+  // The page's links to the Transactions page import RouterLink; the
+  // route is kept on the element so a test can read it.
+  RouterLink: {
+    props: ['to'],
+    template: '<a :data-to="JSON.stringify(to)"><slot /></a>',
+  },
+}))
 
 const toastSuccess = vi.fn()
 const toastError = vi.fn()
@@ -455,5 +463,48 @@ describe('LegacyMigrationPage', () => {
     await flushPromises()
 
     expect(push).toHaveBeenCalledWith('/settings/categories')
+  })
+
+  describe('links to the Transactions page', () => {
+    const to = (w: ReturnType<typeof mount>, id: string) =>
+      JSON.parse(w.get(`[data-testid="${id}"]`).attributes('data-to') ?? '{}')
+
+    it('links a category from the list, beside its button, and from its header', async () => {
+      const wrapper = await mountPage()
+
+      expect(
+        wrapper
+          .get('[data-testid="legacy-category-cat-abos"]')
+          .find('a')
+          .exists()
+      ).toBe(false)
+      expect(to(wrapper, 'legacy-category-link-cat-abos')).toEqual({
+        path: '/transactions',
+        query: { category: 'cat-abos', label: 'Abonnements' },
+      })
+
+      await wrapper
+        .find('[data-testid="legacy-category-cat-abos"]')
+        .trigger('click')
+
+      expect(to(wrapper, 'legacy-selected-link')).toEqual({
+        path: '/transactions',
+        query: { category: 'cat-abos', label: 'Abonnements' },
+      })
+    })
+
+    it('links a line to its subcategory, the bare one as « sans sous-catégorie »', async () => {
+      const wrapper = await mountPage()
+      await wrapper
+        .find('[data-testid="legacy-category-cat-abos"]')
+        .trigger('click')
+
+      expect(to(wrapper, 'legacy-line-link-sub-phone')).toMatchObject({
+        query: { category: 'cat-abos', subcategory: 'sub-phone' },
+      })
+      expect(to(wrapper, 'legacy-line-link-none')).toMatchObject({
+        query: { category: 'cat-abos', subcategory: 'none' },
+      })
+    })
   })
 })

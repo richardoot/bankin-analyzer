@@ -1,8 +1,10 @@
 <script setup lang="ts">
   import PageShell from '@/components/ui/PageShell.vue'
   import { computed, onMounted, ref } from 'vue'
-  import { useRoute } from 'vue-router'
+  import { useRoute, useRouter } from 'vue-router'
   import { api } from '@/lib/api'
+  import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
   import type { TagAnalysisDto, TransactionDto } from '@/lib/api'
   import { formatCurrency, formatDate, formatMonth } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
@@ -16,9 +18,44 @@
   import BaseCard from '@/components/ui/BaseCard.vue'
 
   const route = useRoute()
+  const router = useRouter()
   const toast = useToast()
 
   const tagId = computed(() => String(route.params.id))
+
+  /**
+   * Links to the Transactions page: the tag, narrowed to a category (the
+   * unfiled rows as a word, not an id) or to a month. The figures here are
+   * shared and netted; the list is not, so each link carries `gross`.
+   */
+  function categoryLink(cat: {
+    categoryId: string | null
+    categoryName: string
+    type: 'EXPENSE' | 'INCOME'
+  }) {
+    return transactionsLink({
+      tagId: tagId.value,
+      type: cat.type,
+      categoryId: cat.categoryId ?? NO_CATEGORY,
+      gross: true,
+      label: `${analysis.value?.tag.name ?? 'Étiquette'} · ${cat.categoryName}`,
+    })
+  }
+
+  const monthKeys = computed(() =>
+    (analysis.value?.byMonth ?? []).map(r => r.month)
+  )
+
+  function openMonth(month: string): void {
+    void router.push(
+      transactionsLink({
+        tagId: tagId.value,
+        month,
+        gross: true,
+        label: `${analysis.value?.tag.name ?? 'Étiquette'} · ${formatMonth(month, { capitalize: false })}`,
+      })
+    )
+  }
 
   const analysis = ref<TagAnalysisDto | null>(null)
   const transactions = ref<TransactionDto[]>([])
@@ -349,10 +386,14 @@
             Dépenses par mois
           </h2>
           <div class="h-64">
+            <!-- A bar opens its month; « Voir toutes les transactions »
+                 below is the keyboard way to the tag. -->
             <MonthlyBarChart
               :data="monthlyExpenses"
               title="Dépenses par mois"
               color="#ef4444"
+              :months="monthKeys"
+              @select-month="openMonth"
             />
           </div>
         </BaseCard>
@@ -385,6 +426,13 @@
                 <span class="shrink-0 text-xs text-gray-400"
                   >({{ cat.transactionCount }})</span
                 >
+                <TransactionsLink
+                  :to="categoryLink(cat)"
+                  :subject="cat.categoryName"
+                  icon-only
+                  class="h-6 w-6"
+                  :data-testid="`tag-category-card-link-${cat.categoryName}`"
+                />
               </span>
               <span
                 class="shrink-0 text-sm font-medium tabular-nums"
@@ -460,6 +508,13 @@
                     <span class="text-xs text-gray-400"
                       >({{ cat.transactionCount }})</span
                     >
+                    <TransactionsLink
+                      :to="categoryLink(cat)"
+                      :subject="cat.categoryName"
+                      icon-only
+                      class="h-6 w-6"
+                      :data-testid="`tag-category-link-${cat.categoryName}`"
+                    />
                   </span>
                 </td>
                 <td
@@ -517,10 +572,24 @@
 
       <!-- Transactions list -->
       <BaseCard padding="none" class="overflow-hidden">
+        <!-- The list below stops at a hundred rows: the whole tag lives on
+             the Transactions page. -->
         <div
-          class="px-4 py-3 border-b border-gray-200 dark:border-slate-700 text-sm font-semibold text-gray-700 dark:text-gray-300"
+          class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-200 dark:border-slate-700 text-sm font-semibold text-gray-700 dark:text-gray-300"
         >
           Transactions étiquetées
+          <TransactionsLink
+            :to="
+              transactionsLink({
+                tagId,
+                label: analysis.tag.name,
+              })
+            "
+            :subject="analysis.tag.name"
+            data-testid="tag-all-transactions-link"
+          >
+            Voir toutes les transactions
+          </TransactionsLink>
         </div>
         <div
           v-if="transactions.length === 0"

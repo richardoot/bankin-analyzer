@@ -17,6 +17,7 @@
   import BackLink from '@/components/ui/BackLink.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
+  import { transactionsLink as linkToTransactions } from '@/lib/transactionsLink'
   import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
 
   const route = useRoute()
@@ -44,17 +45,14 @@
 
   onMounted(load)
 
-  /** The imported transactions, by the window the import covered. */
+  /** The rows this import wrote — exactly those, by the import's id. */
   const transactionsLink = computed(() => {
     const h = history.value
-    if (!h?.dateRangeStart || !h.dateRangeEnd) return { path: '/transactions' }
-    const query: Record<string, string> = {
-      from: h.dateRangeStart.slice(0, 10),
-      to: h.dateRangeEnd.slice(0, 10),
-    }
-    const [account] = h.accounts
-    if (h.accounts.length === 1 && account) query.account = account
-    return { path: '/transactions', query }
+    if (!h) return linkToTransactions()
+    return linkToTransactions({
+      importId: h.id,
+      label: `Import du ${formatDate(h.createdAt)}`,
+    })
   })
 
   const isStillRunning = computed(() => history.value?.status === 'IN_PROGRESS')

@@ -39,6 +39,7 @@
   import IconClose from '@/components/icons/IconClose.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   const router = useRouter()
   const toast = useToast()
@@ -192,13 +193,12 @@
     `${r.amountBucket ?? '*'}:${r.merchantKey}`
 
   function openTransactions(row: RecurrenceDto): void {
-    void router.push({
-      path: '/transactions',
-      query: {
+    void router.push(
+      transactionsLink({
         recurrence: recurrenceFilterKey(row),
         recurrenceLabel: row.name,
-      },
-    })
+      })
+    )
   }
 
   async function decide(

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import DeleteBankAccountModal from './DeleteBankAccountModal.vue'
@@ -13,6 +14,15 @@ vi.mock('@/lib/api', () => ({
 }))
 
 import { api } from '@/lib/api'
+
+// The links to the Transactions page need a router behind RouterLink.
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/', component: { template: '<div />' } },
+    { path: '/transactions', component: { template: '<div />' } },
+  ],
+})
 
 const mockedApi = vi.mocked(api)
 
@@ -64,6 +74,7 @@ async function type(value: string): Promise<void> {
 
 async function mountModal() {
   const wrapper = mount(DeleteBankAccountModal, {
+    global: { plugins: [router] },
     props: { account },
     attachTo: document.body,
   })
@@ -166,5 +177,20 @@ describe('DeleteBankAccountModal', () => {
 
     expect(typedInput().value).toBe('')
     expect(confirmButton().disabled).toBe(true)
+  })
+
+  it('offers the rows it would delete, and closes on the way there', async () => {
+    const wrapper = await mountModal()
+
+    const link = q<HTMLAnchorElement>(
+      '[data-testid="deletion-transactions-link"]'
+    )
+    expect(link.getAttribute('href')).toContain(
+      `/transactions?account=${encodeURIComponent(account.name).replace(/%20/g, '+')}`
+    )
+    link.click()
+    await flushPromises()
+
+    expect(wrapper.emitted('close')).toHaveLength(1)
   })
 })

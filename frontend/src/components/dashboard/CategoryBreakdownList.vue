@@ -1,6 +1,9 @@
 <script setup lang="ts">
   import { computed, ref } from 'vue'
-  import type { CategoryDataDto } from '@/lib/api'
+  import { useRouter } from 'vue-router'
+  import { UNCATEGORIZED_CATEGORY_ID, type CategoryDataDto } from '@/lib/api'
+  import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import { formatCurrency, formatMonth } from '@/lib/formatters'
@@ -24,13 +27,57 @@
        * drawn as a dot before the name so the two can be read together.
        */
       colors?: Map<string, string> | undefined
+      /**
+       * The period the figures cover, for the links to the Transactions
+       * page: a row opens its category over that window, a bar of the
+       * drill-down chart opens its month.
+       */
+      window?:
+        { from?: string | undefined; to?: string | undefined } | undefined
     }>(),
     {
       color: '#ef4444',
       mode: 'real',
       colors: undefined,
+      window: undefined,
     }
   )
+
+  const router = useRouter()
+
+  /** The id a link names: the unfiled rows have a word for it, not an id. */
+  function linkCategoryId(cat: CategoryDataDto): string {
+    return cat.categoryId === UNCATEGORIZED_CATEGORY_ID
+      ? NO_CATEGORY
+      : cat.categoryId
+  }
+
+  /**
+   * The figures here are netted and shared; the list is not. `gross` makes
+   * the Transactions page say so.
+   */
+  function rowLink(cat: CategoryDataDto) {
+    return transactionsLink({
+      type: 'EXPENSE',
+      categoryId: linkCategoryId(cat),
+      from: props.window?.from,
+      to: props.window?.to,
+      gross: true,
+      label: cat.category,
+    })
+  }
+
+  function openMonth(cat: CategoryDataDto, month: string): void {
+    void router.push(
+      transactionsLink({
+        type: 'EXPENSE',
+        categoryId: linkCategoryId(cat),
+        month,
+        gross: true,
+        label: `${cat.category} · ${formatMonth(month, { capitalize: false })}`,
+      })
+    )
+  }
 
   const expanded = ref<Set<string>>(new Set())
 
@@ -108,84 +155,94 @@
       :key="rowKey(cat)"
       class="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700"
     >
-      <!-- Row. No overflow-hidden on the card: it cut the keyboard focus
-           ring off; the row rounds its own corners instead. -->
-      <button
-        type="button"
-        :data-testid="`category-row-${cat.category}`"
-        class="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
-        :class="isExpanded(rowKey(cat)) ? 'rounded-t-lg' : 'rounded-lg'"
-        :aria-expanded="isExpanded(rowKey(cat))"
-        @click="toggleExpanded(rowKey(cat))"
-      >
-        <!-- Chevron -->
-        <IconChevronRight
-          class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
-          :class="{ 'rotate-90': isExpanded(rowKey(cat)) }"
-        />
+      <!-- Row: the toggle, then the link to its transactions beside it —
+           never inside it, a link in a button is two gestures in one.
+           No overflow-hidden on the card: it cut the keyboard focus ring
+           off; the row rounds its own corners instead. -->
+      <div class="flex items-center pr-2">
+        <button
+          type="button"
+          :data-testid="`category-row-${cat.category}`"
+          class="min-w-0 flex-1 px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+          :class="isExpanded(rowKey(cat)) ? 'rounded-tl-lg' : 'rounded-l-lg'"
+          :aria-expanded="isExpanded(rowKey(cat))"
+          @click="toggleExpanded(rowKey(cat))"
+        >
+          <!-- Chevron -->
+          <IconChevronRight
+            class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
+            :class="{ 'rotate-90': isExpanded(rowKey(cat)) }"
+          />
 
-        <!-- Icon + name; the share sits beside the name on a desk and
+          <!-- Icon + name; the share sits beside the name on a desk and
              wraps under it on a phone, where it used to be hidden outright. -->
-        <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2">
-          <span
-            v-if="colors?.get(cat.category)"
-            class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-            :style="{ backgroundColor: colors.get(cat.category) }"
-            :data-testid="`category-color-${cat.category}`"
-            aria-hidden="true"
-          />
-          <span v-if="cat.icon" class="text-lg shrink-0">{{ cat.icon }}</span>
-          <span
-            class="min-w-0 flex-1 truncate font-medium text-gray-900 dark:text-gray-100"
-          >
-            {{ cat.category }}
-          </span>
-          <span
-            class="basis-full text-xs text-gray-500 tabular-nums sm:basis-auto dark:text-gray-400"
-          >
-            {{ getPercent(cat).toFixed(1) }}%
-          </span>
-        </div>
-
-        <!-- Sparkline -->
-        <div class="hidden sm:block shrink-0">
-          <SparklineChart
-            v-if="getSparklineData(cat).length >= 2"
-            :data="getSparklineData(cat)"
-            :color="props.color"
-          />
-        </div>
-
-        <!-- Amounts -->
-        <div class="shrink-0 text-right">
-          <div
-            class="font-semibold text-gray-900 dark:text-gray-100 tabular-nums"
-          >
-            {{ formatCurrency(displayedAverage(cat) ?? displayedAmount(cat))
-            }}<span
-              v-if="displayedAverage(cat) !== undefined"
-              class="text-xs font-normal text-gray-500 dark:text-gray-400"
+          <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2">
+            <span
+              v-if="colors?.get(cat.category)"
+              class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+              :style="{ backgroundColor: colors.get(cat.category) }"
+              :data-testid="`category-color-${cat.category}`"
+              aria-hidden="true"
+            />
+            <span v-if="cat.icon" class="text-lg shrink-0">{{ cat.icon }}</span>
+            <span
+              class="min-w-0 flex-1 truncate font-medium text-gray-900 dark:text-gray-100"
             >
-              /mois</span
+              {{ cat.category }}
+            </span>
+            <span
+              class="basis-full text-xs text-gray-500 tabular-nums sm:basis-auto dark:text-gray-400"
             >
+              {{ getPercent(cat).toFixed(1) }}%
+            </span>
           </div>
-          <div class="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-            Total : {{ formatCurrency(displayedAmount(cat)) }}
+
+          <!-- Sparkline -->
+          <div class="hidden sm:block shrink-0">
+            <SparklineChart
+              v-if="getSparklineData(cat).length >= 2"
+              :data="getSparklineData(cat)"
+              :color="props.color"
+            />
           </div>
-          <div
-            v-if="cat.exceptionalAmount && cat.exceptionalAmount > 0"
-            class="text-xs text-amber-700 dark:text-amber-400 tabular-nums"
-            :title="
-              isEveryday
-                ? 'Montant exclu de cette moyenne'
-                : 'Part incluse dans cette moyenne'
-            "
-          >
-            {{ isEveryday ? 'hors' : 'dont' }}
-            {{ formatCurrency(cat.exceptionalAmount) }} exceptionnel
+
+          <!-- Amounts -->
+          <div class="shrink-0 text-right">
+            <div
+              class="font-semibold text-gray-900 dark:text-gray-100 tabular-nums"
+            >
+              {{ formatCurrency(displayedAverage(cat) ?? displayedAmount(cat))
+              }}<span
+                v-if="displayedAverage(cat) !== undefined"
+                class="text-xs font-normal text-gray-500 dark:text-gray-400"
+              >
+                /mois</span
+              >
+            </div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+              Total : {{ formatCurrency(displayedAmount(cat)) }}
+            </div>
+            <div
+              v-if="cat.exceptionalAmount && cat.exceptionalAmount > 0"
+              class="text-xs text-amber-700 dark:text-amber-400 tabular-nums"
+              :title="
+                isEveryday
+                  ? 'Montant exclu de cette moyenne'
+                  : 'Part incluse dans cette moyenne'
+              "
+            >
+              {{ isEveryday ? 'hors' : 'dont' }}
+              {{ formatCurrency(cat.exceptionalAmount) }} exceptionnel
+            </div>
           </div>
-        </div>
-      </button>
+        </button>
+        <TransactionsLink
+          :to="rowLink(cat)"
+          :subject="cat.category"
+          icon-only
+          :data-testid="`category-link-${cat.category}`"
+        />
+      </div>
 
       <!-- Drill-down panel -->
       <div
@@ -238,10 +295,13 @@
           <SectionLabel as="h4" class="mb-2">
             Évolution mensuelle
           </SectionLabel>
+          <!-- A bar opens its month; the link above is the keyboard way. -->
           <MonthlyBarChart
             :data="chartDataFor(cat)"
             :title="cat.category"
             :color="props.color"
+            :months="monthLabels"
+            @select-month="month => openMonth(cat, month)"
           />
         </div>
 

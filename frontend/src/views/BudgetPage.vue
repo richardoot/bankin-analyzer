@@ -35,6 +35,7 @@
   } from '@/composables/useBudgetComparison'
   import { useRouter, onBeforeRouteLeave } from 'vue-router'
   import { formatMonth } from '@/lib/formatters'
+  import { monthWindow, transactionsLink } from '@/lib/transactionsLink'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
@@ -389,6 +390,63 @@
   function openTagAnalysis(tagId: string): void {
     void router.push(`/tags/${tagId}`)
   }
+
+  /**
+   * Links to the Transactions page. Every figure here is netted, shared
+   * and read in the active mode; the list is none of that, so each link
+   * carries `gross` and the list says so.
+   */
+  function openMonthTransactions(ym: string): void {
+    void router.push(
+      transactionsLink({
+        type: 'EXPENSE',
+        month: ym,
+        gross: true,
+        label: `Dépenses · ${formatMonth(ym, { capitalize: false })}`,
+      })
+    )
+  }
+
+  function openCategoryMonth(cat: CategoryAverageDto, ym: string): void {
+    void router.push(
+      transactionsLink({
+        type: 'EXPENSE',
+        categoryId: cat.categoryId,
+        month: ym,
+        gross: true,
+        label: `${cat.categoryName} · ${formatMonth(ym, { capitalize: false })}`,
+      })
+    )
+  }
+
+  /** The comparison months, behind « Historique ». */
+  const historicalWindow = computed(() => {
+    const range = comparisonRange.value
+    if (!range) return null
+    return { from: range.startDate, to: range.endDate, label: range.label }
+  })
+
+  /**
+   * The months behind « Réel »: the one isolated, or the plan from its first
+   * day to today — the average reads complete months only, the list shows
+   * the running one too, which is what the running one is for.
+   */
+  const actualWindow = computed(() => {
+    const current = plan.value
+    if (!current) return null
+    if (selectedMonth.value) {
+      const window = monthWindow(selectedMonth.value)
+      if (!window) return null
+      return { ...window, label: monthLabelFor(selectedMonth.value) }
+    }
+    const today = new Date().toISOString().slice(0, 10)
+    const end = current.endDate.slice(0, 10)
+    return {
+      from: current.startDate.slice(0, 10),
+      to: end < today ? end : today,
+      label: 'plan',
+    }
+  })
 
   /** "2026-08" → "Août 2026". */
   const monthLabelFor = (ym: string): string =>
@@ -1087,6 +1145,7 @@
           :plan-end-month="plan.endDate.slice(0, 7)"
           :comparison-start-month="comparisonRange?.startMonth ?? ''"
           :comparison-end-month="comparisonRange?.endMonth ?? ''"
+          @select-month="openMonthTransactions"
         />
       </BaseCard>
 
@@ -1203,6 +1262,10 @@
             :sparkline="comparison.seriesFor(cat) ?? []"
             :chart-data="categoryChartData(cat)"
             :breakdown-mode="breakdownMode"
+            :historical-window="historicalWindow"
+            :actual-window="actualWindow"
+            :month-keys="statistics?.monthLabels ?? []"
+            @select-month="ym => openCategoryMonth(cat, ym)"
             @toggle-expand="toggleCategoryExpanded(cat.categoryId)"
             @update-budget="value => updateBudgetInput(cat.categoryId, value)"
             @apply-budget="amount => setBudgetValue(cat.categoryId, amount)"

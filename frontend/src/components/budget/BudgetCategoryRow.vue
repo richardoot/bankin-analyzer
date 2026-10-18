@@ -6,6 +6,8 @@
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
   import SectionLabel from '@/components/ui/SectionLabel.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   /**
    * One category of the budget table: the row and its drill-down panel.
@@ -19,7 +21,7 @@
    * dressed as a link: a number that rewrites an envelope when clicked
    * is a trap, not an affordance.
    */
-  defineProps<{
+  const props = defineProps<{
     category: CategoryAverageDto
     rowGrid: string
     expanded: boolean
@@ -39,13 +41,36 @@
     sparkline: number[]
     chartData: { labels: string[]; values: number[] }
     breakdownMode: 'real' | 'everyday'
+    /**
+     * The windows the two reference figures cover, for the links to the
+     * Transactions page: the comparison months behind « Historique », the
+     * plan months — or the one isolated — behind « Réel ». Each figure is
+     * netted and shared, so its link carries `gross`.
+     */
+    historicalWindow?: { from: string; to: string; label: string } | null
+    actualWindow?: { from: string; to: string; label: string } | null
+    /** The `YYYY-MM` behind each bar of the drill-down chart. */
+    monthKeys?: string[] | undefined
   }>()
 
   const emit = defineEmits<{
     'toggle-expand': []
     'update-budget': [raw: string]
     'apply-budget': [amount: number]
+    /** A bar of the drill-down chart was clicked — its `YYYY-MM`. */
+    'select-month': [yearMonth: string]
   }>()
+
+  function windowLink(window: { from: string; to: string; label: string }) {
+    return transactionsLink({
+      type: 'EXPENSE',
+      categoryId: props.category.categoryId,
+      from: window.from,
+      to: window.to,
+      gross: true,
+      label: `${props.category.categoryName} · ${window.label}`,
+    })
+  }
 </script>
 
 <template>
@@ -105,6 +130,14 @@
           {{ formatCurrency(historicalAverage) }}
         </span>
         <span v-else class="text-gray-500 dark:text-gray-400">—</span>
+        <TransactionsLink
+          v-if="historicalWindow && historicalAverage > 0"
+          :to="windowLink(historicalWindow)"
+          :subject="`${category.categoryName} · ${historicalWindow.label}`"
+          icon-only
+          class="-my-1 ml-0.5 align-middle"
+          :data-testid="`budget-historical-link-${category.categoryName}`"
+        />
         <BaseButton
           v-if="editing && historicalAverage > 0"
           variant="ghost"
@@ -201,6 +234,14 @@
           {{ formatCurrency(actualAverage) }}
         </span>
         <span v-else class="text-gray-500 dark:text-gray-400">—</span>
+        <TransactionsLink
+          v-if="actualWindow && actualAverage > 0"
+          :to="windowLink(actualWindow)"
+          :subject="`${category.categoryName} · ${actualWindow.label}`"
+          icon-only
+          class="-my-1 ml-0.5 align-middle"
+          :data-testid="`budget-actual-link-${category.categoryName}`"
+        />
         <!-- The event share, said in words: « hors » when the everyday
              reading left it out, « dont » when the real one counts it. -->
         <span
@@ -345,10 +386,14 @@
       <!-- Monthly evolution chart -->
       <div v-if="(category.monthlyAmounts?.length ?? 0) >= 2">
         <SectionLabel as="h3" class="mb-2"> Évolution mensuelle </SectionLabel>
+        <!-- A bar opens its month; the links beside the figures above
+             are the keyboard way to the same category. -->
         <MonthlyBarChart
           :data="chartData"
           :title="category.categoryName"
           color="#ef4444"
+          :months="monthKeys"
+          @select-month="month => emit('select-month', month)"
         />
       </div>
 

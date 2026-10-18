@@ -1,7 +1,17 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import CategoryBreakdownList from './CategoryBreakdownList.vue'
 import type { CategoryDataDto } from '@/lib/api'
+
+// The rows link to the Transactions page: RouterLink needs a router.
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/', component: { template: '<div />' } },
+    { path: '/transactions', component: { template: '<div />' } },
+  ],
+})
 
 vi.mock('vue3-apexcharts/core', () => ({
   default: {
@@ -50,6 +60,7 @@ describe('CategoryBreakdownList', () => {
 
   it('renders one row per category with name and average', () => {
     const wrapper = mount(CategoryBreakdownList, {
+      global: { plugins: [router] },
       props: { categories, monthLabels, total: 900 },
     })
 
@@ -60,6 +71,7 @@ describe('CategoryBreakdownList', () => {
 
   it('shows the share of total as a percentage', () => {
     const wrapper = mount(CategoryBreakdownList, {
+      global: { plugins: [router] },
       props: { categories, monthLabels, total: 900 },
     })
 
@@ -71,6 +83,7 @@ describe('CategoryBreakdownList', () => {
 
   it('does not show drill-down content until a row is clicked', () => {
     const wrapper = mount(CategoryBreakdownList, {
+      global: { plugins: [router] },
       props: { categories, monthLabels, total: 900 },
     })
 
@@ -80,6 +93,7 @@ describe('CategoryBreakdownList', () => {
 
   it('expands inline showing subcategories and chart on row click', async () => {
     const wrapper = mount(CategoryBreakdownList, {
+      global: { plugins: [router] },
       props: { categories, monthLabels, total: 900 },
     })
 
@@ -96,6 +110,7 @@ describe('CategoryBreakdownList', () => {
 
   it('toggles drill-down off when the same row is clicked again', async () => {
     const wrapper = mount(CategoryBreakdownList, {
+      global: { plugins: [router] },
       props: { categories, monthLabels, total: 900 },
     })
 
@@ -109,6 +124,7 @@ describe('CategoryBreakdownList', () => {
 
   it('renders an empty state when no categories', () => {
     const wrapper = mount(CategoryBreakdownList, {
+      global: { plugins: [router] },
       props: { categories: [], monthLabels, total: 0 },
     })
 
@@ -147,6 +163,7 @@ describe('CategoryBreakdownList', () => {
 
     it('shows the real average by default', () => {
       const wrapper = mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
         props: { categories: mixed, monthLabels, total: 3400 },
       })
 
@@ -158,6 +175,7 @@ describe('CategoryBreakdownList', () => {
 
     it('shows the everyday average in everyday mode', () => {
       const wrapper = mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
         props: {
           categories: mixed,
           monthLabels,
@@ -178,12 +196,14 @@ describe('CategoryBreakdownList', () => {
       const amountsOf = (text: string) => norm(text).replace(/\d+\.\d%/, '')
 
       const real = mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
         props: { categories: mixed, monthLabels, total: 3400 },
       })
         .get('[data-testid="category-row-Logement"]')
         .text()
 
       const everyday = mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
         props: {
           categories: mixed,
           monthLabels,
@@ -201,6 +221,7 @@ describe('CategoryBreakdownList', () => {
 
     it('labels the exceptional share "dont" in real mode and "hors" in everyday mode', () => {
       const real = mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
         props: { categories: mixed, monthLabels, total: 3400 },
       })
       expect(real.get('[data-testid="category-row-Voyages"]').text()).toContain(
@@ -208,6 +229,7 @@ describe('CategoryBreakdownList', () => {
       )
 
       const everyday = mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
         props: {
           categories: mixed,
           monthLabels,
@@ -222,6 +244,7 @@ describe('CategoryBreakdownList', () => {
 
     it('hides the exceptional line when the category carries none', () => {
       const wrapper = mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
         props: { categories: mixed, monthLabels, total: 3400 },
       })
 
@@ -233,6 +256,7 @@ describe('CategoryBreakdownList', () => {
     it('computes the share against the total of the active mode', () => {
       // 400 everyday out of a 2800 everyday total = 14.3 %, not 1000/3400.
       const wrapper = mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
         props: {
           categories: mixed,
           monthLabels,
@@ -258,6 +282,7 @@ describe('CategoryBreakdownList', () => {
       ]
 
       const wrapper = mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
         props: {
           categories: legacy,
           monthLabels,
@@ -269,6 +294,83 @@ describe('CategoryBreakdownList', () => {
       expect(
         norm(wrapper.get('[data-testid="category-row-Alimentation"]').text())
       ).toContain('200,00 € /mois')
+    })
+  })
+
+  describe('links to the Transactions page', () => {
+    it('gives each row a link to its category over the window, gross', () => {
+      const wrapper = mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
+        props: {
+          categories: [
+            ...categories,
+            {
+              categoryId: '__uncategorized__',
+              category: 'Non classé',
+              amount: 5,
+            },
+          ],
+          monthLabels,
+          total: 905,
+          window: { from: '2024-01-01', to: '2024-03-31' },
+        },
+      })
+
+      const link = wrapper.get('[data-testid="category-link-Alimentation"]')
+      expect(link.attributes('href')).toBe(
+        '/transactions?type=EXPENSE&category=cat-1&from=2024-01-01&to=2024-03-31&label=Alimentation&gross=1'
+      )
+      expect(link.attributes('aria-label')).toBe(
+        'Voir les transactions de Alimentation'
+      )
+      // The unfiled rows are a word, not an id.
+      expect(
+        wrapper
+          .get('[data-testid="category-link-Non classé"]')
+          .attributes('href')
+      ).toContain('category=none')
+      // Outside the toggle: following the link does not expand the row.
+      expect(wrapper.text()).not.toContain('Sous-catégories')
+    })
+
+    it('opens the month a bar of the drill-down chart stands for', async () => {
+      const push = vi.spyOn(router, 'push').mockResolvedValue(undefined)
+      const wrapper = mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
+        props: { categories, monthLabels, total: 900 },
+      })
+      await wrapper
+        .find('[data-testid="category-row-Alimentation"]')
+        .trigger('click')
+
+      const chart = wrapper.findComponent({ name: 'VueApexCharts' })
+      const options = chart.props('options') as {
+        chart: {
+          events: {
+            dataPointSelection: (
+              e: unknown,
+              c: unknown,
+              config: { dataPointIndex: number }
+            ) => void
+          }
+        }
+      }
+      options.chart.events.dataPointSelection(null, null, {
+        dataPointIndex: 1,
+      })
+
+      expect(push).toHaveBeenCalledWith({
+        path: '/transactions',
+        query: {
+          type: 'EXPENSE',
+          category: 'cat-1',
+          from: '2024-02-01',
+          to: '2024-02-29',
+          label: 'Alimentation · févr. 2024',
+          gross: '1',
+        },
+      })
+      push.mockRestore()
     })
   })
 })

@@ -16,6 +16,8 @@
   import { api } from '@/lib/api'
   import type { BankSyncRunDto, UndoRunOutcomeDto } from '@/lib/api'
   import { formatDateTime } from '@/lib/formatters'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
@@ -326,6 +328,21 @@
             <p class="text-sm text-green-700 dark:text-green-300">
               nouvelles transactions
             </p>
+            <!-- Every row this run wrote, inserted or claimed. -->
+            <TransactionsLink
+              v-if="!run.undoneAt && run.inserted + run.claimed > 0"
+              :to="
+                transactionsLink({
+                  syncRunId: run.id,
+                  label: `Synchro du ${formatDateTime(run.fetchedAt)}`,
+                })
+              "
+              :subject="`la synchro du ${formatDateTime(run.fetchedAt)}`"
+              class="mt-1"
+              :data-testid="`run-transactions-link-${run.id}`"
+            >
+              Les voir
+            </TransactionsLink>
           </div>
 
           <!-- Claimed -->

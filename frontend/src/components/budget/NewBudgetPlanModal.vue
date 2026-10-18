@@ -194,6 +194,12 @@
   )
 
   // ── Step 2: load preview ─────────────────────────────────────────────────
+  /** The window the step's links open, as `from` / `to`. */
+  const referenceWindow = computed<{ from: string; to: string } | null>(() => {
+    const range = lookbackRange(lookback.value)
+    return range ? { from: range.startDate, to: range.endDate } : null
+  })
+
   function lookbackRange(opt: LookbackOption): {
     startDate: string
     endDate: string
@@ -781,6 +787,7 @@
       :plan-month-count="planMonthCount"
       :reserve-gap="reserveGap"
       :lookback-exceptional-per-month="lookbackExceptionalPerMonth"
+      :reference-window="referenceWindow"
       @update-entry="setEntryAmount"
       @set-savings="setSavingsTarget"
     />

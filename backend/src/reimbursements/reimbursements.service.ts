@@ -26,7 +26,12 @@ import type {
 type ReimbursementWithRelations = ReimbursementRequest & {
   person: { name: string }
   /** The ledger the credit and the status are read from. */
-  payments: { amount: Prisma.Decimal; kind: PaymentKind }[]
+  payments: {
+    amount: Prisma.Decimal
+    kind: PaymentKind
+    settlementId?: string | null
+    incomeTransactionId?: string | null
+  }[]
   transaction: {
     id: string
     date: Date
@@ -47,7 +52,15 @@ const RESPONSE_INCLUDE = {
   person: { select: { name: true } },
   // Not an optional extra: `amountReceived` and `status` are read off these,
   // so a response without them would report every debt as untouched.
-  payments: { select: { amount: true, kind: true } },
+  payments: {
+    select: {
+      amount: true,
+      kind: true,
+      settlementId: true,
+      incomeTransactionId: true,
+    },
+    orderBy: { settledAt: 'asc' },
+  },
   transaction: {
     select: {
       id: true,
@@ -58,6 +71,11 @@ const RESPONSE_INCLUDE = {
     },
   },
 } as const
+
+/** The non-null values, first occurrence first. */
+function distinct(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.filter((v): v is string => Boolean(v)))]
+}
 
 @Injectable()
 export class ReimbursementsService {
@@ -86,6 +104,10 @@ export class ReimbursementsService {
       amountRemaining: round2(amount - amountReceived),
       status: derivedStatusOf(amount, amountReceived),
       note: reimbursement.note,
+      settlementIds: distinct(reimbursement.payments.map(p => p.settlementId)),
+      incomeTransactionIds: distinct(
+        reimbursement.payments.map(p => p.incomeTransactionId)
+      ),
       createdAt: reimbursement.createdAt,
       updatedAt: reimbursement.updatedAt,
     }

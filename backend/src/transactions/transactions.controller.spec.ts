@@ -757,6 +757,57 @@ describe('TransactionsController', () => {
       })
     })
 
+    it('passes the link filters through under their own names', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
+      const id = '550e8400-e29b-41d4-a716-446655440099'
+
+      await controller.findAll(
+        mockUser,
+        1,
+        20,
+        undefined,
+        undefined,
+        undefined,
+        'none',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        id,
+        'person-1',
+        'open',
+        'settlement-1',
+        'import-1',
+        'run-1'
+      )
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 20 },
+        {
+          categoryId: null,
+          ids: [id],
+          reimbursement: { personId: 'person-1', open: true },
+          settlementId: 'settlement-1',
+          importHistoryId: 'import-1',
+          syncRunId: 'run-1',
+        },
+        undefined
+      )
+    })
+
     it('rejects a sort column outside the allowlist', async () => {
       await expect(
         controller.findAll(

@@ -28,6 +28,8 @@
   import BaseField from '@/components/ui/BaseField.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
+  import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
 
   const { exportReimbursementsToPdf } = usePdfExport()
   const toast = useToast()
@@ -432,7 +434,12 @@
            règlement », which is the action this page exists for. -->
       <template v-if="reimbursements.length > 0" #actions>
         <BaseButton
-          to="/transactions"
+          :to="
+            transactionsLink({
+              reimbursement: 'open',
+              label: 'Toutes les dettes ouvertes',
+            })
+          "
           variant="secondary"
           class="w-full sm:w-auto"
         >
@@ -521,6 +528,19 @@
               <div class="text-xs text-gray-500 dark:text-gray-400">
                 restant dû
               </div>
+              <TransactionsLink
+                :to="
+                  transactionsLink({
+                    personId: person.personId,
+                    reimbursement: 'open',
+                    label: `Dettes ouvertes de ${person.personName}`,
+                  })
+                "
+                :subject="person.personName"
+                :data-testid="`person-transactions-link-${person.personId}`"
+              >
+                Voir les transactions
+              </TransactionsLink>
             </div>
           </div>
 
@@ -530,64 +550,83 @@
               v-for="cat in person.byCategory"
               :key="cat.categoryId ?? 'none'"
             >
-              <!-- Category header - clickable -->
-              <button
-                type="button"
-                :aria-expanded="
-                  isCategoryExpanded(person.personId, cat.categoryId ?? 'none')
-                "
-                :aria-controls="`debts-${person.personId}-${cat.categoryId ?? 'none'}`"
-                class="w-full flex items-center justify-between py-2 px-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors text-sm min-h-[44px] sm:min-h-0"
-                @click="
-                  toggleCategoryExpanded(
-                    person.personId,
-                    cat.categoryId ?? 'none'
-                  )
-                "
-              >
-                <span
-                  class="text-gray-600 dark:text-gray-400 flex items-center gap-1.5 sm:gap-2 flex-wrap"
+              <!-- Category header - clickable; the link to its rows sits
+                   beside the button, never inside. -->
+              <div class="flex items-center gap-1">
+                <button
+                  type="button"
+                  :aria-expanded="
+                    isCategoryExpanded(
+                      person.personId,
+                      cat.categoryId ?? 'none'
+                    )
+                  "
+                  :aria-controls="`debts-${person.personId}-${cat.categoryId ?? 'none'}`"
+                  class="w-full flex items-center justify-between py-2 px-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors text-sm min-h-[44px] sm:min-h-0"
+                  @click="
+                    toggleCategoryExpanded(
+                      person.personId,
+                      cat.categoryId ?? 'none'
+                    )
+                  "
                 >
-                  <IconChevronRight
-                    class="w-3 h-3 text-gray-500 dark:text-gray-400 transition-transform duration-200 shrink-0"
-                    :class="{
-                      'rotate-90': isCategoryExpanded(
-                        person.personId,
-                        cat.categoryId ?? 'none'
-                      ),
-                    }"
-                  />
-                  <span class="truncate">{{ cat.categoryName }}</span>
                   <span
-                    class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
-                    >({{ cat.reimbursements.length }})</span
+                    class="text-gray-600 dark:text-gray-400 flex items-center gap-1.5 sm:gap-2 flex-wrap"
                   >
-                  <!-- Status badge -->
-                  <span
-                    v-if="cat.status === 'COMPLETED'"
-                    class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 shrink-0"
-                  >
-                    Réglé
+                    <IconChevronRight
+                      class="w-3 h-3 text-gray-500 dark:text-gray-400 transition-transform duration-200 shrink-0"
+                      :class="{
+                        'rotate-90': isCategoryExpanded(
+                          person.personId,
+                          cat.categoryId ?? 'none'
+                        ),
+                      }"
+                    />
+                    <span class="truncate">{{ cat.categoryName }}</span>
+                    <span
+                      class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
+                      >({{ cat.reimbursements.length }})</span
+                    >
+                    <!-- Status badge -->
+                    <span
+                      v-if="cat.status === 'COMPLETED'"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 shrink-0"
+                    >
+                      Réglé
+                    </span>
+                    <span
+                      v-else-if="cat.status === 'PARTIAL'"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-debt-100 dark:bg-debt-900/30 text-debt-700 dark:text-debt-300 shrink-0"
+                    >
+                      Partiel
+                    </span>
+                    <span
+                      v-else
+                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 shrink-0"
+                    >
+                      En attente
+                    </span>
                   </span>
                   <span
-                    v-else-if="cat.status === 'PARTIAL'"
-                    class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-debt-100 dark:bg-debt-900/30 text-debt-700 dark:text-debt-300 shrink-0"
+                    class="font-medium text-gray-700 dark:text-gray-300 shrink-0 ml-2"
                   >
-                    Partiel
+                    {{ formatCurrency(cat.amountRemaining) }}
                   </span>
-                  <span
-                    v-else
-                    class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 shrink-0"
-                  >
-                    En attente
-                  </span>
-                </span>
-                <span
-                  class="font-medium text-gray-700 dark:text-gray-300 shrink-0 ml-2"
-                >
-                  {{ formatCurrency(cat.amountRemaining) }}
-                </span>
-              </button>
+                </button>
+                <TransactionsLink
+                  :to="
+                    transactionsLink({
+                      personId: person.personId,
+                      reimbursement: 'open',
+                      categoryId: cat.categoryId ?? NO_CATEGORY,
+                      label: `Dettes ouvertes de ${person.personName} · ${cat.categoryName}`,
+                    })
+                  "
+                  :subject="`${person.personName} · ${cat.categoryName}`"
+                  icon-only
+                  :data-testid="`category-transactions-link-${person.personId}-${cat.categoryId ?? 'none'}`"
+                />
+              </div>
 
               <!-- Transaction details - collapsible. v-show, not a max-height
                      animation: the cap cut off the lines past ~9 on a phone,
@@ -606,15 +645,29 @@
                     class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-debt-200 dark:border-debt-700"
                   >
                     <span
-                      class="min-w-0 truncate"
+                      class="flex min-w-0 items-center gap-1"
                       :title="r.transaction?.description"
                     >
-                      <span class="text-gray-500 dark:text-gray-400"
-                        >[{{
-                          formatTransactionDate(r.transaction?.date)
-                        }}]</span
-                      >
-                      {{ r.transaction?.description || 'Transaction' }}
+                      <span class="min-w-0 truncate">
+                        <span class="text-gray-500 dark:text-gray-400"
+                          >[{{
+                            formatTransactionDate(r.transaction?.date)
+                          }}]</span
+                        >
+                        {{ r.transaction?.description || 'Transaction' }}
+                      </span>
+                      <TransactionsLink
+                        :to="
+                          transactionsLink({
+                            ids: [r.transactionId],
+                            label: r.transaction?.description,
+                          })
+                        "
+                        :subject="r.transaction?.description || 'cette dette'"
+                        icon-only
+                        class="h-6 w-6"
+                        :data-testid="`debt-transaction-link-${r.id}`"
+                      />
                     </span>
                     <!-- The amount may wrap; the button never shrinks. -->
                     <span
@@ -670,8 +723,21 @@
           <span class="text-lg font-semibold text-gray-900 dark:text-gray-100"
             >Total général</span
           >
-          <span class="text-xl font-bold text-debt-700 dark:text-debt-400">
-            {{ formatCurrency(totalDue) }}
+          <span class="flex items-center gap-2">
+            <span class="text-xl font-bold text-debt-700 dark:text-debt-400">
+              {{ formatCurrency(totalDue) }}
+            </span>
+            <TransactionsLink
+              :to="
+                transactionsLink({
+                  reimbursement: 'open',
+                  label: 'Toutes les dettes ouvertes',
+                })
+              "
+              subject="toutes les dettes ouvertes"
+              icon-only
+              data-testid="total-transactions-link"
+            />
           </span>
         </div>
       </div>
@@ -727,7 +793,9 @@
           </svg>
         </template>
         <template #action>
-          <BaseButton to="/transactions">Aller aux transactions</BaseButton>
+          <BaseButton :to="transactionsLink()"
+            >Aller aux transactions</BaseButton
+          >
         </template>
       </EmptyState>
     </BaseCard>

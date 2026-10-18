@@ -25,6 +25,8 @@
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import FilterChips from '@/components/ui/FilterChips.vue'
   import FilterDisclosure from '@/components/ui/FilterDisclosure.vue'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
   import type { FilterChip } from '@/components/ui/FilterChips.vue'
   import * as icons from '@/components/icons'
   import {
@@ -688,6 +690,54 @@
               <BaseButton variant="secondary" size="sm">Action</BaseButton>
             </template>
           </FilterDisclosure>
+        </div>
+      </BaseCard>
+
+      <!-- Links to the Transactions page -->
+      <BaseCard
+        as="section"
+        padding="lg"
+        data-testid="design-transactions-link"
+      >
+        <h2 class="mb-1 text-xl font-semibold text-gray-900 dark:text-gray-100">
+          Voir les transactions · TransactionsLink
+        </h2>
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          Partout où un écran montre des transactions ou un chiffre qui en
+          additionne, ce lien ouvre la page Transactions sur exactement ce qu'on
+          regardait. La route vient toujours de
+          <code class="font-mono text-xs">transactionsLink()</code>
+          (<code class="font-mono text-xs">lib/transactionsLink</code>) : champs
+          nommés, jamais une URL écrite à la main. Un lien remplace les filtres
+          de la page ; <code class="font-mono text-xs">gross</code> fait dire au
+          bandeau que les montants sont complets quand le chiffre de départ
+          était net ou partagé. Le nom accessible est « Voir les transactions de
+          … » ; le clic ne remonte pas à la ligne qui l'héberge.
+        </p>
+        <div class="flex flex-wrap items-center gap-6">
+          <TransactionsLink
+            :to="transactionsLink({ categoryId: 'demo', gross: true })"
+            subject="Alimentation"
+          />
+          <TransactionsLink
+            :to="transactionsLink({ tagId: 'demo' })"
+            subject="Vacances"
+            size="md"
+          >
+            Voir les 12 transactions
+          </TransactionsLink>
+          <TransactionsLink
+            :to="transactionsLink({ ids: ['demo'] })"
+            subject="cette dette"
+            icon-only
+          />
+          <TransactionsLink
+            :to="transactionsLink({ importId: 'demo' })"
+            subject="cet import"
+            new-tab
+          >
+            Dans un nouvel onglet
+          </TransactionsLink>
         </div>
       </BaseCard>
 

@@ -19,6 +19,8 @@
     toAllocationLine,
     NO_CATEGORY_LABEL,
   } from '@/lib/settlements'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   const props = defineProps<{
     isOpen: boolean
@@ -168,13 +170,29 @@
       >
         <div class="min-w-0">
           <p
-            class="truncate font-medium text-gray-900 dark:text-gray-100"
+            class="flex items-center gap-1 font-medium text-gray-900 dark:text-gray-100"
             :title="line.description"
           >
-            <span class="text-gray-500 dark:text-gray-400"
-              >[{{ formatDate(line.date) }}]</span
-            >
-            {{ line.description }}
+            <span class="min-w-0 truncate">
+              <span class="text-gray-500 dark:text-gray-400"
+                >[{{ formatDate(line.date) }}]</span
+              >
+              {{ line.description }}
+            </span>
+            <!-- A draft is open: the row opens beside it. -->
+            <TransactionsLink
+              :to="
+                transactionsLink({
+                  ids: [reimbursement.transactionId],
+                  label: line.description,
+                })
+              "
+              :subject="line.description"
+              icon-only
+              new-tab
+              class="h-6 w-6"
+              data-testid="single-settlement-line-link"
+            />
           </p>
           <p class="text-xs text-gray-500 dark:text-gray-400">
             {{ line.categoryName || NO_CATEGORY_LABEL }}

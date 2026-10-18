@@ -15,19 +15,31 @@
  * has to cover the whole day, a subcategory that means nothing without its
  * category.
  */
+import { BadRequestException } from '@nestjs/common'
 import {
   TransactionSource,
   type Prisma,
   type TransactionType,
 } from '../generated/prisma'
 
+/** The query value that asks for « sans catégorie » / « sans sous-catégorie ». */
+export const NO_CATEGORY = 'none'
+
+/** An explicit id list is a link, not a bulk upload: keep the URL sane. */
+export const MAX_TRANSACTION_IDS = 200
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 /** A filter, parsed and typed. */
 export interface TransactionFilters {
   type?: TransactionType
   startDate?: Date
   endDate?: Date
-  categoryId?: string
-  subcategoryId?: string
+  /** A category, or `null` for the rows filed nowhere. */
+  categoryId?: string | null
+  /** A subcategory, or `null` for the rows of the category without one. */
+  subcategoryId?: string | null
   isPointed?: boolean
   account?: string
   tagId?: string
@@ -46,6 +58,26 @@ export interface TransactionFilters {
    * its merchant and amount bucket — rather than by a row id that does not.
    */
   recurrence?: { merchantKey: string; amountBucket: number }
+  /**
+   * An exact list of rows, as a link from one settlement line or one
+   * duplicate names them. Empty when the caller named only ids that could
+   * not be ids: matching nothing is the honest answer, matching everything
+   * would be a leak dressed as a list.
+   */
+  ids?: string[]
+  /**
+   * The expenses carrying a reimbursement request — of one person, or of
+   * anyone — and, with `open`, only those where a remainder is still owed.
+   * `open` needs the ledger, which a `where` alone cannot sum: the service
+   * resolves it before building the query.
+   */
+  reimbursement?: { personId?: string; open: boolean }
+  /** The expenses one settlement closed, and the income that paid them. */
+  settlementId?: string
+  /** The rows one CSV import wrote. */
+  importHistoryId?: string
+  /** The rows one bank sync run inserted or claimed. */
+  syncRunId?: string
 }
 
 /**
@@ -68,6 +100,33 @@ export interface RawTransactionFilters {
   needsBankReview?: string | boolean
   /** `<amountBucket>:<merchantKey>`, e.g. `15:com netflix`. */
   recurrence?: string
+  /** Comma-separated in a query string, an array in a JSON body. */
+  ids?: string | string[]
+  personId?: string
+  /** `open` or `all`; anything else reads as `all`. */
+  reimbursement?: string
+  settlementId?: string
+  importId?: string
+  syncRunId?: string
+}
+
+/**
+ * The ids a caller named, deduplicated, the non-ids dropped. More than the
+ * cap is refused rather than truncated: a silently shortened list would
+ * show a wrong answer with a straight face.
+ */
+function parseIds(value: string | string[] | undefined): string[] | null {
+  if (value === undefined) return null
+  const raw = (Array.isArray(value) ? value : value.split(','))
+    .map(id => id.trim())
+    .filter(id => id !== '')
+  if (raw.length === 0) return null
+  if (raw.length > MAX_TRANSACTION_IDS) {
+    throw new BadRequestException(
+      `ids accepts at most ${MAX_TRANSACTION_IDS} values, got ${raw.length}`
+    )
+  }
+  return [...new Set(raw.filter(id => UUID_PATTERN.test(id)))]
 }
 
 /** `15:com netflix` → the series; anything else is ignored. */
@@ -108,11 +167,15 @@ export function parseTransactionFilters(
       end.setUTCHours(23, 59, 59, 999)
     filters.endDate = end
   }
-  if (raw.categoryId) filters.categoryId = raw.categoryId
+  if (raw.categoryId === NO_CATEGORY) filters.categoryId = null
+  else if (raw.categoryId) filters.categoryId = raw.categoryId
   // A subcategory only exists inside a category, so narrowing by subcategory
-  // without a category would be ambiguous: ignore it in that case.
-  if (raw.categoryId && raw.subcategoryId)
-    filters.subcategoryId = raw.subcategoryId
+  // without a category would be ambiguous: ignore it in that case. Under
+  // « sans catégorie » there is no subcategory to speak of either.
+  if (filters.categoryId && raw.subcategoryId) {
+    filters.subcategoryId =
+      raw.subcategoryId === NO_CATEGORY ? null : raw.subcategoryId
+  }
   if (raw.isPointed !== undefined)
     filters.isPointed =
       typeof raw.isPointed === 'boolean'
@@ -130,6 +193,19 @@ export function parseTransactionFilters(
   const recurrence = parseRecurrence(raw.recurrence)
   if (recurrence) filters.recurrence = recurrence
 
+  const ids = parseIds(raw.ids)
+  if (ids) filters.ids = ids
+
+  if (raw.personId || raw.reimbursement) {
+    filters.reimbursement = {
+      ...(raw.personId && { personId: raw.personId }),
+      open: raw.reimbursement === 'open',
+    }
+  }
+  if (raw.settlementId) filters.settlementId = raw.settlementId
+  if (raw.importId) filters.importHistoryId = raw.importId
+  if (raw.syncRunId) filters.syncRunId = raw.syncRunId
+
   const min = parseAmountBound(raw.amountMin)
   if (min !== null) filters.amountMin = min
   const max = parseAmountBound(raw.amountMax)
@@ -138,9 +214,18 @@ export function parseTransactionFilters(
   return filters
 }
 
+/**
+ * What the service resolved before the query could be built: the rows an
+ * open-debt filter names, read off the payment ledger.
+ */
+export interface ResolvedTransactionFilters {
+  openDebtTransactionIds?: string[]
+}
+
 export function buildTransactionWhere(
   userId: string,
-  filters?: TransactionFilters
+  filters?: TransactionFilters,
+  resolved: ResolvedTransactionFilters = {}
 ): Prisma.TransactionWhereInput {
   // Conditions that either combine several fields (keyword OR) or express a
   // constraint on the signed amount are collected in an AND array so they
@@ -174,6 +259,40 @@ export function buildTransactionWhere(
     and.push({ amount: { gte: -filters.amountMax, lte: filters.amountMax } })
   }
 
+  // An explicit list, and the open debts, both narrow by id: kept apart
+  // here so a link naming both still means their intersection.
+  if (filters?.ids) and.push({ id: { in: filters.ids } })
+
+  if (filters?.reimbursement) {
+    const { personId, open } = filters.reimbursement
+    if (open) {
+      if (!resolved.openDebtTransactionIds) {
+        throw new Error(
+          'An open-debt filter needs its transaction ids resolved first'
+        )
+      }
+      and.push({ id: { in: resolved.openDebtTransactionIds } })
+    } else {
+      and.push({
+        reimbursementRequests: { some: personId ? { personId } : {} },
+      })
+    }
+  }
+
+  if (filters?.settlementId) {
+    const settlementId = filters.settlementId
+    and.push({
+      OR: [
+        { settlementsAsIncome: { some: { id: settlementId } } },
+        {
+          reimbursementRequests: {
+            some: { settlements: { some: { settlementId } } },
+          },
+        },
+      ],
+    })
+  }
+
   // Date window: each bound is optional and applied independently.
   const dateFilter: Prisma.DateTimeFilter = {}
   if (filters?.startDate) dateFilter.gte = filters.startDate
@@ -182,8 +301,17 @@ export function buildTransactionWhere(
   return {
     userId,
     ...(filters?.type && { type: filters.type }),
-    ...(filters?.categoryId && { categoryId: filters.categoryId }),
-    ...(filters?.subcategoryId && { subcategoryId: filters.subcategoryId }),
+    // `null` is a value here: the rows filed nowhere.
+    ...(filters?.categoryId !== undefined && {
+      categoryId: filters.categoryId,
+    }),
+    ...(filters?.subcategoryId !== undefined && {
+      subcategoryId: filters.subcategoryId,
+    }),
+    ...(filters?.importHistoryId && {
+      importHistoryId: filters.importHistoryId,
+    }),
+    ...(filters?.syncRunId && { syncRunId: filters.syncRunId }),
     ...(filters?.isPointed !== undefined && { isPointed: filters.isPointed }),
     ...(filters?.account && {
       accountRef: { name: filters.account },

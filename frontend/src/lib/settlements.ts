@@ -21,6 +21,8 @@ export function availableAmountOf(transaction: TransactionDto): number {
 /** A pending debt line, flattened out of a ReimbursementDto for allocation. */
 export interface AllocationLine {
   reimbursementId: string
+  /** The expense the debt hangs off — what a link to its row names. */
+  transactionId: string
   /**
    * Category of the expense being repaid — how the debts are grouped, and the
    * same axis the reimbursements page displays them on.
@@ -40,6 +42,7 @@ export function toAllocationLine(
 ): AllocationLine {
   return {
     reimbursementId: reimbursement.id,
+    transactionId: reimbursement.transactionId,
     // The expense, not `categoryId`: the latter is the retired income hint,
     // null on most debts, which filed every line under "Sans catégorie".
     categoryId: reimbursement.expenseCategoryId,

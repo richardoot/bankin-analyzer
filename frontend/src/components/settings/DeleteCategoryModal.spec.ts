@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import DeleteCategoryModal from './DeleteCategoryModal.vue'
 import type { CategoryDeletionSummaryDto, CategoryDto } from '@/lib/api'
@@ -11,6 +12,15 @@ vi.mock('@/lib/api', () => ({
 }))
 
 import { api } from '@/lib/api'
+
+// The links to the Transactions page need a router behind RouterLink.
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/', component: { template: '<div />' } },
+    { path: '/transactions', component: { template: '<div />' } },
+  ],
+})
 
 const mockedApi = vi.mocked(api)
 
@@ -83,6 +93,7 @@ async function type(value: string): Promise<void> {
 async function mountModal(summary: CategoryDeletionSummaryDto = fullSummary) {
   mockedApi.getCategoryDeletionSummary.mockResolvedValue(summary)
   const wrapper = mount(DeleteCategoryModal, {
+    global: { plugins: [router] },
     props: { category },
     attachTo: document.body,
   })
@@ -188,6 +199,7 @@ describe('DeleteCategoryModal', () => {
       new Error('Réseau indisponible')
     )
     mount(DeleteCategoryModal, {
+      global: { plugins: [router] },
       props: { category },
       attachTo: document.body,
     })
@@ -197,5 +209,20 @@ describe('DeleteCategoryModal', () => {
       'Réseau indisponible'
     )
     expect(confirmButton().disabled).toBe(true)
+  })
+
+  it('offers the rows it would unfile, and closes on the way there', async () => {
+    const wrapper = await mountModal()
+
+    const link = q<HTMLAnchorElement>(
+      '[data-testid="deletion-transactions-link"]'
+    )
+    expect(link.getAttribute('href')).toBe(
+      `/transactions?category=${category.id}&label=${encodeURIComponent(category.name).replace(/%20/g, '+')}`
+    )
+    link.click()
+    await flushPromises()
+
+    expect(wrapper.emitted('close')).toHaveLength(1)
   })
 })

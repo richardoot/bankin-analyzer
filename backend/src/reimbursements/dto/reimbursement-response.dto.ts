@@ -53,6 +53,15 @@ export class ReimbursementResponseDto {
   /** Note */
   note!: string | null
 
+  /**
+   * The settlements that credited this debt, oldest first. Read-only: what
+   * lets a line say « see the settlement » without a second request.
+   */
+  settlementIds!: string[]
+
+  /** The income transactions the cash came from, oldest first. */
+  incomeTransactionIds!: string[]
+
   /** Creation date */
   createdAt!: Date
 

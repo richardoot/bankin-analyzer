@@ -18,11 +18,32 @@
       title: string
       color: string
       negativeColor?: string
+      /**
+       * The `YYYY-MM` behind each bar, aligned with `data.labels`. Given,
+       * a bar becomes a way to its month: the chart emits `select-month`
+       * and draws the bars with a pointer. The screen that listens adds
+       * the keyboard way (a link beside the chart) — a bar cannot be one.
+       */
+      months?: string[] | undefined
     }>(),
     {
       negativeColor: '#22c55e', // green for reimbursements/credits
+      months: undefined,
     }
   )
+
+  const emit = defineEmits<{
+    /** A bar was clicked — the `YYYY-MM` it stands for. */
+    (e: 'select-month', yearMonth: string): void
+  }>()
+
+  const selectable = computed(() => props.months !== undefined)
+
+  function onBarSelected(config?: { dataPointIndex: number }): void {
+    const index = config?.dataPointIndex ?? -1
+    const month = props.months?.[index]
+    if (month) emit('select-month', month)
+  }
 
   const { isDark, labelColor, chartTheme, chartAnimations } = useChartTheme()
   // A 300px chart with twelve full-currency ticks is unreadable at 375px:
@@ -45,6 +66,15 @@
       fontFamily: 'inherit',
       background: 'transparent',
       animations: chartAnimations.value,
+      ...(selectable.value && {
+        events: {
+          dataPointSelection: (
+            _event: unknown,
+            _context: unknown,
+            config?: { dataPointIndex: number }
+          ) => onBarSelected(config),
+        },
+      }),
     },
     plotOptions: {
       bar: {
@@ -110,7 +140,10 @@
 </script>
 
 <template>
-  <div class="w-full">
+  <div
+    class="w-full"
+    :class="selectable ? '[&_.apexcharts-bar-area]:cursor-pointer' : ''"
+  >
     <VueApexCharts
       type="bar"
       :height="isMobile ? 220 : 300"

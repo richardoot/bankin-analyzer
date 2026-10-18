@@ -40,6 +40,8 @@
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
   import BaseField from '@/components/ui/BaseField.vue'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
 
   const router = useRouter()
   const toast = useToast()
@@ -371,10 +373,16 @@
           <ul
             class="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-100 dark:divide-slate-700/60 dark:border-slate-700/60"
           >
-            <li v-for="category in legacy" :key="category.id">
+            <!-- The row is a button; its link to the rows it counts sits
+                 beside it, never inside. -->
+            <li
+              v-for="category in legacy"
+              :key="category.id"
+              class="flex items-center pr-2"
+            >
               <button
                 type="button"
-                class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/50"
+                class="flex min-w-0 flex-1 items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/50"
                 :data-testid="`legacy-category-${category.id}`"
                 @click="choose(category)"
               >
@@ -417,6 +425,17 @@
                 </span>
                 <IconChevronRight class="h-4 w-4 shrink-0 text-gray-400" />
               </button>
+              <TransactionsLink
+                :to="
+                  transactionsLink({
+                    categoryId: category.id,
+                    label: category.name,
+                  })
+                "
+                :subject="category.name"
+                icon-only
+                :data-testid="`legacy-category-link-${category.id}`"
+              />
             </li>
           </ul>
         </template>
@@ -430,9 +449,21 @@
               {{ selected.name }}
             </CategoryIcon>
             <span class="ml-2 text-sm font-normal text-gray-500">
-              {{ selected.transactionCount }} transaction{{
-                selected.transactionCount > 1 ? 's' : ''
-              }}
+              <TransactionsLink
+                :to="
+                  transactionsLink({
+                    categoryId: selected.id,
+                    label: selected.name,
+                  })
+                "
+                :subject="selected.name"
+                size="md"
+                data-testid="legacy-selected-link"
+              >
+                {{ selected.transactionCount }} transaction{{
+                  selected.transactionCount > 1 ? 's' : ''
+                }}
+              </TransactionsLink>
             </span>
           </h3>
           <BaseButton variant="ghost" size="sm" @click="backToList">
@@ -474,9 +505,24 @@
                 {{ lineLabel(draft.line) }}
               </span>
               <span class="text-xs text-gray-500 dark:text-gray-400">
-                {{ draft.line.transactionCount }} transaction{{
-                  draft.line.transactionCount > 1 ? 's' : ''
-                }}
+                <!-- A line without a subcategory is the category's own
+                     rows: « sans sous-catégorie », a word, not an id. -->
+                <TransactionsLink
+                  :to="
+                    transactionsLink({
+                      categoryId: selected.id,
+                      subcategoryId:
+                        draft.line.sourceSubcategoryId ?? NO_CATEGORY,
+                      label: `${selected.name} · ${lineLabel(draft.line)}`,
+                    })
+                  "
+                  :subject="`${selected.name} · ${lineLabel(draft.line)}`"
+                  :data-testid="`legacy-line-link-${draft.line.sourceSubcategoryId ?? 'none'}`"
+                >
+                  {{ draft.line.transactionCount }} transaction{{
+                    draft.line.transactionCount > 1 ? 's' : ''
+                  }}
+                </TransactionsLink>
               </span>
             </div>
 
