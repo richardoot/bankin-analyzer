@@ -4,6 +4,7 @@
  * here, never an inline <svg>.
  */
 export { default as IconArrowLeft } from './IconArrowLeft.vue'
+export { default as IconArrowRight } from './IconArrowRight.vue'
 export { default as IconArrowPath } from './IconArrowPath.vue'
 export { default as IconArrowsRightLeft } from './IconArrowsRightLeft.vue'
 export { default as IconBolt } from './IconBolt.vue'
