@@ -91,6 +91,11 @@
   const PLAN_COLOR = '#ef4444' // red-500
   const COMP_COLOR = '#6366f1' // indigo-500
   const CURRENT_COLOR = '#f59e0b' // amber-500
+  // The two dashed lines: income in the income green, the budget in the
+  // primary the plan's column and figures already wear — indigo is the
+  // comparison's, and a budget line in indigo read as history.
+  const INCOME_COLOR = '#22c55e' // green-500
+  const BUDGET_COLOR = '#059669' // primary-600
 
   function colorForMonth(ym: string): string {
     if (ym === currentYearMonth) return CURRENT_COLOR
@@ -109,7 +114,7 @@
     if (props.averageIncome > 0) {
       annotations.push({
         y: props.averageIncome,
-        borderColor: '#34d399',
+        borderColor: INCOME_COLOR,
         strokeDashArray: 4,
         label: {
           text: isMobile.value
@@ -119,7 +124,7 @@
           textAnchor: isMobile.value ? 'start' : 'end',
           borderColor: 'transparent',
           style: {
-            color: '#34d399',
+            color: INCOME_COLOR,
             background: 'transparent',
             fontSize: '11px',
             fontWeight: '500',
@@ -131,7 +136,7 @@
     if (props.totalBudget > 0) {
       annotations.push({
         y: props.totalBudget,
-        borderColor: '#818cf8',
+        borderColor: BUDGET_COLOR,
         strokeDashArray: 4,
         label: {
           text: isMobile.value
@@ -141,7 +146,7 @@
           textAnchor: isMobile.value ? 'start' : 'end',
           borderColor: 'transparent',
           style: {
-            color: '#818cf8',
+            color: BUDGET_COLOR,
             background: 'transparent',
             fontSize: '11px',
             fontWeight: '500',
@@ -264,6 +269,10 @@
         const isCurrent = ym === currentYearMonth
         const isPlan = hasPlanRange.value && isPlanMonth(ym)
         const isComp = hasComparisonRange.value && isComparisonMonth(ym)
+        // The tooltip follows the theme: a 400 reads on its dark panel, a
+        // 700 on the light one.
+        const tipGreen = isDark.value ? '#4ade80' : '#15803d'
+        const tipRed = isDark.value ? '#f87171' : '#b91c1c'
 
         const fullLabel = formatMonth(ym, { style: 'long' })
 
@@ -285,11 +294,11 @@
         html += `</div>`
         html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">Dépenses</span><strong>${formatCurrency(val)}</strong></div>`
         if (diffBudget !== null) {
-          const color = diffBudget > 0 ? '#f87171' : '#34d399'
+          const color = diffBudget > 0 ? tipRed : tipGreen
           html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">vs Budget</span><span style="color:${color};font-weight:600">${diffBudget > 0 ? '+' : ''}${formatCurrency(diffBudget)}</span></div>`
         }
         if (epargne !== null) {
-          const color = epargne >= 0 ? '#34d399' : '#f87171'
+          const color = epargne >= 0 ? tipGreen : tipRed
           html += `<div style="display:flex;justify-content:space-between;gap:16px"><span style="opacity:0.7">Épargne</span><span style="color:${color};font-weight:600">${formatCurrency(epargne)}</span></div>`
         }
         html += `</div>`
@@ -342,11 +351,17 @@
         Mois en cours
       </span>
       <span v-if="averageIncome > 0" class="flex items-center gap-1.5">
-        <span class="inline-block w-3 h-0.5 bg-primary-400"></span>
+        <span
+          class="inline-block w-3 h-0.5 bg-green-500"
+          data-testid="legend-income-swatch"
+        ></span>
         Revenus
       </span>
       <span v-if="totalBudget > 0" class="flex items-center gap-1.5">
-        <span class="inline-block w-3 h-0.5 bg-indigo-400"></span>
+        <span
+          class="inline-block w-3 h-0.5 bg-primary-600"
+          data-testid="legend-budget-swatch"
+        ></span>
         Budget
       </span>
     </div>

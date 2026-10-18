@@ -161,7 +161,7 @@
           </div>
           <div
             v-if="cat.exceptionalAmount && cat.exceptionalAmount > 0"
-            class="text-xs text-amber-600 dark:text-amber-500 tabular-nums"
+            class="text-xs text-amber-700 dark:text-amber-400 tabular-nums"
             :title="
               isEveryday
                 ? 'Montant exclu de cette moyenne'

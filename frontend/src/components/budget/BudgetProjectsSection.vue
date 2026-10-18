@@ -41,10 +41,10 @@
   <div
     v-if="hasProjects"
     data-testid="budget-projects"
-    class="mb-4 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-900/20 px-3 py-2.5"
+    class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5"
   >
     <div class="flex flex-wrap items-baseline justify-between gap-2">
-      <p class="text-xs font-medium text-indigo-900 dark:text-indigo-300">
+      <p class="text-xs font-medium text-amber-900 dark:text-amber-200">
         Projets de la période
       </p>
       <p
@@ -54,7 +54,7 @@
         :class="
           reserveRemaining < 0
             ? 'text-red-600 dark:text-red-400 font-semibold'
-            : 'text-indigo-700 dark:text-indigo-400'
+            : 'text-amber-800 dark:text-amber-300'
         "
       >
         <template v-if="reserveRemaining < 0">
@@ -75,7 +75,7 @@
         :key="item.id"
         type="button"
         :data-testid="`project-${item.name}`"
-        class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-indigo-300 transition"
+        class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-primary-300 transition dark:hover:ring-primary-700"
         @click="emit('open-tag', item.id)"
       >
         <span

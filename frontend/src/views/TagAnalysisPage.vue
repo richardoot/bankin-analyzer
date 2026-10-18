@@ -170,13 +170,13 @@
       <div class="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-6">
         <BaseCard padding="sm">
           <p class="text-xs text-gray-500 dark:text-gray-400">Dépenses</p>
-          <p class="mt-1 text-xl font-bold text-red-600 dark:text-red-500">
+          <p class="mt-1 text-xl font-bold text-red-600 dark:text-red-400">
             {{ formatCurrency(analysis.totalExpenses) }}
           </p>
         </BaseCard>
         <BaseCard padding="sm">
           <p class="text-xs text-gray-500 dark:text-gray-400">Revenus</p>
-          <p class="mt-1 text-xl font-bold text-green-600 dark:text-green-500">
+          <p class="mt-1 text-xl font-bold text-green-700 dark:text-green-400">
             {{ formatCurrency(analysis.totalIncome) }}
           </p>
         </BaseCard>
@@ -186,8 +186,8 @@
             class="mt-1 text-xl font-bold"
             :class="
               analysis.net >= 0
-                ? 'text-green-600 dark:text-green-500'
-                : 'text-red-600 dark:text-red-500'
+                ? 'text-green-700 dark:text-green-400'
+                : 'text-red-600 dark:text-red-400'
             "
           >
             {{ formatCurrency(analysis.net) }}
@@ -301,7 +301,7 @@
         </p>
         <p
           v-if="analysis.totalSurplus !== null"
-          class="mt-1 text-[11px] leading-relaxed text-primary-600/80 dark:text-primary-400/80"
+          class="mt-1 text-[11px] leading-relaxed text-primary-700 dark:text-primary-400"
         >
           L'enveloppe est comparée au montant dépensé. Le surcoût réel est plus
           bas : pendant l'événement, vos dépenses habituelles n'ont pas eu lieu
@@ -408,8 +408,8 @@
                   class="px-4 py-2 text-right font-medium whitespace-nowrap"
                   :class="
                     cat.type === 'EXPENSE'
-                      ? 'text-red-600 dark:text-red-500'
-                      : 'text-green-600 dark:text-green-500'
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-green-700 dark:text-green-400'
                   "
                 >
                   {{ formatCurrency(cat.amount) }}
@@ -428,10 +428,10 @@
                     class="px-4 py-2 text-right font-semibold whitespace-nowrap"
                     :class="
                       cat.surplusAmount === undefined
-                        ? 'text-gray-400'
+                        ? 'text-gray-500 dark:text-gray-400'
                         : cat.surplusAmount >= 0
-                          ? 'text-amber-600 dark:text-amber-500'
-                          : 'text-primary-600 dark:text-primary-500'
+                          ? 'text-amber-700 dark:text-amber-400'
+                          : 'text-green-700 dark:text-green-400'
                     "
                   >
                     {{
@@ -492,8 +492,8 @@
                 class="text-sm font-semibold"
                 :class="
                   tx.type === 'EXPENSE'
-                    ? 'text-red-600 dark:text-red-500'
-                    : 'text-green-600 dark:text-green-500'
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-green-700 dark:text-green-400'
                 "
               >
                 {{ formatCurrency(tx.amount) }}

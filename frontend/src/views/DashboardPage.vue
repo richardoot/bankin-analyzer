@@ -259,7 +259,7 @@
                   Dépenses moyennes / mois
                 </div>
                 <div
-                  class="mt-2 text-2xl font-bold text-red-600 dark:text-red-500"
+                  class="mt-2 text-2xl font-bold text-red-600 dark:text-red-400"
                 >
                   {{ formatCurrency(averageMonthlyExpenses) }}
                 </div>
@@ -298,7 +298,7 @@
                   Revenus moyens / mois
                 </div>
                 <div
-                  class="mt-2 text-2xl font-bold text-green-600 dark:text-green-500"
+                  class="mt-2 text-2xl font-bold text-green-700 dark:text-green-400"
                 >
                   {{ formatCurrency(averageMonthlyIncome) }}
                 </div>
@@ -316,9 +316,7 @@
             data-testid="kpi-card-savings"
             class="border-l-4"
             :class="
-              averageMonthlySavings >= 0
-                ? 'border-indigo-500'
-                : 'border-amber-500'
+              averageMonthlySavings >= 0 ? 'border-green-500' : 'border-red-500'
             "
           >
             <div class="flex items-start justify-between gap-3">
@@ -332,8 +330,8 @@
                   class="mt-2 text-2xl font-bold"
                   :class="
                     averageMonthlySavings >= 0
-                      ? 'text-indigo-600 dark:text-indigo-400'
-                      : 'text-amber-600 dark:text-amber-400'
+                      ? 'text-green-700 dark:text-green-400'
+                      : 'text-red-600 dark:text-red-400'
                   "
                 >
                   {{ formatCurrency(averageMonthlySavings) }}
@@ -342,7 +340,7 @@
               <SparklineChart
                 v-if="savingsSparkline.length >= 2"
                 :data="savingsSparkline"
-                :color="averageMonthlySavings >= 0 ? '#6366f1' : '#f59e0b'"
+                :color="averageMonthlySavings >= 0 ? '#22c55e' : '#ef4444'"
               />
             </div>
           </BaseCard>
@@ -498,7 +496,7 @@
                   v-for="event in exceptionalEvents"
                   :key="event.id"
                   type="button"
-                  class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-amber-300 transition"
+                  class="inline-flex items-center gap-1.5 rounded-full bg-white dark:bg-slate-900 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 hover:ring-2 hover:ring-primary-300 transition dark:hover:ring-primary-700"
                   @click="openTagAnalysis(event.id)"
                 >
                   <span

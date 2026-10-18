@@ -23,14 +23,11 @@
 
 <template>
   <span v-if="nature || rhythm" class="inline-flex items-center gap-1">
+    <!-- Neutral, like the rhythm: the word carries the meaning, and an
+         amber « Plaisir » sat next to the amber « À migrer » marker. -->
     <span
       v-if="nature"
-      class="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
-      :class="
-        nature === 'ESSENTIAL'
-          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-          : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-      "
+      class="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-slate-700 dark:text-gray-300"
       :title="nature === 'ESSENTIAL' ? 'Dépense contrainte' : 'Dépense choisie'"
     >
       {{ NATURE[nature] }}

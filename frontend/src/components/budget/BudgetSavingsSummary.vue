@@ -92,7 +92,7 @@
   })
 
   function colorClass(value: number): string {
-    if (value > 0) return 'text-primary-600 dark:text-primary-400'
+    if (value > 0) return 'text-green-700 dark:text-green-400'
     if (value < 0) return 'text-red-600 dark:text-red-400'
     return 'text-gray-500 dark:text-gray-400'
   }

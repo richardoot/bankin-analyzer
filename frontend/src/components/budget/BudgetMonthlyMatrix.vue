@@ -65,7 +65,7 @@
   const CELL_TONE: Record<'over' | 'under' | 'none', string> = {
     over: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 font-semibold',
     under:
-      'bg-primary-50/60 dark:bg-primary-900/15 text-primary-700 dark:text-primary-400',
+      'bg-green-50/60 dark:bg-green-900/15 text-green-700 dark:text-green-400',
     none: 'text-gray-600 dark:text-gray-400',
   }
 

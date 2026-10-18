@@ -73,14 +73,14 @@
         <!-- Status badge: over budget ⚠ or budget covers history ✓ -->
         <span
           v-if="rowStatus === 'over'"
-          class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+          class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
           title="Dépassement par rapport au budget"
         >
           ⚠ Dépassé
         </span>
         <span
           v-else-if="rowStatus === 'covered'"
-          class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400"
+          class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
           title="Le budget couvre la moyenne historique"
         >
           ✓ Couvert
@@ -93,7 +93,7 @@
         class="text-right text-sm tabular-nums leading-tight"
       >
         <span
-          class="block text-[10px] uppercase tracking-wide text-gray-400 sm:hidden"
+          class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
           >Historique</span
         >
         <button
@@ -118,7 +118,7 @@
       <div class="text-right">
         <span
           v-if="editing"
-          class="block text-[10px] uppercase tracking-wide text-gray-400 sm:hidden"
+          class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
           >Budget</span
         >
         <div v-if="editing" class="relative inline-block w-full sm:w-auto">
@@ -133,7 +133,7 @@
             class="w-full min-h-[40px] sm:min-h-0 sm:w-28 pl-2 pr-7 py-1.5 text-sm text-right bg-white dark:bg-slate-900 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900 dark:text-gray-100 tabular-nums font-medium"
             :class="
               dirty
-                ? 'border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20'
+                ? 'border-primary-500 dark:border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                 : 'border-primary-300 dark:border-primary-800'
             "
             @input="
@@ -156,7 +156,7 @@
         </div>
         <div v-else class="text-sm tabular-nums leading-tight">
           <span
-            class="block text-[10px] uppercase tracking-wide text-gray-400 sm:hidden"
+            class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
             >Budget</span
           >
           <span
@@ -187,7 +187,7 @@
         class="text-right text-sm tabular-nums leading-tight"
       >
         <span
-          class="block text-[10px] uppercase tracking-wide text-gray-400 sm:hidden"
+          class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
           >Réel</span
         >
         <button
@@ -209,7 +209,7 @@
         <span
           v-if="exceptionalAverage > 0.005"
           :data-testid="`budget-exceptional-${category.categoryName}`"
-          class="block text-[10px] text-amber-600 dark:text-amber-500"
+          class="block text-[10px] text-amber-700 dark:text-amber-400"
           :title="
             breakdownMode === 'everyday'
               ? 'Part portée par un événement, exclue de ce réel'
@@ -255,10 +255,10 @@
             class="text-lg font-bold tabular-nums"
             :class="
               marginVsHistorical > 0
-                ? 'text-primary-600 dark:text-primary-400'
+                ? 'text-green-700 dark:text-green-400'
                 : marginVsHistorical < 0
                   ? 'text-red-600 dark:text-red-400'
-                  : 'text-gray-500'
+                  : 'text-gray-500 dark:text-gray-400'
             "
           >
             {{ marginVsHistorical > 0 ? '+' : ''
@@ -287,10 +287,10 @@
             class="text-lg font-bold tabular-nums"
             :class="
               remainingVsActual > 0
-                ? 'text-primary-600 dark:text-primary-400'
+                ? 'text-green-700 dark:text-green-400'
                 : remainingVsActual < 0
                   ? 'text-red-600 dark:text-red-400'
-                  : 'text-gray-500'
+                  : 'text-gray-500 dark:text-gray-400'
             "
           >
             {{ remainingVsActual > 0 ? '+' : ''

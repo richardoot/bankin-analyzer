@@ -1119,7 +1119,7 @@
           >
             Historique
             <span
-              class="block text-[10px] font-normal normal-case tracking-normal text-indigo-400 dark:text-indigo-500"
+              class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
             >
               {{ comparisonRange?.label }}
             </span>
@@ -1138,7 +1138,7 @@
           >
             {{ selectedMonth ? 'Réel' : 'Réel à date' }}
             <span
-              class="block text-[10px] font-normal normal-case tracking-normal text-red-400 dark:text-red-500"
+              class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
             >
               {{ actualPeriodLabel }}
             </span>

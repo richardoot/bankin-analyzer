@@ -140,7 +140,11 @@ describe('MonthlyExpensesChart', () => {
     const yAnnotations = chart.props('options').annotations?.yaxis ?? []
     const incomeAnno = yAnnotations.find((a: { y: number }) => a.y === 4200)
     expect(incomeAnno).toBeDefined()
-    expect(incomeAnno.borderColor).toBe('#34d399')
+    // Income wears the income green, as on the Dashboard.
+    expect(incomeAnno.borderColor).toBe('#22c55e')
+    expect(
+      wrapper.get('[data-testid="legend-income-swatch"]').classes()
+    ).toContain('bg-green-500')
   })
 
   it('should add budget annotation line when totalBudget > 0', () => {
@@ -150,7 +154,12 @@ describe('MonthlyExpensesChart', () => {
     const yAnnotations = chart.props('options').annotations?.yaxis ?? []
     const budgetAnno = yAnnotations.find((a: { y: number }) => a.y === 2500)
     expect(budgetAnno).toBeDefined()
-    expect(budgetAnno.borderColor).toBe('#818cf8')
+    // The budget line wears the primary of the budget column — indigo is
+    // the comparison's, and the legend says the same.
+    expect(budgetAnno.borderColor).toBe('#059669')
+    expect(
+      wrapper.get('[data-testid="legend-budget-swatch"]').classes()
+    ).toContain('bg-primary-600')
   })
 
   it('should not add annotation lines when values are 0', () => {

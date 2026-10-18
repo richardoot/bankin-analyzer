@@ -53,7 +53,7 @@
       return {
         label: 'À venir',
         class:
-          'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
+          'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
       }
     if (s === 'past')
       return {
@@ -118,7 +118,7 @@
           :class="
             plan.projectReserve < 0
               ? 'text-red-600 dark:text-red-400'
-              : 'text-indigo-600 dark:text-indigo-400'
+              : 'text-gray-700 dark:text-gray-300'
           "
         >
           {{ formatCurrency(plan.projectReserve) }}
@@ -176,7 +176,7 @@
     >
       <template v-if="isSaving">
         <svg
-          class="animate-spin h-4 w-4 text-indigo-600 dark:text-indigo-400"
+          class="animate-spin h-4 w-4 text-primary-600 dark:text-primary-400"
           fill="none"
           viewBox="0 0 24 24"
         >

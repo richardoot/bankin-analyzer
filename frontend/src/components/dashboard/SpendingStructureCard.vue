@@ -57,19 +57,24 @@
       .map(p => ({ ...p, share: total > 0 ? p.amount / total : 0 }))
   }
 
+  /*
+   * Each reading is one hue in two tones — the strong share and its
+   * counterpart — so the two bars never borrow a role color: amber is the
+   * exceptional share on this very screen, indigo the comparison reference.
+   */
   const natureSegments = computed(() =>
     segments([
       {
         key: 'essential',
         label: 'Essentiel',
         amount: structure.value.essential,
-        color: 'bg-blue-500',
+        color: 'bg-blue-600 dark:bg-blue-500',
       },
       {
         key: 'pleasure',
         label: 'Plaisir',
         amount: structure.value.pleasure,
-        color: 'bg-amber-400',
+        color: 'bg-blue-300',
       },
       {
         key: 'unknown',
@@ -86,13 +91,13 @@
         key: 'committed',
         label: 'Engagé',
         amount: structure.value.committed,
-        color: 'bg-indigo-500',
+        color: 'bg-teal-600 dark:bg-teal-500',
       },
       {
         key: 'variable',
         label: 'Variable',
         amount: structure.value.variable,
-        color: 'bg-teal-400',
+        color: 'bg-teal-300',
       },
       {
         key: 'unknown',
