@@ -12,6 +12,7 @@ import { PersonsService } from '../persons/persons.service'
 import { ReimbursementsService } from '../reimbursements/reimbursements.service'
 import { SettlementsService } from '../settlements/settlements.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
+import { SmoothingSuggestionsService } from '../transactions/smoothing-suggestions.service'
 import { NotFoundException, BadRequestException } from '@nestjs/common'
 
 /* ──────────────────────────────────────────────────────────────
@@ -101,6 +102,10 @@ const mockRecurrencesService = {
   list: vi.fn(),
 }
 
+const mockSmoothingSuggestionsService = {
+  list: vi.fn(),
+}
+
 /** The JSON inside a <user_financial_data> answer. */
 const parseData = (result: { content: Array<{ text: string }> }): any =>
   JSON.parse(
@@ -139,6 +144,10 @@ describe('McpController', () => {
         },
         { provide: SettlementsService, useValue: mockSettlementsService },
         { provide: RecurrencesService, useValue: mockRecurrencesService },
+        {
+          provide: SmoothingSuggestionsService,
+          useValue: mockSmoothingSuggestionsService,
+        },
       ],
     })
       .overrideGuard(McpAuthGuard)
@@ -173,8 +182,10 @@ describe('McpController', () => {
         'get_persons',
         'get_recurrences',
         'get_reimbursements',
+        'get_smoothing_suggestions',
         'get_transaction',
         'get_transactions',
+        'set_transaction_amortization',
         'set_transaction_category',
         'set_transactions_category',
         'settle_reimbursements',
@@ -1499,6 +1510,196 @@ describe('McpController', () => {
 
       expect(result.isError).toBe(true)
       expect(mockSettlementsService.create).not.toHaveBeenCalled()
+    })
+  })
+  describe('smoothed purchases', () => {
+    const phone = (
+      overrides: Record<string, unknown> = {}
+    ): Record<string, unknown> =>
+      expense({
+        amount: -1300,
+        description: 'APPLE STORE',
+        amortizationMonths: null,
+        subcategoryRef: {
+          id: 'sub-tech',
+          name: 'High-tech',
+          catalogKey: 'shopping.tech',
+        },
+        ...overrides,
+      })
+
+    it('smoothes an expense through the service and reports before and after', async () => {
+      mockTransactionsService.findOne.mockResolvedValue(phone())
+      mockTransactionsService.update.mockResolvedValue(
+        phone({ amortizationMonths: 24 })
+      )
+      const tools = await registerTools()
+
+      const result = await tools.get('set_transaction_amortization')!({
+        transactionId: 'tx-1',
+        months: 24,
+        expectedAmount: 1300,
+      })
+
+      expect(result.isError).toBeUndefined()
+      expect(mockTransactionsService.update).toHaveBeenCalledWith(
+        'tx-1',
+        mockUser.id,
+        { amortizationMonths: 24 }
+      )
+      expect(parseData(result)).toMatchObject({
+        status: 'updated',
+        transaction: { id: 'tx-1', amount: -1300 },
+        before: { amortizationMonths: null },
+        after: { amortizationMonths: 24 },
+      })
+    })
+
+    it('stops smoothing on null', async () => {
+      mockTransactionsService.findOne.mockResolvedValue(
+        phone({ amortizationMonths: 24 })
+      )
+      mockTransactionsService.update.mockResolvedValue(phone())
+      const tools = await registerTools()
+
+      const parsed = parseData(
+        await tools.get('set_transaction_amortization')!({
+          transactionId: 'tx-1',
+          months: null,
+        })
+      )
+
+      expect(mockTransactionsService.update).toHaveBeenCalledWith(
+        'tx-1',
+        mockUser.id,
+        { amortizationMonths: null }
+      )
+      expect(parsed.after).toEqual({ amortizationMonths: null })
+    })
+
+    it('writes nothing when the smoothing is already the one asked', async () => {
+      mockTransactionsService.findOne.mockResolvedValue(
+        phone({ amortizationMonths: 24 })
+      )
+      const tools = await registerTools()
+
+      const parsed = parseData(
+        await tools.get('set_transaction_amortization')!({
+          transactionId: 'tx-1',
+          months: 24,
+        })
+      )
+
+      expect(parsed.status).toBe('unchanged')
+      expect(mockTransactionsService.update).not.toHaveBeenCalled()
+    })
+
+    it('refuses without writing when the amount guard disagrees', async () => {
+      mockTransactionsService.findOne.mockResolvedValue(phone())
+      const tools = await registerTools()
+
+      const result = await tools.get('set_transaction_amortization')!({
+        transactionId: 'tx-1',
+        months: 24,
+        expectedAmount: 999,
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0]?.text).toContain('1300')
+      expect(mockTransactionsService.update).not.toHaveBeenCalled()
+    })
+
+    it("answers the service's refusal with its own words", async () => {
+      mockTransactionsService.findOne.mockResolvedValue(phone())
+      mockTransactionsService.update.mockRejectedValue(
+        new BadRequestException(
+          "Cette transaction porte l'étiquette exceptionnelle « Japon » : un épisode exceptionnel sort de la vie courante."
+        )
+      )
+      const tools = await registerTools()
+
+      const result = await tools.get('set_transaction_amortization')!({
+        transactionId: 'tx-1',
+        months: 24,
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0]?.text).toContain(
+        "Refusé par le serveur : Cette transaction porte l'étiquette exceptionnelle « Japon »"
+      )
+    })
+
+    it('reads the smoothing on transactions, with a filter and a proposed duration', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [phone({ amortizationMonths: 24 })],
+        total: 1,
+      })
+      mockTransactionsService.findOne.mockResolvedValue(phone())
+      mockReimbursementsService.findByTransaction.mockResolvedValue([])
+      const tools = await registerTools()
+
+      const list = parseData(
+        await tools.get('get_transactions')!({ amortized: true })
+      )
+      const one = parseData(await tools.get('get_transaction')!({ id: 'tx-1' }))
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 50 },
+        {
+          amortized: true,
+        }
+      )
+      expect(list.transactions[0].amortizationMonths).toBe(24)
+      expect(one).toMatchObject({
+        amortizationMonths: null,
+        suggestedAmortizationMonths: 24,
+      })
+    })
+
+    it('lists the suggestions for the window asked', async () => {
+      mockSmoothingSuggestionsService.list.mockResolvedValue([
+        { transactionId: 'tx-1', question: 'Achat à lisser ?' },
+      ])
+      const tools = await registerTools()
+
+      const parsed = parseData(
+        await tools.get('get_smoothing_suggestions')!({ months: 3 })
+      )
+
+      expect(mockSmoothingSuggestionsService.list).toHaveBeenCalledWith(
+        mockUser.id,
+        { months: 3 }
+      )
+      expect(parsed.suggestions).toHaveLength(1)
+    })
+
+    it('keeps a batch going past a row the service refuses', async () => {
+      givenFilingTree()
+      mockTransactionsService.findOne.mockImplementation(async (id: string) =>
+        expense({ id })
+      )
+      mockTransactionsService.update.mockImplementation(async (id: string) => {
+        if (id === 'tx-smoothed') {
+          throw new BadRequestException(
+            'Seule une dépense peut être étalée : un revenu ou un virement compte en entier à sa date.'
+          )
+        }
+        return filedUnderGroceries(id)
+      })
+      const tools = await registerTools()
+
+      const parsed = parseData(
+        await tools.get('set_transactions_category')!({
+          transactionIds: ['tx-smoothed', 'tx-2'],
+          categoryName: 'Alimentation',
+        })
+      )
+
+      expect(parsed.counts).toEqual({ updated: 1, unchanged: 0, refused: 1 })
+      expect(parsed.results[0].reason).toContain('Seule une dépense')
     })
   })
 })

@@ -13,16 +13,17 @@ que le modèle les lise comme des données et non comme des instructions.
 
 ## Outils de lecture
 
-| Outil                   | Rôle                                                                                                                                                                                                                                                                                                                                                |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_transactions`      | Transactions paginées (50 par défaut, 100 au plus). Filtres : `type` (`EXPENSE`, `INCOME`, `TRANSFER`), `startDate`, `endDate`, `categoryKey`, `categoryId`, `categoryName`, `subcategoryId`, `search`, `account`. Chaque ligne porte `id`, `accountId`, `categoryId`, `categoryKey`, `subcategoryId`, `subcategoryKey`.                            |
-| `get_transaction`       | Une transaction par `id` : type, classement complet avec les clés, `nature` et `rythme` effectifs, note, tags, demandes de remboursement qui la portent, règlements qu'elle paie (pour un revenu). À appeler avant et après une écriture.                                                                                                           |
-| `get_categories`        | Toutes les catégories avec `catalogKey`, `isLocked`, `isLegacy`, `defaultNature`, `defaultRhythm`, et leurs sous-catégories (`catalogKey`, `nature`, `rhythm`, `isLocked`).                                                                                                                                                                         |
-| `get_persons`           | Les personnes (`id`, `name`) à qui une dépense peut être réclamée.                                                                                                                                                                                                                                                                                  |
-| `get_reimbursements`    | Demandes de remboursement, par `transactionId`, par `personId`, et filtrées par `status` (`PENDING`, `PARTIAL`, `COMPLETED`).                                                                                                                                                                                                                       |
-| `get_budget_statistics` | Moyennes de dépenses et revenus par catégorie sur une période, remboursements déduits. Les transferts n'y figurent pas.                                                                                                                                                                                                                             |
-| `get_dashboard_summary` | Dépenses et revenus par mois et par catégorie, structure des dépenses (dont la part récurrente), épargne, ce qui reste dû. Les transferts sont hors des dépenses et des revenus.                                                                                                                                                                    |
-| `get_recurrences`       | Charges récurrentes détectées ou suivies (abonnements, loyer, assurances) : `name` (nom du service), `label` (libellé bancaire), catégorie, `period`, `amount`, `monthlyEquivalent`, `occurrences`, `totalPaid`, `firstDate`, `lastDate`, `nextExpected`, `status` (`ACTIVE`, `STOPPED`, `CANDIDATE`, filtrable), et le `monthlyTotal` des actives. |
+| Outil                       | Rôle                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_transactions`          | Transactions paginées (50 par défaut, 100 au plus). Filtres : `type` (`EXPENSE`, `INCOME`, `TRANSFER`), `startDate`, `endDate`, `categoryKey`, `categoryId`, `categoryName`, `subcategoryId`, `search`, `account`, `amortized` (`true` : les dépenses lissées seulement). Chaque ligne porte `id`, `accountId`, `categoryId`, `categoryKey`, `subcategoryId`, `subcategoryKey`, `amortizationMonths`. |
+| `get_transaction`           | Une transaction par `id` : type, classement complet avec les clés, `nature` et `rythme` effectifs, note, tags, demandes de remboursement qui la portent, règlements qu'elle paie (pour un revenu), `amortizationMonths` (null si la dépense n'est pas lissée) et, pour une dépense, `suggestedAmortizationMonths`. À appeler avant et après une écriture.                                             |
+| `get_categories`            | Toutes les catégories avec `catalogKey`, `isLocked`, `isLegacy`, `defaultNature`, `defaultRhythm`, et leurs sous-catégories (`catalogKey`, `nature`, `rhythm`, `isLocked`).                                                                                                                                                                                                                           |
+| `get_persons`               | Les personnes (`id`, `name`) à qui une dépense peut être réclamée.                                                                                                                                                                                                                                                                                                                                    |
+| `get_reimbursements`        | Demandes de remboursement, par `transactionId`, par `personId`, et filtrées par `status` (`PENDING`, `PARTIAL`, `COMPLETED`).                                                                                                                                                                                                                                                                         |
+| `get_budget_statistics`     | Moyennes de dépenses et revenus par catégorie sur une période, remboursements déduits. Les transferts n'y figurent pas.                                                                                                                                                                                                                                                                               |
+| `get_dashboard_summary`     | Dépenses et revenus par mois et par catégorie, structure des dépenses (dont la part récurrente), épargne, ce qui reste dû. Les transferts sont hors des dépenses et des revenus.                                                                                                                                                                                                                      |
+| `get_smoothing_suggestions` | Les dépenses récentes (`months`, 6 par défaut, 24 au plus) qui dépassent largement l'habitude de leur sous-catégorie, pas encore tranchées, chacune avec une question et deux réponses. Voir « Lissage » plus bas.                                                                                                                                                                                    |
+| `get_recurrences`           | Charges récurrentes détectées ou suivies (abonnements, loyer, assurances) : `name` (nom du service), `label` (libellé bancaire), catégorie, `period`, `amount`, `monthlyEquivalent`, `occurrences`, `totalPaid`, `firstDate`, `lastDate`, `nextExpected`, `status` (`ACTIVE`, `STOPPED`, `CANDIDATE`, filtrable), et le `monthlyTotal` des actives.                                                   |
 
 `categoryName` dans `get_transactions` suit la même règle de nom que les écritures (ci-dessous) ;
 quand le filtre `type` est donné, seules les catégories de ce type sont candidates, ce qui
@@ -30,7 +31,7 @@ départage un nom porté par une catégorie de dépense et une de revenu.
 
 ## Outils d'écriture
 
-Trois écritures, toutes réversibles. Il n'y a **aucun outil de suppression** : supprimer une
+Quatre écritures, toutes réversibles. Il n'y a **aucun outil de suppression** : supprimer une
 transaction, une demande ou un règlement reste dans l'application.
 
 ### Désigner une cible
@@ -107,6 +108,51 @@ disponible. `SettlementsService.create` porte les autres contrôles : transactio
 revenu, personne inconnue, demande d'une autre personne, demande créditée au-delà de son montant.
 Réponse : le règlement (`id`, `settledAt`, `amountUsed`, lignes avec leur nouveau statut et leur
 reste dû) et `incomeAvailableAfter`.
+
+### `set_transaction_amortization`
+
+`transactionId`, `months` (entier de 2 à 60, ou `null` pour arrêter le lissage), `expectedAmount`
+(optionnel : montant absolu de la transaction).
+
+Lisse une dépense en vie courante : à partir du mois de sa date, chaque mois compte une tranche
+égale au net (remboursements demandés déduits, part du compte joint) divisé par `months`. Le mode
+Réel, la liste et les soldes ne bougent pas. L'écriture passe par `TransactionsService.update`, qui
+porte les refus, rendus avec leurs mots : durée hors bornes, revenu ou transfert, transaction qui
+porte une étiquette exceptionnelle. Réponse : `status` (`updated` ou `unchanged`), la transaction,
+`before` et `after` (`amortizationMonths`). **Annuler** : rappeler l'outil avec le `before`.
+
+### Lissage ou épisode : la règle
+
+Le test, à appliquer avant toute écriture sur une grosse dépense : **est-ce que ça reviendra sous
+une forme comparable dans les deux à trois ans ?** (`agent-os/product/amortization-framework.md`)
+
+- **Épisode** (voyage, mariage, déménagement, compétition, fête) : non. Étiquette exceptionnelle,
+  hors vie courante. Elle se pose dans l'application : le MCP n'écrit pas les étiquettes.
+- **Bien durable renouvelé** (téléphone, ordinateur, électroménager, mobilier, vélo, équipement de
+  sport) : oui. Lissage sur la durée d'usage (téléphone, ordinateur 24 à 36 mois ; électroménager,
+  mobilier 36 à 60). Jamais exceptionnel.
+- **Imprévu subi** (réparation auto, dentiste, amende, chaudière) : oui, sous une autre forme.
+  Reste en vie courante, lissé sur 6 à 12 mois si le montant déforme le plan. Jamais
+  exceptionnel.
+- Une transaction est exceptionnelle **ou** lissée, jamais les deux. Un achat payé en plusieurs
+  fois ou à crédit ne se lisse pas : les échéances font déjà le travail. Seule une dépense se
+  lisse.
+
+`get_smoothing_suggestions` applique ce test aux dépenses des derniers mois. Une candidate est une
+dépense d'au moins 200 € (net), ni lissée ni exceptionnelle, hors sous-catégorie d'engagement
+(loyer, assurances), qui vaut plus de trois mois de ce que sa sous-catégorie a coûté sur les douze
+mois précédents. Sa sous-catégorie, par clé de catalogue, choisit la question :
+
+| Sous-catégorie                                                                                             | Question                    | Réponses                                          |
+| ---------------------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------- |
+| `shopping.tech` (24), `shopping.sports-gear` (24), `shopping.home` (48), `transport.vehicle-purchase` (60) | Achat à lisser ?            | `SMOOTH` sur la durée entre parenthèses, `KEEP`   |
+| `transport.maintenance`, `housing.maintenance`, `health.optical-dental`, `taxes.fines` (12)                | Imprévu à lisser ?          | `SMOOTH` sur 12 mois, `KEEP`                      |
+| toute autre                                                                                                | Épisode ou achat à lisser ? | `EPISODE`, `SMOOTH` sur 12 mois (durée à ajuster) |
+
+L'étiquette exceptionnelle n'est jamais proposée pour un équipement ni pour un imprévu. L'outil ne
+fait que lire : l'agent pose la question, l'utilisateur tranche, `set_transaction_amortization`
+lisse. `KEEP` (laisser à sa date) n'est pas mémorisé : la dépense reviendra dans la liste tant
+qu'elle est dans la fenêtre.
 
 ## Garde-fous et erreurs
 

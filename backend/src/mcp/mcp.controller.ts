@@ -33,6 +33,8 @@ import { PersonsService } from '../persons/persons.service'
 import { ReimbursementsService } from '../reimbursements/reimbursements.service'
 import { SettlementsService } from '../settlements/settlements.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
+import { SmoothingSuggestionsService } from '../transactions/smoothing-suggestions.service'
+import { suggestedAmortizationMonths } from '../transactions/smoothing-suggestions'
 import type { ReimbursementResponseDto } from '../reimbursements/dto'
 import { LEDGER_EPSILON, round2 } from '../reimbursements/reimbursement-ledger'
 import {
@@ -255,6 +257,19 @@ const filingTargetShape = {
     ),
 }
 
+/**
+ * The test every large expense goes through, repeated wherever an agent may
+ * act on one (agent-os/product/amortization-framework.md).
+ */
+const SMOOTHING_RULE =
+  'Le test : est-ce que ca reviendra sous une forme comparable dans les 2 a 3 ans ? ' +
+  'Episode (voyage, mariage, demenagement, competition) : non, etiquette exceptionnelle, hors vie courante. ' +
+  'Bien durable renouvele (telephone, ordinateur, electromenager, mobilier, velo, equipement de sport) : oui, ' +
+  'lissage sur sa duree d usage (telephone, ordinateur 24 a 36 mois ; electromenager, mobilier 36 a 60), jamais exceptionnel. ' +
+  'Imprevu subi (reparation auto, dentiste, amende, chaudiere) : reste en vie courante, lisse sur 6 a 12 mois si le montant ' +
+  'deforme le plan, jamais exceptionnel. Une transaction est exceptionnelle ou lissee, jamais les deux. ' +
+  'Un achat deja paye en plusieurs fois ou a credit ne se lisse pas : les echeances font deja le travail.'
+
 /** The two guards a write may carry, checked against the row before anything is written. */
 interface FilingGuards {
   expectedCategoryName?: string | undefined
@@ -274,7 +289,8 @@ export class McpController {
     private readonly personsService: PersonsService,
     private readonly reimbursementsService: ReimbursementsService,
     private readonly settlementsService: SettlementsService,
-    private readonly recurrencesService: RecurrencesService
+    private readonly recurrencesService: RecurrencesService,
+    private readonly smoothingSuggestionsService: SmoothingSuggestionsService
   ) {}
 
   private async loadFilingTree(userId: string): Promise<{
@@ -399,11 +415,28 @@ export class McpController {
       }
     }
 
-    const updated = (await this.transactionsService.update(
-      transactionId,
-      userId,
-      categoryId === null ? { categoryId: null } : { categoryId, subcategoryId }
-    )) as ReadTransaction
+    // The service may still refuse (a smoothed expense cannot become a
+    // transfer or an income): in a batch that is this row's answer, not the
+    // end of the batch.
+    let updated: ReadTransaction
+    try {
+      updated = await this.transactionsService.update(
+        transactionId,
+        userId,
+        categoryId === null
+          ? { categoryId: null }
+          : { categoryId, subcategoryId }
+      )
+    } catch (error) {
+      if (error instanceof HttpException && error.getStatus() < 500) {
+        return {
+          transactionId,
+          status: 'refused',
+          reason: `Refusé par le serveur : ${error.message}`,
+        }
+      }
+      throw error
+    }
     const after = filingOf(updated)
 
     this.logger.log(
@@ -431,7 +464,8 @@ export class McpController {
     server.tool(
       'get_transactions',
       'Recupere les transactions financieres avec filtres optionnels. ' +
-        'Chaque ligne porte son id et ceux de son classement, utilisables par les outils d ecriture.',
+        'Chaque ligne porte son id et ceux de son classement, utilisables par les outils d ecriture, ' +
+        'et amortizationMonths : le nombre de mois sur lesquels la depense est lissee en vie courante, null si elle compte en entier a sa date.',
       {
         type: z
           .enum(['EXPENSE', 'INCOME', 'TRANSFER'])
@@ -466,6 +500,12 @@ export class McpController {
           .describe('Filtrer par sous-categorie'),
         search: z.string().optional().describe('Rechercher dans le libelle'),
         account: z.string().optional().describe('Filtrer par compte bancaire'),
+        amortized: z
+          .boolean()
+          .optional()
+          .describe(
+            'true : seulement les depenses lissees sur plusieurs mois (amortizationMonths renseigne)'
+          ),
         page: z.number().optional().describe('Numero de page (defaut: 1)'),
         limit: z
           .number()
@@ -482,6 +522,7 @@ export class McpController {
           if (params.subcategoryId) filters.subcategoryId = params.subcategoryId
           if (params.search) filters.search = params.search
           if (params.account) filters.account = params.account
+          if (params.amortized) filters.amortized = true
 
           if (params.categoryName || params.categoryKey) {
             const { categories } = await this.loadFilingTree(userId)
@@ -527,6 +568,7 @@ export class McpController {
                 subcategory: tx.subcategory,
                 subcategoryKey: t.subcategoryRef?.catalogKey ?? null,
                 isPointed: tx.isPointed,
+                amortizationMonths: tx.amortizationMonths,
               }
             }),
             total: result.total,
@@ -539,7 +581,8 @@ export class McpController {
       'get_transaction',
       'Recupere une transaction par id avec son classement complet, ses tags, ' +
         'les demandes de remboursement qui la portent et, pour un revenu, les reglements ' +
-        'qu il paie. A appeler avant et apres une ecriture pour verifier.',
+        'qu il paie, et son lissage (amortizationMonths, null si aucun ; suggestedAmortizationMonths pour une depense). ' +
+        'A appeler avant et apres une ecriture pour verifier.',
       {
         id: z.string().describe('Identifiant de la transaction'),
       },
@@ -565,6 +608,14 @@ export class McpController {
               tx.subcategoryRef?.rhythm ?? tx.category?.defaultRhythm ?? null,
             note: tx.note,
             isPointed: tx.isPointed,
+            amortizationMonths: tx.amortizationMonths,
+            // The one duration the framework proposes for its subcategory,
+            // for an expense only.
+            ...(tx.type === 'EXPENSE' && {
+              suggestedAmortizationMonths: suggestedAmortizationMonths(
+                tx.subcategoryRef?.catalogKey
+              ),
+            }),
             tags: (tx.tags ?? []).map(({ tag }) => ({
               id: tag.id,
               name: tag.name,
@@ -988,6 +1039,110 @@ export class McpController {
             },
             incomeAvailableAfter: availableAfter.availableAmount,
           })
+        })
+    )
+
+    // ── Tool: set_transaction_amortization ──
+    server.tool(
+      'set_transaction_amortization',
+      'Lisse une depense sur plusieurs mois en vie courante, ou arrete le lissage (months null). ' +
+        'Le lissage commence au mois de la transaction ; chaque tranche vaut le net (remboursements demandes deduits, ' +
+        'part du compte joint) divise par le nombre de mois. Le mode Reel, la liste et les soldes ne bougent pas. ' +
+        SMOOTHING_RULE +
+        ' Refuse un revenu, un transfert, et une transaction qui porte une etiquette exceptionnelle (la retirer d abord, dans l application). ' +
+        'Renvoie le lissage avant et apres ; pour annuler, rappeler l outil avec l ancienne valeur.',
+      {
+        transactionId: z.string().describe('La depense a lisser'),
+        months: z
+          .number()
+          .nullable()
+          .describe(
+            'Nombre entier de mois, de 2 a 60 (voir suggestedAmortizationMonths de get_transaction) ; null arrete le lissage'
+          ),
+        expectedAmount: z
+          .number()
+          .optional()
+          .describe(
+            'Garde-fou : montant absolu de la transaction. Si la base dit autre chose, rien n est ecrit.'
+          ),
+      },
+      async params =>
+        answer(async () => {
+          const tx = (await this.transactionsService.findOne(
+            params.transactionId,
+            userId
+          )) as ReadTransaction
+
+          const spent = Math.abs(Number(tx.amount))
+          if (
+            params.expectedAmount !== undefined &&
+            Math.abs(Math.abs(params.expectedAmount) - spent) > LEDGER_EPSILON
+          ) {
+            return errorResponse(
+              `Garde-fou : la transaction est de ${round2(spent)} €, pas de ${params.expectedAmount} €. Rien n'a été écrit.`
+            )
+          }
+
+          const before = tx.amortizationMonths
+          if (before === params.months) {
+            return dataResponse({
+              status: 'unchanged',
+              message:
+                params.months === null
+                  ? 'La transaction n est pas lissee : rien n a ete ecrit.'
+                  : `La transaction est deja lissee sur ${params.months} mois : rien n a ete ecrit.`,
+              transaction: transactionHeader(tx),
+              before: { amortizationMonths: before },
+              after: { amortizationMonths: before },
+            })
+          }
+
+          // The service holds every rule (bounds, expense only, never with
+          // an exceptional tag) and its refusals come back as isError.
+          const updated = await this.transactionsService.update(tx.id, userId, {
+            amortizationMonths: params.months,
+          })
+
+          this.logger.log(
+            `amortization user=${userId} transaction=${tx.id} ` +
+              `before=${before ?? '-'} after=${updated.amortizationMonths ?? '-'}`
+          )
+
+          return dataResponse({
+            status: 'updated',
+            transaction: transactionHeader(tx),
+            before: { amortizationMonths: before },
+            after: { amortizationMonths: updated.amortizationMonths },
+          })
+        })
+    )
+
+    // ── Tool: get_smoothing_suggestions ──
+    server.tool(
+      'get_smoothing_suggestions',
+      'Liste les depenses recentes qui depassent largement l habitude de leur sous-categorie ' +
+        '(au moins 200 € et plus de 3 mois de ce qu elle coute d habitude sur les 12 mois precedents), ' +
+        'pas encore tranchees (ni lissees ni exceptionnelles), hors engagements. Chacune porte une question et deux reponses : ' +
+        'un achat d equipement (High-tech, Maison et deco, Sport et equipement de loisir) ou un imprevu (Entretien et reparation...) ' +
+        'propose le lissage sur une duree selon la sous-categorie, ou de le laisser a sa date, jamais l etiquette exceptionnelle ; ' +
+        'ailleurs, « Episode ou achat a lisser ? ». Lecture seule : poser la question a l utilisateur, puis ' +
+        'set_transaction_amortization pour lisser ; une etiquette exceptionnelle se pose dans l application. ' +
+        SMOOTHING_RULE,
+      {
+        months: z
+          .number()
+          .optional()
+          .describe(
+            'Anciennete maximale des depenses examinees, en mois (defaut 6, max 24)'
+          ),
+      },
+      async params =>
+        answer(async () => {
+          const suggestions = await this.smoothingSuggestionsService.list(
+            userId,
+            params.months !== undefined ? { months: params.months } : {}
+          )
+          return dataResponse({ suggestions })
         })
     )
 
