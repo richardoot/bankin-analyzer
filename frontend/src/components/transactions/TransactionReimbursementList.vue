@@ -1,6 +1,8 @@
 <script setup lang="ts">
   import type { ReimbursementDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconClose from '@/components/icons/IconClose.vue'
 
   /**
    * The reimbursements attached to one expense, declared once for both
@@ -70,31 +72,16 @@
           (reçu : {{ formatCurrency(reimb.amountReceived) }})
         </span>
       </div>
-      <button
+      <BaseIconButton
         v-if="reimb.status !== 'COMPLETED'"
-        class="text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors"
-        :class="
-          dense ? 'p-1.5' : 'p-1 hover:bg-red-50 dark:hover:bg-red-900/20'
-        "
-        type="button"
-        title="Supprimer"
-        :aria-label="`Supprimer le remboursement de ${reimb.personName}`"
+        size="sm"
+        variant="danger"
+        class="-my-1"
+        :label="`Supprimer le remboursement de ${reimb.personName}`"
         @click.stop="emit('delete', reimb.id)"
       >
-        <svg
-          :class="dense ? 'h-3.5 w-3.5' : 'h-4 w-4'"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M6 18L18 6M6 6l12 12"
-          />
-        </svg>
-      </button>
+        <IconClose />
+      </BaseIconButton>
     </div>
     <div
       v-if="!dense && remaining() > 0"
