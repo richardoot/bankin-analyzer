@@ -384,7 +384,7 @@
                 </template>
               </tr>
             </thead>
-            <tbody class="divide-y dark:divide-slate-700">
+            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
               <tr
                 v-for="cat in analysis.byCategory"
                 :key="`${cat.categoryId}-${cat.type}`"
@@ -466,7 +466,7 @@
         >
           Aucune transaction associée.
         </div>
-        <div v-else class="divide-y dark:divide-slate-700">
+        <div v-else class="divide-y divide-gray-100 dark:divide-slate-700">
           <div
             v-for="tx in transactions"
             :key="tx.id"

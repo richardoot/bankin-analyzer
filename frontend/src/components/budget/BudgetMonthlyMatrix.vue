@@ -126,7 +126,7 @@
                 class="text-xs font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 transition-colors"
                 :class="
                   selectedMonth === month.ym
-                    ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-slate-900'
+                    ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-gray-900'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                 "
                 @click="emit('select-month', month.ym)"

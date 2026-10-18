@@ -47,7 +47,7 @@
   }>()
 
   const TRIGGER_BASE =
-    "relative inline-flex items-center text-gray-500 transition-colors pointer-coarse:before:absolute pointer-coarse:before:content-[''] hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-slate-400"
+    "relative inline-flex items-center text-gray-500 transition-colors pointer-coarse:before:absolute pointer-coarse:before:content-[''] hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-gray-400"
   const TRIGGER_PILL =
     'min-h-[28px] gap-1 rounded-full border border-dashed border-gray-300 px-2 text-xs font-medium pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 hover:border-primary-400 dark:border-slate-600 dark:hover:border-primary-500'
   const TRIGGER_ICON =
@@ -202,7 +202,7 @@
         type="text"
         placeholder="Rechercher ou créer…"
         aria-label="Rechercher ou créer une étiquette"
-        class="mb-2 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-2 text-base text-gray-700 sm:py-1 sm:text-xs focus:border-primary-400 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+        class="mb-2 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-2 text-base text-gray-700 sm:py-1 sm:text-xs focus:border-primary-400 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-gray-200"
         @keydown.enter.prevent="canCreate ? create() : null"
       />
 
@@ -219,7 +219,7 @@
               class="inline-block h-2 w-2 shrink-0 rounded-full"
               :style="{ backgroundColor: tag.color ?? '#9ca3af' }"
             ></span>
-            <span class="flex-1 truncate text-gray-700 dark:text-slate-200">{{
+            <span class="flex-1 truncate text-gray-700 dark:text-gray-200">{{
               tag.name
             }}</span>
             <IconCheck

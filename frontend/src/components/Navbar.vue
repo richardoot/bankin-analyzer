@@ -121,7 +121,7 @@
               />
             </svg>
             <span
-              class="text-xl font-semibold text-slate-900 lg:max-xl:sr-only dark:text-slate-100"
+              class="text-xl font-semibold text-gray-900 lg:max-xl:sr-only dark:text-gray-100"
               >Finance Analyzer</span
             >
           </RouterLink>
@@ -140,7 +140,7 @@
               :class="
                 isActiveRoute(link.to)
                   ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-gray-100'
               "
             >
               {{ link.label }}
@@ -163,7 +163,7 @@
             <RouterLink
               to="/login"
               data-testid="nav-sign-in-link"
-              class="rounded-md px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+              class="rounded-md px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-gray-100"
             >
               Se connecter
             </RouterLink>
@@ -209,18 +209,18 @@
     <div
       v-if="isMobileMenuOpen"
       id="mobile-menu"
-      class="max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain border-t border-slate-100 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden dark:border-slate-800 dark:bg-slate-900"
+      class="max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain border-t border-gray-100 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden dark:border-slate-800 dark:bg-slate-900"
     >
       <div class="px-4 py-3">
         <template v-if="isAuthenticated">
           <!-- User info -->
           <div
-            class="border-b border-slate-100 dark:border-slate-800 px-3 py-3 mb-2"
+            class="border-b border-gray-100 dark:border-slate-800 px-3 py-3 mb-2"
           >
-            <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+            <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
               Connecté en tant que
             </p>
-            <p class="truncate text-sm text-slate-500 dark:text-slate-400">
+            <p class="truncate text-sm text-gray-500 dark:text-gray-400">
               {{ userEmail }}
             </p>
           </div>
@@ -235,7 +235,7 @@
               :class="
                 isActiveRoute(link.to)
                   ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-gray-100'
               "
               @click="closeMobileMenu"
             >
@@ -244,11 +244,9 @@
           </div>
 
           <!-- Account section -->
-          <div
-            class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800"
-          >
+          <div class="mt-4 pt-4 border-t border-gray-100 dark:border-slate-800">
             <p
-              class="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
+              class="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
             >
               Mon compte
             </p>
@@ -261,7 +259,7 @@
                 :class="
                   isActiveRoute(link.to)
                     ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-gray-100'
                 "
                 @click="closeMobileMenu"
               >
@@ -284,7 +282,7 @@
         <template v-else>
           <RouterLink
             to="/login"
-            class="block rounded-md px-3 py-2 text-base font-medium text-slate-600 dark:text-slate-400 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+            class="block rounded-md px-3 py-2 text-base font-medium text-gray-600 dark:text-gray-400 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-gray-100"
             @click="closeMobileMenu"
           >
             Se connecter

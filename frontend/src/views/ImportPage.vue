@@ -609,15 +609,19 @@
       </div>
 
       <!-- Transaction preview list -->
-      <div class="border dark:border-slate-700 rounded-lg overflow-hidden mb-6">
+      <div
+        class="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden mb-6"
+      >
         <div
-          class="bg-gray-50 dark:bg-slate-800 px-4 py-2 border-b dark:border-slate-700"
+          class="bg-gray-50 dark:bg-slate-800 px-4 py-2 border-b border-gray-200 dark:border-slate-700"
         >
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
             Aperçu des 5 premières transactions
           </span>
         </div>
-        <div class="divide-y dark:divide-slate-700 max-h-64 overflow-y-auto">
+        <div
+          class="divide-y divide-gray-100 dark:divide-slate-700 max-h-64 overflow-y-auto"
+        >
           <div
             v-for="(tx, index) in parsedTransactions.slice(0, 5)"
             :key="index"

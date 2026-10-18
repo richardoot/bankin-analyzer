@@ -1879,7 +1879,7 @@
         <div v-else>
           <!-- Table header (lg and up); the card layout below has none -->
           <div
-            class="hidden items-center gap-2 rounded-t-xl border-b bg-gray-50 px-4 py-3 text-sm font-medium text-gray-500 lg:grid dark:border-slate-700 dark:bg-slate-800 dark:text-gray-400"
+            class="hidden items-center gap-2 rounded-t-xl border-b border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-500 lg:grid dark:border-slate-700 dark:bg-slate-800 dark:text-gray-400"
             :class="rowGridClass(isSelectionMode)"
           >
             <div v-if="isSelectionMode" class="flex items-center">
@@ -1930,7 +1930,7 @@
 
           <!-- Transactions rows -->
           <div
-            class="divide-y dark:divide-slate-700"
+            class="divide-y divide-gray-100 dark:divide-slate-700"
             :class="totalPages > 1 ? '' : '[&>*:last-child]:rounded-b-xl'"
           >
             <TransactionRow

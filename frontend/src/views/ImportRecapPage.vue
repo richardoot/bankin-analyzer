@@ -107,7 +107,7 @@
         </div>
 
         <!-- Total traité -->
-        <div class="bg-gray-100 dark:bg-slate-700 rounded-xl p-6 text-center">
+        <div class="bg-gray-100 dark:bg-slate-800 rounded-xl p-6 text-center">
           <div class="text-4xl font-bold text-gray-600 dark:text-gray-300 mb-1">
             {{ total }}
           </div>
