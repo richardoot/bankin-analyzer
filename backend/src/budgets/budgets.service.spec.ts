@@ -2,7 +2,42 @@ import type { TestingModule } from '@nestjs/testing'
 import { Test } from '@nestjs/testing'
 import { BudgetsService } from './budgets.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { AmortizedSlicesService } from '../transactions/amortized-slices.service'
+import type { SmoothedPurchaseRow } from '../transactions/amortized-slices.service'
 import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
+
+/** Smoothed purchases, everyday reading only; none unless a test says so. */
+const mockAmortizedSlices = { read: vi.fn() }
+
+/** A smoothed purchase as the slices query returns it. */
+function smoothedRow(
+  overrides: Partial<SmoothedPurchaseRow> = {}
+): SmoothedPurchaseRow {
+  return {
+    transaction_id: 'tx-iphone',
+    description: 'IPHONE',
+    date: '2026-06-12',
+    months: 24,
+    net: 1300,
+    monthly: 54.17,
+    first_month: '2026-06',
+    last_month: '2028-05',
+    category_id: 'cat-High-tech',
+    category_name: 'High-tech',
+    category_icon: null,
+    subcategory_id: 'sub-Telephone',
+    subcategory: 'Telephone',
+    subcategory_icon: null,
+    nature: 'PLEASURE',
+    rhythm: 'VARIABLE',
+    is_recurring: false,
+    pending: 0,
+    source_month: '2026-06',
+    source_in_window: false,
+    slices: [],
+    ...overrides,
+  }
+}
 
 describe('BudgetsService', () => {
   let service: BudgetsService
@@ -69,12 +104,14 @@ describe('BudgetsService', () => {
           provide: FilterPreferencesService,
           useValue: mockFilterPreferencesService,
         },
+        { provide: AmortizedSlicesService, useValue: mockAmortizedSlices },
       ],
     }).compile()
 
     service = module.get<BudgetsService>(BudgetsService)
 
     vi.clearAllMocks()
+    mockAmortizedSlices.read.mockResolvedValue([])
     mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
       false
     )
@@ -1153,6 +1190,179 @@ describe('BudgetsService', () => {
         ['sub-pharma', 'Pharmacie', 50, 3],
         [null, '', 10, 1],
       ])
+    })
+  })
+
+  describe('a smoothed purchase', () => {
+    /** Six regular slices of the 1 300 € phone, July to December. */
+    const julyToDecember = ['07', '08', '09', '10', '11', '12'].map(m => ({
+      month: `2026-${m}`,
+      amount: 54.17,
+    }))
+
+    it('weighs its slices in the everyday reading of a later plan, and nothing in the real one', async () => {
+      mockAmortizedSlices.read.mockResolvedValue([
+        smoothedRow({ slices: julyToDecember }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2026-07-01',
+        endDate: '2026-12-31',
+        includeMonthlyBreakdown: true,
+      })
+
+      const hightech = result.expensesByCategory.find(
+        c => c.categoryId === 'cat-High-tech'
+      )
+      // Real: the phone was bought in June, outside the plan.
+      expect(hightech?.totalAmount).toBe(0)
+      expect(hightech?.monthlyAmounts).toEqual([0, 0, 0, 0, 0, 0])
+      expect(result.totalExpenses).toBe(0)
+      // Everyday: 54.17 a month, flagged as smoothed.
+      expect(hightech?.everydayAmount).toBe(325.02)
+      expect(hightech?.everydayAveragePerMonth).toBe(54.17)
+      expect(hightech?.everydayMonthlyAmounts).toEqual(Array(6).fill(54.17))
+      expect(hightech?.amortizedAmount).toBe(325.02)
+      expect(hightech?.amortizedMonthlyAmounts).toEqual(Array(6).fill(54.17))
+      expect(hightech?.subcategories?.[0]).toMatchObject({
+        subcategoryId: 'sub-Telephone',
+        totalAmount: 0,
+        everydayAmount: 325.02,
+        everydayAveragePerMonth: 54.17,
+        amortizedAmount: 325.02,
+      })
+      expect(result.amortizedPurchases).toEqual([
+        {
+          transactionId: 'tx-iphone',
+          description: 'IPHONE',
+          date: '2026-06-12',
+          months: 24,
+          netAmount: 1300,
+          monthlyAmount: 54.17,
+          firstMonth: '2026-06',
+          lastMonth: '2028-05',
+          categoryId: 'cat-High-tech',
+          subcategoryId: 'sub-Telephone',
+          amountInPeriod: 325.02,
+          sliceMonthsInPeriod: julyToDecember.map(s => s.month),
+          dateInPeriod: false,
+        },
+      ])
+    })
+
+    it('trades its own month for its slices when the window holds the purchase', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-High-tech',
+            category_name: 'High-tech',
+            subcategory: 'Telephone',
+            total_amount: 1300,
+          }),
+        ])
+        .mockResolvedValueOnce([
+          {
+            category_id: 'cat-High-tech',
+            type: 'EXPENSE',
+            year_month: '2026-06',
+            is_exceptional: false,
+            monthly_amount: 1300,
+          },
+        ])
+      mockAmortizedSlices.read.mockResolvedValue([
+        smoothedRow({
+          source_in_window: true,
+          slices: [{ month: '2026-06', amount: 54.17 }, ...julyToDecember],
+        }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2026-06-01',
+        endDate: '2026-12-31',
+        includeMonthlyBreakdown: true,
+      })
+
+      const hightech = result.expensesByCategory[0]
+      expect(hightech?.totalAmount).toBe(1300)
+      expect(hightech?.monthlyAmounts).toEqual([1300, 0, 0, 0, 0, 0, 0])
+      expect(hightech?.everydayAmount).toBe(379.19)
+      expect(hightech?.everydayMonthlyAmounts).toEqual(Array(7).fill(54.17))
+      expect(hightech?.subcategories?.[0]?.everydayAmount).toBe(379.19)
+      expect(result.amortizedPurchases?.[0]?.dateInPeriod).toBe(true)
+    })
+
+    it('leaves every other category and line exactly as it was', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValueOnce([
+        createRow({ category_name: 'Santé', total_amount: 80 }),
+      ])
+      mockAmortizedSlices.read.mockResolvedValue([
+        smoothedRow({ slices: julyToDecember }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2026-07-01',
+        endDate: '2026-12-31',
+      })
+
+      const sante = result.expensesByCategory.find(
+        c => c.categoryId === 'cat-1'
+      )
+      expect(sante?.everydayAmount).toBe(80)
+      expect(sante).not.toHaveProperty('amortizedAmount')
+      expect(sante?.subcategories?.[0]).not.toHaveProperty('everydayAmount')
+    })
+
+    it('reads the slices in the scope of the aggregation', async () => {
+      await service.getStatistics(mockUserId, {
+        startDate: '2026-07-15',
+        endDate: '2026-12-31',
+      })
+
+      const [query] = mockAmortizedSlices.read.mock.calls[0] as [
+        { firstMonth: string; lastMonth: string; scope: { strings: string[] } },
+      ]
+      expect(query.firstMonth).toBe('2026-07-01')
+      expect(query.lastMonth).toBe('2026-12-01')
+      expect(query.scope.strings.join('')).toContain('is_excluded_from_budget')
+      expect(query.scope.strings.join('')).toContain(
+        't.category_id IS NOT NULL'
+      )
+    })
+
+    it('does not deduct a debt twice when every debt still owed is asked for', async () => {
+      // Read before the window: its slices are already net of the 300 owed,
+      // and the out-of-period pass takes the whole 300 off its category.
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_id: 'cat-High-tech',
+            category_name: 'High-tech',
+            total_amount: 50,
+          }),
+        ])
+        .mockResolvedValueOnce([
+          { category_id: 'cat-High-tech', pending_amount: 300 },
+        ])
+      mockAmortizedSlices.read.mockResolvedValue([
+        smoothedRow({
+          net: 1000,
+          pending: 300,
+          slices: julyToDecember.map(s => ({ ...s, amount: 41.67 })),
+        }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2026-07-01',
+        endDate: '2026-12-31',
+        deductPendingReimbursements: true,
+        includeAllPendingReimbursements: true,
+      })
+
+      const hightech = result.expensesByCategory[0]
+      // Real: 50 − 300, as before the feature.
+      expect(hightech?.totalAmount).toBe(-250)
+      // Everyday: the 50, plus the six net slices, the debt counted once.
+      expect(hightech?.everydayAmount).toBe(300.02)
     })
   })
 })

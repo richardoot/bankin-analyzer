@@ -15,6 +15,13 @@ import {
   netAmountSql,
   reimbursementCreditCtes,
 } from '../reimbursements/reimbursement-credit.sql'
+import {
+  AmortizedSlicesService,
+  everydayShift,
+  everydayShiftByMonth,
+  slicesTotal,
+  utcMonthStart,
+} from '../transactions/amortized-slices.service'
 import { UNCATEGORIZED_CATEGORY_ID } from './dto'
 import type {
   DashboardFiltersDto,
@@ -93,7 +100,30 @@ interface SubcategoryAccumulator {
   icon: string | null
   total: number
   count: number
+  /** Share of `total` carried by exceptional rows. */
+  exceptional: number
 }
+
+/**
+ * What the everyday reading changes on a line once smoothed purchases are
+ * spread: + their slices in the window, − the purchases the real reading
+ * counted. See AmortizedSlicesService.
+ */
+interface EverydayShift {
+  shift: number
+  /** Slices falling in the window — the « dont X € lissés ». */
+  slices: number
+}
+
+/** The same per category, month by month and line by line. */
+interface CategoryEverydayShift extends EverydayShift {
+  shiftByMonth: Map<string, number>
+  slicesByMonth: Map<string, number>
+  subcategories: Map<string, EverydayShift>
+}
+
+/** The structure attributes of a slice: committed while the smoothing runs. */
+const SLICE_RHYTHM = 'COMMITTED'
 
 /** The key « sans sous-catégorie » takes in a breakdown map. */
 const NO_SUBCATEGORY_KEY = ''
@@ -108,7 +138,7 @@ function addSubcategoryRow(
   row: Pick<
     DashboardAggregatedRow,
     'subcategory_id' | 'subcategory' | 'subcategory_icon' | 'transaction_count'
-  >,
+  > & { is_exceptional?: boolean },
   amount: number
 ): void {
   const key = row.subcategory_id ?? NO_SUBCATEGORY_KEY
@@ -118,8 +148,10 @@ function addSubcategoryRow(
     icon: null,
     total: 0,
     count: 0,
+    exceptional: 0,
   }
   current.total += amount
+  if (row.is_exceptional) current.exceptional += amount
   current.count += row.transaction_count ?? 0
   current.icon = current.icon ?? row.subcategory_icon ?? null
   target.set(key, current)
@@ -127,11 +159,12 @@ function addSubcategoryRow(
 
 function toSubcategoryDtos(
   subMap: Map<string, SubcategoryAccumulator>,
-  periodMonths: number
+  periodMonths: number,
+  shifts?: Map<string, EverydayShift>
 ): SubcategoryDataDto[] {
   const round = (v: number): number => Math.round(v * 100) / 100
-  return Array.from(subMap.values())
-    .map(sd => {
+  return Array.from(subMap.entries())
+    .map(([key, sd]) => {
       const dto: SubcategoryDataDto = {
         subcategoryId: sd.subcategoryId,
         subcategory: sd.name,
@@ -140,6 +173,15 @@ function toSubcategoryDtos(
         averagePerMonth: round(sd.total / periodMonths),
       }
       if (sd.icon) dto.icon = sd.icon
+      // Only on a line a smoothed purchase touches: every other line reads
+      // exactly as before.
+      const shift = shifts?.get(key)
+      if (shift) {
+        const everyday = sd.total - sd.exceptional + shift.shift
+        dto.everydayAmount = round(everyday)
+        dto.everydayAveragePerMonth = round(everyday / periodMonths)
+        dto.amortizedAmount = round(shift.slices)
+      }
       return dto
     })
     .sort((a, b) => b.amount - a.amount)
@@ -216,7 +258,8 @@ export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly filterPreferences: FilterPreferencesService,
-    private readonly recurrences: RecurrencesService
+    private readonly recurrences: RecurrencesService,
+    private readonly amortizedSlices: AmortizedSlicesService
   ) {}
 
   async getSummary(
@@ -254,10 +297,11 @@ export class DashboardService {
     // Fetch aggregated data, the accounts list and the exceptional events.
     // `CategoryAssociation` no longer takes part: it was the only thing
     // linking a refund to a category, and the link is now the transaction.
-    const [rows, accountRows, eventRows, receivableRows] = await Promise.all([
-      // Query 1: Aggregation by month + category + subcategory + type
-      // (excludes stats-excluded accounts).
-      this.prisma.$queryRaw<DashboardAggregatedRow[]>(Prisma.sql`
+    const [rows, accountRows, eventRows, receivableRows, smoothedRows] =
+      await Promise.all([
+        // Query 1: Aggregation by month + category + subcategory + type
+        // (excludes stats-excluded accounts).
+        this.prisma.$queryRaw<DashboardAggregatedRow[]>(Prisma.sql`
         WITH exceptional_tx AS (
           SELECT DISTINCT tt.transaction_id
           FROM app.transaction_tags tt
@@ -301,10 +345,10 @@ export class DashboardService {
           AND COALESCE(a.is_excluded_from_stats, false) = false
         GROUP BY TO_CHAR(t.date, 'YYYY-MM'), c.id, COALESCE(c.name, 'Autre'), c.icon, c.catalog_key, t.type, t.subcategory_id, sc.name, sc.icon, sc.nature, sc.rhythm, c.default_nature, c.default_rhythm, (et.transaction_id IS NOT NULL), ${IS_RECURRING}
       `),
-      // Query 2: Distinct account names (including excluded from stats, for
-      // filter panel). Sourced from the Account relation since the legacy
-      // string column on transactions has been dropped.
-      this.prisma.$queryRaw<AccountRow[]>(Prisma.sql`
+        // Query 2: Distinct account names (including excluded from stats, for
+        // filter panel). Sourced from the Account relation since the legacy
+        // string column on transactions has been dropped.
+        this.prisma.$queryRaw<AccountRow[]>(Prisma.sql`
         SELECT DISTINCT a.name AS account
         FROM app.transactions t
         JOIN app.accounts a ON a.id = t.account_id
@@ -313,9 +357,9 @@ export class DashboardService {
           AND t.date <= ${endDate}
         ORDER BY a.name
       `),
-      // Query 3: exceptional events overlapping the period, so the dashboard
-      // can name what the exceptional share is made of.
-      this.prisma.$queryRaw<ExceptionalEventRow[]>(Prisma.sql`
+        // Query 3: exceptional events overlapping the period, so the dashboard
+        // can name what the exceptional share is made of.
+        this.prisma.$queryRaw<ExceptionalEventRow[]>(Prisma.sql`
         SELECT
           tg.id,
           tg.name,
@@ -335,11 +379,11 @@ export class DashboardService {
         GROUP BY tg.id, tg.name, tg.color, tg.icon
         ORDER BY amount DESC
       `),
-      // Query 4: what is still owed to the user, all debts together. A
-      // stock, not a flow: it ignores the period, because a loan made last
-      // year and not yet repaid is owed today. In full euros, never divided:
-      // the person owes what was claimed, whichever account paid.
-      this.prisma.$queryRaw<ReceivableRow[]>(Prisma.sql`
+        // Query 4: what is still owed to the user, all debts together. A
+        // stock, not a flow: it ignores the period, because a loan made last
+        // year and not yet repaid is owed today. In full euros, never divided:
+        // the person owes what was claimed, whichever account paid.
+        this.prisma.$queryRaw<ReceivableRow[]>(Prisma.sql`
         SELECT COALESCE(SUM(GREATEST(r.amount - COALESCE(p.credited, 0), 0)), 0)::float AS pending
         FROM app.reimbursement_requests r
         LEFT JOIN (
@@ -349,7 +393,20 @@ export class DashboardService {
         ) p ON p.reimbursement_id = r.id
         WHERE r.user_id = ${userId}
       `),
-    ])
+        // Query 5, the everyday reading only: smoothed purchases spread over
+        // their months, in the aggregation's scope. Without an end date the
+        // slices stop at the current month — an open-ended period is « to
+        // date », and the slices still to come are not spent yet.
+        this.amortizedSlices.read({
+          userId,
+          netAmount,
+          start: startDate,
+          end: endDate,
+          firstMonth: utcMonthStart(startDate),
+          lastMonth: utcMonthStart(filters.endDate ? endDate : new Date()),
+          scope: Prisma.sql`COALESCE(a.is_excluded_from_stats, false) = false`,
+        }),
+      ])
 
     // Extract all categories from aggregated rows, keyed by category id.
     const allExpenseCategories = new Map<string, string>()
@@ -387,6 +444,10 @@ export class DashboardService {
         income: number
         reimbursements: number
         exceptionalExpenses: number
+        /** Everyday change from smoothed purchases; 0 when none. */
+        amortizedShift?: number
+        /** Their slices this month. */
+        amortizedSlices?: number
       }
     >()
     /**
@@ -532,6 +593,103 @@ export class DashboardService {
       }
     }
 
+    // Smoothed purchases, everyday reading only: each one trades its own
+    // month for its slices. A month, category or line only slices reach is
+    // added with nothing real in it, so the everyday reading can show it.
+    const shiftByCategory = new Map<string, CategoryEverydayShift>()
+    for (const p of smoothedRows) {
+      const categoryKey = categoryKeyOf(p.category_id)
+      allExpenseCategories.set(categoryKey, p.category_name)
+      if (!categoryNameById.has(categoryKey)) {
+        categoryNameById.set(categoryKey, p.category_name)
+      }
+      if (!expenseByCategoryMap.has(categoryKey)) {
+        expenseByCategoryMap.set(categoryKey, {
+          amount: 0,
+          icon: p.category_icon,
+        })
+      }
+
+      for (const [month, amount] of everydayShiftByMonth(p)) {
+        const monthData = monthlyMap.get(month) ?? {
+          expenses: 0,
+          income: 0,
+          reimbursements: 0,
+          exceptionalExpenses: 0,
+        }
+        monthData.amortizedShift = (monthData.amortizedShift ?? 0) + amount
+        monthlyMap.set(month, monthData)
+      }
+      for (const slice of p.slices) {
+        const monthData = monthlyMap.get(slice.month)
+        if (monthData) {
+          monthData.amortizedSlices =
+            (monthData.amortizedSlices ?? 0) + slice.amount
+        }
+        // A slice falls every month without a new decision: committed while
+        // the smoothing runs, whatever the subcategory's own rhythm.
+        addToStructure(
+          everydayStructure,
+          { nature: p.nature, rhythm: SLICE_RHYTHM, is_recurring: false },
+          slice.amount
+        )
+      }
+      if (p.source_in_window) {
+        addToStructure(everydayStructure, p, -p.net)
+      }
+
+      let entry = shiftByCategory.get(categoryKey)
+      if (!entry) {
+        entry = {
+          shift: 0,
+          slices: 0,
+          shiftByMonth: new Map(),
+          slicesByMonth: new Map(),
+          subcategories: new Map(),
+        }
+        shiftByCategory.set(categoryKey, entry)
+      }
+      const shift = everydayShift(p)
+      const slices = slicesTotal(p)
+      entry.shift += shift
+      entry.slices += slices
+      for (const [month, amount] of everydayShiftByMonth(p)) {
+        entry.shiftByMonth.set(
+          month,
+          (entry.shiftByMonth.get(month) ?? 0) + amount
+        )
+      }
+      for (const slice of p.slices) {
+        entry.slicesByMonth.set(
+          slice.month,
+          (entry.slicesByMonth.get(slice.month) ?? 0) + slice.amount
+        )
+      }
+      const lineKey = p.subcategory_id ?? NO_SUBCATEGORY_KEY
+      const line = entry.subcategories.get(lineKey) ?? { shift: 0, slices: 0 }
+      line.shift += shift
+      line.slices += slices
+      entry.subcategories.set(lineKey, line)
+
+      if (shouldIncludeBreakdown) {
+        let subMap = expenseSubcatByCategory.get(categoryKey)
+        if (!subMap) {
+          subMap = new Map<string, SubcategoryAccumulator>()
+          expenseSubcatByCategory.set(categoryKey, subMap)
+        }
+        addSubcategoryRow(
+          subMap,
+          {
+            subcategory_id: p.subcategory_id,
+            subcategory: p.subcategory,
+            subcategory_icon: p.subcategory_icon,
+            transaction_count: 0,
+          },
+          0
+        )
+      }
+    }
+
     // No deduction pass here any more. The rows arrived net, category by
     // category and subcategory by subcategory, so there is nothing to subtract
     // and — crucially — nothing to clamp: the credit is bounded by the debts
@@ -560,7 +718,7 @@ export class DashboardService {
       const netExpenses = data.expenses
       const grossExpenses = data.expenses + data.reimbursements
 
-      return {
+      const dto: MonthlyDataDto = {
         month,
         label: `${MONTH_LABELS[monthNum] ?? monthNum} ${year}`,
         expenses: Math.round(grossExpenses * 100) / 100,
@@ -568,8 +726,19 @@ export class DashboardService {
         income: Math.round(data.income * 100) / 100,
         exceptionalExpenses: Math.round(data.exceptionalExpenses * 100) / 100,
         everydayNetExpenses:
-          Math.round((netExpenses - data.exceptionalExpenses) * 100) / 100,
+          Math.round(
+            (netExpenses -
+              data.exceptionalExpenses +
+              (data.amortizedShift ?? 0)) *
+              100
+          ) / 100,
       }
+      // Only on a month a smoothed purchase touches.
+      if (data.amortizedShift !== undefined) {
+        dto.amortizedExpenses =
+          Math.round((data.amortizedSlices ?? 0) * 100) / 100
+      }
+      return dto
     })
 
     // Build breakdown month labels (full range when start/end are explicit,
@@ -632,7 +801,12 @@ export class DashboardService {
       const subMap =
         expenseSubcatByCategory.get(categoryId) ??
         new Map<string, SubcategoryAccumulator>()
-      const subcategories = toSubcategoryDtos(subMap, periodMonthsCount)
+      const shift = shiftByCategory.get(categoryId)
+      const subcategories = toSubcategoryDtos(
+        subMap,
+        periodMonthsCount,
+        shift?.subcategories
+      )
 
       const totalCount = Array.from(subMap.values()).reduce(
         (s, sd) => s + sd.count,
@@ -644,10 +818,12 @@ export class DashboardService {
 
       // Everyday / exceptional split, exact. Both shares are sums of netted
       // transactions, so a refunded holiday reduces the exceptional side and
-      // nothing else — no ratio, no leakage into the everyday baseline.
+      // nothing else — no ratio, no leakage into the everyday baseline. A
+      // smoothed purchase then trades its own month for its slices.
       const exceptionalAmount =
         exceptionalExpenseByCategory.get(categoryId) ?? 0
-      const everydayAmount = data.amount - exceptionalAmount
+      const everydayAmount =
+        data.amount - exceptionalAmount + (shift?.shift ?? 0)
 
       dto.exceptionalAmount = round(exceptionalAmount)
       dto.everydayAmount = round(everydayAmount)
@@ -661,8 +837,16 @@ export class DashboardService {
       const excMonthMap = expenseExceptionalMonthlyByCategory.get(categoryId)
       dto.everydayMonthlyAmounts = breakdownMonthLabels.map((m, i) => {
         const net = dto.monthlyAmounts?.[i] ?? 0
-        return round(net - (excMonthMap?.get(m) ?? 0))
+        return round(
+          net - (excMonthMap?.get(m) ?? 0) + (shift?.shiftByMonth.get(m) ?? 0)
+        )
       })
+      if (shift) {
+        dto.amortizedAmount = round(shift.slices)
+        dto.amortizedMonthlyAmounts = breakdownMonthLabels.map(m =>
+          round(shift.slicesByMonth.get(m) ?? 0)
+        )
+      }
 
       if (subcategories.length > 0) dto.subcategories = subcategories
       if (recvDeduction > 0) dto.reimbursement = round(recvDeduction)

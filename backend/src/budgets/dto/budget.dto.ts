@@ -44,6 +44,62 @@ export class SubcategoryAverageDto {
 
   /** Average per month */
   averagePerMonth!: number
+
+  /**
+   * Everyday counterpart of `totalAmount`: exceptional rows out, smoothed
+   * purchases spread into their slices. Only on a line a smoothed purchase
+   * touches this period; elsewhere the line has no everyday split of its own.
+   */
+  everydayAmount?: number
+
+  /** `everydayAmount` over the period. Same presence rule. */
+  everydayAveragePerMonth?: number
+
+  /** Slices of smoothed purchases falling in the period. Same presence rule. */
+  amortizedAmount?: number
+}
+
+/**
+ * A smoothed purchase whose slices or date touch the period: what the
+ * « Achats lissés en cours » list and the link to the source need.
+ */
+export class AmortizedPurchaseDto {
+  transactionId!: string
+
+  description!: string
+
+  /** The purchase's own date, `YYYY-MM-DD`. */
+  date!: string
+
+  /** Number of monthly slices. */
+  months!: number
+
+  /** Net of reimbursements and divided: what the slices sum to. */
+  netAmount!: number
+
+  /** The regular slice; the last one absorbs the rounding gap. */
+  monthlyAmount!: number
+
+  /** `YYYY-MM` of the first and last slice. */
+  firstMonth!: string
+
+  lastMonth!: string
+
+  @ApiProperty({ type: String, nullable: true })
+  categoryId!: string | null
+
+  @ApiProperty({ type: String, nullable: true })
+  subcategoryId!: string | null
+
+  /** Sum of its slices falling in the period. */
+  amountInPeriod!: number
+
+  /** `YYYY-MM` of each of those slices, chronological. */
+  @ApiProperty({ type: [String] })
+  sliceMonthsInPeriod!: string[]
+
+  /** The purchase itself is dated in the period, so the real reading counts it whole. */
+  dateInPeriod!: boolean
 }
 
 export class CategoryAverageDto {
@@ -79,7 +135,8 @@ export class CategoryAverageDto {
 
   /**
    * `totalAmount` minus `exceptionalAmount` — the recurring lifestyle, which
-   * is what a monthly budget envelope should be sized on.
+   * is what a monthly budget envelope should be sized on — with each smoothed
+   * purchase traded for its slices falling in the period.
    */
   everydayAmount?: number
 
@@ -91,6 +148,18 @@ export class CategoryAverageDto {
 
   /** Everyday counterpart of `monthlyAmounts`, same indexes and length. */
   everydayMonthlyAmounts?: number[]
+
+  /**
+   * Slices of smoothed purchases in `everydayAmount` — the « dont X €
+   * lissés ». Only when a smoothed purchase touches the category.
+   */
+  amortizedAmount?: number
+
+  /**
+   * Same, per month, matching `monthLabels`. Only with the monthly breakdown
+   * and when a smoothed purchase touches the category.
+   */
+  amortizedMonthlyAmounts?: number[]
 
   /** Breakdown by subcategory */
   @ApiProperty({ type: [SubcategoryAverageDto] })
@@ -131,6 +200,13 @@ export class BudgetStatisticsResponseDto {
    * reimbursements. `totalExpenses` minus this is everyday spending.
    */
   totalExceptionalExpenses?: number
+
+  /**
+   * Smoothed purchases touching the period, in date order. Absent when there
+   * is none.
+   */
+  @ApiPropertyOptional({ type: [AmortizedPurchaseDto] })
+  amortizedPurchases?: AmortizedPurchaseDto[]
 
   /** Month labels corresponding to monthlyAmounts indexes (e.g. ['2025-04', '2025-05', ...]). Only included when includeMonthlyBreakdown is true. */
   monthLabels?: string[]
