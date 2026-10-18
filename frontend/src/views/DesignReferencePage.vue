@@ -49,28 +49,96 @@
     '950',
   ] as const
 
+  /**
+   * The roles of style.css, one row each: what the hue is for, what it is
+   * never for, and a sample drawn with the very classes a screen uses.
+   */
   const ROLES = [
     {
       hue: 'primary',
       cls: 'bg-primary-600',
-      role: 'Action — boutons, focus, sélection, progression',
+      use: 'Action et sélection : boutons, liens, segment ou ligne choisis, progression, anneaux de focus. Plein en 600 (survol 700), texte en 700 / 400 en sombre. Sur Budget, les chiffres du plan.',
+      never: 'Une donnée positive (c’est green).',
+      sample:
+        'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
+      sampleLabel: 'Sélectionné',
     },
-    { hue: 'red', cls: 'bg-red-600', role: 'Dépenses, destruction, erreurs' },
-    { hue: 'green', cls: 'bg-green-600', role: 'Revenus, succès' },
+    {
+      hue: 'red',
+      cls: 'bg-red-600',
+      use: 'Danger et négatif : destruction, erreurs, dépenses, tout dépassement (enveloppe, mois, réserve, épargne sous zéro).',
+      never: 'Réinitialiser un filtre ou un brouillon, réessayer.',
+      sample: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+      sampleLabel: '⚠ Dépassé',
+    },
+    {
+      hue: 'green',
+      cls: 'bg-green-600',
+      use: 'Donnée positive : revenus, argent reçu, dette réglée, épargne ou marge positive, import réussi, succès.',
+      never: 'Une action (« Valider », « Pointer » sont primary).',
+      sample:
+        'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+      sampleLabel: 'Réglé',
+    },
     {
       hue: 'amber',
       cls: 'bg-amber-500',
-      role: 'Avertissements (et accent remboursements, séparation à venir)',
+      use: 'Avertissement (InlineAlert warning, « À migrer », doublons à trancher) et donnée exceptionnelle : événements, projets, leur surcoût, mois en cours.',
+      never: 'Une action, un anneau de focus, un réglage neutre.',
+      sample:
+        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+      sampleLabel: 'Exceptionnel',
     },
     {
-      hue: 'blue',
-      cls: 'bg-blue-600',
-      role: 'Information — toasts info, tuiles de stats',
+      hue: 'debt',
+      cls: 'bg-debt-500',
+      use: 'Donnée de remboursement : montant dû, avatar de la personne, « Partiel », badge en attente. Alias d’amber.',
+      never: 'Une action ; une dette réglée (green).',
+      sample:
+        'bg-debt-100 text-debt-700 dark:bg-debt-900/30 dark:text-debt-300',
+      sampleLabel: 'Partiel',
     },
     {
       hue: 'indigo',
       cls: 'bg-indigo-500',
-      role: 'Donnée — épargne, référence de comparaison. Jamais une action.',
+      use: 'Donnée de référence : la colonne et le résumé « Historique » du budget, la période de comparaison du graphique.',
+      never: 'Une action, une sélection, un statut.',
+      sample:
+        'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+      sampleLabel: 'Historique',
+    },
+    {
+      hue: 'blue',
+      cls: 'bg-blue-600',
+      use: 'Information : messages info, comptes ni bons ni mauvais, statut factuel (« À venir », « Auto », type de compte), abonnement sur une transaction.',
+      never: 'Une action.',
+      sample:
+        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+      sampleLabel: 'À venir',
+    },
+    {
+      hue: 'gray',
+      cls: 'bg-gray-400',
+      use: 'Tout le reste : textes, bordures, un virement (l’argent qui ne fait que bouger), un réglage (« Hors budget »).',
+      never:
+        'text-slate-* (le sombre pose ses surfaces en slate, le texte reste gray).',
+      sample: 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-300',
+      sampleLabel: 'Hors budget',
+    },
+  ]
+
+  /** The dark theme's surface ladder, darkest last. */
+  const DARK_SURFACES = [
+    {
+      cls: 'bg-slate-800',
+      name: 'slate-800',
+      use: 'Page (PageShell), champ, panneau dans une carte',
+    },
+    { cls: 'bg-slate-900', name: 'slate-900', use: 'Carte (BaseCard), modale' },
+    {
+      cls: 'bg-slate-700',
+      name: 'slate-700',
+      use: 'Bordure, survol, pastille neutre',
     },
   ]
 
@@ -182,12 +250,19 @@
     <div class="space-y-8">
       <!-- Tokens -->
       <BaseCard as="section" padding="lg">
-        <h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">
-          Couleurs
+        <h2 class="mb-1 text-xl font-semibold text-gray-900 dark:text-gray-100">
+          Couleurs et rôles
         </h2>
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          Une teinte, un sens — défini dans
+          <code class="font-mono text-xs">style.css</code>. Une action passe par
+          <code class="font-mono text-xs">BaseButton</code> /
+          <code class="font-mono text-xs">BaseIconButton</code>, jamais par une
+          teinte choisie pour son allure. Catégories, étiquettes et séries de
+          graphiques sont des données, hors de ces rôles.
+        </p>
         <p class="mb-3 text-sm text-gray-600 dark:text-gray-400">
-          Échelle <code class="font-mono text-xs">primary-*</code> (définie dans
-          <code class="font-mono text-xs">style.css</code>) :
+          Échelle <code class="font-mono text-xs">primary-*</code> :
         </p>
         <div class="mb-6 flex flex-wrap gap-1">
           <div
@@ -201,20 +276,56 @@
               class="h-10 w-12 rounded"
               :style="{ backgroundColor: `var(--color-primary-${shade})` }"
             ></div>
-            <span class="font-mono text-[10px] text-gray-500">{{ shade }}</span>
+            <span
+              class="font-mono text-[10px] text-gray-500 dark:text-gray-400"
+              >{{ shade }}</span
+            >
           </div>
         </div>
-        <ul class="space-y-2">
+        <ul
+          class="divide-y divide-gray-100 dark:divide-slate-700"
+          data-testid="design-color-roles"
+        >
           <li
             v-for="entry in ROLES"
             :key="entry.hue"
-            class="flex items-center gap-3 text-sm"
+            class="grid gap-2 py-3 text-sm sm:grid-cols-[7rem_1fr_auto] sm:items-start sm:gap-4"
           >
-            <span class="h-4 w-4 shrink-0 rounded" :class="entry.cls"></span>
-            <code class="w-16 shrink-0 font-mono text-xs">{{ entry.hue }}</code>
-            <span class="text-gray-600 dark:text-gray-400">{{
-              entry.role
-            }}</span>
+            <span class="flex items-center gap-2">
+              <span class="h-4 w-4 shrink-0 rounded" :class="entry.cls"></span>
+              <code
+                class="font-mono text-xs text-gray-900 dark:text-gray-100"
+                >{{ entry.hue }}</code
+              >
+            </span>
+            <span class="text-gray-700 dark:text-gray-300">
+              {{ entry.use }}
+              <span
+                class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400"
+              >
+                Jamais : {{ entry.never }}
+              </span>
+            </span>
+            <span
+              class="justify-self-start rounded-full px-2 py-0.5 text-xs font-medium"
+              :class="entry.sample"
+              >{{ entry.sampleLabel }}</span
+            >
+          </li>
+        </ul>
+        <SectionLabel as="h3" class="mt-6 mb-2">Surfaces sombres</SectionLabel>
+        <ul class="flex flex-wrap gap-3">
+          <li
+            v-for="surface in DARK_SURFACES"
+            :key="surface.name"
+            class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400"
+          >
+            <span
+              class="h-6 w-6 shrink-0 rounded border border-gray-200 dark:border-slate-600"
+              :class="surface.cls"
+            ></span>
+            <code class="font-mono">{{ surface.name }}</code>
+            · {{ surface.use }}
           </li>
         </ul>
       </BaseCard>

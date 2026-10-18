@@ -6,22 +6,62 @@
 /*
  * Design tokens — the one place a color decision is made.
  *
- * Roles, as applied across the app:
+ * A hue means one thing. Before reaching for a color, find its role below;
+ * if none fits, the element is neutral (gray). /design shows the same table.
  *
- *   primary-*  the action color: primary buttons, focus rings, selected
- *              states, progress, active navigation. Today it aliases the
- *              emerald scale; a rebrand edits these eleven lines and
- *              nothing else.
- *   red        expenses, destructive actions, errors.
- *   green      income, success states.
- *   amber      warnings — and, historically, the reimbursements accent;
- *              separating those two meanings is still open.
- *   blue       informational tints (info toasts, import stat tiles).
- *   indigo     data only: the savings KPI and the budget comparison
- *              reference. Never an action.
+ *   primary-*  ACTION and SELECTION. Buttons (through BaseButton and
+ *              BaseIconButton), links, the selected segment, option, row
+ *              or card, progress, active navigation, and every focus ring
+ *              (`ring-primary-500`). A filled action is 600, hover 700, in
+ *              both themes; primary text is 700 on light (600 falls under
+ *              4.5:1 on white) and 400 on dark. On Budget it is also the
+ *              plan's own figures: the budget column, line and total.
+ *              Today it aliases the emerald scale; a rebrand edits these
+ *              eleven lines and nothing else.
+ *   red        DANGER and the NEGATIVE. Destructive actions (BaseButton
+ *              danger / danger-outline, BaseIconButton danger — only for
+ *              what deletes or undoes), errors, expenses, and every overrun:
+ *              an envelope, a month or a reserve over budget, savings below
+ *              zero. An overrun is red everywhere, never amber — amber
+ *              already means « exceptional » on the same budget rows.
+ *   green      DATA, the POSITIVE: income, money received, a debt settled,
+ *              a positive saving or margin, an import that went through,
+ *              success messages. Never an action: a confirming button is
+ *              primary. Text is 700 on light, 400 on dark.
+ *   amber      WARNING notices (InlineAlert warning, a « needs a hand »
+ *              marker such as « À migrer » or « à réaffecter », duplicates
+ *              to decide) and the EXCEPTIONAL data: exceptional expenses,
+ *              event tags and projects, their extra cost, the running month
+ *              whose figures are still partial. Never an action, never a
+ *              focus ring. Text is 700 on light, 300-400 on dark.
+ *   debt-*     DATA of reimbursements: what someone owes — amounts due, a
+ *              person's avatar, « Partiel », the pending badge and edge on a
+ *              transaction. An alias of amber so a debt keeps its warmth,
+ *              named apart so it can move without touching the warnings.
+ *              A settled debt turns green.
+ *   indigo     DATA, the REFERENCE: what a figure is compared with — the
+ *              budget's « Historique » column and summary, the comparison
+ *              period in the budget chart. Never an action, never a
+ *              selection, never a status.
+ *   blue       INFORMATION: info messages and toasts, counts that are
+ *              neither good nor bad (import tiles), a status that is merely
+ *              a fact (« À venir », « En cours », « Auto », the account's
+ *              kind), and the subscription marker on a transaction.
+ *   gray       Everything else, including money that merely moves (a
+ *              transfer) and a user's own settings (« Hors budget »).
+ *              Neutrals are gray in light mode — text, borders, quiet
+ *              fills; text-slate-* is not used. The dark theme sits on
+ *              slate surfaces: the page is slate-800 (PageShell), a card is
+ *              slate-900 (BaseCard), a field or a nested panel inside a card
+ *              slate-800, a border slate-700. Text stays gray in both themes.
  *
- * Components must reach for `primary-*` (or a semantic hue above), never
- * for a raw palette name when styling an action.
+ * Outside the roles: categories and tags carry the user's own colors, and
+ * a chart's categorical series (CategoryPieChart, the two readings of the
+ * spending structure in blue and teal tones) is data. A status pill always
+ * spells its dark variant (`dark:bg-…-900/30 dark:text-…-300`).
+ *
+ * Components reach for these roles, never for a raw palette name chosen
+ * for its look — and never for violet, purple, sky, rose or orange.
  */
 /*
  * The system said « less motion » : spinners stop spinning, skeletons stop
@@ -61,4 +101,17 @@
   --color-primary-800: #065f46;
   --color-primary-900: #064e3b;
   --color-primary-950: #022c22;
+
+  /* Reimbursement data — see the roles above. */
+  --color-debt-50: var(--color-amber-50);
+  --color-debt-100: var(--color-amber-100);
+  --color-debt-200: var(--color-amber-200);
+  --color-debt-300: var(--color-amber-300);
+  --color-debt-400: var(--color-amber-400);
+  --color-debt-500: var(--color-amber-500);
+  --color-debt-600: var(--color-amber-600);
+  --color-debt-700: var(--color-amber-700);
+  --color-debt-800: var(--color-amber-800);
+  --color-debt-900: var(--color-amber-900);
+  --color-debt-950: var(--color-amber-950);
 }
