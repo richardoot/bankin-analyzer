@@ -14,6 +14,7 @@
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import BaseModal from '@/components/ui/BaseModal.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+  import StepIndicator from '@/components/ui/StepIndicator.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import BaseField from '@/components/ui/BaseField.vue'
@@ -116,6 +117,9 @@
 
   const isModalOpen = ref(false)
   const isConfirmOpen = ref(false)
+  const isWizardOpen = ref(false)
+  const wizardStep = ref(1)
+  const isTypedConfirmOpen = ref(false)
   const isButtonLoading = ref(false)
   const demoFilterOpen = ref(true)
   const demoField = ref('')
@@ -379,14 +383,34 @@
         </h2>
         <p class="mb-3 text-sm text-gray-600 dark:text-gray-400">
           Échap ferme, Tab reste dedans, le focus revient au déclencheur —
-          fourni par la brique, jamais réécrit.
+          fourni par la brique, jamais réécrit. Sous <code>sm</code> la boîte
+          devient une feuille en bas d'écran et le pied s'empile. Un assistant
+          prend une flèche de retour (<code>backLabel</code>), un sous-en-tête
+          fixe (<code>#subheader</code>) et une garde de brouillon
+          (<code>dirty</code>) ; une suppression irréversible demande le nom
+          (<code>typedConfirmation</code>).
         </p>
         <div class="flex flex-wrap gap-3">
           <BaseButton variant="secondary" @click="isModalOpen = true">
             Ouvrir une BaseModal
           </BaseButton>
+          <BaseButton
+            variant="secondary"
+            @click="
+              wizardStep = 1
+              isWizardOpen = true
+            "
+          >
+            Ouvrir un assistant
+          </BaseButton>
           <BaseButton variant="danger-outline" @click="isConfirmOpen = true">
             Ouvrir un ConfirmDialog
+          </BaseButton>
+          <BaseButton
+            variant="danger-outline"
+            @click="isTypedConfirmOpen = true"
+          >
+            ConfirmDialog avec saisie du nom
           </BaseButton>
         </div>
       </BaseCard>
@@ -603,6 +627,39 @@
       </template>
     </BaseModal>
 
+    <BaseModal
+      :open="isWizardOpen"
+      title="Un assistant"
+      :subtitle="wizardStep === 1 ? 'Étape 1 : choisir' : 'Étape 2 : vérifier'"
+      max-width="lg"
+      :back-label="wizardStep > 1 ? 'Retour' : undefined"
+      dirty
+      @back="wizardStep = 1"
+      @close="isWizardOpen = false"
+    >
+      <template #subheader>
+        <StepIndicator :steps="['Choisir', 'Vérifier']" :current="wizardStep" />
+      </template>
+      <p class="text-sm text-gray-600 dark:text-gray-400">
+        Le fond, la croix et Échap demandent confirmation avant de jeter le
+        brouillon ; la flèche d'en-tête ramène à l'étape précédente.
+      </p>
+      <template #footer-start>
+        <span class="text-gray-500 dark:text-gray-400">
+          Récapitulatif en pied, à gauche des actions.
+        </span>
+      </template>
+      <template #footer>
+        <BaseButton variant="secondary" @click="isWizardOpen = false">
+          Annuler
+        </BaseButton>
+        <BaseButton v-if="wizardStep === 1" @click="wizardStep = 2">
+          Suivant
+        </BaseButton>
+        <BaseButton v-else @click="isWizardOpen = false">Terminer</BaseButton>
+      </template>
+    </BaseModal>
+
     <ConfirmDialog
       :open="isConfirmOpen"
       title="Supprimer cet exemple ?"
@@ -611,6 +668,16 @@
     >
       La question destructrice standard : annuler discret à gauche, confirmer
       rouge à droite.
+    </ConfirmDialog>
+
+    <ConfirmDialog
+      :open="isTypedConfirmOpen"
+      title="Supprimer « Livret A » ?"
+      typed-confirmation="Livret A"
+      @confirm="isTypedConfirmOpen = false"
+      @cancel="isTypedConfirmOpen = false"
+    >
+      Le bouton rouge reste verrouillé tant que le nom n'est pas retapé.
     </ConfirmDialog>
   </PageShell>
 </template>
