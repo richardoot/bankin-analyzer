@@ -10,7 +10,8 @@ export interface StartImportData {
 
 export interface FinalizeImportData {
   transactionsImported: number
-  categoriesCreated: number
+  /** Defaults to 0: an import creates no category since the catalogue. */
+  categoriesCreated?: number | undefined
   duplicatesSkipped: number
   dateRangeStart: Date
   dateRangeEnd: Date
@@ -158,7 +159,7 @@ export class ImportHistoriesService {
       where: { id },
       data: {
         transactionsImported: data.transactionsImported,
-        categoriesCreated: data.categoriesCreated,
+        categoriesCreated: data.categoriesCreated ?? 0,
         duplicatesSkipped: data.duplicatesSkipped,
         dateRangeStart: data.dateRangeStart,
         dateRangeEnd: data.dateRangeEnd,

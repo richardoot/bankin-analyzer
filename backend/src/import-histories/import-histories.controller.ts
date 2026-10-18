@@ -9,6 +9,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  NotFoundException,
 } from '@nestjs/common'
 import {
   ApiTags,
@@ -61,6 +62,23 @@ export class ImportHistoriesController {
   ): Promise<{ date: string | null }> {
     const date = await this.importHistoriesService.getLatestImportDate(user.id)
     return { date: date?.toISOString() ?? null }
+  }
+
+  // After 'latest-date': a literal segment must be matched before the param.
+  @Get(':id')
+  @ApiOperation({ summary: 'Get one import of the current user' })
+  @ApiParam({ name: 'id', description: 'Import history ID' })
+  @ApiResponse({ status: 200, type: ImportHistoryResponseDto })
+  @ApiResponse({ status: 404, description: 'Import not found' })
+  async findOne(
+    @CurrentUser() user: User,
+    @Param('id') id: string
+  ): Promise<ImportHistoryResponseDto> {
+    const history = await this.importHistoriesService.findById(id, user.id)
+    if (!history) {
+      throw new NotFoundException(`Import history ${id} not found`)
+    }
+    return history
   }
 
   @Post('start')
