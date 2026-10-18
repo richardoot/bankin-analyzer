@@ -18,6 +18,7 @@
   import BaseField from '@/components/ui/BaseField.vue'
   import BaseCheckbox from '@/components/ui/BaseCheckbox.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
+  import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 
   const router = useRouter()
   const tagsStore = useTagsStore()
@@ -182,12 +183,18 @@
     return `${from} – ${to}`
   }
 
-  // Delete confirmation
-  const confirmingDeleteId = ref<string | null>(null)
+  // Delete confirmation: a real dialog (named, Escape closes it), not an
+  // overlay painted over the card.
+  const tagToDelete = ref<TagDto | null>(null)
+  const deleting = ref(false)
 
-  async function confirmDelete(tag: TagDto): Promise<void> {
+  async function confirmDelete(): Promise<void> {
+    const tag = tagToDelete.value
+    if (!tag || deleting.value) return
+    deleting.value = true
     const ok = await tagsStore.removeTag(tag.id)
-    confirmingDeleteId.value = null
+    deleting.value = false
+    tagToDelete.value = null
     if (ok) toast.success(`Étiquette « ${tag.name} » supprimée`)
   }
 
@@ -540,42 +547,23 @@
               size="sm"
               variant="danger"
               :label="`Supprimer ${tag.name}`"
-              @click.stop="confirmingDeleteId = tag.id"
+              @click.stop="tagToDelete = tag"
             >
               <IconTrash />
             </BaseIconButton>
           </div>
-
-          <!-- Delete confirmation -->
-          <div
-            v-if="confirmingDeleteId === tag.id"
-            class="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-white/95 dark:bg-slate-900/95 p-4 text-center"
-          >
-            <p class="text-sm text-gray-700 dark:text-gray-300">
-              Supprimer « {{ tag.name }} » ?
-            </p>
-            <p class="text-xs text-gray-400">
-              Les transactions ne sont pas supprimées.
-            </p>
-            <div class="flex gap-2">
-              <BaseButton
-                variant="ghost"
-                size="sm"
-                @click.stop="confirmingDeleteId = null"
-              >
-                Annuler
-              </BaseButton>
-              <BaseButton
-                variant="danger"
-                size="sm"
-                @click.stop="confirmDelete(tag)"
-              >
-                Supprimer
-              </BaseButton>
-            </div>
-          </div>
         </template>
       </BaseCard>
     </div>
+
+    <ConfirmDialog
+      :open="tagToDelete !== null"
+      :title="`Supprimer « ${tagToDelete?.name ?? ''} » ?`"
+      :loading="deleting"
+      @confirm="confirmDelete"
+      @cancel="tagToDelete = null"
+    >
+      Les transactions qui portent cette étiquette ne sont pas supprimées.
+    </ConfirmDialog>
   </PageShell>
 </template>

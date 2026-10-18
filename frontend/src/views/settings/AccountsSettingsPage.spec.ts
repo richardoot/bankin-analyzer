@@ -132,7 +132,8 @@ async function mountPage(
     TRIVIAL_REASSIGNMENT_PREVIEW
   )
   const wrapper = mount(AccountsSettingsPage, {
-    global: { stubs: { RouterLink: true } },
+    // Teleport stubbed so the dialogs render inside the wrapper, not <body>.
+    global: { stubs: { RouterLink: true, Teleport: true } },
   })
   await flushPromises()
   return wrapper
