@@ -20,6 +20,8 @@
   import BaseCard from '@/components/ui/BaseCard.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import TagForm from '@/components/tags/TagForm.vue'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
   import {
     DEFAULT_TAG_COLOR,
     emptyTagForm,
@@ -287,7 +289,14 @@
           </div>
         </div>
         <p class="text-sm text-gray-500 dark:text-gray-400">
-          {{ tag.transactionCount }} transaction(s)
+          <TransactionsLink
+            :to="transactionsLink({ tagId: tag.id, label: tag.name })"
+            :subject="tag.name"
+            size="md"
+            :data-testid="`tag-transactions-link-${tag.id}`"
+          >
+            {{ tag.transactionCount }} transaction(s)
+          </TransactionsLink>
         </p>
         <div
           v-if="tag.isExceptional"

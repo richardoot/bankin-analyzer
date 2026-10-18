@@ -13,10 +13,11 @@ vi.mock('vue3-apexcharts/core', () => ({
   },
 }))
 
+const routerPush = vi.hoisted(() => vi.fn())
 vi.mock('vue-router', async importOriginal => ({
   ...(await importOriginal<typeof import('vue-router')>()),
   useRoute: () => ({ params: { id: 'tag-1' } }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: routerPush }),
 }))
 
 const mockToast = {
@@ -389,5 +390,79 @@ describe('TagAnalysisPage — project envelope', () => {
 
     expect(text).toContain('Surcoût réel')
     expect(text).not.toContain("Renseignez une période d'absence")
+  })
+
+  describe('links to the Transactions page', () => {
+    it('links every category row to the tag’s rows in it, the unfiled ones as a word', async () => {
+      mockAnalysis({
+        ...analysisWithBaseline,
+        byCategory: [
+          {
+            categoryId: 'cat-resto',
+            categoryName: 'Restaurant',
+            categoryIcon: null,
+            type: 'EXPENSE',
+            amount: 300,
+            transactionCount: 3,
+          },
+          {
+            categoryId: null,
+            categoryName: 'Sans catégorie',
+            categoryIcon: null,
+            type: 'EXPENSE',
+            amount: 12,
+            transactionCount: 1,
+          },
+        ],
+      })
+      const wrapper = await mountPage()
+
+      const stubs = wrapper.findAllComponents(RouterLinkStub)
+      const byTestId = (id: string) =>
+        stubs.find(s => s.attributes('data-testid') === id)?.props('to')
+      expect(byTestId('tag-category-link-Restaurant')).toEqual({
+        path: '/transactions',
+        query: {
+          type: 'EXPENSE',
+          category: 'cat-resto',
+          tag: 'tag-1',
+          label: 'Vacances Italie · Restaurant',
+          gross: '1',
+        },
+      })
+      expect(byTestId('tag-category-link-Sans catégorie')).toMatchObject({
+        query: { category: 'none', tag: 'tag-1' },
+      })
+      expect(byTestId('tag-all-transactions-link')).toEqual({
+        path: '/transactions',
+        query: { tag: 'tag-1', label: 'Vacances Italie' },
+      })
+    })
+
+    it('opens a month from a bar of the monthly chart', async () => {
+      mockAnalysis({
+        ...analysisWithBaseline,
+        byMonth: [
+          { month: '2026-07', expenses: 100, income: 0 },
+          { month: '2026-08', expenses: 200, income: 0 },
+        ],
+      })
+      const wrapper = await mountPage()
+
+      wrapper
+        .findComponent({ name: 'MonthlyBarChart' })
+        .vm.$emit('select-month', '2026-08')
+
+      expect(routerPush).toHaveBeenCalledWith({
+        path: '/transactions',
+        query: {
+          tag: 'tag-1',
+          from: '2026-08-01',
+          to: '2026-08-31',
+          label: 'Vacances Italie · août 2026',
+          gross: '1',
+        },
+      })
+    })
   })
 })
