@@ -28,6 +28,8 @@
     toAllocationLine,
     type AllocationLine,
   } from '@/lib/settlements'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   const props = defineProps<{
     isOpen: boolean
@@ -570,13 +572,31 @@
                 @change="toggleLineSelection(line.reimbursementId)"
               />
               <span
-                class="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-gray-100"
+                class="flex min-w-0 flex-1 items-center gap-1 text-sm text-gray-900 dark:text-gray-100"
                 :title="line.description"
               >
-                <span class="text-gray-500 dark:text-gray-400"
-                  >[{{ formatDate(line.date) }}]</span
-                >
-                {{ line.description }}
+                <span class="min-w-0 truncate">
+                  <span class="text-gray-500 dark:text-gray-400"
+                    >[{{ formatDate(line.date) }}]</span
+                  >
+                  {{ line.description }}
+                </span>
+                <!-- A draft is open: the row opens beside it. A link is
+                     interactive content, so the checkbox of the label
+                     around is left alone. -->
+                <TransactionsLink
+                  :to="
+                    transactionsLink({
+                      ids: [line.transactionId],
+                      label: line.description,
+                    })
+                  "
+                  :subject="line.description"
+                  icon-only
+                  new-tab
+                  class="h-6 w-6"
+                  :data-testid="`settlement-line-link-${line.reimbursementId}`"
+                />
               </span>
               <span
                 class="shrink-0 text-sm whitespace-nowrap text-gray-700 dark:text-gray-300"
@@ -637,10 +657,25 @@
         >
           <div class="min-w-0">
             <p
-              class="truncate font-medium text-gray-900 dark:text-gray-100"
+              class="flex items-center gap-1 font-medium text-gray-900 dark:text-gray-100"
               :title="selectedTransaction.description"
             >
-              {{ selectedTransaction.description }}
+              <span class="min-w-0 truncate">
+                {{ selectedTransaction.description }}
+              </span>
+              <TransactionsLink
+                :to="
+                  transactionsLink({
+                    ids: [selectedTransaction.id],
+                    label: selectedTransaction.description,
+                  })
+                "
+                :subject="selectedTransaction.description"
+                icon-only
+                new-tab
+                class="h-6 w-6"
+                data-testid="settlement-receipt-link"
+              />
             </p>
             <p class="text-sm text-gray-600 dark:text-gray-400">
               {{ formatDate(selectedTransaction.date) }} &middot;

@@ -12,6 +12,7 @@ import type { ReimbursementDto, TransactionDto } from './api'
 
 const line = (overrides: Partial<AllocationLine> = {}): AllocationLine => ({
   reimbursementId: 'r-1',
+  transactionId: 'tx-1',
   categoryId: 'cat-courses',
   categoryName: 'R Courses',
   date: '2026-08-05',
@@ -253,6 +254,8 @@ describe('toAllocationLine', () => {
       note: null,
       createdAt: '2026-08-13T10:00:00.000Z',
       updatedAt: '2026-08-13T10:00:00.000Z',
+      settlementIds: [],
+      incomeTransactionIds: [],
       transaction: {
         id: 'tx-9',
         date: '2026-08-12',
@@ -263,6 +266,7 @@ describe('toAllocationLine', () => {
 
     expect(toAllocationLine(reimbursement)).toEqual({
       reimbursementId: 'r-1',
+      transactionId: 'tx-9',
       categoryId: 'cat-courses',
       categoryName: 'Alimentation',
       date: '2026-08-12',
@@ -290,6 +294,8 @@ describe('toAllocationLine', () => {
       note: null,
       createdAt: '2026-08-13T10:00:00.000Z',
       updatedAt: '2026-08-13T10:00:00.000Z',
+      settlementIds: [],
+      incomeTransactionIds: [],
       transaction: {
         id: 'tx-7',
         date: '2026-08-12',
@@ -322,6 +328,8 @@ describe('toAllocationLine', () => {
       note: null,
       createdAt: '2026-08-13T10:00:00.000Z',
       updatedAt: '2026-08-13T10:00:00.000Z',
+      settlementIds: [],
+      incomeTransactionIds: [],
     } satisfies ReimbursementDto
 
     const allocationLine = toAllocationLine(reimbursement)

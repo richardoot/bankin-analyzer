@@ -623,6 +623,10 @@ export interface ReimbursementDto {
   amountRemaining: number
   status: 'PENDING' | 'PARTIAL' | 'COMPLETED'
   note: string | null
+  /** The settlements that credited this debt, oldest first. */
+  settlementIds: string[]
+  /** The income transactions the cash came from, oldest first. */
+  incomeTransactionIds: string[]
   createdAt: string
   updatedAt: string
   transaction?: TransactionSummaryDto

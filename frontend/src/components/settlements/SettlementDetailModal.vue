@@ -6,6 +6,8 @@
   import IconTrash from '@/components/icons/IconTrash.vue'
   import type { SettlementDto } from '@/lib/api'
   import { formatCurrency, formatDate, formatDateTime } from '@/lib/formatters'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   const props = withDefaults(
     defineProps<{
@@ -57,6 +59,22 @@
           <p class="text-sm text-gray-500 dark:text-gray-400">
             Montant réglé : {{ formatCurrency(settlement.amountUsed) }}
           </p>
+          <!-- Every row this settlement touched, on the Transactions page.
+               The dialog closes on the way: opened from that very page,
+               it would otherwise sit over the list it just filtered. -->
+          <TransactionsLink
+            :to="
+              transactionsLink({
+                settlementId: settlement.id,
+                label: `Règlement du ${formatDate(settlement.createdAt)}`,
+              })
+            "
+            :subject="`ce règlement`"
+            data-testid="settlement-detail-link"
+            @click="emit('close')"
+          >
+            Voir toutes ses transactions
+          </TransactionsLink>
         </div>
       </div>
 
@@ -65,8 +83,25 @@
         <SectionLabel as="h4" class="mb-2">
           Transaction de règlement
         </SectionLabel>
-        <p class="font-medium text-gray-900 dark:text-gray-100">
-          {{ settlement.incomeTransactionDescription }}
+        <p
+          class="flex items-center gap-1 font-medium text-gray-900 dark:text-gray-100"
+        >
+          <span class="min-w-0 truncate">
+            {{ settlement.incomeTransactionDescription }}
+          </span>
+          <TransactionsLink
+            :to="
+              transactionsLink({
+                ids: [settlement.incomeTransactionId],
+                label: settlement.incomeTransactionDescription,
+              })
+            "
+            :subject="settlement.incomeTransactionDescription"
+            icon-only
+            class="h-6 w-6"
+            data-testid="settlement-income-link"
+            @click="emit('close')"
+          />
         </p>
         <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
           {{ formatDate(settlement.incomeTransactionDate) }}
@@ -106,10 +141,25 @@
             <div class="flex items-start justify-between gap-4">
               <div class="min-w-0 flex-1">
                 <p
-                  class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                  class="flex items-center gap-1 text-sm font-medium text-gray-900 dark:text-gray-100"
                   :title="reimbursement.transactionDescription"
                 >
-                  {{ reimbursement.transactionDescription }}
+                  <span class="min-w-0 truncate">
+                    {{ reimbursement.transactionDescription }}
+                  </span>
+                  <TransactionsLink
+                    :to="
+                      transactionsLink({
+                        ids: [reimbursement.transactionId],
+                        label: reimbursement.transactionDescription,
+                      })
+                    "
+                    :subject="reimbursement.transactionDescription"
+                    icon-only
+                    class="h-6 w-6"
+                    :data-testid="`settlement-expense-link-${reimbursement.reimbursementId}`"
+                    @click="emit('close')"
+                  />
                 </p>
                 <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                   {{ formatDate(reimbursement.transactionDate) }}

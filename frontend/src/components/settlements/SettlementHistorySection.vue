@@ -6,6 +6,8 @@
   import IconEye from '@/components/icons/IconEye.vue'
   import IconTrash from '@/components/icons/IconTrash.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   const props = defineProps<{
     settlements: SettlementDto[]
@@ -16,6 +18,14 @@
     delete: [settlementId: string]
     viewDetails: [settlement: SettlementDto]
   }>()
+
+  /** The rows a settlement touched: the expenses it closed, the income it drew on. */
+  function settlementLink(settlement: SettlementDto) {
+    return transactionsLink({
+      settlementId: settlement.id,
+      label: `Règlement du ${formatDate(settlement.createdAt)}`,
+    })
+  }
 
   // Filter state
   const selectedPersonId = ref<string | null>(null)
@@ -194,6 +204,13 @@
               >
                 <IconEye />
               </BaseIconButton>
+              <TransactionsLink
+                :to="settlementLink(settlement)"
+                :subject="`règlement du ${formatDate(settlement.createdAt)}`"
+                icon-only
+                class="h-8 w-8"
+                :data-testid="`settlement-transactions-link-${settlement.id}`"
+              />
               <BaseIconButton
                 variant="danger"
                 label="Annuler le règlement"
@@ -280,6 +297,13 @@
               >
                 <IconEye />
               </BaseIconButton>
+              <TransactionsLink
+                :to="settlementLink(settlement)"
+                :subject="`règlement du ${formatDate(settlement.createdAt)}`"
+                icon-only
+                class="h-8 w-8"
+                :data-testid="`settlement-transactions-link-${settlement.id}`"
+              />
               <BaseIconButton
                 variant="danger"
                 label="Annuler le règlement"

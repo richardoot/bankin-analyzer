@@ -36,6 +36,8 @@ const carrefour: ReimbursementDto = {
   note: null,
   createdAt: '2026-08-12T10:00:00.000Z',
   updatedAt: '2026-08-12T10:00:00.000Z',
+  settlementIds: [],
+  incomeTransactionIds: [],
   transaction: {
     id: 'tx-carrefour',
     date: '2026-08-12',

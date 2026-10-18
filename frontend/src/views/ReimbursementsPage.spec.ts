@@ -99,6 +99,8 @@ describe('ReimbursementsPage', () => {
       note: null,
       createdAt: '2024-01-15T00:00:00.000Z',
       updatedAt: '2024-01-15T00:00:00.000Z',
+      settlementIds: [],
+      incomeTransactionIds: [],
     },
     {
       id: 'r2',
@@ -116,6 +118,8 @@ describe('ReimbursementsPage', () => {
       note: null,
       createdAt: '2024-01-20T00:00:00.000Z',
       updatedAt: '2024-01-20T00:00:00.000Z',
+      settlementIds: [],
+      incomeTransactionIds: [],
     },
   ]
 
@@ -948,6 +952,32 @@ describe('ReimbursementsPage', () => {
       expect(api.getSettlements).toHaveBeenCalledTimes(2)
       expect(wrapper.find('[data-testid="settlements-error"]').exists()).toBe(
         false
+      )
+    })
+  })
+
+  describe('links to exact lists', () => {
+    it('links a person, a category of theirs, a debt and the grand total', async () => {
+      setupDefaultMocks()
+      vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
+      const wrapper = mount(ReimbursementsPage, {
+        global: { plugins: [router], stubs: { Teleport: true } },
+      })
+      await flushPromises()
+
+      const href = (id: string) =>
+        wrapper.get(`[data-testid="${id}"]`).attributes('href')
+      expect(href('person-transactions-link-1')).toBe(
+        '/transactions?person=1&reimbursement=open&label=Dettes+ouvertes+de+Alice+Dupont'
+      )
+      expect(href('category-transactions-link-1-cat1')).toContain(
+        '/transactions?category=cat1&person=1&reimbursement=open'
+      )
+      expect(href('debt-transaction-link-r1')).toMatch(
+        /^\/transactions\?ids=1(&label=.*)?$/
+      )
+      expect(href('total-transactions-link')).toBe(
+        '/transactions?reimbursement=open&label=Toutes+les+dettes+ouvertes'
       )
     })
   })

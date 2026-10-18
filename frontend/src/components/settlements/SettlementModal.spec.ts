@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import SettlementModal from './SettlementModal.vue'
@@ -20,6 +21,15 @@ vi.mock('@/lib/api', () => ({
 
 import { api } from '@/lib/api'
 
+// The links beside the debt lines and the receipt need a router to resolve.
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/', component: { template: '<div />' } },
+    { path: '/transactions', component: { template: '<div />' } },
+  ],
+})
+
 const PERSON = { id: 'person-1', name: 'Alice Martin' }
 
 /** Two pending lines in the same category — the case the old modal could not split. */
@@ -38,6 +48,8 @@ const monoprix: ReimbursementDto = {
   note: null,
   createdAt: '2026-08-05T10:00:00.000Z',
   updatedAt: '2026-08-05T10:00:00.000Z',
+  settlementIds: [],
+  incomeTransactionIds: [],
   transaction: {
     id: 'tx-monoprix',
     date: '2026-08-05',
@@ -54,6 +66,8 @@ const carrefour: ReimbursementDto = {
   amountRemaining: 30,
   createdAt: '2026-08-12T10:00:00.000Z',
   updatedAt: '2026-08-12T10:00:00.000Z',
+  settlementIds: [],
+  incomeTransactionIds: [],
   transaction: {
     id: 'tx-carrefour',
     date: '2026-08-12',
@@ -72,6 +86,8 @@ const netflix: ReimbursementDto = {
   amountRemaining: 12,
   createdAt: '2026-08-01T10:00:00.000Z',
   updatedAt: '2026-08-01T10:00:00.000Z',
+  settlementIds: [],
+  incomeTransactionIds: [],
   transaction: {
     id: 'tx-netflix',
     date: '2026-08-01',
@@ -161,7 +177,10 @@ async function mountModal(options: {
       personName: PERSON.name,
       pendingReimbursements: options.pending ?? [monoprix, carrefour, netflix],
     },
-    global: { stubs: { Teleport: true } },
+    global: {
+      plugins: [router],
+      stubs: { Teleport: true },
+    },
   })
 
   // The transaction list loads on open, so flip the prop after mounting.
@@ -785,5 +804,28 @@ describe('SettlementModal', () => {
       0
     )
     expect(total).toBeLessThanOrEqual(20)
+  })
+
+  it('lets each debt line be checked in a new tab, without ticking it', async () => {
+    const wrapper = await mountModal({})
+    if (
+      wrapper.findAll('[data-testid^="settlement-line-link-"]').length === 0
+    ) {
+      for (const toggle of wrapper.findAll('button[aria-label^="Déplier"]')) {
+        await toggle.trigger('click')
+      }
+    }
+
+    const links = wrapper.findAll('[data-testid^="settlement-line-link-"]')
+    expect(links.length).toBeGreaterThan(0)
+    for (const link of links) {
+      expect(link.attributes('target')).toBe('_blank')
+      expect(link.attributes('href')).toMatch(/^\/transactions\?ids=/)
+    }
+    expect(
+      wrapper
+        .findAll('input[type="checkbox"]')
+        .filter(box => (box.element as HTMLInputElement).checked)
+    ).toHaveLength(0)
   })
 })
