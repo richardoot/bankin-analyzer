@@ -557,6 +557,7 @@
           :remaining-to-live="remainingToLive"
           :period-months="periodMonths"
           :reading="breakdownMode === 'everyday' ? 'everyday' : 'actual'"
+          :window="linkWindow"
         />
 
         <!-- Expenses section (primary) -->

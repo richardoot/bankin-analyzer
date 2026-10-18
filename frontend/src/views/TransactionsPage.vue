@@ -34,13 +34,17 @@
   import { formatCurrency, formatDate } from '@/lib/formatters'
   import {
     EXCEPTIONAL_LABEL,
+    NATURE_LABEL,
     NO_CATEGORY,
+    RHYTHM_LABEL,
     hasTransactionsQuery,
     parseTransactionsQuery,
     sameTransactionsQuery,
     transactionsLink,
     transactionsQuery,
     type ExceptionalFilter,
+    type NatureFilter,
+    type RhythmFilter,
     type TransactionsLinkFilters,
   } from '@/lib/transactionsLink'
   import FilterChips from '@/components/ui/FilterChips.vue'
@@ -233,6 +237,12 @@
     initialLink.exceptional ?? null
   )
   /**
+   * The two attributes the Dashboard reads spending through — nature and
+   * rhythm — by the Dashboard's own rule. Not saved either.
+   */
+  const natureFilter = ref<NatureFilter | null>(initialLink.nature ?? null)
+  const rhythmFilter = ref<RhythmFilter | null>(initialLink.rhythm ?? null)
+  /**
    * The context a link can carry and the controls above cannot express: a
    * person's debts, a settlement, an import, a sync run, an exact list of
    * rows. Named in the banner above the list rather than in a chip, and
@@ -314,6 +324,8 @@
     recurrenceFilter.value = null
     recurrenceLabel.value = null
     exceptionalFilter.value = null
+    natureFilter.value = null
+    rhythmFilter.value = null
     clearContext()
     localStorage.removeItem(FILTERS_STORAGE_KEY)
   }
@@ -357,6 +369,8 @@
       needsBankReview.value ||
       recurrenceFilter.value !== null ||
       exceptionalFilter.value !== null ||
+      natureFilter.value !== null ||
+      rhythmFilter.value !== null ||
       hasContextFilter.value
     )
   })
@@ -451,6 +465,18 @@
         label: EXCEPTIONAL_LABEL[exceptionalFilter.value],
       })
     }
+    if (natureFilter.value) {
+      chips.push({
+        key: 'nature',
+        label: `Nature : ${NATURE_LABEL[natureFilter.value]}`,
+      })
+    }
+    if (rhythmFilter.value) {
+      chips.push({
+        key: 'rhythm',
+        label: `Rythme : ${RHYTHM_LABEL[rhythmFilter.value]}`,
+      })
+    }
     if (searchKeyword.value.trim()) {
       chips.push({ key: 'q', label: `« ${searchKeyword.value.trim()} »` })
     }
@@ -503,6 +529,12 @@
         break
       case 'exceptional':
         exceptionalFilter.value = null
+        break
+      case 'nature':
+        natureFilter.value = null
+        break
+      case 'rhythm':
+        rhythmFilter.value = null
         break
       case 'q':
         searchKeyword.value = ''
@@ -743,6 +775,8 @@
       importId: importFilter.value || undefined,
       syncRunId: syncRunFilter.value || undefined,
       exceptional: exceptionalFilter.value || undefined,
+      nature: natureFilter.value || undefined,
+      rhythm: rhythmFilter.value || undefined,
     }
   })
 
@@ -1109,6 +1143,8 @@
       syncRunId: syncRunFilter.value ?? undefined,
       ids: idsFilter.value,
       exceptional: exceptionalFilter.value ?? undefined,
+      nature: natureFilter.value ?? undefined,
+      rhythm: rhythmFilter.value ?? undefined,
       label: contextLabel.value ?? undefined,
       gross: grossAmounts.value,
       sort: sortBy.value,
@@ -1164,6 +1200,8 @@
     syncRunFilter.value = link.syncRunId ?? null
     idsFilter.value = link.ids ?? []
     exceptionalFilter.value = link.exceptional ?? null
+    natureFilter.value = link.nature ?? null
+    rhythmFilter.value = link.rhythm ?? null
     contextLabel.value = link.label ?? null
     grossAmounts.value = link.gross ?? false
     // Sort and page size are how the list reads, not what it shows: a link
@@ -1239,6 +1277,8 @@
       needsBankReview,
       recurrenceFilter,
       exceptionalFilter,
+      natureFilter,
+      rhythmFilter,
       personFilter,
       reimbursementFilter,
       settlementFilter,
@@ -1724,6 +1764,38 @@
             <option :value="null">Tous</option>
             <option value="exclude">Hors événements</option>
             <option value="only">Événements seulement</option>
+          </select>
+        </div>
+
+        <!-- Nature and rhythm, by the Dashboard's rule: the subcategory's,
+               else the category's; a recurrence makes a line committed. -->
+        <div class="flex flex-col gap-1">
+          <SectionLabel as="span">Nature</SectionLabel>
+          <select
+            v-model="natureFilter"
+            data-testid="transactions-nature-filter"
+            aria-label="Nature"
+            class="h-11 md:h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
+          >
+            <option :value="null">Toutes</option>
+            <option value="ESSENTIAL">Essentiel</option>
+            <option value="PLEASURE">Plaisir</option>
+            <option :value="NO_CATEGORY">À migrer</option>
+          </select>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <SectionLabel as="span">Rythme</SectionLabel>
+          <select
+            v-model="rhythmFilter"
+            data-testid="transactions-rhythm-filter"
+            aria-label="Rythme"
+            class="h-11 md:h-9 w-full md:w-36 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
+          >
+            <option :value="null">Tous</option>
+            <option value="COMMITTED">Engagé</option>
+            <option value="VARIABLE">Variable</option>
+            <option :value="NO_CATEGORY">À migrer</option>
           </select>
         </div>
 

@@ -100,6 +100,8 @@ describe('parseTransactionsQuery', () => {
     syncRunId: 'run-1',
     ids: ['tx-1', 'tx-2'],
     exceptional: 'exclude',
+    nature: 'ESSENTIAL',
+    rhythm: 'none',
     label: 'Dettes ouvertes de Julien',
     gross: true,
     sort: 'amount',
@@ -139,6 +141,8 @@ describe('parseTransactionsQuery', () => {
         dir: 'sideways',
         notPointed: 'yes',
         exceptional: 'sometimes',
+        nature: 'essential',
+        rhythm: 'constructor',
       })
     ).toEqual({})
   })

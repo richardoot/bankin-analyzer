@@ -418,6 +418,13 @@ export interface TransactionQueryParams {
    * reading; `only`: at least one.
    */
   exceptional?: 'exclude' | 'only' | undefined
+  /** The subcategory's nature, else the category's; `none`: « à migrer ». */
+  nature?: 'ESSENTIAL' | 'PLEASURE' | 'none' | undefined
+  /**
+   * COMMITTED for a line of a recurrence, else the subcategory's rhythm,
+   * else the category's; `none`: « à migrer ».
+   */
+  rhythm?: 'COMMITTED' | 'VARIABLE' | 'none' | undefined
   sortBy?: 'date' | 'amount' | undefined
   sortOrder?: 'asc' | 'desc' | undefined
 }

@@ -36,6 +36,25 @@ export const NO_CATEGORY = 'none'
  */
 export type ExceptionalFilter = 'exclude' | 'only'
 
+/**
+ * A row's nature — its subcategory's, else its category's default — and
+ * its rhythm, as the Dashboard reads them; `none` is « à migrer ».
+ */
+export type NatureFilter = 'ESSENTIAL' | 'PLEASURE' | typeof NO_CATEGORY
+export type RhythmFilter = 'COMMITTED' | 'VARIABLE' | typeof NO_CATEGORY
+
+export const NATURE_LABEL: Record<NatureFilter, string> = {
+  ESSENTIAL: 'Essentiel',
+  PLEASURE: 'Plaisir',
+  none: 'À migrer',
+}
+
+export const RHYTHM_LABEL: Record<RhythmFilter, string> = {
+  COMMITTED: 'Engagé',
+  VARIABLE: 'Variable',
+  none: 'À migrer',
+}
+
 /** How the Transactions page names that filter, in a chip. */
 export const EXCEPTIONAL_LABEL: Record<ExceptionalFilter, string> = {
   exclude: 'Hors événements exceptionnels',
@@ -82,6 +101,10 @@ export interface TransactionsLinkFilters {
   ids?: string[] | undefined
   /** The rows of an exceptional event, left out or kept alone. */
   exceptional?: ExceptionalFilter | undefined
+  /** Essentiel, Plaisir, or « à migrer ». */
+  nature?: NatureFilter | undefined
+  /** Engagé, Variable, or « à migrer ». */
+  rhythm?: RhythmFilter | undefined
   /** What the context banner says, when the filters alone would not. */
   label?: string | undefined
   /** The figure the link came from was netted and shared; the list is not. */
@@ -119,6 +142,8 @@ export const TRANSACTIONS_QUERY_KEYS = [
   'syncRun',
   'ids',
   'exceptional',
+  'nature',
+  'rhythm',
   'label',
   'gross',
   'sort',
@@ -209,6 +234,8 @@ export function transactionsQuery(
   const ids = (filters.ids ?? []).map(id => id.trim()).filter(id => id !== '')
   if (ids.length > 0) query.ids = ids.join(',')
   if (filters.exceptional) query.exceptional = filters.exceptional
+  if (filters.nature) query.nature = filters.nature
+  if (filters.rhythm) query.rhythm = filters.rhythm
   const label = trimmed(filters.label)
   if (label) query.label = label
   if (filters.gross) query.gross = '1'
@@ -295,6 +322,12 @@ export function parseTransactionsQuery(
   const exceptional = get('exceptional')
   if (exceptional === 'exclude' || exceptional === 'only')
     filters.exceptional = exceptional
+  const nature = get('nature')
+  if (nature === 'ESSENTIAL' || nature === 'PLEASURE' || nature === NO_CATEGORY)
+    filters.nature = nature
+  const rhythm = get('rhythm')
+  if (rhythm === 'COMMITTED' || rhythm === 'VARIABLE' || rhythm === NO_CATEGORY)
+    filters.rhythm = rhythm
   const label = get('label')
   if (label?.trim()) filters.label = label.trim()
   if (get('gross') === '1') filters.gross = true

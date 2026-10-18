@@ -1436,6 +1436,31 @@ describe('TransactionsPage — optimistic updates', () => {
       expect(wrapper.text()).toContain('Événements exceptionnels seulement')
     })
 
+    it('reads nature and rhythm from the URL, names them, and offers them in the panel', async () => {
+      const wrapper = await mountAt({ nature: 'PLEASURE', rhythm: 'none' })
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ nature: 'PLEASURE', rhythm: 'none' })
+      )
+      const chips = wrapper.find('[data-testid="active-filter-chips"]')
+      expect(chips.text()).toContain('Nature : Plaisir')
+      expect(chips.text()).toContain('Rythme : À migrer')
+
+      await wrapper
+        .find('[data-testid="transactions-rhythm-filter"]')
+        .setValue('COMMITTED')
+      await flushPromises()
+      expect(router.currentRoute.value.query.rhythm).toBe('COMMITTED')
+
+      await chips
+        .find('[aria-label="Retirer le filtre Nature : Plaisir"]')
+        .trigger('click')
+      await flushPromises()
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ nature: undefined, rhythm: 'COMMITTED' })
+      )
+    })
+
     it('follows a link pushed while the page is open, and Back as well', async () => {
       const wrapper = await mountAt({ type: 'EXPENSE' })
       expect(api.getTransactions).toHaveBeenCalledTimes(1)

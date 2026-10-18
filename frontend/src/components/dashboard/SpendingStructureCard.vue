@@ -21,6 +21,13 @@
   import type { SpendingStructureDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
   import BaseCard from '@/components/ui/BaseCard.vue'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import {
+    NO_CATEGORY,
+    transactionsLink,
+    type NatureFilter,
+    type RhythmFilter,
+  } from '@/lib/transactionsLink'
 
   const props = defineProps<{
     actual: SpendingStructureDto
@@ -33,23 +40,31 @@
     periodMonths: number
     /** Which of the two structures is read. */
     reading: 'everyday' | 'actual'
+    /**
+     * The period the figures cover, for the links to the Transactions
+     * page: a segment opens its expenses over that window.
+     */
+    window?: { from?: string | undefined; to?: string | undefined } | undefined
   }>()
 
   const structure = computed(() =>
     props.reading === 'everyday' ? props.everyday : props.actual
   )
 
-  interface Segment {
+  interface SegmentPart {
     key: string
     label: string
     amount: number
-    share: number
     color: string
+    /** What the segment is, as the Transactions page filters it. */
+    filter: { nature: NatureFilter } | { rhythm: RhythmFilter }
   }
 
-  function segments(
-    parts: { key: string; label: string; amount: number; color: string }[]
-  ): Segment[] {
+  interface Segment extends SegmentPart {
+    share: number
+  }
+
+  function segments(parts: SegmentPart[]): Segment[] {
     const total = parts.reduce((sum, p) => sum + Math.max(0, p.amount), 0)
     return parts
       .filter(p => p.amount > 0)
@@ -65,18 +80,21 @@
     segments([
       {
         key: 'essential',
+        filter: { nature: 'ESSENTIAL' },
         label: 'Essentiel',
         amount: structure.value.essential,
         color: 'bg-blue-600 dark:bg-blue-500',
       },
       {
         key: 'pleasure',
+        filter: { nature: 'PLEASURE' },
         label: 'Plaisir',
         amount: structure.value.pleasure,
         color: 'bg-blue-300',
       },
       {
         key: 'unknown',
+        filter: { nature: NO_CATEGORY },
         label: 'À migrer',
         amount: structure.value.unknownNature,
         color: 'bg-gray-300 dark:bg-slate-600',
@@ -88,18 +106,21 @@
     segments([
       {
         key: 'committed',
+        filter: { rhythm: 'COMMITTED' },
         label: 'Engagé',
         amount: structure.value.committed,
         color: 'bg-teal-600 dark:bg-teal-500',
       },
       {
         key: 'variable',
+        filter: { rhythm: 'VARIABLE' },
         label: 'Variable',
         amount: structure.value.variable,
         color: 'bg-teal-300',
       },
       {
         key: 'unknown',
+        filter: { rhythm: NO_CATEGORY },
         label: 'À migrer',
         amount: structure.value.unknownRhythm,
         color: 'bg-gray-300 dark:bg-slate-600',
@@ -110,6 +131,27 @@
   const hasUnknown = computed(
     () => structure.value.unknownNature > 0 || structure.value.unknownRhythm > 0
   )
+
+  /**
+   * A segment opens its expenses over the period, by the Dashboard's own
+   * rule for nature and rhythm. The figures are netted and shared — gross;
+   * read « vie courante », they leave the events out — so does the link.
+   */
+  function segmentLink(
+    filter: SegmentPart['filter'],
+    label: string,
+    reading: 'everyday' | 'actual' = props.reading
+  ) {
+    return transactionsLink({
+      type: 'EXPENSE',
+      ...filter,
+      from: props.window?.from,
+      to: props.window?.to,
+      exceptional: reading === 'everyday' ? 'exclude' : undefined,
+      gross: true,
+      label: `Dépenses · ${label}`,
+    })
+  }
 
   const percent = (share: number) => `${Math.round(share * 100)} %`
   const perMonth = (amount: number) =>
@@ -178,11 +220,18 @@
               />
               {{ segment.label }}
             </span>
-            <span class="tabular-nums">
+            <span class="flex items-center gap-1 tabular-nums">
               {{ percent(segment.share) }}
               <span class="text-xs text-gray-500 dark:text-gray-400">
                 · {{ perMonth(segment.amount) }} / mois
               </span>
+              <TransactionsLink
+                :to="segmentLink(segment.filter, segment.label)"
+                :subject="`Dépenses · ${segment.label}`"
+                icon-only
+                class="-my-1 h-6 w-6"
+                :data-testid="`structure-link-${axis.key}-${segment.key}`"
+              />
             </span>
           </li>
         </ul>
@@ -239,8 +288,23 @@
         <dt class="text-xs text-gray-500 dark:text-gray-400">
           Engagé, vie courante
         </dt>
-        <dd class="font-semibold text-gray-900 dark:text-gray-100">
+        <dd
+          class="flex items-center gap-1 font-semibold text-gray-900 dark:text-gray-100"
+        >
           {{ perMonth(everyday.committed) }} / mois
+          <TransactionsLink
+            :to="
+              segmentLink(
+                { rhythm: 'COMMITTED' },
+                'Engagé, vie courante',
+                'everyday'
+              )
+            "
+            subject="Dépenses · Engagé, vie courante"
+            icon-only
+            class="-my-1 h-6 w-6"
+            data-testid="structure-link-everyday-committed"
+          />
         </dd>
       </div>
       <div data-testid="pending-receivables">

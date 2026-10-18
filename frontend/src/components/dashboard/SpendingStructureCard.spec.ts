@@ -56,9 +56,65 @@ describe('SpendingStructureCard', () => {
     const line = wrapper.find('[data-testid="recurring-share"]')
     expect(line.text()).toContain('dont abonnements et charges récurrentes')
     expect(line.text()).toContain('120,00')
-    expect(wrapper.findComponent(RouterLinkStub).props('to')).toBe(
-      '/recurrences'
-    )
+    expect(line.findComponent(RouterLinkStub).props('to')).toBe('/recurrences')
+  })
+
+  describe('links to the Transactions page', () => {
+    const linkTo = (
+      wrapper: ReturnType<typeof mountCard>,
+      testId: string
+    ): unknown =>
+      wrapper
+        .findAllComponents(RouterLinkStub)
+        .find(link => link.attributes('data-testid') === testId)
+        ?.props('to')
+
+    it('opens each segment by nature or rhythm over the period, events left out in « vie courante »', () => {
+      const wrapper = mountCard({
+        everyday: { ...everyday, unknownRhythm: 50 },
+        window: { from: '2026-01-01', to: '2026-03-31' },
+      })
+
+      expect(linkTo(wrapper, 'structure-link-nature-essential')).toEqual({
+        path: '/transactions',
+        query: {
+          type: 'EXPENSE',
+          from: '2026-01-01',
+          to: '2026-03-31',
+          exceptional: 'exclude',
+          nature: 'ESSENTIAL',
+          label: 'Dépenses · Essentiel',
+          gross: '1',
+        },
+      })
+      expect(linkTo(wrapper, 'structure-link-rhythm-unknown')).toMatchObject({
+        query: { rhythm: 'none', label: 'Dépenses · À migrer' },
+      })
+    })
+
+    it('counts the events in the real reading, but « Engagé, vie courante » never does', () => {
+      const wrapper = mountCard({ reading: 'actual' })
+
+      expect(
+        (
+          linkTo(wrapper, 'structure-link-rhythm-variable') as {
+            query: Record<string, string>
+          }
+        ).query
+      ).toEqual({
+        type: 'EXPENSE',
+        rhythm: 'VARIABLE',
+        label: 'Dépenses · Variable',
+        gross: '1',
+      })
+      expect(
+        (
+          linkTo(wrapper, 'structure-link-everyday-committed') as {
+            query: Record<string, string>
+          }
+        ).query
+      ).toMatchObject({ rhythm: 'COMMITTED', exceptional: 'exclude' })
+    })
   })
 
   it('says nothing about recurrences when none was detected', () => {
