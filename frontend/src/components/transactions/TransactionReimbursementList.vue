@@ -26,7 +26,7 @@
 
 <template>
   <div
-    class="pl-3 border-l-2 border-amber-200 dark:border-amber-700"
+    class="pl-3 border-l-2 border-debt-200 dark:border-debt-700"
     :class="dense ? 'space-y-1' : 'md:pl-4'"
   >
     <div
@@ -41,8 +41,8 @@
           :class="[
             dense ? 'h-5 w-5 text-[10px]' : 'h-6 w-6 text-xs',
             reimb.status === 'COMPLETED'
-              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-              : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+              : 'bg-debt-100 dark:bg-debt-900/30 text-debt-700 dark:text-debt-300',
           ]"
         >
           {{ reimb.personName.charAt(0).toUpperCase() }}
@@ -59,15 +59,15 @@
           :class="[
             dense ? 'text-xs' : '',
             reimb.status === 'COMPLETED'
-              ? 'text-green-600 dark:text-green-400'
-              : 'text-amber-600 dark:text-amber-400',
+              ? 'text-green-700 dark:text-green-400'
+              : 'text-debt-700 dark:text-debt-400',
           ]"
         >
           {{ formatCurrency(reimb.amount) }}
         </span>
         <span
           v-if="!dense && reimb.status === 'PARTIAL'"
-          class="text-xs text-green-600 dark:text-green-400"
+          class="text-xs text-green-700 dark:text-green-400"
         >
           (reçu : {{ formatCurrency(reimb.amountReceived) }})
         </span>

@@ -163,7 +163,7 @@
       <!-- The debt being settled -->
       <div
         data-testid="single-settlement-line"
-        class="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-800 dark:bg-amber-900/20"
+        class="mb-4 flex items-center justify-between gap-3 rounded-lg border border-debt-200 bg-debt-50/60 p-3 dark:border-debt-800 dark:bg-debt-900/20"
       >
         <div class="min-w-0">
           <p
@@ -180,7 +180,7 @@
           </p>
         </div>
         <p
-          class="text-lg font-bold whitespace-nowrap text-amber-700 dark:text-amber-400"
+          class="text-lg font-bold whitespace-nowrap text-debt-700 dark:text-debt-400"
         >
           {{ formatCurrency(amountDue) }}
         </p>
@@ -208,7 +208,7 @@
         data-testid="single-settlement-recap"
       >
         <div
-          class="flex items-center justify-between gap-3 rounded-lg bg-primary-50 p-3 dark:bg-primary-900/20"
+          class="flex items-center justify-between gap-3 rounded-lg bg-green-50 p-3 dark:bg-green-900/20"
         >
           <div class="min-w-0">
             <p
@@ -223,7 +223,7 @@
             </p>
           </div>
           <p
-            class="text-lg font-bold whitespace-nowrap text-primary-600 dark:text-primary-400"
+            class="text-lg font-bold whitespace-nowrap text-green-700 dark:text-green-400"
           >
             +{{ formatCurrency(pot) }}
           </p>

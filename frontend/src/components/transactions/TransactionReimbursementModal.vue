@@ -143,7 +143,7 @@
             class="rounded-lg border border-gray-200 bg-white p-2 dark:border-slate-600 dark:bg-slate-700"
           >
             <SectionLabel>Montant total</SectionLabel>
-            <p class="text-lg font-semibold text-red-600 dark:text-red-500">
+            <p class="text-lg font-semibold text-red-600 dark:text-red-400">
               {{ formatCurrency(transaction.amount) }}
             </p>
           </div>
@@ -155,8 +155,8 @@
               class="text-lg font-semibold"
               :class="
                 remainingAmount > 0
-                  ? 'text-amber-600 dark:text-amber-400'
-                  : 'text-green-600 dark:text-green-400'
+                  ? 'text-gray-900 dark:text-gray-100'
+                  : 'text-green-700 dark:text-green-400'
               "
             >
               {{ formatCurrency(remainingAmount) }}

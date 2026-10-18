@@ -132,9 +132,7 @@
             <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
               {{ formatDate(settlement.createdAt) }}
             </span>
-            <span
-              class="text-lg font-bold text-primary-600 dark:text-primary-400"
-            >
+            <span class="text-lg font-bold text-green-700 dark:text-green-400">
               {{ formatCurrency(settlement.amountUsed) }}
             </span>
           </div>
@@ -142,10 +140,10 @@
           <!-- Row 2: Person -->
           <div class="flex items-center gap-2 mb-2">
             <div
-              class="h-6 w-6 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center shrink-0"
+              class="h-6 w-6 bg-debt-100 dark:bg-debt-900/30 rounded-full flex items-center justify-center shrink-0"
             >
               <span
-                class="text-xs font-semibold text-primary-700 dark:text-primary-400"
+                class="text-xs font-semibold text-debt-700 dark:text-debt-300"
               >
                 {{ settlement.personName.charAt(0).toUpperCase() }}
               </span>
@@ -221,10 +219,10 @@
               <span class="text-gray-500 dark:text-gray-400">-</span>
               <div class="flex items-center gap-2">
                 <div
-                  class="h-6 w-6 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center"
+                  class="h-6 w-6 bg-debt-100 dark:bg-debt-900/30 rounded-full flex items-center justify-center"
                 >
                   <span
-                    class="text-xs font-semibold text-primary-700 dark:text-primary-400"
+                    class="text-xs font-semibold text-debt-700 dark:text-debt-300"
                   >
                     {{ settlement.personName.charAt(0).toUpperCase() }}
                   </span>
@@ -266,9 +264,7 @@
           <!-- Amount and actions -->
           <div class="flex items-center gap-3">
             <div class="text-right">
-              <div
-                class="text-lg font-bold text-primary-600 dark:text-primary-400"
-              >
+              <div class="text-lg font-bold text-green-700 dark:text-green-400">
                 {{ formatCurrency(settlement.amountUsed) }}
               </div>
               <div class="text-xs text-gray-500 dark:text-gray-400">

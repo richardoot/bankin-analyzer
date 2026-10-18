@@ -474,7 +474,7 @@
               </div>
             </div>
             <div
-              class="shrink-0 text-base font-semibold whitespace-nowrap text-primary-600 sm:text-lg dark:text-primary-400"
+              class="shrink-0 text-base font-semibold whitespace-nowrap text-green-700 sm:text-lg dark:text-green-400"
             >
               +{{ formatCurrency(entry.available) }}
             </div>
@@ -524,7 +524,7 @@
               </div>
             </div>
             <div
-              class="shrink-0 text-base font-semibold whitespace-nowrap text-primary-600 sm:text-lg dark:text-primary-400"
+              class="shrink-0 text-base font-semibold whitespace-nowrap text-green-700 sm:text-lg dark:text-green-400"
             >
               +{{ formatCurrency(entry.available) }}
             </div>

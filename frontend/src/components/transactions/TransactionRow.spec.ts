@@ -69,7 +69,7 @@ describe('TransactionRow', () => {
       const wrapper = mountRow({ transaction: tx({ recurrence }) })
 
       expect(wrapper.attributes('data-recurring')).toBe('true')
-      expect(wrapper.classes()).toContain('border-indigo-400')
+      expect(wrapper.classes()).toContain('border-blue-400')
       const badge = wrapper.find('[data-testid="recurrence-badge"]')
       expect(badge.text()).toBe('Netflix · mensuel')
       expect(wrapper.find('[data-testid="unlink-recurrence"]').exists()).toBe(
@@ -136,7 +136,7 @@ describe('TransactionRow', () => {
     }
   })
 
-  it('paints a transfer category indigo in both layouts, never red or green', () => {
+  it('paints a transfer category grey in both layouts, never red or green', () => {
     const wrapper = mountRow({ transaction: tx({ type: 'TRANSFER' }) })
     const category = wrapper
       .findAll('button')
@@ -145,7 +145,9 @@ describe('TransactionRow', () => {
     const icon = wrapper.find('button.rounded-xl')
 
     for (const el of [...category, icon]) {
-      expect(el.classes()).toContain('bg-indigo-100')
+      expect(el.classes()).toContain('bg-gray-100')
+      // Grey like its amount, yet not the faded grey of « Sans catégorie ».
+      expect(el.classes()).not.toContain('text-gray-500')
       expect(el.classes().some(c => /^(bg|text)-(red|green)-/.test(c))).toBe(
         false
       )

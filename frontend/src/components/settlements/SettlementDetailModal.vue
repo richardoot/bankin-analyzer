@@ -44,11 +44,9 @@
       <!-- Person info -->
       <div class="mb-6 flex items-center gap-3">
         <div
-          class="flex h-12 w-12 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30"
+          class="flex h-12 w-12 items-center justify-center rounded-full bg-debt-100 dark:bg-debt-900/30"
         >
-          <span
-            class="text-xl font-semibold text-primary-700 dark:text-primary-400"
-          >
+          <span class="text-xl font-semibold text-debt-700 dark:text-debt-300">
             {{ settlement.personName.charAt(0).toUpperCase() }}
           </span>
         </div>
@@ -63,7 +61,7 @@
       </div>
 
       <!-- Income transaction -->
-      <div class="mb-6 rounded-lg bg-primary-50 p-4 dark:bg-primary-900/20">
+      <div class="mb-6 rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
         <SectionLabel as="h4" class="mb-2">
           Transaction de règlement
         </SectionLabel>
@@ -74,12 +72,12 @@
           {{ formatDate(settlement.incomeTransactionDate) }}
         </p>
         <div
-          class="mt-2 flex items-center justify-between border-t border-primary-200 pt-2 dark:border-primary-800"
+          class="mt-2 flex items-center justify-between border-t border-green-200 pt-2 dark:border-green-800"
         >
           <span class="text-sm text-gray-600 dark:text-gray-400"
             >Montant total</span
           >
-          <span class="font-bold text-primary-600 dark:text-primary-400">
+          <span class="font-bold text-green-700 dark:text-green-400">
             +{{ formatCurrency(settlement.incomeTransactionAmount) }}
           </span>
         </div>
@@ -130,7 +128,7 @@
                   v-if="
                     reimbursement.amountSettled < reimbursement.originalAmount
                   "
-                  class="text-xs text-amber-700 dark:text-amber-400"
+                  class="text-xs text-debt-700 dark:text-debt-400"
                 >
                   sur {{ formatCurrency(reimbursement.originalAmount) }}
                 </p>
@@ -146,9 +144,7 @@
           <span class="font-medium text-gray-700 dark:text-gray-300"
             >Total réglé</span
           >
-          <span
-            class="text-lg font-bold text-primary-600 dark:text-primary-400"
-          >
+          <span class="text-lg font-bold text-green-700 dark:text-green-400">
             {{ formatCurrency(totalSettled) }}
           </span>
         </div>

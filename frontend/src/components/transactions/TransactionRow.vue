@@ -116,29 +116,32 @@
     () => props.transaction.categoryName || 'Sans catégorie'
   )
 
-  /** Red for spending, green for earning, grey for money merely moving. */
+  /**
+   * Red for spending, green for earning, grey for money merely moving —
+   * the amount, the mobile icon and the desktop pill all say the same.
+   */
   const amountClass = computed(() =>
     isTransfer.value
       ? 'text-gray-500 dark:text-gray-400'
       : isExpense.value
-        ? 'text-red-600 dark:text-red-500'
-        : 'text-green-600 dark:text-green-500'
+        ? 'text-red-600 dark:text-red-400'
+        : 'text-green-700 dark:text-green-400'
   )
   const iconClass = computed(() =>
     !props.transaction.categoryName
       ? 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
       : isTransfer.value
-        ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+        ? 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200'
         : isExpense.value
           ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-          : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+          : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
   )
   /** The desktop category pill, in the same palette as the mobile icon. */
   const categoryPillClass = computed(() =>
     !props.transaction.categoryName
       ? 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
       : isTransfer.value
-        ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50'
+        ? 'bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'
         : isExpense.value
           ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
           : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
@@ -288,9 +291,9 @@
     class="group border-l-4 px-4 py-2.5 transition-colors hover:bg-gray-50 lg:py-3 dark:hover:bg-slate-800"
     :class="{
       'bg-primary-50/50 dark:bg-primary-900/10': selectionMode && selected,
-      // A subscription line reads apart at a glance: an indigo edge while
+      // A subscription line reads apart at a glance: a blue edge while
       // it runs, a grey one once it has ended.
-      'border-indigo-400 dark:border-indigo-500':
+      'border-blue-400 dark:border-blue-500':
         transaction.recurrence?.status === 'ACTIVE',
       'border-gray-300 dark:border-slate-600':
         transaction.recurrence?.status === 'STOPPED',
@@ -378,8 +381,8 @@
                   class="relative inline-flex min-h-[24px] shrink-0 items-center gap-1 rounded-full px-1.5 text-[11px] font-medium transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2.5 pointer-coarse:before:content-['']"
                   :class="
                     reimbursementSummary.allCompleted
-                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                      : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                      : 'bg-debt-100 dark:bg-debt-900/30 text-debt-700 dark:text-debt-300'
                   "
                   :aria-expanded="reimbursementsExpanded"
                   @click="emit('toggle-reimbursements')"
@@ -601,7 +604,7 @@
         </BaseButton>
         <span
           v-else-if="isExpense"
-          class="px-2 text-xs font-medium text-green-600 dark:text-green-400"
+          class="px-2 text-xs font-medium text-gray-500 dark:text-gray-400"
         >
           Assigné
         </span>
@@ -658,7 +661,7 @@
         class="relative inline-flex min-h-[28px] items-center gap-1 rounded-full px-2 text-xs font-medium transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 pointer-coarse:before:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         :class="
           transaction.recurrence.status === 'ACTIVE'
-            ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50'
+            ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50'
             : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600'
         "
         :title="`Voir toutes les échéances de ${transaction.recurrence.label}`"

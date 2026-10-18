@@ -536,7 +536,7 @@
             </label>
             <span
               v-if="group.selectedCount > 0"
-              class="shrink-0 text-sm font-semibold whitespace-nowrap text-primary-600 dark:text-primary-400"
+              class="shrink-0 text-sm font-semibold whitespace-nowrap text-debt-700 dark:text-debt-400"
             >
               {{ formatCurrency(group.selectedDue) }}
             </span>
@@ -623,7 +623,7 @@
         data-testid="settlement-recap"
       >
         <div
-          class="mb-4 flex items-center justify-between gap-3 rounded-lg bg-primary-50 p-3 dark:bg-primary-900/20"
+          class="mb-4 flex items-center justify-between gap-3 rounded-lg bg-green-50 p-3 dark:bg-green-900/20"
         >
           <div class="min-w-0">
             <p
@@ -638,7 +638,7 @@
             </p>
           </div>
           <p
-            class="text-lg font-bold whitespace-nowrap text-primary-600 dark:text-primary-400"
+            class="text-lg font-bold whitespace-nowrap text-green-700 dark:text-green-400"
           >
             +{{ formatCurrency(pot) }}
           </p>
@@ -807,7 +807,7 @@
         <span
           class="font-semibold"
           :class="{
-            'text-primary-700 dark:text-primary-400':
+            'text-green-700 dark:text-green-400':
               Math.abs(remainingToAllocate) < 0.01,
             'text-amber-700 dark:text-amber-400': remainingToAllocate >= 0.01,
             'text-red-700 dark:text-red-400': isOverAllocated,

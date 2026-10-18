@@ -464,10 +464,10 @@
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-3">
               <div
-                class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center"
+                class="h-10 w-10 bg-debt-100 dark:bg-debt-900/30 rounded-full flex items-center justify-center"
               >
                 <span
-                  class="text-lg font-semibold text-amber-700 dark:text-amber-400"
+                  class="text-lg font-semibold text-debt-700 dark:text-debt-300"
                 >
                   {{ person.personName.charAt(0).toUpperCase() }}
                 </span>
@@ -482,7 +482,7 @@
                 </p>
               </div>
             </div>
-            <div class="text-lg font-bold text-amber-700 dark:text-amber-400">
+            <div class="text-lg font-bold text-debt-700 dark:text-debt-400">
               {{ formatCurrency(person.total) }}
             </div>
           </div>
@@ -528,13 +528,13 @@
                   <!-- Status badge -->
                   <span
                     v-if="cat.status === 'COMPLETED'"
-                    class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 shrink-0"
+                    class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 shrink-0"
                   >
                     Réglé
                   </span>
                   <span
                     v-else-if="cat.status === 'PARTIAL'"
-                    class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 shrink-0"
+                    class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-debt-100 dark:bg-debt-900/30 text-debt-700 dark:text-debt-300 shrink-0"
                   >
                     Partiel
                   </span>
@@ -566,7 +566,7 @@
                   <div
                     v-for="r in cat.reimbursements"
                     :key="r.id"
-                    class="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-amber-200 dark:border-amber-700"
+                    class="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-debt-200 dark:border-debt-700"
                   >
                     <span class="truncate">
                       <span class="text-gray-500 dark:text-gray-400"
@@ -583,7 +583,7 @@
                         {{ formatCurrency(r.amountRemaining) }}
                         <span
                           v-if="r.amountReceived > 0"
-                          class="text-primary-600 dark:text-primary-400 ml-1"
+                          class="text-green-700 dark:text-green-400 ml-1"
                         >
                           (reçu : {{ formatCurrency(r.amountReceived) }})
                         </span>
@@ -624,12 +624,12 @@
 
         <!-- Total -->
         <div
-          class="border-t-2 border-amber-200 dark:border-amber-700 pt-4 flex items-center justify-between"
+          class="border-t-2 border-debt-200 dark:border-debt-700 pt-4 flex items-center justify-between"
         >
           <span class="text-lg font-semibold text-gray-900 dark:text-gray-100"
             >Total général</span
           >
-          <span class="text-xl font-bold text-amber-700 dark:text-amber-400">
+          <span class="text-xl font-bold text-debt-700 dark:text-debt-400">
             {{ formatCurrency(totalDue) }}
           </span>
         </div>
@@ -759,10 +759,10 @@
             <div class="flex items-center gap-2">
               <!-- Avatar with first letter -->
               <div
-                class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center shrink-0"
+                class="h-10 w-10 bg-debt-100 dark:bg-debt-900/30 rounded-full flex items-center justify-center shrink-0"
               >
                 <span
-                  class="text-lg font-semibold text-amber-700 dark:text-amber-400"
+                  class="text-lg font-semibold text-debt-700 dark:text-debt-300"
                 >
                   {{ person.name.charAt(0).toUpperCase() }}
                 </span>
@@ -799,10 +799,10 @@
             <div class="flex items-start gap-3">
               <!-- Avatar with first letter -->
               <div
-                class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center shrink-0"
+                class="h-10 w-10 bg-debt-100 dark:bg-debt-900/30 rounded-full flex items-center justify-center shrink-0"
               >
                 <span
-                  class="text-lg font-semibold text-amber-700 dark:text-amber-400"
+                  class="text-lg font-semibold text-debt-700 dark:text-debt-300"
                 >
                   {{ person.name.charAt(0).toUpperCase() }}
                 </span>
@@ -810,7 +810,7 @@
               <!-- Name and email -->
               <div class="flex-1 min-w-0">
                 <button
-                  class="text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-amber-600 dark:hover:text-amber-400 truncate block w-full"
+                  class="text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-primary-700 dark:hover:text-primary-400 truncate block w-full"
                   @click="startEditPerson(person.id, person.name)"
                 >
                   {{ person.name }}
