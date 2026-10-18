@@ -1,6 +1,9 @@
 <script setup lang="ts">
-  import { ref, computed, watch } from 'vue'
-  import { useModalA11y } from '@/composables/useModalA11y'
+  import { computed, watch } from 'vue'
+  import BaseModal from '@/components/ui/BaseModal.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
   import type { CategoryDto, SubcategoryDto } from '@/lib/api'
   import { KIND_LABELS, isCatalogCategory, kindOf } from '@/lib/categories'
   import type { CategoryKind } from '@/lib/categories'
@@ -17,14 +20,6 @@
     close: []
     apply: [categoryId: string, subcategoryId: string | null]
   }>()
-
-  // Escape closes, Tab stays inside, focus returns to the opener after.
-  const modalPanelRef = ref<HTMLElement | null>(null)
-  useModalA11y({
-    isOpen: () => props.isOpen,
-    onClose: () => emit('close'),
-    panel: modalPanelRef,
-  })
 
   const selectedCategoryId = defineModel<string | null>('categoryId', {
     default: null,
@@ -65,6 +60,11 @@
     selectedSubcategoryId.value = null
   })
 
+  const title = computed(
+    () =>
+      `Déplacer ${props.selectedCount} transaction${props.selectedCount > 1 ? 's' : ''}`
+  )
+
   function handleApply(): void {
     if (selectedCategoryId.value) {
       emit('apply', selectedCategoryId.value, selectedSubcategoryId.value)
@@ -73,119 +73,88 @@
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      v-if="isOpen"
-      class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
-    >
-      <div class="absolute inset-0 bg-black/50" @click="emit('close')" />
-
-      <div
-        ref="modalPanelRef"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="bulk-category-modal-title"
-        class="relative max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl sm:rounded-xl sm:p-6 sm:pb-6 dark:bg-slate-900 dark:shadow-slate-900/30"
+  <BaseModal
+    :open="isOpen"
+    :title="title"
+    max-width="md"
+    :closable="!isUpdating"
+    @close="emit('close')"
+  >
+    <div class="space-y-4">
+      <BaseField
+        v-model="selectedCategoryId"
+        as="select"
+        label="Catégorie"
+        data-testid="bulk-category-select"
       >
-        <h3
-          id="bulk-category-modal-title"
-          class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
+        <option :value="null" disabled>Sélectionnez une catégorie</option>
+        <optgroup
+          v-for="group in groups"
+          :key="group.kind"
+          :label="group.label"
         >
-          Déplacer {{ selectedCount }} transaction{{
-            selectedCount > 1 ? 's' : ''
-          }}
-        </h3>
-
-        <label
-          for="bulk-category"
-          class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-        >
-          Catégorie
-        </label>
-        <select
-          id="bulk-category"
-          v-model="selectedCategoryId"
-          data-testid="bulk-category-select"
-          class="w-full min-h-[44px] px-3 py-2 border border-gray-300 sm:min-h-0 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 mb-4"
-        >
-          <option :value="null" disabled>Sélectionnez une catégorie</option>
-          <optgroup
-            v-for="group in groups"
-            :key="group.kind"
-            :label="group.label"
-          >
-            <option v-for="cat in group.items" :key="cat.id" :value="cat.id">
-              {{ cat.icon ? cat.icon + ' ' : '' }}{{ cat.name }}
-            </option>
-          </optgroup>
-        </select>
-
-        <label
-          for="bulk-subcategory"
-          class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-        >
-          Sous-catégorie
-        </label>
-        <select
-          id="bulk-subcategory"
-          v-model="selectedSubcategoryId"
-          data-testid="bulk-subcategory-select"
-          :disabled="!selectedCategoryId"
-          class="w-full min-h-[44px] px-3 py-2 border border-gray-300 sm:min-h-0 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 disabled:cursor-not-allowed disabled:opacity-50 mb-3"
-        >
-          <option :value="null">Catégorie seule</option>
-          <option
-            v-for="sub in availableSubcategories"
-            :key="sub.id"
-            :value="sub.id"
-          >
-            {{ sub.name }}
+          <option v-for="cat in group.items" :key="cat.id" :value="cat.id">
+            {{ cat.icon ? cat.icon + ' ' : '' }}{{ cat.name }}
           </option>
-        </select>
+        </optgroup>
+      </BaseField>
 
-        <!--
-          There is no correct default when the category changes: the old
-          subcategory belongs elsewhere and cannot come along. Saying so beats
-          letting the user discover it in the dashboard afterwards.
-        -->
-        <p
-          v-if="selectedCategoryId"
-          data-testid="bulk-subcategory-warning"
-          class="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50 rounded-lg px-3 py-2 mb-4"
+      <BaseField
+        v-model="selectedSubcategoryId"
+        as="select"
+        label="Sous-catégorie"
+        data-testid="bulk-subcategory-select"
+        :disabled="!selectedCategoryId"
+      >
+        <option :value="null">Catégorie seule</option>
+        <option
+          v-for="sub in availableSubcategories"
+          :key="sub.id"
+          :value="sub.id"
         >
-          <template v-if="selectedSubcategoryId">
-            Les sous-catégories actuelles seront remplacées par celle choisie
-            ci-dessus.
-          </template>
-          <template v-else>
-            Les sous-catégories actuelles seront retirées : elles
-            n'appartiennent pas à la catégorie choisie.
-          </template>
-        </p>
+          {{ sub.name }}
+        </option>
+      </BaseField>
 
-        <div class="flex gap-3">
-          <button
-            class="flex-1 min-h-[44px] px-4 py-2.5 text-sm font-medium sm:min-h-0 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
-            @click="emit('close')"
-          >
-            Annuler
-          </button>
-          <button
-            :disabled="!selectedCategoryId || isUpdating"
-            data-testid="bulk-category-apply"
-            class="flex-1 min-h-[44px] px-4 py-2.5 text-sm font-medium sm:min-h-0 text-white rounded-lg transition-colors"
-            :class="
-              selectedCategoryId && !isUpdating
-                ? 'bg-primary-600 dark:bg-primary-500 hover:bg-primary-700 dark:hover:bg-primary-600'
-                : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
-            "
-            @click="handleApply"
-          >
-            <span v-if="isUpdating">Application...</span>
-            <span v-else>Déplacer {{ selectedCount }}</span>
-          </button>
-        </div>
-      </div>
+      <!--
+        There is no correct default when the category changes: the old
+        subcategory belongs elsewhere and cannot come along. Saying so beats
+        letting the user discover it in the dashboard afterwards.
+      -->
+      <InlineAlert
+        v-if="selectedCategoryId"
+        variant="warning"
+        data-testid="bulk-subcategory-warning"
+      >
+        <template v-if="selectedSubcategoryId">
+          Les sous-catégories actuelles seront remplacées par celle choisie
+          ci-dessus.
+        </template>
+        <template v-else>
+          Les sous-catégories actuelles seront retirées : elles n'appartiennent
+          pas à la catégorie choisie.
+        </template>
+      </InlineAlert>
     </div>
-  </Teleport>
+
+    <template #footer>
+      <BaseButton
+        variant="secondary"
+        class="flex-1"
+        :disabled="isUpdating"
+        @click="emit('close')"
+      >
+        Annuler
+      </BaseButton>
+      <BaseButton
+        class="flex-1"
+        :disabled="!selectedCategoryId"
+        :loading="isUpdating"
+        data-testid="bulk-category-apply"
+        @click="handleApply"
+      >
+        Déplacer {{ selectedCount }}
+      </BaseButton>
+    </template>
+  </BaseModal>
 </template>
