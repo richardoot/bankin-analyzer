@@ -695,9 +695,21 @@
 
                 <!-- Subcategories -->
                 <div v-if="acceptsSubcategories(category)">
-                  <SectionLabel as="h4" class="mb-2">
+                  <SectionLabel as="h4" class="mb-1">
                     Sous-catégories
                   </SectionLabel>
+                  <!-- The two attributes every calculation reads, defined
+                       where they are set — not only in a tooltip. -->
+                  <p
+                    v-if="kindOf(category) === 'EXPENSE'"
+                    class="mb-2 text-xs text-gray-500 dark:text-gray-400"
+                    data-testid="attribute-definitions"
+                  >
+                    Nature — Essentiel : dépense contrainte ; Plaisir : dépense
+                    choisie. Rythme — Engagé : continue tout seul, jamais déduit
+                    pendant une absence ; Variable : dépend de ce que vous
+                    faites, suspendu pendant une absence.
+                  </p>
                   <ul
                     v-if="subcategoriesFor(category.id).length > 0"
                     class="mb-2 flex flex-wrap gap-1.5"
@@ -719,12 +731,12 @@
                       <button
                         v-if="!isLockedSubcategory(sub)"
                         type="button"
-                        class="-mr-1 rounded-full p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                        class="relative -mr-1 rounded-full p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 pointer-coarse:before:absolute pointer-coarse:before:-inset-3 pointer-coarse:before:content-[''] dark:hover:bg-red-900/20 dark:hover:text-red-400"
                         :aria-label="`Supprimer la sous-catégorie ${sub.name}`"
                         :data-testid="`delete-subcategory-${sub.id}`"
                         @click="askDeleteSubcategory(sub)"
                       >
-                        <IconClose class="h-3 w-3" />
+                        <IconClose class="h-3.5 w-3.5" />
                       </button>
                     </li>
                   </ul>
@@ -736,7 +748,7 @@
                   </p>
 
                   <form
-                    class="flex flex-col gap-2 sm:flex-row"
+                    class="flex flex-col gap-2 sm:flex-row sm:items-end"
                     @submit.prevent="addSubcategory(category)"
                   >
                     <BaseField
@@ -755,8 +767,7 @@
                       <BaseField
                         as="select"
                         size="sm"
-                        :label="`Nature de la nouvelle sous-catégorie de ${category.name}`"
-                        label-hidden
+                        label="Nature"
                         :model-value="natureDraftFor(category)"
                         @update:model-value="
                           newSubcategoryNature[category.id] =
@@ -774,8 +785,7 @@
                       <BaseField
                         as="select"
                         size="sm"
-                        :label="`Rythme de la nouvelle sous-catégorie de ${category.name}`"
-                        label-hidden
+                        label="Rythme"
                         :model-value="rhythmDraftFor(category)"
                         @update:model-value="
                           newSubcategoryRhythm[category.id] =

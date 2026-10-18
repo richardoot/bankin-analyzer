@@ -52,10 +52,6 @@
     },
   ]
 
-  /** Merging still needs an endpoint the API does not expose yet. */
-  const UNAVAILABLE_HINT =
-    'Pas encore disponible : cette action nécessite un nouvel endpoint côté serveur.'
-
   // ── Rename ────────────────────────────────────────────────────────────────
   const renameDraft = ref<string | null>(null)
   const renameError = ref<string | null>(null)
@@ -133,10 +129,13 @@
    * keystroke — an intermediate "1" while typing "12" would otherwise be
    * saved. Out-of-range values are rejected by the backend, so clamp here.
    */
-  async function setDivisor(raw: string): Promise<void> {
-    const parsed = Number.parseInt(raw, 10)
+  async function setDivisor(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement
+    const parsed = Number.parseInt(input.value, 10)
     if (!Number.isFinite(parsed) || parsed < 1 || parsed > 10) {
       toast.error('Le diviseur doit être compris entre 1 et 10')
+      // The refused value must not stay on screen as if it had been kept.
+      input.value = String(props.account.divisor)
       return
     }
     if (parsed === props.account.divisor) return
@@ -367,7 +366,7 @@
             class="w-20"
             :model-value="account.divisor"
             :disabled="saving"
-            @change="setDivisor(($event.target as HTMLInputElement).value)"
+            @change="setDivisor($event)"
           />
           <p class="text-xs text-gray-500 dark:text-gray-400">
             Chaque montant de ce compte est divisé par cette valeur dans le
@@ -425,15 +424,6 @@
       <div
         class="flex flex-col gap-2 border-t border-gray-100 pt-4 sm:flex-row sm:flex-wrap dark:border-slate-700/60"
       >
-        <!-- Merging still needs a backend endpoint -->
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          disabled
-          :title="UNAVAILABLE_HINT"
-        >
-          Fusionner avec un autre compte…
-        </BaseButton>
         <BaseButton
           variant="danger-outline"
           size="sm"

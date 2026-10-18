@@ -360,7 +360,8 @@ describe('AccountsSettingsPage — grouped under a bank connection', () => {
     expect(wrapper.find('img').exists()).toBe(false)
   })
 
-  it('disables the sync button and says why', async () => {
+  it('offers to renew a lapsed consent, and says why the sync is off', async () => {
+    vi.mocked(api.startBankAuthorization).mockReturnValue(new Promise(() => {}))
     const wrapper = await mountPage({
       configured: true,
       connections: [
@@ -368,11 +369,67 @@ describe('AccountsSettingsPage — grouped under a bank connection', () => {
       ],
     })
 
-    const button = wrapper.get('[data-testid="sync-button"]')
-    expect(button.attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="sync-button"]').exists()).toBe(false)
+    const renew = wrapper.get('[data-testid="renew-consent-button"]')
+    expect(renew.text()).toContain('Renouveler le consentement')
     expect(wrapper.get('[data-testid="sync-reason"]').text()).toContain(
       'consent has lapsed'
     )
+
+    await renew.trigger('click')
+    await renew.trigger('click')
+    expect(api.startBankAuthorization).toHaveBeenCalledTimes(1)
+    expect(api.startBankAuthorization).toHaveBeenCalledWith(
+      expect.objectContaining({ aspspName: 'Boursorama Banque' })
+    )
+  })
+
+  it('leads with the onboarding until an account is read, then with the accounts', async () => {
+    // No application: step 1, developer block on top.
+    const fresh = await mountPage({ accounts: [account()], configured: false })
+    expect(fresh.get('[data-testid="bank-onboarding-hint"]').text()).toContain(
+      'application'
+    )
+    expect(fresh.find('[data-testid="developer-block"]').exists()).toBe(false)
+    expect(
+      fresh.find('[data-testid="enable-banking-credential-card"]').exists()
+    ).toBe(true)
+
+    // Application, no bank yet: step 2, developer block folded at the bottom.
+    const noBank = await mountPage({ configured: true, connections: [] })
+    expect(noBank.get('[data-testid="bank-onboarding-hint"]').text()).toContain(
+      'banque'
+    )
+    expect(noBank.find('[data-testid="developer-block"]').exists()).toBe(true)
+
+    // An account read: nothing left to walk through.
+    const done = await mountPage({
+      configured: true,
+      connections: [
+        connection({ accounts: [discoveredAccount({ isIngested: true })] }),
+      ],
+    })
+    expect(done.find('[data-testid="bank-onboarding"]').exists()).toBe(false)
+  })
+
+  it('warns about duplicates only when two names look like one account', async () => {
+    const quiet = await mountPage({
+      accounts: [account({ id: 'a1', name: 'Courant' })],
+    })
+    expect(
+      quiet.find('[data-testid="duplicate-accounts-notice"]').exists()
+    ).toBe(false)
+
+    const noisy = await mountPage({
+      accounts: [
+        account({ id: 'a1', name: 'Compte Courant' }),
+        account({ id: 'a2', name: 'compte  courant' }),
+      ],
+    })
+    const notice = noisy.get('[data-testid="duplicate-accounts-notice"]').text()
+    expect(notice).toContain('Compte Courant')
+    expect(notice).toMatch(/compte\s+courant/)
+    expect(notice).toContain(' / ')
   })
 
   it('reads the bank when the button is pressed', async () => {
