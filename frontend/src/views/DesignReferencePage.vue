@@ -58,7 +58,7 @@
       hue: 'primary',
       cls: 'bg-primary-600',
       use: 'Action et sélection : boutons, liens, segment ou ligne choisis, progression, anneaux de focus. Plein en 600 (survol 700), texte en 700 / 400 en sombre. Sur Budget, les chiffres du plan.',
-      never: 'Une donnée positive (c’est green).',
+      never: 'une donnée positive (c’est green).',
       sample:
         'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
       sampleLabel: 'Sélectionné',
@@ -67,7 +67,7 @@
       hue: 'red',
       cls: 'bg-red-600',
       use: 'Danger et négatif : destruction, erreurs, dépenses, tout dépassement (enveloppe, mois, réserve, épargne sous zéro).',
-      never: 'Réinitialiser un filtre ou un brouillon, réessayer.',
+      never: 'réinitialiser un filtre ou un brouillon, réessayer.',
       sample: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
       sampleLabel: '⚠ Dépassé',
     },
@@ -75,7 +75,7 @@
       hue: 'green',
       cls: 'bg-green-600',
       use: 'Donnée positive : revenus, argent reçu, dette réglée, épargne ou marge positive, import réussi, succès.',
-      never: 'Une action (« Valider », « Pointer » sont primary).',
+      never: 'une action (« Valider », « Pointer » sont primary).',
       sample:
         'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
       sampleLabel: 'Réglé',
@@ -84,7 +84,7 @@
       hue: 'amber',
       cls: 'bg-amber-500',
       use: 'Avertissement (InlineAlert warning, « À migrer », doublons à trancher) et donnée exceptionnelle : événements, projets, leur surcoût, mois en cours.',
-      never: 'Une action, un anneau de focus, un réglage neutre.',
+      never: 'une action, un anneau de focus, un réglage neutre.',
       sample:
         'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
       sampleLabel: 'Exceptionnel',
@@ -93,7 +93,7 @@
       hue: 'debt',
       cls: 'bg-debt-500',
       use: 'Donnée de remboursement : montant dû, avatar de la personne, « Partiel », badge en attente. Alias d’amber.',
-      never: 'Une action ; une dette réglée (green).',
+      never: 'une action ; une dette réglée (green).',
       sample:
         'bg-debt-100 text-debt-700 dark:bg-debt-900/30 dark:text-debt-300',
       sampleLabel: 'Partiel',
@@ -102,7 +102,7 @@
       hue: 'indigo',
       cls: 'bg-indigo-500',
       use: 'Donnée de référence : la colonne et le résumé « Historique » du budget, la période de comparaison du graphique.',
-      never: 'Une action, une sélection, un statut.',
+      never: 'une action, une sélection, un statut.',
       sample:
         'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
       sampleLabel: 'Historique',
@@ -111,7 +111,7 @@
       hue: 'blue',
       cls: 'bg-blue-600',
       use: 'Information : messages info, comptes ni bons ni mauvais, statut factuel (« À venir », « Auto », type de compte), abonnement sur une transaction.',
-      never: 'Une action.',
+      never: 'une action.',
       sample:
         'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
       sampleLabel: 'À venir',
