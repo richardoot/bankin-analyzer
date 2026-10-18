@@ -28,6 +28,7 @@
   import BaseField from '@/components/ui/BaseField.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   const { exportReimbursementsToPdf } = usePdfExport()
   const toast = useToast()
@@ -432,7 +433,7 @@
            règlement », which is the action this page exists for. -->
       <template v-if="reimbursements.length > 0" #actions>
         <BaseButton
-          to="/transactions"
+          :to="transactionsLink()"
           variant="secondary"
           class="w-full sm:w-auto"
         >
@@ -727,7 +728,9 @@
           </svg>
         </template>
         <template #action>
-          <BaseButton to="/transactions">Aller aux transactions</BaseButton>
+          <BaseButton :to="transactionsLink()"
+            >Aller aux transactions</BaseButton
+          >
         </template>
       </EmptyState>
     </BaseCard>

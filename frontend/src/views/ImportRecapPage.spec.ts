@@ -76,7 +76,7 @@ describe('ImportRecapPage', () => {
 
     const transactions = wrapper.get('[data-testid="recap-transactions"]')
     expect(transactions.attributes('href')).toBe(
-      '/transactions?from=2024-01-03&to=2024-01-28&account=Compte+Courant'
+      '/transactions?account=Compte+Courant&from=2024-01-03&to=2024-01-28'
     )
     expect(wrapper.get('[data-testid="back-link"]').attributes('href')).toBe(
       '/accounts'
