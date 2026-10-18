@@ -65,7 +65,15 @@
   const statistics = ref<BudgetStatisticsDto | null>(null)
   const isLoading = ref(false)
   const isSaving = ref(false)
-  const saveSuccess = ref(false)
+  /**
+   * How the last save went, said in the edit bar next to the button that
+   * asked. « saved » keeps the bar on screen a moment after edit mode has
+   * ended; « error » keeps the draft and the bar until it is saved or
+   * dropped.
+   */
+  const saveStatus = ref<'idle' | 'saved' | 'error'>('idle')
+  const saveError = ref<string | null>(null)
+  let saveStatusTimer: ReturnType<typeof setTimeout> | null = null
   const error = ref<string | null>(null)
 
   // ── Comparison state ────────────────────────────────────────────────────
@@ -314,13 +322,13 @@
     return planIncomeAvg.value
   })
 
-  const totalBudget = computed(() => {
-    let total = 0
-    for (const cat of visibleExpenseCategories.value) {
-      total += budgetInputs.value.get(cat.categoryId) ?? 0
-    }
-    return total
-  })
+  /**
+   * The plan's total, the same figure everywhere on the page: over every
+   * entry of the plan, not only the categories the statistics happen to
+   * list (an envelope on a category that spent nothing this window would
+   * otherwise vanish from the summary while the edit bar still counts it).
+   */
+  const totalBudget = computed(() => draftPlanTotal.value)
 
   /**
    * Comparison props for the savings summary — null when no comparison is set.
@@ -406,16 +414,9 @@
     selectedMonth.value = ym
   }
 
-  /**
-   * A bar was clicked. Comparison and future months are on the same chart and
-   * have no per-month reading to offer, so they are ignored rather than
-   * selected into an empty view. Clicking the month already isolated releases
-   * it — the same click that got you in gets you out.
-   */
-  function onChartMonthSelected(ym: string): void {
-    if (!comparison.selectableMonths.value.includes(ym)) return
-    selectedMonth.value = selectedMonth.value === ym ? null : ym
-  }
+  // Isolating a month happens in one place, the period band above the table
+  // (BudgetTableControls): the chart and the month-by-month grid only reflect
+  // the choice. Three places to set the same thing were two too many.
 
   /** Label describing what the "Réel" figures currently cover. */
   const actualPeriodLabel = computed(() => {
@@ -673,12 +674,21 @@
   // "Enregistrer". That is what makes "Annuler" able to promise anything, and
   // what stops a stray click on a number in a table from rewriting a plan.
 
+  function clearSaveStatus(): void {
+    if (saveStatusTimer) clearTimeout(saveStatusTimer)
+    saveStatusTimer = null
+    saveStatus.value = 'idle'
+    saveError.value = null
+  }
+
   function enterEditMode(): void {
+    clearSaveStatus()
     budgetInputs.value = new Map(savedBudgets.value)
     isEditing.value = true
   }
 
   function cancelEdit(): void {
+    clearSaveStatus()
     budgetInputs.value = new Map(savedBudgets.value)
     isEditing.value = false
   }
@@ -741,17 +751,17 @@
       .map(([categoryId, amount]) => ({ categoryId, amount }))
     try {
       isSaving.value = true
+      clearSaveStatus()
       const updated = await api.updateBudgetPlan(plan.value.id, { entries })
       plan.value = updated
       adoptPlanEntries(updated)
-      saveSuccess.value = true
-      setTimeout(() => {
-        saveSuccess.value = false
-      }, 2000)
+      saveStatus.value = 'saved'
+      saveStatusTimer = setTimeout(clearSaveStatus, 4000)
     } catch (err) {
       // The draft survives on purpose: a failed save must not silently throw
       // away what the user typed.
-      error.value =
+      saveStatus.value = 'error'
+      saveError.value =
         err instanceof Error ? err.message : 'Erreur lors de la sauvegarde'
     } finally {
       isSaving.value = false
@@ -769,12 +779,24 @@
     budgetInputs.value.set(categoryId, Math.round(amount))
   }
 
-  /** "Apply all averages" — prefer historical if available, else actual. */
+  /**
+   * What « Reprendre les moyennes » would copy: the historical average when
+   * a comparison is on, else the actual to date, else nothing to offer.
+   * The button says which, so the user knows what lands in the envelopes.
+   */
+  const averagesSource = computed<'historical' | 'actual' | 'none'>(() => {
+    if (showHistoricalColumn.value) return 'historical'
+    if (showActualColumn.value) return 'actual'
+    return 'none'
+  })
+
   function applyAverageToAll() {
+    if (averagesSource.value === 'none') return
     for (const cat of visibleExpenseCategories.value) {
-      const ref = showHistoricalColumn.value
-        ? getHistoricalAverage(cat)
-        : getPlanActualAverage(cat)
+      const ref =
+        averagesSource.value === 'historical'
+          ? getHistoricalAverage(cat)
+          : getPlanActualAverage(cat)
       if (ref > 0) {
         budgetInputs.value.set(cat.categoryId, Math.round(ref))
       }
@@ -819,6 +841,7 @@
 
   onBeforeUnmount(() => {
     window.removeEventListener('beforeunload', warnOnUnload)
+    if (saveStatusTimer) clearTimeout(saveStatusTimer)
   })
 
   onBeforeRouteLeave(() => {
@@ -868,8 +891,6 @@
       :is-loading="isLoading"
       :plan-count="planCount"
       :is-editing="isEditing"
-      :is-saving="isSaving"
-      :save-success="saveSuccess"
       @open-history="isHistoryOpen = true"
       @create="openCreateModal"
     />
@@ -1026,6 +1047,23 @@
         </div>
       </BaseCard>
 
+      <!-- The verdict first — « am I on track » is what the page is opened
+           for — then the chart it is read from. -->
+      <div class="mb-6">
+        <BudgetSavingsSummary
+          :plan-label="plan.name"
+          :plan-income-avg="chartAverageIncome"
+          :plan-budget-total="totalBudget"
+          :plan-actual-expense-avg="planActualExpenseAvg"
+          :plan-actual-income-avg="planActualIncomeAvg"
+          :complete-plan-months-count="comparison.completePlanMonthsCount.value"
+          :is-plan-finished="comparison.isPlanFinished.value"
+          :actual-period-label="selectedMonth ? actualPeriodLabel : null"
+          :month-progress="comparison.selectedMonthProgress.value"
+          :comparison="summaryComparisonProps"
+        />
+      </div>
+
       <!-- Monthly expenses chart -->
       <BaseCard
         v-if="monthlyTotalExpenses.length >= 2 && statistics?.monthLabels"
@@ -1046,24 +1084,8 @@
           :plan-end-month="plan.endDate.slice(0, 7)"
           :comparison-start-month="comparisonRange?.startMonth ?? ''"
           :comparison-end-month="comparisonRange?.endMonth ?? ''"
-          @select-month="onChartMonthSelected"
         />
       </BaseCard>
-
-      <!-- Savings summary -->
-      <div class="mb-6">
-        <BudgetSavingsSummary
-          :plan-label="plan.name"
-          :plan-income-avg="chartAverageIncome"
-          :plan-budget-total="totalBudget"
-          :plan-actual-expense-avg="planActualExpenseAvg"
-          :plan-actual-income-avg="planActualIncomeAvg"
-          :complete-plan-months-count="comparison.completePlanMonthsCount.value"
-          :is-plan-finished="comparison.isPlanFinished.value"
-          :actual-period-label="selectedMonth ? actualPeriodLabel : null"
-          :comparison="summaryComparisonProps"
-        />
-      </div>
 
       <!-- Month-by-month grid: which envelope drifts, and when. The
              averages above cannot answer that — they average it away. -->
@@ -1072,7 +1094,6 @@
         :months="matrixMonths"
         :rows="matrixRows"
         :selected-month="selectedMonth"
-        @select-month="onChartMonthSelected"
       />
 
       <!-- Expense category list -->
@@ -1088,6 +1109,7 @@
           :has-exceptional="hasExceptionalInPlan"
           :breakdown-mode="breakdownMode"
           :plan-events="planEvents"
+          :averages-source="averagesSource"
           @enter-edit="enterEditMode"
           @select-month="selectMonth"
           @apply-averages="applyAverageToAll"
@@ -1177,8 +1199,6 @@
             :remaining-vs-actual="getRemainingVsActual(cat)"
             :sparkline="comparison.seriesFor(cat) ?? []"
             :chart-data="categoryChartData(cat)"
-            :comparison-label="comparisonRange?.label"
-            :actual-period-label="actualPeriodLabel"
             :breakdown-mode="breakdownMode"
             @toggle-expand="toggleCategoryExpanded(cat.categoryId)"
             @update-budget="value => updateBudgetInput(cat.categoryId, value)"
@@ -1188,12 +1208,14 @@
       </BaseCard>
 
       <BudgetEditBar
-        v-if="isEditing"
+        v-if="isEditing || saveStatus === 'saved'"
         :dirty-count="dirtyCategoryIds.length"
         :saved-total="savedPlanTotal"
         :draft-total="draftPlanTotal"
         :delta="draftDelta"
         :saving="isSaving"
+        :status="saveStatus"
+        :error-message="saveError"
         @save="saveBudget"
         @cancel="cancelEdit"
       />

@@ -1,6 +1,8 @@
 <script setup lang="ts">
-  import { computed } from 'vue'
+  import { computed, ref } from 'vue'
   import { formatCurrency } from '@/lib/formatters'
+  import { useIsMobile } from '@/composables/useMediaQuery'
+  import IconChevronDown from '@/components/icons/IconChevronDown.vue'
 
   /** One column: a plan month that has started. */
   export interface MatrixMonth {
@@ -30,9 +32,14 @@
     selectedMonth: string | null
   }>()
 
-  const emit = defineEmits<{
-    (e: 'select-month', yearMonth: string): void
-  }>()
+  /**
+   * The grid is the widest thing on the page: on a phone it starts folded,
+   * one tap away, so the envelopes below are not pushed under a table that
+   * has to be scrolled sideways anyway. Isolating a month is done from the
+   * table's period band — this grid only shows which one is read.
+   */
+  const isMobile = useIsMobile()
+  const open = ref(!isMobile.value)
 
   /** Column totals, plus the envelope total they are judged against. */
   const monthTotals = computed(() =>
@@ -89,19 +96,38 @@
     data-testid="budget-monthly-matrix"
     class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5 mb-6"
   >
-    <div class="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
       <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        Mois par mois
+        <button
+          type="button"
+          class="flex min-h-[44px] w-full items-center gap-2 text-left md:hidden"
+          :aria-expanded="open"
+          aria-controls="budget-monthly-matrix-table"
+          data-testid="matrix-toggle"
+          @click="open = !open"
+        >
+          Mois par mois
+          <IconChevronDown
+            class="h-4 w-4 text-gray-500 transition-transform dark:text-gray-400"
+            :class="{ '-rotate-180': open }"
+          />
+        </button>
+        <span class="max-md:hidden">Mois par mois</span>
       </h2>
       <p class="hidden text-xs text-gray-500 sm:block dark:text-gray-400">
-        Rouge : l'enveloppe du mois est dépassée. Clique un mois pour n'afficher
-        que celui-là.
+        Rouge : l'enveloppe du mois est dépassée. Le mois isolé dans le tableau
+        est mis en avant.
       </p>
     </div>
 
     <!-- The table is the one thing on this page that legitimately grows wider
          than the viewport, so it scrolls inside its own box. -->
-    <div class="overflow-x-auto -mx-4 sm:mx-0">
+    <div
+      v-show="open"
+      id="budget-monthly-matrix-table"
+      class="overflow-x-auto -mx-4 sm:mx-0"
+      data-testid="matrix-body"
+    >
       <table class="min-w-full text-sm border-separate border-spacing-0">
         <thead>
           <tr>
@@ -120,20 +146,19 @@
               :key="month.ym"
               class="pb-2 px-2 sm:px-3 whitespace-nowrap"
             >
-              <button
-                type="button"
+              <span
                 :data-testid="`matrix-header-${month.ym}`"
-                class="text-xs font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 transition-colors"
+                class="inline-block text-xs font-semibold uppercase tracking-wide rounded px-1.5 py-0.5"
                 :class="
                   selectedMonth === month.ym
-                    ? 'bg-gray-900 text-white dark:bg-slate-200 dark:text-gray-900'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-gray-500 dark:text-gray-400'
                 "
-                @click="emit('select-month', month.ym)"
+                :aria-current="selectedMonth === month.ym ? 'true' : undefined"
               >
                 {{ month.label }}
                 <span v-if="month.isRunning" class="text-amber-500">●</span>
-              </button>
+              </span>
             </th>
           </tr>
         </thead>
@@ -205,5 +230,9 @@
         </tfoot>
       </table>
     </div>
+    <p class="mt-2 text-xs text-gray-500 sm:hidden dark:text-gray-400">
+      Rouge : l'enveloppe du mois est dépassée. Faites défiler le tableau pour
+      voir les mois suivants.
+    </p>
   </div>
 </template>

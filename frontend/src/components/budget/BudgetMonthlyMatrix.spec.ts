@@ -89,22 +89,46 @@ describe('BudgetMonthlyMatrix', () => {
     expect(july.classes().join(' ')).not.toContain('text-red-600')
   })
 
-  it('asks for a month when its column header is clicked', async () => {
-    const wrapper = mountMatrix()
-
-    await wrapper.find('[data-testid="matrix-header-2026-07"]').trigger('click')
-
-    expect(wrapper.emitted('select-month')?.[0]).toEqual(['2026-07'])
-  })
-
-  it('marks the column the page is currently reading', () => {
+  it('marks the column the page is currently reading, without a button', () => {
     const wrapper = mountMatrix('2026-08')
 
+    const header = wrapper.find('[data-testid="matrix-header-2026-08"]')
+    expect(header.element.tagName).not.toBe('BUTTON')
+    expect(header.attributes('aria-current')).toBe('true')
+    expect(header.classes().join(' ')).toContain('bg-primary-600')
     expect(
-      wrapper.find('[data-testid="matrix-header-2026-08"]').classes().join(' ')
-    ).toContain('bg-gray-900')
+      wrapper
+        .find('[data-testid="matrix-header-2026-06"]')
+        .attributes('aria-current')
+    ).toBeUndefined()
+  })
+
+  it('starts open on a desk and folded on a phone', () => {
+    const open = mountMatrix()
     expect(
-      wrapper.find('[data-testid="matrix-header-2026-06"]').classes().join(' ')
-    ).not.toContain('bg-gray-900')
+      open.find('[data-testid="matrix-toggle"]').attributes('aria-expanded')
+    ).toBe('true')
+    expect(open.find('[data-testid="matrix-body"]').attributes('style')).toBe(
+      undefined
+    )
+
+    const original = window.matchMedia
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('max-width'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia
+    try {
+      const folded = mountMatrix()
+      expect(
+        folded.find('[data-testid="matrix-body"]').attributes('style')
+      ).toContain('display: none')
+      expect(
+        folded.find('[data-testid="matrix-toggle"]').attributes('aria-expanded')
+      ).toBe('false')
+    } finally {
+      window.matchMedia = original
+    }
   })
 })

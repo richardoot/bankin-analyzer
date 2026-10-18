@@ -643,14 +643,16 @@ describe('BudgetPage', () => {
       ).toBe(false)
     })
 
-    it('empties the draft on "Réinitialiser" without touching the server', async () => {
+    it('empties the draft on « Vider toutes les enveloppes » without touching the server', async () => {
       const wrapper = await mountEditing()
 
-      const reset = wrapper
-        .findAll('[data-testid="budget-quick-actions"] button')
-        .find(b => b.text() === 'Réinitialiser')
-      expect(reset).toBeDefined()
-      await reset?.trigger('click')
+      const reset = wrapper.find('[data-testid="budget-clear-envelopes"]')
+      expect(reset.text()).toBe('Vider toutes les enveloppes')
+      // The scope is written next to it.
+      expect(
+        wrapper.find('[data-testid="budget-quick-actions"]').text()
+      ).toContain('toutes les enveloppes du plan')
+      await reset.trigger('click')
 
       expect(api.updateBudgetPlan).not.toHaveBeenCalled()
       const input = wrapper.find('[data-testid="budget-input-Alimentation"]')
@@ -670,21 +672,51 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      // The "Réel" figure is plain text in read mode, never a button.
-      const buttons = wrapper
-        .find('[data-testid="budget-row-Alimentation"]')
-        .findAll('button')
+      // The "Réel" figure is plain text in read mode; the « Reprendre »
+      // button under it only exists in edit mode.
       expect(
-        buttons.some(b => b.attributes('title')?.includes('appliquer'))
+        wrapper.find('[data-testid="budget-take-actual-Alimentation"]').exists()
       ).toBe(false)
 
       await wrapper.find('[data-testid="budget-edit-button"]').trigger('click')
-      const editButtons = wrapper
-        .find('[data-testid="budget-row-Alimentation"]')
-        .findAll('button')
-      expect(
-        editButtons.some(b => b.attributes('title')?.includes('appliquer'))
-      ).toBe(true)
+      const take = wrapper.find(
+        '[data-testid="budget-take-actual-Alimentation"]'
+      )
+      expect(take.exists()).toBe(true)
+      expect(take.text()).toBe('Reprendre')
+      expect(take.attributes('aria-label')).toContain('comme budget')
+      // The button says which reference the bulk action copies.
+      expect(wrapper.find('[data-testid="budget-apply-averages"]').text()).toBe(
+        'Reprendre le réel à date'
+      )
+    })
+
+    it('says how the save went in the edit bar, next to the button', async () => {
+      const wrapper = await mountEditing()
+      await wrapper
+        .find('[data-testid="budget-input-Alimentation"]')
+        .setValue('300')
+
+      // The live region exists before anything lands in it.
+      const feedback = () =>
+        wrapper.find('[data-testid="budget-save-feedback"]')
+      expect(feedback().attributes('aria-live')).toBe('polite')
+      expect(feedback().text()).toBe('')
+
+      vi.mocked(api.updateBudgetPlan).mockResolvedValue(samplePlan)
+      await wrapper.find('[data-testid="budget-save-button"]').trigger('click')
+      await flushPromises()
+
+      // Edit mode has ended, but the bar stays to say it went through.
+      expect(wrapper.find('[data-testid="budget-edit-bar"]').exists()).toBe(
+        true
+      )
+      expect(feedback().text()).toContain('Budget enregistré')
+      expect(wrapper.find('[data-testid="budget-save-button"]').exists()).toBe(
+        false
+      )
+      // The header no longer carries a competing « Sauvegardé ».
+      expect(wrapper.text()).not.toContain('Sauvegardé')
     })
 
     it('blocks plan switching while a draft is open', async () => {
@@ -744,7 +776,10 @@ describe('BudgetPage', () => {
       await wrapper.find('[data-testid="budget-save-button"]').trigger('click')
       await flushPromises()
 
-      expect(wrapper.text()).toContain('boom')
+      // Said in the bar, where the button is — and the draft is still there.
+      const feedback = wrapper.find('[data-testid="budget-save-feedback"]')
+      expect(feedback.text()).toContain('boom')
+      expect(feedback.text()).toContain('conservées')
       const input = wrapper.find('[data-testid="budget-input-Alimentation"]')
         .element as HTMLInputElement
       expect(input.value).toBe('300')
@@ -937,31 +972,20 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
-    it('selects a month when its bar is clicked, and releases it on a second click', async () => {
+    it('isolates a month from the period band only — the chart just follows', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
+      // A click on a bar no longer rewrites the page's reading.
       const chart = wrapper.findComponent({ name: 'MonthlyExpensesChart' })
       chart.vm.$emit('select-month', '2026-06')
       await flushPromises()
+      expect(foodRow(wrapper).text()).toMatch(/350/)
+
+      await wrapper
+        .find('[data-testid="budget-month-2026-06"]')
+        .trigger('click')
       expect(foodRow(wrapper).text()).toMatch(/500/)
-
-      chart.vm.$emit('select-month', '2026-06')
-      await flushPromises()
-      expect(foodRow(wrapper).text()).toMatch(/350/)
-      wrapper.unmount()
-    })
-
-    it('ignores a bar that is not a started plan month', async () => {
-      const wrapper = mount(BudgetPage)
-      await flushPromises()
-
-      const chart = wrapper.findComponent({ name: 'MonthlyExpensesChart' })
-      chart.vm.$emit('select-month', '2026-11')
-      await flushPromises()
-
-      // Still the average — November carries nothing to read.
-      expect(foodRow(wrapper).text()).toMatch(/350/)
       wrapper.unmount()
     })
 
@@ -986,15 +1010,23 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
-    it('selects a month from the grid header', async () => {
+    it('shows the isolated month in the grid header without owning the choice', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      await wrapper
-        .find('[data-testid="matrix-header-2026-06"]')
-        .trigger('click')
+      const header = wrapper.find('[data-testid="matrix-header-2026-06"]')
+      expect(header.element.tagName).not.toBe('BUTTON')
+      await header.trigger('click')
+      expect(foodRow(wrapper).text()).toMatch(/350/)
 
-      expect(foodRow(wrapper).text()).toMatch(/500/)
+      await wrapper
+        .find('[data-testid="budget-month-2026-06"]')
+        .trigger('click')
+      expect(
+        wrapper
+          .find('[data-testid="matrix-header-2026-06"]')
+          .attributes('aria-current')
+      ).toBe('true')
       wrapper.unmount()
     })
 

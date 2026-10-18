@@ -26,6 +26,14 @@
      * default average.
      */
     actualPeriodLabel: string | null
+    /**
+     * When the isolated month is the one still running, how far into it we
+     * are. The verdict is then read against the budget's share to date, not
+     * against the whole envelope a half-finished month was never going to
+     * reach. Null for a complete month or the average.
+     */
+    monthProgress?:
+      { elapsedDays: number; totalDays: number } | null | undefined
 
     /** Optional comparison block. */
     comparison: {
@@ -56,9 +64,17 @@
   // ── Suivi: actual reality vs the plan's allocation ─────────────────────
   // Both sides use the *actual* income observed across complete plan months
   // — that way "Écart d'épargne" simplifies to `budget − actualExpense`,
-  // which is what the user expects to see.
+  // which is what the user expects to see. On a running month the budget
+  // is prorated to the days elapsed, so the verdict judges the pace.
+  const budgetShare = computed(() => {
+    const progress = props.monthProgress
+    if (!progress || progress.totalDays <= 0) return 1
+    return Math.min(1, Math.max(0, progress.elapsedDays / progress.totalDays))
+  })
+  const isProrated = computed(() => budgetShare.value < 1)
+  const budgetToDate = computed(() => props.planBudgetTotal * budgetShare.value)
   const followupProjectedSavings = computed(
-    () => props.planActualIncomeAvg - props.planBudgetTotal
+    () => props.planActualIncomeAvg - budgetToDate.value
   )
   const planActualSavings = computed(
     () => props.planActualIncomeAvg - props.planActualExpenseAvg
@@ -114,7 +130,7 @@
       <header class="flex items-baseline justify-between gap-3 mb-4">
         <div>
           <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-            🎯 {{ followupTitle }}
+            {{ followupTitle }}
             <span
               class="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400"
             >
@@ -132,12 +148,20 @@
           <span
             class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400"
           >
-            Budget alloué
+            {{ isProrated ? 'Budget à ce jour' : 'Budget alloué' }}
           </span>
           <span
             class="text-lg font-semibold text-primary-700 dark:text-primary-400 tabular-nums"
+            data-testid="summary-budget"
           >
-            {{ formatCurrency(planBudgetTotal) }}
+            {{ formatCurrency(budgetToDate) }}
+          </span>
+          <span
+            v-if="isProrated"
+            class="text-[11px] text-gray-500 dark:text-gray-400"
+            data-testid="summary-budget-prorata"
+          >
+            sur {{ formatCurrency(planBudgetTotal) }} pour le mois
           </span>
           <span class="text-[11px] text-gray-500 dark:text-gray-400">
             Épargne prévue
@@ -183,7 +207,7 @@
           </span>
           <span class="text-[11px] text-gray-500 dark:text-gray-400">
             <template v-if="trackingDelta > 0">
-              ✓ Tu épargnes plus que prévu
+              ✓ Vous épargnez plus que prévu
             </template>
             <template v-else-if="trackingDelta < 0">
               ⚠ Dépassement par rapport au plan
@@ -199,7 +223,7 @@
       <header class="flex items-baseline justify-between gap-3 mb-4">
         <div>
           <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-            📊 Planification
+            Planification
             <span
               class="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400"
             >

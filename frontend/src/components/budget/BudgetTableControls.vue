@@ -29,6 +29,8 @@
     hasExceptional: boolean
     breakdownMode: BreakdownMode
     planEvents: { id: string; name: string; color: string | null }[]
+    /** Which reference « Appliquer les moyennes » would copy into the envelopes. */
+    averagesSource: 'historical' | 'actual' | 'none'
   }>()
 
   const emit = defineEmits<{
@@ -118,10 +120,12 @@
       <span class="mr-1 shrink-0 text-xs text-gray-500 dark:text-gray-400">
         Période :
       </span>
+      <!-- The one place a month is isolated: the chart and the grid follow. -->
       <SegmentedControl
         :model-value="selectedMonth"
         :options="monthSegments"
         size="sm"
+        scrollable
         label="Période du tableau"
         @update:model-value="emit('select-month', $event)"
       >
@@ -167,12 +171,18 @@
         Actions rapides :
       </span>
       <BaseButton
+        v-if="averagesSource !== 'none'"
         variant="tinted"
         size="sm"
         class="col-span-2 sm:col-auto"
+        data-testid="budget-apply-averages"
         @click="emit('apply-averages')"
       >
-        Appliquer toutes les moyennes
+        {{
+          averagesSource === 'historical'
+            ? 'Reprendre les moyennes historiques'
+            : 'Reprendre le réel à date'
+        }}
       </BaseButton>
       <BaseButton
         variant="secondary"
@@ -194,10 +204,19 @@
         variant="secondary"
         size="sm"
         class="col-span-2 sm:col-auto sm:ml-auto"
+        data-testid="budget-clear-envelopes"
         @click="emit('reset')"
       >
-        Réinitialiser
+        Vider toutes les enveloppes
       </BaseButton>
+      <p
+        class="col-span-2 text-[11px] text-gray-500 sm:basis-full dark:text-gray-400"
+      >
+        Les moyennes et les ±5 % portent sur les catégories affichées ; « Vider
+        » met à zéro toutes les enveloppes du plan, y compris celles absentes du
+        tableau. Rien ne part avant « Enregistrer », et « Annuler » restaure
+        tout.
+      </p>
     </div>
 
     <!-- Tracking mode: everyday keeps a one-off event from reading as an

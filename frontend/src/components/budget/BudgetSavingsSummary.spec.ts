@@ -161,6 +161,36 @@ describe('BudgetSavingsSummary', () => {
     })
   })
 
+  describe('running month', () => {
+    it('judges the pace against the budget share to date, in the second person plural', () => {
+      // 1500 budgeted for the month, 10 of 30 days elapsed → 500 to date.
+      // 400 spent: on pace (+100), even though 400 is far from 1500.
+      const wrapper = mount(BudgetSavingsSummary, {
+        props: {
+          ...baseProps,
+          planBudgetTotal: 1500,
+          planActualIncomeAvg: 2500,
+          planActualExpenseAvg: 400,
+          completePlanMonthsCount: 0,
+          actualPeriodLabel: 'Août 2026 · en cours, 10/30 j',
+          monthProgress: { elapsedDays: 10, totalDays: 30 },
+        },
+      })
+      const text = wrapper.find('[data-testid="summary-followup"]').text()
+      expect(text).toContain('Budget à ce jour')
+      expect(wrapper.find('[data-testid="summary-budget"]').text()).toContain(
+        '500,00'
+      )
+      expect(
+        wrapper.find('[data-testid="summary-budget-prorata"]').text()
+      ).toMatch(/1\s500,00/)
+      expect(text).toMatch(/\+\s*100,00/)
+      expect(text).toContain('Vous épargnez plus que prévu')
+      expect(text).not.toContain('Tu ')
+      expect(wrapper.find('h3').text()).not.toMatch(/[🎯📊]/u)
+    })
+  })
+
   describe('fallback', () => {
     it('renders only the minimal block when neither comparison nor complete months are set', () => {
       const wrapper = mount(BudgetSavingsSummary, {

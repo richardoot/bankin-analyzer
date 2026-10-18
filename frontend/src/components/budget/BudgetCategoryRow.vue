@@ -5,15 +5,19 @@
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
   import SectionLabel from '@/components/ui/SectionLabel.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
 
   /**
    * One category of the budget table: the row and its drill-down panel.
    *
    * Every figure arrives precomputed — averages, margins, prorata, dirty
    * state — so this component is a pure view over data the page derives
-   * once, and the three ways a row can change a budget (typing, applying
-   * the historical average, applying the actual) leave as events. The page
-   * keeps the drafts, the sorting and the API.
+   * once, and the three ways a row can change a budget (typing, taking
+   * the historical average, taking the actual) leave as events. The page
+   * keeps the drafts, the sorting and the API. Taking a reference figure
+   * is a visible « Reprendre » button under it, never the figure itself
+   * dressed as a link: a number that rewrites an envelope when clicked
+   * is a trap, not an affordance.
    */
   defineProps<{
     category: CategoryAverageDto
@@ -34,8 +38,6 @@
     remainingVsActual: number
     sparkline: number[]
     chartData: { labels: string[]; values: number[] }
-    comparisonLabel?: string | undefined
-    actualPeriodLabel: string
     breakdownMode: 'real' | 'everyday'
   }>()
 
@@ -96,22 +98,24 @@
           class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
           >Historique</span
         >
-        <button
-          v-if="editing && historicalAverage > 0"
-          type="button"
-          class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline decoration-dotted underline-offset-2"
-          :title="`Moyenne sur ${comparisonLabel} — cliquer pour appliquer comme budget`"
-          @click="emit('apply-budget', historicalAverage)"
-        >
-          {{ formatCurrency(historicalAverage) }}
-        </button>
         <span
-          v-else-if="historicalAverage > 0"
+          v-if="historicalAverage > 0"
           class="text-indigo-600 dark:text-indigo-400 font-medium"
         >
           {{ formatCurrency(historicalAverage) }}
         </span>
         <span v-else class="text-gray-500 dark:text-gray-400">—</span>
+        <BaseButton
+          v-if="editing && historicalAverage > 0"
+          variant="ghost"
+          size="sm"
+          class="mt-0.5 !px-1.5 !py-0.5 !text-xs"
+          :aria-label="`Reprendre la moyenne historique de ${category.categoryName} (${formatCurrency(historicalAverage)}) comme budget`"
+          :data-testid="`budget-take-historical-${category.categoryName}`"
+          @click="emit('apply-budget', historicalAverage)"
+        >
+          Reprendre
+        </BaseButton>
       </div>
 
       <!-- Budget: read as text, edited only in edit mode -->
@@ -190,35 +194,34 @@
           class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
           >Réel</span
         >
-        <button
-          v-if="editing && actualAverage > 0"
-          type="button"
-          class="text-red-600 dark:text-red-400 font-medium hover:underline decoration-dotted underline-offset-2"
-          :title="`Réel sur ${actualPeriodLabel} — cliquer pour appliquer comme budget`"
-          @click="emit('apply-budget', actualAverage)"
-        >
-          {{ formatCurrency(actualAverage) }}
-        </button>
         <span
-          v-else-if="actualAverage > 0"
+          v-if="actualAverage > 0"
           class="text-red-600 dark:text-red-400 font-medium"
         >
           {{ formatCurrency(actualAverage) }}
         </span>
         <span v-else class="text-gray-500 dark:text-gray-400">—</span>
+        <!-- The event share, said in words: « hors » when the everyday
+             reading left it out, « dont » when the real one counts it. -->
         <span
           v-if="exceptionalAverage > 0.005"
           :data-testid="`budget-exceptional-${category.categoryName}`"
           class="block text-[10px] text-amber-700 dark:text-amber-400"
-          :title="
-            breakdownMode === 'everyday'
-              ? 'Part portée par un événement, exclue de ce réel'
-              : 'Part portée par un événement, incluse dans ce réel'
-          "
         >
           {{ breakdownMode === 'everyday' ? 'hors' : 'dont' }}
-          {{ formatCurrency(exceptionalAverage) }}
+          {{ formatCurrency(exceptionalAverage) }} d'événements
         </span>
+        <BaseButton
+          v-if="editing && actualAverage > 0"
+          variant="ghost"
+          size="sm"
+          class="mt-0.5 !px-1.5 !py-0.5 !text-xs"
+          :aria-label="`Reprendre le réel de ${category.categoryName} (${formatCurrency(actualAverage)}) comme budget`"
+          :data-testid="`budget-take-actual-${category.categoryName}`"
+          @click="emit('apply-budget', actualAverage)"
+        >
+          Reprendre
+        </BaseButton>
       </div>
 
       <!-- Sparkline -->

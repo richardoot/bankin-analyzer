@@ -1,20 +1,31 @@
 <script setup lang="ts">
   import { formatCurrency } from '@/lib/formatters'
   import BaseButton from '@/components/ui/BaseButton.vue'
+  import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
 
   /**
    * The only way a budget change reaches the server. Sticky at the bottom
    * so the count of pending changes and the way out are never scrolled
    * away from; the saved → draft totals make the consequence readable
    * before committing.
+   *
+   * The outcome of a save is said here too, next to the button that asked
+   * for it, in a live region that exists before the message does: a
+   * success turns the bar green for a moment, a failure stays until the
+   * draft is saved or dropped.
    */
-  defineProps<{
-    dirtyCount: number
-    savedTotal: number
-    draftTotal: number
-    delta: number
-    saving: boolean
-  }>()
+  withDefaults(
+    defineProps<{
+      dirtyCount: number
+      savedTotal: number
+      draftTotal: number
+      delta: number
+      saving: boolean
+      status?: 'idle' | 'saved' | 'error' | undefined
+      errorMessage?: string | null | undefined
+    }>(),
+    { status: 'idle', errorMessage: null }
+  )
 
   const emit = defineEmits<{ save: []; cancel: [] }>()
 </script>
@@ -22,11 +33,43 @@
 <template>
   <div
     data-testid="budget-edit-bar"
-    class="sticky bottom-0 z-10 mt-4 -mx-4 flex flex-col gap-2 border-t border-gray-200 bg-white px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-lg sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:rounded-xl sm:border sm:pb-3 dark:border-slate-700 dark:bg-slate-900 dark:shadow-slate-900/40"
+    class="sticky bottom-0 z-10 mt-4 -mx-4 flex flex-col gap-2 border-t bg-white px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-lg sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:rounded-xl sm:border sm:pb-3 dark:bg-slate-900 dark:shadow-slate-900/40"
+    :class="
+      status === 'saved'
+        ? 'border-green-200 dark:border-green-800'
+        : status === 'error'
+          ? 'border-red-200 dark:border-red-800'
+          : 'border-gray-200 dark:border-slate-700'
+    "
   >
+    <!-- Always in the DOM, so a screen reader hears what lands in it. -->
+    <p
+      aria-live="polite"
+      data-testid="budget-save-feedback"
+      class="text-sm"
+      :class="{
+        'flex items-center gap-2 text-green-700 dark:text-green-400':
+          status === 'saved',
+        'text-red-700 dark:text-red-400': status === 'error',
+        hidden: status === 'idle',
+      }"
+    >
+      <template v-if="status === 'saved'">
+        <IconCheckCircle class="h-4 w-4 shrink-0" />
+        Budget enregistré.
+      </template>
+      <template v-else-if="status === 'error'">
+        L'enregistrement a échoué : {{ errorMessage ?? 'réessayez.' }} Vos
+        modifications sont conservées.
+      </template>
+    </p>
+
     <!-- A phone gets the two figures that matter; the full sentence
          cost three lines of a viewport already short of them. -->
-    <p class="text-sm text-gray-600 sm:hidden dark:text-gray-400">
+    <p
+      v-if="status !== 'saved'"
+      class="text-sm text-gray-600 sm:hidden dark:text-gray-400"
+    >
       <span
         v-if="dirtyCount > 0"
         class="font-medium text-gray-900 dark:text-gray-100"
@@ -48,7 +91,10 @@
         </span>
       </template>
     </p>
-    <p class="hidden text-sm text-gray-600 sm:block dark:text-gray-400">
+    <p
+      v-if="status !== 'saved'"
+      class="hidden text-sm text-gray-600 sm:block dark:text-gray-400"
+    >
       <span
         v-if="dirtyCount > 0"
         data-testid="budget-dirty-count"
@@ -81,7 +127,7 @@
         <span class="text-gray-500 dark:text-gray-400">/ mois</span>
       </span>
     </p>
-    <div class="flex shrink-0 items-center gap-2">
+    <div v-if="status !== 'saved'" class="flex shrink-0 items-center gap-2">
       <BaseButton
         variant="secondary"
         size="sm"

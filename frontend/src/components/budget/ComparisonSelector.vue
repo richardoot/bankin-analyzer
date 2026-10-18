@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { computed, ref, watch } from 'vue'
+  import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
   import type {
     ComparisonPreset,
     ComparisonRange,
@@ -7,6 +7,7 @@
   import type { BudgetPlanDto } from '@/lib/api'
   import { formatMonth } from '@/lib/formatters'
   import SectionLabel from '@/components/ui/SectionLabel.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
 
   const props = defineProps<{
     plan: BudgetPlanDto | null
@@ -59,6 +60,9 @@
     if (preset === 'none') return null
     if (preset === 'custom') {
       if (!props.customStartDate || !props.customEndDate) return null
+      // An end before its start is not a range: say so rather than skip
+      // the refetch in silence.
+      if (props.customEndDate < props.customStartDate) return null
       return {
         startDate: props.customStartDate,
         endDate: props.customEndDate,
@@ -113,6 +117,15 @@
     }
   }
 
+  /** The custom dates are both set, but in the wrong order. */
+  const customRangeInverted = computed(
+    () =>
+      props.preset === 'custom' &&
+      props.customStartDate !== '' &&
+      props.customEndDate !== '' &&
+      props.customEndDate < props.customStartDate
+  )
+
   /** Resolve the current comparison range from preset + custom dates. */
   const resolvedRange = computed<ComparisonRange | null>(() => {
     if (!props.plan) return null
@@ -128,8 +141,35 @@
     { immediate: true }
   )
 
-  /** Local state for the dropdown (closed by default). */
+  /**
+   * The dropdown: a menu button that says whether it is open, closes on
+   * Escape (handing focus back) and on a click outside.
+   */
   const open = ref(false)
+  const root = ref<HTMLElement | null>(null)
+  const trigger = ref<HTMLButtonElement | null>(null)
+
+  function closeMenu(returnFocus = false): void {
+    if (!open.value) return
+    open.value = false
+    if (returnFocus) trigger.value?.focus()
+  }
+
+  function onDocumentClick(event: MouseEvent): void {
+    if (!open.value) return
+    const target = event.target as Node | null
+    if (target && root.value && !root.value.contains(target)) closeMenu()
+  }
+
+  function onKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && open.value) {
+      event.stopPropagation()
+      closeMenu(true)
+    }
+  }
+
+  onMounted(() => document.addEventListener('click', onDocumentClick))
+  onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
 
   /** Options to display in the dropdown. Year-ago is filtered out when unavailable. */
   const options = computed<{ value: ComparisonPreset; label: string }[]>(() => {
@@ -157,7 +197,7 @@
 
   function selectPreset(p: ComparisonPreset) {
     emit('update:preset', p)
-    open.value = false
+    closeMenu(true)
   }
 </script>
 
@@ -166,11 +206,19 @@
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
       <SectionLabel as="span" class="shrink-0"> Comparer avec </SectionLabel>
 
-      <div class="relative w-full min-w-0 sm:w-auto">
+      <div
+        ref="root"
+        class="relative w-full min-w-0 sm:w-auto"
+        @keydown="onKeydown"
+      >
         <button
+          ref="trigger"
           type="button"
           data-testid="comparison-trigger"
-          class="inline-flex min-h-[44px] w-full max-w-full items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 transition-colors hover:bg-gray-50 sm:min-h-0 sm:w-auto dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:hover:bg-slate-700"
+          aria-haspopup="menu"
+          :aria-expanded="open"
+          aria-controls="comparison-menu"
+          class="inline-flex min-h-[44px] w-full max-w-full items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 sm:min-h-0 sm:w-auto dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:hover:bg-slate-700"
           @click="open = !open"
         >
           <span
@@ -202,13 +250,17 @@
 
         <div
           v-if="open"
+          id="comparison-menu"
+          role="menu"
+          aria-label="Période de comparaison"
           class="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg sm:w-auto sm:min-w-[220px] dark:border-slate-700 dark:bg-slate-900"
         >
           <button
             v-for="opt in options"
             :key="opt.value"
             type="button"
-            :aria-pressed="preset === opt.value"
+            role="menuitemradio"
+            :aria-checked="preset === opt.value"
             :data-testid="`comparison-option-${opt.value}`"
             class="block w-full px-3 py-2.5 text-left text-sm transition-colors sm:py-2"
             :class="
@@ -278,5 +330,13 @@
         />
       </div>
     </div>
+    <InlineAlert
+      v-if="customRangeInverted"
+      variant="warning"
+      data-testid="comparison-custom-inverted"
+    >
+      La date de fin est antérieure à la date de début : la comparaison n'est
+      pas appliquée.
+    </InlineAlert>
   </div>
 </template>
