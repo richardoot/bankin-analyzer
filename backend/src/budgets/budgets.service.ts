@@ -38,6 +38,9 @@ interface AggregatedTransactionRow {
   category_name: string
   category_icon: string | null
   type: string
+  /** The subcategory the row is filed under, or null for none. */
+  subcategory_id: string | null
+  /** Its name, read off `subcategories`; empty when there is none. */
   subcategory: string
   /** True when the transaction carries at least one tag flagged exceptional. */
   is_exceptional: boolean
@@ -48,6 +51,14 @@ interface AggregatedTransactionRow {
   received_credit: number
   /** Still owed on them, for reporting. */
   pending_credit: number
+}
+
+/** One line of a category's breakdown being summed: a subcategory, or none. */
+interface SubcategoryTotal {
+  subcategoryId: string | null
+  name: string
+  total: number
+  count: number
 }
 
 /** Debt still owed on an expense that falls outside the statistics window. */
@@ -119,7 +130,10 @@ export class BudgetsService {
           c.name AS category_name,
           c.icon AS category_icon,
           t.type::text AS type,
-          COALESCE(t.subcategory, '') AS subcategory,
+          -- The real subcategory, not the legacy text column: a line of the
+          -- breakdown is the one its link opens.
+          t.subcategory_id,
+          COALESCE(sc.name, '') AS subcategory,
           (et.transaction_id IS NOT NULL) AS is_exceptional,
           COUNT(*)::int AS transaction_count,
           SUM(${netAmount})::float AS total_amount,
@@ -127,6 +141,7 @@ export class BudgetsService {
           SUM(${PENDING_CREDIT_SCALED})::float AS pending_credit
         FROM app.transactions t
         JOIN app.categories c ON c.id = t.category_id
+        LEFT JOIN app.subcategories sc ON sc.id = t.subcategory_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
         LEFT JOIN exceptional_tx et ON et.transaction_id = t.id
         ${REIMBURSEMENT_CREDIT_JOINS}
@@ -136,7 +151,7 @@ export class BudgetsService {
           AND t.category_id IS NOT NULL
           AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_budget, false) = false
-        GROUP BY t.category_id, c.name, c.icon, t.type, COALESCE(t.subcategory, ''), (et.transaction_id IS NOT NULL)
+        GROUP BY t.category_id, c.name, c.icon, t.type, t.subcategory_id, sc.name, (et.transaction_id IS NOT NULL)
       `),
       shouldIncludeMonthly
         ? this.prisma.$queryRaw<MonthlyBreakdownRow[]>(Prisma.sql`
@@ -209,7 +224,7 @@ export class BudgetsService {
         categoryIcon: string | null
         total: number
         count: number
-        subcategories: Map<string, { total: number; count: number }>
+        subcategories: Map<string, SubcategoryTotal>
       }
     >()
     const incomeMap = new Map<
@@ -220,7 +235,7 @@ export class BudgetsService {
         categoryIcon: string | null
         total: number
         count: number
-        subcategories: Map<string, { total: number; count: number }>
+        subcategories: Map<string, SubcategoryTotal>
       }
     >()
 
@@ -237,24 +252,30 @@ export class BudgetsService {
 
     // Since `is_exceptional` joined the GROUP BY, a (category, subcategory)
     // pair can now come back on two rows — accumulate instead of overwriting.
+    // Keyed by the subcategory's id; « sans sous-catégorie » under ''.
     const addSubcategory = (
-      subcategories: Map<string, { total: number; count: number }>,
-      subcategory: string,
+      subcategories: Map<string, SubcategoryTotal>,
+      row: AggregatedTransactionRow,
       amount: number,
       count: number
     ): void => {
-      const existing = subcategories.get(subcategory)
+      const key = row.subcategory_id ?? ''
+      const existing = subcategories.get(key)
       if (existing) {
         existing.total += amount
         existing.count += count
       } else {
-        subcategories.set(subcategory, { total: amount, count })
+        subcategories.set(key, {
+          subcategoryId: row.subcategory_id,
+          name: row.subcategory_id ? row.subcategory : '',
+          total: amount,
+          count,
+        })
       }
     }
 
     for (const row of rows) {
       const categoryId = row.category_id
-      const subcategory = row.subcategory
       const amount = row.total_amount
       const count = row.transaction_count
 
@@ -272,13 +293,10 @@ export class BudgetsService {
         if (existing) {
           existing.total += amount
           existing.count += count
-          addSubcategory(existing.subcategories, subcategory, amount, count)
+          addSubcategory(existing.subcategories, row, amount, count)
         } else {
-          const subcategories = new Map<
-            string,
-            { total: number; count: number }
-          >()
-          subcategories.set(subcategory, { total: amount, count })
+          const subcategories = new Map<string, SubcategoryTotal>()
+          addSubcategory(subcategories, row, amount, count)
           expenseMap.set(categoryId, {
             categoryId,
             categoryName: row.category_name,
@@ -299,13 +317,10 @@ export class BudgetsService {
         if (existing) {
           existing.total += amount
           existing.count += count
-          addSubcategory(existing.subcategories, subcategory, amount, count)
+          addSubcategory(existing.subcategories, row, amount, count)
         } else {
-          const subcategories = new Map<
-            string,
-            { total: number; count: number }
-          >()
-          subcategories.set(subcategory, { total: amount, count })
+          const subcategories = new Map<string, SubcategoryTotal>()
+          addSubcategory(subcategories, row, amount, count)
           incomeMap.set(categoryId, {
             categoryId,
             categoryName: row.category_name,
@@ -467,10 +482,11 @@ export class BudgetsService {
         // transactions. Sharing the deduction out pro rata used to move money
         // between subcategories that had been refunded nothing.
         const subcategories: SubcategoryAverageDto[] = Array.from(
-          e.subcategories.entries()
+          e.subcategories.values()
         )
-          .map(([subcategory, data]) => ({
-            subcategory,
+          .map(data => ({
+            subcategoryId: data.subcategoryId,
+            subcategory: data.name,
             totalAmount: this.round(data.total),
             transactionCount: data.count,
             averagePerMonth: this.round(data.total / periodMonths),
@@ -534,10 +550,11 @@ export class BudgetsService {
     )
       .map(i => {
         const subcategories: SubcategoryAverageDto[] = Array.from(
-          i.subcategories.entries()
+          i.subcategories.values()
         )
-          .map(([subcategory, data]) => ({
-            subcategory,
+          .map(data => ({
+            subcategoryId: data.subcategoryId,
+            subcategory: data.name,
             totalAmount: this.round(data.total),
             transactionCount: data.count,
             averagePerMonth: this.round(data.total / periodMonths),

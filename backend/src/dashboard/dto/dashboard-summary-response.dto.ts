@@ -40,7 +40,14 @@ export class MonthlyDataDto {
 }
 
 export class SubcategoryDataDto {
-  /** Subcategory name (empty string if none) */
+  /**
+   * The subcategory this line sums, or null for the category's rows filed
+   * under none — what a link to the line's transactions names.
+   */
+  @ApiProperty({ type: String, nullable: true })
+  subcategoryId!: string | null
+
+  /** Subcategory name, read off the subcategory (empty string if none) */
   subcategory!: string
 
   /** Subcategory icon emoji (when the subcategory is linked to a Subcategory record) */

@@ -15,6 +15,7 @@ describe('BudgetsService', () => {
       category_name: string
       category_icon: string | null
       type: string
+      subcategory_id: string | null
       subcategory: string
       is_exceptional: boolean
       transaction_count: number
@@ -27,6 +28,14 @@ describe('BudgetsService', () => {
     category_name: overrides.category_name ?? 'Santé',
     category_icon: overrides.category_icon ?? null,
     type: overrides.type ?? 'EXPENSE',
+    // A named line stands for a real subcategory, with an id derived from
+    // its name unless the test passes one; the unnamed line is « none ».
+    subcategory_id:
+      'subcategory_id' in overrides
+        ? (overrides.subcategory_id ?? null)
+        : overrides.subcategory
+          ? `sub-${overrides.subcategory}`
+          : null,
     subcategory: overrides.subcategory ?? '',
     is_exceptional: overrides.is_exceptional ?? false,
     transaction_count: overrides.transaction_count ?? 1,
@@ -1085,6 +1094,65 @@ describe('BudgetsService', () => {
       expect(sql).toContain('exceptional_tx')
       expect(sql).toContain('app.transaction_tags')
       expect(sql).toContain('tg.is_exceptional = true')
+    })
+  })
+
+  describe('subcategory breakdown, by the real subcategory', () => {
+    it('groups by subcategory_id, never by the legacy text column', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([])
+
+      await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+      })
+
+      const sql = mockPrismaService.$queryRaw.mock.calls[0][0].strings.join('')
+      expect(sql).toContain('LEFT JOIN app.subcategories sc')
+      expect(sql).toContain("COALESCE(sc.name, '') AS subcategory")
+      expect(sql).toMatch(/GROUP BY[^\n]*t\.subcategory_id/)
+      expect(sql).not.toContain('COALESCE(t.subcategory')
+    })
+
+    it('names each line by its id, « none » by null, and merges a split pair', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        createRow({
+          subcategory_id: 'sub-pharma',
+          subcategory: 'Pharmacie',
+          total_amount: 30,
+          transaction_count: 1,
+        }),
+        createRow({
+          subcategory_id: 'sub-pharma',
+          subcategory: 'Pharmacie',
+          is_exceptional: true,
+          total_amount: 20,
+          transaction_count: 2,
+        }),
+        createRow({
+          subcategory_id: null,
+          subcategory: '',
+          total_amount: 10,
+          transaction_count: 1,
+        }),
+      ])
+
+      const result = await service.getStatistics(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+      })
+
+      expect(result.expensesByCategory[0].totalAmount).toBe(60)
+      expect(
+        result.expensesByCategory[0].subcategories?.map(s => [
+          s.subcategoryId,
+          s.subcategory,
+          s.totalAmount,
+          s.transactionCount,
+        ])
+      ).toEqual([
+        ['sub-pharma', 'Pharmacie', 50, 3],
+        [null, '', 10, 1],
+      ])
     })
   })
 })
