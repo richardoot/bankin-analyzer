@@ -51,6 +51,16 @@ describe('router guard', () => {
     )
   })
 
+  it('keeps the password reset reachable whether signed in or not', async () => {
+    await router.push('/reset-password')
+    expect(router.currentRoute.value.name).toBe('reset-password')
+
+    authState.isAuthenticated = true
+    await router.push('/terms')
+    await router.push('/reset-password')
+    expect(router.currentRoute.value.name).toBe('reset-password')
+  })
+
   it('keeps the legal pages public', async () => {
     await router.push('/privacy')
 

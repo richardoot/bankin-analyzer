@@ -30,6 +30,20 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Confirmation d’e-mail', guestOnly: true },
   },
   {
+    path: '/forgot-password',
+    name: 'forgot-password',
+    component: () => import('@/views/ForgotPasswordPage.vue'),
+    meta: { title: 'Mot de passe oublié', guestOnly: true },
+  },
+  // Neither guest-only nor private: the recovery link opens a session on
+  // arrival, and a signed-in user may also land here to change a password.
+  {
+    path: '/reset-password',
+    name: 'reset-password',
+    component: () => import('@/views/ResetPasswordPage.vue'),
+    meta: { title: 'Nouveau mot de passe' },
+  },
+  {
     path: '/oauth/consent',
     name: 'oauth-consent',
     component: () => import('@/views/OAuthConsentPage.vue'),

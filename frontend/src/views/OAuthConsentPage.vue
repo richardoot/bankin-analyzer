@@ -15,6 +15,22 @@
   const scopes = ref<string[]>([])
   const authorizationId = ref('')
 
+  /**
+   * A scope is a word for a machine; the person deciding reads a sentence.
+   * Unknown scopes are still shown, named as what they are.
+   */
+  const SCOPE_SENTENCES: Record<string, string> = {
+    openid: 'Vous identifier auprès de cette application',
+    email: 'Connaître votre adresse e-mail',
+    profile: 'Connaître votre nom et votre photo de profil',
+    offline_access:
+      'Rester connectée à votre compte sans vous redemander votre accord',
+  }
+
+  function describeScope(scope: string): string {
+    return SCOPE_SENTENCES[scope] ?? `Accéder à la permission « ${scope} »`
+  }
+
   onMounted(async () => {
     const id = route.query.authorization_id as string
 
@@ -57,7 +73,7 @@
       if (approveError) {
         error.value = approveError.message
       }
-      // GoTrue redirige automatiquement apres l'approbation
+      // GoTrue redirige automatiquement après l'approbation
     } catch (err) {
       error.value =
         err instanceof Error ? err.message : "Erreur lors de l'approbation"
@@ -165,9 +181,11 @@
                 d="M5 13l4 4L19 7"
               />
             </svg>
-            <span class="text-sm text-gray-700 dark:text-gray-300">{{
-              scope
-            }}</span>
+            <span
+              class="text-sm text-gray-700 dark:text-gray-300"
+              :data-testid="`scope-${scope}`"
+              >{{ describeScope(scope) }}</span
+            >
           </div>
           <div
             v-if="scopes.length === 0"
@@ -232,7 +250,7 @@
             Refuser
           </BaseButton>
           <BaseButton class="flex-1" :loading="isSubmitting" @click="approve">
-            <span v-if="isSubmitting">Autorisation...</span>
+            <span v-if="isSubmitting">Autorisation…</span>
             <span v-else>Autoriser</span>
           </BaseButton>
         </div>

@@ -117,7 +117,7 @@
         <form class="space-y-6" @submit.prevent="handleSubmit">
           <BaseField
             v-model="email"
-            label="Email"
+            label="E-mail"
             type="email"
             required
             data-testid="login-email-input"
@@ -125,15 +125,26 @@
             autocomplete="email"
           />
 
-          <BaseField
-            v-model="password"
-            label="Mot de passe"
-            type="password"
-            required
-            data-testid="login-password-input"
-            placeholder="••••••••"
-            :autocomplete="isSignUp ? 'new-password' : 'current-password'"
-          />
+          <div>
+            <BaseField
+              v-model="password"
+              label="Mot de passe"
+              type="password"
+              required
+              data-testid="login-password-input"
+              placeholder="••••••••"
+              :autocomplete="isSignUp ? 'new-password' : 'current-password'"
+            />
+            <div v-if="!isSignUp" class="mt-2 text-right">
+              <RouterLink
+                to="/forgot-password"
+                data-testid="login-forgot-password"
+                class="inline-flex min-h-[44px] items-center text-sm text-primary-700 hover:text-primary-800 sm:min-h-0 dark:text-primary-400 dark:hover:text-primary-300"
+              >
+                Mot de passe oublié ?
+              </RouterLink>
+            </div>
+          </div>
 
           <BaseField
             v-if="isSignUp"
@@ -152,7 +163,7 @@
             :loading="loading"
             data-testid="login-submit-button"
           >
-            <span v-if="loading">Chargement...</span>
+            <span v-if="loading">Chargement…</span>
             <span v-else>{{ isSignUp ? "S'inscrire" : 'Se connecter' }}</span>
           </BaseButton>
         </form>
