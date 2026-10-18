@@ -404,6 +404,11 @@ describe('TagsService', () => {
         "WHEN rtx.transaction_id IS NOT NULL THEN 'COMMITTED'"
       )
       expect(clause).toContain('COALESCE(sc.rhythm, c.default_rhythm)')
+      // A smoothed purchase keeps falling while the user is away: committed,
+      // never part of what a trip suspends.
+      expect(withRhythm[0]).toContain(
+        'AND (t.amortization_months IS NULL OR t.amount >= 0)'
+      )
     })
 
     it('returns zeroed analysis when the tag has no transactions', async () => {

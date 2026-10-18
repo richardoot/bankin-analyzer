@@ -461,6 +461,11 @@ export class TagsService {
         -- what every row used to be. A line of a detected recurrence is
         -- committed whatever its subcategory says.
         AND ${EFFECTIVE_RHYTHM} IS DISTINCT FROM 'COMMITTED'
+        -- A smoothed purchase is committed too: its slices keep falling
+        -- while the user is away, like rent, so a trip suspends none of it.
+        -- Left in, a phone bought in the reference year would inflate the
+        -- daily rate and hide the trip's surplus.
+        AND (t.amortization_months IS NULL OR t.amount >= 0)
         AND NOT EXISTS (
           SELECT 1
           FROM app.transaction_tags tt2
