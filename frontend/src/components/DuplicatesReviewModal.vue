@@ -188,8 +188,8 @@
 
   function amountClass(amount: number): string {
     return amount < 0
-      ? 'text-red-600 dark:text-red-500'
-      : 'text-green-600 dark:text-green-500'
+      ? 'text-red-600 dark:text-red-400'
+      : 'text-green-700 dark:text-green-400'
   }
 </script>
 
@@ -211,19 +211,21 @@
         </h3>
         <div class="grid grid-cols-3 gap-2 text-sm sm:gap-4">
           <div class="text-center">
-            <p class="text-2xl font-bold text-green-600 dark:text-green-400">
+            <p class="text-2xl font-bold text-green-700 dark:text-green-400">
               {{ previewResult.newCount }}
             </p>
             <p class="text-gray-600 dark:text-gray-400">Nouvelles</p>
           </div>
           <div class="text-center">
-            <p class="text-2xl font-bold text-amber-600 dark:text-amber-400">
+            <p class="text-2xl font-bold text-amber-700 dark:text-amber-400">
               {{ previewResult.internalDuplicateCount }}
             </p>
             <p class="text-gray-600 dark:text-gray-400">Doublons internes</p>
           </div>
           <div class="text-center">
-            <p class="text-2xl font-bold text-red-600 dark:text-red-400">
+            <!-- Already in the account: skipped, nothing goes wrong — neutral,
+                 where the internal duplicates still ask for a decision. -->
+            <p class="text-2xl font-bold text-gray-700 dark:text-gray-300">
               {{ previewResult.externalDuplicateCount }}
             </p>
             <p class="text-gray-600 dark:text-gray-400">Déjà importées</p>
@@ -263,7 +265,7 @@
             class="border-b border-amber-200 bg-amber-50 px-4 py-2 dark:border-amber-800 dark:bg-amber-900/20"
           >
             <span
-              class="text-sm font-medium text-amber-800 dark:text-amber-400"
+              class="text-sm font-medium text-amber-800 dark:text-amber-300"
             >
               Groupe {{ groupIdx + 1 }} : {{ group.indices.length }}
               transactions identiques
@@ -341,9 +343,9 @@
           :data-testid="`external-row-${dup.uploaded.index}`"
         >
           <div
-            class="border-b border-red-200 bg-red-50 px-4 py-2 dark:border-red-800 dark:bg-red-900/20"
+            class="border-b border-gray-200 bg-gray-50 px-4 py-2 dark:border-slate-700 dark:bg-slate-800"
           >
-            <span class="text-sm font-medium text-red-800 dark:text-red-400">
+            <span class="text-sm font-medium text-gray-800 dark:text-gray-200">
               Transaction #{{ dup.uploaded.index + 1 }} existe déjà
             </span>
           </div>
@@ -456,7 +458,7 @@
 
     <template #footer-start>
       <p class="text-gray-600 dark:text-gray-400" data-testid="import-summary">
-        <span class="font-medium text-green-600 dark:text-green-400">{{
+        <span class="font-medium text-green-700 dark:text-green-400">{{
           totalToImport
         }}</span>
         à importer,

@@ -73,7 +73,7 @@
           class="bg-green-50 dark:bg-green-900/20 rounded-xl p-6 text-center"
         >
           <div
-            class="text-4xl font-bold text-green-600 dark:text-green-400 mb-1"
+            class="text-4xl font-bold text-green-700 dark:text-green-400 mb-1"
           >
             {{ imported }}
           </div>
@@ -97,7 +97,7 @@
           class="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-6 text-center"
         >
           <div
-            class="text-4xl font-bold text-amber-600 dark:text-amber-400 mb-1"
+            class="text-4xl font-bold text-amber-700 dark:text-amber-400 mb-1"
           >
             {{ duplicates }}
           </div>

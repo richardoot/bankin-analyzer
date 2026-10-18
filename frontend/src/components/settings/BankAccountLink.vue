@@ -55,7 +55,7 @@
   >
     <template #extra-badges>
       <span
-        class="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-900/30 dark:text-sky-300"
+        class="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-700 dark:bg-slate-700 dark:text-gray-300"
       >
         {{ bankName }}
       </span>

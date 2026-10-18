@@ -69,14 +69,14 @@
   ): { bg: string; text: string; icon: string } =>
     run.undoneAt
       ? {
-          bg: 'bg-gray-100',
-          text: 'text-gray-600',
+          bg: 'bg-gray-100 dark:bg-slate-700',
+          text: 'text-gray-600 dark:text-gray-300',
           // Undo arrow: this run's writes have been taken back.
           icon: 'M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3',
         }
       : {
-          bg: 'bg-primary-100',
-          text: 'text-primary-600',
+          bg: 'bg-green-100 dark:bg-green-900/30',
+          text: 'text-green-700 dark:text-green-300',
           icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
         }
 
@@ -237,7 +237,7 @@
                 <span
                   v-if="run.trigger === 'SCHEDULED'"
                   data-testid="run-auto-badge"
-                  class="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                  class="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
                   title="Synchronisation quotidienne automatique"
                 >
                   Auto
@@ -299,13 +299,11 @@
         <!-- Stats Grid -->
         <div class="grid grid-cols-2 gap-4">
           <!-- Inserted -->
-          <div class="rounded-lg bg-primary-50 dark:bg-primary-900/30 p-3">
-            <p
-              class="text-2xl font-bold text-primary-700 dark:text-primary-400"
-            >
+          <div class="rounded-lg bg-green-50 dark:bg-green-900/30 p-3">
+            <p class="text-2xl font-bold text-green-700 dark:text-green-400">
               {{ run.inserted.toLocaleString('fr-FR') }}
             </p>
-            <p class="text-sm text-primary-600 dark:text-primary-500">
+            <p class="text-sm text-green-700 dark:text-green-300">
               nouvelles transactions
             </p>
           </div>

@@ -52,26 +52,26 @@
     switch (status) {
       case 'COMPLETED':
         return {
-          bg: 'bg-primary-100',
-          text: 'text-primary-600',
+          bg: 'bg-green-100 dark:bg-green-900/30',
+          text: 'text-green-700 dark:text-green-300',
           icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
         }
       case 'IN_PROGRESS':
         return {
-          bg: 'bg-amber-100',
-          text: 'text-amber-600',
+          bg: 'bg-blue-100 dark:bg-blue-900/30',
+          text: 'text-blue-700 dark:text-blue-300',
           icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
         }
       case 'FAILED':
         return {
-          bg: 'bg-red-100',
-          text: 'text-red-600',
+          bg: 'bg-red-100 dark:bg-red-900/30',
+          text: 'text-red-700 dark:text-red-300',
           icon: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z',
         }
       default:
         return {
-          bg: 'bg-gray-100',
-          text: 'text-gray-600',
+          bg: 'bg-gray-100 dark:bg-slate-700',
+          text: 'text-gray-600 dark:text-gray-300',
           icon: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
         }
     }
@@ -272,13 +272,11 @@
         <!-- Stats Grid -->
         <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <!-- Transactions Imported -->
-          <div class="rounded-lg bg-primary-50 dark:bg-primary-900/30 p-3">
-            <p
-              class="text-2xl font-bold text-primary-700 dark:text-primary-400"
-            >
+          <div class="rounded-lg bg-green-50 dark:bg-green-900/30 p-3">
+            <p class="text-2xl font-bold text-green-700 dark:text-green-400">
               {{ history.transactionsImported.toLocaleString('fr-FR') }}
             </p>
-            <p class="text-sm text-primary-600 dark:text-primary-500">
+            <p class="text-sm text-green-700 dark:text-green-300">
               transactions importées
             </p>
           </div>
@@ -298,19 +296,17 @@
             <p class="text-2xl font-bold text-amber-700 dark:text-amber-400">
               {{ history.duplicatesSkipped.toLocaleString('fr-FR') }}
             </p>
-            <p class="text-sm text-amber-600 dark:text-amber-500">
+            <p class="text-sm text-amber-700 dark:text-amber-300">
               doublons ignorés
             </p>
           </div>
 
           <!-- Categories Created -->
-          <div class="rounded-lg bg-primary-50 dark:bg-primary-900/30 p-3">
-            <p
-              class="text-2xl font-bold text-primary-700 dark:text-primary-400"
-            >
+          <div class="rounded-lg bg-blue-50 dark:bg-blue-900/30 p-3">
+            <p class="text-2xl font-bold text-blue-700 dark:text-blue-400">
               {{ history.categoriesCreated.toLocaleString('fr-FR') }}
             </p>
-            <p class="text-sm text-primary-600 dark:text-primary-500">
+            <p class="text-sm text-blue-700 dark:text-blue-300">
               nouvelles catégories
             </p>
           </div>

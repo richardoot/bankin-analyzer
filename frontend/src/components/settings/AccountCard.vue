@@ -172,7 +172,9 @@
 
   // ── Badges ────────────────────────────────────────────────────────────────
   // Small summary shown on the collapsed header so the card is readable
-  // without opening it.
+  // without opening it. Amber only for what needs a hand (« à réaffecter »);
+  // the account's kind is information (blue), its exclusions a setting
+  // (grey) — neither a warning nor a danger.
   function computeBadges(): { label: string; tone: string }[] {
     const list: { label: string; tone: string }[] = []
     if (props.needsReviewCount) {
@@ -184,29 +186,29 @@
     if (props.account.type === 'JOINT') {
       list.push({
         label: `Joint ÷${props.account.divisor}`,
-        tone: 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
+        tone: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
       })
     } else if (props.account.type === 'INVESTMENT') {
       list.push({
         label: 'Investissement',
-        tone: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+        tone: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
       })
     } else if (props.account.divisor !== 1) {
       list.push({
         label: `÷${props.account.divisor}`,
-        tone: 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
+        tone: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
       })
     }
     if (props.account.isExcludedFromStats) {
       list.push({
         label: 'Hors statistiques',
-        tone: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+        tone: 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-300',
       })
     }
     if (props.account.isExcludedFromBudget) {
       list.push({
         label: 'Hors budget',
-        tone: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+        tone: 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-300',
       })
     }
     return list

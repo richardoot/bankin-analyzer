@@ -69,7 +69,9 @@
   ]
 
   // Tailwind only ships classes it can read in full, hence the literal
-  // strings rather than a template built from the color name.
+  // strings rather than a template built from the color name. Each feature
+  // wears the hue its screen wears in the app: debt for reimbursements,
+  // amber for the event tags, the rest primary, blue or neutral.
   const colorClasses = {
     primary: {
       box: 'bg-primary-100 dark:bg-primary-900/30',
@@ -79,21 +81,17 @@
       box: 'bg-blue-100 dark:bg-blue-900/30',
       icon: 'text-blue-600 dark:text-blue-400',
     },
-    purple: {
-      box: 'bg-purple-100 dark:bg-purple-900/30',
-      icon: 'text-purple-600 dark:text-purple-400',
+    debt: {
+      box: 'bg-debt-100 dark:bg-debt-900/30',
+      icon: 'text-debt-700 dark:text-debt-400',
     },
     amber: {
       box: 'bg-amber-100 dark:bg-amber-900/30',
-      icon: 'text-amber-600 dark:text-amber-400',
+      icon: 'text-amber-700 dark:text-amber-400',
     },
-    rose: {
-      box: 'bg-rose-100 dark:bg-rose-900/30',
-      icon: 'text-rose-600 dark:text-rose-400',
-    },
-    slate: {
-      box: 'bg-slate-100 dark:bg-slate-700/40',
-      icon: 'text-slate-600 dark:text-slate-300',
+    gray: {
+      box: 'bg-gray-100 dark:bg-slate-700/40',
+      icon: 'text-gray-600 dark:text-gray-300',
     },
   } as const
 
@@ -120,7 +118,7 @@
         'Dépenses et revenus par mois et par catégorie, sur la période de votre choix.',
       iconPath:
         'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-      color: 'slate',
+      color: 'gray',
     },
     {
       title: 'Budget prévisionnel',
@@ -136,7 +134,7 @@
         'Associez une dépense à une personne, suivez qui doit quoi, et soldez en un récapitulatif.',
       iconPath:
         'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
-      color: 'purple',
+      color: 'debt',
     },
     {
       title: 'Étiquettes d’analyse',
@@ -152,7 +150,7 @@
         'Toujours là pour les comptes hors synchronisation ou l’historique ancien : un import en quatre écrans, doublons détectés.',
       iconPath:
         'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12',
-      color: 'slate',
+      color: 'gray',
     },
     {
       title: 'Sur votre téléphone',
@@ -160,7 +158,7 @@
         'Installable comme une application, avec une interface pensée pour le pouce : filtres repliés, actions à portée.',
       iconPath:
         'M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z',
-      color: 'rose',
+      color: 'primary',
     },
     {
       title: 'Vos données, vos questions',
