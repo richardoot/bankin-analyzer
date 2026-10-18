@@ -16,7 +16,10 @@
    * less the reimbursements requested on it, divided like its account.
    *
    * Twelve, 24 and 36 months cover the usual cases (an unexpected repair,
-   * a phone, a computer); any whole number from 2 to 60 is accepted.
+   * a phone, a computer); any whole number from 2 to 60 is accepted. The
+   * dialog opens on the duration the server proposes for the subcategory
+   * (`suggestedAmortizationMonths`: High-tech 24, Maison et déco 48,
+   * Entretien et réparation 12…), added to the choices when it is not one.
    *
    * Refused before asking, with the reason, rather than after a round trip:
    * a transaction carrying an exceptional tag (an episode leaves the
@@ -47,9 +50,31 @@
   const MIN_MONTHS = 2
   const MAX_MONTHS = 60
   const PRESETS = [12, 24, 36] as const
+  const FALLBACK_MONTHS = 24
 
-  type Choice = (typeof PRESETS)[number] | 'custom'
-  const choice = ref<Choice>(24)
+  /** The duration proposed for its subcategory, when in bounds. */
+  const suggested = computed<number | null>(() => {
+    const value = props.transaction?.suggestedAmortizationMonths
+    return typeof value === 'number' &&
+      Number.isInteger(value) &&
+      value >= MIN_MONTHS &&
+      value <= MAX_MONTHS
+      ? value
+      : null
+  })
+
+  /** The usual durations, plus the proposed one when it is not among them. */
+  const presets = computed<number[]>(() =>
+    [
+      ...new Set([
+        ...PRESETS,
+        ...(suggested.value !== null ? [suggested.value] : []),
+      ]),
+    ].sort((a, b) => a - b)
+  )
+
+  type Choice = number | 'custom'
+  const choice = ref<Choice>(FALLBACK_MONTHS)
   const customMonths = ref<string>('')
 
   /** What the slices sum to, as the budget will spread it. */
@@ -75,14 +100,14 @@
     open => {
       if (!open) return
       const months = current.value
-      if (months !== null && (PRESETS as readonly number[]).includes(months)) {
-        choice.value = months as Choice
+      if (months !== null && presets.value.includes(months)) {
+        choice.value = months
         customMonths.value = ''
       } else if (months !== null) {
         choice.value = 'custom'
         customMonths.value = String(months)
       } else {
-        choice.value = 24
+        choice.value = suggested.value ?? FALLBACK_MONTHS
         customMonths.value = ''
       }
     },
@@ -202,7 +227,7 @@
       </legend>
       <div class="space-y-1">
         <label
-          v-for="preset in PRESETS"
+          v-for="preset in presets"
           :key="preset"
           class="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg px-3 text-sm text-gray-700 hover:bg-gray-50 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 dark:text-gray-300 dark:hover:bg-slate-800"
         >
@@ -214,7 +239,16 @@
             :data-testid="`amortization-preset-${preset}`"
             class="h-4 w-4 text-primary-700"
           />
-          <span class="flex-1">{{ preset }} mois</span>
+          <span class="flex-1">
+            {{ preset }} mois
+            <span
+              v-if="preset === suggested && transaction?.subcategoryName"
+              class="ml-1 text-xs text-gray-500 dark:text-gray-400"
+              :data-testid="`amortization-suggested-${preset}`"
+            >
+              · proposé pour {{ transaction.subcategoryName }}
+            </span>
+          </span>
           <span
             class="tabular-nums text-xs text-gray-500 dark:text-gray-400"
             aria-hidden="true"

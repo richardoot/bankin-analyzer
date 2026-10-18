@@ -46,6 +46,45 @@ describe('TransactionAmortizationModal', () => {
     expect(sliceText(wrapper)).toContain('de juin 2026 à mai 2028')
   })
 
+  it('opens on the duration proposed for its subcategory, added when not offered', () => {
+    const wrapper = mountModal({
+      transaction: {
+        ...phone,
+        description: 'Canapé',
+        subcategoryName: 'Maison et déco',
+        suggestedAmortizationMonths: 48,
+      } as TransactionDto,
+    })
+
+    expect(
+      wrapper.find<HTMLInputElement>('[data-testid="amortization-preset-48"]')
+        .element.checked
+    ).toBe(true)
+    expect(
+      wrapper.find('[data-testid="amortization-suggested-48"]').text()
+    ).toContain('proposé pour Maison et déco')
+    expect(
+      wrapper.find('[data-testid="amortization-preset-12"]').exists()
+    ).toBe(true)
+    expect(sliceText(wrapper)).toContain('27,08 € par mois')
+  })
+
+  it('opens on 12 months for a repair', () => {
+    const wrapper = mountModal({
+      transaction: {
+        ...phone,
+        subcategoryName: 'Entretien et réparation',
+        suggestedAmortizationMonths: 12,
+      } as TransactionDto,
+    })
+
+    expect(
+      wrapper.find<HTMLInputElement>('[data-testid="amortization-preset-12"]')
+        .element.checked
+    ).toBe(true)
+    expect(wrapper.findAll('input[type="radio"]')).toHaveLength(4)
+  })
+
   it('follows the choice live, a free duration included', async () => {
     const wrapper = mountModal()
 

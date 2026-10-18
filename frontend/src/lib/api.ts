@@ -333,6 +333,12 @@ export interface TransactionDto {
    * from the month of its date (2 to 60). Null: counted whole at its date.
    */
   amortizationMonths?: number | null
+  /**
+   * The one smoothing duration the server proposes for its subcategory
+   * (High-tech 24, Maison et déco 48, Entretien et réparation 12…), 12 when
+   * the subcategory says nothing. Expenses only.
+   */
+  suggestedAmortizationMonths?: number
   categoryId?: string | null
   // Mirrors the backend, which omits the key entirely when the transaction has
   // no category. Under `exactOptionalPropertyTypes` an absent property and one
