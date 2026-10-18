@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import IncomeTransactionPicker from './IncomeTransactionPicker.vue'
 import type { TransactionDto } from '@/lib/api'
@@ -12,6 +13,15 @@ vi.mock('@/lib/api', () => ({
 }))
 
 import { api } from '@/lib/api'
+
+// The links to the Transactions page need a router behind RouterLink.
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/', component: { template: '<div />' } },
+    { path: '/transactions', component: { template: '<div />' } },
+  ],
+})
 
 enableAutoUnmount(afterEach)
 
@@ -55,6 +65,7 @@ function searchTerms(): (string | undefined)[] {
 
 async function mountPicker(personName = 'Alice Martin') {
   const wrapper = mount(IncomeTransactionPicker, {
+    global: { plugins: [router] },
     props: { context: { personName, pendingTotals: [45] } },
   })
   await flushPromises()
@@ -159,6 +170,21 @@ describe('IncomeTransactionPicker candidate set', () => {
 
     expect(wrapper.find('[data-testid="settlement-truncated"]').exists()).toBe(
       false
+    )
+  })
+
+  it('offers every match on the Transactions page, in a new tab, with the filters', async () => {
+    vi.mocked(api.getTransactions)
+      .mockResolvedValueOnce(page([income()], 12))
+      .mockResolvedValueOnce(page([income()], 140))
+      .mockResolvedValueOnce(page([income()], 3))
+    const wrapper = await mountPicker()
+
+    const link = wrapper.get('[data-testid="settlement-all-matches-link"]')
+    // A settlement is being composed: the list opens beside it.
+    expect(link.attributes('target')).toBe('_blank')
+    expect(link.attributes('href')).toBe(
+      '/transactions?type=INCOME&label=Revenus+pour+Alice+Martin'
     )
   })
 })
