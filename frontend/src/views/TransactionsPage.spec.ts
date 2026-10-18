@@ -1096,6 +1096,8 @@ describe('TransactionsPage — optimistic updates', () => {
       note: null,
       createdAt: '2026-01-15T00:00:00.000Z',
       updatedAt: '2026-01-15T00:00:00.000Z',
+      settlementIds: [],
+      incomeTransactionIds: [],
     }
 
     const mountWithReimbursement = async () => {
@@ -1472,6 +1474,90 @@ describe('TransactionsPage — optimistic updates', () => {
         recurrence: '15:com netflix',
         recurrenceLabel: 'Netflix',
       })
+    })
+  })
+
+  describe('links from a row to exact lists', () => {
+    it('offers the rows a settlement touched, beside the detail it opens', async () => {
+      setupDefaultMocks([
+        makeTx({
+          id: 'inc-1',
+          type: 'INCOME',
+          amount: 50,
+          settlements: [
+            {
+              id: 'stl-1',
+              personId: 'p-1',
+              personName: 'Marie',
+              amountUsed: 30,
+            },
+          ],
+        }),
+      ])
+      await router.replace({ query: {} })
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      const link = wrapper.find('[data-testid="settlement-rows-link-stl-1"]')
+      expect(link.attributes('href')).toBe(
+        '/transactions?settlement=stl-1&label=R%C3%A8glement+de+Marie'
+      )
+      // The link beside it still opens the detail.
+      expect(api.getSettlement).not.toHaveBeenCalled()
+    })
+
+    it('offers the income that repaid a debt, once cash came in', async () => {
+      setupDefaultMocks()
+      vi.mocked(api.getReimbursements).mockResolvedValue([
+        {
+          id: 'r-1',
+          transactionId: 'tx-1',
+          personId: 'p-1',
+          personName: 'Marie',
+          expenseCategoryId: 'cat-1',
+          expenseCategoryName: 'Alimentation',
+          amount: 2,
+          amountReceived: 2,
+          amountRemaining: 0,
+          status: 'COMPLETED',
+          note: null,
+          settlementIds: ['stl-9'],
+          incomeTransactionIds: ['inc-9'],
+          createdAt: '2026-01-15T00:00:00.000Z',
+          updatedAt: '2026-01-15T00:00:00.000Z',
+        },
+      ])
+      await router.replace({ query: {} })
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      expect(
+        wrapper
+          .find('[data-testid="reimbursement-income-link-r-1"]')
+          .attributes('href')
+      ).toBe('/transactions?ids=inc-9&label=Revenu+ayant+rembours%C3%A9+Marie')
     })
   })
 })

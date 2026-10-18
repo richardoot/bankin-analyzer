@@ -44,6 +44,8 @@ const reimb = (overrides: Partial<ReimbursementDto>): ReimbursementDto =>
     amount: 10,
     amountReceived: 0,
     status: 'PENDING',
+    settlementIds: [],
+    incomeTransactionIds: [],
     ...overrides,
   }) as ReimbursementDto
 
