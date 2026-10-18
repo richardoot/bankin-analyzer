@@ -132,6 +132,11 @@ describe('BudgetPage', () => {
         true
       )
       expect(wrapper.text()).toContain('Aucun budget en cours')
+      // Said once, with one way to create: the header does not repeat it
+      expect(wrapper.text().match(/Aucun budget en cours/g)).toHaveLength(1)
+      expect(
+        wrapper.find('[data-testid="header-new-plan-button"]').exists()
+      ).toBe(false)
       // Statistics are not fetched when no plan
       expect(api.getBudgetStatistics).not.toHaveBeenCalled()
     })

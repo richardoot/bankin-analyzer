@@ -122,15 +122,11 @@
           — ce plan ne tient pas dans les revenus prévus
         </span>
       </p>
-      <p
-        v-else-if="!isLoading"
-        class="mt-1 text-sm sm:text-base text-gray-600 dark:text-gray-400"
-      >
-        Aucun budget en cours.
-      </p>
     </div>
 
-    <div class="flex items-center gap-2 shrink-0">
+    <!-- Without a plan the page's empty state carries « Créer un budget »
+         and « Historique »: the header does not repeat them. -->
+    <div v-if="plan" class="flex items-center gap-2 shrink-0">
       <BaseButton
         v-if="(planCount ?? 0) > 0"
         variant="secondary"
