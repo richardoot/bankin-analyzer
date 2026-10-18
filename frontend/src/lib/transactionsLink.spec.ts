@@ -99,6 +99,7 @@ describe('parseTransactionsQuery', () => {
     importId: 'import-1',
     syncRunId: 'run-1',
     ids: ['tx-1', 'tx-2'],
+    exceptional: 'exclude',
     label: 'Dettes ouvertes de Julien',
     gross: true,
     sort: 'amount',
@@ -137,6 +138,7 @@ describe('parseTransactionsQuery', () => {
         sort: 'merchant',
         dir: 'sideways',
         notPointed: 'yes',
+        exceptional: 'sometimes',
       })
     ).toEqual({})
   })
@@ -145,6 +147,15 @@ describe('parseTransactionsQuery', () => {
     expect(
       parseTransactionsQuery({ q: ['  uber ', 'x'], account: ['A', 'B'] })
     ).toEqual({ q: 'uber', account: 'A' })
+  })
+
+  it('carries the exceptional events left out, or kept alone', () => {
+    expect(transactionsQuery({ exceptional: 'only' })).toEqual({
+      exceptional: 'only',
+    })
+    expect(parseTransactionsQuery({ exceptional: 'exclude' })).toEqual({
+      exceptional: 'exclude',
+    })
   })
 
   it('reads an id list, blanks removed', () => {

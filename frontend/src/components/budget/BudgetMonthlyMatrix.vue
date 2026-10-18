@@ -2,7 +2,10 @@
   import { computed, ref } from 'vue'
   import { RouterLink } from 'vue-router'
   import { formatCurrency } from '@/lib/formatters'
-  import { transactionsLink } from '@/lib/transactionsLink'
+  import {
+    transactionsLink,
+    type ExceptionalFilter,
+  } from '@/lib/transactionsLink'
   import { useIsMobile } from '@/composables/useMediaQuery'
   import IconChevronDown from '@/components/icons/IconChevronDown.vue'
 
@@ -32,6 +35,11 @@
     rows: MatrixRow[]
     /** The month currently isolated on the page, highlighted here. */
     selectedMonth: string | null
+    /**
+     * `exclude` when the amounts are read « Vie courante »: the links then
+     * leave the events out, as the figures do.
+     */
+    exceptional?: ExceptionalFilter | undefined
   }>()
 
   /**
@@ -89,6 +97,7 @@
       type: 'EXPENSE',
       categoryId: row.categoryId,
       month: month?.ym,
+      exceptional: props.exceptional,
       gross: true,
       label: `${row.categoryName} · ${month?.label ?? ''}`,
     })
@@ -99,6 +108,7 @@
     return transactionsLink({
       type: 'EXPENSE',
       month: month?.ym,
+      exceptional: props.exceptional,
       gross: true,
       label: `Dépenses · ${month?.label ?? ''}`,
     })

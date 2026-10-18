@@ -30,6 +30,18 @@ export type TransactionsLinkType = 'EXPENSE' | 'INCOME' | 'TRANSFER'
 /** The value that asks for « sans catégorie » / « sans sous-catégorie ». */
 export const NO_CATEGORY = 'none'
 
+/**
+ * The rows carrying an exceptional event's tag: left out (`exclude`, the
+ * « Vie courante » reading) or kept alone (`only`, the share it sets aside).
+ */
+export type ExceptionalFilter = 'exclude' | 'only'
+
+/** How the Transactions page names that filter, in a chip. */
+export const EXCEPTIONAL_LABEL: Record<ExceptionalFilter, string> = {
+  exclude: 'Hors événements exceptionnels',
+  only: 'Événements exceptionnels seulement',
+}
+
 export const TRANSACTIONS_PAGE_SIZES = [20, 50, 100] as const
 
 export interface TransactionsLinkFilters {
@@ -68,6 +80,8 @@ export interface TransactionsLinkFilters {
   syncRunId?: string | undefined
   /** An exact list of rows. */
   ids?: string[] | undefined
+  /** The rows of an exceptional event, left out or kept alone. */
+  exceptional?: ExceptionalFilter | undefined
   /** What the context banner says, when the filters alone would not. */
   label?: string | undefined
   /** The figure the link came from was netted and shared; the list is not. */
@@ -104,6 +118,7 @@ export const TRANSACTIONS_QUERY_KEYS = [
   'import',
   'syncRun',
   'ids',
+  'exceptional',
   'label',
   'gross',
   'sort',
@@ -193,6 +208,7 @@ export function transactionsQuery(
   if (syncRun) query.syncRun = syncRun
   const ids = (filters.ids ?? []).map(id => id.trim()).filter(id => id !== '')
   if (ids.length > 0) query.ids = ids.join(',')
+  if (filters.exceptional) query.exceptional = filters.exceptional
   const label = trimmed(filters.label)
   if (label) query.label = label
   if (filters.gross) query.gross = '1'
@@ -276,6 +292,9 @@ export function parseTransactionsQuery(
     .map(id => id.trim())
     .filter(id => id !== '')
   if (ids.length > 0) filters.ids = ids
+  const exceptional = get('exceptional')
+  if (exceptional === 'exclude' || exceptional === 'only')
+    filters.exceptional = exceptional
   const label = get('label')
   if (label?.trim()) filters.label = label.trim()
   if (get('gross') === '1') filters.gross = true

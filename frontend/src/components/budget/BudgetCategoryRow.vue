@@ -66,14 +66,36 @@
     'select-month': [yearMonth: string]
   }>()
 
+  /**
+   * In « Vie courante » both reference figures leave the events out; their
+   * links do the same.
+   */
   function windowLink(window: { from: string; to: string; label: string }) {
     return transactionsLink({
       type: 'EXPENSE',
       categoryId: props.category.categoryId,
       from: window.from,
       to: window.to,
+      exceptional: props.breakdownMode === 'everyday' ? 'exclude' : undefined,
       gross: true,
       label: `${props.category.categoryName} · ${window.label}`,
+    })
+  }
+
+  /** The events' share of « Réel », on its own: what « dont / hors » names. */
+  function exceptionalLink(window: {
+    from: string
+    to: string
+    label: string
+  }) {
+    return transactionsLink({
+      type: 'EXPENSE',
+      categoryId: props.category.categoryId,
+      from: window.from,
+      to: window.to,
+      exceptional: 'only',
+      gross: true,
+      label: `${props.category.categoryName} · événements · ${window.label}`,
     })
   }
 
@@ -279,6 +301,14 @@
         >
           {{ breakdownMode === 'everyday' ? 'hors' : 'dont' }}
           {{ formatCurrency(exceptionalAverage) }} d'événements
+          <TransactionsLink
+            v-if="actualWindow"
+            :to="exceptionalLink(actualWindow)"
+            :subject="`${category.categoryName} · événements · ${actualWindow.label}`"
+            icon-only
+            class="-my-2 h-6 w-6 align-middle"
+            :data-testid="`budget-exceptional-link-${category.categoryName}`"
+          />
         </span>
         <BaseButton
           v-if="editing && actualAverage > 0"

@@ -66,8 +66,30 @@
       categoryId: linkCategoryId(cat),
       from: props.window?.from,
       to: props.window?.to,
+      exceptional: everydayFilter.value,
       gross: true,
       label: cat.category,
+    })
+  }
+
+  /**
+   * In « Vie courante » the row's figure leaves the events out; its link
+   * does the same. The real reading counts everything, and filters nothing.
+   */
+  const everydayFilter = computed(() =>
+    props.mode === 'everyday' ? ('exclude' as const) : undefined
+  )
+
+  /** The share the events carry, on its own: what « dont / hors » names. */
+  function exceptionalLink(cat: CategoryDataDto) {
+    return transactionsLink({
+      type: 'EXPENSE',
+      categoryId: linkCategoryId(cat),
+      from: props.window?.from,
+      to: props.window?.to,
+      exceptional: 'only',
+      gross: true,
+      label: `${cat.category} · événements exceptionnels`,
     })
   }
 
@@ -98,6 +120,7 @@
         type: 'EXPENSE',
         categoryId: linkCategoryId(cat),
         month,
+        exceptional: everydayFilter.value,
         gross: true,
         label: `${cat.category} · ${formatMonth(month, { capitalize: false })}`,
       })
@@ -336,6 +359,27 @@
             :months="monthLabels"
             @select-month="month => openMonth(cat, month)"
           />
+        </div>
+
+        <!-- The events' share, and the rows behind it. A line of its own:
+             the figure in the row sits inside the toggle, where a link
+             cannot go. -->
+        <div
+          v-if="cat.exceptionalAmount && cat.exceptionalAmount > 0"
+          class="mt-3 flex flex-wrap items-center gap-x-2 text-xs text-amber-700 dark:text-amber-400"
+        >
+          <span class="tabular-nums">
+            Événements exceptionnels :
+            {{ formatCurrency(cat.exceptionalAmount) }}
+            {{ isEveryday ? '(exclus de la moyenne)' : '(inclus)' }}
+          </span>
+          <TransactionsLink
+            :to="exceptionalLink(cat)"
+            :subject="`${cat.category} · événements exceptionnels`"
+            :data-testid="`category-exceptional-link-${cat.category}`"
+          >
+            Voir
+          </TransactionsLink>
         </div>
 
         <!-- Reimbursement info -->

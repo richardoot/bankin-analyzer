@@ -726,6 +726,8 @@ describe('DashboardPage', () => {
         query: {
           type: 'EXPENSE',
           category: 'cat-Alimentation',
+          // The page opens « Vie courante »: the slice leaves events out.
+          exceptional: 'exclude',
           label: 'Alimentation',
           gross: '1',
         },

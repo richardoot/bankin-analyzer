@@ -33,12 +33,14 @@
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import { formatCurrency, formatDate } from '@/lib/formatters'
   import {
+    EXCEPTIONAL_LABEL,
     NO_CATEGORY,
     hasTransactionsQuery,
     parseTransactionsQuery,
     sameTransactionsQuery,
     transactionsLink,
     transactionsQuery,
+    type ExceptionalFilter,
     type TransactionsLinkFilters,
   } from '@/lib/transactionsLink'
   import FilterChips from '@/components/ui/FilterChips.vue'
@@ -222,6 +224,15 @@
     initialLink.recurrenceLabel ?? null
   )
   /**
+   * The rows of exceptional events, left out (the « Vie courante » reading
+   * of the Dashboard and the Budget) or kept alone. A link sets it, the
+   * filter panel offers it; not saved, like the review filter: it answers
+   * the figure it came from, it is not a way to read the list every day.
+   */
+  const exceptionalFilter = ref<ExceptionalFilter | null>(
+    initialLink.exceptional ?? null
+  )
+  /**
    * The context a link can carry and the controls above cannot express: a
    * person's debts, a settlement, an import, a sync run, an exact list of
    * rows. Named in the banner above the list rather than in a chip, and
@@ -302,6 +313,7 @@
     needsBankReview.value = false
     recurrenceFilter.value = null
     recurrenceLabel.value = null
+    exceptionalFilter.value = null
     clearContext()
     localStorage.removeItem(FILTERS_STORAGE_KEY)
   }
@@ -344,6 +356,7 @@
       amountMax.value !== '' ||
       needsBankReview.value ||
       recurrenceFilter.value !== null ||
+      exceptionalFilter.value !== null ||
       hasContextFilter.value
     )
   })
@@ -432,6 +445,12 @@
         label: `Charge récurrente${recurrenceLabel.value ? ` : ${recurrenceLabel.value}` : ''}`,
       })
     }
+    if (exceptionalFilter.value) {
+      chips.push({
+        key: 'exceptional',
+        label: EXCEPTIONAL_LABEL[exceptionalFilter.value],
+      })
+    }
     if (searchKeyword.value.trim()) {
       chips.push({ key: 'q', label: `« ${searchKeyword.value.trim()} »` })
     }
@@ -481,6 +500,9 @@
         break
       case 'recurrence':
         recurrenceFilter.value = null
+        break
+      case 'exceptional':
+        exceptionalFilter.value = null
         break
       case 'q':
         searchKeyword.value = ''
@@ -720,6 +742,7 @@
       settlementId: settlementFilter.value || undefined,
       importId: importFilter.value || undefined,
       syncRunId: syncRunFilter.value || undefined,
+      exceptional: exceptionalFilter.value || undefined,
     }
   })
 
@@ -1085,6 +1108,7 @@
       importId: importFilter.value ?? undefined,
       syncRunId: syncRunFilter.value ?? undefined,
       ids: idsFilter.value,
+      exceptional: exceptionalFilter.value ?? undefined,
       label: contextLabel.value ?? undefined,
       gross: grossAmounts.value,
       sort: sortBy.value,
@@ -1139,6 +1163,7 @@
     importFilter.value = link.importId ?? null
     syncRunFilter.value = link.syncRunId ?? null
     idsFilter.value = link.ids ?? []
+    exceptionalFilter.value = link.exceptional ?? null
     contextLabel.value = link.label ?? null
     grossAmounts.value = link.gross ?? false
     // Sort and page size are how the list reads, not what it shows: a link
@@ -1213,6 +1238,7 @@
       showOnlyNotPointed,
       needsBankReview,
       recurrenceFilter,
+      exceptionalFilter,
       personFilter,
       reimbursementFilter,
       settlementFilter,
@@ -1682,6 +1708,22 @@
             <option v-for="tag in tagsStore.tags" :key="tag.id" :value="tag.id">
               {{ tag.name }}
             </option>
+          </select>
+        </div>
+
+        <!-- Exceptional events: the « Vie courante » reading of the
+               Dashboard and the Budget leaves them out. -->
+        <div class="flex flex-col gap-1">
+          <SectionLabel as="span">Événements</SectionLabel>
+          <select
+            v-model="exceptionalFilter"
+            data-testid="transactions-exceptional-filter"
+            aria-label="Événements exceptionnels"
+            class="h-11 md:h-9 w-full md:w-44 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
+          >
+            <option :value="null">Tous</option>
+            <option value="exclude">Hors événements</option>
+            <option value="only">Événements seulement</option>
           </select>
         </div>
 

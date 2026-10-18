@@ -396,11 +396,17 @@
    * and read in the active mode; the list is none of that, so each link
    * carries `gross` and the list says so.
    */
+  /** In « Vie courante » every figure leaves the events out: so do links. */
+  const everydayFilter = computed(() =>
+    breakdownMode.value === 'everyday' ? ('exclude' as const) : undefined
+  )
+
   function openMonthTransactions(ym: string): void {
     void router.push(
       transactionsLink({
         type: 'EXPENSE',
         month: ym,
+        exceptional: everydayFilter.value,
         gross: true,
         label: `Dépenses · ${formatMonth(ym, { capitalize: false })}`,
       })
@@ -413,6 +419,7 @@
         type: 'EXPENSE',
         categoryId: cat.categoryId,
         month: ym,
+        exceptional: everydayFilter.value,
         gross: true,
         label: `${cat.categoryName} · ${formatMonth(ym, { capitalize: false })}`,
       })
@@ -1166,6 +1173,7 @@
         :months="matrixMonths"
         :rows="matrixRows"
         :selected-month="selectedMonth"
+        :exceptional="everydayFilter"
       />
 
       <!-- Expense category list -->

@@ -1510,6 +1510,7 @@ describe('BudgetPage', () => {
           category: 'cat-food',
           from: '2026-06-01',
           to: '2026-08-20',
+          exceptional: 'exclude',
           label: 'Alimentation · plan',
           gross: '1',
         },
@@ -1583,6 +1584,52 @@ describe('BudgetPage', () => {
       })
     })
 
+    it('in the real reading, counts everything; the events’ share opens them alone', async () => {
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...sampleStatistics,
+        periodMonths: 7,
+        monthLabels: ['2026-06', '2026-07', '2026-08'],
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            totalAmount: 900,
+            transactionCount: 12,
+            averagePerMonth: 128,
+            monthlyAmounts: [500, 200, 200],
+            everydayMonthlyAmounts: [180, 200, 200],
+          },
+        ],
+      })
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      wrapper
+        .findComponent({ name: 'BudgetTableControls' })
+        .vm.$emit('set-mode', 'real')
+      await flushPromises()
+
+      const actual = JSON.parse(
+        wrapper
+          .get('[data-testid="budget-actual-link-Alimentation"]')
+          .attributes('data-to') ?? '{}'
+      )
+      expect(actual.query.exceptional).toBeUndefined()
+      const events = JSON.parse(
+        wrapper
+          .get('[data-testid="budget-exceptional-link-Alimentation"]')
+          .attributes('data-to') ?? '{}'
+      )
+      expect(events.query).toEqual({
+        type: 'EXPENSE',
+        category: 'cat-food',
+        from: '2026-06-01',
+        to: '2026-08-20',
+        exceptional: 'only',
+        label: 'Alimentation · événements · plan',
+        gross: '1',
+      })
+    })
+
     it('opens a month from a bar of the expenses chart', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
@@ -1597,6 +1644,7 @@ describe('BudgetPage', () => {
           type: 'EXPENSE',
           from: '2026-07-01',
           to: '2026-07-31',
+          exceptional: 'exclude',
           label: 'Dépenses · juil. 2026',
           gross: '1',
         },
@@ -1621,6 +1669,7 @@ describe('BudgetPage', () => {
           category: 'cat-food',
           from: '2026-06-01',
           to: '2026-06-30',
+          exceptional: 'exclude',
           label: 'Alimentation · juin 2026',
           gross: '1',
         },

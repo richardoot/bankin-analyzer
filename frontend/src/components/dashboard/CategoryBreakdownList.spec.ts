@@ -368,6 +368,45 @@ describe('CategoryBreakdownList', () => {
       expect(none.attributes('href')).not.toContain('exceptional')
     })
 
+    it('leaves the events out of a row’s link in « Vie courante », and links them alone', async () => {
+      const travel: CategoryDataDto = {
+        categoryId: 'cat-travel',
+        category: 'Voyages',
+        amount: 1000,
+        exceptionalAmount: 600,
+        everydayAmount: 400,
+      }
+      const mountIn = (mode: 'real' | 'everyday') =>
+        mount(CategoryBreakdownList, {
+          global: { plugins: [router] },
+          props: {
+            categories: [travel],
+            monthLabels,
+            total: 1000,
+            mode,
+            window: { from: '2024-01-01', to: '2024-03-31' },
+          },
+        })
+
+      const everyday = mountIn('everyday')
+      expect(
+        everyday.get('[data-testid="category-link-Voyages"]').attributes('href')
+      ).toContain('&exceptional=exclude&')
+      const real = mountIn('real')
+      expect(
+        real.get('[data-testid="category-link-Voyages"]').attributes('href')
+      ).not.toContain('exceptional')
+
+      await real.find('[data-testid="category-row-Voyages"]').trigger('click')
+      expect(
+        real
+          .get('[data-testid="category-exceptional-link-Voyages"]')
+          .attributes('href')
+      ).toBe(
+        '/transactions?type=EXPENSE&category=cat-travel&from=2024-01-01&to=2024-03-31&exceptional=only&label=Voyages+%C2%B7+%C3%A9v%C3%A9nements+exceptionnels&gross=1'
+      )
+    })
+
     it('opens the month a bar of the drill-down chart stands for', async () => {
       const push = vi.spyOn(router, 'push').mockResolvedValue(undefined)
       const wrapper = mount(CategoryBreakdownList, {

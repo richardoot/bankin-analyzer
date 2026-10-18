@@ -788,6 +788,7 @@
       :reserve-gap="reserveGap"
       :lookback-exceptional-per-month="lookbackExceptionalPerMonth"
       :reference-window="referenceWindow"
+      :everyday="seedBasis === 'everyday'"
       @update-entry="setEntryAmount"
       @set-savings="setSavingsTarget"
     />

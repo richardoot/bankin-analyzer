@@ -161,4 +161,24 @@ describe('BudgetMonthlyMatrix', () => {
       '/transactions?type=EXPENSE&from=2026-08-01&to=2026-08-31&label=D%C3%A9penses+%C2%B7+Ao%C3%BBt&gross=1'
     )
   })
+
+  it('leaves the events out of its links when read « Vie courante »', () => {
+    const wrapper = mount(BudgetMonthlyMatrix, {
+      props: { months, rows, selectedMonth: null, exceptional: 'exclude' },
+      global: { plugins: [router] },
+    })
+
+    expect(
+      wrapper
+        .get('[data-testid="matrix-cell-Alimentation-2026-07"]')
+        .get('a')
+        .attributes('href')
+    ).toContain('&exceptional=exclude&')
+    expect(
+      wrapper
+        .get('[data-testid="matrix-total-2026-08"]')
+        .get('a')
+        .attributes('href')
+    ).toContain('&exceptional=exclude&')
+  })
 })

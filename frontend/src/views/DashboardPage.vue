@@ -220,12 +220,21 @@
     )
   }
 
+  /**
+   * The donut of expenses reads « Vie courante » when the page does: its
+   * slices then leave the events out, and so do their links. Income has no
+   * events to leave out, the monthly bars always count everything.
+   */
   function openCategory(type: LinkType, id: string): void {
     void router.push(
       transactionsLink({
         type,
         categoryId: id,
         ...linkWindow.value,
+        exceptional:
+          type === 'EXPENSE' && breakdownMode.value === 'everyday'
+            ? 'exclude'
+            : undefined,
         gross: true,
         label: nameOf(type, id),
       })

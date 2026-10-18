@@ -1392,6 +1392,50 @@ describe('TransactionsPage — optimistic updates', () => {
       expect(router.currentRoute.value.query).toEqual({})
     })
 
+    it('leaves the exceptional events out, says so in a chip, and lets it go', async () => {
+      const wrapper = await mountAt({
+        category: 'cat-1',
+        exceptional: 'exclude',
+      })
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ categoryId: 'cat-1', exceptional: 'exclude' })
+      )
+      const chips = wrapper.find('[data-testid="active-filter-chips"]')
+      expect(chips.text()).toContain('Hors événements exceptionnels')
+      expect(
+        (
+          wrapper.find('[data-testid="transactions-exceptional-filter"]')
+            .element as HTMLSelectElement
+        ).value
+      ).toBe('exclude')
+
+      await chips
+        .find('[aria-label="Retirer le filtre Hors événements exceptionnels"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ exceptional: undefined })
+      )
+      expect(router.currentRoute.value.query.exceptional).toBeUndefined()
+    })
+
+    it('offers the events alone from the filter panel, mirrored in the URL', async () => {
+      const wrapper = await mountAt({ type: 'EXPENSE' })
+
+      await wrapper
+        .find('[data-testid="transactions-exceptional-filter"]')
+        .setValue('only')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ exceptional: 'only' })
+      )
+      expect(router.currentRoute.value.query.exceptional).toBe('only')
+      expect(wrapper.text()).toContain('Événements exceptionnels seulement')
+    })
+
     it('follows a link pushed while the page is open, and Back as well', async () => {
       const wrapper = await mountAt({ type: 'EXPENSE' })
       expect(api.getTransactions).toHaveBeenCalledTimes(1)
