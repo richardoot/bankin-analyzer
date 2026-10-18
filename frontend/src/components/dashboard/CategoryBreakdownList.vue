@@ -7,6 +7,7 @@
     type SubcategoryDataDto,
   } from '@/lib/api'
   import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
+  import { isAmortizationCarrier } from '@/lib/amortization'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
@@ -151,6 +152,34 @@
   }
 
   const isEveryday = computed(() => props.mode === 'everyday')
+
+  /**
+   * The breakdown lines shown. The real reading must look as it did before
+   * smoothing: a line only slices of smoothed purchases reach is left out.
+   */
+  function subcategoryLines(cat: CategoryDataDto): SubcategoryDataDto[] {
+    const lines = cat.subcategories ?? []
+    return isEveryday.value
+      ? lines
+      : lines.filter(sub => !isAmortizationCarrier(sub))
+  }
+
+  /**
+   * A line's figure in the active reading. Only a line a smoothed purchase
+   * touches carries its own everyday figures; every other line keeps the
+   * one it always had.
+   */
+  function subcategoryAmount(sub: SubcategoryDataDto): number {
+    return isEveryday.value && sub.everydayAmount !== undefined
+      ? sub.everydayAmount
+      : sub.amount
+  }
+
+  function subcategoryAverage(sub: SubcategoryDataDto): number {
+    return isEveryday.value && sub.everydayAveragePerMonth !== undefined
+      ? sub.everydayAveragePerMonth
+      : sub.averagePerMonth
+  }
 
   /** Amount over the period, in the active mode. */
   function displayedAmount(cat: CategoryDataDto): number {
@@ -298,14 +327,11 @@
         class="rounded-b-lg border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 px-4 py-4"
       >
         <!-- Subcategories table -->
-        <div
-          v-if="cat.subcategories && cat.subcategories.length > 0"
-          class="mb-4"
-        >
+        <div v-if="subcategoryLines(cat).length > 0" class="mb-4">
           <SectionLabel as="h4" class="mb-2"> Sous-catégories </SectionLabel>
           <div class="space-y-1">
             <div
-              v-for="sub in cat.subcategories"
+              v-for="sub in subcategoryLines(cat)"
               :key="sub.subcategoryId ?? '(sans sous-catégorie)'"
               class="flex items-center gap-3 py-1.5 pl-3 pr-1 rounded text-sm bg-white dark:bg-slate-900"
               :data-testid="`subcategory-line-${cat.category}-${sub.subcategory || 'none'}`"
@@ -328,12 +354,12 @@
               <span
                 class="font-medium text-gray-900 dark:text-gray-100 tabular-nums shrink-0"
               >
-                {{ formatCurrency(sub.amount) }}
+                {{ formatCurrency(subcategoryAmount(sub)) }}
               </span>
               <span
                 class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0 hidden sm:inline"
               >
-                {{ formatCurrency(sub.averagePerMonth) }}/mois
+                {{ formatCurrency(subcategoryAverage(sub)) }}/mois
               </span>
               <TransactionsLink
                 :to="subcategoryLink(cat, sub)"

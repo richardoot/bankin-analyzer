@@ -706,6 +706,112 @@ describe('useDashboardData', () => {
   })
 })
 
+describe('useDashboardData — smoothed purchases', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(localStorage.getItem).mockReturnValue(null)
+  })
+
+  /**
+   * January carries a 600 event; a 1 200 € phone bought in January is
+   * smoothed over 12 months (100 a month). March has nothing real in it:
+   * only the phone's slice reaches it, as does a category with no row.
+   */
+  const summary: DashboardSummaryDto = {
+    monthlyData: [
+      {
+        month: '2024-01',
+        label: 'Jan 2024',
+        expenses: 2600,
+        netExpenses: 2600,
+        income: 2500,
+        exceptionalExpenses: 600,
+        everydayNetExpenses: 900,
+        amortizedExpenses: 100,
+      },
+      {
+        month: '2024-02',
+        label: 'Fév 2024',
+        expenses: 800,
+        netExpenses: 800,
+        income: 2500,
+        exceptionalExpenses: 0,
+        everydayNetExpenses: 900,
+        amortizedExpenses: 100,
+      },
+      {
+        month: '2024-03',
+        label: 'Mars 2024',
+        expenses: 0,
+        netExpenses: 0,
+        income: 0,
+        exceptionalExpenses: 0,
+        everydayNetExpenses: 100,
+        amortizedExpenses: 100,
+      },
+    ],
+    expensesByCategory: [
+      {
+        categoryId: 'cat-Logement',
+        category: 'Logement',
+        amount: 3400,
+        transactionCount: 4,
+        everydayAmount: 1600,
+        exceptionalAmount: 600,
+      },
+      {
+        categoryId: 'cat-Tech',
+        category: 'High-tech',
+        amount: 0,
+        transactionCount: 0,
+        everydayAmount: 300,
+        exceptionalAmount: 0,
+        amortizedAmount: 300,
+      },
+    ],
+    incomeByCategory: [],
+    totalExpenses: 3400,
+    totalIncome: 5000,
+    allExpenseCategories: [],
+    allIncomeCategories: [],
+    availableAccounts: [],
+    periodMonths: 3,
+    monthLabels: ['2024-01', '2024-02', '2024-03'],
+    totalExceptionalExpenses: 600,
+    exceptionalEvents: [],
+  }
+
+  it('reads the real months and categories as before, without the carriers', async () => {
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(summary)
+    const data = useDashboardData()
+    await data.fetchData()
+
+    expect(data.hasAmortizedExpenses.value).toBe(true)
+    expect(data.monthlyData.value).toHaveLength(3)
+    expect(data.expenseCategoriesDetailed.value).toHaveLength(2)
+
+    data.setBreakdownMode('real')
+    expect(data.monthlyData.value.map(m => m.month)).toEqual([
+      '2024-01',
+      '2024-02',
+    ])
+    expect(data.periodMonths.value).toBe(2)
+    expect(data.averageMonthlyExpenses.value).toBe(1700)
+    expect(data.expenseCategoriesDetailed.value.map(c => c.category)).toEqual([
+      'Logement',
+    ])
+  })
+
+  it('reads the events from their own total, not the gap of the readings', async () => {
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(summary)
+    const data = useDashboardData()
+    await data.fetchData()
+
+    // 600 over the three everyday months — not (3400 − 1900) / 3.
+    expect(data.averageExceptionalMonthlyExpenses.value).toBe(200)
+  })
+})
+
 /** Total exceptional spending declared by a summary fixture. */
 function totalExceptionalOf(summary: DashboardSummaryDto): number {
   return summary.expensesByCategory.reduce(

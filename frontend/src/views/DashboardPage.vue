@@ -47,6 +47,7 @@
     pendingPreferenceSyncError,
     exceptionalEvents,
     hasExceptionalExpenses,
+    hasAmortizedExpenses,
     averageMonthlyIncome,
     averageMonthlySavings,
     periodMonths,
@@ -412,7 +413,7 @@
         <!-- One reading for the whole page: the expenses KPI, the
              structure, the donut and the list follow it together. -->
         <div
-          v-if="hasExceptionalExpenses"
+          v-if="hasExceptionalExpenses || hasAmortizedExpenses"
           class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-100 pt-4 dark:border-slate-700"
           data-testid="dashboard-breakdown-mode"
         >
@@ -436,11 +437,27 @@
             ]"
             @update:model-value="setBreakdownMode($event)"
           />
-          <span class="text-xs text-gray-500 dark:text-gray-400">
+          <span
+            v-if="hasExceptionalExpenses"
+            class="text-xs text-gray-500 dark:text-gray-400"
+          >
             {{
               breakdownMode === 'everyday'
                 ? 'Les dépenses d’événements sont mises à part.'
                 : 'Les dépenses d’événements sont comprises.'
+            }}
+          </span>
+          <!-- A smoothed purchase counts by its slices: the figures are no
+               longer the cash, and the reading says so. -->
+          <span
+            v-if="hasAmortizedExpenses"
+            class="basis-full text-xs text-teal-800 sm:basis-auto dark:text-teal-300"
+            data-testid="dashboard-amortized-note"
+          >
+            {{
+              breakdownMode === 'everyday'
+                ? 'Les achats lissés comptent par tranches mensuelles : un total sur la période ne correspond plus à l’argent sorti du compte.'
+                : 'Les achats lissés comptent en entier à leur date.'
             }}
           </span>
         </div>
