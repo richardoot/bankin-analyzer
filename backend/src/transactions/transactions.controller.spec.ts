@@ -844,6 +844,27 @@ describe('TransactionsController', () => {
       )
     })
 
+    it('passes nature and rhythm through, and refuses an unknown value', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
+
+      await findAllWithPhase3(undefined, 'PLEASURE', 'none')
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 20 },
+        { nature: 'PLEASURE', rhythm: 'none' },
+        undefined
+      )
+      await expect(findAllWithPhase3(undefined, 'FUN')).rejects.toThrow(
+        BadRequestException
+      )
+    })
+
     it('rejects a sort column outside the allowlist', async () => {
       await expect(
         controller.findAll(

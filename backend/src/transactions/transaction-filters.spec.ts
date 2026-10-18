@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { BadRequestException } from '@nestjs/common'
+import type { Prisma } from '../generated/prisma'
 import {
   parseTransactionFilters,
   buildTransactionWhere,
@@ -414,6 +415,84 @@ describe('buildTransactionWhere', () => {
           },
         },
       ])
+    })
+  })
+
+  describe('nature and rhythm', () => {
+    it('reads the enum values and none, and refuses the rest', () => {
+      expect(
+        parseTransactionFilters({ nature: 'ESSENTIAL', rhythm: 'none' })
+      ).toEqual({ nature: 'ESSENTIAL', rhythm: 'none' })
+      expect(() => parseTransactionFilters({ nature: 'essential' })).toThrow(
+        BadRequestException
+      )
+      expect(() => parseTransactionFilters({ rhythm: 'WEEKLY' })).toThrow(
+        BadRequestException
+      )
+    })
+
+    const subcategorySaysNothing = {
+      OR: [
+        { subcategoryId: null },
+        { subcategoryRef: { is: { nature: null } } },
+      ],
+    }
+
+    it('reads the subcategory, else the category default', () => {
+      expect(
+        buildTransactionWhere('user-1', { nature: 'PLEASURE' }).AND
+      ).toEqual([
+        {
+          OR: [
+            { subcategoryRef: { is: { nature: 'PLEASURE' } } },
+            {
+              AND: [
+                subcategorySaysNothing,
+                { category: { is: { defaultNature: 'PLEASURE' } } },
+              ],
+            },
+          ],
+        },
+      ])
+    })
+
+    it('reads « à migrer » as neither saying anything, no category included', () => {
+      expect(buildTransactionWhere('user-1', { nature: 'none' }).AND).toEqual([
+        {
+          AND: [
+            subcategorySaysNothing,
+            {
+              OR: [
+                { categoryId: null },
+                { category: { is: { defaultNature: null } } },
+              ],
+            },
+          ],
+        },
+      ])
+    })
+
+    const proven = {
+      recurrence: { userId: 'user-1', status: { in: ['ACTIVE', 'STOPPED'] } },
+    }
+
+    it('counts a proven recurrence as committed, whatever its subcategory says', () => {
+      const [clause] = buildTransactionWhere('user-1', { rhythm: 'COMMITTED' })
+        .AND as Prisma.TransactionWhereInput[]
+      expect(clause?.OR?.[0]).toEqual({ recurrences: { some: proven } })
+      expect(JSON.stringify(clause?.OR?.[1])).toContain(
+        '"defaultRhythm":"COMMITTED"'
+      )
+    })
+
+    it('keeps the lines of a proven recurrence out of variable and « à migrer »', () => {
+      for (const rhythm of ['VARIABLE', 'none'] as const) {
+        const [clause] = buildTransactionWhere('user-1', { rhythm })
+          .AND as Prisma.TransactionWhereInput[]
+        expect(
+          (clause?.AND as Prisma.TransactionWhereInput[] | undefined)?.[0]
+        ).toEqual({ recurrences: { none: proven } })
+      }
     })
   })
 })

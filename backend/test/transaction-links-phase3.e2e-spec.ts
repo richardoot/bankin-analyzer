@@ -302,4 +302,125 @@ describe('GET /transactions phase 3 link filters (e2e)', () => {
       expect(refused.status).toBe(400)
     })
   })
+
+  describe('nature and rhythm', () => {
+    async function amountsOf(query: Record<string, string>): Promise<number> {
+      const response = await http()
+        .get('/transactions')
+        .query({ limit: '100', type: 'EXPENSE', ...query })
+        .set(ctx.auth(owner))
+      expect(response.status).toBe(200)
+      return (response.body as { data: Array<{ amount: number }> }).data.reduce(
+        (sum, t) => sum + Math.abs(t.amount),
+        0
+      )
+    }
+
+    it('reads the subcategory, else the category default, and agrees with the spending structure', async () => {
+      // Category defaults: essential and committed.
+      const home = await category('Logement e2e', {
+        defaultNature: 'ESSENTIAL',
+        defaultRhythm: 'COMMITTED',
+      })
+      const pleasure = await subcategory(home, 'Déco', {
+        nature: 'PLEASURE',
+        rhythm: 'VARIABLE',
+      })
+      // A subcategory that says nothing: the category speaks for it.
+      const silent = await subcategory(home, 'Divers')
+      // A legacy category: nothing anywhere, « à migrer ».
+      const legacy = await category('Ancienne e2e')
+
+      await expense(100, { categoryId: home })
+      await expense(20, { categoryId: home, subcategoryId: pleasure })
+      await expense(7, { categoryId: home, subcategoryId: silent })
+      await expense(3, { categoryId: legacy })
+      await expense(1) // filed nowhere
+
+      expect(await amountsOf({ nature: 'ESSENTIAL' })).toBe(107)
+      expect(await amountsOf({ nature: 'PLEASURE' })).toBe(20)
+      expect(await amountsOf({ nature: 'none' })).toBe(4)
+      expect(await amountsOf({ rhythm: 'COMMITTED' })).toBe(107)
+      expect(await amountsOf({ rhythm: 'VARIABLE' })).toBe(20)
+      expect(await amountsOf({ rhythm: 'none' })).toBe(4)
+
+      const dashboard = await http()
+        .post('/dashboard/summary')
+        .set(ctx.auth(owner))
+        .send({
+          startDate: '2026-08-01',
+          endDate: '2026-08-31',
+          deductReimbursements: false,
+          deductPendingReimbursements: false,
+        })
+      const structure = (
+        dashboard.body as {
+          spendingStructure: {
+            essential: number
+            pleasure: number
+            unknownNature: number
+            committed: number
+            variable: number
+            unknownRhythm: number
+          }
+        }
+      ).spendingStructure
+      expect(structure).toMatchObject({
+        essential: 107,
+        pleasure: 20,
+        unknownNature: 4,
+        committed: 107,
+        variable: 20,
+        unknownRhythm: 4,
+      })
+    })
+
+    it('counts a line of an active or stopped recurrence as committed, a candidate not', async () => {
+      const fun = await category('Loisirs e2e', {
+        defaultNature: 'PLEASURE',
+        defaultRhythm: 'VARIABLE',
+      })
+      const piano = await expense(15, { categoryId: fun })
+      const maybe = await expense(9, { categoryId: fun })
+      const loose = await expense(40, { categoryId: fun })
+
+      const series = async (
+        merchantKey: string,
+        status: 'ACTIVE' | 'STOPPED' | 'CANDIDATE',
+        transactionId: string
+      ): Promise<void> => {
+        const recurrence = await prisma.recurrence.create({
+          data: {
+            userId,
+            merchantKey,
+            amountBucket: 15,
+            label: merchantKey,
+            period: 'MONTHLY',
+            amount: 15,
+            monthlyEquivalent: 15,
+            occurrences: 3,
+            totalPaid: 45,
+            firstDate: new Date('2026-06-12'),
+            lastDate: new Date('2026-08-12'),
+            nextExpected: new Date('2026-09-12'),
+            status,
+          },
+        })
+        await prisma.recurrenceTransaction.create({
+          data: { recurrenceId: recurrence.id, transactionId },
+        })
+      }
+      await series('piano', 'STOPPED', piano)
+      await series('maybe', 'CANDIDATE', maybe)
+
+      expect(await listIds({ rhythm: 'COMMITTED' })).toEqual([piano])
+      expect(await listIds({ rhythm: 'VARIABLE' })).toEqual(
+        [maybe, loose].sort()
+      )
+      // Nature is the subcategory's business only.
+      expect(await listIds({ nature: 'PLEASURE' })).toEqual(
+        [piano, maybe, loose].sort()
+      )
+    })
+  })
 })

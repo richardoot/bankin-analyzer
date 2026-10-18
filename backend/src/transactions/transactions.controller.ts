@@ -286,6 +286,23 @@ export class TransactionsController {
       'reading); `only`: at least one. Anything else is refused.',
   })
   @ApiQuery({
+    name: 'nature',
+    required: false,
+    enum: ['ESSENTIAL', 'PLEASURE', 'none'],
+    description:
+      "The subcategory's nature, else the category's default; `none` when " +
+      'neither says (« à migrer »).',
+  })
+  @ApiQuery({
+    name: 'rhythm',
+    required: false,
+    enum: ['COMMITTED', 'VARIABLE', 'none'],
+    description:
+      'COMMITTED for a line of an active or stopped recurrence, else the ' +
+      "subcategory's rhythm, else the category's default; `none` when " +
+      'nothing says.',
+  })
+  @ApiQuery({
     name: 'sortBy',
     required: false,
     enum: ['date', 'amount'],
@@ -322,7 +339,9 @@ export class TransactionsController {
     @Query('settlementId') settlementId?: string,
     @Query('importId') importId?: string,
     @Query('syncRunId') syncRunId?: string,
-    @Query('exceptional') exceptional?: string
+    @Query('exceptional') exceptional?: string,
+    @Query('nature') nature?: string,
+    @Query('rhythm') rhythm?: string
   ): Promise<PaginatedTransactionsResponseDto> {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
@@ -370,6 +389,8 @@ export class TransactionsController {
       ...(importId && { importId }),
       ...(syncRunId && { syncRunId }),
       ...(exceptional && { exceptional }),
+      ...(nature && { nature }),
+      ...(rhythm && { rhythm }),
     })
 
     const { data: transactions, total } =

@@ -33,6 +33,22 @@ export const NO_CATEGORY = 'none'
 export const EXCEPTIONAL_FILTERS = ['exclude', 'only'] as const
 export type ExceptionalFilter = (typeof EXCEPTIONAL_FILTERS)[number]
 
+/**
+ * A row's nature: its subcategory's, else its category's default — the
+ * COALESCE the Dashboard's spending structure reads. `none` is « à migrer »:
+ * neither says anything.
+ */
+export const NATURE_FILTERS = ['ESSENTIAL', 'PLEASURE', NO_CATEGORY] as const
+export type NatureFilter = (typeof NATURE_FILTERS)[number]
+
+/**
+ * A row's rhythm as the Dashboard reads it: COMMITTED for a line of an active
+ * or stopped recurrence whatever its subcategory says, else its
+ * subcategory's rhythm, else its category's default. `none`: none of those.
+ */
+export const RHYTHM_FILTERS = ['COMMITTED', 'VARIABLE', NO_CATEGORY] as const
+export type RhythmFilter = (typeof RHYTHM_FILTERS)[number]
+
 /** An explicit id list is a link, not a bulk upload: keep the URL sane. */
 export const MAX_TRANSACTION_IDS = 200
 
@@ -92,6 +108,10 @@ export interface TransactionFilters {
    * Budget apply to tell an event from everyday life.
    */
   exceptional?: ExceptionalFilter
+  /** Essentiel, Plaisir, or neither (« à migrer »). */
+  nature?: NatureFilter
+  /** Engagé, Variable, or neither (« à migrer »). */
+  rhythm?: RhythmFilter
 }
 
 /**
@@ -124,6 +144,10 @@ export interface RawTransactionFilters {
   syncRunId?: string
   /** `exclude` or `only`; anything else is refused. */
   exceptional?: string
+  /** `ESSENTIAL`, `PLEASURE` or `none`; anything else is refused. */
+  nature?: string
+  /** `COMMITTED`, `VARIABLE` or `none`; anything else is refused. */
+  rhythm?: string
 }
 
 /**
@@ -245,6 +269,10 @@ export function parseTransactionFilters(
     EXCEPTIONAL_FILTERS
   )
   if (exceptional) filters.exceptional = exceptional
+  const nature = parseChoice('nature', raw.nature, NATURE_FILTERS)
+  if (nature) filters.nature = nature
+  const rhythm = parseChoice('rhythm', raw.rhythm, RHYTHM_FILTERS)
+  if (rhythm) filters.rhythm = rhythm
 
   const min = parseAmountBound(raw.amountMin)
   if (min !== null) filters.amountMin = min
@@ -260,6 +288,60 @@ export function parseTransactionFilters(
  */
 export interface ResolvedTransactionFilters {
   openDebtTransactionIds?: string[]
+}
+
+/**
+ * `COALESCE(sc.<field>, c.<default>) = value`, or both null for `none`, as a
+ * Prisma condition. A row with no subcategory, or one whose subcategory says
+ * nothing, falls back to its category; a row with no category says nothing.
+ */
+function attributeIs(
+  field: 'nature' | 'rhythm',
+  value: string | null
+): Prisma.TransactionWhereInput {
+  const fallback = field === 'nature' ? 'defaultNature' : 'defaultRhythm'
+  const subcategorySaysNothing: Prisma.TransactionWhereInput = {
+    OR: [
+      { subcategoryId: null },
+      { subcategoryRef: { is: { [field]: null } } },
+    ],
+  }
+  if (value === null) {
+    return {
+      AND: [
+        subcategorySaysNothing,
+        {
+          OR: [
+            { categoryId: null },
+            { category: { is: { [fallback]: null } } },
+          ],
+        },
+      ],
+    }
+  }
+  return {
+    OR: [
+      { subcategoryRef: { is: { [field]: value } } },
+      {
+        AND: [
+          subcategorySaysNothing,
+          { category: { is: { [fallback]: value } } },
+        ],
+      },
+    ],
+  }
+}
+
+/**
+ * A line of a recurrence that proves a commitment — ACTIVE or STOPPED, never
+ * a CANDIDATE — the `rtx` join of the Dashboard's rhythm.
+ */
+function provenRecurrence(
+  userId: string
+): Prisma.RecurrenceTransactionWhereInput {
+  return {
+    recurrence: { userId, status: { in: ['ACTIVE', 'STOPPED'] } },
+  }
 }
 
 export function buildTransactionWhere(
@@ -344,6 +426,40 @@ export function buildTransactionWhere(
           ? { some: exceptionalTag }
           : { none: exceptionalTag },
     })
+  }
+
+  if (filters?.nature) {
+    and.push(
+      attributeIs(
+        'nature',
+        filters.nature === NO_CATEGORY ? null : filters.nature
+      )
+    )
+  }
+
+  // The rhythm the Dashboard reads: a proven recurrence makes a line
+  // committed, whatever its subcategory says; only the lines outside one
+  // fall back to the subcategory, then the category.
+  if (filters?.rhythm) {
+    const recurring = provenRecurrence(userId)
+    if (filters.rhythm === 'COMMITTED') {
+      and.push({
+        OR: [
+          { recurrences: { some: recurring } },
+          attributeIs('rhythm', 'COMMITTED'),
+        ],
+      })
+    } else {
+      and.push({
+        AND: [
+          { recurrences: { none: recurring } },
+          attributeIs(
+            'rhythm',
+            filters.rhythm === NO_CATEGORY ? null : filters.rhythm
+          ),
+        ],
+      })
+    }
   }
 
   // Date window: each bound is optional and applied independently.
