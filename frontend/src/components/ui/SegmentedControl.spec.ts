@@ -17,6 +17,18 @@ function build(modelValue = '6m') {
 }
 
 describe('SegmentedControl', () => {
+  it('keeps its options on one scrolling line when asked', () => {
+    const wrapper = mount(SegmentedControl, {
+      props: { options, modelValue: '6m', label: 'Période', scrollable: true },
+    })
+    const classes = wrapper.classes().join(' ')
+    expect(classes).toContain('overflow-x-auto')
+    expect(classes).toContain('flex-nowrap')
+    expect(classes).not.toContain('flex-wrap')
+    // The fade that says « there is more to the right ».
+    expect(classes).toContain('after:bg-gradient-to-l')
+  })
+
   it('turns into a tablist whose tabs name their panels', () => {
     const wrapper = mount(SegmentedControl, {
       props: {

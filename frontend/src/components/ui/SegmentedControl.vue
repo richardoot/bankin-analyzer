@@ -15,6 +15,10 @@
    * equal-column grid) and lets them size to their label from `sm` up —
    * the period selector needs it, a two-option toggle does not.
    *
+   * `scrollable` keeps the options on one line that scrolls sideways, with
+   * a fade on the right edge saying there is more — for a band of months
+   * that must not wrap into three rows on a phone.
+   *
    * `semantics="tablist"` is for the case where each option shows its own
    * panel rather than re-reading the same one: the options become tabs,
    * each naming its panel through `controls` (and `id` for the panel's
@@ -44,6 +48,7 @@
       fullWidth?: boolean | undefined
       disabled?: boolean | undefined
       semantics?: 'radiogroup' | 'tablist' | undefined
+      scrollable?: boolean | undefined
     }>(),
     {
       label: undefined,
@@ -52,6 +57,7 @@
       fullWidth: false,
       disabled: false,
       semantics: 'radiogroup',
+      scrollable: false,
     }
   )
 
@@ -155,11 +161,14 @@
     :aria-disabled="disabled ? true : undefined"
     class="rounded-lg bg-gray-100 p-1 dark:bg-slate-700/50"
     :class="[
-      fullWidth
-        ? 'grid auto-cols-fr grid-flow-col sm:inline-flex sm:flex-wrap'
-        : 'inline-flex flex-wrap',
+      scrollable
+        ? 'relative flex max-w-full flex-nowrap overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden after:pointer-events-none after:sticky after:right-0 after:-ml-6 after:w-6 after:shrink-0 after:bg-gradient-to-l after:from-gray-100 after:to-transparent after:content-[\'\'] dark:after:from-slate-800'
+        : fullWidth
+          ? 'grid auto-cols-fr grid-flow-col sm:inline-flex sm:flex-wrap'
+          : 'inline-flex flex-wrap',
       disabled ? 'opacity-50' : '',
     ]"
+    :data-scrollable="scrollable ? 'true' : undefined"
   >
     <button
       v-for="(option, index) in options"
