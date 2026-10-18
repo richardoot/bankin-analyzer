@@ -73,6 +73,67 @@ describe('api', () => {
     })
   })
 
+  describe('smoothing refusals', () => {
+    // A smoothing and an exceptional tag cannot meet on one row; the server
+    // says which side to undo, and that is what the user has to read.
+    const refusal = (message: string) => ({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ message }),
+    })
+
+    it('surfaces why a transaction cannot be smoothed', async () => {
+      mockFetch.mockResolvedValue(
+        refusal(
+          "Cette transaction porte l'étiquette exceptionnelle « Mariage »"
+        )
+      )
+
+      await expect(
+        api.updateTransaction('tx-1', { amortizationMonths: 24 })
+      ).rejects.toThrow('« Mariage »')
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/transactions/tx-1'),
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ amortizationMonths: 24 }),
+        })
+      )
+    })
+
+    it('surfaces why an exceptional tag cannot be attached', async () => {
+      mockFetch.mockResolvedValue(
+        refusal('La transaction « IPHONE » est étalée sur plusieurs mois')
+      )
+
+      await expect(
+        api.attachTagToTransactions('tag-1', ['tx-1'])
+      ).rejects.toThrow('« IPHONE » est étalée')
+    })
+
+    it('surfaces why a tag cannot become exceptional', async () => {
+      mockFetch.mockResolvedValue(
+        refusal('La transaction « IPHONE » est étalée sur plusieurs mois')
+      )
+
+      await expect(
+        api.updateTag('tag-1', { isExceptional: true })
+      ).rejects.toThrow('« IPHONE » est étalée')
+    })
+
+    it('still names a duplicate tag on a conflict', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: () => Promise.resolve({ message: 'A tag named "x" exists' }),
+      })
+
+      await expect(api.updateTag('tag-1', { name: 'x' })).rejects.toThrow(
+        'Une étiquette porte déjà ce nom'
+      )
+    })
+  })
+
   describe('getMe', () => {
     it('should fetch current user with auth headers', async () => {
       const mockUser = {

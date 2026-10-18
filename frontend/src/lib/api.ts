@@ -328,6 +328,11 @@ export interface TransactionDto {
   subcategory?: string | null
   note?: string | null
   isPointed: boolean
+  /**
+   * Over how many months the expense is smoothed in the everyday reading,
+   * from the month of its date (2 to 60). Null: counted whole at its date.
+   */
+  amortizationMonths?: number | null
   categoryId?: string | null
   // Mirrors the backend, which omits the key entirely when the transaction has
   // no category. Under `exactOptionalPropertyTypes` an absent property and one
@@ -1927,6 +1932,8 @@ export const api = {
       categoryId?: string | null
       subcategoryId?: string | null
       isPointed?: boolean
+      /** Smooth the expense over 2 to 60 months; null stops smoothing it. */
+      amortizationMonths?: number | null
     }
   ): Promise<TransactionDto> {
     const response = await fetchWithAuth(`${API_BASE_URL}/transactions/${id}`, {
@@ -1935,7 +1942,13 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Impossible de modifier la transaction')
+      // A refused smoothing says why (an exceptional tag, an income).
+      throw new Error(
+        await readErrorMessage(
+          response,
+          'Impossible de modifier la transaction'
+        )
+      )
     }
 
     return response.json() as Promise<TransactionDto>
@@ -2301,10 +2314,14 @@ export const api = {
     })
 
     if (!response.ok) {
+      // A tag turned exceptional over smoothed purchases is refused with why.
       const message =
         response.status === 409
           ? 'Une étiquette porte déjà ce nom'
-          : "Impossible de modifier l'étiquette"
+          : await readErrorMessage(
+              response,
+              "Impossible de modifier l'étiquette"
+            )
       throw new Error(message)
     }
 
@@ -2334,7 +2351,10 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error("Impossible d'ajouter l'étiquette")
+      // An exceptional tag on a smoothed purchase is refused with why.
+      throw new Error(
+        await readErrorMessage(response, "Impossible d'ajouter l'étiquette")
+      )
     }
 
     return response.json() as Promise<{ attached: number }>
