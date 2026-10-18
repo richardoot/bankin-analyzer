@@ -873,6 +873,194 @@ describe('TransactionsPage — optimistic updates', () => {
     })
   })
 
+  describe('loading without losing the list', () => {
+    const deferred = () => {
+      let resolve!: (value: {
+        data: TransactionDto[]
+        meta: typeof defaultPaginationMeta
+      }) => void
+      const promise = new Promise<{
+        data: TransactionDto[]
+        meta: typeof defaultPaginationMeta
+      }>(r => {
+        resolve = r
+      })
+      return { promise, resolve }
+    }
+
+    it('shows the skeleton once, then keeps the rows dimmed while it refetches', async () => {
+      setupDefaultMocks()
+      const first = deferred()
+      vi.mocked(api.getTransactions).mockReturnValueOnce(first.promise)
+      await router.replace({ query: {} })
+      const wrapper = mount(TransactionsPage, {
+        global: { plugins: [router], stubs: { Teleport: true } },
+      })
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="transactions-skeleton"]').exists()
+      ).toBe(true)
+      expect(wrapper.find('[data-testid="transactions-list"]').exists()).toBe(
+        false
+      )
+
+      first.resolve({ data: [makeTx()], meta: defaultPaginationMeta })
+      await flushPromises()
+      expect(
+        wrapper.find('[data-testid="transactions-skeleton"]').exists()
+      ).toBe(false)
+      expect(wrapper.text()).toContain('Cafe')
+
+      const second = deferred()
+      vi.mocked(api.getTransactions).mockReturnValueOnce(second.promise)
+      await wrapper.get('[data-testid="sort-by-date"]').trigger('click')
+      await flushPromises()
+
+      // The rows stay, busy, under a discreet indicator — no skeleton.
+      expect(
+        wrapper.find('[data-testid="transactions-skeleton"]').exists()
+      ).toBe(false)
+      const list = wrapper.get('[data-testid="transactions-list"]')
+      expect(list.attributes('aria-busy')).toBe('true')
+      expect(list.classes()).toContain('opacity-60')
+      expect(
+        wrapper.find('[data-testid="transactions-refreshing"]').exists()
+      ).toBe(true)
+      expect(wrapper.text()).toContain('Cafe')
+
+      second.resolve({
+        data: [makeTx({ description: 'Boulangerie' })],
+        meta: defaultPaginationMeta,
+      })
+      await flushPromises()
+      expect(
+        wrapper.get('[data-testid="transactions-list"]').attributes('aria-busy')
+      ).toBeUndefined()
+      expect(wrapper.text()).toContain('Boulangerie')
+      expect(wrapper.text()).not.toContain('Cafe')
+    })
+
+    it('lets only the latest answer land when two requests overlap', async () => {
+      const wrapper = await mountPage()
+      const slow = deferred()
+      const fast = deferred()
+      vi.mocked(api.getTransactions)
+        .mockReturnValueOnce(slow.promise)
+        .mockReturnValueOnce(fast.promise)
+
+      await wrapper.get('[data-testid="sort-by-date"]').trigger('click')
+      await flushPromises()
+      await wrapper.get('[data-testid="sort-by-amount"]').trigger('click')
+      await flushPromises()
+
+      fast.resolve({
+        data: [makeTx({ description: 'Réponse récente' })],
+        meta: defaultPaginationMeta,
+      })
+      await flushPromises()
+      slow.resolve({
+        data: [makeTx({ description: 'Réponse périmée' })],
+        meta: defaultPaginationMeta,
+      })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Réponse récente')
+      expect(wrapper.text()).not.toContain('Réponse périmée')
+      expect(
+        wrapper.get('[data-testid="transactions-list"]').attributes('aria-busy')
+      ).toBeUndefined()
+    })
+  })
+
+  describe('sorting from a phone', () => {
+    it('offers the four orders as one choice and mirrors it in the URL', async () => {
+      const wrapper = await mountPage()
+      const group = wrapper.get('[data-testid="transactions-sort-choice"]')
+      expect(group.attributes('role')).toBe('radiogroup')
+      expect(
+        group.findAll('[role="radio"]').map(r => r.attributes('aria-checked'))
+      ).toEqual(['true', 'false', 'false', 'false'])
+
+      await wrapper
+        .get('[data-testid="sort-choice-amount-asc"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sortBy: 'amount', sortOrder: 'asc' })
+      )
+      expect(router.currentRoute.value.query).toMatchObject({
+        sort: 'amount',
+        dir: 'asc',
+      })
+      // The table header agrees.
+      expect(
+        wrapper.get('[data-testid="sort-by-amount"]').attributes('aria-label')
+      ).toBe('Trier par montant, décroissant')
+    })
+
+    it('names the search field and keeps its placeholder short', async () => {
+      const wrapper = await mountPage()
+      const search = wrapper.get('[data-testid="transactions-search-input"]')
+      expect(search.attributes('aria-label')).toMatch(/^Rechercher/)
+      expect(search.attributes('placeholder')?.length).toBeLessThan(20)
+    })
+  })
+
+  describe('one selection bar', () => {
+    it('opens with the toggle, counts, and closes from its single exit', async () => {
+      const wrapper = await mountPage()
+      expect(wrapper.find('[data-testid="selection-bar"]').exists()).toBe(false)
+
+      await wrapper
+        .get('[data-testid="toggle-selection-mode"]')
+        .trigger('click')
+      const bar = wrapper.get('[data-testid="selection-bar"]')
+      expect(bar.text()).toContain('Aucune transaction sélectionnée')
+      // The entry point steps aside: the bar is the one way out.
+      expect(
+        wrapper.find('[data-testid="toggle-selection-mode"]').exists()
+      ).toBe(false)
+      expect(
+        bar.findAll('button').filter(b => b.text() === 'Quitter la sélection')
+          .length
+      ).toBeGreaterThan(0)
+      expect(wrapper.find('[data-testid="bulk-pointed"]').text()).toBe(
+        'Pointer'
+      )
+      expect(wrapper.find('[data-testid="bulk-unpointed"]').text()).toBe(
+        'Dépointer'
+      )
+
+      // A tap on the card ticks it.
+      await wrapper.get('[data-testid="row-card"]').trigger('click')
+      expect(wrapper.get('[data-testid="selection-bar"]').text()).toContain(
+        '1 sélectionnée'
+      )
+
+      // The phone ticks — here unticks — the whole page from the bar.
+      await wrapper.get('[data-testid="select-all-mobile"]').trigger('change')
+      expect(wrapper.get('[data-testid="selection-bar"]').text()).toContain(
+        'Aucune transaction sélectionnée'
+      )
+
+      await wrapper.get('[data-testid="exit-selection"]').trigger('click')
+      expect(wrapper.find('[data-testid="selection-bar"]').exists()).toBe(false)
+      expect(
+        wrapper.find('[data-testid="toggle-selection-mode"]').exists()
+      ).toBe(true)
+    })
+
+    it('opens the filing dialog from a tap on the card outside selection mode', async () => {
+      const wrapper = await mountPage()
+      await wrapper.get('[data-testid="row-card"]').trigger('click')
+      expect(
+        wrapper.find('category-subcategory-modal-stub').attributes('isopen')
+      ).toBe('true')
+    })
+  })
+
   describe('deleting a reimbursement', () => {
     const reimbursement = {
       id: 'r-1',
