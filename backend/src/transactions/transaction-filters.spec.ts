@@ -571,4 +571,55 @@ describe('buildTransactionWhere', () => {
       }
     })
   })
+
+  describe('smoothed purchases', () => {
+    it('reads amortized from a query string and from JSON alike', () => {
+      expect(parseTransactionFilters({ amortized: 'true' }).amortized).toBe(
+        true
+      )
+      expect(parseTransactionFilters({ amortized: true }).amortized).toBe(true)
+      expect(
+        parseTransactionFilters({ amortized: 'false' }).amortized
+      ).toBeUndefined()
+    })
+
+    it('keeps the rows carrying a smoothing', () => {
+      expect(buildTransactionWhere('user-1', { amortized: true }).AND).toEqual([
+        { amortizationMonths: { not: null } },
+      ])
+    })
+
+    it('reads the extra rows like ids, dropping what is not one', () => {
+      expect(
+        parseTransactionFilters({ alsoIds: `${uuid(1)}, abc,${uuid(1)}` })
+          .alsoIds
+      ).toEqual([uuid(1)])
+      // Nothing usable named: no union, rather than an empty one.
+      expect(
+        parseTransactionFilters({ alsoIds: 'abc' }).alsoIds
+      ).toBeUndefined()
+      const many = Array.from({ length: MAX_TRANSACTION_IDS + 1 }, (_, i) =>
+        uuid(i)
+      )
+      expect(() => parseTransactionFilters({ alsoIds: many })).toThrow(
+        BadRequestException
+      )
+    })
+
+    it('adds the extra rows to what the filters match, for the user only', () => {
+      const where = buildTransactionWhere('user-1', {
+        categoryId: 'cat-1',
+        exceptional: 'exclude',
+        alsoIds: [uuid(1)],
+      })
+
+      expect(where).toEqual({
+        userId: 'user-1',
+        OR: [
+          expect.objectContaining({ userId: 'user-1', categoryId: 'cat-1' }),
+          { id: { in: [uuid(1)] } },
+        ],
+      })
+    })
+  })
 })

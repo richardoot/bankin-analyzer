@@ -810,7 +810,8 @@ describe('TransactionsController', () => {
 
     /**
      * The phase 3 filters sit after the 21 earlier optional parameters, in
-     * this order: exceptional, nature, rhythm, categoryIds, recurrences.
+     * this order: exceptional, nature, rhythm, categoryIds, recurrences, then
+     * the smoothing filters: amortized, alsoIds.
      */
     const findAllWithPhase3 = (
       ...phase3: (string | undefined)[]
@@ -889,6 +890,33 @@ describe('TransactionsController', () => {
           categoryIds: [id, null],
           recurrences: [{ amountBucket: 15, merchantKey: 'netflix' }],
         },
+        undefined
+      )
+    })
+
+    it('passes the smoothing filter and the extra rows through', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
+      const id = '550e8400-e29b-41d4-a716-446655440001'
+
+      await findAllWithPhase3(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'true',
+        id
+      )
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 20 },
+        { amortized: true, alsoIds: [id] },
         undefined
       )
     })

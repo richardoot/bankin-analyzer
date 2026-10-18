@@ -320,6 +320,21 @@ export class TransactionsController {
       '`<amountBucket>:<merchantKey>` (at most 200).',
   })
   @ApiQuery({
+    name: 'amortized',
+    required: false,
+    type: Boolean,
+    description: 'Only the rows smoothed over several months.',
+  })
+  @ApiQuery({
+    name: 'alsoIds',
+    required: false,
+    type: String,
+    description:
+      'Rows shown on top of what the other filters match, comma-separated ' +
+      '(at most 200): the smoothed purchases whose slices a « Vie courante » ' +
+      'figure counts although they are dated elsewhere.',
+  })
+  @ApiQuery({
     name: 'sortBy',
     required: false,
     enum: ['date', 'amount'],
@@ -360,7 +375,9 @@ export class TransactionsController {
     @Query('nature') nature?: string,
     @Query('rhythm') rhythm?: string,
     @Query('categoryIds') categoryIds?: string,
-    @Query('recurrences') recurrences?: string
+    @Query('recurrences') recurrences?: string,
+    @Query('amortized') amortized?: string,
+    @Query('alsoIds') alsoIds?: string
   ): Promise<PaginatedTransactionsResponseDto> {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
@@ -412,6 +429,8 @@ export class TransactionsController {
       ...(rhythm && { rhythm }),
       ...(categoryIds && { categoryIds }),
       ...(recurrences && { recurrences }),
+      ...(amortized !== undefined && { amortized }),
+      ...(alsoIds && { alsoIds }),
     })
 
     const { data: transactions, total } =
