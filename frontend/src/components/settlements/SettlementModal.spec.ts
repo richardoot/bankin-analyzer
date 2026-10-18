@@ -220,10 +220,19 @@ async function setAmount(
   label: string,
   value: string
 ): Promise<void> {
-  const input = wrapper.find(`input[aria-label="Montant affecté à ${label}"]`)
+  const input = amountField(wrapper, label)
   await input.setValue(value)
   await input.trigger('change')
   await flushPromises()
+}
+
+/** The BaseField whose (hidden) label names the line or the category. */
+function amountField(wrapper: VueWrapper, label: string) {
+  const field = wrapper
+    .findAll('label')
+    .find(l => l.text() === `Montant affecté à ${label}`)
+  if (!field) throw new Error(`No amount field for ${label}`)
+  return wrapper.get(`#${CSS.escape(field.attributes('for') ?? '')}`)
 }
 
 /** The only emerald call-to-action on screen at the step it is called from. */
@@ -720,6 +729,37 @@ describe('SettlementModal', () => {
     expect(
       wrapper.find('[data-testid="settlement-step-select"]').exists()
     ).toBe(true)
+  })
+
+  it('gives the receipt list the room of a phone on step 2', async () => {
+    // A phone: the step trail and « Annuler » step aside — the header's
+    // back arrow and cross already do both jobs.
+    const original = window.matchMedia
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('max-width'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia
+    try {
+      const wrapper = await mountModal({})
+      expect(wrapper.find('[aria-current="step"]').exists()).toBe(true)
+      expect(
+        wrapper.get('[data-testid="settlement-cancel"]').classes()
+      ).not.toContain('max-sm:hidden')
+
+      await goToReceipt(wrapper, ['Carrefour'])
+
+      expect(wrapper.find('[aria-current="step"]').exists()).toBe(false)
+      expect(
+        wrapper.get('[data-testid="settlement-cancel"]').classes()
+      ).toContain('max-sm:hidden')
+      expect(wrapper.find('[data-testid="settlement-back"]').exists()).toBe(
+        true
+      )
+    } finally {
+      window.matchMedia = original
+    }
   })
 
   it('says so when the person owes nothing', async () => {

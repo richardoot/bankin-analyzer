@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { computed, ref, useId, watch } from 'vue'
+  import { computed, nextTick, ref, useId, watch } from 'vue'
   import { parseDecimal } from '@/lib/formatters'
 
   /**
@@ -15,6 +15,11 @@
    * text input with a decimal keyboard whose model is a number (or null
    * when empty), read through parseDecimal so « 12,5 » is 12.5 and not
    * zero on Safari.
+   *
+   * `lazy` (amount only) hands the number over on `change` rather than on
+   * every keystroke, for a parent that clamps what it receives: writing a
+   * bound back on each key would eat a half-typed « 0, ». Once committed,
+   * the text is rewritten from the model, so a clamp always shows.
    *
    * `size="sm"` is the compact field of a settings form or a filter bar;
    * on a phone it still types at 16px so iOS does not zoom in.
@@ -32,6 +37,7 @@
       size?: 'sm' | 'md' | undefined
       as?: 'input' | 'select' | 'textarea' | undefined
       amount?: boolean | undefined
+      lazy?: boolean | undefined
     }>(),
     {
       labelHidden: false,
@@ -40,6 +46,7 @@
       size: 'md',
       as: 'input',
       amount: false,
+      lazy: false,
     }
   )
 
@@ -72,10 +79,24 @@
     if (!same) amountText.value = toText(next)
   })
 
-  function onAmountInput(event: Event): void {
-    amountText.value = (event.target as HTMLInputElement).value
+  function commitAmount(): void {
     const parsed = parseDecimal(amountText.value)
     model.value = Number.isNaN(parsed) ? null : parsed
+  }
+
+  function onAmountInput(event: Event): void {
+    amountText.value = (event.target as HTMLInputElement).value
+    if (!props.lazy) commitAmount()
+  }
+
+  // The parent may clamp to the very value it already held, which no watch
+  // would see: re-read the model once it has had its say.
+  function onAmountChange(): void {
+    if (!props.lazy) return
+    commitAmount()
+    void nextTick(() => {
+      amountText.value = toText(model.value)
+    })
   }
 
   const CONTROL_SIZES: Record<NonNullable<typeof props.size>, string> = {
@@ -133,6 +154,7 @@
       :aria-describedby="describedBy"
       :class="controlClass"
       @input="onAmountInput"
+      @change="onAmountChange"
     />
     <input
       v-else

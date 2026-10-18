@@ -17,6 +17,44 @@ function build(modelValue = '6m') {
 }
 
 describe('SegmentedControl', () => {
+  it('turns into a tablist whose tabs name their panels', () => {
+    const wrapper = mount(SegmentedControl, {
+      props: {
+        semantics: 'tablist',
+        label: 'Abonnements',
+        modelValue: 'ended',
+        options: [
+          {
+            value: 'current',
+            label: 'En cours',
+            id: 't-current',
+            controls: 'p-current',
+          },
+          {
+            value: 'ended',
+            label: 'Terminés',
+            id: 't-ended',
+            controls: 'p-ended',
+          },
+        ],
+      },
+    })
+    expect(wrapper.attributes('role')).toBe('tablist')
+    const tabs = wrapper.findAll('[role="tab"]')
+    expect(tabs).toHaveLength(2)
+    expect(tabs.map(t => t.attributes('aria-selected'))).toEqual([
+      'false',
+      'true',
+    ])
+    expect(tabs.map(t => t.attributes('aria-controls'))).toEqual([
+      'p-current',
+      'p-ended',
+    ])
+    expect(tabs.map(t => t.attributes('id'))).toEqual(['t-current', 't-ended'])
+    expect(tabs[0]?.attributes('aria-checked')).toBeUndefined()
+    expect(wrapper.find('[role="radio"]').exists()).toBe(false)
+  })
+
   it('is a named radio group whose selection is checked and primary', () => {
     const wrapper = build()
     expect(wrapper.attributes('role')).toBe('radiogroup')

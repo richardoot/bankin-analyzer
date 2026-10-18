@@ -24,8 +24,10 @@
   import IconCheck from '@/components/icons/IconCheck.vue'
   import IconClose from '@/components/icons/IconClose.vue'
   import IconTrash from '@/components/icons/IconTrash.vue'
+  import IconPencil from '@/components/icons/IconPencil.vue'
   import BaseField from '@/components/ui/BaseField.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
+  import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
 
   const { exportReimbursementsToPdf } = usePdfExport()
   const toast = useToast()
@@ -206,6 +208,19 @@
 
   const totalDue = computed(() =>
     reimbursements.value.reduce((sum, r) => sum + r.amountRemaining, 0)
+  )
+
+  /** The first load: nothing to show yet, so the shape of the card stands in. */
+  const isFirstLoad = computed(
+    () => isLoadingReimbursements.value && reimbursements.value.length === 0
+  )
+
+  /** Debts exist, but every one of them has been settled. */
+  const isAllSettled = computed(
+    () =>
+      !isFirstLoad.value &&
+      reimbursements.value.length > 0 &&
+      summaryByPerson.value.length === 0
   )
 
   // Fetch reimbursements (with transaction info)
@@ -412,10 +427,13 @@
       title="Remboursements"
       subtitle="Gérez les personnes et suivez les remboursements en cours"
     >
-      <template #actions>
+      <!-- One link to Transactions per screen: here when there are debts,
+           in the empty state otherwise. Quieter than « Enregistrer un
+           règlement », which is the action this page exists for. -->
+      <template v-if="reimbursements.length > 0" #actions>
         <BaseButton
           to="/transactions"
-          variant="tinted"
+          variant="secondary"
           class="w-full sm:w-auto"
         >
           <IconClipboard class="h-4 w-4" />
@@ -438,8 +456,17 @@
       {{ reimbursementsError }}
     </InlineAlert>
 
+    <!-- First load: the shape of the summary, not a spinner -->
+    <BaseCard v-if="isFirstLoad" data-testid="reimbursements-loading">
+      <SkeletonBlock class="mb-6 h-6 w-64" />
+      <div class="space-y-4">
+        <SkeletonBlock class="h-28 rounded-lg" />
+        <SkeletonBlock class="h-28 rounded-lg" />
+      </div>
+    </BaseCard>
+
     <!-- Summary Section: the balances are what the page is opened for -->
-    <BaseCard v-if="reimbursements.length > 0">
+    <BaseCard v-else-if="summaryByPerson.length > 0">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
           Récapitulatif des remboursements
@@ -477,13 +504,23 @@
                   {{ person.personName }}
                 </h3>
                 <p class="text-xs text-gray-500 dark:text-gray-400">
-                  Reçu : {{ formatCurrency(person.totalReceived) }} · En attente
-                  : {{ formatCurrency(person.totalRemaining) }}
+                  {{ formatCurrency(person.totalReceived) }} reçus sur
+                  {{ formatCurrency(person.total) }}
                 </p>
               </div>
             </div>
-            <div class="text-lg font-bold text-debt-700 dark:text-debt-400">
-              {{ formatCurrency(person.total) }}
+            <!-- The figure that matters is what is still owed: it is what
+                 the lines add up to and what the grand total sums. -->
+            <div class="text-right">
+              <div
+                class="text-lg font-bold text-debt-700 dark:text-debt-400"
+                data-testid="person-remaining"
+              >
+                {{ formatCurrency(person.totalRemaining) }}
+              </div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                restant dû
+              </div>
             </div>
           </div>
 
@@ -566,9 +603,12 @@
                   <div
                     v-for="r in cat.reimbursements"
                     :key="r.id"
-                    class="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-debt-200 dark:border-debt-700"
+                    class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-debt-200 dark:border-debt-700"
                   >
-                    <span class="truncate">
+                    <span
+                      class="min-w-0 truncate"
+                      :title="r.transaction?.description"
+                    >
                       <span class="text-gray-500 dark:text-gray-400"
                         >[{{
                           formatTransactionDate(r.transaction?.date)
@@ -576,10 +616,11 @@
                       >
                       {{ r.transaction?.description || 'Transaction' }}
                     </span>
+                    <!-- The amount may wrap; the button never shrinks. -->
                     <span
-                      class="flex items-center gap-2 whitespace-nowrap mt-0.5 sm:mt-0 sm:ml-2"
+                      class="flex items-center justify-between gap-2 sm:justify-end sm:ml-2"
                     >
-                      <span class="font-medium">
+                      <span class="min-w-0 font-medium">
                         {{ formatCurrency(r.amountRemaining) }}
                         <span
                           v-if="r.amountReceived > 0"
@@ -591,6 +632,7 @@
                       <BaseButton
                         variant="tinted"
                         size="sm"
+                        class="shrink-0 pointer-coarse:min-h-[44px] pointer-coarse:px-4"
                         :title="`Régler uniquement ${r.transaction?.description || 'cette transaction'}`"
                         @click="openSettlementModalForReimbursement(r)"
                       >
@@ -609,7 +651,6 @@
             class="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700"
           >
             <BaseButton
-              variant="tinted"
               block
               @click="openSettlementModal(person.personId, person.personName)"
             >
@@ -632,6 +673,27 @@
           <span class="text-xl font-bold text-debt-700 dark:text-debt-400">
             {{ formatCurrency(totalDue) }}
           </span>
+        </div>
+      </div>
+    </BaseCard>
+
+    <!-- Every debt settled: say so, instead of a summary with nobody in it -->
+    <BaseCard v-else-if="isAllSettled" data-testid="reimbursements-settled">
+      <div class="flex items-start gap-3">
+        <div
+          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+        >
+          <IconCheckCircle class="h-6 w-6" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Tout est soldé
+          </h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Aucun remboursement n'est en attente. L'historique des règlements
+            reste consultable ci-dessous, et un nouveau remboursement s'assigne
+            depuis la page Transactions.
+          </p>
         </div>
       </div>
     </BaseCard>
@@ -809,12 +871,12 @@
               </div>
               <!-- Name and email -->
               <div class="flex-1 min-w-0">
-                <button
-                  class="text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-primary-700 dark:hover:text-primary-400 truncate block w-full"
-                  @click="startEditPerson(person.id, person.name)"
+                <p
+                  class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
+                  :title="person.name"
                 >
                   {{ person.name }}
-                </button>
+                </p>
                 <p
                   class="text-xs text-gray-500 dark:text-gray-400 truncate"
                   :title="person.email || 'Pas d\'email'"
@@ -822,6 +884,16 @@
                   {{ person.email || "Pas d'email" }}
                 </p>
               </div>
+              <!-- Rename: a pencil, as on Récurrences — a name that is
+                   secretly a button is a convention nobody finds. -->
+              <BaseIconButton
+                size="sm"
+                :label="`Renommer ${person.name}`"
+                data-testid="rename-person"
+                @click="startEditPerson(person.id, person.name)"
+              >
+                <IconPencil />
+              </BaseIconButton>
               <!-- Delete button -->
               <BaseIconButton
                 size="sm"

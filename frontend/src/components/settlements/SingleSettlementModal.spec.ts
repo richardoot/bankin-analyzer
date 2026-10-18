@@ -263,7 +263,9 @@ describe('SingleSettlementModal', () => {
     })
 
     await pickFirstTransaction(wrapper)
-    const field = wrapper.get('#single-settlement-amount')
+    const field = wrapper.get(
+      '[data-testid="single-settlement-recap"] input[inputmode="decimal"]'
+    )
     await field.setValue('120')
     await field.trigger('change')
     await flushPromises()
@@ -282,7 +284,9 @@ describe('SingleSettlementModal', () => {
     })
 
     await pickFirstTransaction(wrapper)
-    const field = wrapper.get('#single-settlement-amount')
+    const field = wrapper.get(
+      '[data-testid="single-settlement-recap"] input[inputmode="decimal"]'
+    )
     expect(field.attributes('inputmode')).toBe('decimal')
     await field.setValue('12,5')
     await field.trigger('change')

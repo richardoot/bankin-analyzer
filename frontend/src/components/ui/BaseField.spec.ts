@@ -109,6 +109,29 @@ describe('BaseField', () => {
       expect(wrapper.find('input').element.value).toBe('42,5')
     })
 
+    it('with lazy, commits on change and shows the value the parent kept', async () => {
+      const wrapper = mount(BaseField, {
+        // A parent that listens but clamps everything back to 30.
+        props: {
+          label: 'Montant',
+          amount: true,
+          lazy: true,
+          modelValue: 30,
+          'onUpdate:modelValue': () => {},
+        },
+      })
+      const input = wrapper.find('input')
+      input.element.value = '100'
+      await input.trigger('input')
+      // Nothing yet: the keystrokes stay in the field.
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+      await input.trigger('change')
+      expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([100])
+      // The parent clamped back to the value it already had: the text follows.
+      await nextTick()
+      expect(input.element.value).toBe('30')
+    })
+
     it('keeps what the user typed while it parses to the same number', async () => {
       const wrapper = mount(BaseField, {
         props: { label: 'Montant', amount: true, modelValue: null },

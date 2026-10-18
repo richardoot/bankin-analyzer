@@ -158,10 +158,44 @@ describe('ReimbursementsPage', () => {
       )
     })
 
-    it('should display link to transactions page', async () => {
-      const wrapper = await mountComponent()
+    it('offers one link to Transactions per screen', async () => {
+      // Empty: the empty state carries the link, the header stays quiet.
+      const empty = await mountComponent()
+      expect(empty.text()).not.toContain('Voir les transactions')
+      expect(empty.text()).toContain('Aller aux transactions')
 
-      expect(wrapper.text()).toContain('Voir les transactions')
+      // With debts: the header carries it, the empty state is gone.
+      vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
+      const withDebts = mount(ReimbursementsPage, {
+        global: { plugins: [router], stubs: { Teleport: true } },
+      })
+      await flushPromises()
+      expect(withDebts.text()).toContain('Voir les transactions')
+      expect(withDebts.text()).not.toContain('Aller aux transactions')
+    })
+
+    it('stands in with a skeleton while the first load is in flight', async () => {
+      let resolve: (value: never[]) => void = () => {}
+      vi.mocked(api.getReimbursements).mockReturnValue(
+        new Promise(r => {
+          resolve = r
+        })
+      )
+      const wrapper = mount(ReimbursementsPage, {
+        global: { plugins: [router], stubs: { Teleport: true } },
+      })
+      await flushPromises()
+      expect(
+        wrapper.find('[data-testid="reimbursements-loading"]').exists()
+      ).toBe(true)
+      expect(wrapper.text()).not.toContain('Aucun remboursement en cours')
+
+      resolve([])
+      await flushPromises()
+      expect(
+        wrapper.find('[data-testid="reimbursements-loading"]').exists()
+      ).toBe(false)
+      expect(wrapper.text()).toContain('Aucun remboursement en cours')
     })
 
     it('should fetch persons and reimbursements on mount', async () => {
@@ -174,6 +208,26 @@ describe('ReimbursementsPage', () => {
   })
 
   describe('Persons section', () => {
+    it('renames a person through an explicit pencil, as Récurrences does', async () => {
+      setupDefaultMocks()
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      const wrapper = mount(ReimbursementsPage, {
+        global: { plugins: [router], stubs: { Teleport: true } },
+      })
+      await flushPromises()
+
+      // The name is text, not a secret button.
+      expect(
+        wrapper.find('button[aria-label="Renommer Alice Dupont"]').exists()
+      ).toBe(true)
+      await wrapper
+        .get('button[aria-label="Renommer Alice Dupont"]')
+        .trigger('click')
+      expect(
+        wrapper.find('button[aria-label="Enregistrer le nom"]').exists()
+      ).toBe(true)
+    })
+
     it('should display "Personnes" section title', async () => {
       const wrapper = await mountComponent()
 
@@ -458,6 +512,68 @@ describe('ReimbursementsPage', () => {
 
       expect(wrapper.text()).toContain('Récapitulatif des remboursements')
       expect(wrapper.text()).toContain('Total général')
+    })
+
+    it('heads each person with what is still owed, not the initial debt', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getReimbursements).mockResolvedValue(
+        mockReimbursements.map(r =>
+          r.id === 'r1' ? { ...r, amountReceived: 10, amountRemaining: 15 } : r
+        )
+      )
+      vi.mocked(api.getSettlements).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            SettlementModal: true,
+            SettlementHistorySection: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      // 15 + 20 still due, out of 25 + 20 initially, 10 received.
+      const big = wrapper.get('[data-testid="person-remaining"]').text()
+      expect(big).toContain('35')
+      expect(big).not.toContain('45')
+      expect(wrapper.text()).toContain('restant dû')
+      expect(wrapper.text()).toMatch(/10,00\s*€ reçus sur 45,00\s*€/)
+    })
+
+    it('says everything is settled instead of an empty summary', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getReimbursements).mockResolvedValue(
+        mockReimbursements.map(r => ({
+          ...r,
+          amountReceived: r.amount,
+          amountRemaining: 0,
+          status: 'COMPLETED' as const,
+        }))
+      )
+      vi.mocked(api.getSettlements).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            SettlementModal: true,
+            SettlementHistorySection: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="reimbursements-settled"]').text()
+      ).toContain('Tout est soldé')
+      expect(wrapper.text()).not.toContain('Récapitulatif des remboursements')
+      expect(wrapper.text()).not.toContain('Aucun remboursement en cours')
     })
 
     it('should display person totals in summary', async () => {

@@ -6,8 +6,9 @@
    * Netflix by how it is paid rather than by what it is for.
    *
    * Detection proposes, the user corrects: the ✕ on a row ("Écarter : ce
-   * n'est pas un abonnement") dismisses a series for good, "Confirmer" promotes one seen only twice.
-   * A row opens the transactions it was read from.
+   * n'est pas un abonnement") dismisses a series, after a confirmation —
+   * it hides the series until « Rétablir » — and "Confirmer" promotes one
+   * seen only twice. A row opens the transactions it was read from.
    *
    * Two tabs: what runs today, and what ran before — each ended charge with
    * when it started, when it stopped, how long it lasted and what it cost.
@@ -37,6 +38,7 @@
   import IconPencil from '@/components/icons/IconPencil.vue'
   import IconClose from '@/components/icons/IconClose.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
+  import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 
   const router = useRouter()
   const toast = useToast()
@@ -52,6 +54,18 @@
 
   type Tab = 'current' | 'ended'
   const tab = ref<Tab>('current')
+
+  /**
+   * The tabs show two different lists, so they are tabs for real: each
+   * names its panel, and the panel names its tab back.
+   */
+  const TAB_IDS: Record<Tab, { tab: string; panel: string }> = {
+    current: {
+      tab: 'recurrences-tab-current',
+      panel: 'recurrences-panel-current',
+    },
+    ended: { tab: 'recurrences-tab-ended', panel: 'recurrences-panel-ended' },
+  }
 
   const PERIOD_LABELS: Record<RecurrencePeriod, string> = {
     WEEKLY: 'par semaine',
@@ -211,6 +225,20 @@
     }
   }
 
+  /**
+   * The series about to be dismissed. The ✕ sits a thumb away from the
+   * pencil, and a dismissal hides the series until it is restored from
+   * « Écartées » — so it asks first.
+   */
+  const dismissing = ref<RecurrenceDto | null>(null)
+
+  async function confirmDismiss(): Promise<void> {
+    const row = dismissing.value
+    if (!row) return
+    await decide(row, 'DISMISSED')
+    dismissing.value = null
+  }
+
   /** The series whose name is being edited, by `rowKey`. */
   const editingKey = ref<string | null>(null)
 
@@ -319,16 +347,24 @@
           v-model="tab"
           class="mb-4"
           label="Abonnements"
+          semantics="tablist"
           :options="
             tabs.map(t => ({
               value: t.key,
               label: `${t.label} (${t.count})`,
               testId: `tab-${t.key}`,
+              id: TAB_IDS[t.key].tab,
+              controls: TAB_IDS[t.key].panel,
             }))
           "
         />
 
-        <template v-if="tab === 'current'">
+        <div
+          v-if="tab === 'current'"
+          :id="TAB_IDS.current.panel"
+          role="tabpanel"
+          :aria-labelledby="TAB_IDS.current.tab"
+        >
           <div
             v-if="active.length > 0"
             class="mb-3 flex items-center justify-end gap-2"
@@ -336,17 +372,17 @@
             <label
               for="recurrences-sort"
               class="text-xs text-gray-500 dark:text-gray-400"
-              >Trier</label
+              >Affichage</label
             >
             <select
               id="recurrences-sort"
               v-model="sortBy"
               data-testid="recurrences-sort"
-              class="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-gray-100"
+              class="min-h-[44px] rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm sm:min-h-0 dark:border-slate-600 dark:bg-slate-900 dark:text-gray-100"
             >
-              <option value="category">par catégorie</option>
-              <option value="amount">par montant</option>
-              <option value="age">par ancienneté</option>
+              <option value="category">Grouper par catégorie</option>
+              <option value="amount">Trier par montant</option>
+              <option value="age">Trier par ancienneté</option>
             </select>
           </div>
 
@@ -421,10 +457,20 @@
                     {{ formatCurrency(row.totalPaid) }} payés
                   </span>
                 </button>
+                <!-- The pencil and the ✕ sit either side of the amount:
+                     a thumb aiming at one no longer lands on the other. -->
                 <div
-                  class="flex items-center justify-between gap-4 sm:justify-end"
+                  class="flex items-center justify-between gap-3 sm:justify-end sm:gap-4"
                 >
-                  <div class="text-right">
+                  <BaseIconButton
+                    :disabled="busyKey !== null"
+                    :label="`Renommer ${row.name}`"
+                    data-testid="rename-recurrence"
+                    @click="editingKey = rowKey(row)"
+                  >
+                    <IconPencil />
+                  </BaseIconButton>
+                  <div class="min-w-0 flex-1 text-right sm:flex-none">
                     <span
                       class="block tabular-nums font-medium text-gray-900 dark:text-gray-100"
                       >{{ formatCurrency(row.amount) }}
@@ -441,19 +487,11 @@
                     >
                   </div>
                   <BaseIconButton
-                    :disabled="busyKey !== null"
-                    :label="`Renommer ${row.name}`"
-                    data-testid="rename-recurrence"
-                    @click="editingKey = rowKey(row)"
-                  >
-                    <IconPencil />
-                  </BaseIconButton>
-                  <BaseIconButton
                     variant="danger"
                     :disabled="busyKey !== null"
                     :label="`Écarter ${row.name} : ce n'est pas un abonnement`"
                     data-testid="dismiss-recurrence"
-                    @click="decide(row, 'DISMISSED')"
+                    @click="dismissing = row"
                   >
                     <IconClose />
                   </BaseIconButton>
@@ -513,7 +551,7 @@
                     :disabled="busyKey !== null"
                     :label="`Écarter ${row.name} : ce n'est pas un abonnement`"
                     data-testid="dismiss-recurrence"
-                    @click="decide(row, 'DISMISSED')"
+                    @click="dismissing = row"
                   >
                     <IconClose />
                   </BaseIconButton>
@@ -521,9 +559,14 @@
               </li>
             </ul>
           </section>
-        </template>
+        </div>
 
-        <template v-else>
+        <div
+          v-else
+          :id="TAB_IDS.ended.panel"
+          role="tabpanel"
+          :aria-labelledby="TAB_IDS.ended.tab"
+        >
           <BaseCard
             v-if="stopped.length === 0"
             class="text-center text-sm text-gray-500 dark:text-gray-400"
@@ -599,10 +642,20 @@
                     {{ formatDuration(row) }}
                   </span>
                 </button>
+                <!-- The pencil and the ✕ sit either side of the amount:
+                     a thumb aiming at one no longer lands on the other. -->
                 <div
-                  class="flex items-center justify-between gap-4 sm:justify-end"
+                  class="flex items-center justify-between gap-3 sm:justify-end sm:gap-4"
                 >
-                  <div class="text-right">
+                  <BaseIconButton
+                    :disabled="busyKey !== null"
+                    :label="`Renommer ${row.name}`"
+                    data-testid="rename-recurrence"
+                    @click="editingKey = rowKey(row)"
+                  >
+                    <IconPencil />
+                  </BaseIconButton>
+                  <div class="min-w-0 flex-1 text-right sm:flex-none">
                     <span
                       class="block tabular-nums font-medium text-gray-900 dark:text-gray-100"
                       >{{ formatCurrency(row.totalPaid) }}</span
@@ -614,19 +667,11 @@
                     >
                   </div>
                   <BaseIconButton
-                    :disabled="busyKey !== null"
-                    :label="`Renommer ${row.name}`"
-                    data-testid="rename-recurrence"
-                    @click="editingKey = rowKey(row)"
-                  >
-                    <IconPencil />
-                  </BaseIconButton>
-                  <BaseIconButton
                     variant="danger"
                     :disabled="busyKey !== null"
                     :label="`Écarter ${row.name} : ce n'est pas un abonnement`"
                     data-testid="dismiss-recurrence"
-                    @click="decide(row, 'DISMISSED')"
+                    @click="dismissing = row"
                   >
                     <IconClose />
                   </BaseIconButton>
@@ -634,7 +679,7 @@
               </li>
             </ul>
           </BaseCard>
-        </template>
+        </div>
 
         <BaseCard
           v-if="dismissed.length > 0"
@@ -706,5 +751,21 @@
         </section>
       </template>
     </template>
+
+    <ConfirmDialog
+      :open="dismissing !== null"
+      title="Écarter cette récurrence ?"
+      confirm-label="Écarter"
+      cancel-label="Conserver"
+      :loading="busyKey !== null"
+      @confirm="confirmDismiss"
+      @cancel="dismissing = null"
+    >
+      <span class="font-medium text-gray-900 dark:text-gray-100"
+        >« {{ dismissing?.name }} »</span
+      >
+      ne sera plus proposée comme abonnement. Vous pourrez la rétablir depuis la
+      liste « Écartées ».
+    </ConfirmDialog>
   </PageShell>
 </template>

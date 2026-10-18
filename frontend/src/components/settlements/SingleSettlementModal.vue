@@ -3,6 +3,7 @@
   import BaseModal from '@/components/ui/BaseModal.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseCheckbox from '@/components/ui/BaseCheckbox.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import {
     api,
@@ -10,7 +11,7 @@
     type TransactionDto,
     type SettlementDto,
   } from '@/lib/api'
-  import { formatCurrency, formatDate, parseDecimal } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
   import IncomeTransactionPicker from './IncomeTransactionPicker.vue'
   import {
     availableAmountOf,
@@ -82,9 +83,9 @@
     })
   }
 
-  function onAmountCommit(event: Event): void {
-    const raw = parseDecimal((event.target as HTMLInputElement).value)
-    const value = Number.isFinite(raw) ? raw : 0
+  /** Committed on change (BaseField `lazy`), then clamped to the line and the pot. */
+  function onAmountCommit(raw: number | null): void {
+    const value = raw ?? 0
     amount.value = round2(
       Math.min(Math.max(0, value), Math.min(amountDue.value, pot.value))
     )
@@ -232,20 +233,21 @@
         <div
           class="mt-3 flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 dark:border-slate-700"
         >
-          <label
-            class="text-sm text-gray-700 dark:text-gray-300"
-            for="single-settlement-amount"
-          >
+          <span class="text-sm text-gray-700 dark:text-gray-300">
             Montant à imputer
-          </label>
+          </span>
           <div class="flex shrink-0 items-center gap-1">
-            <input
-              id="single-settlement-amount"
-              type="text"
-              inputmode="decimal"
-              :value="amount"
-              class="min-h-[40px] w-24 rounded border border-gray-300 bg-white px-2 py-1 text-right text-gray-900 focus:ring-2 focus:ring-primary-500 sm:min-h-0 sm:w-28 dark:border-slate-600 dark:bg-slate-900 dark:text-gray-100"
-              @change="onAmountCommit"
+            <BaseField
+              amount
+              lazy
+              size="sm"
+              label-hidden
+              label="Montant à imputer"
+              :model-value="amount"
+              class="w-24 sm:w-28 [&_input]:text-right"
+              @update:model-value="
+                value => onAmountCommit(value as number | null)
+              "
             />
             <span class="text-gray-500 dark:text-gray-400">&euro;</span>
           </div>

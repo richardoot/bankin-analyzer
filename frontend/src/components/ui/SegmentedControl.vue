@@ -14,6 +14,11 @@
    * `fullWidth` spreads the options across the container on a phone (an
    * equal-column grid) and lets them size to their label from `sm` up —
    * the period selector needs it, a two-option toggle does not.
+   *
+   * `semantics="tablist"` is for the case where each option shows its own
+   * panel rather than re-reading the same one: the options become tabs,
+   * each naming its panel through `controls` (and `id` for the panel's
+   * `aria-labelledby`). The keyboard behaves the same.
    */
   export interface SegmentedOption<V> {
     value: V
@@ -23,6 +28,10 @@
     testId?: string
     disabled?: boolean
     title?: string
+    /** tablist only: the id of the panel this option shows. */
+    controls?: string
+    /** tablist only: the id of the tab, for the panel's aria-labelledby. */
+    id?: string
   }
 
   const props = withDefaults(
@@ -34,6 +43,7 @@
       size?: 'sm' | 'md' | undefined
       fullWidth?: boolean | undefined
       disabled?: boolean | undefined
+      semantics?: 'radiogroup' | 'tablist' | undefined
     }>(),
     {
       label: undefined,
@@ -41,6 +51,7 @@
       size: 'md',
       fullWidth: false,
       disabled: false,
+      semantics: 'radiogroup',
     }
   )
 
@@ -102,8 +113,9 @@
   }
 
   function focusOption(index: number): void {
-    const buttons =
-      groupRef.value?.querySelectorAll<HTMLButtonElement>('[role="radio"]')
+    const buttons = groupRef.value?.querySelectorAll<HTMLButtonElement>(
+      '[role="radio"], [role="tab"]'
+    )
     buttons?.[index]?.focus()
   }
 
@@ -137,7 +149,7 @@
 <template>
   <div
     ref="groupRef"
-    role="radiogroup"
+    :role="semantics"
     :aria-label="label"
     :aria-labelledby="labelledBy"
     :aria-disabled="disabled ? true : undefined"
@@ -151,10 +163,13 @@
   >
     <button
       v-for="(option, index) in options"
+      :id="option.id"
       :key="String(option.value)"
       type="button"
-      role="radio"
-      :aria-checked="isSelected(option)"
+      :role="semantics === 'tablist' ? 'tab' : 'radio'"
+      :aria-checked="semantics === 'tablist' ? undefined : isSelected(option)"
+      :aria-selected="semantics === 'tablist' ? isSelected(option) : undefined"
+      :aria-controls="option.controls"
       :tabindex="tabIndexFor(index)"
       :disabled="disabled || option.disabled"
       :data-testid="option.testId"

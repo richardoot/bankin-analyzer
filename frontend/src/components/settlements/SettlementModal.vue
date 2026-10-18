@@ -3,6 +3,7 @@
   import BaseModal from '@/components/ui/BaseModal.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseCheckbox from '@/components/ui/BaseCheckbox.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import SectionLabel from '@/components/ui/SectionLabel.vue'
@@ -15,8 +16,9 @@
     type SettlementDto,
     type SettlementReimbursementItemDto,
   } from '@/lib/api'
-  import { formatCurrency, formatDate, parseDecimal } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
   import IncomeTransactionPicker from './IncomeTransactionPicker.vue'
+  import { useIsMobile } from '@/composables/useMediaQuery'
   import {
     availableAmountOf,
     byOldestFirst,
@@ -48,6 +50,12 @@
   }
 
   const currentStep = ref<1 | 2>(1)
+  /**
+   * On a phone the second step has to leave the receipt list at least half
+   * the screen: the step trail and the « Annuler » button give way there —
+   * the header's back arrow and cross already do both jobs.
+   */
+  const isMobile = useIsMobile()
   /**
    * Step 1 answers "which debts", step 2 answers "with what money". Keeping the
    * two apart is what lets the selection exist before a pot is known — the
@@ -261,12 +269,12 @@
   }
 
   /**
-   * Committed on `change` rather than `input`: the field is value-bound and
-   * clamped, so writing back on every keystroke would eat a half-typed "0.".
+   * Committed on `change` rather than `input` (BaseField `lazy`): the field
+   * is clamped, so writing back on every keystroke would eat a half-typed
+   * "0,".
    */
-  function onAmountCommit(reimbursementId: string, event: Event): void {
-    const value = parseDecimal((event.target as HTMLInputElement).value)
-    setLineAmount(reimbursementId, Number.isFinite(value) ? value : 0)
+  function onAmountCommit(reimbursementId: string, value: number | null): void {
+    setLineAmount(reimbursementId, value ?? 0)
   }
 
   function toggleForceComplete(reimbursementId: string): void {
@@ -287,9 +295,11 @@
     }
   }
 
-  function onCategoryAmountCommit(group: CategoryGroup, event: Event): void {
-    const value = parseDecimal((event.target as HTMLInputElement).value)
-    applyToGroup(group, Number.isFinite(value) ? Math.max(0, value) : 0)
+  function onCategoryAmountCommit(
+    group: CategoryGroup,
+    value: number | null
+  ): void {
+    applyToGroup(group, Math.max(0, value ?? 0))
   }
 
   function spreadGroupProrata(group: CategoryGroup): void {
@@ -454,7 +464,7 @@
     @back="goBackToSelection"
     @close="handleClose"
   >
-    <template #subheader>
+    <template v-if="currentStep === 1 || !isMobile" #subheader>
       <StepIndicator
         class="justify-start"
         :steps="STEP_LABELS"
@@ -690,13 +700,18 @@
                 </p>
               </div>
               <div class="flex shrink-0 items-center gap-1">
-                <input
-                  type="text"
-                  inputmode="decimal"
-                  :value="group.allocated"
-                  :aria-label="`Montant affecté à ${group.categoryName}`"
-                  class="min-h-[40px] w-20 rounded border border-gray-300 bg-white px-2 py-1 text-right text-gray-900 focus:ring-2 focus:ring-primary-500 sm:min-h-0 sm:w-24 dark:border-slate-600 dark:bg-slate-900 dark:text-gray-100"
-                  @change="onCategoryAmountCommit(group, $event)"
+                <BaseField
+                  amount
+                  lazy
+                  size="sm"
+                  label-hidden
+                  :label="`Montant affecté à ${group.categoryName}`"
+                  :model-value="group.allocated"
+                  class="w-20 sm:w-24 [&_input]:text-right"
+                  @update:model-value="
+                    value =>
+                      onCategoryAmountCommit(group, value as number | null)
+                  "
                 />
                 <span class="text-gray-500 dark:text-gray-400">&euro;</span>
               </div>
@@ -728,13 +743,21 @@
                     </p>
                   </div>
                   <div class="flex shrink-0 items-center gap-1">
-                    <input
-                      type="text"
-                      inputmode="decimal"
-                      :value="stateOf(line.reimbursementId).amount"
-                      :aria-label="`Montant affecté à ${line.description}`"
-                      class="min-h-[40px] w-20 rounded border border-gray-300 bg-white px-2 py-1 text-right text-gray-900 focus:ring-2 focus:ring-primary-500 sm:min-h-0 sm:w-24 dark:border-slate-600 dark:bg-slate-900 dark:text-gray-100"
-                      @change="onAmountCommit(line.reimbursementId, $event)"
+                    <BaseField
+                      amount
+                      lazy
+                      size="sm"
+                      label-hidden
+                      :label="`Montant affecté à ${line.description}`"
+                      :model-value="stateOf(line.reimbursementId).amount"
+                      class="w-20 sm:w-24 [&_input]:text-right"
+                      @update:model-value="
+                        value =>
+                          onAmountCommit(
+                            line.reimbursementId,
+                            value as number | null
+                          )
+                      "
                     />
                     <span class="text-gray-500 dark:text-gray-400">&euro;</span>
                   </div>
@@ -827,9 +850,12 @@
     </template>
 
     <template #footer>
+      <!-- Step 2 on a phone: the header's cross already closes. -->
       <BaseButton
         variant="secondary"
         :disabled="isSubmitting"
+        :class="currentStep === 2 ? 'max-sm:hidden' : ''"
+        data-testid="settlement-cancel"
         @click="requestClose"
       >
         Annuler
