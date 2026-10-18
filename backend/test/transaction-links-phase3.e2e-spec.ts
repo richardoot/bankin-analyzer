@@ -423,4 +423,86 @@ describe('GET /transactions phase 3 link filters (e2e)', () => {
       )
     })
   })
+
+  describe('several categories, several recurrences', () => {
+    it('opens any of the named categories, the unfiled rows on request, none of a stranger', async () => {
+      const food = await category('Alimentation e2e')
+      const fun = await category('Loisirs e2e')
+      const other = await category('Autre e2e')
+      const a = await expense(10, { categoryId: food })
+      const b = await expense(20, { categoryId: fun })
+      await expense(30, { categoryId: other })
+      const unfiled = await expense(40)
+      const strangerUser = await prisma.user.findFirstOrThrow({
+        where: { supabaseId: stranger.supabaseId },
+      })
+      const strangerAccount = await prisma.account.create({
+        data: { userId: strangerUser.id, name: 'Theirs' },
+      })
+      const strangerFood = await category('Alimentation stranger e2e', {
+        userId: strangerUser.id,
+      })
+      await expense(50, {
+        userId: strangerUser.id,
+        accountId: strangerAccount.id,
+        categoryId: strangerFood,
+      })
+
+      expect(
+        await listIds({ categoryIds: `${food},${fun},${strangerFood}` })
+      ).toEqual([a, b].sort())
+      expect(await listIds({ categoryIds: `${food},none` })).toEqual(
+        [a, unfiled].sort()
+      )
+      // Combined with a single category: the intersection.
+      expect(
+        await listIds({ categoryIds: `${food},${fun}`, categoryId: fun })
+      ).toEqual([b])
+
+      const tooMany = Array.from({ length: 201 }, () => food).join(',')
+      const refused = await http()
+        .get('/transactions')
+        .query({ categoryIds: tooMany })
+        .set(ctx.auth(owner))
+      // Deduplicated after the cap is checked: 201 values are refused.
+      expect(refused.status).toBe(400)
+    })
+
+    it('opens the lines of any of the named series', async () => {
+      const netflix = await expense(15, { description: 'NETFLIX' })
+      const spotify = await expense(11, { description: 'SPOTIFY' })
+      await expense(9, { description: 'DEEZER' })
+      for (const [merchantKey, amountBucket, transactionId] of [
+        ['netflix', 15, netflix],
+        ['spotify', 11, spotify],
+      ] as const) {
+        const recurrence = await prisma.recurrence.create({
+          data: {
+            userId,
+            merchantKey,
+            amountBucket,
+            label: merchantKey,
+            period: 'MONTHLY',
+            amount: amountBucket,
+            monthlyEquivalent: amountBucket,
+            occurrences: 3,
+            totalPaid: amountBucket * 3,
+            firstDate: new Date('2026-06-12'),
+            lastDate: new Date('2026-08-12'),
+            nextExpected: new Date('2026-09-12'),
+            status: 'ACTIVE',
+          },
+        })
+        await prisma.recurrenceTransaction.create({
+          data: { recurrenceId: recurrence.id, transactionId },
+        })
+      }
+
+      expect(await listIds({ recurrences: '15:netflix,11:spotify' })).toEqual(
+        [netflix, spotify].sort()
+      )
+      // The amount bucket is part of the name.
+      expect(await listIds({ recurrences: '16:netflix' })).toEqual([])
+    })
+  })
 })

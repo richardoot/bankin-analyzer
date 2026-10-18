@@ -865,6 +865,34 @@ describe('TransactionsController', () => {
       )
     })
 
+    it('passes the category and recurrence lists through', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
+      const id = '550e8400-e29b-41d4-a716-446655440001'
+
+      await findAllWithPhase3(
+        undefined,
+        undefined,
+        undefined,
+        `${id},none`,
+        '15:netflix'
+      )
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 20 },
+        {
+          categoryIds: [id, null],
+          recurrences: [{ amountBucket: 15, merchantKey: 'netflix' }],
+        },
+        undefined
+      )
+    })
+
     it('rejects a sort column outside the allowlist', async () => {
       await expect(
         controller.findAll(

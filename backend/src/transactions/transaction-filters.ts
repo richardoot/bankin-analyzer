@@ -112,6 +112,14 @@ export interface TransactionFilters {
   nature?: NatureFilter
   /** Engagé, Variable, or neither (« à migrer »). */
   rhythm?: RhythmFilter
+  /**
+   * The rows filed under any of these categories — `null` in the list for
+   * the rows filed nowhere. Empty when nothing usable was named: matching
+   * nothing, as with `ids`.
+   */
+  categoryIds?: (string | null)[]
+  /** The lines of any of these recurring charges, named as `recurrence`. */
+  recurrences?: { merchantKey: string; amountBucket: number }[]
 }
 
 /**
@@ -148,6 +156,10 @@ export interface RawTransactionFilters {
   nature?: string
   /** `COMMITTED`, `VARIABLE` or `none`; anything else is refused. */
   rhythm?: string
+  /** Comma-separated in a query string, an array in a JSON body. */
+  categoryIds?: string | string[]
+  /** `<amountBucket>:<merchantKey>` each; comma-separated or an array. */
+  recurrences?: string | string[]
 }
 
 /**
@@ -167,6 +179,27 @@ function parseIds(value: string | string[] | undefined): string[] | null {
     )
   }
   return [...new Set(raw.filter(id => UUID_PATTERN.test(id)))]
+}
+
+/**
+ * A list as a query string or a JSON body gives it, trimmed, blanks out,
+ * capped like `ids`: refused beyond, never truncated. Null when absent.
+ */
+function parseList(
+  name: string,
+  value: string | string[] | undefined
+): string[] | null {
+  if (value === undefined) return null
+  const raw = (Array.isArray(value) ? value : value.split(','))
+    .map(item => item.trim())
+    .filter(item => item !== '')
+  if (raw.length === 0) return null
+  if (raw.length > MAX_TRANSACTION_IDS) {
+    throw new BadRequestException(
+      `${name} accepts at most ${MAX_TRANSACTION_IDS} values, got ${raw.length}`
+    )
+  }
+  return [...new Set(raw)]
 }
 
 /** `15:com netflix` → the series; anything else is ignored. */
@@ -252,6 +285,19 @@ export function parseTransactionFilters(
 
   const ids = parseIds(raw.ids)
   if (ids) filters.ids = ids
+
+  // Category ids are uuids; `none` stands for the rows filed nowhere.
+  // What is neither is dropped, and a list left empty matches nothing.
+  const categoryIds = parseList('categoryIds', raw.categoryIds)
+  if (categoryIds) {
+    filters.categoryIds = categoryIds
+      .filter(id => id === NO_CATEGORY || UUID_PATTERN.test(id))
+      .map(id => (id === NO_CATEGORY ? null : id))
+  }
+  const recurrences = parseList('recurrences', raw.recurrences)
+  if (recurrences) {
+    filters.recurrences = recurrences.flatMap(key => parseRecurrence(key) ?? [])
+  }
 
   if (raw.personId || raw.reimbursement) {
     filters.reimbursement = {
@@ -426,6 +472,30 @@ export function buildTransactionWhere(
           ? { some: exceptionalTag }
           : { none: exceptionalTag },
     })
+  }
+
+  // Lists from a link: any of the named categories, any of the named
+  // series. In AND, so a single `categoryId` or `recurrence` still narrows.
+  if (filters?.categoryIds) {
+    const real = filters.categoryIds.filter((id): id is string => id !== null)
+    const either: Prisma.TransactionWhereInput[] = []
+    if (real.length > 0) either.push({ categoryId: { in: real } })
+    if (real.length < filters.categoryIds.length)
+      either.push({ categoryId: null })
+    and.push(either.length > 0 ? { OR: either } : { id: { in: [] } })
+  }
+  if (filters?.recurrences) {
+    and.push(
+      filters.recurrences.length > 0
+        ? {
+            recurrences: {
+              some: {
+                recurrence: { userId, OR: filters.recurrences },
+              },
+            },
+          }
+        : { id: { in: [] } }
+    )
   }
 
   if (filters?.nature) {

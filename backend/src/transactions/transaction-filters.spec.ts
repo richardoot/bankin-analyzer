@@ -495,4 +495,80 @@ describe('buildTransactionWhere', () => {
       }
     })
   })
+
+  describe('several categories, several recurrences', () => {
+    it('reads a comma-separated query and a JSON array alike, none as null', () => {
+      expect(
+        parseTransactionFilters({ categoryIds: `${uuid(1)}, none,,${uuid(1)}` })
+      ).toEqual({ categoryIds: [uuid(1), null] })
+      expect(
+        parseTransactionFilters({ categoryIds: [uuid(2), 'not-an-id'] })
+      ).toEqual({ categoryIds: [uuid(2)] })
+      expect(
+        parseTransactionFilters({
+          recurrences: '15:com netflix,9:spotify,garbage',
+        })
+      ).toEqual({
+        recurrences: [
+          { amountBucket: 15, merchantKey: 'com netflix' },
+          { amountBucket: 9, merchantKey: 'spotify' },
+        ],
+      })
+    })
+
+    it('refuses more than the cap rather than truncating', () => {
+      const many = Array.from({ length: MAX_TRANSACTION_IDS + 1 }, (_, i) =>
+        uuid(i)
+      )
+      expect(() => parseTransactionFilters({ categoryIds: many })).toThrow(
+        BadRequestException
+      )
+      expect(() =>
+        parseTransactionFilters({
+          recurrences: many.map((_, i) => `${i}:shop`),
+        })
+      ).toThrow(BadRequestException)
+    })
+
+    it('matches any of the categories, the unfiled ones included when asked', () => {
+      expect(
+        buildTransactionWhere('user-1', {
+          categoryId: 'cat-9',
+          categoryIds: ['cat-1', null],
+        })
+      ).toMatchObject({
+        categoryId: 'cat-9',
+        AND: [
+          { OR: [{ categoryId: { in: ['cat-1'] } }, { categoryId: null }] },
+        ],
+      })
+    })
+
+    it('matches the lines of any of the series, scoped to the user', () => {
+      expect(
+        buildTransactionWhere('user-1', {
+          recurrences: [{ amountBucket: 15, merchantKey: 'netflix' }],
+        }).AND
+      ).toEqual([
+        {
+          recurrences: {
+            some: {
+              recurrence: {
+                userId: 'user-1',
+                OR: [{ amountBucket: 15, merchantKey: 'netflix' }],
+              },
+            },
+          },
+        },
+      ])
+    })
+
+    it('matches nothing when nothing usable was named', () => {
+      for (const filters of [{ categoryIds: [] }, { recurrences: [] }]) {
+        expect(buildTransactionWhere('user-1', filters).AND).toEqual([
+          { id: { in: [] } },
+        ])
+      }
+    })
+  })
 })

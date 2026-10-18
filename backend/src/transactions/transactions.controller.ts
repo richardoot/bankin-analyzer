@@ -303,6 +303,22 @@ export class TransactionsController {
       'nothing says.',
   })
   @ApiQuery({
+    name: 'categoryIds',
+    required: false,
+    type: String,
+    description:
+      'Any of these categories, comma-separated (at most 200); `none` for ' +
+      'the rows filed nowhere.',
+  })
+  @ApiQuery({
+    name: 'recurrences',
+    required: false,
+    type: String,
+    description:
+      'The lines of any of these recurring charges, comma-separated ' +
+      '`<amountBucket>:<merchantKey>` (at most 200).',
+  })
+  @ApiQuery({
     name: 'sortBy',
     required: false,
     enum: ['date', 'amount'],
@@ -341,7 +357,9 @@ export class TransactionsController {
     @Query('syncRunId') syncRunId?: string,
     @Query('exceptional') exceptional?: string,
     @Query('nature') nature?: string,
-    @Query('rhythm') rhythm?: string
+    @Query('rhythm') rhythm?: string,
+    @Query('categoryIds') categoryIds?: string,
+    @Query('recurrences') recurrences?: string
   ): Promise<PaginatedTransactionsResponseDto> {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
@@ -391,6 +409,8 @@ export class TransactionsController {
       ...(exceptional && { exceptional }),
       ...(nature && { nature }),
       ...(rhythm && { rhythm }),
+      ...(categoryIds && { categoryIds }),
+      ...(recurrences && { recurrences }),
     })
 
     const { data: transactions, total } =
