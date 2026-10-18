@@ -122,6 +122,22 @@ describe('GET /transactions phase 3 link filters (e2e)', () => {
     return row.id
   }
 
+  async function tag(
+    name: string,
+    isExceptional: boolean,
+    transactionIds: string[]
+  ): Promise<string> {
+    const row = await prisma.tag.create({
+      data: { userId, name, isExceptional },
+    })
+    for (const transactionId of transactionIds) {
+      await prisma.transactionTag.create({
+        data: { tagId: row.id, transactionId },
+      })
+    }
+    return row.id
+  }
+
   async function listIds(query: Record<string, string>): Promise<string[]> {
     const response = await http()
       .get('/transactions')
@@ -226,6 +242,64 @@ describe('GET /transactions phase 3 link filters (e2e)', () => {
         })
         expect(ids).toHaveLength(line.transactionCount)
       }
+    })
+  })
+
+  describe('exceptional', () => {
+    it('excludes, or keeps only, the rows carrying an exceptional tag — as the « Vie courante » reading does', async () => {
+      const food = await category('Alimentation e2e')
+      const holiday = await expense(100, {
+        categoryId: food,
+        description: 'Holiday dinner',
+      })
+      const everyday = await expense(20, {
+        categoryId: food,
+        description: 'Groceries',
+      })
+      const tagged = await expense(30, {
+        categoryId: food,
+        description: 'Tagged, not an event',
+      })
+      await tag('Vacances', true, [holiday])
+      const plain = await tag('Courses du samedi', false, [tagged])
+
+      expect(await listIds({ exceptional: 'exclude' })).toEqual(
+        [everyday, tagged].sort()
+      )
+      expect(await listIds({ exceptional: 'only' })).toEqual([holiday])
+      // Combines with a tag filter rather than replacing it.
+      expect(await listIds({ exceptional: 'exclude', tagId: plain })).toEqual([
+        tagged,
+      ])
+
+      // The everyday figure of the Dashboard counts exactly the excluded set.
+      const dashboard = await http()
+        .post('/dashboard/summary')
+        .set(ctx.auth(owner))
+        .send({
+          startDate: '2026-08-01',
+          endDate: '2026-08-31',
+          includeCategoryBreakdown: true,
+          deductReimbursements: false,
+          deductPendingReimbursements: false,
+        })
+      const row = (
+        dashboard.body as {
+          expensesByCategory: Array<{
+            categoryId: string
+            everydayAmount: number
+            exceptionalAmount: number
+          }>
+        }
+      ).expensesByCategory.find(c => c.categoryId === food)
+      expect(row?.everydayAmount).toBe(50)
+      expect(row?.exceptionalAmount).toBe(100)
+
+      const refused = await http()
+        .get('/transactions')
+        .query({ exceptional: 'sometimes' })
+        .set(ctx.auth(owner))
+      expect(refused.status).toBe(400)
     })
   })
 })

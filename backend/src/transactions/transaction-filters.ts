@@ -25,6 +25,14 @@ import {
 /** The query value that asks for « sans catégorie » / « sans sous-catégorie ». */
 export const NO_CATEGORY = 'none'
 
+/**
+ * Whether a row carries an exceptional event's tag. `exclude` is the
+ * « Vie courante » reading of the Dashboard and the Budget, `only` the part
+ * of a figure those readings set aside.
+ */
+export const EXCEPTIONAL_FILTERS = ['exclude', 'only'] as const
+export type ExceptionalFilter = (typeof EXCEPTIONAL_FILTERS)[number]
+
 /** An explicit id list is a link, not a bulk upload: keep the URL sane. */
 export const MAX_TRANSACTION_IDS = 200
 
@@ -78,6 +86,12 @@ export interface TransactionFilters {
   importHistoryId?: string
   /** The rows one bank sync run inserted or claimed. */
   syncRunId?: string
+  /**
+   * The rows carrying at least one of the user's exceptional tags (`only`),
+   * or none of them (`exclude`) — the same test the Dashboard and the
+   * Budget apply to tell an event from everyday life.
+   */
+  exceptional?: ExceptionalFilter
 }
 
 /**
@@ -108,6 +122,8 @@ export interface RawTransactionFilters {
   settlementId?: string
   importId?: string
   syncRunId?: string
+  /** `exclude` or `only`; anything else is refused. */
+  exceptional?: string
 }
 
 /**
@@ -136,6 +152,23 @@ function parseRecurrence(
   const match = value?.match(/^(-?\d+):(.+)$/)
   if (!match?.[1] || !match[2]) return null
   return { amountBucket: Number(match[1]), merchantKey: match[2] }
+}
+
+/**
+ * One of a closed set of values, or nothing. A value outside the set is
+ * refused rather than ignored: ignored, the link would open on more rows than
+ * the figure it came from, and nothing on screen would say so.
+ */
+function parseChoice<T extends string>(
+  name: string,
+  value: string | undefined,
+  allowed: readonly T[]
+): T | null {
+  if (value === undefined || value === '') return null
+  if ((allowed as readonly string[]).includes(value)) return value as T
+  throw new BadRequestException(
+    `${name} must be one of ${allowed.join(', ')}, got '${value}'`
+  )
 }
 
 /**
@@ -205,6 +238,13 @@ export function parseTransactionFilters(
   if (raw.settlementId) filters.settlementId = raw.settlementId
   if (raw.importId) filters.importHistoryId = raw.importId
   if (raw.syncRunId) filters.syncRunId = raw.syncRunId
+
+  const exceptional = parseChoice(
+    'exceptional',
+    raw.exceptional,
+    EXCEPTIONAL_FILTERS
+  )
+  if (exceptional) filters.exceptional = exceptional
 
   const min = parseAmountBound(raw.amountMin)
   if (min !== null) filters.amountMin = min
@@ -290,6 +330,19 @@ export function buildTransactionWhere(
           },
         },
       ],
+    })
+  }
+
+  // Same test as the `exceptional_tx` CTE of the Dashboard and the Budget:
+  // one of the user's own tags, flagged exceptional. Kept in the AND list so
+  // it combines with a `tagId` filter instead of overwriting it.
+  if (filters?.exceptional) {
+    const exceptionalTag = { tag: { userId, isExceptional: true } }
+    and.push({
+      tags:
+        filters.exceptional === 'only'
+          ? { some: exceptionalTag }
+          : { none: exceptionalTag },
     })
   }
 

@@ -376,4 +376,44 @@ describe('buildTransactionWhere', () => {
       })
     })
   })
+
+  describe('exceptional events', () => {
+    it('reads exclude and only, nothing for a blank, and refuses the rest', () => {
+      expect(parseTransactionFilters({ exceptional: 'exclude' })).toEqual({
+        exceptional: 'exclude',
+      })
+      expect(parseTransactionFilters({ exceptional: 'only' })).toEqual({
+        exceptional: 'only',
+      })
+      expect(parseTransactionFilters({ exceptional: '' })).toEqual({})
+      expect(() => parseTransactionFilters({ exceptional: 'yes' })).toThrow(
+        BadRequestException
+      )
+    })
+
+    it('keeps the rows with none of the user exceptional tags, or at least one', () => {
+      const tag = { tag: { userId: 'user-1', isExceptional: true } }
+      expect(
+        buildTransactionWhere('user-1', { exceptional: 'exclude' }).AND
+      ).toEqual([{ tags: { none: tag } }])
+      expect(
+        buildTransactionWhere('user-1', { exceptional: 'only' }).AND
+      ).toEqual([{ tags: { some: tag } }])
+    })
+
+    it('combines with a tag filter instead of overwriting it', () => {
+      const where = buildTransactionWhere('user-1', {
+        tagId: 't-1',
+        exceptional: 'exclude',
+      })
+      expect(where.tags).toEqual({ some: { tagId: 't-1' } })
+      expect(where.AND).toEqual([
+        {
+          tags: {
+            none: { tag: { userId: 'user-1', isExceptional: true } },
+          },
+        },
+      ])
+    })
+  })
 })

@@ -278,6 +278,14 @@ export class TransactionsController {
     description: 'The rows one bank sync run inserted or claimed.',
   })
   @ApiQuery({
+    name: 'exceptional',
+    required: false,
+    enum: ['exclude', 'only'],
+    description:
+      '`exclude`: no exceptional tag of the user (the « Vie courante » ' +
+      'reading); `only`: at least one. Anything else is refused.',
+  })
+  @ApiQuery({
     name: 'sortBy',
     required: false,
     enum: ['date', 'amount'],
@@ -313,7 +321,8 @@ export class TransactionsController {
     @Query('reimbursement') reimbursement?: string,
     @Query('settlementId') settlementId?: string,
     @Query('importId') importId?: string,
-    @Query('syncRunId') syncRunId?: string
+    @Query('syncRunId') syncRunId?: string,
+    @Query('exceptional') exceptional?: string
   ): Promise<PaginatedTransactionsResponseDto> {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
@@ -360,6 +369,7 @@ export class TransactionsController {
       ...(settlementId && { settlementId }),
       ...(importId && { importId }),
       ...(syncRunId && { syncRunId }),
+      ...(exceptional && { exceptional }),
     })
 
     const { data: transactions, total } =

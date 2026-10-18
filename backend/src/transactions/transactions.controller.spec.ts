@@ -808,6 +808,42 @@ describe('TransactionsController', () => {
       )
     })
 
+    /**
+     * The phase 3 filters sit after the 21 earlier optional parameters, in
+     * this order: exceptional, nature, rhythm, categoryIds, recurrences.
+     */
+    const findAllWithPhase3 = (
+      ...phase3: (string | undefined)[]
+    ): ReturnType<typeof controller.findAll> =>
+      controller.findAll(
+        mockUser,
+        1,
+        20,
+        ...(Array(21).fill(undefined) as undefined[]),
+        ...phase3
+      )
+
+    it('passes the exceptional filter through, and refuses an unknown value', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
+
+      await findAllWithPhase3('exclude')
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 20 },
+        { exceptional: 'exclude' },
+        undefined
+      )
+      await expect(findAllWithPhase3('maybe')).rejects.toThrow(
+        BadRequestException
+      )
+    })
+
     it('rejects a sort column outside the allowlist', async () => {
       await expect(
         controller.findAll(
