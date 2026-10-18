@@ -1,7 +1,17 @@
 import { describe, it, expect, afterEach } from 'vitest'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { mount, enableAutoUnmount } from '@vue/test-utils'
 import MarkRecurringModal from './MarkRecurringModal.vue'
 import type { RecurrenceDto, TransactionDto } from '@/lib/api'
+
+// The links to the Transactions page need a router behind RouterLink.
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/', component: { template: '<div />' } },
+    { path: '/transactions', component: { template: '<div />' } },
+  ],
+})
 
 enableAutoUnmount(afterEach)
 
@@ -25,7 +35,7 @@ const strava = {
 function mountModal(recurrences: RecurrenceDto[] | null = [strava]) {
   return mount(MarkRecurringModal, {
     props: { open: true, transaction, recurrences },
-    global: { stubs: { Teleport: true } },
+    global: { plugins: [router], stubs: { Teleport: true } },
   })
 }
 
@@ -97,5 +107,23 @@ describe('MarkRecurringModal', () => {
     expect(wrapper.find('[data-testid="link-targets-empty"]').exists()).toBe(
       true
     )
+  })
+
+  it('lets each series be checked in a new tab before attaching', async () => {
+    const wrapper = mountModal([strava])
+    await wrapper.find('[data-testid="mode-link"]').trigger('click')
+
+    const link = wrapper.get('[data-testid="target-link-60:ireland strava"]')
+    expect(link.attributes('target')).toBe('_blank')
+    expect(link.attributes('href')).toBe(
+      '/transactions?recurrence=60:ireland+strava&recurrenceLabel=Strava'
+    )
+    // The radio beside it is untouched by the link.
+    expect(
+      (
+        wrapper.get('[data-testid="target-60:ireland strava"]')
+          .element as HTMLInputElement
+      ).checked
+    ).toBe(false)
   })
 })

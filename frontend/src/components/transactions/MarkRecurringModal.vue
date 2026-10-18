@@ -17,6 +17,8 @@
     TransactionDto,
   } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
 
   /**
    * Follow one expense as a recurring charge, in one of two ways.
@@ -219,6 +221,21 @@
               >
             </span>
           </span>
+          <!-- The series' lines, to check before attaching — beside the
+               dialog, which holds a choice. A link is interactive content:
+               clicking it does not tick the radio of the label around. -->
+          <TransactionsLink
+            :to="
+              transactionsLink({
+                recurrence: keyOf(recurrence),
+                recurrenceLabel: recurrence.name,
+              })
+            "
+            :subject="recurrence.name"
+            icon-only
+            new-tab
+            :data-testid="`target-link-${keyOf(recurrence)}`"
+          />
         </label>
       </div>
     </fieldset>

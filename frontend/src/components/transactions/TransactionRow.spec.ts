@@ -1,8 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { nextTick } from 'vue'
 import TransactionRow from './TransactionRow.vue'
 import type { ReimbursementDto, TransactionDto } from '@/lib/api'
+
+// The links to the Transactions page need a router behind RouterLink.
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/', component: { template: '<div />' } },
+    { path: '/transactions', component: { template: '<div />' } },
+  ],
+})
 
 const tx = (overrides: Partial<TransactionDto> = {}): TransactionDto =>
   ({
@@ -42,6 +52,7 @@ function mountRow(
   options: { attachTo?: Element } = {}
 ) {
   return mount(TransactionRow, {
+    global: { plugins: [router] },
     props: {
       transaction: tx(),
       reimbursements: [],
@@ -418,6 +429,32 @@ describe('TransactionRow', () => {
       expect(line.text()).toContain('Vacances')
       // 12px, not the 10px of before.
       expect(line.find('span.rounded-full').classes()).toContain('text-xs')
+    })
+  })
+
+  describe('a tag on the row', () => {
+    it('leads to the tag’s transactions without opening the row', async () => {
+      const wrapper = mountRow({
+        transaction: tx({
+          tags: [{ id: 'tag-1', name: 'Vacances', color: null, icon: null }],
+        }),
+      })
+
+      const link = wrapper.get('[data-testid="tag-chip-link"]')
+      expect(link.attributes('href')).toBe(
+        '/transactions?tag=tag-1&label=Vacances'
+      )
+      expect(link.attributes('aria-label')).toBe(
+        "Voir les transactions de l'étiquette Vacances"
+      )
+
+      await link.trigger('click')
+      expect(wrapper.emitted('open-category')).toBeUndefined()
+      // The cross beside it still removes.
+      await wrapper
+        .get('[aria-label="Retirer l\'étiquette Vacances"]')
+        .trigger('click')
+      expect(wrapper.emitted('detach-tag')).toEqual([['tag-1']])
     })
   })
 })

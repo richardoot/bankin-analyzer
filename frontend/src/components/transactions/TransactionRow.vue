@@ -9,6 +9,7 @@
   } from '@/lib/api'
   import { formatCurrency, formatDate } from '@/lib/formatters'
   import TagChip from '@/components/tags/TagChip.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
   import TagSelector from '@/components/tags/TagSelector.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
@@ -701,6 +702,7 @@
         :name="t.name"
         :color="t.color"
         :icon="t.icon"
+        :to="transactionsLink({ tagId: t.id, label: t.name })"
         dense
         removable
         @remove="emit('detach-tag', t.id)"

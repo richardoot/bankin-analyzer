@@ -1,4 +1,6 @@
 <script setup lang="ts">
+  import { RouterLink, type RouteLocationRaw } from 'vue-router'
+
   /**
    * Small colored pill representing a tag. The tag color (when set) tints a
    * leading dot; an optional remove button emits `remove`.
@@ -6,6 +8,10 @@
    * `dense` is the fit of a transaction row: tighter padding, but the
    * text stays 12px — it was 10px, unreadable on a phone — and the cross
    * keeps a 44px halo under a thumb however small it is drawn.
+   *
+   * With `to`, the name is a link — to the tag's transactions, from a
+   * row — and the cross beside it keeps removing: the two never share a
+   * target, and neither reaches the row underneath.
    */
   withDefaults(
     defineProps<{
@@ -15,12 +21,15 @@
       removable?: boolean
       /** Smaller variant for dense transaction rows. */
       dense?: boolean
+      /** Where the name leads, when it leads somewhere. */
+      to?: RouteLocationRaw | undefined
     }>(),
     {
       color: null,
       icon: null,
       removable: false,
       dense: false,
+      to: undefined,
     }
   )
 
@@ -41,7 +50,16 @@
       :class="dense ? 'h-1.5 w-1.5' : 'h-2 w-2'"
       :style="{ backgroundColor: color ?? '#9ca3af' }"
     ></span>
-    <span class="max-w-[10rem] truncate">{{ name }}</span>
+    <RouterLink
+      v-if="to"
+      :to="to"
+      class="relative max-w-[10rem] truncate rounded hover:underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-3 pointer-coarse:before:content-['']"
+      :aria-label="`Voir les transactions de l'étiquette ${name}`"
+      data-testid="tag-chip-link"
+      @click.stop
+      >{{ name }}</RouterLink
+    >
+    <span v-else class="max-w-[10rem] truncate">{{ name }}</span>
     <button
       v-if="removable"
       type="button"
