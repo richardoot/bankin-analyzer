@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import NewBudgetPlanModal from './NewBudgetPlanModal.vue'
 import type { BudgetPlanDto, BudgetStatisticsDto, CategoryDto } from '@/lib/api'
@@ -82,10 +83,21 @@ const samplePlan: BudgetPlanDto = {
   updatedAt: '2026-04-01T00:00:00Z',
 }
 
+// The envelopes step links each row to its transactions: RouterLink
+// needs a router.
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/', component: { template: '<div />' } },
+    { path: '/transactions', component: { template: '<div />' } },
+  ],
+})
+
 function mountModal() {
   return mount(NewBudgetPlanModal, {
     props: { open: true },
     attachTo: document.body,
+    global: { plugins: [router] },
   })
 }
 
@@ -1148,5 +1160,33 @@ describe('NewBudgetPlanModal', () => {
 
       wrapper.unmount()
     })
+  })
+
+  it('links each envelope row to its rows over the reference months, in a new tab', async () => {
+    // Today: 2026-05-13, plan from June: the reference is Nov 2025 → Apr 2026.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-13T12:00:00Z'))
+    try {
+      const wrapper = mountModal()
+      await flushPromises()
+      await clickNext()
+      await clickNext()
+
+      const link = document.body.querySelector(
+        '[data-testid="preview-transactions-link-Alimentation"]'
+      ) as HTMLAnchorElement | null
+      expect(link).not.toBeNull()
+      // A draft is open: the list opens beside it, never over it.
+      expect(link?.getAttribute('target')).toBe('_blank')
+      expect(link?.getAttribute('href')).toBe(
+        '/transactions?type=EXPENSE&category=cat-food&from=2025-11-01&to=2026-04-30&label=Alimentation+%C2%B7+6+mois+pr%C3%A9c%C3%A9dents&gross=1'
+      )
+      expect(link?.getAttribute('aria-label')).toBe(
+        'Voir les transactions de Alimentation'
+      )
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -1,6 +1,8 @@
 <script setup lang="ts">
   import type { CategoryAverageDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
+  import { transactionsLink } from '@/lib/transactionsLink'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
 
   /**
    * Étape 3 — les enveloppes et l'équation d'épargne. Chaque ligne
@@ -30,6 +32,12 @@
     planMonthCount: number
     reserveGap: number | null
     lookbackExceptionalPerMonth: number
+    /**
+     * The months the reference averages were read over. Each row links to
+     * its rows there — in a new tab: this step is a draft, and a draft is
+     * not something to walk away from to check a figure.
+     */
+    referenceWindow?: { from: string; to: string } | null
   }>()
 
   const emit = defineEmits<{
@@ -277,10 +285,28 @@
           </span>
           <span class="flex items-center justify-between gap-3 sm:contents">
             <span
-              class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0"
+              class="inline-flex items-center gap-0.5 text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0"
             >
               <template v-if="row.seedAverage > 0">
                 Moy. {{ formatCurrency(row.seedAverage) }}
+                <TransactionsLink
+                  v-if="referenceWindow"
+                  :to="
+                    transactionsLink({
+                      type: 'EXPENSE',
+                      categoryId: row.category.categoryId,
+                      from: referenceWindow.from,
+                      to: referenceWindow.to,
+                      gross: true,
+                      label: `${row.category.categoryName} · ${referenceIncomeLabel}`,
+                    })
+                  "
+                  :subject="row.category.categoryName"
+                  icon-only
+                  new-tab
+                  class="h-6 w-6"
+                  :data-testid="`preview-transactions-link-${row.category.categoryName}`"
+                />
               </template>
               <template v-else>Pas d'historique</template>
             </span>

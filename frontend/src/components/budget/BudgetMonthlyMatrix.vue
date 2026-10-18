@@ -1,6 +1,8 @@
 <script setup lang="ts">
   import { computed, ref } from 'vue'
+  import { RouterLink } from 'vue-router'
   import { formatCurrency } from '@/lib/formatters'
+  import { transactionsLink } from '@/lib/transactionsLink'
   import { useIsMobile } from '@/composables/useMediaQuery'
   import IconChevronDown from '@/components/icons/IconChevronDown.vue'
 
@@ -75,6 +77,35 @@
       'bg-green-50/60 dark:bg-green-900/15 text-green-700 dark:text-green-400',
     none: 'text-gray-600 dark:text-gray-400',
   }
+
+  /**
+   * A cell opens the rows behind it: that category, that month. The
+   * figures here are netted and shared, so the link says `gross`. The
+   * link is styled as the cell's own text — the grid stays a grid.
+   */
+  function cellLink(row: MatrixRow, index: number) {
+    const month = props.months[index]
+    return transactionsLink({
+      type: 'EXPENSE',
+      categoryId: row.categoryId,
+      month: month?.ym,
+      gross: true,
+      label: `${row.categoryName} · ${month?.label ?? ''}`,
+    })
+  }
+
+  function totalLink(index: number) {
+    const month = props.months[index]
+    return transactionsLink({
+      type: 'EXPENSE',
+      month: month?.ym,
+      gross: true,
+      label: `Dépenses · ${month?.label ?? ''}`,
+    })
+  }
+
+  const CELL_LINK_CLASS =
+    'block rounded px-0.5 -mx-0.5 hover:underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500'
 
   function cellTitle(row: MatrixRow, index: number): string {
     const amount = row.amounts[index] ?? 0
@@ -197,7 +228,13 @@
               :class="CELL_TONE[toneFor(row, index)]"
               :title="cellTitle(row, index)"
             >
-              {{ formatCurrency(row.amounts[index] ?? 0) }}
+              <RouterLink
+                :to="cellLink(row, index)"
+                :class="CELL_LINK_CLASS"
+                :aria-label="`Voir les transactions de ${row.categoryName} · ${month.label}`"
+              >
+                {{ formatCurrency(row.amounts[index] ?? 0) }}
+              </RouterLink>
             </td>
           </tr>
         </tbody>
@@ -224,7 +261,13 @@
                   : 'text-gray-900 dark:text-gray-100'
               "
             >
-              {{ formatCurrency(total) }}
+              <RouterLink
+                :to="totalLink(index)"
+                :class="CELL_LINK_CLASS"
+                :aria-label="`Voir les transactions de ${months[index]?.label ?? ''}`"
+              >
+                {{ formatCurrency(total) }}
+              </RouterLink>
             </td>
           </tr>
         </tfoot>

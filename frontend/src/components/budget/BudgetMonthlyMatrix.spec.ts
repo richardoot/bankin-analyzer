@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import BudgetMonthlyMatrix from './BudgetMonthlyMatrix.vue'
+
+// Every cell links to the Transactions page: RouterLink needs a router.
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/', component: { template: '<div />' } },
+    { path: '/transactions', component: { template: '<div />' } },
+  ],
+})
 
 const months = [
   { ym: '2026-06', label: 'Juin', isRunning: false },
@@ -28,6 +38,7 @@ const rows = [
 function mountMatrix(selectedMonth: string | null = null) {
   return mount(BudgetMonthlyMatrix, {
     props: { months, rows, selectedMonth },
+    global: { plugins: [router] },
   })
 }
 
@@ -130,5 +141,24 @@ describe('BudgetMonthlyMatrix', () => {
     } finally {
       window.matchMedia = original
     }
+  })
+
+  it('opens the rows behind a cell, and behind a month total, gross', () => {
+    const wrapper = mountMatrix()
+
+    const cell = wrapper
+      .get('[data-testid="matrix-cell-Alimentation-2026-07"]')
+      .get('a')
+    expect(cell.attributes('href')).toBe(
+      '/transactions?type=EXPENSE&category=cat-food&from=2026-07-01&to=2026-07-31&label=Alimentation+%C2%B7+Juil&gross=1'
+    )
+    expect(cell.attributes('aria-label')).toBe(
+      'Voir les transactions de Alimentation · Juil'
+    )
+
+    const total = wrapper.get('[data-testid="matrix-total-2026-08"]').get('a')
+    expect(total.attributes('href')).toBe(
+      '/transactions?type=EXPENSE&from=2026-08-01&to=2026-08-31&label=D%C3%A9penses+%C2%B7+Ao%C3%BBt&gross=1'
+    )
   })
 })
