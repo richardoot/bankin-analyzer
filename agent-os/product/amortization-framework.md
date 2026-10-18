@@ -75,6 +75,16 @@ Invariants à tester :
 - Le mode Réel est identique avant et après la fonctionnalité (golden masters du budget et du dashboard).
 - Sur une fenêtre qui couvre tout le lissage, la vie courante d'une sous-catégorie égale son réel moins l'exceptionnel.
 
+Décisions du lot 1 (implémentation : `transactions/amortized-slices.service.ts`) :
+
+- **Requête à part.** Les tranches sont lues par une requête séparée, lancée en parallèle de l'agrégation réelle, qui n'est pas modifiée. La vie courante vaut réel − exceptionnel − achat lissé compté à sa date + tranches de la fenêtre.
+- **Lissé et exceptionnel à la fois** (données écrites par la synchro ou la migration héritée, hors service) : l'étiquette l'emporte, la transaction est lue comme exceptionnelle, exactement comme avant la fonctionnalité. Un lissage posé sur un revenu, un virement ou un montant positif est ignoré.
+- **Fenêtre.** Une tranche appartient à un mois et compte si ce mois chevauche la fenêtre ; l'achat lui-même compte s'il est daté dans la fenêtre. Sans date de fin (dashboard « tout »), les tranches s'arrêtent au mois en cours.
+- **Engagé.** Une tranche se lit comme un engagement dans la structure des dépenses de vie courante (rythme COMMITTED, nature de la sous-catégorie), donc aussi dans le reste à vivre. Une fenêtre future lit les tranches qui y tombent : c'est l'engagé d'un plan à venir.
+- **Fenêtres exceptionnelles.** Une tranche n'est pas suspendue par les jours d'un voyage : elle tombe comme un loyer. Pour la même raison, la base de référence d'un événement daté (`tags.service.ts`, dépenses variables par jour) exclut les achats lissés, qui sinon gonfleraient le taux journalier et cacheraient le surcoût.
+- **Toutes les dettes en cours** (`includeAllPendingReimbursements`) : la dette d'un achat lissé daté avant la fenêtre est déjà dans ses tranches ; la vie courante la rend une fois pour ne pas la déduire deux fois.
+- **Réponses.** Les champs ajoutés n'apparaissent que là où un achat lissé touche la période (`amortizedAmount`, `amortizedMonthlyAmounts`, `everydayAmount` d'une ligne de sous-catégorie, `amortizedExpenses` d'un mois du dashboard, liste `amortizedPurchases` du budget). Une catégorie, une ligne ou un mois que seules des tranches atteignent apparaît avec un réel à zéro.
+
 ## Écrans
 
 - **Transaction** : dans la modale, une action « Étaler sur… » avec 12, 24, 36 mois et une durée libre, la tranche mensuelle affichée en direct, et « Ne plus étaler ». Refus expliqué si la transaction porte un tag exceptionnel.
