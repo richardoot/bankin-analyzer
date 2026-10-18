@@ -92,6 +92,17 @@ Décisions du lot 1 (implémentation : `transactions/amortized-slices.service.ts
 - **Page Budget** : encart « Achats lissés en cours » sous les projets, une ligne par achat (libellé, tranche, mois restants, lien vers la transaction). Une cellule de la matrice qui contient des tranches le dit (« dont 54 € lissés ») et son lien « voir les transactions » montre aussi la transaction source, même si elle est datée d'un autre mois.
 - **Avertissement de période** : en vie courante, un total sur une période ne correspond plus au cash ; le libellé du mode le dit.
 
+Décisions du lot 2 :
+
+- **Une modale à part.** « Étaler sur… » est sa propre modale (`TransactionAmortizationModal`), pas une section de la modale de classement, qui reste « Modifier la catégorie ». On l'ouvre depuis le menu « … » de la carte (mobile), un bouton au survol et au focus de la ligne (bureau, colonne Actions élargie à 13,5rem) et le badge « lissé · N mois ». La tranche affichée est celle que le budget étalera : montant moins les remboursements demandés, divisé comme le compte. Le refus pour étiquette exceptionnelle ou pour un revenu, un virement est dit avant l'envoi ; le message du serveur reste affiché dans la modale en filet.
+- **Filtre « Lissées »** : `GET /transactions?amortized=true` (lien `amortized=1`), non mémorisé, comme le filtre des événements.
+- **Lien d'une cellule vers la source** : `alsoIds` (lien `also`), une union et non un filtre : les lignes que les autres filtres trouvent, plus ces lignes-là, toujours limitées à l'utilisateur. L'émetteur sait déjà quels achats ses tranches comptent (`amortizedPurchases`), donc le serveur ne refait pas le calcul des mois. Posé en vie courante seulement, sur la cellule et le total de la matrice, la colonne « Réel », les barres du graphique et les lignes de sous-catégorie lues en vie courante. Le bandeau de la liste le dit.
+- **Mode Réel inchangé.** Les catégories, lignes de sous-catégorie et mois que seules des tranches atteignent (`amortizedAmount` présent, aucune transaction) sont masqués en mode Réel, sur le Budget comme sur le Dashboard. L'encart « Achats lissés en cours » et les mentions « dont X € lissés » n'apparaissent qu'en vie courante. Seule différence visible en Réel : le sélecteur de lecture s'affiche aussi quand seul un achat lissé touche la période, pour pouvoir revenir en vie courante.
+- **Part des événements.** L'écart entre réel et vie courante n'est plus les seuls événements dès qu'un achat est lissé : le Budget le recalcule mois par mois (on rend les tranches, on retire les achats comptés à leur date), l'assistant de nouveau plan et le Dashboard lisent le montant exceptionnel lui-même.
+- **Sous-catégories** : `everydayAmount` n'est lu que là où il est présent ; les autres lignes gardent leur montant habituel.
+
+Le lot 2 a aussi corrigé un oubli de la phase 3 des liens : le frontend n'envoyait pas `nature`, `rhythm`, `categoryIds` ni `recurrences` à `GET /transactions`, si bien que ces liens ouvraient une liste trop large.
+
 ## Lots
 
 **Lot 0, modèle.** Migration de la colonne et de sa contrainte. DTO de transaction (`amortizationMonths`). `PATCH /transactions/:id` l'accepte, avec le refus croisé avec les tags exceptionnels, côté transactions et côté tags.
