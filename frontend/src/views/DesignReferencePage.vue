@@ -120,6 +120,11 @@
   const isWizardOpen = ref(false)
   const wizardStep = ref(1)
   const isTypedConfirmOpen = ref(false)
+
+  function openWizard(): void {
+    wizardStep.value = 1
+    isWizardOpen.value = true
+  }
   const isButtonLoading = ref(false)
   const demoFilterOpen = ref(true)
   const demoField = ref('')
@@ -394,13 +399,7 @@
           <BaseButton variant="secondary" @click="isModalOpen = true">
             Ouvrir une BaseModal
           </BaseButton>
-          <BaseButton
-            variant="secondary"
-            @click="
-              wizardStep = 1
-              isWizardOpen = true
-            "
-          >
+          <BaseButton variant="secondary" @click="openWizard">
             Ouvrir un assistant
           </BaseButton>
           <BaseButton variant="danger-outline" @click="isConfirmOpen = true">
