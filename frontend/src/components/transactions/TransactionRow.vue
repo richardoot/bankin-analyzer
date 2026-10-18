@@ -292,12 +292,13 @@
     :class="{
       'bg-primary-50/50 dark:bg-primary-900/10': selectionMode && selected,
       // A subscription line reads apart at a glance: a blue edge while
-      // it runs, a grey one once it has ended.
-      'border-blue-400 dark:border-blue-500':
+      // it runs, a grey one once it has ended. The left edge only: the
+      // divider below the row keeps the list's colour.
+      'border-l-blue-400 dark:border-l-blue-500':
         transaction.recurrence?.status === 'ACTIVE',
-      'border-gray-300 dark:border-slate-600':
+      'border-l-gray-300 dark:border-l-slate-600':
         transaction.recurrence?.status === 'STOPPED',
-      'border-transparent': !transaction.recurrence,
+      'border-l-transparent': !transaction.recurrence,
     }"
     :data-recurring="transaction.recurrence ? 'true' : undefined"
   >

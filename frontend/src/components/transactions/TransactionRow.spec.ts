@@ -69,7 +69,7 @@ describe('TransactionRow', () => {
       const wrapper = mountRow({ transaction: tx({ recurrence }) })
 
       expect(wrapper.attributes('data-recurring')).toBe('true')
-      expect(wrapper.classes()).toContain('border-blue-400')
+      expect(wrapper.classes()).toContain('border-l-blue-400')
       const badge = wrapper.find('[data-testid="recurrence-badge"]')
       expect(badge.text()).toBe('Netflix · mensuel')
       expect(wrapper.find('[data-testid="unlink-recurrence"]').exists()).toBe(
@@ -94,7 +94,7 @@ describe('TransactionRow', () => {
         }),
       })
 
-      expect(wrapper.classes()).toContain('border-gray-300')
+      expect(wrapper.classes()).toContain('border-l-gray-300')
       expect(wrapper.find('[data-testid="recurrence-badge"]').text()).toMatch(
         /^Netflix · annuel\s+· terminé$/
       )
@@ -115,7 +115,7 @@ describe('TransactionRow', () => {
       const wrapper = mountRow()
 
       expect(wrapper.attributes('data-recurring')).toBeUndefined()
-      expect(wrapper.classes()).toContain('border-transparent')
+      expect(wrapper.classes()).toContain('border-l-transparent')
       expect(wrapper.find('[data-testid="recurrence-badge"]').exists()).toBe(
         false
       )
