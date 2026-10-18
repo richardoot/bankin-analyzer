@@ -641,6 +641,14 @@
         >
           <IconArrowPath />
         </BaseIconButton>
+        <!-- Keeps « Assigner » in the same place on rows that cannot be
+             followed (already a subscription, income). -->
+        <span
+          v-else-if="!selectionMode"
+          aria-hidden="true"
+          class="h-8 w-8 shrink-0"
+          data-testid="mark-recurring-placeholder"
+        />
       </div>
     </div>
 

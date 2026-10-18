@@ -78,6 +78,10 @@ describe('TransactionRow', () => {
       expect(wrapper.find('[data-testid="mark-recurring"]').exists()).toBe(
         false
       )
+      // Its slot stays reserved, so « Assigner » lines up with the other rows.
+      expect(
+        wrapper.find('[data-testid="mark-recurring-placeholder"]').exists()
+      ).toBe(true)
 
       await badge.trigger('click')
       expect(wrapper.emitted('show-recurrence')).toHaveLength(1)
