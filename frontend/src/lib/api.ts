@@ -401,6 +401,18 @@ export interface TransactionQueryParams {
   needsBankReview?: boolean | undefined
   /** The lines of one recurring charge: `<amountBucket>:<merchantKey>`. */
   recurrence?: string | undefined
+  /** An exact list of rows (at most 200). */
+  ids?: string[] | undefined
+  /** The expenses this person owes something on; see `reimbursement`. */
+  personId?: string | undefined
+  /** `open`: a remainder is still owed; `all`: settled debts too. */
+  reimbursement?: 'open' | 'all' | undefined
+  /** The expenses one settlement closed, and the income that paid them. */
+  settlementId?: string | undefined
+  /** The rows one CSV import wrote. */
+  importId?: string | undefined
+  /** The rows one bank sync run inserted or claimed. */
+  syncRunId?: string | undefined
   sortBy?: 'date' | 'amount' | undefined
   sortOrder?: 'asc' | 'desc' | undefined
 }
@@ -1854,6 +1866,15 @@ export const api = {
     if (params?.needsBankReview !== undefined)
       searchParams.set('needsBankReview', params.needsBankReview.toString())
     if (params?.recurrence) searchParams.set('recurrence', params.recurrence)
+    if (params?.ids && params.ids.length > 0)
+      searchParams.set('ids', params.ids.join(','))
+    if (params?.personId) searchParams.set('personId', params.personId)
+    if (params?.reimbursement)
+      searchParams.set('reimbursement', params.reimbursement)
+    if (params?.settlementId)
+      searchParams.set('settlementId', params.settlementId)
+    if (params?.importId) searchParams.set('importId', params.importId)
+    if (params?.syncRunId) searchParams.set('syncRunId', params.syncRunId)
     if (params?.sortBy) searchParams.set('sortBy', params.sortBy)
     if (params?.sortOrder) searchParams.set('sortOrder', params.sortOrder)
 

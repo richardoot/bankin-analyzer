@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { ref, computed, onMounted, watch } from 'vue'
+  import { ref, computed, onMounted, nextTick, watch } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
   import { usePersonsStore } from '@/stores/persons'
   import { useAccountsStore } from '@/stores/accounts'
@@ -32,6 +32,15 @@
   import BaseButton from '@/components/ui/BaseButton.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import { formatCurrency, formatDate } from '@/lib/formatters'
+  import {
+    NO_CATEGORY,
+    hasTransactionsQuery,
+    parseTransactionsQuery,
+    sameTransactionsQuery,
+    transactionsLink,
+    transactionsQuery,
+    type TransactionsLinkFilters,
+  } from '@/lib/transactionsLink'
   import FilterChips from '@/components/ui/FilterChips.vue'
   import FilterDisclosure from '@/components/ui/FilterDisclosure.vue'
   import type { FilterChip } from '@/components/ui/FilterChips.vue'
@@ -144,66 +153,44 @@
   }
 
   const savedFilters = loadSavedFilters()
+  type ClassicFilters = typeof savedFilters
 
   const route = useRoute()
   const router = useRouter()
 
   /**
-   * The URL is the shareable form of the filters: pasting a link restores
-   * the exact view, and the Back button returns to the page that was left.
-   * A link that names any filter wins over localStorage — the sender's
-   * intent beats this browser's leftovers.
+   * The URL is the shareable form of the view: pasting a link restores it,
+   * and the Back button returns to the page that was left. A link that
+   * names any filter wins over localStorage — and replaces it: the sender's
+   * intent beats this browser's leftovers. The format is the one contract
+   * in `lib/transactionsLink`; this page only maps it onto its controls.
    */
-  const QUERY_KEYS = [
-    'type',
-    'category',
-    'subcategory',
-    'account',
-    'tag',
-    'notPointed',
-    'review',
-    'recurrence',
-    'q',
-    'from',
-    'to',
-    'min',
-    'max',
-    'page',
-  ] as const
-
-  function firstParam(value: unknown): string | null {
-    const single = Array.isArray(value) ? value[0] : value
-    return typeof single === 'string' && single !== '' ? single : null
-  }
-
-  const hasQueryFilters = QUERY_KEYS.some(
-    key => firstParam(route.query[key]) !== null
-  )
-
-  function filtersFromQuery(): typeof savedFilters {
-    const q = route.query
-    const type = firstParam(q.type)
-    const category = firstParam(q.category)
+  function classicFiltersFromLink(
+    link: TransactionsLinkFilters
+  ): ClassicFilters {
     return {
-      typeFilter:
-        type === 'EXPENSE' || type === 'INCOME' || type === 'TRANSFER'
-          ? type
-          : 'ALL',
-      selectedCategory: category,
+      typeFilter: link.type ?? 'ALL',
+      selectedCategory: link.categoryId ?? null,
       // A subcategory is meaningless without its parent category.
-      selectedSubcategory: category ? firstParam(q.subcategory) : null,
-      selectedAccount: firstParam(q.account),
-      selectedTag: firstParam(q.tag),
-      showOnlyNotPointed: firstParam(q.notPointed) === '1',
-      searchKeyword: firstParam(q.q) ?? '',
-      filterStartDate: firstParam(q.from) ?? '',
-      filterEndDate: firstParam(q.to) ?? '',
-      amountMin: firstParam(q.min) ?? '',
-      amountMax: firstParam(q.max) ?? '',
+      selectedSubcategory: link.categoryId
+        ? (link.subcategoryId ?? null)
+        : null,
+      selectedAccount: link.account ?? null,
+      selectedTag: link.tagId ?? null,
+      showOnlyNotPointed: link.notPointed ?? false,
+      searchKeyword: link.q ?? '',
+      filterStartDate: link.from ?? '',
+      filterEndDate: link.to ?? '',
+      amountMin: link.min !== undefined ? String(link.min) : '',
+      amountMax: link.max !== undefined ? String(link.max) : '',
     }
   }
 
-  const initialFilters = hasQueryFilters ? filtersFromQuery() : savedFilters
+  const arrivedByLink = hasTransactionsQuery(route.query)
+  const initialLink = parseTransactionsQuery(route.query)
+  const initialFilters = arrivedByLink
+    ? classicFiltersFromLink(initialLink)
+    : savedFilters
 
   // Filters
   const typeFilter = ref<'ALL' | 'EXPENSE' | 'INCOME' | 'TRANSFER'>(
@@ -224,14 +211,33 @@
    * swap. Not saved to localStorage: this is a one-off "where did they go"
    * check, not a filter meant to stay on across visits.
    */
-  const needsBankReview = ref(firstParam(route.query.review) === '1')
+  const needsBankReview = ref(initialLink.review ?? false)
   /**
    * The lines of one recurring charge, reached from the recurrences page.
    * Named by `<amountBucket>:<merchantKey>`, which survives a recompute; the
    * label only names the chip. One-off, like the review filter: not saved.
    */
-  const recurrenceFilter = ref(firstParam(route.query.recurrence))
-  const recurrenceLabel = ref(firstParam(route.query.recurrenceLabel))
+  const recurrenceFilter = ref<string | null>(initialLink.recurrence ?? null)
+  const recurrenceLabel = ref<string | null>(
+    initialLink.recurrenceLabel ?? null
+  )
+  /**
+   * The context a link can carry and the controls above cannot express: a
+   * person's debts, a settlement, an import, a sync run, an exact list of
+   * rows. Named in the banner above the list rather than in a chip, and
+   * never saved: they describe where the user came from, not a habit.
+   */
+  const personFilter = ref<string | null>(initialLink.personId ?? null)
+  const reimbursementFilter = ref<'open' | 'all' | null>(
+    initialLink.reimbursement ?? null
+  )
+  const settlementFilter = ref<string | null>(initialLink.settlementId ?? null)
+  const importFilter = ref<string | null>(initialLink.importId ?? null)
+  const syncRunFilter = ref<string | null>(initialLink.syncRunId ?? null)
+  const idsFilter = ref<string[]>(initialLink.ids ?? [])
+  /** What the sender called the view, and whether its figure was netted. */
+  const contextLabel = ref<string | null>(initialLink.label ?? null)
+  const grossAmounts = ref(initialLink.gross ?? false)
   // Advanced search filters (keyword, date window, amount range)
   const searchKeyword = ref(initialFilters.searchKeyword)
   const filterStartDate = ref(initialFilters.filterStartDate)
@@ -295,8 +301,32 @@
     amountMax.value = ''
     needsBankReview.value = false
     recurrenceFilter.value = null
+    recurrenceLabel.value = null
+    clearContext()
     localStorage.removeItem(FILTERS_STORAGE_KEY)
   }
+
+  /** Drop what a link brought that no control can: the context and its note. */
+  function clearContext(): void {
+    personFilter.value = null
+    reimbursementFilter.value = null
+    settlementFilter.value = null
+    importFilter.value = null
+    syncRunFilter.value = null
+    idsFilter.value = []
+    contextLabel.value = null
+    grossAmounts.value = false
+  }
+
+  const hasContextFilter = computed(
+    () =>
+      personFilter.value !== null ||
+      reimbursementFilter.value !== null ||
+      settlementFilter.value !== null ||
+      importFilter.value !== null ||
+      syncRunFilter.value !== null ||
+      idsFilter.value.length > 0
+  )
 
   // Check if any filter is active
   const hasActiveFilters = computed(() => {
@@ -313,8 +343,38 @@
       amountMin.value !== '' ||
       amountMax.value !== '' ||
       needsBankReview.value ||
-      recurrenceFilter.value !== null
+      recurrenceFilter.value !== null ||
+      hasContextFilter.value
     )
+  })
+
+  /**
+   * The banner's title: what the sender said, or the context read off the
+   * filters. A person is named from the store; the rest is named by kind,
+   * the sender being the one who knows the date of a settlement or an
+   * import.
+   */
+  const contextTitle = computed<string | null>(() => {
+    if (contextLabel.value) return contextLabel.value
+    if (personFilter.value) {
+      const name =
+        personsStore.persons.find(p => p.id === personFilter.value)?.name ?? '…'
+      return reimbursementFilter.value === 'all'
+        ? `Toutes les dettes de ${name}`
+        : `Dettes ouvertes de ${name}`
+    }
+    if (reimbursementFilter.value)
+      return reimbursementFilter.value === 'all'
+        ? 'Toutes les dettes'
+        : 'Toutes les dettes ouvertes'
+    if (settlementFilter.value) return 'Un règlement'
+    if (importFilter.value) return 'Un import'
+    if (syncRunFilter.value) return 'Une synchronisation bancaire'
+    const count = idsFilter.value.length
+    if (count === 1) return 'Une transaction'
+    if (count > 1) return `${count} transactions choisies`
+    if (grossAmounts.value) return 'Le détail d’un total'
+    return null
   })
 
   /**
@@ -334,13 +394,17 @@
               : 'Transferts',
       })
     }
-    if (selectedCategory.value) {
+    if (selectedCategory.value === NO_CATEGORY) {
+      chips.push({ key: 'category', label: 'Sans catégorie' })
+    } else if (selectedCategory.value) {
       const name = allCategories.value.find(
         c => c.id === selectedCategory.value
       )?.name
       chips.push({ key: 'category', label: `Catégorie : ${name ?? '…'}` })
     }
-    if (selectedSubcategory.value) {
+    if (selectedSubcategory.value === NO_CATEGORY) {
+      chips.push({ key: 'subcategory', label: 'Sans sous-catégorie' })
+    } else if (selectedSubcategory.value) {
       const name = allSubcategories.value.find(
         sc => sc.id === selectedSubcategory.value
       )?.name
@@ -437,13 +501,8 @@
   }
 
   // Sort + page size, both shareable via the URL.
-  const querySort = firstParam(route.query.sort)
-  const sortBy = ref<'date' | 'amount'>(
-    querySort === 'amount' ? 'amount' : 'date'
-  )
-  const sortOrder = ref<'asc' | 'desc'>(
-    firstParam(route.query.dir) === 'asc' ? 'asc' : 'desc'
-  )
+  const sortBy = ref<'date' | 'amount'>(initialLink.sort ?? 'date')
+  const sortOrder = ref<'asc' | 'desc'>(initialLink.dir ?? 'desc')
 
   /** Toggle on the active column, switch column otherwise (desc first). */
   function toggleSort(column: 'date' | 'amount'): void {
@@ -499,15 +558,10 @@
   })
 
   const PAGE_SIZES = [20, 50, 100] as const
-  const querySize = Number(firstParam(route.query.size))
-  const pageSize = ref<number>(
-    (PAGE_SIZES as readonly number[]).includes(querySize) ? querySize : 20
-  )
+  const pageSize = ref<number>(initialLink.size ?? 20)
 
   // Pagination
-  const currentPage = ref(
-    Math.max(1, parseInt(firstParam(route.query.page) ?? '1', 10) || 1)
-  )
+  const currentPage = ref(initialLink.page ?? 1)
 
   // Inline editing state
   // Which row edits its note — the draft itself lives in the row.
@@ -577,10 +631,17 @@
       .sort((a, b) => a.name.localeCompare(b.name))
   })
 
+  // « Sans catégorie » is a choice of the category select, not a category:
+  // it has no subcategories, and no subcategory select to speak of.
+  const hasRealCategory = computed(
+    () =>
+      selectedCategory.value !== null && selectedCategory.value !== NO_CATEGORY
+  )
+
   // Computed: subcategories of the selected category — empty (and the select
   // disabled) as long as no category is picked.
   const filteredSubcategories = computed(() => {
-    if (!selectedCategory.value) return []
+    if (!hasRealCategory.value) return []
     return allSubcategories.value
       .filter(s => s.categoryId === selectedCategory.value)
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -653,6 +714,12 @@
         Number.isFinite(parsedMax) && parsedMax >= 0 ? parsedMax : undefined,
       needsBankReview: needsBankReview.value || undefined,
       recurrence: recurrenceFilter.value || undefined,
+      ids: idsFilter.value.length > 0 ? idsFilter.value : undefined,
+      personId: personFilter.value || undefined,
+      reimbursement: reimbursementFilter.value || undefined,
+      settlementId: settlementFilter.value || undefined,
+      importId: importFilter.value || undefined,
+      syncRunId: syncRunFilter.value || undefined,
     }
   })
 
@@ -995,39 +1062,129 @@
     }
   }
 
-  // Mirror the active filters into the URL. replace, not push: a keystroke
-  // in the search box must not add a history entry. Reading happens once at
-  // setup, so this cannot loop.
-  function syncQuery(): void {
-    const query: Record<string, string> = {}
-    if (typeFilter.value !== 'ALL') query.type = typeFilter.value
-    if (selectedCategory.value) query.category = selectedCategory.value
-    if (selectedCategory.value && selectedSubcategory.value)
-      query.subcategory = selectedSubcategory.value
-    if (selectedAccount.value) query.account = selectedAccount.value
-    if (selectedTag.value) query.tag = selectedTag.value
-    if (showOnlyNotPointed.value) query.notPointed = '1'
-    if (needsBankReview.value) query.review = '1'
-    if (recurrenceFilter.value) {
-      query.recurrence = recurrenceFilter.value
-      if (recurrenceLabel.value) query.recurrenceLabel = recurrenceLabel.value
+  /** The whole view, in the contract's terms: what the URL mirrors. */
+  function linkFromState(): TransactionsLinkFilters {
+    return {
+      type: typeFilter.value === 'ALL' ? undefined : typeFilter.value,
+      categoryId: selectedCategory.value ?? undefined,
+      subcategoryId: selectedSubcategory.value ?? undefined,
+      account: selectedAccount.value ?? undefined,
+      tagId: selectedTag.value ?? undefined,
+      notPointed: showOnlyNotPointed.value,
+      review: needsBankReview.value,
+      recurrence: recurrenceFilter.value ?? undefined,
+      recurrenceLabel: recurrenceLabel.value ?? undefined,
+      q: searchKeyword.value,
+      from: filterStartDate.value,
+      to: filterEndDate.value,
+      min: amountMin.value,
+      max: amountMax.value,
+      personId: personFilter.value ?? undefined,
+      reimbursement: reimbursementFilter.value ?? undefined,
+      settlementId: settlementFilter.value ?? undefined,
+      importId: importFilter.value ?? undefined,
+      syncRunId: syncRunFilter.value ?? undefined,
+      ids: idsFilter.value,
+      label: contextLabel.value ?? undefined,
+      gross: grossAmounts.value,
+      sort: sortBy.value,
+      dir: sortOrder.value,
+      size: pageSize.value,
+      page: currentPage.value,
     }
-    if (searchKeyword.value.trim()) query.q = searchKeyword.value.trim()
-    if (filterStartDate.value) query.from = filterStartDate.value
-    if (filterEndDate.value) query.to = filterEndDate.value
-    if (amountMin.value !== '') query.min = amountMin.value
-    if (amountMax.value !== '') query.max = amountMax.value
-    if (sortBy.value !== 'date') query.sort = sortBy.value
-    if (sortOrder.value !== 'desc') query.dir = sortOrder.value
-    if (pageSize.value !== 20) query.size = String(pageSize.value)
-    if (currentPage.value > 1) query.page = String(currentPage.value)
-    void router.replace({ query })
   }
+
+  // Mirror the active filters into the URL. replace, not push: a keystroke
+  // in the search box must not add a history entry. The route watcher below
+  // sees the result, finds it equal to the state, and does nothing: no loop.
+  function syncQuery(): void {
+    void router.replace({ query: transactionsQuery(linkFromState()) })
+  }
+
+  /**
+   * True while a link is being poured into the controls. The watchers
+   * below stand down for that one flush: a link is applied in one go, not
+   * as eleven filter changes each saving, mirroring and fetching — and the
+   * category watcher must not wipe the subcategory the link just set.
+   */
+  let applyingLink = false
+  let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined
+
+  /**
+   * A link replaces the view: every control takes the link's value, blank
+   * where the link says nothing, and the page starts at the link's page.
+   * The remembered filters are replaced too — the sender's intent is the
+   * new habit, not an overlay on the old one.
+   */
+  async function applyLink(link: TransactionsLinkFilters): Promise<void> {
+    applyingLink = true
+    const classic = classicFiltersFromLink(link)
+    typeFilter.value = classic.typeFilter
+    selectedCategory.value = classic.selectedCategory
+    selectedSubcategory.value = classic.selectedSubcategory
+    selectedAccount.value = classic.selectedAccount
+    selectedTag.value = classic.selectedTag
+    showOnlyNotPointed.value = classic.showOnlyNotPointed
+    searchKeyword.value = classic.searchKeyword
+    filterStartDate.value = classic.filterStartDate
+    filterEndDate.value = classic.filterEndDate
+    amountMin.value = classic.amountMin
+    amountMax.value = classic.amountMax
+    needsBankReview.value = link.review ?? false
+    recurrenceFilter.value = link.recurrence ?? null
+    recurrenceLabel.value = link.recurrenceLabel ?? null
+    personFilter.value = link.personId ?? null
+    reimbursementFilter.value = link.reimbursement ?? null
+    settlementFilter.value = link.settlementId ?? null
+    importFilter.value = link.importId ?? null
+    syncRunFilter.value = link.syncRunId ?? null
+    idsFilter.value = link.ids ?? []
+    contextLabel.value = link.label ?? null
+    grossAmounts.value = link.gross ?? false
+    // Sort and page size are how the list reads, not what it shows: a link
+    // that says nothing about them leaves them be.
+    if (link.sort) sortBy.value = link.sort
+    if (link.dir) sortOrder.value = link.dir
+    if (link.size) pageSize.value = link.size
+    currentPage.value = link.page ?? 1
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+    // Let the watchers run (and stand down) before acting once.
+    await nextTick()
+    applyingLink = false
+    saveFilters()
+    syncQuery()
+    void fetchTransactions()
+  }
+
+  /**
+   * A link reaching this page while it is open — a settlement's rows from a
+   * line's dialog, a series from a badge, the Back button returning to an
+   * earlier link — is a navigation to react to. The page's own mirroring
+   * (`syncQuery`, a replace) comes through here too and is told apart by
+   * its content: a query equal to the state is nothing to apply. A bare
+   * `/transactions` (the navbar) carries no view and changes nothing.
+   */
+  watch(
+    () => route.query,
+    query => {
+      if (!hasTransactionsQuery(query)) return
+      const incoming = parseTransactionsQuery(query)
+      if (
+        sameTransactionsQuery(
+          transactionsQuery(incoming),
+          transactionsQuery(linkFromState())
+        )
+      )
+        return
+      void applyLink(incoming)
+    }
+  )
 
   // Apply a filter change: persist, jump back to page 1 and refetch. Setting
   // currentPage triggers its own watch (which fetches); when already on page 1
   // that watch won't fire, so we fetch manually.
   function applyFilterChange() {
+    if (applyingLink) return
     saveFilters()
     syncQuery()
     const wasOnPage1 = currentPage.value === 1
@@ -1041,6 +1198,7 @@
   // previous subcategory. Declared before the refetch watcher below so both
   // changes land in the same flush and only one request is fired.
   watch(selectedCategory, () => {
+    if (applyingLink) return
     selectedSubcategory.value = null
   })
 
@@ -1055,6 +1213,12 @@
       showOnlyNotPointed,
       needsBankReview,
       recurrenceFilter,
+      personFilter,
+      reimbursementFilter,
+      settlementFilter,
+      importFilter,
+      syncRunFilter,
+      idsFilter,
       filterStartDate,
       filterEndDate,
       sortBy,
@@ -1065,8 +1229,8 @@
   )
 
   // Debounce free-text / numeric inputs so we don't fire a request per keystroke
-  let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined
   watch([searchKeyword, amountMin, amountMax], () => {
+    if (applyingLink) return
     if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
     searchDebounceTimer = setTimeout(applyFilterChange, 350)
   })
@@ -1074,6 +1238,7 @@
   // Refetch when page changes
   const listCard = ref<InstanceType<typeof BaseCard> | null>(null)
   watch(currentPage, (newPage, oldPage) => {
+    if (applyingLink) return
     if (newPage !== oldPage) {
       syncQuery()
       fetchTransactions()
@@ -1157,11 +1322,19 @@
   }
 
   // Open reimbursement modal
-  /** Narrow the list to every charge of the series this line belongs to. */
+  /**
+   * Show every charge of the series this line belongs to — the series
+   * alone, not the series inside the current filters: a link, like any
+   * other, that the route watcher applies. Pushed, so Back returns here.
+   */
   function showRecurrence(tx: TransactionDto): void {
     if (!tx.recurrence) return
-    recurrenceFilter.value = recurrenceFilterKey(tx.recurrence)
-    recurrenceLabel.value = tx.recurrence.name
+    void router.push(
+      transactionsLink({
+        recurrence: recurrenceFilterKey(tx.recurrence),
+        recurrenceLabel: tx.recurrence.name,
+      })
+    )
   }
 
   /** The expense being marked as a recurring charge, while its modal is open. */
@@ -1357,6 +1530,8 @@
     // corrected fetch.
     void accountsStore.load().then(dropUnknownAccountFilter)
     tagsStore.fetchTags()
+    // A link replaces the remembered filters, not only the ones on screen.
+    if (arrivedByLink) saveFilters()
     syncQuery()
     fetchTransactions()
     fetchCategories()
@@ -1427,6 +1602,7 @@
             class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
           >
             <option :value="null">Toutes</option>
+            <option :value="NO_CATEGORY">Sans catégorie</option>
             <option
               v-for="cat in filteredCategories"
               :key="cat.id"
@@ -1442,7 +1618,7 @@
           <span
             class="text-[11px] font-semibold uppercase tracking-wide"
             :class="
-              selectedCategory
+              hasRealCategory
                 ? 'text-gray-500 dark:text-gray-400'
                 : 'text-gray-300 dark:text-gray-600'
             "
@@ -1450,17 +1626,20 @@
           >
           <select
             v-model="selectedSubcategory"
-            :disabled="!selectedCategory"
+            :disabled="!hasRealCategory"
             data-testid="transactions-subcategory-filter"
             :title="
-              selectedCategory
+              hasRealCategory
                 ? undefined
                 : 'Sélectionnez d\'abord une catégorie'
             "
             class="h-11 md:h-9 w-full md:w-40 px-3 border border-gray-300 dark:border-slate-600 rounded-lg text-base md:text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/60 dark:disabled:text-gray-500"
           >
             <option :value="null">
-              {{ selectedCategory ? 'Toutes' : 'Choisir une catégorie' }}
+              {{ hasRealCategory ? 'Toutes' : 'Choisir une catégorie' }}
+            </option>
+            <option v-if="hasRealCategory" :value="NO_CATEGORY">
+              Sans sous-catégorie
             </option>
             <option
               v-for="sub in filteredSubcategories"
@@ -1675,6 +1854,35 @@
       @remove="removeFilterChip"
       @clear="resetFilters"
     />
+
+    <!--
+      Where the user came from, when a link brought a context the controls
+      cannot show: a person's debts, a settlement, an import, a chosen list.
+      A figure that was netted and shared says so here, because the rows
+      below will not add up to it. « Effacer » returns to the plain list.
+    -->
+    <InlineAlert
+      v-if="contextTitle"
+      variant="info"
+      :title="contextTitle"
+      class="mb-4"
+      data-testid="transactions-context"
+    >
+      <span v-if="grossAmounts" data-testid="transactions-context-gross">
+        Montants complets, avant votre part du compte joint et les
+        remboursements.
+      </span>
+      <template #actions>
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          data-testid="transactions-context-clear"
+          @click="resetFilters"
+        >
+          Effacer
+        </BaseButton>
+      </template>
+    </InlineAlert>
 
     <!--
       The selection bar: one strip for the count, the escalation from « the

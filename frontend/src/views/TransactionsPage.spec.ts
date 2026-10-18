@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
 import { setActivePinia, createPinia } from 'pinia'
 import {
@@ -100,6 +100,10 @@ const defaultPaginationMeta = {
   hasNextPage: false,
   hasPreviousPage: false,
 }
+
+// The router is shared across tests and the page now reacts to its query:
+// a page left mounted by an earlier test would answer this one's links.
+enableAutoUnmount(afterEach)
 
 describe('TransactionsPage — optimistic updates', () => {
   beforeEach(() => {
@@ -588,7 +592,12 @@ describe('TransactionsPage — optimistic updates', () => {
       )
       expect(select.attributes('disabled')).toBeUndefined()
       const options = select.findAll('option').map(o => o.text())
-      expect(options).toEqual(['Toutes', 'Courses', 'Restaurant'])
+      expect(options).toEqual([
+        'Toutes',
+        'Sans sous-catégorie',
+        'Courses',
+        'Restaurant',
+      ])
     })
 
     it('sends the selected subcategory to the API', async () => {
@@ -1262,6 +1271,207 @@ describe('TransactionsPage — optimistic updates', () => {
       expect(api.getTransactions).toHaveBeenLastCalledWith(
         expect.objectContaining({ account: 'Checking' })
       )
+    })
+  })
+
+  describe('arriving by a link', () => {
+    const savedFilters = JSON.stringify({
+      typeFilter: 'EXPENSE',
+      selectedAccount: 'Checking',
+      searchKeyword: 'uber',
+    })
+
+    afterEach(() => {
+      vi.mocked(localStorage.getItem).mockReturnValue(undefined as never)
+    })
+
+    const mountAt = async (query: Record<string, string>) => {
+      vi.mocked(localStorage.getItem).mockReturnValue(savedFilters as never)
+      setupDefaultMocks()
+      await router.replace({ path: '/transactions', query })
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+      return wrapper
+    }
+
+    it('replaces the remembered filters, on screen and in storage', async () => {
+      await mountAt({ category: 'cat-1', from: '2026-10-01' })
+
+      expect(api.getTransactions).toHaveBeenCalledTimes(1)
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          categoryId: 'cat-1',
+          startDate: '2026-10-01',
+          type: undefined,
+          account: undefined,
+          search: undefined,
+        })
+      )
+      const saved = vi
+        .mocked(localStorage.setItem)
+        .mock.calls.map(([, value]) => JSON.parse(String(value)))
+      expect(saved.at(-1)).toMatchObject({
+        selectedCategory: 'cat-1',
+        selectedAccount: null,
+        searchKeyword: '',
+      })
+    })
+
+    it('names the context above the list, and says when the figure was netted', async () => {
+      const wrapper = await mountAt({
+        category: 'cat-1',
+        label: 'Alimentation · oct. 2026',
+        gross: '1',
+      })
+
+      const banner = wrapper.find('[data-testid="transactions-context"]')
+      expect(banner.text()).toContain('Alimentation · oct. 2026')
+      expect(banner.text()).toContain('Montants complets')
+    })
+
+    it('keeps quiet about gross amounts on an exact list', async () => {
+      const wrapper = await mountAt({ ids: 'tx-1,tx-2' })
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ids: ['tx-1', 'tx-2'] })
+      )
+      const banner = wrapper.find('[data-testid="transactions-context"]')
+      expect(banner.text()).toContain('2 transactions choisies')
+      expect(
+        wrapper.find('[data-testid="transactions-context-gross"]').exists()
+      ).toBe(false)
+    })
+
+    it('reads « sans catégorie » as a choice of the category select', async () => {
+      const wrapper = await mountAt({ category: 'none' })
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ categoryId: 'none' })
+      )
+      expect(wrapper.text()).toContain('Sans catégorie')
+      expect(
+        wrapper
+          .find('[data-testid="transactions-subcategory-filter"]')
+          .attributes('disabled')
+      ).toBeDefined()
+    })
+
+    it('« Effacer » returns to the plain list', async () => {
+      const wrapper = await mountAt({ person: 'p-1', reimbursement: 'open' })
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ personId: 'p-1', reimbursement: 'open' })
+      )
+
+      await wrapper
+        .find('[data-testid="transactions-context-clear"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          personId: undefined,
+          reimbursement: undefined,
+        })
+      )
+      expect(
+        wrapper.find('[data-testid="transactions-context"]').exists()
+      ).toBe(false)
+      expect(router.currentRoute.value.query).toEqual({})
+    })
+
+    it('follows a link pushed while the page is open, and Back as well', async () => {
+      const wrapper = await mountAt({ type: 'EXPENSE' })
+      expect(api.getTransactions).toHaveBeenCalledTimes(1)
+
+      await router.push({
+        path: '/transactions',
+        query: { settlement: 's-1', label: 'Règlement du 12 oct. 2026' },
+      })
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenCalledTimes(2)
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ settlementId: 's-1', type: undefined })
+      )
+      expect(wrapper.text()).toContain('Règlement du 12 oct. 2026')
+
+      await router.back()
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenCalledTimes(3)
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ settlementId: undefined, type: 'EXPENSE' })
+      )
+    })
+
+    it('ignores its own mirroring of the filters into the URL', async () => {
+      const wrapper = await mountAt({ type: 'EXPENSE' })
+
+      await wrapper
+        .find('[data-testid="transactions-category-filter"]')
+        .setValue('cat-2')
+      await flushPromises()
+
+      // One request for the change, none for the URL it wrote.
+      expect(api.getTransactions).toHaveBeenCalledTimes(2)
+      expect(router.currentRoute.value.query).toEqual({
+        type: 'EXPENSE',
+        category: 'cat-2',
+      })
+    })
+
+    it('a recurrence badge replaces the filters instead of adding to them', async () => {
+      const wrapper = await mountAt({ type: 'EXPENSE', account: 'Checking' })
+      const listed = await vi.mocked(api.getTransactions)()
+      vi.mocked(api.getTransactions).mockResolvedValue({
+        ...listed,
+        data: listed.data.map(tx => ({
+          ...tx,
+          recurrence: {
+            status: 'ACTIVE' as const,
+            period: 'MONTHLY' as const,
+            merchantKey: 'com netflix',
+            amountBucket: 15,
+            label: 'CB Netflix.com',
+            name: 'Netflix',
+            linked: false,
+          },
+        })),
+      })
+      await wrapper
+        .find('[data-testid="transactions-type-filter"]')
+        .setValue('ALL')
+      await flushPromises()
+      await wrapper
+        .find('[data-testid="transactions-type-filter"]')
+        .setValue('EXPENSE')
+      await flushPromises()
+
+      await wrapper.find('[data-testid="recurrence-badge"]').trigger('click')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          recurrence: '15:com netflix',
+          type: undefined,
+          account: undefined,
+        })
+      )
+      expect(router.currentRoute.value.query).toEqual({
+        recurrence: '15:com netflix',
+        recurrenceLabel: 'Netflix',
+      })
     })
   })
 })
