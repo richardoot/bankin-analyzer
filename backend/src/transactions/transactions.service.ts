@@ -16,8 +16,9 @@ import {
   isFilingKind,
 } from '../ai-suggestions/transaction-categorizer'
 import type { CategorizableTransaction } from '../ai-suggestions/transaction-categorizer'
-import { TransactionSource } from '../generated/prisma'
-import type { Prisma, Transaction, TransactionType } from '../generated/prisma'
+import { Prisma, TransactionSource } from '../generated/prisma'
+import type { Transaction, TransactionType } from '../generated/prisma'
+import { LEDGER_EPSILON } from '../reimbursements/reimbursement-ledger'
 import {
   buildTransactionWhere,
   type TransactionFilters,
@@ -293,13 +294,56 @@ export class TransactionsService {
     })
   }
 
+  /**
+   * The expenses on which this person — or anyone — is still owed
+   * something. « Still owed » is the ledger's word, not a column's: the
+   * same arithmetic as `derivedStatusOf`, run in SQL so a where clause can
+   * name the rows. Scoped to the user before anything else.
+   */
+  private async openDebtTransactionIds(
+    userId: string,
+    personId?: string
+  ): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<{ transactionId: string }[]>`
+      SELECT DISTINCT r.transaction_id AS "transactionId"
+      FROM app.reimbursement_requests r
+      WHERE r.user_id = ${userId}
+        ${personId ? Prisma.sql`AND r.person_id = ${personId}` : Prisma.empty}
+        AND r.amount - COALESCE((
+          SELECT SUM(p.amount) FROM app.reimbursement_payments p
+          WHERE p.reimbursement_id = r.id
+        ), 0) > ${LEDGER_EPSILON}
+    `
+    return rows.map(row => row.transactionId)
+  }
+
+  /**
+   * The where clause for a filter, with whatever the pure builder cannot
+   * know resolved first. The list and the bulk action both come through
+   * here, so « everything matching the filter » means the same rows to both.
+   */
+  private async whereFor(
+    userId: string,
+    filters?: TransactionFilters
+  ): Promise<Prisma.TransactionWhereInput> {
+    const resolved = filters?.reimbursement?.open
+      ? {
+          openDebtTransactionIds: await this.openDebtTransactionIds(
+            userId,
+            filters.reimbursement.personId
+          ),
+        }
+      : {}
+    return buildTransactionWhere(userId, filters, resolved)
+  }
+
   async findAllByUserPaginated(
     userId: string,
     pagination: { page: number; limit: number },
     filters?: TransactionFilters,
     sort?: { by: 'date' | 'amount'; order: 'asc' | 'desc' }
   ): Promise<{ data: Transaction[]; total: number }> {
-    const where = buildTransactionWhere(userId, filters)
+    const where = await this.whereFor(userId, filters)
 
     // The id tiebreak keeps pagination stable: many rows share a date (or an
     // amount), and without it the same row can appear on two pages.
@@ -1091,7 +1135,7 @@ export class TransactionsService {
     if ('ids' in selection) {
       where = { id: { in: selection.ids }, userId }
     } else {
-      where = buildTransactionWhere(userId, selection.filters)
+      where = await this.whereFor(userId, selection.filters)
       const actual = await this.prisma.transaction.count({ where })
       if (actual !== selection.expectedCount) {
         throw new BadRequestException(

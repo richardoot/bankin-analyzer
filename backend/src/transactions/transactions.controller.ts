@@ -237,6 +237,47 @@ export class TransactionsController {
       'Only the lines of one recurring charge: `<amountBucket>:<merchantKey>`.',
   })
   @ApiQuery({
+    name: 'ids',
+    required: false,
+    type: String,
+    description:
+      'An exact list of transaction ids, comma-separated (at most 200).',
+  })
+  @ApiQuery({
+    name: 'personId',
+    required: false,
+    type: String,
+    description:
+      'Only the expenses carrying a reimbursement request of this person.',
+  })
+  @ApiQuery({
+    name: 'reimbursement',
+    required: false,
+    enum: ['open', 'all'],
+    description:
+      'With or without personId: `open` keeps the expenses where a ' +
+      'remainder is still owed, `all` every expense carrying a request.',
+  })
+  @ApiQuery({
+    name: 'settlementId',
+    required: false,
+    type: String,
+    description:
+      'The expenses this settlement closed, and the income that paid them.',
+  })
+  @ApiQuery({
+    name: 'importId',
+    required: false,
+    type: String,
+    description: 'The rows one CSV import wrote.',
+  })
+  @ApiQuery({
+    name: 'syncRunId',
+    required: false,
+    type: String,
+    description: 'The rows one bank sync run inserted or claimed.',
+  })
+  @ApiQuery({
     name: 'sortBy',
     required: false,
     enum: ['date', 'amount'],
@@ -266,7 +307,13 @@ export class TransactionsController {
     @Query('needsBankReview') needsBankReview?: string,
     @Query('recurrence') recurrence?: string,
     @Query('sortBy') sortBy?: string,
-    @Query('sortOrder') sortOrder?: string
+    @Query('sortOrder') sortOrder?: string,
+    @Query('ids') ids?: string,
+    @Query('personId') personId?: string,
+    @Query('reimbursement') reimbursement?: string,
+    @Query('settlementId') settlementId?: string,
+    @Query('importId') importId?: string,
+    @Query('syncRunId') syncRunId?: string
   ): Promise<PaginatedTransactionsResponseDto> {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
@@ -307,6 +354,12 @@ export class TransactionsController {
       ...(amountMax !== undefined && { amountMax }),
       ...(needsBankReview !== undefined && { needsBankReview }),
       ...(recurrence && { recurrence }),
+      ...(ids && { ids }),
+      ...(personId && { personId }),
+      ...(reimbursement && { reimbursement }),
+      ...(settlementId && { settlementId }),
+      ...(importId && { importId }),
+      ...(syncRunId && { syncRunId }),
     })
 
     const { data: transactions, total } =

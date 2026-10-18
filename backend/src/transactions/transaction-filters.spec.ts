@@ -1,8 +1,13 @@
 import { describe, it, expect } from 'vitest'
+import { BadRequestException } from '@nestjs/common'
 import {
   parseTransactionFilters,
   buildTransactionWhere,
+  MAX_TRANSACTION_IDS,
 } from './transaction-filters'
+
+const uuid = (n: number) =>
+  `550e8400-e29b-41d4-a716-${String(n).padStart(12, '0')}`
 
 describe('parseTransactionFilters', () => {
   it('returns nothing for an empty request', () => {
@@ -206,6 +211,168 @@ describe('buildTransactionWhere', () => {
 
       expect(where.recurrences).toEqual({
         some: { recurrence: { amountBucket: 15, merchantKey: 'com netflix' } },
+      })
+    })
+  })
+
+  describe('an exact list of ids', () => {
+    it('reads a comma-separated query and a JSON array alike', () => {
+      expect(
+        parseTransactionFilters({ ids: `${uuid(1)}, ${uuid(2)}` }).ids
+      ).toEqual([uuid(1), uuid(2)])
+      expect(parseTransactionFilters({ ids: [uuid(1), uuid(1)] }).ids).toEqual([
+        uuid(1),
+      ])
+    })
+
+    it('drops what is not an id, and matches nothing when nothing is left', () => {
+      // A list made only of garbage must not fall back to "everything".
+      expect(parseTransactionFilters({ ids: 'abc,1' }).ids).toEqual([])
+      expect(parseTransactionFilters({ ids: `${uuid(1)},abc` }).ids).toEqual([
+        uuid(1),
+      ])
+      expect(parseTransactionFilters({ ids: '' }).ids).toBeUndefined()
+      expect(parseTransactionFilters({ ids: ' , ' }).ids).toBeUndefined()
+    })
+
+    it('refuses more than the cap rather than truncating', () => {
+      const many = Array.from({ length: MAX_TRANSACTION_IDS + 1 }, (_, i) =>
+        uuid(i)
+      )
+      expect(() => parseTransactionFilters({ ids: many })).toThrow(
+        BadRequestException
+      )
+      expect(parseTransactionFilters({ ids: many.slice(1) }).ids).toHaveLength(
+        MAX_TRANSACTION_IDS
+      )
+    })
+
+    it('narrows by id inside AND, next to the other conditions', () => {
+      const where = buildTransactionWhere('user-1', {
+        ids: [uuid(1)],
+        search: 'uber',
+      })
+
+      expect(where.AND).toEqual([
+        expect.objectContaining({ OR: expect.any(Array) }),
+        { id: { in: [uuid(1)] } },
+      ])
+    })
+  })
+
+  describe('« sans catégorie »', () => {
+    it('reads none as a null category', () => {
+      expect(parseTransactionFilters({ categoryId: 'none' })).toEqual({
+        categoryId: null,
+      })
+      expect(
+        buildTransactionWhere('user-1', { categoryId: null }).categoryId
+      ).toBeNull()
+    })
+
+    it('reads none as a null subcategory, inside a real category only', () => {
+      expect(
+        parseTransactionFilters({ categoryId: 'cat-1', subcategoryId: 'none' })
+      ).toEqual({ categoryId: 'cat-1', subcategoryId: null })
+      expect(
+        parseTransactionFilters({ categoryId: 'none', subcategoryId: 'none' })
+      ).toEqual({ categoryId: null })
+      expect(
+        buildTransactionWhere('user-1', {
+          categoryId: 'cat-1',
+          subcategoryId: null,
+        })
+      ).toMatchObject({ categoryId: 'cat-1', subcategoryId: null })
+    })
+
+    it('still leaves an absent category out of the where', () => {
+      expect(buildTransactionWhere('user-1', {})).toEqual({ userId: 'user-1' })
+    })
+  })
+
+  describe('reimbursements', () => {
+    it('reads a person, open by request only', () => {
+      expect(
+        parseTransactionFilters({ personId: 'p-1' }).reimbursement
+      ).toEqual({ personId: 'p-1', open: false })
+      expect(
+        parseTransactionFilters({ personId: 'p-1', reimbursement: 'open' })
+          .reimbursement
+      ).toEqual({ personId: 'p-1', open: true })
+      expect(
+        parseTransactionFilters({ reimbursement: 'open' }).reimbursement
+      ).toEqual({ open: true })
+      expect(
+        parseTransactionFilters({ reimbursement: 'all' }).reimbursement
+      ).toEqual({ open: false })
+      expect(parseTransactionFilters({}).reimbursement).toBeUndefined()
+    })
+
+    it('matches every expense carrying a request, of one person or anyone', () => {
+      expect(
+        buildTransactionWhere('user-1', {
+          reimbursement: { personId: 'p-1', open: false },
+        }).AND
+      ).toEqual([{ reimbursementRequests: { some: { personId: 'p-1' } } }])
+      expect(
+        buildTransactionWhere('user-1', { reimbursement: { open: false } }).AND
+      ).toEqual([{ reimbursementRequests: { some: {} } }])
+    })
+
+    it('narrows open debts to the rows the ledger resolved', () => {
+      expect(
+        buildTransactionWhere(
+          'user-1',
+          { reimbursement: { open: true } },
+          { openDebtTransactionIds: ['tx-1'] }
+        ).AND
+      ).toEqual([{ id: { in: ['tx-1'] } }])
+      // Building it without the resolution would silently widen the list.
+      expect(() =>
+        buildTransactionWhere('user-1', { reimbursement: { open: true } })
+      ).toThrow()
+    })
+  })
+
+  describe('a settlement, an import, a sync run', () => {
+    it('reads each id under its own name', () => {
+      expect(
+        parseTransactionFilters({
+          settlementId: 's-1',
+          importId: 'i-1',
+          syncRunId: 'r-1',
+        })
+      ).toEqual({
+        settlementId: 's-1',
+        importHistoryId: 'i-1',
+        syncRunId: 'r-1',
+      })
+    })
+
+    it('matches the expenses a settlement closed and the income that paid them', () => {
+      expect(
+        buildTransactionWhere('user-1', { settlementId: 's-1' }).AND
+      ).toEqual([
+        {
+          OR: [
+            { settlementsAsIncome: { some: { id: 's-1' } } },
+            {
+              reimbursementRequests: {
+                some: { settlements: { some: { settlementId: 's-1' } } },
+              },
+            },
+          ],
+        },
+      ])
+    })
+
+    it('matches the rows an import or a sync run wrote', () => {
+      expect(
+        buildTransactionWhere('user-1', { importHistoryId: 'i-1' })
+      ).toEqual({ userId: 'user-1', importHistoryId: 'i-1' })
+      expect(buildTransactionWhere('user-1', { syncRunId: 'r-1' })).toEqual({
+        userId: 'user-1',
+        syncRunId: 'r-1',
       })
     })
   })
