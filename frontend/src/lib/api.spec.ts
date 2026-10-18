@@ -372,6 +372,43 @@ describe('api', () => {
         expect.anything()
       )
     })
+
+    it('sends the link filters the page holds: attributes, lists, smoothing', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            data: [],
+            meta: {
+              total: 0,
+              page: 1,
+              limit: 20,
+              totalPages: 0,
+              hasNextPage: false,
+              hasPreviousPage: false,
+            },
+          }),
+      })
+
+      await api.getTransactions({
+        nature: 'PLEASURE',
+        rhythm: 'none',
+        categoryIds: ['cat-1', 'none'],
+        recurrences: ['15:netflix'],
+        amortized: true,
+        alsoIds: ['tx-1', 'tx-2'],
+      })
+
+      const url = new URL(mockFetch.mock.calls[0]?.[0] as string)
+      expect(Object.fromEntries(url.searchParams)).toEqual({
+        nature: 'PLEASURE',
+        rhythm: 'none',
+        categoryIds: 'cat-1,none',
+        recurrences: '15:netflix',
+        amortized: 'true',
+        alsoIds: 'tx-1,tx-2',
+      })
+    })
   })
 
   describe('bank sync run history', () => {

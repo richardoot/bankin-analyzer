@@ -22,6 +22,16 @@
  * amounts, before the joint-account share and before reimbursements, and the
  * page says so. A link to an exact list (a person's debts, a settlement, an
  * import, a handful of ids) carries no such note.
+ *
+ * ## Smoothed purchases
+ *
+ * A figure read « Vie courante » counts a smoothed purchase by its monthly
+ * slices, in the months they fall in, not at its date. Its link keeps the
+ * window it filters on and names the purchases whose slices it counts in
+ * `alsoIds`: the list shows those rows on top of the window's, even dated in
+ * another month. A union, unlike `ids`, which narrows. The sender knows
+ * which purchases (the budget statistics list them), so no date arithmetic
+ * is repeated server-side.
  */
 import type { LocationQuery, RouteLocationRaw } from 'vue-router'
 
@@ -112,6 +122,13 @@ export interface TransactionsLinkFilters {
   categoryIds?: string[] | undefined
   /** The lines of any of these series, each `<amountBucket>:<merchantKey>`. */
   recurrences?: string[] | undefined
+  /** Only the rows smoothed over several months (« Lissées »). */
+  amortized?: boolean | undefined
+  /**
+   * Rows shown on top of what the other filters match: the smoothed
+   * purchases a « Vie courante » figure counts by their slices.
+   */
+  alsoIds?: string[] | undefined
   /** What the context banner says, when the filters alone would not. */
   label?: string | undefined
   /** The figure the link came from was netted and shared; the list is not. */
@@ -153,6 +170,8 @@ export const TRANSACTIONS_QUERY_KEYS = [
   'rhythm',
   'categories',
   'recurrences',
+  'amortized',
+  'also',
   'label',
   'gross',
   'sort',
@@ -260,6 +279,9 @@ export function transactionsQuery(
   if (categories.length > 0) query.categories = categories.join(',')
   const recurrences = cleanList(filters.recurrences)
   if (recurrences.length > 0) query.recurrences = recurrences.join(',')
+  if (filters.amortized) query.amortized = '1'
+  const also = cleanList(filters.alsoIds)
+  if (also.length > 0) query.also = also.join(',')
   const label = trimmed(filters.label)
   if (label) query.label = label
   if (filters.gross) query.gross = '1'
@@ -356,6 +378,9 @@ export function parseTransactionsQuery(
   if (categories.length > 0) filters.categoryIds = categories
   const recurrences = cleanList((get('recurrences') ?? '').split(','))
   if (recurrences.length > 0) filters.recurrences = recurrences
+  if (get('amortized') === '1') filters.amortized = true
+  const also = cleanList((get('also') ?? '').split(','))
+  if (also.length > 0) filters.alsoIds = also
   const label = get('label')
   if (label?.trim()) filters.label = label.trim()
   if (get('gross') === '1') filters.gross = true
@@ -392,7 +417,8 @@ export function isTransactionsContext(
     filters.settlementId ||
     filters.importId ||
     filters.syncRunId ||
-    (filters.ids && filters.ids.length > 0)
+    (filters.ids && filters.ids.length > 0) ||
+    (filters.alsoIds && filters.alsoIds.length > 0)
   )
 }
 
