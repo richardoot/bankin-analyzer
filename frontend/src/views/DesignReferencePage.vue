@@ -12,6 +12,7 @@
   import SectionLabel from '@/components/ui/SectionLabel.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import BaseMenu from '@/components/ui/BaseMenu.vue'
   import BaseModal from '@/components/ui/BaseModal.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import StepIndicator from '@/components/ui/StepIndicator.vue'
@@ -125,6 +126,7 @@
     wizardStep.value = 1
     isWizardOpen.value = true
   }
+  const demoMenuPick = ref('')
   const isButtonLoading = ref(false)
   const demoFilterOpen = ref(true)
   const demoField = ref('')
@@ -307,6 +309,49 @@
           <BaseIconButton label="Désactivé" disabled>
             <icons.IconTrash />
           </BaseIconButton>
+        </div>
+      </BaseCard>
+
+      <!-- Menu -->
+      <BaseCard as="section" padding="lg">
+        <h2 class="mb-1 text-xl font-semibold text-gray-900 dark:text-gray-100">
+          BaseMenu
+        </h2>
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          Les actions d'une ligne à la demande, derrière un « … » : un bouton de
+          menu qui dit s'il est déplié, des flèches pour parcourir, Échap pour
+          fermer et revenir au bouton, l'élément en focus dessiné. Il s'ouvre
+          vers le haut quand la fenêtre n'a plus de place en bas.
+        </p>
+        <div class="flex items-center gap-3">
+          <BaseMenu
+            label="Actions de la ligne"
+            :items="[
+              {
+                key: 'note',
+                label: 'Ajouter une note',
+                icon: icons.IconPencil,
+              },
+              {
+                key: 'tag',
+                label: 'Ajouter une étiquette',
+                icon: icons.IconTag,
+              },
+              { key: 'off', label: 'Indisponible', disabled: true },
+              {
+                key: 'unlink',
+                label: 'Détacher',
+                icon: icons.IconClose,
+                danger: true,
+              },
+            ]"
+            @select="key => (demoMenuPick = key)"
+          />
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {{
+              demoMenuPick ? `Choisi : ${demoMenuPick}` : 'Rien choisi encore'
+            }}
+          </span>
         </div>
       </BaseCard>
 
