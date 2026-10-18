@@ -7,9 +7,9 @@
 
 <template>
   <!-- Full width on a phone (a 384 px card does not fit 390 px), clear of
-       the home indicator; bottom-right from sm up. -->
+       the home indicator and of the tab bar; bottom-right from sm up. -->
   <div
-    class="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-4 right-4 z-[60] flex flex-col gap-2 sm:left-auto sm:right-4"
+    class="fixed bottom-[calc(1rem+max(var(--tab-bar-space),env(safe-area-inset-bottom)))] left-4 right-4 z-[60] flex flex-col gap-2 sm:left-auto sm:right-4"
     aria-live="polite"
   >
     <TransitionGroup name="toast">

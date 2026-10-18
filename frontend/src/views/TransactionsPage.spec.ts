@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
 import { setActivePinia, createPinia } from 'pinia'
+import {
+  isTabBarSuppressed,
+  resetMobileNavigation,
+} from '@/composables/useMobileNavigation'
 import TransactionsPage from './TransactionsPage.vue'
 
 // Mock the API
@@ -1010,13 +1014,17 @@ describe('TransactionsPage — optimistic updates', () => {
 
   describe('one selection bar', () => {
     it('opens with the toggle, counts, and closes from its single exit', async () => {
+      resetMobileNavigation()
       const wrapper = await mountPage()
       expect(wrapper.find('[data-testid="selection-bar"]').exists()).toBe(false)
+      expect(isTabBarSuppressed()).toBe(false)
 
       await wrapper
         .get('[data-testid="toggle-selection-mode"]')
         .trigger('click')
       const bar = wrapper.get('[data-testid="selection-bar"]')
+      // Below lg the selection bar takes the tab bar's place.
+      expect(isTabBarSuppressed()).toBe(true)
       expect(bar.text()).toContain('Aucune transaction sélectionnée')
       // The entry point steps aside: the bar is the one way out.
       expect(
@@ -1050,6 +1058,7 @@ describe('TransactionsPage — optimistic updates', () => {
       expect(
         wrapper.find('[data-testid="toggle-selection-mode"]').exists()
       ).toBe(true)
+      expect(isTabBarSuppressed()).toBe(false)
     })
 
     it('opens the filing dialog from a tap on the card outside selection mode', async () => {

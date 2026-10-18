@@ -64,6 +64,23 @@
  * for its look — and never for violet, purple, sky, rose or orange.
  */
 /*
+ * The room the bottom tab bar takes (AppTabBar, below lg, on the product's
+ * pages): its 3.5rem row plus the home indicator, while the bar is in the
+ * document, 0 otherwise. The layout pads the page by it, the mobile menu
+ * rests on it, toasts rise above it. A page mode that brings its own bottom
+ * bar removes the tab bar, and the room with it.
+ */
+:root {
+  --tab-bar-space: 0px;
+}
+
+@media (width < 64rem) {
+  :root:has([data-tab-bar]) {
+    --tab-bar-space: calc(3.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/*
  * The system said « less motion » : spinners stop spinning, skeletons stop
  * pulsing, toasts and modals appear instead of sliding. One rule, because
  * per-component opt-ins are exactly the kind of discipline that erodes.

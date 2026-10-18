@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import BudgetPage from './BudgetPage.vue'
+import {
+  isTabBarSuppressed,
+  resetMobileNavigation,
+} from '@/composables/useMobileNavigation'
 import type { BudgetPlanDto, BudgetStatisticsDto } from '@/lib/api'
 
 vi.mock('vue3-apexcharts/core', () => ({
@@ -565,6 +569,18 @@ describe('BudgetPage', () => {
       await wrapper.find('[data-testid="budget-edit-button"]').trigger('click')
       return wrapper
     }
+
+    it('takes the tab bar’s place while the edit bar shows', async () => {
+      resetMobileNavigation()
+      const wrapper = await mountEditing()
+      expect(isTabBarSuppressed()).toBe(true)
+
+      await wrapper.get('[data-testid="budget-cancel-button"]').trigger('click')
+      expect(wrapper.find('[data-testid="budget-edit-bar"]').exists()).toBe(
+        false
+      )
+      expect(isTabBarSuppressed()).toBe(false)
+    })
 
     it('writes nothing until "Enregistrer" is pressed', async () => {
       const wrapper = await mountEditing()

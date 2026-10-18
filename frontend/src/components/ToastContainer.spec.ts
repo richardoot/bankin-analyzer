@@ -55,12 +55,13 @@ describe('ToastContainer', () => {
     expect(useToast().toasts.value).toHaveLength(0)
   })
 
-  it('spans the phone width and clears the home indicator', () => {
+  it('spans the phone width and clears the home indicator and the tab bar', () => {
     const wrapper = mount(ToastContainer)
     const classes = wrapper.get('[aria-live="polite"]').classes()
     expect(classes).toEqual(
       expect.arrayContaining(['left-4', 'right-4', 'sm:left-auto'])
     )
     expect(classes.join(' ')).toContain('safe-area-inset-bottom')
+    expect(classes.join(' ')).toContain('var(--tab-bar-space)')
   })
 })

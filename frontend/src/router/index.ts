@@ -47,7 +47,9 @@ const routes: RouteRecordRaw[] = [
     path: '/oauth/consent',
     name: 'oauth-consent',
     component: () => import('@/views/OAuthConsentPage.vue'),
-    meta: { title: 'Autorisation', requiresAuth: true },
+    // A consent asked by another application: one decision, no way out
+    // through the tabs.
+    meta: { title: 'Autorisation', requiresAuth: true, tabBar: false },
   },
   // Where the bank redirects after authorization. Public on purpose: the
   // request arrives from the bank in whatever session state the browser was
@@ -260,5 +262,7 @@ declare module 'vue-router' {
     guestOnly?: boolean
     /** Page name shown in the tab; the product name is appended once. */
     title?: string
+    /** `false` keeps the mobile tab bar off a signed-in page. */
+    tabBar?: boolean
   }
 }

@@ -39,6 +39,7 @@
   import BaseButton from '@/components/ui/BaseButton.vue'
   import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
+  import { useSuppressTabBar } from '@/composables/useMobileNavigation'
 
   const filtersStore = useFiltersStore()
   const router = useRouter()
@@ -103,6 +104,8 @@
   const budgetInputs = ref<Map<string, number>>(new Map())
   const savedBudgets = ref<Map<string, number>>(new Map())
   const isEditing = ref(false)
+  // The edit bar takes the tab bar's place below lg while it shows.
+  useSuppressTabBar(() => isEditing.value || saveStatus.value === 'saved')
 
   /**
    * The plan month the page is reading, or null for the average over every

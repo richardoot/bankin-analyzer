@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+  import { computed, watch, onMounted, onBeforeUnmount } from 'vue'
   import { useRouter, useRoute } from 'vue-router'
   import { useAuthStore } from '@/stores/auth'
   import { useThemeStore } from '@/stores/theme'
@@ -10,13 +10,24 @@
   import IconMoon from '@/components/icons/IconMoon.vue'
   import IconMenu from '@/components/icons/IconMenu.vue'
   import IconClose from '@/components/icons/IconClose.vue'
+  import {
+    isTabBarPath,
+    useMobileMenu,
+    useTabBar,
+  } from '@/composables/useMobileNavigation'
 
   const router = useRouter()
   const route = useRoute()
   const authStore = useAuthStore()
   const themeStore = useThemeStore()
 
-  const isMobileMenuOpen = ref(false)
+  // One menu below lg. Its door is the hamburger up here on the pages
+  // without a tab bar (the pitch, login, legal pages); on the product's
+  // pages it is the « Plus » tab at the bottom, and the hamburger steps
+  // aside so the same menu never has two doors on screen.
+  const menu = useMobileMenu()
+  const isMobileMenuOpen = menu.isOpen
+  const { belongs: hasTabBar } = useTabBar()
 
   const isAuthenticated = computed(() => authStore.isAuthenticated)
   const userEmail = computed(() => authStore.user?.email)
@@ -54,6 +65,11 @@
     { to: '/settings', label: 'Réglages' },
   ]
 
+  // Behind « Plus », the menu lists what the four tabs do not already show.
+  const menuNavLinks = computed(() =>
+    hasTabBar.value ? navLinks.filter(link => !isTabBarPath(link.to)) : navLinks
+  )
+
   const isActiveRoute = (path: string): boolean => {
     // Comptes couvre aussi ses pages profondes : import et historiques.
     if (path === '/accounts') {
@@ -66,13 +82,8 @@
     return route.path.startsWith(path)
   }
 
-  const toggleMobileMenu = (): void => {
-    isMobileMenuOpen.value = !isMobileMenuOpen.value
-  }
-
-  const closeMobileMenu = (): void => {
-    isMobileMenuOpen.value = false
-  }
+  const toggleMobileMenu = menu.toggle
+  const closeMobileMenu = menu.close
 
   // The menu closes the way a phone user expects: Escape, a tap outside,
   // or simply arriving on the page they picked.
@@ -92,6 +103,7 @@
 
 <template>
   <nav
+    aria-label="Navigation principale"
     class="sticky top-0 z-50 bg-white dark:bg-slate-900 shadow-sm dark:shadow-slate-800/20 transition-colors"
   >
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -186,6 +198,7 @@
           </BaseIconButton>
 
           <BaseIconButton
+            v-if="!hasTabBar"
             data-testid="nav-mobile-menu-button"
             :aria-expanded="isMobileMenuOpen"
             aria-controls="mobile-menu"
@@ -206,10 +219,19 @@
       aria-hidden="true"
       @click="closeMobileMenu"
     />
+    <!-- From the hamburger the menu drops under the bar; from « Plus » it
+         rises as a sheet resting on the tab bar, next to the thumb that
+         opened it. -->
     <div
       v-if="isMobileMenuOpen"
       id="mobile-menu"
-      class="max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain border-t border-gray-100 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden dark:border-slate-800 dark:bg-slate-900"
+      data-testid="mobile-menu"
+      class="overflow-y-auto overscroll-contain border-t bg-white lg:hidden dark:bg-slate-900"
+      :class="
+        hasTabBar
+          ? 'fixed inset-x-0 bottom-[var(--tab-bar-space)] max-h-[calc(100dvh-4rem-var(--tab-bar-space))] rounded-t-2xl border-gray-200 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] dark:border-slate-700'
+          : 'max-h-[calc(100dvh-4rem)] border-gray-100 pb-[env(safe-area-inset-bottom)] dark:border-slate-800'
+      "
     >
       <div class="px-4 py-3">
         <template v-if="isAuthenticated">
@@ -228,7 +250,7 @@
           <!-- Navigation links -->
           <div class="space-y-1">
             <RouterLink
-              v-for="link in navLinks"
+              v-for="link in menuNavLinks"
               :key="link.to"
               :to="link.to"
               class="block min-h-[44px] rounded-md px-3 py-2.5 text-base font-medium transition-colors"

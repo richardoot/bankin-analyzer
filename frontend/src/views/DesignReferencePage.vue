@@ -717,6 +717,42 @@
         </ul>
       </BaseCard>
 
+      <!-- Mobile navigation -->
+      <BaseCard as="section" padding="lg" data-testid="design-tab-bar">
+        <h2 class="mb-1 text-xl font-semibold text-gray-900 dark:text-gray-100">
+          Navigation mobile · AppTabBar
+        </h2>
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          Sous <code class="font-mono text-xs">lg</code>, sur les pages
+          connectées (pas la vitrine, la connexion, les pages légales ni le
+          retour bancaire ; <code class="font-mono text-xs">meta.tabBar</code> à
+          <code class="font-mono text-xs">false</code> pour en exclure une) :
+          Dashboard · Transactions · Budget · Récurrences · Plus. « Plus » ouvre
+          le menu, en feuille posée sur la barre ; le hamburger du haut ne reste
+          que là où la barre n'est pas.
+        </p>
+        <ul
+          class="list-disc space-y-1 pl-5 text-sm text-gray-700 dark:text-gray-300"
+        >
+          <li>
+            La place est réservée par
+            <code class="font-mono text-xs">--tab-bar-space</code> (fond de
+            page, menu, toasts) — un élément fixé en bas s'appuie dessus, jamais
+            sur <code class="font-mono text-xs">bottom-0</code> seul.
+          </li>
+          <li>
+            Un mode qui apporte sa propre barre basse (sélection de
+            Transactions, édition du Budget) prend la place de la barre :
+            <code class="font-mono text-xs">useSuppressTabBar(mode)</code>.
+          </li>
+          <li>
+            La barre s'efface pendant la saisie sur écran tactile, sans rendre
+            sa place : la page ne saute pas quand le clavier s'ouvre.
+          </li>
+          <li>Les modales et les toasts passent toujours par-dessus.</li>
+        </ul>
+      </BaseCard>
+
       <!-- Formatters -->
       <BaseCard as="section" padding="lg">
         <h2 class="mb-1 text-xl font-semibold text-gray-900 dark:text-gray-100">

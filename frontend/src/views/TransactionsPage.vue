@@ -51,6 +51,7 @@
   import BaseCard from '@/components/ui/BaseCard.vue'
   import SectionLabel from '@/components/ui/SectionLabel.vue'
   import { rowGridClass } from '@/components/transactions/rowGrid'
+  import { useSuppressTabBar } from '@/composables/useMobileNavigation'
 
   const toast = useToast()
 
@@ -83,6 +84,8 @@
   // Selection state
   const isSelectionMode = ref(false)
   const selectedIds = ref<Set<string>>(new Set())
+  // The selection bar takes the tab bar's place below lg: one bottom bar.
+  useSuppressTabBar(isSelectionMode)
 
   // LocalStorage key for filters
   const FILTERS_STORAGE_KEY = 'transactions-filters'
