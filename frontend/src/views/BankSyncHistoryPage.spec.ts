@@ -173,4 +173,25 @@ describe('BankSyncHistoryPage', () => {
     ).toContain('boom')
     expect(wrapper.find('[data-testid="bank-sync-run"]').exists()).toBe(true)
   })
+
+  it('links the rows a run wrote, unless it was undone', async () => {
+    const wrapper = await mountPage([
+      run({ id: 'run-1', inserted: 3, claimed: 1 }),
+      run({ id: 'run-2', inserted: 2, claimed: 0, undoneAt: '2026-09-02' }),
+    ])
+
+    const links = wrapper.findAllComponents({ name: 'TransactionsLink' })
+    expect(links.map(l => l.attributes('data-testid'))).toEqual([
+      'run-transactions-link-run-1',
+    ])
+    expect(links.map(l => l.props('to'))).toEqual([
+      {
+        path: '/transactions',
+        query: {
+          syncRun: 'run-1',
+          label: expect.stringMatching(/^Synchro du /),
+        },
+      },
+    ])
+  })
 })
