@@ -210,6 +210,16 @@ if (import.meta.env.DEV) {
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  // A new page opens at its top — with the mobile tab bar a screen is one tap
+  // from another, and landing halfway down Budget because Transactions was
+  // scrolled reads as a broken page. Back and forward return where the user
+  // was; a change of query or hash on the same page (filters, tabs) leaves
+  // the scroll alone.
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.path === from.path) return false
+    return { top: 0 }
+  },
 })
 
 router.beforeEach(async to => {

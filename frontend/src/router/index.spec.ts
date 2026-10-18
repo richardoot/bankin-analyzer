@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { RouteLocationNormalized } from 'vue-router'
 
 // The guard reads three things from the auth store; nothing else in the
 // store matters here, and the real one drags in the Supabase client.
@@ -75,5 +76,31 @@ describe('router guard', () => {
     await router.push('/privacy')
 
     expect(router.currentRoute.value.name).toBe('privacy')
+  })
+})
+
+describe('router scroll', () => {
+  const scroll = router.options.scrollBehavior
+  // The scroll hook takes normalized locations; a resolved one carries the
+  // same path and query, which is all it reads.
+  const at = (path: string) =>
+    router.resolve(path) as unknown as RouteLocationNormalized
+
+  it('opens a new page at its top', () => {
+    expect(scroll?.(at('/budget'), at('/transactions'), null)).toEqual({
+      top: 0,
+    })
+  })
+
+  it('returns where the user was on back and forward', () => {
+    expect(
+      scroll?.(at('/transactions'), at('/budget'), { left: 0, top: 640 })
+    ).toEqual({ left: 0, top: 640 })
+  })
+
+  it('leaves the scroll alone when only the query changes', () => {
+    expect(
+      scroll?.(at('/transactions?page=2'), at('/transactions'), null)
+    ).toBe(false)
   })
 })
