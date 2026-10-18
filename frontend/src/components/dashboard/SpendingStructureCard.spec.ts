@@ -39,6 +39,7 @@ function mountCard(
       savingsRate: 0.15,
       remainingToLive: 800,
       periodMonths: 1,
+      reading: 'everyday',
       ...overrides,
     },
     global: { stubs: { RouterLink: RouterLinkStub } },
@@ -66,8 +67,9 @@ describe('SpendingStructureCard', () => {
     expect(wrapper.find('[data-testid="recurring-share"]').exists()).toBe(false)
   })
 
-  it('opens on the everyday reading and shares each axis out', () => {
+  it('reads the everyday structure when told to, and shares each axis out', () => {
     const wrapper = mountCard()
+    expect(wrapper.text()).toContain('vie courante')
 
     const nature = wrapper.find('[data-testid="axis-nature"]')
     expect(nature.text()).toContain('Essentiel')
@@ -80,10 +82,12 @@ describe('SpendingStructureCard', () => {
     expect(rhythm.text()).toContain('75 %')
   })
 
-  it('switches to the month as it was', async () => {
+  it('reads the month as it was when the page says so', async () => {
+    // No control of its own: the reading is the page's, set once for all.
     const wrapper = mountCard()
+    expect(wrapper.find('[role="radiogroup"]').exists()).toBe(false)
 
-    await wrapper.find('[data-testid="reading-actual"]').trigger('click')
+    await wrapper.setProps({ reading: 'actual' })
 
     const nature = wrapper.find('[data-testid="axis-nature"]')
     expect(nature.text()).toContain('67 %')

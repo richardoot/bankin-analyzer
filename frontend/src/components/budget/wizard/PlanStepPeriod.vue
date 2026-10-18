@@ -1,4 +1,6 @@
 <script setup lang="ts">
+  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+  import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
   /**
    * Étape 1 — la période et le nom. Les mois et le nom sont des
    * v-model ; le choix d'un preset remonte au parent, qui sait quels
@@ -15,6 +17,14 @@
     'set-preset': [preset: Preset]
     'name-edited': []
   }>()
+
+  const PRESETS: SegmentedOption<Preset>[] = [
+    { value: 'next-month', label: 'Mois prochain' },
+    { value: 'next-quarter', label: 'Trimestre suivant' },
+    { value: 'next-year', label: 'Année suivante' },
+    { value: 'custom', label: 'Personnalisé' },
+  ]
+
   const startMonth = defineModel<string>('startMonth', { required: true })
   const endMonth = defineModel<string>('endMonth', { required: true })
   const name = defineModel<string>('name', { required: true })
@@ -24,34 +34,18 @@
   <div class="space-y-5">
     <!-- Presets -->
     <div>
-      <label
+      <p
+        id="plan-range-label"
         class="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
       >
         Plage
-      </label>
-      <div
-        class="inline-flex flex-wrap gap-1.5 rounded-lg bg-gray-100 dark:bg-slate-700/50 p-1"
-      >
-        <button
-          v-for="opt in [
-            { value: 'next-month', label: 'Mois prochain' },
-            { value: 'next-quarter', label: 'Trimestre suivant' },
-            { value: 'next-year', label: 'Année suivante' },
-            { value: 'custom', label: 'Personnalisé' },
-          ]"
-          :key="opt.value"
-          type="button"
-          class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
-          :class="
-            preset === opt.value
-              ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 shadow-sm'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-          "
-          @click="emit('set-preset', opt.value as Preset)"
-        >
-          {{ opt.label }}
-        </button>
-      </div>
+      </p>
+      <SegmentedControl
+        :model-value="preset"
+        labelled-by="plan-range-label"
+        :options="PRESETS"
+        @update:model-value="emit('set-preset', $event)"
+      />
     </div>
 
     <!-- Month inputs -->

@@ -1,6 +1,14 @@
 <script setup lang="ts">
-  import { ref, computed, watch } from 'vue'
-  import { useModalA11y } from '@/composables/useModalA11y'
+  import { ref, computed, watch, nextTick } from 'vue'
+  import BaseModal from '@/components/ui/BaseModal.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseCheckbox from '@/components/ui/BaseCheckbox.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
+  import StepIndicator from '@/components/ui/StepIndicator.vue'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
   import {
     api,
     type ReimbursementDto,
@@ -8,8 +16,9 @@
     type SettlementDto,
     type SettlementReimbursementItemDto,
   } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
   import IncomeTransactionPicker from './IncomeTransactionPicker.vue'
+  import { useIsMobile } from '@/composables/useMediaQuery'
   import {
     availableAmountOf,
     byOldestFirst,
@@ -33,13 +42,7 @@
     confirm: [settlement: SettlementDto]
   }>()
 
-  // Escape closes, Tab stays inside, focus returns to the opener after.
-  const modalPanelRef = ref<HTMLElement | null>(null)
-  useModalA11y({
-    isOpen: () => props.isOpen,
-    onClose: () => handleClose(),
-    panel: modalPanelRef,
-  })
+  const STEP_LABELS = ['Remboursements', 'Transaction reçue']
 
   interface LineState {
     amount: number
@@ -47,6 +50,12 @@
   }
 
   const currentStep = ref<1 | 2>(1)
+  /**
+   * On a phone the second step has to leave the receipt list at least half
+   * the screen: the step trail and the « Annuler » button give way there —
+   * the header's back arrow and cross already do both jobs.
+   */
+  const isMobile = useIsMobile()
   /**
    * Step 1 answers "which debts", step 2 answers "with what money". Keeping the
    * two apart is what lets the selection exist before a pot is known — the
@@ -260,12 +269,12 @@
   }
 
   /**
-   * Committed on `change` rather than `input`: the field is value-bound and
-   * clamped, so writing back on every keystroke would eat a half-typed "0.".
+   * Committed on `change` rather than `input` (BaseField `lazy`): the field
+   * is clamped, so writing back on every keystroke would eat a half-typed
+   * "0,".
    */
-  function onAmountCommit(reimbursementId: string, event: Event): void {
-    const value = Number.parseFloat((event.target as HTMLInputElement).value)
-    setLineAmount(reimbursementId, Number.isFinite(value) ? value : 0)
+  function onAmountCommit(reimbursementId: string, value: number | null): void {
+    setLineAmount(reimbursementId, value ?? 0)
   }
 
   function toggleForceComplete(reimbursementId: string): void {
@@ -286,9 +295,11 @@
     }
   }
 
-  function onCategoryAmountCommit(group: CategoryGroup, event: Event): void {
-    const value = Number.parseFloat((event.target as HTMLInputElement).value)
-    applyToGroup(group, Number.isFinite(value) ? Math.max(0, value) : 0)
+  function onCategoryAmountCommit(
+    group: CategoryGroup,
+    value: number | null
+  ): void {
+    applyToGroup(group, Math.max(0, value ?? 0))
   }
 
   function spreadGroupProrata(group: CategoryGroup): void {
@@ -334,9 +345,19 @@
     }
   })
 
+  /**
+   * The recap renders under the receipt list; on a phone that is below the
+   * fold, so a tap on a suggestion must bring it into view or nothing seems
+   * to happen.
+   */
+  const recapRef = ref<HTMLElement | null>(null)
+
   function selectTransaction(transaction: TransactionDto): void {
     selectedTransaction.value = transaction
     applyAutoAllocation()
+    void nextTick(() => {
+      recapRef.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    })
   }
 
   // --- Navigation ----------------------------------------------------------
@@ -367,9 +388,21 @@
     expandedCategories.value = new Set(groups.value.map(group => group.key))
   }
 
+  /** A started settlement is a draft: the shell asks before dropping it. */
+  const isDirty = computed(
+    () => selectedIds.value.size > 0 || selectedTransaction.value !== null
+  )
+
+  const modalRef = ref<InstanceType<typeof BaseModal> | null>(null)
+
   function handleClose(): void {
     resetModal()
     emit('close')
+  }
+
+  /** « Annuler » closes the way the cross does — through the draft guard. */
+  function requestClose(): void {
+    modalRef.value?.requestClose()
   }
 
   async function handleConfirm(): Promise<void> {
@@ -411,574 +444,438 @@
       if (isOpen) resetModal()
     }
   )
-
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="modal">
-      <div
-        v-if="isOpen"
-        class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
-      >
-        <div class="fixed inset-0 bg-black/50" @click="handleClose" />
+  <BaseModal
+    ref="modalRef"
+    :open="isOpen"
+    title="Enregistrer un règlement"
+    :subtitle="
+      currentStep === 1
+        ? `${personName} · que voulez-vous régler ?`
+        : `${personName} · d'où vient l'argent ?`
+    "
+    max-width="xl"
+    :closable="!isSubmitting"
+    :dirty="isDirty"
+    :back-label="currentStep === 2 ? 'Retour à la sélection' : undefined"
+    back-test-id="settlement-back"
+    @back="goBackToSelection"
+    @close="handleClose"
+  >
+    <template v-if="currentStep === 1 || !isMobile" #subheader>
+      <StepIndicator
+        class="justify-start"
+        :steps="STEP_LABELS"
+        :current="currentStep"
+      />
+    </template>
 
+    <InlineAlert v-if="error" class="mb-4">{{ error }}</InlineAlert>
+
+    <!-- ============ Step 1: pick the debts to settle ============ -->
+    <div v-if="currentStep === 1" data-testid="settlement-step-select">
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+          Quels remboursements en attente de {{ personName }} souhaitez-vous
+          régler ?
+        </p>
+        <div class="flex items-center gap-1">
+          <BaseButton
+            variant="ghost"
+            size="sm"
+            data-testid="settlement-select-all"
+            @click="selectAllLines"
+          >
+            Tout sélectionner
+          </BaseButton>
+          <BaseButton variant="ghost" size="sm" @click="clearSelection">
+            Tout décocher
+          </BaseButton>
+        </div>
+      </div>
+
+      <div class="space-y-2">
         <div
-          ref="modalPanelRef"
-          role="dialog"
-          aria-modal="true"
-          class="relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-slate-900 dark:shadow-slate-900/30"
+          v-for="group in groups"
+          :key="group.key"
+          class="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700"
         >
-          <!-- Header -->
+          <!-- Category row -->
           <div
-            class="flex items-start justify-between gap-3 border-b border-gray-200 p-4 sm:p-6 dark:border-slate-700"
+            class="flex items-center gap-2 bg-gray-50 p-2 pr-3 dark:bg-slate-800"
           >
-            <div class="min-w-0">
-              <h2
-                class="text-xl font-semibold text-gray-900 dark:text-gray-100"
-              >
-                Enregistrer un règlement
-              </h2>
-              <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                {{ personName }}
-                <span class="sm:hidden"
-                  >&middot; étape {{ currentStep }}/2</span
-                >
-                <span v-if="currentStep === 1" class="hidden sm:inline">
-                  &middot; etape 1 sur 2 : que voulez-vous regler ?</span
-                >
-                <span v-else class="hidden sm:inline">
-                  &middot; etape 2 sur 2 : d'ou vient l'argent ?</span
-                >
-              </p>
-            </div>
-            <button
-              type="button"
-              class="-m-2 shrink-0 p-2 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-              aria-label="Fermer"
-              @click="handleClose"
+            <BaseIconButton
+              size="sm"
+              :label="`Déplier ${group.categoryName}`"
+              :aria-expanded="expandedCategories.has(group.key)"
+              @click="toggleExpanded(group.key)"
             >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-
-          <div class="flex-1 overflow-y-auto p-4 sm:p-6">
-            <div
-              v-if="error"
-              class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm"
-            >
-              {{ error }}
-            </div>
-
-            <!-- ============ Step 1: pick the debts to settle ============ -->
-            <div v-if="currentStep === 1" data-testid="settlement-step-select">
-              <p class="mb-3 text-sm text-gray-600 dark:text-gray-400">
-                Quels remboursements en attente de {{ personName }}
-                souhaitez-vous regler ?
-              </p>
-
-              <div class="flex justify-end gap-3 mb-2 text-sm">
-                <button
-                  type="button"
-                  data-testid="settlement-select-all"
-                  class="inline-flex min-h-[40px] items-center text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
-                  @click="selectAllLines"
-                >
-                  Tout sélectionner
-                </button>
-                <span class="text-gray-300 dark:text-gray-600">|</span>
-                <button
-                  type="button"
-                  class="inline-flex min-h-[40px] items-center text-gray-600 hover:underline sm:min-h-0 dark:text-gray-400"
-                  @click="clearSelection"
-                >
-                  Tout decocher
-                </button>
-              </div>
-
-              <div class="space-y-2">
-                <div
-                  v-for="group in groups"
-                  :key="group.key"
-                  class="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden"
-                >
-                  <!-- Category row -->
-                  <div
-                    class="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800"
-                  >
-                    <button
-                      type="button"
-                      class="-my-2 shrink-0 p-2.5 text-gray-500 sm:my-0 sm:p-1 dark:text-gray-400"
-                      :aria-label="`Deplier ${group.categoryName}`"
-                      :aria-expanded="expandedCategories.has(group.key)"
-                      @click="toggleExpanded(group.key)"
-                    >
-                      <svg
-                        class="w-4 h-4 transition-transform duration-200"
-                        :class="{
-                          'rotate-90': expandedCategories.has(group.key),
-                        }"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M9 5l7 7-7 7"
-                        />
-                      </svg>
-                    </button>
-                    <input
-                      type="checkbox"
-                      class="h-5 w-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 shrink-0"
-                      :checked="group.selectedCount > 0"
-                      :indeterminate="
-                        group.selectedCount > 0 &&
-                        group.selectedCount < group.lines.length
-                      "
-                      :aria-label="`Selectionner ${group.categoryName}`"
-                      @change="toggleCategorySelection(group)"
-                    />
-                    <div class="flex-1 min-w-0">
-                      <div
-                        class="font-medium text-gray-900 dark:text-gray-100 truncate"
-                      >
-                        {{ group.categoryName }}
-                      </div>
-                      <div class="text-xs text-gray-500 dark:text-gray-400">
-                        {{ group.lines.length }} ligne(s) &middot; du
-                        {{ formatCurrency(group.due) }}
-                      </div>
-                    </div>
-                    <div
-                      v-if="group.selectedCount > 0"
-                      class="text-sm font-semibold text-primary-600 dark:text-primary-400 whitespace-nowrap shrink-0"
-                    >
-                      {{ formatCurrency(group.selectedDue) }}
-                    </div>
-                  </div>
-
-                  <!-- Lines -->
-                  <div
-                    v-if="expandedCategories.has(group.key)"
-                    class="divide-y divide-gray-100 dark:divide-slate-700"
-                  >
-                    <label
-                      v-for="line in group.lines"
-                      :key="line.reimbursementId"
-                      class="flex items-center gap-2 p-3 pl-4 sm:pl-10 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/50"
-                    >
-                      <input
-                        type="checkbox"
-                        class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 shrink-0"
-                        :checked="isSelected(line.reimbursementId)"
-                        :aria-label="`Selectionner ${line.description}`"
-                        @change="toggleLineSelection(line.reimbursementId)"
-                      />
-                      <div class="flex-1 min-w-0">
-                        <div
-                          class="text-sm text-gray-900 dark:text-gray-100 truncate"
-                        >
-                          <span class="text-gray-500 dark:text-gray-400"
-                            >[{{ formatDate(line.date) }}]</span
-                          >
-                          {{ line.description }}
-                        </div>
-                      </div>
-                      <div
-                        class="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap shrink-0"
-                      >
-                        {{ formatCurrency(line.amountDue) }}
-                      </div>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <p
-                v-if="groups.length === 0"
-                class="py-8 text-center text-gray-500 dark:text-gray-400"
-              >
-                Aucun remboursement en attente pour {{ personName }}
-              </p>
-            </div>
-
-            <!-- ====== Step 2: find the receipt, then fine-tune ====== -->
-            <div v-else data-testid="settlement-step-receipt">
-              <div
-                class="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-slate-800 flex items-center justify-between gap-3"
-              >
-                <span class="text-sm text-gray-600 dark:text-gray-400">
-                  {{ selectedLines.length }} remboursement(s) retenu(s)
-                </span>
-                <span
-                  class="text-sm font-semibold text-gray-900 dark:text-gray-100 whitespace-nowrap"
-                  data-testid="settlement-selected-total"
-                >
-                  {{ formatCurrency(selectedDueTotal) }} a couvrir
-                </span>
-              </div>
-
-              <label
-                class="block text-sm text-gray-600 dark:text-gray-400 mb-3"
-                for="settlement-search"
-              >
-                Quelle transaction correspond au paiement de {{ personName }} ?
-              </label>
-
-              <IncomeTransactionPicker
-                :context="suggestionContext"
-                :selected-transaction-id="selectedTransaction?.id ?? null"
-                @select="selectTransaction"
+              <IconChevronRight
+                class="transition-transform duration-200"
+                :class="{ 'rotate-90': expandedCategories.has(group.key) }"
               />
-
-              <!-- Recap, once the money is known -->
-              <div v-if="selectedTransaction" class="mt-6">
-                <div
-                  class="mb-4 p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg flex items-center justify-between gap-3"
+            </BaseIconButton>
+            <label
+              class="flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-1 pointer-coarse:min-h-[44px]"
+            >
+              <input
+                type="checkbox"
+                class="h-4 w-4 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                :checked="group.selectedCount > 0"
+                :indeterminate="
+                  group.selectedCount > 0 &&
+                  group.selectedCount < group.lines.length
+                "
+                :aria-label="`Sélectionner ${group.categoryName}`"
+                @change="toggleCategorySelection(group)"
+              />
+              <span class="min-w-0 flex-1">
+                <span
+                  class="block truncate font-medium text-gray-900 dark:text-gray-100"
+                  :title="group.categoryName"
                 >
-                  <div class="min-w-0">
-                    <div
-                      class="font-medium text-gray-900 dark:text-gray-100 truncate"
-                    >
-                      {{ selectedTransaction.description }}
-                    </div>
-                    <div class="text-sm text-gray-600 dark:text-gray-400">
-                      {{ formatDate(selectedTransaction.date) }} &middot;
-                      {{ selectedTransaction.account }}
-                    </div>
-                  </div>
-                  <div
-                    class="text-lg font-bold text-primary-600 dark:text-primary-400 whitespace-nowrap"
-                  >
-                    +{{ formatCurrency(pot) }}
-                  </div>
-                </div>
-
-                <div class="flex items-center justify-between gap-3 mb-2">
-                  <h3
-                    class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                  >
-                    Repartition
-                  </h3>
-                  <div class="flex gap-3 text-sm">
-                    <button
-                      type="button"
-                      class="inline-flex min-h-[40px] items-center text-primary-600 hover:underline sm:min-h-0 dark:text-primary-400"
-                      @click="allocateEverything"
-                    >
-                      Tout affecter
-                    </button>
-                    <span class="text-gray-300 dark:text-gray-600">|</span>
-                    <button
-                      type="button"
-                      class="inline-flex min-h-[40px] items-center text-gray-600 hover:underline sm:min-h-0 dark:text-gray-400"
-                      @click="clearAmounts"
-                    >
-                      Tout remettre a zero
-                    </button>
-                  </div>
-                </div>
-
-                <div class="space-y-2">
-                  <div
-                    v-for="group in allocationGroups"
-                    :key="group.key"
-                    class="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden"
-                  >
-                    <!-- Category row -->
-                    <div
-                      class="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800"
-                    >
-                      <button
-                        type="button"
-                        class="-my-2 shrink-0 p-2.5 text-gray-500 sm:my-0 sm:p-1 dark:text-gray-400"
-                        :aria-label="`Deplier ${group.categoryName}`"
-                        :aria-expanded="expandedCategories.has(group.key)"
-                        @click="toggleExpanded(group.key)"
-                      >
-                        <svg
-                          class="w-4 h-4 transition-transform duration-200"
-                          :class="{
-                            'rotate-90': expandedCategories.has(group.key),
-                          }"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M9 5l7 7-7 7"
-                          />
-                        </svg>
-                      </button>
-                      <div class="flex-1 min-w-0">
-                        <div
-                          class="font-medium text-gray-900 dark:text-gray-100 truncate"
-                        >
-                          {{ group.categoryName }}
-                        </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400">
-                          {{ group.lines.length }} ligne(s) &middot; du
-                          {{ formatCurrency(group.selectedDue) }}
-                        </div>
-                      </div>
-                      <div class="flex items-center gap-1 shrink-0">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          :max="group.selectedDue"
-                          :value="group.allocated"
-                          :aria-label="`Montant affecte a ${group.categoryName}`"
-                          class="w-20 min-h-[40px] px-2 py-1 text-right border border-gray-300 sm:min-h-0 sm:w-24 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
-                          @change="onCategoryAmountCommit(group, $event)"
-                        />
-                        <span class="text-gray-500 dark:text-gray-400"
-                          >&euro;</span
-                        >
-                      </div>
-                    </div>
-
-                    <!-- Lines -->
-                    <div
-                      v-if="expandedCategories.has(group.key)"
-                      class="divide-y divide-gray-100 dark:divide-slate-700"
-                    >
-                      <div
-                        v-for="line in group.lines"
-                        :key="line.reimbursementId"
-                        class="p-3 pl-4 sm:pl-10"
-                      >
-                        <div class="flex items-center gap-2">
-                          <div class="flex-1 min-w-0">
-                            <div
-                              class="text-sm text-gray-900 dark:text-gray-100 truncate"
-                            >
-                              <span class="text-gray-500 dark:text-gray-400"
-                                >[{{ formatDate(line.date) }}]</span
-                              >
-                              {{ line.description }}
-                            </div>
-                            <div
-                              class="text-xs text-gray-500 dark:text-gray-400"
-                            >
-                              du {{ formatCurrency(line.amountDue) }}
-                            </div>
-                          </div>
-                          <div class="flex items-center gap-1 shrink-0">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              :max="line.amountDue"
-                              :value="stateOf(line.reimbursementId).amount"
-                              :aria-label="`Montant affecte a ${line.description}`"
-                              class="w-20 min-h-[40px] px-2 py-1 text-right border border-gray-300 sm:min-h-0 sm:w-24 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
-                              @change="
-                                onAmountCommit(line.reimbursementId, $event)
-                              "
-                            />
-                            <span class="text-gray-500 dark:text-gray-400"
-                              >&euro;</span
-                            >
-                          </div>
-                        </div>
-
-                        <!-- Settle-the-shortfall, only when the line stays short -->
-                        <label
-                          v-if="
-                            stateOf(line.reimbursementId).amount > 0 &&
-                            stateOf(line.reimbursementId).amount <
-                              line.amountDue
-                          "
-                          class="mt-2 ml-6 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                            :checked="
-                              stateOf(line.reimbursementId).forceComplete
-                            "
-                            :aria-label="`Solder ${line.description}`"
-                            @change="toggleForceComplete(line.reimbursementId)"
-                          />
-                          Solder cette ligne malgre l'ecart de
-                          {{
-                            formatCurrency(
-                              round2(
-                                line.amountDue -
-                                  stateOf(line.reimbursementId).amount
-                              )
-                            )
-                          }}
-                        </label>
-                      </div>
-
-                      <div
-                        v-if="group.lines.length > 1 && group.allocated > 0"
-                        class="px-3 py-2 pl-10 text-right"
-                      >
-                        <button
-                          type="button"
-                          class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                          @click="spreadGroupProrata(group)"
-                        >
-                          Repartir au prorata
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+                  {{ group.categoryName }}
+                </span>
+                <span class="block text-xs text-gray-500 dark:text-gray-400">
+                  {{ group.lines.length }} ligne(s) &middot; dû
+                  {{ formatCurrency(group.due) }}
+                </span>
+              </span>
+            </label>
+            <span
+              v-if="group.selectedCount > 0"
+              class="shrink-0 text-sm font-semibold whitespace-nowrap text-debt-700 dark:text-debt-400"
+            >
+              {{ formatCurrency(group.selectedDue) }}
+            </span>
           </div>
 
-          <!-- Footer -->
+          <!-- Lines -->
           <div
-            class="space-y-3 border-t border-gray-200 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 dark:border-slate-700"
+            v-if="expandedCategories.has(group.key)"
+            class="divide-y divide-gray-100 dark:divide-slate-700"
           >
-            <!-- Selection total, step 1 only -->
-            <div
-              v-if="currentStep === 1"
-              class="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-slate-800"
+            <label
+              v-for="line in group.lines"
+              :key="line.reimbursementId"
+              class="flex cursor-pointer items-center gap-3 p-3 pl-4 hover:bg-gray-50 pointer-coarse:min-h-[44px] sm:pl-12 dark:hover:bg-slate-800/50"
             >
-              <span class="text-sm text-gray-700 dark:text-gray-300">
-                {{ selectedLines.length }} remboursement(s) sélectionné(s)
+              <input
+                type="checkbox"
+                class="h-4 w-4 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                :checked="isSelected(line.reimbursementId)"
+                :aria-label="`Sélectionner ${line.description}`"
+                @change="toggleLineSelection(line.reimbursementId)"
+              />
+              <span
+                class="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-gray-100"
+                :title="line.description"
+              >
+                <span class="text-gray-500 dark:text-gray-400"
+                  >[{{ formatDate(line.date) }}]</span
+                >
+                {{ line.description }}
               </span>
               <span
-                class="text-sm font-semibold text-gray-900 dark:text-gray-100"
-                data-testid="settlement-selection-total"
+                class="shrink-0 text-sm whitespace-nowrap text-gray-700 dark:text-gray-300"
               >
-                {{ formatCurrency(selectedDueTotal) }}
+                {{ formatCurrency(line.amountDue) }}
               </span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <p
+        v-if="groups.length === 0"
+        class="py-8 text-center text-gray-500 dark:text-gray-400"
+      >
+        Aucun remboursement en attente pour {{ personName }}
+      </p>
+    </div>
+
+    <!-- ====== Step 2: find the receipt, then fine-tune ====== -->
+    <div v-else data-testid="settlement-step-receipt">
+      <div
+        class="mb-4 flex items-center justify-between gap-3 rounded-lg bg-gray-50 p-3 dark:bg-slate-800"
+      >
+        <span class="text-sm text-gray-600 dark:text-gray-400">
+          {{ selectedLines.length }} remboursement(s) retenu(s)
+        </span>
+        <span
+          class="text-sm font-semibold whitespace-nowrap text-gray-900 dark:text-gray-100"
+          data-testid="settlement-selected-total"
+        >
+          {{ formatCurrency(selectedDueTotal) }} à couvrir
+        </span>
+      </div>
+
+      <label
+        class="mb-3 block text-sm text-gray-600 dark:text-gray-400"
+        for="settlement-search"
+      >
+        Quelle transaction correspond au paiement de {{ personName }} ?
+      </label>
+
+      <IncomeTransactionPicker
+        :context="suggestionContext"
+        :selected-transaction-id="selectedTransaction?.id ?? null"
+        @select="selectTransaction"
+      />
+
+      <!-- Recap, once the money is known -->
+      <div
+        v-if="selectedTransaction"
+        ref="recapRef"
+        class="mt-6 scroll-mt-2"
+        data-testid="settlement-recap"
+      >
+        <div
+          class="mb-4 flex items-center justify-between gap-3 rounded-lg bg-green-50 p-3 dark:bg-green-900/20"
+        >
+          <div class="min-w-0">
+            <p
+              class="truncate font-medium text-gray-900 dark:text-gray-100"
+              :title="selectedTransaction.description"
+            >
+              {{ selectedTransaction.description }}
+            </p>
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+              {{ formatDate(selectedTransaction.date) }} &middot;
+              {{ selectedTransaction.account }}
+            </p>
+          </div>
+          <p
+            class="text-lg font-bold whitespace-nowrap text-green-700 dark:text-green-400"
+          >
+            +{{ formatCurrency(pot) }}
+          </p>
+        </div>
+
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <SectionLabel as="h3">Répartition</SectionLabel>
+          <div class="flex items-center gap-1">
+            <BaseButton variant="ghost" size="sm" @click="allocateEverything">
+              Tout affecter
+            </BaseButton>
+            <BaseButton variant="ghost" size="sm" @click="clearAmounts">
+              Tout remettre à zéro
+            </BaseButton>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div
+            v-for="group in allocationGroups"
+            :key="group.key"
+            class="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700"
+          >
+            <!-- Category row -->
+            <div
+              class="flex items-center gap-2 bg-gray-50 p-2 pr-3 dark:bg-slate-800"
+            >
+              <BaseIconButton
+                size="sm"
+                :label="`Déplier ${group.categoryName}`"
+                :aria-expanded="expandedCategories.has(group.key)"
+                @click="toggleExpanded(group.key)"
+              >
+                <IconChevronRight
+                  class="transition-transform duration-200"
+                  :class="{ 'rotate-90': expandedCategories.has(group.key) }"
+                />
+              </BaseIconButton>
+              <div class="min-w-0 flex-1">
+                <p
+                  class="truncate font-medium text-gray-900 dark:text-gray-100"
+                  :title="group.categoryName"
+                >
+                  {{ group.categoryName }}
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ group.lines.length }} ligne(s) &middot; dû
+                  {{ formatCurrency(group.selectedDue) }}
+                </p>
+              </div>
+              <div class="flex shrink-0 items-center gap-1">
+                <BaseField
+                  amount
+                  lazy
+                  size="sm"
+                  label-hidden
+                  :label="`Montant affecté à ${group.categoryName}`"
+                  :model-value="group.allocated"
+                  class="w-20 sm:w-24 [&_input]:text-right"
+                  @update:model-value="
+                    value =>
+                      onCategoryAmountCommit(group, value as number | null)
+                  "
+                />
+                <span class="text-gray-500 dark:text-gray-400">&euro;</span>
+              </div>
             </div>
 
-            <!-- Running balance, step 2 only -->
+            <!-- Lines -->
             <div
-              v-if="currentStep === 2 && selectedTransaction"
-              class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 p-3 rounded-lg"
-              :class="{
-                'bg-primary-50 dark:bg-primary-900/20':
-                  Math.abs(remainingToAllocate) < 0.01,
-                'bg-amber-50 dark:bg-amber-900/20': remainingToAllocate >= 0.01,
-                'bg-red-50 dark:bg-red-900/20': isOverAllocated,
-              }"
+              v-if="expandedCategories.has(group.key)"
+              class="divide-y divide-gray-100 dark:divide-slate-700"
             >
-              <span class="text-sm text-gray-700 dark:text-gray-300">
-                Affecte {{ formatCurrency(allocatedTotal) }}
-              </span>
-              <span
-                class="text-sm font-semibold"
-                :class="{
-                  'text-primary-700 dark:text-primary-400':
-                    Math.abs(remainingToAllocate) < 0.01,
-                  'text-amber-700 dark:text-amber-400':
-                    remainingToAllocate >= 0.01,
-                  'text-red-700 dark:text-red-400': isOverAllocated,
-                }"
+              <div
+                v-for="line in group.lines"
+                :key="line.reimbursementId"
+                class="p-3 pl-4 sm:pl-12"
               >
-                <template v-if="isOverAllocated">
-                  Depassement de
-                  {{ formatCurrency(Math.abs(remainingToAllocate)) }}
-                </template>
-                <template v-else-if="remainingToAllocate >= 0.01">
-                  {{ formatCurrency(remainingToAllocate) }} resteront
-                  disponibles sur cette transaction
-                </template>
-                <template v-else> Tout est affecte </template>
-              </span>
-            </div>
-
-            <div
-              class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <button
-                v-if="currentStep === 2"
-                type="button"
-                data-testid="settlement-back"
-                class="min-h-[44px] px-4 py-2 sm:min-h-0 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                :disabled="isSubmitting"
-                @click="goBackToSelection"
-              >
-                Retour
-              </button>
-              <div v-else class="hidden sm:block" />
-
-              <div class="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
-                <button
-                  type="button"
-                  class="min-h-[44px] px-4 py-2 sm:min-h-0 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                  :disabled="isSubmitting"
-                  @click="handleClose"
-                >
-                  Annuler
-                </button>
-                <button
-                  v-if="currentStep === 1"
-                  type="button"
-                  data-testid="settlement-continue"
-                  class="min-h-[44px] px-6 py-2 sm:min-h-0 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  :disabled="!hasSelection"
-                  @click="goToReceipt"
-                >
-                  Continuer
-                </button>
-                <button
-                  v-else
-                  type="button"
-                  class="inline-flex min-h-[44px] items-center justify-center px-6 py-2 sm:min-h-0 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  :disabled="!canConfirm"
-                  @click="handleConfirm"
-                >
-                  <span v-if="isSubmitting" class="flex items-center gap-2">
-                    <span
-                      class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"
+                <div class="flex items-center gap-2">
+                  <div class="min-w-0 flex-1">
+                    <p
+                      class="truncate text-sm text-gray-900 dark:text-gray-100"
+                      :title="line.description"
+                    >
+                      <span class="text-gray-500 dark:text-gray-400"
+                        >[{{ formatDate(line.date) }}]</span
+                      >
+                      {{ line.description }}
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                      dû {{ formatCurrency(line.amountDue) }}
+                    </p>
+                  </div>
+                  <div class="flex shrink-0 items-center gap-1">
+                    <BaseField
+                      amount
+                      lazy
+                      size="sm"
+                      label-hidden
+                      :label="`Montant affecté à ${line.description}`"
+                      :model-value="stateOf(line.reimbursementId).amount"
+                      class="w-20 sm:w-24 [&_input]:text-right"
+                      @update:model-value="
+                        value =>
+                          onAmountCommit(
+                            line.reimbursementId,
+                            value as number | null
+                          )
+                      "
                     />
-                    Creation...
-                  </span>
-                  <span v-else>Confirmer le règlement</span>
-                </button>
+                    <span class="text-gray-500 dark:text-gray-400">&euro;</span>
+                  </div>
+                </div>
+
+                <!-- Settle-the-shortfall, only when the line stays short -->
+                <div
+                  v-if="
+                    stateOf(line.reimbursementId).amount > 0 &&
+                    stateOf(line.reimbursementId).amount < line.amountDue
+                  "
+                  class="mt-2"
+                >
+                  <BaseCheckbox
+                    :model-value="stateOf(line.reimbursementId).forceComplete"
+                    :label="`Solder cette ligne malgré l'écart de ${formatCurrency(
+                      round2(
+                        line.amountDue - stateOf(line.reimbursementId).amount
+                      )
+                    )}`"
+                    :aria-label="`Solder ${line.description}`"
+                    @update:model-value="
+                      toggleForceComplete(line.reimbursementId)
+                    "
+                  />
+                </div>
+              </div>
+
+              <div
+                v-if="group.lines.length > 1 && group.allocated > 0"
+                class="px-3 py-1 text-right"
+              >
+                <BaseButton
+                  variant="ghost"
+                  size="sm"
+                  @click="spreadGroupProrata(group)"
+                >
+                  Répartir au prorata
+                </BaseButton>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </Transition>
-  </Teleport>
+    </div>
+
+    <template #footer-start>
+      <!-- Selection total, step 1 only -->
+      <p
+        v-if="currentStep === 1"
+        class="flex items-center justify-between gap-3 text-gray-700 dark:text-gray-300"
+      >
+        <span>{{ selectedLines.length }} remboursement(s) sélectionné(s)</span>
+        <span
+          class="font-semibold text-gray-900 dark:text-gray-100"
+          data-testid="settlement-selection-total"
+        >
+          {{ formatCurrency(selectedDueTotal) }}
+        </span>
+      </p>
+
+      <!-- Running balance, step 2 only -->
+      <p
+        v-else-if="selectedTransaction"
+        class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
+      >
+        <span class="text-gray-700 dark:text-gray-300">
+          Affecté {{ formatCurrency(allocatedTotal) }}
+        </span>
+        <span
+          class="font-semibold"
+          :class="{
+            'text-green-700 dark:text-green-400':
+              Math.abs(remainingToAllocate) < 0.01,
+            'text-amber-700 dark:text-amber-400': remainingToAllocate >= 0.01,
+            'text-red-700 dark:text-red-400': isOverAllocated,
+          }"
+        >
+          <template v-if="isOverAllocated">
+            Dépassement de
+            {{ formatCurrency(Math.abs(remainingToAllocate)) }}
+          </template>
+          <template v-else-if="remainingToAllocate >= 0.01">
+            {{ formatCurrency(remainingToAllocate) }} resteront disponibles sur
+            cette transaction
+          </template>
+          <template v-else>Tout est affecté</template>
+        </span>
+      </p>
+    </template>
+
+    <template #footer>
+      <!-- Step 2 on a phone: the header's cross already closes. -->
+      <BaseButton
+        variant="secondary"
+        :disabled="isSubmitting"
+        :class="currentStep === 2 ? 'max-sm:hidden' : ''"
+        data-testid="settlement-cancel"
+        @click="requestClose"
+      >
+        Annuler
+      </BaseButton>
+      <BaseButton
+        v-if="currentStep === 1"
+        data-testid="settlement-continue"
+        :disabled="!hasSelection"
+        @click="goToReceipt"
+      >
+        Continuer
+      </BaseButton>
+      <BaseButton
+        v-else
+        :disabled="!canConfirm"
+        :loading="isSubmitting"
+        @click="handleConfirm"
+      >
+        Confirmer le règlement
+      </BaseButton>
+    </template>
+  </BaseModal>
 </template>
-
-<style scoped>
-  .modal-enter-active,
-  .modal-leave-active {
-    transition: opacity 0.2s ease;
-  }
-
-  .modal-enter-from,
-  .modal-leave-to {
-    opacity: 0;
-  }
-</style>

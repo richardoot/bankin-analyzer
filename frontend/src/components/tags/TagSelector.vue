@@ -1,6 +1,9 @@
 <script setup lang="ts">
   import { computed, onBeforeUnmount, nextTick, ref, watch } from 'vue'
   import type { TagDto } from '@/lib/api'
+  import IconCheck from '@/components/icons/IconCheck.vue'
+  import IconPlus from '@/components/icons/IconPlus.vue'
+  import IconTag from '@/components/icons/IconTag.vue'
 
   /**
    * Popover to attach/detach tags to an entity (typically a transaction) and to
@@ -13,8 +16,28 @@
       tags: TagDto[]
       /** Disable interactions while a mutation is in flight. */
       busy?: boolean
+      /**
+       * The trigger as a 32px icon button (a tag glyph) instead of the
+       * dashed « Étiquette » pill — the fit of a table row's actions cell.
+       */
+      iconOnly?: boolean | undefined
+      /**
+       * Extra classes for the trigger button, when the caller decides when
+       * it shows — a table row reveals it on hover.
+       */
+      triggerClass?: string | undefined
+      /**
+       * No trigger at all: the panel is opened through `open()` — a phone
+       * row does it from its « … » menu — and still hangs under this root.
+       */
+      hideTrigger?: boolean | undefined
     }>(),
-    { busy: false }
+    {
+      busy: false,
+      iconOnly: false,
+      triggerClass: undefined,
+      hideTrigger: false,
+    }
   )
 
   const emit = defineEmits<{
@@ -23,6 +46,13 @@
     (e: 'create', name: string): void
   }>()
 
+  const TRIGGER_BASE =
+    "relative inline-flex items-center text-gray-500 transition-colors pointer-coarse:before:absolute pointer-coarse:before:content-[''] hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-gray-400"
+  const TRIGGER_PILL =
+    'min-h-[28px] gap-1 rounded-full border border-dashed border-gray-300 px-2 text-xs font-medium pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 hover:border-primary-400 dark:border-slate-600 dark:hover:border-primary-500'
+  const TRIGGER_ICON =
+    'h-8 w-8 justify-center rounded-lg pointer-coarse:before:-inset-1.5 hover:bg-gray-100 dark:hover:bg-slate-700'
+
   const open = ref(false)
   // The panel is 14rem wide; opened near the right edge of a phone it
   // would run off-screen, so it hangs from whichever side has the room.
@@ -30,6 +60,9 @@
   const search = ref('')
   const root = ref<HTMLElement | null>(null)
   const searchInput = ref<HTMLInputElement | null>(null)
+  const trigger = ref<HTMLButtonElement | null>(null)
+  /** Where the keyboard goes back to on Escape: the trigger, or whoever opened the panel. */
+  let opener: HTMLElement | null = null
 
   const selectedSet = computed(() => new Set(props.selectedTagIds))
 
@@ -73,13 +106,46 @@
     }
   }
 
+  /** Escape closes and hands the keyboard back to whoever opened the panel. */
+  function closeFromKeyboard(): void {
+    open.value = false
+    ;(opener ?? trigger.value)?.focus()
+    opener = null
+  }
+
+  /**
+   * Tabbing out of the panel closes it — it used to stay open behind the
+   * focus. A null target is a click on the panel's own padding (or outside,
+   * which the mousedown handler already covers), so it is left alone.
+   */
+  function onFocusOut(e: FocusEvent): void {
+    const next = e.relatedTarget as Node | null
+    if (next && root.value && !root.value.contains(next)) open.value = false
+  }
+
   function toggleOpen(): void {
-    if (!open.value && root.value) {
+    if (open.value) {
+      open.value = false
+      return
+    }
+    openPanel(null)
+  }
+
+  /**
+   * Opens the panel on request — from the row's « … » menu, whose button
+   * the keyboard returns to on Escape. The panel hangs under this
+   * component's root, so it still appears where the tags of the row are.
+   */
+  function openPanel(from: HTMLElement | null): void {
+    if (root.value) {
       const { left } = root.value.getBoundingClientRect()
       alignRight.value = left + 256 > window.innerWidth
     }
-    open.value = !open.value
+    opener = from
+    open.value = true
   }
+
+  defineExpose({ open: openPanel })
 
   watch(open, isOpen => {
     if (isOpen) {
@@ -97,19 +163,32 @@
 </script>
 
 <template>
-  <div ref="root" class="relative inline-block">
+  <div
+    ref="root"
+    class="relative inline-block"
+    @focusout="onFocusOut"
+    @keydown.esc.stop="open && closeFromKeyboard()"
+  >
     <button
+      v-if="!hideTrigger"
+      ref="trigger"
       type="button"
-      class="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-dashed border-gray-300 px-2.5 py-0.5 text-xs font-medium sm:min-h-0 sm:px-2 sm:text-[10px] text-gray-500 hover:border-primary-400 hover:text-primary-600 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary-400 dark:border-slate-600 dark:text-slate-400 dark:hover:border-primary-500"
+      :aria-expanded="open"
+      aria-haspopup="true"
+      :class="[
+        TRIGGER_BASE,
+        iconOnly ? TRIGGER_ICON : TRIGGER_PILL,
+        triggerClass,
+      ]"
       aria-label="Ajouter une étiquette"
+      :title="iconOnly ? 'Ajouter une étiquette' : undefined"
       @click="toggleOpen"
     >
-      <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-        <path
-          d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
-        />
-      </svg>
-      Étiquette
+      <IconTag v-if="iconOnly" class="h-4 w-4" />
+      <template v-else>
+        <IconPlus class="h-3 w-3" :stroke-width="2.5" />
+        Étiquette
+      </template>
     </button>
 
     <div
@@ -122,7 +201,8 @@
         v-model="search"
         type="text"
         placeholder="Rechercher ou créer…"
-        class="mb-2 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-2 text-base text-gray-700 sm:py-1 sm:text-xs focus:border-primary-400 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+        aria-label="Rechercher ou créer une étiquette"
+        class="mb-2 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-2 text-base text-gray-700 sm:py-1 sm:text-xs focus:border-primary-400 focus:outline-none dark:border-slate-600 dark:bg-slate-900 dark:text-gray-200"
         @keydown.enter.prevent="canCreate ? create() : null"
       />
 
@@ -132,27 +212,21 @@
             type="button"
             class="flex min-h-[40px] w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs hover:bg-gray-100 sm:min-h-0 disabled:opacity-50 dark:hover:bg-slate-700"
             :disabled="busy"
+            :aria-pressed="selectedSet.has(tag.id)"
             @click="toggle(tag)"
           >
             <span
               class="inline-block h-2 w-2 shrink-0 rounded-full"
               :style="{ backgroundColor: tag.color ?? '#9ca3af' }"
             ></span>
-            <span class="flex-1 truncate text-gray-700 dark:text-slate-200">{{
+            <span class="flex-1 truncate text-gray-700 dark:text-gray-200">{{
               tag.name
             }}</span>
-            <svg
+            <IconCheck
               v-if="selectedSet.has(tag.id)"
               class="h-3.5 w-3.5 text-primary-500"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path
-                fill-rule="evenodd"
-                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                clip-rule="evenodd"
-              />
-            </svg>
+              :stroke-width="2.5"
+            />
           </button>
         </li>
 
@@ -164,15 +238,11 @@
       <button
         v-if="canCreate"
         type="button"
-        class="mt-1 flex min-h-[40px] w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium text-primary-600 sm:min-h-0 hover:bg-primary-50 disabled:opacity-50 dark:text-primary-400 dark:hover:bg-slate-700"
+        class="mt-1 flex min-h-[40px] w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium text-primary-700 sm:min-h-0 hover:bg-primary-50 disabled:opacity-50 dark:text-primary-400 dark:hover:bg-slate-700"
         :disabled="busy"
         @click="create"
       >
-        <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-          <path
-            d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
-          />
-        </svg>
+        <IconPlus class="h-3.5 w-3.5" />
         Créer « {{ search.trim() }} »
       </button>
     </div>

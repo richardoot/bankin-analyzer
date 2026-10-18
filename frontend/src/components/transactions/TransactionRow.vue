@@ -7,25 +7,50 @@
     TransactionDto,
     TransactionSettlementSummaryDto,
   } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
   import TagChip from '@/components/tags/TagChip.vue'
   import TagSelector from '@/components/tags/TagSelector.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import BaseMenu, { type MenuItem } from '@/components/ui/BaseMenu.vue'
+  import IconArrowPath from '@/components/icons/IconArrowPath.vue'
+  import IconCash from '@/components/icons/IconCash.vue'
+  import IconCheck from '@/components/icons/IconCheck.vue'
+  import IconClock from '@/components/icons/IconClock.vue'
+  import IconClose from '@/components/icons/IconClose.vue'
+  import IconDocumentText from '@/components/icons/IconDocumentText.vue'
+  import IconPencil from '@/components/icons/IconPencil.vue'
+  import IconPlus from '@/components/icons/IconPlus.vue'
+  import IconTag from '@/components/icons/IconTag.vue'
   import TransactionNoteEditor from './TransactionNoteEditor.vue'
   import TransactionReimbursementList from './TransactionReimbursementList.vue'
   import TransactionSettlementLinks from './TransactionSettlementLinks.vue'
+  import { rowGridClass } from './rowGrid'
 
   /**
    * One transaction, one declaration.
    *
-   * The row used to exist twice in the page — a card layout for mobile, a
-   * grid for desktop — and every field, badge and action had to be written
-   * (and fixed) in both. The two arrangements still exist, but side by side
-   * in this file, composing the same leaf pieces (note editor,
-   * reimbursement list, settlement links) declared exactly once.
+   * Two arrangements of the same fields live side by side in this file,
+   * composing the same leaf pieces (note editor, reimbursement list,
+   * settlement links) declared exactly once:
+   *
+   * - below `lg`, a card: two lines, tappable. A tap on the line opens
+   *   the filing dialog — the category is what a transaction gets edited
+   *   for — and the rest of the actions wait behind a « … » menu instead
+   *   of a strip of affordances repeated on every line. The pointed
+   *   toggle stays in view: it is the one quick flip a line has. In
+   *   selection mode a tap ticks the line.
+   * - from `lg`, a table row: the secondary affordances (« + Note »,
+   *   « Étiquette », « Abonnement ») show on hover *and* on focus within
+   *   the row, never on hover alone; what exists (a note, tags, a
+   *   subscription badge, reimbursements) is always drawn.
+   *
+   * Every target reaches 44px on a touch screen, through an invisible halo
+   * where the visible control is smaller.
    *
    * The page stays the orchestrator: it owns the data and the API calls,
-   * and keeps the single-editor / single-expansion invariants (only one row
-   * edits its note at a time). The row owns nothing but its note draft.
+   * and keeps the single-editor / single-expansion invariants (only one
+   * row edits its note at a time). The row owns nothing but its note draft.
    */
   const props = withDefaults(
     defineProps<{
@@ -87,30 +112,36 @@
 
   const isExpense = computed(() => props.transaction.type === 'EXPENSE')
   const isTransfer = computed(() => props.transaction.type === 'TRANSFER')
+  const categoryLabel = computed(
+    () => props.transaction.categoryName || 'Sans catégorie'
+  )
 
-  /** Red for spending, green for earning, grey for money merely moving. */
+  /**
+   * Red for spending, green for earning, grey for money merely moving —
+   * the amount, the mobile icon and the desktop pill all say the same.
+   */
   const amountClass = computed(() =>
     isTransfer.value
       ? 'text-gray-500 dark:text-gray-400'
       : isExpense.value
-        ? 'text-red-600 dark:text-red-500'
-        : 'text-green-600 dark:text-green-500'
+        ? 'text-red-600 dark:text-red-400'
+        : 'text-green-700 dark:text-green-400'
   )
   const iconClass = computed(() =>
     !props.transaction.categoryName
       ? 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
       : isTransfer.value
-        ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+        ? 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200'
         : isExpense.value
           ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-          : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+          : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
   )
   /** The desktop category pill, in the same palette as the mobile icon. */
   const categoryPillClass = computed(() =>
     !props.transaction.categoryName
       ? 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
       : isTransfer.value
-        ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50'
+        ? 'bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'
         : isExpense.value
           ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
           : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
@@ -126,52 +157,180 @@
 
   const tagIds = computed(() => (props.transaction.tags ?? []).map(t => t.id))
 
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
+  /**
+   * A desktop affordance that waits for the row to be hovered — or to
+   * hold the focus, so the keyboard sees exactly what the mouse sees.
+   */
+  const REVEAL_ON_HOVER =
+    'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 aria-expanded:opacity-100'
+
+  const canAssign = computed(() => isExpense.value && props.remainingAmount > 0)
+  const canFollow = computed(
+    () => isExpense.value && !props.transaction.recurrence
+  )
+
+  /** Whether the tags line has something to show on a phone. */
+  const hasTagLineContent = computed(
+    () =>
+      Boolean(props.transaction.recurrence) ||
+      (props.transaction.tags ?? []).length > 0
+  )
+
+  // ── The « … » menu of the card (below lg) ──
+  const tagSelector = ref<InstanceType<typeof TagSelector> | null>(null)
+  const menu = ref<InstanceType<typeof BaseMenu> | null>(null)
+
+  const menuItems = computed<MenuItem[]>(() => {
+    const items: MenuItem[] = [
+      {
+        key: 'category',
+        label: 'Modifier la catégorie',
+        icon: IconPencil,
+        testId: 'row-menu-category',
+      },
+      {
+        key: 'note',
+        label: props.transaction.note ? 'Modifier la note' : 'Ajouter une note',
+        icon: IconDocumentText,
+        testId: 'row-menu-note',
+      },
+    ]
+    if (canAssign.value) {
+      items.push({
+        key: 'reimbursement',
+        label: 'Ajouter un remboursement',
+        icon: IconCash,
+        testId: 'row-menu-reimbursement',
+      })
+    }
+    items.push({
+      key: 'tag',
+      label: 'Ajouter une étiquette',
+      icon: IconTag,
+      testId: 'row-menu-tag',
     })
+    if (canFollow.value) {
+      items.push({
+        key: 'recurring',
+        label: 'Suivre comme abonnement',
+        icon: IconArrowPath,
+        testId: 'row-menu-recurring',
+      })
+    }
+    if (props.transaction.recurrence?.linked) {
+      items.push({
+        key: 'unlink',
+        label: "Détacher de l'abonnement",
+        icon: IconClose,
+        danger: true,
+        testId: 'row-menu-unlink',
+      })
+    }
+    return items
+  })
+
+  function onMenuSelect(key: string): void {
+    switch (key) {
+      case 'category':
+        emit('open-category')
+        break
+      case 'note':
+        emit('start-note')
+        break
+      case 'reimbursement':
+        emit('open-reimbursement')
+        break
+      case 'tag':
+        // The panel hangs under the tags line; Escape returns to the menu.
+        tagSelector.value?.open(
+          (menu.value?.$el as HTMLElement | undefined)?.querySelector(
+            'button'
+          ) ?? null
+        )
+        break
+      case 'recurring':
+        emit('mark-recurring')
+        break
+      case 'unlink':
+        emit('unlink-recurrence')
+        break
+      default:
+        break
+    }
+  }
+
+  // ── The tappable line ──
+  /**
+   * A tap on the line's quiet area is the primary action; a tap on any
+   * control inside it is that control's. Checked by walking up from the
+   * target rather than stopping propagation on each button, so a new
+   * control cannot forget to.
+   */
+  function isInteractive(target: EventTarget | null): boolean {
+    return (
+      target instanceof Element &&
+      target.closest('button, a, input, select, textarea, [role="menu"]') !==
+        null
+    )
+  }
+
+  function onCardClick(event: MouseEvent): void {
+    if (isInteractive(event.target)) return
+    if (props.selectionMode) emit('toggle-select')
+    else if (!props.isEditingNote) emit('open-category')
+  }
+
+  function onGridClick(event: MouseEvent): void {
+    if (!props.selectionMode || isInteractive(event.target)) return
+    emit('toggle-select')
   }
 </script>
 
 <template>
   <div
-    class="border-l-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+    class="group border-l-4 px-4 py-2.5 transition-colors hover:bg-gray-50 lg:py-3 dark:hover:bg-slate-800"
     :class="{
       'bg-primary-50/50 dark:bg-primary-900/10': selectionMode && selected,
-      // A subscription line reads apart at a glance: an indigo edge while
-      // it runs, a grey one once it has ended.
-      'border-indigo-400 dark:border-indigo-500':
+      // A subscription line reads apart at a glance: a blue edge while
+      // it runs, a grey one once it has ended. The left edge only: the
+      // divider below the row keeps the list's colour.
+      'border-l-blue-400 dark:border-l-blue-500':
         transaction.recurrence?.status === 'ACTIVE',
-      'border-gray-300 dark:border-slate-600':
+      'border-l-gray-300 dark:border-l-slate-600':
         transaction.recurrence?.status === 'STOPPED',
-      'border-transparent': !transaction.recurrence,
+      'border-l-transparent': !transaction.recurrence,
     }"
     :data-recurring="transaction.recurrence ? 'true' : undefined"
   >
-    <!-- ==================== MOBILE CARD LAYOUT ==================== -->
-    <div class="block md:hidden">
-      <!-- ── Compact row: icon + description + amount ── -->
-      <div class="flex items-center gap-3 min-h-[52px]">
-        <!-- Selection checkbox (replaces icon in selection mode) -->
+    <!-- ==================== CARD (below lg) ==================== -->
+    <div
+      class="lg:hidden"
+      :class="selectionMode || !isEditingNote ? 'cursor-pointer' : ''"
+      data-testid="row-card"
+      @click="onCardClick"
+    >
+      <div class="flex items-center gap-3">
+        <!-- Selection checkbox (replaces the icon in selection mode) -->
         <div
           v-if="selectionMode"
-          class="flex items-center justify-center w-9 h-9 shrink-0"
+          class="flex h-9 w-9 shrink-0 items-center justify-center"
         >
           <input
             type="checkbox"
             :checked="selected"
-            class="h-5 w-5 text-primary-600 dark:text-primary-500 border-gray-300 dark:border-slate-600 rounded focus:ring-primary-500 dark:bg-slate-700"
+            :aria-label="`Sélectionner ${transaction.description}`"
+            class="h-5 w-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-700 dark:text-primary-400"
             @change="emit('toggle-select')"
           />
         </div>
 
-        <!-- Category icon -->
+        <!-- Category icon: the same action as the line, made explicit -->
         <button
           v-else
-          class="flex items-center justify-center w-9 h-9 rounded-xl text-sm shrink-0 transition-colors"
+          type="button"
+          class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm transition-colors pointer-coarse:before:absolute pointer-coarse:before:-inset-1 pointer-coarse:before:content-['']"
           :class="iconClass"
+          :aria-label="`Catégorie : ${categoryLabel}, modifier`"
           @click="emit('open-category')"
         >
           {{
@@ -183,66 +342,58 @@
         </button>
 
         <!-- Description + meta line -->
-        <div class="flex-1 min-w-0">
+        <div class="min-w-0 flex-1">
           <div class="flex items-baseline justify-between gap-2">
             <span
-              class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
+              class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+              :title="transaction.description"
             >
               {{ transaction.description }}
             </span>
-            <span class="text-sm font-semibold shrink-0" :class="amountClass">
+            <span class="shrink-0 text-sm font-semibold" :class="amountClass">
               {{ formatCurrency(transaction.amount) }}
             </span>
           </div>
-          <div class="flex items-center justify-between mt-0.5">
-            <div class="flex items-center gap-1.5 min-w-0">
-              <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0">
-                {{ formatDate(transaction.date) }}
-              </span>
-              <span class="text-xs text-gray-300 dark:text-gray-600 shrink-0"
+          <div class="flex items-center justify-between gap-2">
+            <div
+              class="flex min-w-0 items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400"
+            >
+              <span class="shrink-0">{{ formatDate(transaction.date) }}</span>
+              <span class="text-gray-300 dark:text-gray-600" aria-hidden="true"
                 >&middot;</span
               >
               <button
-                class="relative truncate text-xs text-gray-500 transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-3 pointer-coarse:before:content-[''] hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
+                type="button"
+                class="relative min-w-0 truncate transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-3.5 pointer-coarse:before:content-[''] hover:text-gray-700 dark:hover:text-gray-300"
+                :title="categoryLabel"
                 @click="emit('open-category')"
               >
-                {{ transaction.categoryName || 'Sans catégorie' }}
+                {{ categoryLabel }}
               </button>
               <!-- Reimbursement inline badge -->
               <template v-if="isExpense && reimbursements.length > 0">
-                <span class="text-xs text-gray-300 dark:text-gray-600 shrink-0"
+                <span
+                  class="text-gray-300 dark:text-gray-600"
+                  aria-hidden="true"
                   >&middot;</span
                 >
                 <button
-                  class="inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded-full text-[11px] font-medium transition-colors"
+                  type="button"
+                  class="relative inline-flex min-h-[24px] shrink-0 items-center gap-1 rounded-full px-1.5 text-[11px] font-medium transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2.5 pointer-coarse:before:content-['']"
                   :class="
                     reimbursementSummary.allCompleted
-                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                      : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                      : 'bg-debt-100 dark:bg-debt-900/30 text-debt-700 dark:text-debt-300'
                   "
+                  :aria-expanded="reimbursementsExpanded"
                   @click="emit('toggle-reimbursements')"
                 >
-                  <svg
-                    class="w-3 h-3"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      v-if="reimbursementSummary.allCompleted"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2.5"
-                      d="M5 13l4 4L19 7"
-                    />
-                    <path
-                      v-else
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
+                  <IconCheck
+                    v-if="reimbursementSummary.allCompleted"
+                    class="h-3 w-3"
+                    :stroke-width="2.5"
+                  />
+                  <IconClock v-else class="h-3 w-3" />
                   <span v-if="reimbursementSummary.allCompleted"
                     >Remboursé</span
                   >
@@ -253,33 +404,42 @@
                 </button>
               </template>
             </div>
-            <!-- Pointed toggle -->
-            <button
-              class="relative -my-1 -mr-1.5 ml-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors pointer-coarse:before:absolute pointer-coarse:before:-inset-1 pointer-coarse:before:content-['']"
-              :class="
-                transaction.isPointed
-                  ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
-                  : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'
-              "
-              :title="transaction.isPointed ? 'Depointer' : 'Pointer'"
-              @click="emit('toggle-pointed')"
-            >
-              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fill-rule="evenodd"
-                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-            </button>
+
+            <!-- Pointed toggle + the actions on demand -->
+            <div class="-my-1 -mr-2 flex shrink-0 items-center gap-0.5">
+              <button
+                type="button"
+                class="relative flex h-8 w-8 items-center justify-center rounded-lg transition-colors pointer-coarse:before:absolute pointer-coarse:before:-inset-1.5 pointer-coarse:before:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                :class="
+                  transaction.isPointed
+                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+                    : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-slate-700'
+                "
+                :title="transaction.isPointed ? 'Dépointer' : 'Pointer'"
+                :aria-label="transaction.isPointed ? 'Dépointer' : 'Pointer'"
+                @click="emit('toggle-pointed')"
+              >
+                <IconCheck class="h-4 w-4" :stroke-width="2.5" />
+              </button>
+              <BaseMenu
+                v-if="!selectionMode"
+                ref="menu"
+                label="Autres actions"
+                :items="menuItems"
+                data-testid="row-menu"
+                @select="onMenuSelect"
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- ── Inline note (shown only if exists or editing) ── -->
-      <div v-if="transaction.note && !isEditingNote" class="ml-12 mt-0.5">
+      <!-- ── The note, when there is one (tap to edit) ── -->
+      <div v-if="transaction.note && !isEditingNote" class="ml-12">
         <button
-          class="text-xs text-gray-500 dark:text-gray-400 italic truncate max-w-full text-left"
+          type="button"
+          class="relative block max-w-full truncate text-left text-xs italic text-gray-500 pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-3.5 pointer-coarse:before:content-[''] hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+          :title="transaction.note"
           @click="emit('start-note')"
         >
           {{ transaction.note }}
@@ -287,7 +447,7 @@
       </div>
 
       <!-- Note editor -->
-      <div v-if="isEditingNote" class="mt-1.5">
+      <div v-if="isEditingNote" class="ml-12 mt-1.5">
         <TransactionNoteEditor
           v-model="noteDraft"
           dense
@@ -296,35 +456,12 @@
         />
       </div>
 
-      <!-- ── Quick action bar (contextual, compact) ── -->
-      <div v-if="!selectionMode" class="ml-10 mt-0.5 flex items-center gap-1">
-        <!-- Add note -->
-        <button
-          v-if="!transaction.note && !isEditingNote"
-          class="inline-flex min-h-[36px] items-center rounded px-2.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-700"
-          @click="emit('start-note')"
-        >
-          + Note
-        </button>
-        <!-- Assign reimbursement -->
-        <button
-          v-if="isExpense && remainingAmount > 0"
-          class="inline-flex min-h-[36px] items-center rounded px-2.5 text-xs text-amber-600 transition-colors hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20"
-          @click="emit('open-reimbursement')"
-        >
-          + Remb.
-        </button>
-        <span
-          v-else-if="
-            isExpense && reimbursements.length > 0 && remainingAmount <= 0
-          "
-          class="inline-flex min-h-[36px] items-center px-2.5 text-xs text-green-500 dark:text-green-400"
-        >
-          Assigne
-        </span>
-        <!-- Settlement links (one per person settled by this income) -->
+      <!-- Settlement links (one per person settled by this income) -->
+      <div
+        v-if="transaction.type === 'INCOME' && transaction.settlements?.length"
+        class="ml-10 mt-0.5 flex flex-wrap items-center gap-1"
+      >
         <TransactionSettlementLinks
-          v-if="transaction.type === 'INCOME' && transaction.settlements"
           :settlements="transaction.settlements"
           :disabled="settlementLoading"
           dense
@@ -335,7 +472,7 @@
       <!-- ── Expanded reimbursements ── -->
       <div
         v-if="isExpense && reimbursementsExpanded && reimbursements.length > 0"
-        class="mt-1.5"
+        class="ml-12 mt-1.5"
       >
         <TransactionReimbursementList
           :reimbursements="reimbursements"
@@ -345,36 +482,43 @@
       </div>
     </div>
 
-    <!-- ==================== DESKTOP GRID LAYOUT ==================== -->
+    <!-- ==================== TABLE ROW (lg and up) ==================== -->
     <div
-      class="hidden md:grid gap-2 items-center"
-      :class="selectionMode ? 'grid-cols-12' : 'grid-cols-11'"
+      class="hidden items-center gap-2 lg:grid"
+      :class="[
+        rowGridClass(selectionMode),
+        selectionMode ? 'cursor-pointer' : '',
+      ]"
+      data-testid="row-grid"
+      @click="onGridClick"
     >
       <!-- Checkbox -->
-      <div v-if="selectionMode" class="col-span-1 flex items-center">
+      <div v-if="selectionMode" class="flex items-center">
         <input
           type="checkbox"
           :checked="selected"
-          class="h-4 w-4 text-primary-600 dark:text-primary-500 border-gray-300 dark:border-slate-600 rounded focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
+          :aria-label="`Sélectionner ${transaction.description}`"
+          class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-700 dark:text-primary-400"
           data-testid="select-row-desktop"
           @change="emit('toggle-select')"
         />
       </div>
 
       <!-- Date -->
-      <div class="col-span-1 text-sm text-gray-600 dark:text-gray-400">
+      <div class="text-sm tabular-nums text-gray-600 dark:text-gray-400">
         {{ formatDate(transaction.date) }}
       </div>
 
       <!-- Description -->
       <div
-        class="col-span-3 text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
+        class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+        :title="transaction.description"
       >
         {{ transaction.description }}
       </div>
 
-      <!-- Note (editable) -->
-      <div class="col-span-2">
+      <!-- Note (editable); the « + Note » affordance shows on hover or focus -->
+      <div class="min-w-0">
         <TransactionNoteEditor
           v-if="isEditingNote"
           v-model="noteDraft"
@@ -383,8 +527,9 @@
         />
         <button
           v-else
-          class="w-full text-left text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 truncate group"
-          :title="transaction.note ?? 'Cliquer pour ajouter une note'"
+          type="button"
+          class="block w-full truncate rounded text-left text-sm text-gray-500 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-gray-400 dark:hover:text-gray-300"
+          :title="transaction.note ?? 'Ajouter une note'"
           @click="emit('start-note')"
         >
           <span v-if="transaction.note" class="block truncate">{{
@@ -392,110 +537,82 @@
           }}</span>
           <span
             v-else
-            class="text-gray-300 dark:text-gray-600 group-hover:text-gray-400 dark:group-hover:text-gray-500"
+            class="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
             >+ Note</span
           >
         </button>
       </div>
 
       <!-- Amount -->
-      <div class="col-span-1 text-sm font-semibold text-right">
+      <div class="text-right text-sm font-semibold tabular-nums">
         <span :class="amountClass">
           {{ formatCurrency(transaction.amount) }}
         </span>
       </div>
 
       <!-- Category (clickable to open modal) -->
-      <div class="col-span-2">
+      <div class="min-w-0">
         <button
-          class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full transition-colors"
+          type="button"
+          class="inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1"
           :class="categoryPillClass"
+          :title="`${categoryLabel} — modifier`"
           @click="emit('open-category')"
         >
-          {{ transaction.categoryIcon ? transaction.categoryIcon + ' ' : ''
-          }}{{ transaction.categoryName || 'Sans catégorie' }}
-          <svg
-            class="h-3 w-3 opacity-50"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+          <span class="truncate"
+            >{{ transaction.categoryIcon ? transaction.categoryIcon + ' ' : ''
+            }}{{ categoryLabel }}</span
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-            />
-          </svg>
+          <IconPencil class="h-3 w-3 shrink-0 opacity-50" />
         </button>
       </div>
 
       <!-- Pointed status (toggle) -->
-      <div class="col-span-1 flex justify-center">
+      <div class="flex justify-center">
         <button
-          class="p-1 rounded-full transition-colors"
+          type="button"
+          class="relative flex h-8 w-8 items-center justify-center rounded-full transition-colors pointer-coarse:before:absolute pointer-coarse:before:-inset-1.5 pointer-coarse:before:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
           :class="
             transaction.isPointed
-              ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
-              : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-600'
+              ? 'bg-primary-100 text-primary-700 hover:bg-primary-200 dark:bg-primary-900/30 dark:text-primary-400 dark:hover:bg-primary-900/50'
+              : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-400 dark:hover:bg-slate-600'
           "
-          :title="transaction.isPointed ? 'Depointer' : 'Pointer'"
+          :title="transaction.isPointed ? 'Dépointer' : 'Pointer'"
+          :aria-label="transaction.isPointed ? 'Dépointer' : 'Pointer'"
           @click="emit('toggle-pointed')"
         >
-          <svg
+          <IconCheck
             v-if="transaction.isPointed"
-            class="h-5 w-5"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <path
-              fill-rule="evenodd"
-              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-              clip-rule="evenodd"
-            />
-          </svg>
-          <svg v-else class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fill-rule="evenodd"
-              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-              clip-rule="evenodd"
-            />
-          </svg>
+            class="h-4 w-4"
+            :stroke-width="2.5"
+          />
+          <IconClose v-else class="h-4 w-4" />
         </button>
       </div>
 
-      <!-- Actions -->
-      <div class="col-span-1 flex justify-center">
-        <button
-          v-if="isExpense && remainingAmount > 0"
-          class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+      <!-- Actions: the primary one always drawn, the secondary ones
+           (étiquette, abonnement) on hover or focus within the row -->
+      <div class="flex items-center justify-end gap-1">
+        <BaseButton
+          v-if="canAssign"
+          size="sm"
+          variant="tinted"
+          class="whitespace-nowrap"
           @click="emit('open-reimbursement')"
         >
-          <svg
-            class="h-3.5 w-3.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
+          <IconPlus class="h-3.5 w-3.5" />
           Assigner
-        </button>
+        </BaseButton>
         <span
           v-else-if="isExpense"
-          class="text-xs text-green-600 dark:text-green-400 font-medium"
+          class="px-2 text-xs font-medium text-gray-500 dark:text-gray-400"
         >
-          Assigne
+          Assigné
         </span>
         <!-- Settlement links (one per person settled by this income) -->
         <div
           v-else-if="transaction.type === 'INCOME' && transaction.settlements"
-          class="flex flex-wrap justify-center gap-1"
+          class="flex flex-wrap justify-end gap-1"
         >
           <TransactionSettlementLinks
             :settlements="transaction.settlements"
@@ -503,68 +620,81 @@
             @open="s => emit('open-settlement', s)"
           />
         </div>
+        <TagSelector
+          v-if="!selectionMode"
+          :selected-tag-ids="tagIds"
+          :tags="allTags"
+          icon-only
+          :trigger-class="REVEAL_ON_HOVER"
+          @attach="id => emit('attach-tag', id)"
+          @detach="id => emit('detach-tag', id)"
+          @create="name => emit('create-tag', name)"
+        />
+        <!-- Follow as a subscription: for a charge detection cannot see
+             yet, an annual plan paid once. -->
+        <BaseIconButton
+          v-if="canFollow && !selectionMode"
+          size="sm"
+          label="Suivre comme abonnement"
+          :class="REVEAL_ON_HOVER"
+          data-testid="mark-recurring"
+          @click="emit('mark-recurring')"
+        >
+          <IconArrowPath />
+        </BaseIconButton>
+        <!-- Keeps « Assigner » in the same place on rows that cannot be
+             followed (already a subscription, income). -->
+        <span
+          v-else-if="!selectionMode"
+          aria-hidden="true"
+          class="h-8 w-8 shrink-0"
+          data-testid="mark-recurring-placeholder"
+        />
       </div>
     </div>
 
-    <!-- Tags line (both layouts) -->
-    <div class="flex flex-wrap items-center gap-1.5 mt-2 ml-12 md:ml-2">
+    <!--
+      Tags line (both layouts), drawn only when it has something to show:
+      the subscription badge, the tags. The phone's tag picker also hangs
+      here, its trigger hidden: the « … » menu opens it, and its panel then
+      appears where the tags are.
+    -->
+    <div
+      class="flex flex-wrap items-center gap-1.5 ml-12 lg:ml-2"
+      :class="hasTagLineContent ? 'mt-1.5 lg:mt-2' : ''"
+      data-testid="row-tags"
+    >
       <button
         v-if="transaction.recurrence"
         type="button"
-        class="inline-flex min-h-[28px] items-center gap-1 rounded-full px-2 text-xs font-medium transition-colors"
+        class="relative inline-flex min-h-[28px] items-center gap-1 rounded-full px-2 text-xs font-medium transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 pointer-coarse:before:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         :class="
           transaction.recurrence.status === 'ACTIVE'
-            ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50'
+            ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50'
             : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600'
         "
         :title="`Voir toutes les échéances de ${transaction.recurrence.label}`"
         data-testid="recurrence-badge"
         @click="emit('show-recurrence')"
       >
-        <svg
-          class="h-3.5 w-3.5"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
-          />
-        </svg>
+        <IconArrowPath class="h-3.5 w-3.5" />
         {{ transaction.recurrence.name }} ·
         {{ RECURRENCE_PERIOD_LABELS[transaction.recurrence.period] }}
         <template v-if="transaction.recurrence.status === 'STOPPED'">
           · terminé
         </template>
       </button>
-      <button
+      <BaseIconButton
         v-if="transaction.recurrence?.linked && !selectionMode"
-        type="button"
-        class="inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-slate-700 dark:hover:text-red-400"
-        :aria-label="`Détacher de ${transaction.recurrence.name}`"
-        title="Détacher de l'abonnement"
+        size="sm"
+        variant="danger"
+        class="max-lg:hidden"
+        :label="`Détacher de ${transaction.recurrence.name}`"
         data-testid="unlink-recurrence"
         @click="emit('unlink-recurrence')"
       >
-        <svg
-          class="h-3.5 w-3.5"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M6 18 18 6M6 6l12 12"
-          />
-        </svg>
-      </button>
+        <IconClose />
+      </BaseIconButton>
       <TagChip
         v-for="t in transaction.tags ?? []"
         :key="t.id"
@@ -577,44 +707,21 @@
       />
       <TagSelector
         v-if="!selectionMode"
+        ref="tagSelector"
+        class="lg:hidden"
         :selected-tag-ids="tagIds"
         :tags="allTags"
+        hide-trigger
         @attach="id => emit('attach-tag', id)"
         @detach="id => emit('detach-tag', id)"
         @create="name => emit('create-tag', name)"
       />
-      <!-- Follow as a subscription: for a charge detection cannot see yet,
-           an annual plan paid once. -->
-      <button
-        v-if="isExpense && !selectionMode && !transaction.recurrence"
-        type="button"
-        class="inline-flex min-h-[28px] items-center gap-1 rounded-full px-2 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-slate-700"
-        title="Suivre comme abonnement"
-        data-testid="mark-recurring"
-        @click="emit('mark-recurring')"
-      >
-        <svg
-          class="h-3.5 w-3.5"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
-          />
-        </svg>
-        Abonnement
-      </button>
     </div>
 
-    <!-- Reimbursements for this transaction (desktop only; mobile expands on demand) -->
+    <!-- Reimbursements for this transaction (table only; the card expands on demand) -->
     <div
       v-if="isExpense && reimbursements.length > 0"
-      class="hidden md:block mt-2 ml-4 md:ml-8"
+      class="hidden lg:block mt-2 ml-8"
     >
       <TransactionReimbursementList
         :reimbursements="reimbursements"

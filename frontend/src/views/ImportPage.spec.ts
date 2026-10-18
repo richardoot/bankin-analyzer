@@ -35,10 +35,11 @@ const router = createRouter({
     { path: '/', name: 'home', component: { template: '<div>Home</div>' } },
     { path: '/import', name: 'import', component: ImportPage },
     {
-      path: '/import/recap',
+      path: '/import/recap/:id',
       name: 'import-recap',
       component: { template: '<div>Recap</div>' },
     },
+    { path: '/accounts', name: 'accounts', component: { template: '<div />' } },
   ],
 })
 
@@ -150,7 +151,7 @@ describe('ImportPage', () => {
 
       // Should have both expense (red) and income (green) amounts
       expect(wrapper.html()).toContain('text-red-600') // expense
-      expect(wrapper.html()).toContain('text-green-600') // income
+      expect(wrapper.html()).toContain('text-green-700') // income
     })
 
     it('should convert Oui/Non to boolean isPointed', async () => {
@@ -346,6 +347,49 @@ Attente Remb. Chloé";"Oui"
   })
 
   describe('import submission', () => {
+    it('frees the button and says why when the import cannot start', async () => {
+      const csvContent = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
+"15/01/2024";"Test";"Compte";"-50.00";"Cat";"Sub";"";"Oui"`
+      vi.mocked(api.previewImport).mockResolvedValue({
+        newCount: 1,
+        internalDuplicateCount: 0,
+        externalDuplicateCount: 0,
+        total: 1,
+        internalDuplicates: [],
+        externalDuplicates: [],
+      })
+      vi.mocked(api.startImport).mockRejectedValue(
+        new Error("Impossible de démarrer l'import")
+      )
+
+      const wrapper = mount(ImportPage, { global: { plugins: [router] } })
+      const file = new File([csvContent], 'export.CSV', { type: 'text/csv' })
+      const input = wrapper.find('input[type="file"]')
+      Object.defineProperty(input.element, 'files', { value: [file] })
+      await input.trigger('change')
+      await flushPromises()
+
+      // An upper-case extension is still a CSV.
+      expect(wrapper.text()).toContain("Aperçu de l'import")
+
+      const submit = wrapper
+        .findAll('button')
+        .find(b => b.text().startsWith('Importer'))
+      await submit?.trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain("Impossible de démarrer l'import")
+      expect(wrapper.text()).not.toContain('Import en cours')
+      expect(api.importTransactions).not.toHaveBeenCalled()
+    })
+
+    it('keeps the file input reachable from the keyboard', () => {
+      const wrapper = mount(ImportPage, { global: { plugins: [router] } })
+      const input = wrapper.get('[data-testid="import-file-input"]')
+      expect(input.classes()).toContain('sr-only')
+      expect(input.classes()).not.toContain('hidden')
+    })
+
     it('should call API and navigate to recap on successful import', async () => {
       const csvContent = `Date;Description;Compte;Montant;Catégorie;Sous-Catégorie;Note;Pointée
 "15/01/2024";"Test";"Compte";"-50.00";"Cat";"Sub";"";"Oui"`

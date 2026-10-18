@@ -143,7 +143,7 @@ describe('SingleSettlementModal', () => {
     const wrapper = await mountModal()
 
     // No stepper, no selection: the line is already known.
-    expect(wrapper.text()).not.toContain('etape 1 sur 2')
+    expect(wrapper.text()).not.toContain('étape 1 sur 2')
     expect(api.getTransactions).toHaveBeenCalledWith({
       type: 'INCOME',
       limit: 100,
@@ -263,7 +263,9 @@ describe('SingleSettlementModal', () => {
     })
 
     await pickFirstTransaction(wrapper)
-    const field = wrapper.get('#single-settlement-amount')
+    const field = wrapper.get(
+      '[data-testid="single-settlement-recap"] input[inputmode="decimal"]'
+    )
     await field.setValue('120')
     await field.trigger('change')
     await flushPromises()
@@ -273,6 +275,28 @@ describe('SingleSettlementModal', () => {
 
     expect(submittedLines()).toEqual([
       { reimbursementId: 'r-carrefour', amountSettled: 30 },
+    ])
+  })
+
+  it('reads an amount typed with a comma', async () => {
+    const wrapper = await mountModal({
+      income: [makeIncome({ amount: 500 })],
+    })
+
+    await pickFirstTransaction(wrapper)
+    const field = wrapper.get(
+      '[data-testid="single-settlement-recap"] input[inputmode="decimal"]'
+    )
+    expect(field.attributes('inputmode')).toBe('decimal')
+    await field.setValue('12,5')
+    await field.trigger('change')
+    await flushPromises()
+
+    await confirmButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(submittedLines()).toEqual([
+      { reimbursementId: 'r-carrefour', amountSettled: 12.5 },
     ])
   })
 })

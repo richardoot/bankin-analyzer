@@ -36,6 +36,11 @@
   import ReassignAccountModal from '@/components/settings/ReassignAccountModal.vue'
   import type { PendingReassignment } from '@/components/settings/ReassignAccountModal.vue'
   import EnableBankingCredentialCard from '@/components/settings/EnableBankingCredentialCard.vue'
+  import { formatDate } from '@/lib/formatters'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
+  import StepIndicator from '@/components/ui/StepIndicator.vue'
 
   const accountsStore = useAccountsStore()
   const toast = useToast()
@@ -52,6 +57,51 @@
   >([])
 
   const { isLoading, error, run } = useAsyncAction()
+
+  /**
+   * The bank onboarding, in three steps the page walks through: an Enable
+   * Banking application, a bank connected, an account read. Which one is
+   * next is read from the data, and once every step is behind, the trail
+   * disappears and the accounts come first — the developer block, needed
+   * once, folds to the bottom.
+   */
+  const ONBOARDING_STEPS = [
+    'Application Enable Banking',
+    'Connecter une banque',
+    'Choisir les comptes à lire',
+  ]
+  const onboardingStep = computed<number | null>(() => {
+    if (configured.value === null) return null
+    if (!configured.value) return 1
+    if (connections.value.length === 0) return 2
+    const anyIngested = connections.value.some(c =>
+      c.accounts.some(a => a.isIngested)
+    )
+    return anyIngested ? null : 3
+  })
+  const isOnboarding = computed(() => onboardingStep.value !== null)
+
+  /**
+   * Two accounts whose names differ only by case, accents or spacing are
+   * almost certainly one account twice: the duplicates notice is for them,
+   * and for nobody else.
+   */
+  function normalizeName(name: string): string {
+    return name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+  const likelyDuplicates = computed(() => {
+    const groups = new Map<string, string[]>()
+    for (const account of accountsStore.sortedAccounts) {
+      const key = normalizeName(account.name)
+      groups.set(key, [...(groups.get(key) ?? []), account.name])
+    }
+    return [...groups.values()].filter(names => names.length > 1)
+  })
 
   /**
    * One round of fetching, shared by the first load and every refresh.
@@ -310,6 +360,29 @@
     }
   }
 
+  /**
+   * A lapsed consent is renewed at the bank, the same way it was first
+   * given: one departure at a time.
+   */
+  const renewing = ref<string | null>(null)
+
+  async function renewConsent(connection: BankConnectionDto): Promise<void> {
+    if (renewing.value) return
+    renewing.value = connection.id
+    try {
+      const { url } = await api.startBankAuthorization({
+        aspspName: connection.aspspName,
+        redirectUrl: `${window.location.origin}/bank-callback`,
+      })
+      window.location.href = url
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Renouvellement impossible'
+      )
+      renewing.value = null
+    }
+  }
+
   async function synchronise(connection: BankConnectionDto): Promise<void> {
     syncing.value = connection.id
     try {
@@ -369,19 +442,55 @@
         Chargement…
       </p>
 
-      <p
+      <InlineAlert
         v-else-if="error"
-        class="rounded-lg bg-red-50 p-4 text-red-700 dark:bg-red-900/20 dark:text-red-300"
+        data-testid="accounts-settings-error"
+        retry-label="Réessayer"
+        retry-test-id="accounts-settings-retry"
+        @retry="load"
       >
         {{ error }}
-      </p>
+      </InlineAlert>
 
       <template v-else>
+        <!-- The way in, while it is not done: which of the three steps
+             comes next, read from the data. -->
+        <div
+          v-if="isOnboarding"
+          class="mb-6 rounded-xl bg-gray-50 p-4 dark:bg-slate-800"
+          data-testid="bank-onboarding"
+        >
+          <StepIndicator
+            :steps="ONBOARDING_STEPS"
+            :current="onboardingStep ?? 1"
+          />
+          <p
+            class="mt-3 text-center text-sm text-gray-600 dark:text-gray-400"
+            data-testid="bank-onboarding-hint"
+          >
+            <template v-if="onboardingStep === 1">
+              La synchronisation se fait au nom de votre propre application
+              Enable Banking : créez-la, puis enregistrez-la ci-dessous.
+            </template>
+            <template v-else-if="onboardingStep === 2">
+              Application enregistrée. Choisissez votre banque ci-dessous : vous
+              l'autoriserez chez elle, puis reviendrez ici.
+            </template>
+            <template v-else>
+              Banque connectée. Il reste à dire quels comptes lire : chacun
+              arrive éteint, pour qu'une carte ne compte pas ses achats deux
+              fois.
+            </template>
+          </p>
+        </div>
+
         <!-- Nothing else bank-related is offered until this user has their
              own application: a "Connecter" button that only produces a
              puzzling failure is worse than no button. The accounts
-             themselves are still fully manageable either way. -->
-        <div class="mb-8">
+             themselves are still fully manageable either way. The block
+             leads while it is the next step, and folds to the bottom once
+             the application exists. -->
+        <div v-if="!configured" class="mb-8">
           <EnableBankingCredentialCard @changed="refresh" />
         </div>
 
@@ -390,17 +499,12 @@
             class="mb-8 flex flex-wrap items-end gap-3 rounded-xl bg-gray-50 p-4 dark:bg-slate-800"
           >
             <div class="min-w-0 flex-1 basis-56">
-              <label
-                for="bank-picker"
-                class="text-sm font-medium text-gray-700 dark:text-gray-300"
-              >
-                Connecter une banque
-              </label>
-              <select
-                id="bank-picker"
+              <BaseField
                 v-model="chosenBank"
+                as="select"
+                size="sm"
+                label="Connecter une banque"
                 data-testid="bank-picker"
-                class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100"
               >
                 <option value="">— choisir —</option>
                 <option
@@ -410,17 +514,17 @@
                 >
                   {{ bank.name }}{{ bank.beta ? ' (beta)' : '' }}
                 </option>
-              </select>
+              </BaseField>
             </div>
-            <button
-              type="button"
+            <BaseButton
               data-testid="connect-button"
-              :disabled="!chosenBank || connecting"
-              class="min-h-[44px] w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white sm:min-h-0 sm:w-auto hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-slate-700"
+              class="w-full sm:w-auto"
+              :disabled="!chosenBank"
+              :loading="connecting"
               @click="connect"
             >
               {{ connecting ? 'Redirection…' : 'Connecter' }}
-            </button>
+            </BaseButton>
           </div>
 
           <p
@@ -456,24 +560,31 @@
                       {{ consentLabel(connection) }}
                       <span v-if="connection.lastSyncAt">
                         · dernière synchro
-                        {{
-                          new Date(connection.lastSyncAt).toLocaleDateString(
-                            'fr-FR'
-                          )
-                        }}
+                        {{ formatDate(connection.lastSyncAt) }}
                       </span>
                     </p>
                   </div>
                 </div>
 
                 <div class="w-full text-left sm:w-auto sm:text-right">
-                  <button
-                    type="button"
+                  <!-- A lapsed consent has an action, not a greyed button:
+                       the bank must be asked again. -->
+                  <BaseButton
+                    v-if="connection.action === 'reconnect'"
+                    data-testid="renew-consent-button"
+                    class="w-full sm:w-auto"
+                    :loading="renewing === connection.id"
+                    :disabled="renewing !== null"
+                    @click="renewConsent(connection)"
+                  >
+                    Renouveler le consentement
+                  </BaseButton>
+                  <BaseButton
+                    v-else
                     data-testid="sync-button"
-                    :disabled="
-                      connection.action !== 'fetch' || syncing === connection.id
-                    "
-                    class="min-h-[44px] w-full rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300 sm:min-h-0 sm:w-auto dark:disabled:bg-slate-700"
+                    class="w-full sm:w-auto"
+                    :disabled="connection.action !== 'fetch'"
+                    :loading="syncing === connection.id"
                     @click="synchronise(connection)"
                   >
                     {{
@@ -481,7 +592,7 @@
                         ? 'Synchronisation…'
                         : 'Synchroniser'
                     }}
-                  </button>
+                  </BaseButton>
                   <!-- The server's own words for why the button is off: a
                      lapsed consent needs the user at their bank, an exhausted
                      quota needs tomorrow. -->
@@ -588,8 +699,11 @@
         <!-- Every account not spoken for by a bank above — the whole list
              when there is no bank sync at all. -->
         <div>
+          <!-- Only over a list: with every account under a bank, the
+               title used to stand alone above nothing. -->
           <h3
-            v-if="configured"
+            v-if="configured && unlinkedAccounts.length > 0"
+            data-testid="unlinked-accounts-title"
             class="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
           >
             Comptes sans banque
@@ -621,15 +735,37 @@
           </ul>
         </div>
 
-        <div
-          class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
+        <!-- Only when two names look like one account: a permanent amber
+             box about duplicates was a warning about nothing. -->
+        <InlineAlert
+          v-if="likelyDuplicates.length > 0"
+          variant="warning"
+          class="mt-6"
+          data-testid="duplicate-accounts-notice"
+          title="Des comptes semblent en double."
         >
-          <strong>Doublons :</strong> la fusion de comptes n'est pas encore
-          branchée, et renommer un compte avec le nom exact d'un autre échoue.
-          Pour résorber un doublon, supprimez le compte en trop — ses
-          transactions partiront avec lui, réimportez-les ensuite sur le bon
+          <span v-for="names in likelyDuplicates" :key="names.join('|')">
+            {{ names.join(' / ') }}.
+          </span>
+          Deux comptes ne se fusionnent pas encore : supprimez celui en trop —
+          ses transactions partiront avec lui — puis réimportez-les sur le bon
           compte.
-        </div>
+        </InlineAlert>
+
+        <details
+          v-if="configured"
+          class="mt-8 rounded-xl border border-gray-200 dark:border-slate-700"
+          data-testid="developer-block"
+        >
+          <summary
+            class="cursor-pointer px-4 py-3 text-sm font-medium text-gray-700 sm:px-5 dark:text-gray-300"
+          >
+            Votre application Enable Banking
+          </summary>
+          <div class="px-4 pb-4 sm:px-5">
+            <EnableBankingCredentialCard @changed="refresh" />
+          </div>
+        </details>
       </template>
     </SettingsCard>
 

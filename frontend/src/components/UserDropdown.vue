@@ -68,7 +68,7 @@
       aria-label="Menu utilisateur"
       aria-haspopup="menu"
       :aria-expanded="isOpen"
-      class="flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+      class="flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-gray-100 dark:hover:bg-slate-800"
       @click="toggle"
     >
       <!-- Avatar with initial -->
@@ -79,7 +79,7 @@
       </div>
       <!-- Chevron -->
       <svg
-        class="h-4 w-4 text-slate-500 dark:text-slate-400 transition-transform duration-200"
+        class="h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform duration-200"
         :class="{ 'rotate-180': isOpen }"
         fill="none"
         viewBox="0 0 24 24"
@@ -109,11 +109,11 @@
         class="absolute right-0 mt-2 w-64 origin-top-right rounded-lg bg-white dark:bg-slate-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10"
       >
         <!-- User email header -->
-        <div class="border-b border-slate-100 dark:border-slate-700 px-4 py-3">
-          <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+        <div class="border-b border-gray-100 dark:border-slate-700 px-4 py-3">
+          <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
             Connecté en tant que
           </p>
-          <p class="truncate text-sm text-slate-500 dark:text-slate-400">
+          <p class="truncate text-sm text-gray-500 dark:text-gray-400">
             {{ userEmail }}
           </p>
         </div>
@@ -125,13 +125,13 @@
             :key="item.to"
             type="button"
             role="menuitem"
-            class="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+            class="flex w-full items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
             @click="navigateTo(item.to)"
           >
             <!-- User icon -->
             <svg
               v-if="item.icon === 'user'"
-              class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500"
+              class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -146,7 +146,7 @@
             <!-- Settings icon -->
             <svg
               v-else-if="item.icon === 'settings'"
-              class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500"
+              class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -167,7 +167,7 @@
             <!-- History icon -->
             <svg
               v-else-if="item.icon === 'history'"
-              class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500"
+              class="h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -184,7 +184,7 @@
         </div>
 
         <!-- Sign out -->
-        <div class="border-t border-slate-100 dark:border-slate-700 py-1">
+        <div class="border-t border-gray-100 dark:border-slate-700 py-1">
           <button
             type="button"
             role="menuitem"

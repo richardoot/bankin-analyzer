@@ -22,7 +22,8 @@ vi.mock('@/composables/useChartTheme', () => ({
 }))
 
 // Mock formatCurrency
-vi.mock('@/lib/formatters', () => ({
+vi.mock('@/lib/formatters', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/formatters')>()),
   formatCurrency: (v: number) => `${v.toFixed(2)} €`,
 }))
 
@@ -122,7 +123,14 @@ describe('MonthlyExpensesChart', () => {
 
     const chart = wrapper.findComponent({ name: 'VueApexCharts' })
     const categories = chart.props('options').xaxis.categories
-    expect(categories).toEqual(['Nov', 'Dec', 'Jan', 'Fev', 'Mar', 'Avr'])
+    expect(categories).toEqual([
+      'Nov.',
+      'Déc.',
+      'Janv.',
+      'Févr.',
+      'Mars',
+      'Avr.',
+    ])
   })
 
   it('should add income annotation line when averageIncome > 0', () => {
@@ -132,7 +140,11 @@ describe('MonthlyExpensesChart', () => {
     const yAnnotations = chart.props('options').annotations?.yaxis ?? []
     const incomeAnno = yAnnotations.find((a: { y: number }) => a.y === 4200)
     expect(incomeAnno).toBeDefined()
-    expect(incomeAnno.borderColor).toBe('#34d399')
+    // Income wears the income green, as on the Dashboard.
+    expect(incomeAnno.borderColor).toBe('#22c55e')
+    expect(
+      wrapper.get('[data-testid="legend-income-swatch"]').classes()
+    ).toContain('bg-green-500')
   })
 
   it('should add budget annotation line when totalBudget > 0', () => {
@@ -142,7 +154,12 @@ describe('MonthlyExpensesChart', () => {
     const yAnnotations = chart.props('options').annotations?.yaxis ?? []
     const budgetAnno = yAnnotations.find((a: { y: number }) => a.y === 2500)
     expect(budgetAnno).toBeDefined()
-    expect(budgetAnno.borderColor).toBe('#818cf8')
+    // The budget line wears the primary of the budget column — indigo is
+    // the comparison's, and the legend says the same.
+    expect(budgetAnno.borderColor).toBe('#059669')
+    expect(
+      wrapper.get('[data-testid="legend-budget-swatch"]').classes()
+    ).toContain('bg-primary-600')
   })
 
   it('should not add annotation lines when values are 0', () => {
@@ -165,7 +182,7 @@ describe('MonthlyExpensesChart', () => {
     const chart = wrapper.findComponent({ name: 'VueApexCharts' })
     const xAnnotations = chart.props('options').annotations?.xaxis ?? []
     expect(xAnnotations).toHaveLength(1)
-    expect(xAnnotations[0]?.x).toBe('Avr')
+    expect(xAnnotations[0]?.x).toBe('Avr.')
     expect(xAnnotations[0]?.label.text).toBe('En cours')
   })
 
@@ -189,7 +206,7 @@ describe('MonthlyExpensesChart', () => {
     expect(html).toContain('2500.00')
     expect(html).toContain('Dépenses')
     expect(html).toContain('vs Budget')
-    expect(html).toContain('Epargne')
+    expect(html).toContain('Épargne')
   })
 
   it('tooltip should show "(en cours)" for current month', () => {
@@ -269,6 +286,23 @@ describe('MonthlyExpensesChart', () => {
       })
       expect(withPlan.text()).toContain('Plan budgétaire')
       expect(withPlan.text()).toContain('Mois précédents')
+    })
+
+    it('paints the comparison legend swatch in the hue of its bars', () => {
+      const wrapper = mount(MonthlyExpensesChart, {
+        props: {
+          ...defaultProps,
+          planStartMonth: '2026-03',
+          planEndMonth: '2026-04',
+          comparisonStartMonth: '2025-11',
+          comparisonEndMonth: '2026-01',
+        },
+      })
+      // COMP_COLOR is indigo-500 (#6366f1): the legend must say the same.
+      expect(
+        wrapper.get('[data-testid="legend-comparison-swatch"]').classes()
+      ).toContain('bg-indigo-500')
+      expect(getColors(wrapper)).toContain('#6366f1')
     })
 
     it('falls back to the original gray-only coloring when no plan range is supplied', () => {

@@ -136,6 +136,46 @@ describe('AccountsPage', () => {
     expect(wrapper.find('[data-testid="connection-c1"]').exists()).toBe(false)
   })
 
+  it('never reads a failed load as "no bank connected", and retries', async () => {
+    vi.mocked(api.getBankSyncStatus).mockRejectedValueOnce(
+      new Error('Le serveur est injoignable.')
+    )
+
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="no-bank-connected"]').exists()).toBe(
+      false
+    )
+    expect(wrapper.get('[data-testid="accounts-load-error"]').text()).toContain(
+      "Vos connexions bancaires n'ont pas pu être chargées."
+    )
+
+    vi.mocked(api.getBankConnections).mockResolvedValue([
+      connection({ id: 'c1' }),
+    ])
+    await wrapper.get('[data-testid="accounts-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="accounts-load-error"]').exists()).toBe(
+      false
+    )
+    expect(wrapper.find('[data-testid="connection-c1"]').exists()).toBe(true)
+  })
+
+  it('still says "no bank connected" when sync is simply not set up', async () => {
+    vi.mocked(api.getBankSyncStatus).mockResolvedValue({ configured: false })
+    vi.mocked(api.getBankConnections).mockRejectedValue(new Error('nope'))
+
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="no-bank-connected"]').exists()).toBe(
+      true
+    )
+    expect(wrapper.find('[data-testid="accounts-load-error"]').exists()).toBe(
+      false
+    )
+  })
+
   it('links an account row to its filtered transactions', async () => {
     vi.mocked(api.getAccounts).mockResolvedValue([account('a2', 'PEL')])
 
@@ -325,5 +365,42 @@ describe('AccountsPage', () => {
     expect(wrapper.get('[data-testid="reconnect-button"]').text()).toContain(
       'Reconnecter'
     )
+  })
+
+  it('offers « Connecter une banque » once per screen', async () => {
+    // Not configured: the empty state carries it, the header stays quiet.
+    vi.mocked(api.getBankSyncStatus).mockResolvedValue({ configured: false })
+    const bare = await mountPage()
+    expect(bare.find('[data-testid="connect-bank-header"]').exists()).toBe(
+      false
+    )
+    expect(bare.find('[data-testid="no-bank-connected"]').text()).toContain(
+      'Connecter une banque'
+    )
+
+    // Configured: the header carries it, the empty state is gone.
+    vi.mocked(api.getBankSyncStatus).mockResolvedValue({ configured: true })
+    const withBank = await mountPage()
+    expect(withBank.find('[data-testid="connect-bank-header"]').exists()).toBe(
+      true
+    )
+    expect(withBank.find('[data-testid="no-bank-connected"]').exists()).toBe(
+      false
+    )
+  })
+
+  it('starts one reconnection at a time', async () => {
+    vi.mocked(api.getBankConnections).mockResolvedValue([
+      connection({ id: 'c3', action: 'reconnect', reason: 'lapsed' }),
+    ])
+    vi.mocked(api.startBankAuthorization).mockReturnValue(new Promise(() => {}))
+    const wrapper = await mountPage()
+
+    const button = wrapper.get('[data-testid="reconnect-button"]')
+    await button.trigger('click')
+    await button.trigger('click')
+
+    expect(api.startBankAuthorization).toHaveBeenCalledTimes(1)
+    expect(button.attributes('disabled')).toBeDefined()
   })
 })

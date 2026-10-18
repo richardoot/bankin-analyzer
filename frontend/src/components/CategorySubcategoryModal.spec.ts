@@ -134,13 +134,15 @@ describe('CategorySubcategoryModal', () => {
   it('searches subcategory names too, and files in one click from the hit', async () => {
     const wrapper = await mountModal()
 
-    await wrapper.find('input[type="text"]').setValue('loyer')
+    await wrapper.find('[data-testid="category-search"]').setValue('loyer')
     await flushPromises()
 
     const picks = wrapper.findAll('[data-testid^="pick-category-"]')
     expect(picks).toHaveLength(1)
     expect(picks[0]?.text()).toContain('Logement')
-    const hit = wrapper.find('[data-testid="search-hits"] [role="button"]')
+    // A hit is a real button beside the category's own, not a role bolted on
+    // a span inside it.
+    const hit = wrapper.find('[data-testid="search-hits"] button')
     expect(hit.text()).toContain('Loyer')
 
     await hit.trigger('click')
@@ -183,7 +185,7 @@ describe('CategorySubcategoryModal', () => {
       .find('[data-testid="pick-category-cat-food"]')
       .trigger('click')
     await wrapper
-      .find('input[aria-label="Nouvelle sous-catégorie"]')
+      .find('[data-testid="new-subcategory-name"]')
       .setValue('Traiteur')
     await wrapper.find('[data-testid="create-subcategory"]').trigger('click')
     await flushPromises()
@@ -202,13 +204,15 @@ describe('CategorySubcategoryModal', () => {
       currentSubcategoryId: 'sub-groceries',
     })
 
-    const confirm = wrapper.find('[data-testid="confirm-filing"]')
-    expect(confirm.attributes('disabled')).toBeDefined()
+    // Read again after the click: the stubbed Teleport re-renders its
+    // subtree, so a wrapper taken before it goes stale.
+    const confirm = () => wrapper.find('[data-testid="confirm-filing"]')
+    expect(confirm().attributes('disabled')).toBeDefined()
 
     await wrapper
       .find('[data-testid="pick-category-cat-housing"]')
       .trigger('click')
-    expect(confirm.attributes('disabled')).toBeUndefined()
+    expect(confirm().attributes('disabled')).toBeUndefined()
   })
 
   it('emits a null filing for "À classer"', async () => {

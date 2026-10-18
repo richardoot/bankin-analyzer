@@ -1,7 +1,9 @@
 <script setup lang="ts">
+  import PageShell from '@/components/ui/PageShell.vue'
   import { ref, onMounted } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
   import { supabase } from '@/lib/supabase'
+  import BaseButton from '@/components/ui/BaseButton.vue'
 
   const route = useRoute()
   const router = useRouter()
@@ -12,6 +14,22 @@
   const clientName = ref('')
   const scopes = ref<string[]>([])
   const authorizationId = ref('')
+
+  /**
+   * A scope is a word for a machine; the person deciding reads a sentence.
+   * Unknown scopes are still shown, named as what they are.
+   */
+  const SCOPE_SENTENCES: Record<string, string> = {
+    openid: 'Vous identifier auprès de cette application',
+    email: 'Connaître votre adresse e-mail',
+    profile: 'Connaître votre nom et votre photo de profil',
+    offline_access:
+      'Rester connectée à votre compte sans vous redemander votre accord',
+  }
+
+  function describeScope(scope: string): string {
+    return SCOPE_SENTENCES[scope] ?? `Accéder à la permission « ${scope} »`
+  }
 
   onMounted(async () => {
     const id = route.query.authorization_id as string
@@ -31,7 +49,7 @@
       if (fetchError || !data) {
         error.value =
           fetchError?.message ??
-          "Impossible de recuperer les details d'autorisation"
+          "Impossible de récupérer les détails de l'autorisation"
         return
       }
 
@@ -55,7 +73,7 @@
       if (approveError) {
         error.value = approveError.message
       }
-      // GoTrue redirige automatiquement apres l'approbation
+      // GoTrue redirige automatiquement après l'approbation
     } catch (err) {
       error.value =
         err instanceof Error ? err.message : "Erreur lors de l'approbation"
@@ -76,11 +94,9 @@
 </script>
 
 <template>
-  <div
-    class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-800 px-4"
-  >
+  <PageShell width="narrow" center>
     <div
-      class="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl dark:shadow-slate-900/40 overflow-hidden"
+      class="mx-auto w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl dark:shadow-slate-900/40 overflow-hidden"
     >
       <!-- Header -->
       <div class="px-8 pt-8 pb-4 text-center">
@@ -88,7 +104,7 @@
           class="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4"
         >
           <svg
-            class="w-8 h-8 text-primary-600 dark:text-primary-400"
+            class="w-8 h-8 text-primary-700 dark:text-primary-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -111,9 +127,7 @@
         <div
           class="w-8 h-8 border-3 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-400 rounded-full animate-spin mx-auto"
         />
-        <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">
-          Chargement...
-        </p>
+        <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">Chargement…</p>
       </div>
 
       <!-- Error -->
@@ -123,12 +137,14 @@
         >
           <p class="text-sm text-red-700 dark:text-red-400">{{ error }}</p>
         </div>
-        <button
-          class="w-full mt-4 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-xl transition-colors"
+        <BaseButton
+          variant="secondary"
+          block
+          class="mt-4"
           @click="router.push('/dashboard')"
         >
           Retour
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Consent form -->
@@ -141,7 +157,7 @@
             {{ clientName }}
           </p>
           <p class="text-sm text-gray-500 dark:text-gray-400 mt-3">
-            souhaite acceder a votre compte avec les permissions suivantes :
+            souhaite accéder à votre compte avec les permissions suivantes :
           </p>
         </div>
 
@@ -165,9 +181,11 @@
                 d="M5 13l4 4L19 7"
               />
             </svg>
-            <span class="text-sm text-gray-700 dark:text-gray-300">{{
-              scope
-            }}</span>
+            <span
+              class="text-sm text-gray-700 dark:text-gray-300"
+              :data-testid="`scope-${scope}`"
+              >{{ describeScope(scope) }}</span
+            >
           </div>
           <div
             v-if="scopes.length === 0"
@@ -216,30 +234,27 @@
             />
           </svg>
           <p class="text-xs text-amber-700 dark:text-amber-400">
-            Cette application pourra consulter vos transactions, categories,
+            Cette application pourra consulter vos transactions, catégories,
             budgets et statistiques. Elle ne pourra pas modifier vos données.
           </p>
         </div>
 
         <!-- Buttons -->
         <div class="flex gap-3">
-          <button
+          <BaseButton
+            variant="secondary"
+            class="flex-1"
             :disabled="isSubmitting"
-            class="flex-1 px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-xl transition-colors disabled:opacity-50"
             @click="deny"
           >
             Refuser
-          </button>
-          <button
-            :disabled="isSubmitting"
-            class="flex-1 px-4 py-3 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 hover:bg-primary-700 dark:hover:bg-primary-600 rounded-xl transition-colors disabled:opacity-50"
-            @click="approve"
-          >
-            <span v-if="isSubmitting">Autorisation...</span>
+          </BaseButton>
+          <BaseButton class="flex-1" :loading="isSubmitting" @click="approve">
+            <span v-if="isSubmitting">Autorisation…</span>
             <span v-else>Autoriser</span>
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
-  </div>
+  </PageShell>
 </template>

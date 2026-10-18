@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import PageShell from '@/components/ui/PageShell.vue'
   import { ref, computed } from 'vue'
   import { useRouter } from 'vue-router'
   import {
@@ -13,6 +14,12 @@
   } from '@/composables/useChunkedImport'
   import DuplicatesReviewModal from '@/components/DuplicatesReviewModal.vue'
   import StepIndicator from '@/components/ui/StepIndicator.vue'
+  import { formatCurrency } from '@/lib/formatters'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconClose from '@/components/icons/IconClose.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
+  import BackLink from '@/components/ui/BackLink.vue'
 
   /** A row the parser could not use, and why. */
   interface SkippedRow {
@@ -84,7 +91,8 @@
   }
 
   async function processFile(selectedFile: File) {
-    if (!selectedFile.name.endsWith('.csv')) {
+    // Case-insensitive: Windows and some banks name it `export.CSV`.
+    if (!selectedFile.name.toLowerCase().endsWith('.csv')) {
       error.value = 'Veuillez sélectionner un fichier CSV'
       return
     }
@@ -271,23 +279,19 @@
     partialImportError.value = null
     resetProgress()
 
-    // Start import history BEFORE importing transactions
-    const importHistory = await api.startImport({
-      totalInFile: parsedTransactions.value.length,
-      ...(file.value?.name && { fileName: file.value.name }),
-    })
-
     try {
+      // Start import history BEFORE importing transactions. Inside the try:
+      // a failure here used to leave the button stuck on "Import en cours…".
+      const importHistory = await api.startImport({
+        totalInFile: parsedTransactions.value.length,
+        ...(file.value?.name && { fileName: file.value.name }),
+      })
+
       // Chunked import with automatic retry, passing importHistoryId
       const result = await chunkedImportTransactions(
         parsedTransactions.value,
         forceIndices,
         importHistory.id
-      )
-
-      // Get unique categories for the recap screen.
-      const uniqueCategories = new Set(
-        parsedTransactions.value.map(t => t.category)
       )
 
       // Calculate date range from transactions
@@ -302,24 +306,16 @@
       // it explicitly.
       await api.finalizeImport(importHistory.id, {
         transactionsImported: result.imported,
-        categoriesCreated: 0, // Categories are created on backend, we don't track new ones here
         duplicatesSkipped: result.duplicates,
         dateRangeStart,
         dateRangeEnd,
       })
 
-      // Prepare recap query params
-      const recapQuery = {
-        imported: result.imported.toString(),
-        duplicates: result.duplicates.toString(),
-        total: result.total.toString(),
-        categories: uniqueCategories.size.toString(),
-      }
-
-      // Navigate to recap page with result
+      // The recap reads the import back from the history: one source of
+      // truth, and a page that can be reopened later.
       router.push({
         name: 'import-recap',
-        query: recapQuery,
+        params: { id: importHistory.id },
       })
     } catch (err) {
       if (err instanceof PartialImportError) {
@@ -327,7 +323,7 @@
         // The import history stays in IN_PROGRESS status
         // User can delete it from the history page if needed
         partialImportError.value = err
-        error.value = `Import échoué au chunk ${err.details.failedAtChunk + 1}/${err.details.chunksTotal}. ${err.details.imported} transactions importées sur ${err.details.total}.`
+        error.value = `Import interrompu au lot ${err.details.failedAtChunk + 1}/${err.details.chunksTotal}. ${err.details.imported} transactions importées sur ${err.details.total}.`
       } else {
         error.value =
           err instanceof Error ? err.message : "Erreur lors de l'import"
@@ -364,337 +360,303 @@
     submitImport()
   }
 
-  function formatAmount(amount: number): string {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(amount)
-  }
+  const formatAmount = formatCurrency
 </script>
 
 <template>
-  <div
-    class="min-h-screen bg-gray-50 dark:bg-slate-800 py-6 sm:py-12 transition-colors"
-  >
-    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="text-center mb-8">
-        <h1
-          class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
-        >
-          Import de transactions
-        </h1>
-        <p class="mt-2 text-gray-600 dark:text-gray-400">
-          Importez vos transactions depuis un export CSV Bankin
-        </p>
-        <StepIndicator
-          class="mt-6"
-          :steps="IMPORT_STEPS"
-          :current="currentStep"
-        />
-      </div>
-
-      <!-- Progress bar during chunking -->
-      <div
-        v-if="showProgressBar"
-        role="status"
-        aria-live="polite"
-        class="mb-6 bg-white dark:bg-slate-900 border border-primary-200 dark:border-primary-800 rounded-lg p-4"
+  <PageShell width="narrow">
+    <BackLink to="/accounts" class="mb-4">Comptes</BackLink>
+    <div class="text-center mb-8">
+      <h1
+        class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
       >
-        <div class="flex items-center justify-between mb-2">
-          <span
-            class="text-sm font-medium text-primary-700 dark:text-primary-400"
-          >
-            {{ progress.message }}
-          </span>
-          <span class="text-sm text-primary-600 dark:text-primary-400"
-            >{{ progress.percent }}%</span
-          >
-        </div>
-        <div
-          class="w-full bg-primary-100 dark:bg-primary-900/30 rounded-full h-2.5"
-        >
-          <div
-            class="bg-primary-600 dark:bg-primary-500 h-2.5 rounded-full transition-all duration-300"
-            :style="{ width: `${progress.percent}%` }"
-          ></div>
-        </div>
-        <div
-          v-if="progress.totalChunks > 1"
-          class="mt-2 text-xs text-primary-500 dark:text-primary-400"
-        >
-          Chunk {{ progress.completedChunks }}/{{ progress.totalChunks }}
-        </div>
-      </div>
+        Import de transactions
+      </h1>
+      <p class="mt-2 text-gray-600 dark:text-gray-400">
+        Importez vos transactions depuis un export CSV Bankin
+      </p>
+      <StepIndicator
+        class="mt-6"
+        :steps="IMPORT_STEPS"
+        :current="currentStep"
+      />
+    </div>
 
-      <!-- Partial import error with retry -->
+    <!-- Progress bar during chunking -->
+    <div
+      v-if="showProgressBar"
+      role="status"
+      aria-live="polite"
+      class="mb-6 bg-white dark:bg-slate-900 border border-primary-200 dark:border-primary-800 rounded-lg p-4"
+    >
+      <div class="flex items-center justify-between mb-2">
+        <span
+          class="text-sm font-medium text-primary-700 dark:text-primary-400"
+        >
+          {{ progress.message }}
+        </span>
+        <span class="text-sm text-primary-700 dark:text-primary-400"
+          >{{ progress.percent }}%</span
+        >
+      </div>
       <div
-        v-if="partialImportError"
-        role="alert"
-        class="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4"
+        class="w-full bg-primary-100 dark:bg-primary-900/30 rounded-full h-2.5"
       >
-        <div class="flex items-start gap-3">
-          <svg
-            class="w-6 h-6 text-amber-600 dark:text-amber-500 flex-shrink-0 mt-0.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-            />
-          </svg>
-          <div class="flex-1">
-            <h3 class="font-medium text-amber-800 dark:text-amber-400">
-              Import partiel
-            </h3>
-            <p class="text-sm text-amber-700 dark:text-amber-400/80 mt-1">
-              {{ partialImportError.details.imported }} transactions importées
-              sur {{ partialImportError.details.total }}.
-            </p>
-            <p class="text-xs text-amber-600 dark:text-amber-500 mt-2">
-              Vous pouvez réessayer sans risque de dupliquer les transactions
-              déjà importées.
-            </p>
-            <div class="mt-3 flex gap-2">
-              <button
-                class="px-3 py-1.5 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 transition-colors"
-                @click="retryImport"
-              >
-                Réessayer l'import
-              </button>
-              <button
-                class="px-3 py-1.5 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 text-sm rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-                @click="cancelImport"
-              >
-                Annuler
-              </button>
-            </div>
+        <div
+          class="bg-primary-600 h-2.5 rounded-full transition-all duration-300"
+          :style="{ width: `${progress.percent}%` }"
+        ></div>
+      </div>
+      <div
+        v-if="progress.totalChunks > 1"
+        class="mt-2 text-xs text-primary-700 dark:text-primary-400"
+      >
+        Chunk {{ progress.completedChunks }}/{{ progress.totalChunks }}
+      </div>
+    </div>
+
+    <!-- Partial import error with retry -->
+    <div
+      v-if="partialImportError"
+      role="alert"
+      class="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4"
+    >
+      <div class="flex items-start gap-3">
+        <svg
+          class="w-6 h-6 text-amber-600 dark:text-amber-500 flex-shrink-0 mt-0.5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+          />
+        </svg>
+        <div class="flex-1">
+          <h3 class="font-medium text-amber-800 dark:text-amber-300">
+            Import partiel
+          </h3>
+          <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">
+            {{ partialImportError.details.imported }} transactions importées sur
+            {{ partialImportError.details.total }}.
+          </p>
+          <p class="text-xs text-amber-700 dark:text-amber-300 mt-2">
+            Vous pouvez réessayer sans risque de dupliquer les transactions déjà
+            importées.
+          </p>
+          <div class="mt-3 flex gap-2">
+            <BaseButton size="sm" @click="retryImport">
+              Réessayer l'import
+            </BaseButton>
+            <BaseButton size="sm" variant="secondary" @click="cancelImport">
+              Annuler
+            </BaseButton>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- Error message -->
-      <div
-        v-if="error && !partialImportError"
-        role="alert"
-        class="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg"
-      >
-        {{ error }}
-      </div>
+    <!-- Error message -->
+    <div
+      v-if="error && !partialImportError"
+      role="alert"
+      class="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg"
+    >
+      {{ error }}
+    </div>
 
-      <!--
+    <!--
         A row the parser refused used to vanish without a trace, which is how a
         two-line note cost a transaction for months. Naming the line and the
         reason is what makes the next case visible on the spot.
       -->
-      <div
-        v-if="skippedRows.length > 0"
-        role="status"
-        data-testid="skipped-rows"
-        class="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-lg"
-      >
-        <p class="font-medium">
-          {{ skippedRows.length }} ligne{{
-            skippedRows.length > 1 ? 's' : ''
-          }}
-          du fichier {{ skippedRows.length > 1 ? 'ont' : 'a' }} été ignorée{{
-            skippedRows.length > 1 ? 's' : ''
-          }}
-        </p>
-        <ul class="mt-2 space-y-1 text-sm">
-          <li v-for="row in skippedRows.slice(0, 10)" :key="row.line">
-            Ligne {{ row.line }} : {{ row.reason }}
-            <span v-if="row.excerpt" class="opacity-75">
-              &mdash; {{ row.excerpt }}
-            </span>
-          </li>
-        </ul>
-        <p v-if="skippedRows.length > 10" class="mt-1 text-sm">
-          … et {{ skippedRows.length - 10 }} autre{{
-            skippedRows.length - 10 > 1 ? 's' : ''
-          }}
-        </p>
-      </div>
-
-      <!-- File upload zone -->
-      <div
-        v-if="!showPreview"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border-2 border-dashed transition-colors"
-        :class="
-          isDragOver
-            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-            : 'border-gray-300 dark:border-slate-600'
-        "
-        @dragover="handleDragOver"
-        @dragleave="handleDragLeave"
-        @drop="handleDrop"
-      >
-        <label
-          class="flex flex-col items-center justify-center py-16 cursor-pointer"
-        >
-          <svg
-            class="w-16 h-16 text-gray-500 dark:text-gray-400 mb-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="1.5"
-              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-            />
-          </svg>
-          <span class="text-lg font-medium text-gray-700 dark:text-gray-300">
-            Glissez-déposez votre fichier CSV ici
+    <div
+      v-if="skippedRows.length > 0"
+      role="status"
+      data-testid="skipped-rows"
+      class="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-lg"
+    >
+      <p class="font-medium">
+        {{ skippedRows.length }} ligne{{ skippedRows.length > 1 ? 's' : '' }} du
+        fichier {{ skippedRows.length > 1 ? 'ont' : 'a' }} été ignorée{{
+          skippedRows.length > 1 ? 's' : ''
+        }}
+      </p>
+      <ul class="mt-2 space-y-1 text-sm">
+        <li v-for="row in skippedRows.slice(0, 10)" :key="row.line">
+          Ligne {{ row.line }} : {{ row.reason }}
+          <span v-if="row.excerpt" class="opacity-75">
+            &mdash; {{ row.excerpt }}
           </span>
-          <span class="text-sm text-gray-500 dark:text-gray-400 mt-1"
-            >ou cliquez pour parcourir</span
-          >
-          <input
-            type="file"
-            accept=".csv"
-            class="hidden"
-            @change="handleFileSelect"
+        </li>
+      </ul>
+      <p v-if="skippedRows.length > 10" class="mt-1 text-sm">
+        … et {{ skippedRows.length - 10 }} autre{{
+          skippedRows.length - 10 > 1 ? 's' : ''
+        }}
+      </p>
+    </div>
+
+    <!-- File upload zone -->
+    <div
+      v-if="!showPreview"
+      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border-2 border-dashed transition-colors focus-within:ring-2 focus-within:ring-primary-500 focus-within:ring-offset-2 dark:focus-within:ring-offset-slate-800"
+      :class="
+        isDragOver
+          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+          : 'border-gray-300 dark:border-slate-600'
+      "
+      @dragover="handleDragOver"
+      @dragleave="handleDragLeave"
+      @drop="handleDrop"
+    >
+      <label
+        class="flex flex-col items-center justify-center py-16 cursor-pointer"
+      >
+        <svg
+          class="w-16 h-16 text-gray-500 dark:text-gray-400 mb-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
           />
-        </label>
+        </svg>
+        <!-- On a phone there is nothing to drag: say what a tap does. -->
+        <span
+          class="hidden text-lg font-medium text-gray-700 sm:inline dark:text-gray-300"
+        >
+          Glissez-déposez votre fichier CSV ici
+        </span>
+        <span
+          class="text-lg font-medium text-gray-700 sm:hidden dark:text-gray-300"
+        >
+          Choisissez votre fichier CSV
+        </span>
+        <span
+          class="mt-1 hidden text-sm text-gray-500 sm:inline dark:text-gray-400"
+          >ou cliquez pour parcourir</span
+        >
+        <!-- sr-only, not hidden: the input stays in the tab order, and the
+               ring on the drop zone shows where the focus is. -->
+        <input
+          type="file"
+          accept=".csv"
+          class="sr-only"
+          data-testid="import-file-input"
+          @change="handleFileSelect"
+        />
+      </label>
+    </div>
+
+    <!-- Preview -->
+    <BaseCard v-if="showPreview">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            Aperçu de l'import
+          </h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">
+            {{ file?.name }}
+          </p>
+        </div>
+        <BaseIconButton label="Retirer ce fichier" @click="cancelImport">
+          <IconClose />
+        </BaseIconButton>
       </div>
 
-      <!-- Preview -->
+      <!-- Stats -->
+      <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 text-center">
+          <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
+            {{ parsedTransactions.length }}
+          </div>
+          <div class="text-sm text-blue-800 dark:text-blue-300">
+            Transactions
+          </div>
+        </div>
+        <!-- Three counts, none good nor bad: one neutral blue for all. -->
+        <div class="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 text-center">
+          <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
+            {{ new Set(parsedTransactions.map(t => t.category)).size }}
+          </div>
+          <div class="text-sm text-blue-800 dark:text-blue-300">Catégories</div>
+        </div>
+        <div class="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 text-center">
+          <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
+            {{ new Set(parsedTransactions.map(t => t.account)).size }}
+          </div>
+          <div class="text-sm text-blue-800 dark:text-blue-300">Comptes</div>
+        </div>
+      </div>
+
+      <!-- Transaction preview list -->
       <div
-        v-if="showPreview"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
+        class="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden mb-6"
       >
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
-              Aperçu de l'import
-            </h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
-              {{ file?.name }}
-            </p>
-          </div>
-          <button
-            class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-            @click="cancelImport"
-          >
-            <svg
-              class="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <!-- Stats -->
-        <div class="grid grid-cols-3 gap-4 mb-6">
-          <div
-            class="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4 text-center"
-          >
-            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              {{ parsedTransactions.length }}
-            </div>
-            <div class="text-sm text-blue-800 dark:text-blue-300">
-              Transactions
-            </div>
-          </div>
-          <div
-            class="bg-green-50 dark:bg-green-900/30 rounded-lg p-4 text-center"
-          >
-            <div class="text-2xl font-bold text-green-600 dark:text-green-400">
-              {{ new Set(parsedTransactions.map(t => t.category)).size }}
-            </div>
-            <div class="text-sm text-green-800 dark:text-green-300">
-              Catégories
-            </div>
-          </div>
-          <div
-            class="bg-amber-50 dark:bg-amber-900/30 rounded-lg p-4 text-center"
-          >
-            <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">
-              {{ new Set(parsedTransactions.map(t => t.account)).size }}
-            </div>
-            <div class="text-sm text-amber-800 dark:text-amber-300">
-              Comptes
-            </div>
-          </div>
-        </div>
-
-        <!-- Transaction preview list -->
         <div
-          class="border dark:border-slate-700 rounded-lg overflow-hidden mb-6"
+          class="bg-gray-50 dark:bg-slate-800 px-4 py-2 border-b border-gray-200 dark:border-slate-700"
+        >
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Aperçu des 5 premières transactions
+          </span>
+        </div>
+        <div
+          class="divide-y divide-gray-100 dark:divide-slate-700 max-h-64 overflow-y-auto"
         >
           <div
-            class="bg-gray-50 dark:bg-slate-800 px-4 py-2 border-b dark:border-slate-700"
+            v-for="(tx, index) in parsedTransactions.slice(0, 5)"
+            :key="index"
+            class="px-4 py-3 flex items-center justify-between bg-white dark:bg-slate-900"
           >
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Aperçu des 5 premières transactions
-            </span>
-          </div>
-          <div class="divide-y dark:divide-slate-700 max-h-64 overflow-y-auto">
+            <div>
+              <div class="font-medium text-gray-900 dark:text-gray-100 text-sm">
+                {{ tx.description }}
+              </div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                {{ new Date(tx.date).toLocaleDateString('fr-FR') }} -
+                {{ tx.category }}
+              </div>
+            </div>
             <div
-              v-for="(tx, index) in parsedTransactions.slice(0, 5)"
-              :key="index"
-              class="px-4 py-3 flex items-center justify-between bg-white dark:bg-slate-900"
+              class="font-semibold"
+              :class="
+                tx.amount < 0
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-green-700 dark:text-green-400'
+              "
             >
-              <div>
-                <div
-                  class="font-medium text-gray-900 dark:text-gray-100 text-sm"
-                >
-                  {{ tx.description }}
-                </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ new Date(tx.date).toLocaleDateString('fr-FR') }} -
-                  {{ tx.category }}
-                </div>
-              </div>
-              <div
-                class="font-semibold"
-                :class="
-                  tx.amount < 0
-                    ? 'text-red-600 dark:text-red-500'
-                    : 'text-green-600 dark:text-green-500'
-                "
-              >
-                {{ formatAmount(tx.amount) }}
-              </div>
+              {{ formatAmount(tx.amount) }}
             </div>
           </div>
         </div>
-
-        <!-- Actions -->
-        <div class="flex gap-4">
-          <button
-            class="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-            @click="cancelImport"
-          >
-            Annuler
-          </button>
-          <button
-            :disabled="isUploading || isPreviewLoading"
-            class="flex-1 px-4 py-3 bg-primary-600 dark:bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            @click="submitImport"
-          >
-            <span v-if="isPreviewLoading">Analyse en cours...</span>
-            <span v-else-if="isUploading">Import en cours...</span>
-            <span v-else
-              >Importer {{ parsedTransactions.length }} transactions</span
-            >
-          </button>
-        </div>
       </div>
-    </div>
+
+      <!-- Actions -->
+      <div class="flex gap-4">
+        <BaseButton variant="secondary" class="flex-1" @click="cancelImport">
+          Annuler
+        </BaseButton>
+        <BaseButton
+          class="flex-1"
+          :loading="isUploading || isPreviewLoading"
+          @click="submitImport"
+        >
+          <span v-if="isPreviewLoading">Analyse en cours…</span>
+          <span v-else-if="isUploading">Import en cours…</span>
+          <span v-else
+            >Importer {{ parsedTransactions.length }} transactions</span
+          >
+        </BaseButton>
+      </div>
+    </BaseCard>
 
     <!-- Duplicates Review Modal -->
     <DuplicatesReviewModal
@@ -704,5 +666,5 @@
       @close="handleDuplicatesClose"
       @confirm="handleDuplicatesConfirm"
     />
-  </div>
+  </PageShell>
 </template>

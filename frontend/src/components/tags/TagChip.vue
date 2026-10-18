@@ -2,6 +2,10 @@
   /**
    * Small colored pill representing a tag. The tag color (when set) tints a
    * leading dot; an optional remove button emits `remove`.
+   *
+   * `dense` is the fit of a transaction row: tighter padding, but the
+   * text stays 12px — it was 10px, unreadable on a phone — and the cross
+   * keeps a 44px halo under a thumb however small it is drawn.
    */
   withDefaults(
     defineProps<{
@@ -27,15 +31,10 @@
 
 <template>
   <span
-    class="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-100 font-medium text-gray-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
-    :class="dense ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-xs'"
+    class="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-100 font-medium text-gray-700 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-200"
+    :class="dense ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-0.5 text-xs'"
   >
-    <span
-      v-if="icon"
-      class="leading-none"
-      :class="dense ? 'text-[10px]' : 'text-xs'"
-      >{{ icon }}</span
-    >
+    <span v-if="icon" class="text-xs leading-none">{{ icon }}</span>
     <span
       v-else
       class="inline-block rounded-full"
@@ -46,7 +45,7 @@
     <button
       v-if="removable"
       type="button"
-      class="ml-0.5 rounded-full text-gray-400 hover:text-red-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-red-400 dark:text-slate-400"
+      class="relative -my-1 -mr-1 ml-0.5 flex h-5 w-5 items-center justify-center rounded-full text-gray-400 hover:bg-gray-200 hover:text-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 pointer-coarse:before:absolute pointer-coarse:before:-inset-3 pointer-coarse:before:content-[''] dark:text-gray-400 dark:hover:bg-slate-600"
       :aria-label="`Retirer l'étiquette ${name}`"
       @click.stop="emit('remove')"
     >

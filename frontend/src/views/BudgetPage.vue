@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import PageShell from '@/components/ui/PageShell.vue'
   import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
   import { api } from '@/lib/api'
   import type {
@@ -33,6 +34,12 @@
     type ComparisonRange,
   } from '@/composables/useBudgetComparison'
   import { useRouter, onBeforeRouteLeave } from 'vue-router'
+  import { formatMonth } from '@/lib/formatters'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
+  import { useSuppressTabBar } from '@/composables/useMobileNavigation'
 
   const filtersStore = useFiltersStore()
   const router = useRouter()
@@ -59,7 +66,15 @@
   const statistics = ref<BudgetStatisticsDto | null>(null)
   const isLoading = ref(false)
   const isSaving = ref(false)
-  const saveSuccess = ref(false)
+  /**
+   * How the last save went, said in the edit bar next to the button that
+   * asked. « saved » keeps the bar on screen a moment after edit mode has
+   * ended; « error » keeps the draft and the bar until it is saved or
+   * dropped.
+   */
+  const saveStatus = ref<'idle' | 'saved' | 'error'>('idle')
+  const saveError = ref<string | null>(null)
+  let saveStatusTimer: ReturnType<typeof setTimeout> | null = null
   const error = ref<string | null>(null)
 
   // ── Comparison state ────────────────────────────────────────────────────
@@ -89,6 +104,8 @@
   const budgetInputs = ref<Map<string, number>>(new Map())
   const savedBudgets = ref<Map<string, number>>(new Map())
   const isEditing = ref(false)
+  // The edit bar takes the tab bar's place below lg while it shows.
+  useSuppressTabBar(() => isEditing.value || saveStatus.value === 'saved')
 
   /**
    * The plan month the page is reading, or null for the average over every
@@ -308,13 +325,13 @@
     return planIncomeAvg.value
   })
 
-  const totalBudget = computed(() => {
-    let total = 0
-    for (const cat of visibleExpenseCategories.value) {
-      total += budgetInputs.value.get(cat.categoryId) ?? 0
-    }
-    return total
-  })
+  /**
+   * The plan's total, the same figure everywhere on the page: over every
+   * entry of the plan, not only the categories the statistics happen to
+   * list (an envelope on a category that spent nothing this window would
+   * otherwise vanish from the summary while the edit bar still counts it).
+   */
+  const totalBudget = computed(() => draftPlanTotal.value)
 
   /**
    * Comparison props for the savings summary — null when no comparison is set.
@@ -373,41 +390,9 @@
     void router.push(`/tags/${tagId}`)
   }
 
-  const MONTH_LABEL_FR: Record<string, string> = {
-    '01': 'Jan',
-    '02': 'Fév',
-    '03': 'Mar',
-    '04': 'Avr',
-    '05': 'Mai',
-    '06': 'Juin',
-    '07': 'Juil',
-    '08': 'Août',
-    '09': 'Sep',
-    '10': 'Oct',
-    '11': 'Nov',
-    '12': 'Déc',
-  }
-
-  const MONTH_FULL_FR: Record<string, string> = {
-    '01': 'Janvier',
-    '02': 'Février',
-    '03': 'Mars',
-    '04': 'Avril',
-    '05': 'Mai',
-    '06': 'Juin',
-    '07': 'Juillet',
-    '08': 'Août',
-    '09': 'Septembre',
-    '10': 'Octobre',
-    '11': 'Novembre',
-    '12': 'Décembre',
-  }
-
   /** "2026-08" → "Août 2026". */
-  function monthLabelFor(ym: string): string {
-    const [year, month] = ym.split('-')
-    return `${MONTH_FULL_FR[month ?? ''] ?? ym} ${year ?? ''}`.trim()
-  }
+  const monthLabelFor = (ym: string): string =>
+    formatMonth(ym, { style: 'long' })
 
   /**
    * The months the user can isolate, newest last, each flagged when it is the
@@ -417,7 +402,7 @@
   const monthOptions = computed(() =>
     comparison.selectableMonths.value.map(ym => ({
       ym,
-      short: `${MONTH_LABEL_FR[ym.split('-')[1] ?? ''] ?? ym}`,
+      short: formatMonth(ym, { year: false }),
       full: monthLabelFor(ym),
       isRunning: ym === currentYearMonth(),
     }))
@@ -432,16 +417,9 @@
     selectedMonth.value = ym
   }
 
-  /**
-   * A bar was clicked. Comparison and future months are on the same chart and
-   * have no per-month reading to offer, so they are ignored rather than
-   * selected into an empty view. Clicking the month already isolated releases
-   * it — the same click that got you in gets you out.
-   */
-  function onChartMonthSelected(ym: string): void {
-    if (!comparison.selectableMonths.value.includes(ym)) return
-    selectedMonth.value = selectedMonth.value === ym ? null : ym
-  }
+  // Isolating a month happens in one place, the period band above the table
+  // (BudgetTableControls): the chart and the month-by-month grid only reflect
+  // the choice. Three places to set the same thing were two too many.
 
   /** Label describing what the "Réel" figures currently cover. */
   const actualPeriodLabel = computed(() => {
@@ -503,10 +481,9 @@
   const showMonthlyMatrix = computed(() => matrixMonths.value.length >= 2)
 
   function categoryChartData(cat: CategoryAverageDto) {
-    const labels = (statistics.value?.monthLabels ?? []).map(ym => {
-      const [, m] = ym.split('-')
-      return MONTH_LABEL_FR[m ?? ''] ?? ym
-    })
+    const labels = (statistics.value?.monthLabels ?? []).map(ym =>
+      formatMonth(ym, { year: false })
+    )
     return { labels, values: comparison.seriesFor(cat) ?? [] }
   }
 
@@ -637,7 +614,7 @@
     error.value = null
     try {
       await fetchPlan()
-      await fetchStatistics()
+      await Promise.all([fetchStatistics(), fetchProjects()])
     } catch (err) {
       error.value =
         err instanceof Error ? err.message : 'Erreur lors du rechargement'
@@ -661,7 +638,12 @@
       // one: keep the new plan on its average until the user picks again.
       selectedMonth.value = null
       isHistoryOpen.value = false
-      await Promise.all([fetchStatistics(), checkYearAgoAvailability()])
+      // The projects too: they are read over the plan's own window.
+      await Promise.all([
+        fetchStatistics(),
+        checkYearAgoAvailability(),
+        fetchProjects(),
+      ])
     } catch (err) {
       error.value =
         err instanceof Error ? err.message : 'Erreur lors du chargement du plan'
@@ -681,7 +663,11 @@
     selectedMonth.value = null
     isModalOpen.value = false
     planCount.value++
-    await Promise.all([fetchStatistics(), checkYearAgoAvailability()])
+    await Promise.all([
+      fetchStatistics(),
+      checkYearAgoAvailability(),
+      fetchProjects(),
+    ])
   }
 
   // ── Editing ──────────────────────────────────────────────────────────────
@@ -691,12 +677,21 @@
   // "Enregistrer". That is what makes "Annuler" able to promise anything, and
   // what stops a stray click on a number in a table from rewriting a plan.
 
+  function clearSaveStatus(): void {
+    if (saveStatusTimer) clearTimeout(saveStatusTimer)
+    saveStatusTimer = null
+    saveStatus.value = 'idle'
+    saveError.value = null
+  }
+
   function enterEditMode(): void {
+    clearSaveStatus()
     budgetInputs.value = new Map(savedBudgets.value)
     isEditing.value = true
   }
 
   function cancelEdit(): void {
+    clearSaveStatus()
     budgetInputs.value = new Map(savedBudgets.value)
     isEditing.value = false
   }
@@ -759,17 +754,17 @@
       .map(([categoryId, amount]) => ({ categoryId, amount }))
     try {
       isSaving.value = true
+      clearSaveStatus()
       const updated = await api.updateBudgetPlan(plan.value.id, { entries })
       plan.value = updated
       adoptPlanEntries(updated)
-      saveSuccess.value = true
-      setTimeout(() => {
-        saveSuccess.value = false
-      }, 2000)
+      saveStatus.value = 'saved'
+      saveStatusTimer = setTimeout(clearSaveStatus, 4000)
     } catch (err) {
       // The draft survives on purpose: a failed save must not silently throw
       // away what the user typed.
-      error.value =
+      saveStatus.value = 'error'
+      saveError.value =
         err instanceof Error ? err.message : 'Erreur lors de la sauvegarde'
     } finally {
       isSaving.value = false
@@ -787,12 +782,24 @@
     budgetInputs.value.set(categoryId, Math.round(amount))
   }
 
-  /** "Apply all averages" — prefer historical if available, else actual. */
+  /**
+   * What « Reprendre les moyennes » would copy: the historical average when
+   * a comparison is on, else the actual to date, else nothing to offer.
+   * The button says which, so the user knows what lands in the envelopes.
+   */
+  const averagesSource = computed<'historical' | 'actual' | 'none'>(() => {
+    if (showHistoricalColumn.value) return 'historical'
+    if (showActualColumn.value) return 'actual'
+    return 'none'
+  })
+
   function applyAverageToAll() {
+    if (averagesSource.value === 'none') return
     for (const cat of visibleExpenseCategories.value) {
-      const ref = showHistoricalColumn.value
-        ? getHistoricalAverage(cat)
-        : getPlanActualAverage(cat)
+      const ref =
+        averagesSource.value === 'historical'
+          ? getHistoricalAverage(cat)
+          : getPlanActualAverage(cat)
       if (ref > 0) {
         budgetInputs.value.set(cat.categoryId, Math.round(ref))
       }
@@ -837,6 +844,7 @@
 
   onBeforeUnmount(() => {
     window.removeEventListener('beforeunload', warnOnUnload)
+    if (saveStatusTimer) clearTimeout(saveStatusTimer)
   })
 
   onBeforeRouteLeave(() => {
@@ -846,380 +854,375 @@
     )
   })
 
+  // A toggle or a new comparison refetches the figures. Shown while it runs,
+  // and said when it fails — otherwise a switch reads "on" over figures that
+  // are still "off". Only the latest request may write its outcome.
+  const isRefreshingStatistics = ref(false)
+  const statisticsError = ref<string | null>(null)
+  let statisticsRequest = 0
+
+  async function refreshStatistics(): Promise<void> {
+    const request = ++statisticsRequest
+    isRefreshingStatistics.value = true
+    statisticsError.value = null
+    try {
+      await fetchStatistics()
+    } catch (err) {
+      if (request !== statisticsRequest) return
+      statisticsError.value =
+        err instanceof Error
+          ? err.message
+          : 'Impossible de mettre à jour les chiffres'
+    } finally {
+      if (request === statisticsRequest) isRefreshingStatistics.value = false
+    }
+  }
+
   watch(
     [comparisonRange, deductReimbursements, deductPendingReimbursements],
     () => {
       if (!plan.value) return
-      void fetchStatistics()
+      void refreshStatistics()
     }
   )
 </script>
 
 <template>
-  <div
-    class="min-h-screen bg-gray-50 dark:bg-slate-800 py-6 sm:py-8 transition-colors"
-  >
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <BudgetPlanHeader
-        :plan="plan"
-        :is-loading="isLoading"
-        :plan-count="planCount"
-        :is-editing="isEditing"
-        :is-saving="isSaving"
-        :save-success="saveSuccess"
-        @open-history="isHistoryOpen = true"
-        @create="openCreateModal"
-      />
+  <PageShell width="wide">
+    <BudgetPlanHeader
+      :plan="plan"
+      :is-loading="isLoading"
+      :plan-count="planCount"
+      :is-editing="isEditing"
+      @open-history="isHistoryOpen = true"
+      @create="openCreateModal"
+    />
 
-      <!-- Error banner -->
-      <div
-        v-if="error"
-        role="alert"
-        class="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm"
-      >
-        {{ error }}
-      </div>
+    <!-- Error banner -->
+    <div
+      v-if="error"
+      role="alert"
+      class="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg text-sm"
+    >
+      {{ error }}
+    </div>
 
-      <!-- Initial loading -->
-      <div v-if="isLoading" class="flex justify-center items-center py-20">
-        <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
-          <svg class="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
-            />
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-          <span>Chargement…</span>
-        </div>
-      </div>
-
-      <!-- Empty state -->
-      <div
-        v-else-if="!plan"
-        data-testid="budget-empty-state"
-        class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-8 text-center"
-      >
-        <svg
-          class="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
+    <!-- Initial loading -->
+    <div v-if="isLoading" class="flex justify-center items-center py-20">
+      <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+        <svg class="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
+          <circle
+            class="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            stroke-width="4"
+          />
           <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="1.5"
-            d="M9 7h6m-6 4h6m-6 4h6m-9 4h12a2 2 0 002-2V5a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2z"
+            class="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
           />
         </svg>
-        <h2 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Aucun budget en cours
-        </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-          Créez un budget pour commencer à suivre vos dépenses prévues.
-        </p>
-        <div class="mt-5 flex flex-wrap items-center justify-center gap-3">
-          <button
-            type="button"
-            data-testid="empty-create-button"
-            class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 dark:bg-primary-500 text-white text-sm font-medium rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors"
-            @click="openCreateModal"
+        <span>Chargement…</span>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <div
+      v-else-if="!plan"
+      data-testid="budget-empty-state"
+      class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-8 text-center"
+    >
+      <svg
+        class="mx-auto h-12 w-12 text-gray-500 dark:text-gray-400"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.5"
+          d="M9 7h6m-6 4h6m-6 4h6m-9 4h12a2 2 0 002-2V5a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2z"
+        />
+      </svg>
+      <h2 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+        Aucun budget en cours
+      </h2>
+      <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+        Créez un budget pour commencer à suivre vos dépenses prévues.
+      </p>
+      <div class="mt-5 flex flex-wrap items-center justify-center gap-3">
+        <BaseButton data-testid="empty-create-button" @click="openCreateModal">
+          Créer un budget
+        </BaseButton>
+        <BaseButton
+          v-if="planCount > 0"
+          variant="ghost"
+          data-testid="empty-history-button"
+          @click="isHistoryOpen = true"
+        >
+          Voir l'historique ({{ planCount }})
+        </BaseButton>
+      </div>
+    </div>
+
+    <!-- Plan content -->
+    <template v-else>
+      <!-- Filters card: reference period + reimbursement toggles -->
+      <BaseCard bordered data-testid="budget-filters-card" class="mb-6">
+        <div class="flex flex-col gap-3">
+          <ComparisonSelector
+            :plan="plan"
+            :year-ago-available="yearAgoAvailable"
+            :preset="comparisonPreset"
+            :custom-start-date="comparisonCustomStart"
+            :custom-end-date="comparisonCustomEnd"
+            @update:preset="comparisonPreset = $event"
+            @update:custom-start-date="comparisonCustomStart = $event"
+            @update:custom-end-date="comparisonCustomEnd = $event"
+            @update:range="comparisonRange = $event"
+          />
+
+          <div
+            class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 sm:flex sm:flex-wrap sm:items-center sm:gap-6 dark:border-slate-700"
           >
-            Créer un budget
-          </button>
-          <button
-            v-if="planCount > 0"
-            type="button"
-            data-testid="empty-history-button"
-            class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-            @click="isHistoryOpen = true"
+            <label
+              for="budget-deduct-reimbursements"
+              class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
+            >
+              <ToggleSwitch
+                id="budget-deduct-reimbursements"
+                :checked="deductReimbursements"
+                label="Déduire les remboursements reçus"
+                @change="deductReimbursements = $event"
+              />
+              <span
+                class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
+              >
+                <span class="sm:hidden">Déduire les remb. reçus</span>
+                <span class="hidden sm:inline"
+                  >Déduire les remboursements reçus</span
+                >
+              </span>
+            </label>
+            <label
+              for="budget-deduct-pending"
+              class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
+            >
+              <ToggleSwitch
+                id="budget-deduct-pending"
+                :checked="deductPendingReimbursements"
+                label="Déduire les remboursements en attente"
+                @change="deductPendingReimbursements = $event"
+              />
+              <span
+                class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
+              >
+                <span class="sm:hidden">Déduire les remb. en attente</span>
+                <span class="hidden sm:inline"
+                  >Déduire les remboursements en attente</span
+                >
+              </span>
+            </label>
+          </div>
+
+          <p
+            v-if="isRefreshingStatistics"
+            role="status"
+            data-testid="budget-statistics-refreshing"
+            class="text-xs text-gray-500 dark:text-gray-400"
           >
-            Voir l'historique ({{ planCount }})
-          </button>
+            Mise à jour des chiffres…
+          </p>
+          <InlineAlert
+            v-else-if="statisticsError"
+            data-testid="budget-statistics-error"
+            retry-label="Réessayer"
+            retry-test-id="budget-statistics-retry"
+            @retry="refreshStatistics"
+          >
+            Les chiffres n'ont pas pu être mis à jour : ils correspondent encore
+            aux réglages précédents. {{ statisticsError }}
+          </InlineAlert>
         </div>
+      </BaseCard>
+
+      <!-- The verdict first — « am I on track » is what the page is opened
+           for — then the chart it is read from. -->
+      <div class="mb-6">
+        <BudgetSavingsSummary
+          :plan-label="plan.name"
+          :plan-income-avg="chartAverageIncome"
+          :plan-budget-total="totalBudget"
+          :plan-actual-expense-avg="planActualExpenseAvg"
+          :plan-actual-income-avg="planActualIncomeAvg"
+          :complete-plan-months-count="comparison.completePlanMonthsCount.value"
+          :is-plan-finished="comparison.isPlanFinished.value"
+          :actual-period-label="selectedMonth ? actualPeriodLabel : null"
+          :month-progress="comparison.selectedMonthProgress.value"
+          :comparison="summaryComparisonProps"
+        />
       </div>
 
-      <!-- Plan content -->
-      <template v-else>
-        <!-- Filters card: reference period + reimbursement toggles -->
-        <div
-          data-testid="budget-filters-card"
-          class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5 mb-6"
-        >
-          <div class="flex flex-col gap-3">
-            <ComparisonSelector
-              :plan="plan"
-              :year-ago-available="yearAgoAvailable"
-              :preset="comparisonPreset"
-              :custom-start-date="comparisonCustomStart"
-              :custom-end-date="comparisonCustomEnd"
-              @update:preset="comparisonPreset = $event"
-              @update:custom-start-date="comparisonCustomStart = $event"
-              @update:custom-end-date="comparisonCustomEnd = $event"
-              @update:range="comparisonRange = $event"
-            />
+      <!-- Monthly expenses chart -->
+      <BaseCard
+        v-if="monthlyTotalExpenses.length >= 2 && statistics?.monthLabels"
+        class="mb-6"
+      >
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+          Évolution des dépenses mensuelles
+        </h2>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          Lignes de référence : revenus moyens et budget total alloué.
+        </p>
+        <MonthlyExpensesChart
+          :monthly-totals="monthlyTotalExpenses"
+          :month-labels="statistics.monthLabels"
+          :average-income="chartAverageIncome"
+          :total-budget="totalBudget"
+          :plan-start-month="plan.startDate.slice(0, 7)"
+          :plan-end-month="plan.endDate.slice(0, 7)"
+          :comparison-start-month="comparisonRange?.startMonth ?? ''"
+          :comparison-end-month="comparisonRange?.endMonth ?? ''"
+        />
+      </BaseCard>
 
-            <div
-              class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 sm:flex sm:flex-wrap sm:items-center sm:gap-6 dark:border-slate-700"
-            >
-              <button
-                type="button"
-                role="switch"
-                :aria-checked="deductReimbursements"
-                class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-                @click="deductReimbursements = !deductReimbursements"
-              >
-                <span
-                  class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
-                  :class="
-                    deductReimbursements
-                      ? 'bg-primary-500'
-                      : 'bg-gray-300 dark:bg-slate-600'
-                  "
-                >
-                  <span
-                    class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
-                    :class="
-                      deductReimbursements ? 'translate-x-4' : 'translate-x-0.5'
-                    "
-                  />
-                </span>
-                <span
-                  class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
-                >
-                  <span class="sm:hidden">Déduire les remb. reçus</span>
-                  <span class="hidden sm:inline"
-                    >Déduire les remboursements reçus</span
-                  >
-                </span>
-              </button>
-              <button
-                type="button"
-                role="switch"
-                :aria-checked="deductPendingReimbursements"
-                class="group flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-                @click="
-                  deductPendingReimbursements = !deductPendingReimbursements
-                "
-              >
-                <span
-                  class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
-                  :class="
-                    deductPendingReimbursements
-                      ? 'bg-primary-500'
-                      : 'bg-gray-300 dark:bg-slate-600'
-                  "
-                >
-                  <span
-                    class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200"
-                    :class="
-                      deductPendingReimbursements
-                        ? 'translate-x-4'
-                        : 'translate-x-0.5'
-                    "
-                  />
-                </span>
-                <span
-                  class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
-                >
-                  <span class="sm:hidden">Déduire les remb. en attente</span>
-                  <span class="hidden sm:inline"
-                    >Déduire les remboursements en attente</span
-                  >
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Monthly expenses chart -->
-        <div
-          v-if="monthlyTotalExpenses.length >= 2 && statistics?.monthLabels"
-          class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-4 sm:p-6 mb-6"
-        >
-          <h2
-            class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1"
-          >
-            Évolution des dépenses mensuelles
-          </h2>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
-            Lignes de référence : revenus moyens et budget total alloué.
-          </p>
-          <MonthlyExpensesChart
-            :monthly-totals="monthlyTotalExpenses"
-            :month-labels="statistics.monthLabels"
-            :average-income="chartAverageIncome"
-            :total-budget="totalBudget"
-            :plan-start-month="plan.startDate.slice(0, 7)"
-            :plan-end-month="plan.endDate.slice(0, 7)"
-            :comparison-start-month="comparisonRange?.startMonth ?? ''"
-            :comparison-end-month="comparisonRange?.endMonth ?? ''"
-            @select-month="onChartMonthSelected"
-          />
-        </div>
-
-        <!-- Savings summary -->
-        <div class="mb-6">
-          <BudgetSavingsSummary
-            :plan-label="plan.name"
-            :plan-income-avg="chartAverageIncome"
-            :plan-budget-total="totalBudget"
-            :plan-actual-expense-avg="planActualExpenseAvg"
-            :plan-actual-income-avg="planActualIncomeAvg"
-            :complete-plan-months-count="
-              comparison.completePlanMonthsCount.value
-            "
-            :is-plan-finished="comparison.isPlanFinished.value"
-            :actual-period-label="selectedMonth ? actualPeriodLabel : null"
-            :comparison="summaryComparisonProps"
-          />
-        </div>
-
-        <!-- Month-by-month grid: which envelope drifts, and when. The
+      <!-- Month-by-month grid: which envelope drifts, and when. The
              averages above cannot answer that — they average it away. -->
-        <BudgetMonthlyMatrix
-          v-if="showMonthlyMatrix"
-          :months="matrixMonths"
-          :rows="matrixRows"
+      <BudgetMonthlyMatrix
+        v-if="showMonthlyMatrix"
+        :months="matrixMonths"
+        :rows="matrixRows"
+        :selected-month="selectedMonth"
+      />
+
+      <!-- Expense category list -->
+      <BaseCard bordered>
+        <BudgetTableControls
+          v-model:sort-order="sortOrder"
+          :editing="isEditing"
+          :month-options="monthOptions"
           :selected-month="selectedMonth"
-          @select-month="onChartMonthSelected"
+          :complete-months-count="comparison.completePlanMonthsCount.value"
+          :actual-period-label="actualPeriodLabel"
+          :plan-is-past="planStatus(plan) === 'past'"
+          :has-exceptional="hasExceptionalInPlan"
+          :breakdown-mode="breakdownMode"
+          :plan-events="planEvents"
+          :averages-source="averagesSource"
+          @enter-edit="enterEditMode"
+          @select-month="selectMonth"
+          @apply-averages="applyAverageToAll"
+          @adjust-percent="adjustAllByPercent"
+          @reset="resetAllBudgets"
+          @set-mode="setBreakdownMode"
+          @open-tag="openTagAnalysis"
         />
 
-        <!-- Expense category list -->
-        <div
-          class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5"
-        >
-          <BudgetTableControls
-            v-model:sort-order="sortOrder"
-            :editing="isEditing"
-            :month-options="monthOptions"
-            :selected-month="selectedMonth"
-            :complete-months-count="comparison.completePlanMonthsCount.value"
-            :actual-period-label="actualPeriodLabel"
-            :plan-is-past="planStatus(plan) === 'past'"
-            :has-exceptional="hasExceptionalInPlan"
-            :breakdown-mode="breakdownMode"
-            :plan-events="planEvents"
-            @enter-edit="enterEditMode"
-            @select-month="selectMonth"
-            @apply-averages="applyAverageToAll"
-            @adjust-percent="adjustAllByPercent"
-            @reset="resetAllBudgets"
-            @set-mode="setBreakdownMode"
-            @open-tag="openTagAnalysis"
-          />
+        <BudgetProjectsSection
+          :projects="projects"
+          :plan="plan"
+          @open-tag="openTagAnalysis"
+        />
 
-          <BudgetProjectsSection
-            :projects="projects"
-            :plan="plan"
-            @open-tag="openTagAnalysis"
-          />
-
-          <!-- Column-count CSS variable drives both header & row grids so
+        <!-- Column-count CSS variable drives both header & row grids so
                the table adapts to which columns are visible. -->
-          <div
-            class="hidden sm:grid gap-x-6 px-4 pb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-slate-700"
-            :style="{
-              '--row-grid': rowGridTemplate,
-              gridTemplateColumns: 'var(--row-grid)',
-            }"
+        <div
+          class="hidden sm:grid gap-x-6 px-4 pb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-slate-700"
+          :style="{
+            '--row-grid': rowGridTemplate,
+            gridTemplateColumns: 'var(--row-grid)',
+          }"
+        >
+          <span>Catégorie</span>
+          <span
+            v-if="showHistoricalColumn"
+            class="text-right text-indigo-600 dark:text-indigo-400"
           >
-            <span>Catégorie</span>
+            Historique
             <span
-              v-if="showHistoricalColumn"
-              class="text-right text-indigo-600 dark:text-indigo-400"
+              class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
             >
-              Historique
-              <span
-                class="block text-[10px] font-normal normal-case tracking-normal text-indigo-400 dark:text-indigo-500"
-              >
-                {{ comparisonRange?.label }}
-              </span>
+              {{ comparisonRange?.label }}
             </span>
-            <span class="text-right text-primary-700 dark:text-primary-400">
-              Budget
-              <span
-                class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
-              >
-                /mois
-              </span>
-            </span>
+          </span>
+          <span class="text-right text-primary-700 dark:text-primary-400">
+            Budget
             <span
-              v-if="showActualColumn"
-              class="text-right text-red-600 dark:text-red-400"
+              class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
             >
-              {{ selectedMonth ? 'Réel' : 'Réel à date' }}
-              <span
-                class="block text-[10px] font-normal normal-case tracking-normal text-red-400 dark:text-red-500"
-              >
-                {{ actualPeriodLabel }}
-              </span>
+              /mois
             </span>
-            <span class="text-right w-24">Tendance</span>
-          </div>
-
-          <!-- Empty list -->
-          <div
-            v-if="sortedCategories.length === 0"
-            class="py-12 text-center text-sm text-gray-500 dark:text-gray-400"
+          </span>
+          <span
+            v-if="showActualColumn"
+            class="text-right text-red-600 dark:text-red-400"
           >
-            Aucune catégorie de dépense sur cette période.
-          </div>
-
-          <!-- Category rows -->
-          <div v-else class="divide-y divide-gray-100 dark:divide-slate-700">
-            <BudgetCategoryRow
-              v-for="cat in sortedCategories"
-              :key="cat.categoryId"
-              :category="cat"
-              :row-grid="rowGridTemplate"
-              :expanded="isCategoryExpanded(cat.categoryId)"
-              :editing="isEditing"
-              :show-historical="showHistoricalColumn"
-              :show-actual="showActualColumn"
-              :historical-average="getHistoricalAverage(cat)"
-              :actual-average="getPlanActualAverage(cat)"
-              :exceptional-average="getExceptionalAverage(cat)"
-              :budget="getBudgetForCategory(cat.categoryId)"
-              :saved-budget="getSavedBudget(cat.categoryId)"
-              :dirty="isCategoryDirty(cat.categoryId)"
-              :prorated-budget="getProratedBudget(cat.categoryId)"
-              :row-status="getRowStatus(cat)"
-              :margin-vs-historical="getMarginVsHistorical(cat)"
-              :remaining-vs-actual="getRemainingVsActual(cat)"
-              :sparkline="comparison.seriesFor(cat) ?? []"
-              :chart-data="categoryChartData(cat)"
-              :comparison-label="comparisonRange?.label"
-              :actual-period-label="actualPeriodLabel"
-              :breakdown-mode="breakdownMode"
-              @toggle-expand="toggleCategoryExpanded(cat.categoryId)"
-              @update-budget="value => updateBudgetInput(cat.categoryId, value)"
-              @apply-budget="amount => setBudgetValue(cat.categoryId, amount)"
-            />
-          </div>
+            {{ selectedMonth ? 'Réel' : 'Réel à date' }}
+            <span
+              class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
+            >
+              {{ actualPeriodLabel }}
+            </span>
+          </span>
+          <span class="text-right w-24">Tendance</span>
         </div>
 
-        <BudgetEditBar
-          v-if="isEditing"
-          :dirty-count="dirtyCategoryIds.length"
-          :saved-total="savedPlanTotal"
-          :draft-total="draftPlanTotal"
-          :delta="draftDelta"
-          :saving="isSaving"
-          @save="saveBudget"
-          @cancel="cancelEdit"
-        />
-      </template>
-    </div>
+        <!-- Empty list -->
+        <div
+          v-if="sortedCategories.length === 0"
+          class="py-12 text-center text-sm text-gray-500 dark:text-gray-400"
+        >
+          Aucune catégorie de dépense sur cette période.
+        </div>
+
+        <!-- Category rows -->
+        <div v-else class="divide-y divide-gray-100 dark:divide-slate-700">
+          <BudgetCategoryRow
+            v-for="cat in sortedCategories"
+            :key="cat.categoryId"
+            :category="cat"
+            :row-grid="rowGridTemplate"
+            :expanded="isCategoryExpanded(cat.categoryId)"
+            :editing="isEditing"
+            :show-historical="showHistoricalColumn"
+            :show-actual="showActualColumn"
+            :historical-average="getHistoricalAverage(cat)"
+            :actual-average="getPlanActualAverage(cat)"
+            :exceptional-average="getExceptionalAverage(cat)"
+            :budget="getBudgetForCategory(cat.categoryId)"
+            :saved-budget="getSavedBudget(cat.categoryId)"
+            :dirty="isCategoryDirty(cat.categoryId)"
+            :prorated-budget="getProratedBudget(cat.categoryId)"
+            :row-status="getRowStatus(cat)"
+            :margin-vs-historical="getMarginVsHistorical(cat)"
+            :remaining-vs-actual="getRemainingVsActual(cat)"
+            :sparkline="comparison.seriesFor(cat) ?? []"
+            :chart-data="categoryChartData(cat)"
+            :breakdown-mode="breakdownMode"
+            @toggle-expand="toggleCategoryExpanded(cat.categoryId)"
+            @update-budget="value => updateBudgetInput(cat.categoryId, value)"
+            @apply-budget="amount => setBudgetValue(cat.categoryId, amount)"
+          />
+        </div>
+      </BaseCard>
+
+      <BudgetEditBar
+        v-if="isEditing || saveStatus === 'saved'"
+        :dirty-count="dirtyCategoryIds.length"
+        :saved-total="savedPlanTotal"
+        :draft-total="draftPlanTotal"
+        :delta="draftDelta"
+        :saving="isSaving"
+        :status="saveStatus"
+        :error-message="saveError"
+        @save="saveBudget"
+        @cancel="cancelEdit"
+      />
+    </template>
 
     <NewBudgetPlanModal
       :open="isModalOpen"
@@ -1234,5 +1237,5 @@
       @select="loadPlanById"
       @deleted="onPlanDeleted"
     />
-  </div>
+  </PageShell>
 </template>

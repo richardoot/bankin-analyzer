@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
   /**
    * Shell for the settings hub. Owns the page chrome — title, tab bar, page
@@ -24,45 +25,41 @@
 </script>
 
 <template>
-  <div
-    class="min-h-[calc(100vh-4rem)] bg-gray-50 py-6 sm:py-12 transition-colors dark:bg-slate-800"
-  >
-    <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-      <PageHeader
-        title="Réglages"
-        subtitle="Vos comptes, vos catégories et vos préférences d'affichage"
-        class="mb-6"
-      />
+  <PageShell>
+    <PageHeader
+      title="Réglages"
+      subtitle="Vos comptes, vos catégories et vos préférences d'affichage"
+      class="mb-6"
+    />
 
-      <!-- Tab bar. Scrolls horizontally on narrow screens rather than wrapping,
+    <!-- Tab bar. Scrolls horizontally on narrow screens rather than wrapping,
            so the tabs keep reading as a single row. -->
-      <nav
-        class="mb-5 -mx-4 overflow-x-auto px-4 sm:mx-0 sm:mb-8 sm:px-0"
-        aria-label="Sections des réglages"
+    <nav
+      class="mb-5 -mx-4 overflow-x-auto px-4 sm:mx-0 sm:mb-8 sm:px-0"
+      aria-label="Sections des réglages"
+    >
+      <ul
+        class="inline-flex gap-1 rounded-xl border border-gray-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900"
       >
-        <ul
-          class="inline-flex gap-1 rounded-xl border border-gray-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900"
-        >
-          <li v-for="tab in tabs" :key="tab.to">
-            <RouterLink
-              :to="tab.to"
-              :data-testid="tab.testId"
-              class="flex min-h-[44px] items-center whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:min-h-0"
-              active-class="bg-primary-600 text-white dark:bg-primary-600"
-              exact-active-class="bg-primary-600 text-white dark:bg-primary-600"
-              :class="
-                $route.path.startsWith(tab.to)
-                  ? ''
-                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800'
-              "
-            >
-              {{ tab.label }}
-            </RouterLink>
-          </li>
-        </ul>
-      </nav>
+        <li v-for="tab in tabs" :key="tab.to">
+          <RouterLink
+            :to="tab.to"
+            :data-testid="tab.testId"
+            class="flex min-h-[44px] items-center whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:min-h-0"
+            active-class="bg-primary-600 text-white dark:bg-primary-600"
+            exact-active-class="bg-primary-600 text-white dark:bg-primary-600"
+            :class="
+              $route.path.startsWith(tab.to)
+                ? ''
+                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800'
+            "
+          >
+            {{ tab.label }}
+          </RouterLink>
+        </li>
+      </ul>
+    </nav>
 
-      <RouterView />
-    </div>
-  </div>
+    <RouterView />
+  </PageShell>
 </template>

@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
 import { setActivePinia, createPinia } from 'pinia'
+import {
+  isTabBarSuppressed,
+  resetMobileNavigation,
+} from '@/composables/useMobileNavigation'
 import TransactionsPage from './TransactionsPage.vue'
 
 // Mock the API
@@ -23,6 +27,7 @@ vi.mock('@/lib/api', () => ({
     getRecurrences: vi.fn(),
     linkTransactionToRecurrence: vi.fn(),
     unlinkTransactionFromRecurrence: vi.fn(),
+    deleteReimbursement: vi.fn(),
   },
   recurrenceFilterKey: (r: { amountBucket: number; merchantKey: string }) =>
     `${r.amountBucket}:${r.merchantKey}`,
@@ -41,7 +46,8 @@ vi.mock('@/composables/useToast', () => ({
 }))
 
 // Mock the formatters
-vi.mock('@/lib/formatters', () => ({
+vi.mock('@/lib/formatters', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/lib/formatters')>()),
   formatCurrency: (v: number) => `${v.toFixed(2)} €`,
 }))
 
@@ -291,6 +297,29 @@ describe('TransactionsPage — optimistic updates', () => {
       const wrapper = await mountPage()
       expect(wrapper.text()).toContain('Cafe')
     })
+
+    it('keeps the last list under the error and retries on demand', async () => {
+      const wrapper = await mountPage()
+
+      vi.mocked(api.getTransactions).mockRejectedValueOnce(
+        new Error('Impossible de charger les transactions')
+      )
+      await wrapper.find('[data-testid="sort-by-date"]').trigger('click')
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="transactions-error"]').text()
+      ).toContain('Impossible de charger les transactions')
+      expect(wrapper.text()).toContain('Cafe')
+
+      await wrapper.find('[data-testid="transactions-retry"]').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="transactions-error"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.text()).toContain('Cafe')
+    })
   })
 
   describe('togglePointed', () => {
@@ -316,15 +345,15 @@ describe('TransactionsPage — optimistic updates', () => {
       })
 
       // While API is pending, the button should already reflect the new state
-      // (title changes from "Pointer" to "Depointer")
-      expect(wrapper.find('button[title="Depointer"]').exists()).toBe(true)
+      // (title changes from "Pointer" to "Dépointer")
+      expect(wrapper.find('button[title="Dépointer"]').exists()).toBe(true)
 
       // Now resolve API
       resolveApi(makeTx({ isPointed: true }))
       await flushPromises()
 
       // State should remain pointed
-      expect(wrapper.find('button[title="Depointer"]').exists()).toBe(true)
+      expect(wrapper.find('button[title="Dépointer"]').exists()).toBe(true)
     })
 
     it('should rollback to original state and show error toast on API failure', async () => {
@@ -730,6 +759,28 @@ describe('TransactionsPage — optimistic updates', () => {
       await flushPromises()
     }
 
+    it('pages on a phone through previous / « n / N » / next', async () => {
+      const wrapper = await mountWithPage(3, 412)
+
+      expect(wrapper.get('[data-testid="pagination-compact"]').text()).toBe(
+        '1 / 138'
+      )
+      const next = wrapper.get('[data-testid="pagination-next"]')
+      expect(next.attributes('aria-label')).toBe('Page suivante')
+      expect(
+        wrapper
+          .get('[data-testid="pagination-previous"]')
+          .attributes('disabled')
+      ).toBeDefined()
+
+      await next.trigger('click')
+      await flushPromises()
+
+      expect(wrapper.get('[data-testid="pagination-compact"]').text()).toBe(
+        '2 / 138'
+      )
+    })
+
     it('offers to reach the rest of the filter once the page is fully ticked', async () => {
       const wrapper = await mountWithPage(3, 412)
       await selectWholePage(wrapper)
@@ -764,6 +815,34 @@ describe('TransactionsPage — optimistic updates', () => {
       expect(selection).not.toHaveProperty('ids')
     })
 
+    it('confirms a bulk pointing with a toast', async () => {
+      vi.mocked(api.bulkUpdateTransactions).mockResolvedValue({ updated: 3 })
+      const wrapper = await mountWithPage(3, 412)
+      await selectWholePage(wrapper)
+
+      await wrapper.get('[data-testid="bulk-pointed"]').trigger('click')
+      await flushPromises()
+
+      expect(mockToast.success).toHaveBeenCalledWith(
+        '3 transaction(s) pointée(s)'
+      )
+    })
+
+    it('says so when a bulk pointing fails', async () => {
+      vi.mocked(api.bulkUpdateTransactions).mockRejectedValue(
+        new Error('Impossible de modifier les transactions')
+      )
+      const wrapper = await mountWithPage(3, 412)
+      await selectWholePage(wrapper)
+
+      await wrapper.get('[data-testid="bulk-pointed"]').trigger('click')
+      await flushPromises()
+
+      expect(mockToast.error).toHaveBeenCalledWith(
+        'Impossible de modifier les transactions'
+      )
+    })
+
     it('falls back to ids when the selection is just this page', async () => {
       vi.mocked(api.bulkUpdateTransactions).mockResolvedValue({ updated: 3 })
       const wrapper = await mountWithPage(3, 412)
@@ -795,6 +874,288 @@ describe('TransactionsPage — optimistic updates', () => {
       expect(
         wrapper.find('[data-testid="whole-filter-selected-banner"]').exists()
       ).toBe(false)
+    })
+  })
+
+  describe('loading without losing the list', () => {
+    const deferred = () => {
+      let resolve!: (value: {
+        data: TransactionDto[]
+        meta: typeof defaultPaginationMeta
+      }) => void
+      const promise = new Promise<{
+        data: TransactionDto[]
+        meta: typeof defaultPaginationMeta
+      }>(r => {
+        resolve = r
+      })
+      return { promise, resolve }
+    }
+
+    it('shows the skeleton once, then keeps the rows dimmed while it refetches', async () => {
+      setupDefaultMocks()
+      const first = deferred()
+      vi.mocked(api.getTransactions).mockReturnValueOnce(first.promise)
+      await router.replace({ query: {} })
+      const wrapper = mount(TransactionsPage, {
+        global: { plugins: [router], stubs: { Teleport: true } },
+      })
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="transactions-skeleton"]').exists()
+      ).toBe(true)
+      expect(wrapper.find('[data-testid="transactions-list"]').exists()).toBe(
+        false
+      )
+
+      first.resolve({ data: [makeTx()], meta: defaultPaginationMeta })
+      await flushPromises()
+      expect(
+        wrapper.find('[data-testid="transactions-skeleton"]').exists()
+      ).toBe(false)
+      expect(wrapper.text()).toContain('Cafe')
+
+      const second = deferred()
+      vi.mocked(api.getTransactions).mockReturnValueOnce(second.promise)
+      await wrapper.get('[data-testid="sort-by-date"]').trigger('click')
+      await flushPromises()
+
+      // The rows stay, busy, under a discreet indicator — no skeleton.
+      expect(
+        wrapper.find('[data-testid="transactions-skeleton"]').exists()
+      ).toBe(false)
+      const list = wrapper.get('[data-testid="transactions-list"]')
+      expect(list.attributes('aria-busy')).toBe('true')
+      expect(list.classes()).toContain('opacity-60')
+      expect(
+        wrapper.find('[data-testid="transactions-refreshing"]').exists()
+      ).toBe(true)
+      expect(wrapper.text()).toContain('Cafe')
+
+      second.resolve({
+        data: [makeTx({ description: 'Boulangerie' })],
+        meta: defaultPaginationMeta,
+      })
+      await flushPromises()
+      expect(
+        wrapper.get('[data-testid="transactions-list"]').attributes('aria-busy')
+      ).toBeUndefined()
+      expect(wrapper.text()).toContain('Boulangerie')
+      expect(wrapper.text()).not.toContain('Cafe')
+    })
+
+    it('lets only the latest answer land when two requests overlap', async () => {
+      const wrapper = await mountPage()
+      const slow = deferred()
+      const fast = deferred()
+      vi.mocked(api.getTransactions)
+        .mockReturnValueOnce(slow.promise)
+        .mockReturnValueOnce(fast.promise)
+
+      await wrapper.get('[data-testid="sort-by-date"]').trigger('click')
+      await flushPromises()
+      await wrapper.get('[data-testid="sort-by-amount"]').trigger('click')
+      await flushPromises()
+
+      fast.resolve({
+        data: [makeTx({ description: 'Réponse récente' })],
+        meta: defaultPaginationMeta,
+      })
+      await flushPromises()
+      slow.resolve({
+        data: [makeTx({ description: 'Réponse périmée' })],
+        meta: defaultPaginationMeta,
+      })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Réponse récente')
+      expect(wrapper.text()).not.toContain('Réponse périmée')
+      expect(
+        wrapper.get('[data-testid="transactions-list"]').attributes('aria-busy')
+      ).toBeUndefined()
+    })
+  })
+
+  describe('sorting from a phone', () => {
+    it('offers the four orders as one choice and mirrors it in the URL', async () => {
+      const wrapper = await mountPage()
+      const group = wrapper.get('[data-testid="transactions-sort-choice"]')
+      expect(group.attributes('role')).toBe('radiogroup')
+      expect(
+        group.findAll('[role="radio"]').map(r => r.attributes('aria-checked'))
+      ).toEqual(['true', 'false', 'false', 'false'])
+
+      await wrapper
+        .get('[data-testid="sort-choice-amount-asc"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sortBy: 'amount', sortOrder: 'asc' })
+      )
+      expect(router.currentRoute.value.query).toMatchObject({
+        sort: 'amount',
+        dir: 'asc',
+      })
+      // The table header agrees.
+      expect(
+        wrapper.get('[data-testid="sort-by-amount"]').attributes('aria-label')
+      ).toBe('Trier par montant, décroissant')
+    })
+
+    it('names the search field and keeps its placeholder short', async () => {
+      const wrapper = await mountPage()
+      const search = wrapper.get('[data-testid="transactions-search-input"]')
+      expect(search.attributes('aria-label')).toMatch(/^Rechercher/)
+      expect(search.attributes('placeholder')?.length).toBeLessThan(20)
+    })
+  })
+
+  describe('one selection bar', () => {
+    it('opens with the toggle, counts, and closes from its single exit', async () => {
+      resetMobileNavigation()
+      const wrapper = await mountPage()
+      expect(wrapper.find('[data-testid="selection-bar"]').exists()).toBe(false)
+      expect(isTabBarSuppressed()).toBe(false)
+
+      await wrapper
+        .get('[data-testid="toggle-selection-mode"]')
+        .trigger('click')
+      const bar = wrapper.get('[data-testid="selection-bar"]')
+      // Below lg the selection bar takes the tab bar's place.
+      expect(isTabBarSuppressed()).toBe(true)
+      expect(bar.text()).toContain('Aucune transaction sélectionnée')
+      // The entry point steps aside: the bar is the one way out.
+      expect(
+        wrapper.find('[data-testid="toggle-selection-mode"]').exists()
+      ).toBe(false)
+      expect(
+        bar.findAll('button').filter(b => b.text() === 'Quitter la sélection')
+          .length
+      ).toBeGreaterThan(0)
+      expect(wrapper.find('[data-testid="bulk-pointed"]').text()).toBe(
+        'Pointer'
+      )
+      expect(wrapper.find('[data-testid="bulk-unpointed"]').text()).toBe(
+        'Dépointer'
+      )
+
+      // A tap on the card ticks it.
+      await wrapper.get('[data-testid="row-card"]').trigger('click')
+      expect(wrapper.get('[data-testid="selection-bar"]').text()).toContain(
+        '1 sélectionnée'
+      )
+
+      // The phone ticks — here unticks — the whole page from the bar.
+      await wrapper.get('[data-testid="select-all-mobile"]').trigger('change')
+      expect(wrapper.get('[data-testid="selection-bar"]').text()).toContain(
+        'Aucune transaction sélectionnée'
+      )
+
+      await wrapper.get('[data-testid="exit-selection"]').trigger('click')
+      expect(wrapper.find('[data-testid="selection-bar"]').exists()).toBe(false)
+      expect(
+        wrapper.find('[data-testid="toggle-selection-mode"]').exists()
+      ).toBe(true)
+      expect(isTabBarSuppressed()).toBe(false)
+    })
+
+    it('opens the filing dialog from a tap on the card outside selection mode', async () => {
+      const wrapper = await mountPage()
+      await wrapper.get('[data-testid="row-card"]').trigger('click')
+      expect(
+        wrapper.find('category-subcategory-modal-stub').attributes('isopen')
+      ).toBe('true')
+    })
+  })
+
+  describe('deleting a reimbursement', () => {
+    const reimbursement = {
+      id: 'r-1',
+      transactionId: 'tx-1',
+      personId: 'p-1',
+      personName: 'Alice',
+      categoryId: null,
+      categoryName: null,
+      expenseCategoryId: 'cat-1',
+      expenseCategoryName: 'Alimentation',
+      amount: 2,
+      amountReceived: 0,
+      amountRemaining: 2,
+      status: 'PENDING' as const,
+      note: null,
+      createdAt: '2026-01-15T00:00:00.000Z',
+      updatedAt: '2026-01-15T00:00:00.000Z',
+    }
+
+    const mountWithReimbursement = async () => {
+      setupDefaultMocks()
+      vi.mocked(api.getReimbursements).mockResolvedValue([reimbursement])
+      await router.replace({ query: {} })
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+      return wrapper
+    }
+
+    it('asks before deleting, then deletes and says so', async () => {
+      vi.mocked(api.deleteReimbursement).mockResolvedValue(undefined)
+      const wrapper = await mountWithReimbursement()
+
+      const cross = wrapper.findAll(
+        'button[aria-label="Supprimer le remboursement de Alice"]'
+      )
+      expect(cross.length).toBeGreaterThan(0)
+      await cross.map(b => b)[0]?.trigger('click')
+      await flushPromises()
+
+      // Nothing deleted yet: the question comes first.
+      expect(api.deleteReimbursement).not.toHaveBeenCalled()
+      expect(wrapper.text()).toContain('Supprimer ce remboursement ?')
+
+      const confirm = wrapper
+        .findAll('button')
+        .filter(b => b.text() === 'Supprimer')
+      await confirm.map(b => b)[0]?.trigger('click')
+      await flushPromises()
+
+      expect(api.deleteReimbursement).toHaveBeenCalledWith('r-1')
+      expect(mockToast.success).toHaveBeenCalledWith('Remboursement supprimé')
+    })
+
+    it('keeps the question open and says so when the deletion fails', async () => {
+      vi.mocked(api.deleteReimbursement).mockRejectedValue(
+        new Error('Impossible de supprimer le remboursement')
+      )
+      const wrapper = await mountWithReimbursement()
+
+      await wrapper
+        .findAll('button[aria-label="Supprimer le remboursement de Alice"]')
+        .map(b => b)[0]
+        ?.trigger('click')
+      await flushPromises()
+      await wrapper
+        .findAll('button')
+        .filter(b => b.text() === 'Supprimer')
+        .map(b => b)[0]
+        ?.trigger('click')
+      await flushPromises()
+
+      expect(mockToast.error).toHaveBeenCalledWith(
+        'Impossible de supprimer le remboursement'
+      )
+      expect(wrapper.text()).toContain('Supprimer ce remboursement ?')
     })
   })
 

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+  import IconSpinner from '@/components/icons/IconSpinner.vue'
+
   /**
    * Small accessible on/off switch. Emits `change` with the next value so the
    * parent stays in control of (possibly async) state updates.
@@ -39,37 +41,14 @@
     :disabled="disabled || loading"
     :title="label"
     class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors pointer-coarse:before:absolute pointer-coarse:before:-inset-x-1 pointer-coarse:before:-inset-y-3 pointer-coarse:before:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-    :class="
-      checked
-        ? 'bg-primary-500 dark:bg-primary-600'
-        : 'bg-gray-300 dark:bg-slate-600'
-    "
+    :class="checked ? 'bg-primary-600' : 'bg-gray-300 dark:bg-slate-600'"
     @click="onClick(checked, disabled === true || loading === true)"
   >
     <span
       class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
       :class="checked ? 'translate-x-4' : 'translate-x-0.5'"
     >
-      <svg
-        v-if="loading"
-        class="h-4 w-4 animate-spin text-gray-400"
-        fill="none"
-        viewBox="0 0 24 24"
-      >
-        <circle
-          class="opacity-25"
-          cx="12"
-          cy="12"
-          r="10"
-          stroke="currentColor"
-          stroke-width="4"
-        />
-        <path
-          class="opacity-75"
-          fill="currentColor"
-          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-        />
-      </svg>
+      <IconSpinner v-if="loading" class="h-4 w-4 text-gray-400" />
     </span>
   </button>
 </template>

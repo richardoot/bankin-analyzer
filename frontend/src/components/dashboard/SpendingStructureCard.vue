@@ -16,10 +16,11 @@
    * that come back on their own — subscriptions, rent, insurance — with a
    * way to the list of them.
    */
-  import { computed, ref } from 'vue'
+  import { computed } from 'vue'
   import { RouterLink } from 'vue-router'
   import type { SpendingStructureDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const props = defineProps<{
     actual: SpendingStructureDto
@@ -30,12 +31,12 @@
     savingsRate: number | null
     remainingToLive: number | null
     periodMonths: number
+    /** Which of the two structures is read. */
+    reading: 'everyday' | 'actual'
   }>()
 
-  type Reading = 'everyday' | 'actual'
-  const reading = ref<Reading>('everyday')
   const structure = computed(() =>
-    reading.value === 'everyday' ? props.everyday : props.actual
+    props.reading === 'everyday' ? props.everyday : props.actual
   )
 
   interface Segment {
@@ -55,19 +56,24 @@
       .map(p => ({ ...p, share: total > 0 ? p.amount / total : 0 }))
   }
 
+  /*
+   * Each reading is one hue in two tones — the strong share and its
+   * counterpart — so the two bars never borrow a role color: amber is the
+   * exceptional share on this very screen, indigo the comparison reference.
+   */
   const natureSegments = computed(() =>
     segments([
       {
         key: 'essential',
         label: 'Essentiel',
         amount: structure.value.essential,
-        color: 'bg-blue-500',
+        color: 'bg-blue-600 dark:bg-blue-500',
       },
       {
         key: 'pleasure',
         label: 'Plaisir',
         amount: structure.value.pleasure,
-        color: 'bg-amber-400',
+        color: 'bg-blue-300',
       },
       {
         key: 'unknown',
@@ -84,13 +90,13 @@
         key: 'committed',
         label: 'Engagé',
         amount: structure.value.committed,
-        color: 'bg-indigo-500',
+        color: 'bg-teal-600 dark:bg-teal-500',
       },
       {
         key: 'variable',
         label: 'Variable',
         amount: structure.value.variable,
-        color: 'bg-teal-400',
+        color: 'bg-teal-300',
       },
       {
         key: 'unknown',
@@ -111,53 +117,18 @@
 </script>
 
 <template>
-  <section
-    data-testid="spending-structure"
-    class="rounded-xl bg-white p-4 shadow-sm sm:p-6 dark:bg-slate-900 dark:shadow-slate-900/20"
-  >
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Structure des dépenses
-        </h2>
-        <p class="text-xs text-gray-500 dark:text-gray-400">
-          Contraint ou choisi, engagé ou variable, sur la période.
-        </p>
-      </div>
-      <div
-        class="inline-flex rounded-lg border border-gray-200 p-0.5 dark:border-slate-700"
-        role="group"
-        aria-label="Lecture"
-      >
-        <button
-          type="button"
-          :aria-pressed="reading === 'everyday'"
-          data-testid="reading-everyday"
-          class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-          :class="
-            reading === 'everyday'
-              ? 'bg-primary-500 text-white dark:bg-primary-600'
-              : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
-          "
-          @click="reading = 'everyday'"
+  <BaseCard data-testid="spending-structure">
+    <div class="mb-4">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        Structure des dépenses
+      </h2>
+      <p class="text-xs text-gray-500 dark:text-gray-400">
+        Contraint ou choisi, engagé ou variable, sur la période
+        <template v-if="reading === 'everyday'">
+          — vie courante, hors événements.</template
         >
-          Vie courante
-        </button>
-        <button
-          type="button"
-          :aria-pressed="reading === 'actual'"
-          data-testid="reading-actual"
-          class="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-          :class="
-            reading === 'actual'
-              ? 'bg-primary-500 text-white dark:bg-primary-600'
-              : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
-          "
-          @click="reading = 'actual'"
-        >
-          Réel
-        </button>
-      </div>
+        <template v-else> — tout compris, événements inclus.</template>
+      </p>
     </div>
 
     <div class="grid gap-6 md:grid-cols-2">
@@ -229,7 +200,7 @@
           ·
           <RouterLink
             to="/recurrences"
-            class="text-primary-600 hover:underline dark:text-primary-400"
+            class="text-primary-700 hover:underline dark:text-primary-400"
             data-testid="recurring-link"
           >
             voir la liste
@@ -290,5 +261,5 @@
         </dd>
       </div>
     </dl>
-  </section>
+  </BaseCard>
 </template>

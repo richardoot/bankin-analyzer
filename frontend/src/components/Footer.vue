@@ -28,11 +28,27 @@
           </span>
         </div>
 
-        <!--
-          The three placeholder links (Confidentialité / Conditions / Contact,
-          all href="#") are gone: a dead legal link on a tool that handles bank
-          data reads worse than no link. They come back when the pages exist.
-        -->
+        <!-- The legal pages exist and are public: reachable from every page,
+             not only from the Enable Banking tutorial that quotes them. -->
+        <nav
+          aria-label="Informations légales"
+          class="flex items-center gap-6 text-sm"
+        >
+          <RouterLink
+            to="/privacy"
+            data-testid="footer-privacy-link"
+            class="inline-flex min-h-[44px] items-center text-gray-600 hover:text-gray-900 hover:underline sm:min-h-0 dark:text-gray-400 dark:hover:text-gray-100"
+          >
+            Confidentialité
+          </RouterLink>
+          <RouterLink
+            to="/terms"
+            data-testid="footer-terms-link"
+            class="inline-flex min-h-[44px] items-center text-gray-600 hover:text-gray-900 hover:underline sm:min-h-0 dark:text-gray-400 dark:hover:text-gray-100"
+          >
+            Conditions d'utilisation
+          </RouterLink>
+        </nav>
       </div>
     </div>
   </footer>

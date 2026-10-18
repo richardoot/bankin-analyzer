@@ -5,6 +5,7 @@
   import type { ApexOptions } from 'apexcharts'
   import { useChartTheme } from '@/composables/useChartTheme'
   import { useIsMobile } from '@/composables/useMediaQuery'
+  import { formatCompactCurrency, formatCurrency } from '@/lib/formatters'
 
   export interface ChartData {
     labels: string[]
@@ -23,7 +24,7 @@
     }
   )
 
-  const { isDark, labelColor, chartTheme } = useChartTheme()
+  const { isDark, labelColor, chartTheme, chartAnimations } = useChartTheme()
   // A 300px chart with twelve full-currency ticks is unreadable at 375px:
   // shorter, compact axis labels, rotated month names.
   const isMobile = useIsMobile()
@@ -43,6 +44,7 @@
       },
       fontFamily: 'inherit',
       background: 'transparent',
+      animations: chartAnimations.value,
     },
     plotOptions: {
       bar: {
@@ -82,14 +84,8 @@
           colors: labelColor.value,
           fontSize: isMobile.value ? '11px' : '12px',
         },
-        formatter: (value: number) => {
-          return new Intl.NumberFormat('fr-FR', {
-            style: 'currency',
-            currency: 'EUR',
-            maximumFractionDigits: isMobile.value ? 1 : 0,
-            ...(isMobile.value ? { notation: 'compact' as const } : {}),
-          }).format(value)
-        },
+        formatter: (value: number) =>
+          formatCompactCurrency(value, { compact: isMobile.value }),
       },
     },
     grid: {
@@ -100,12 +96,7 @@
     tooltip: {
       theme: isDark.value ? 'dark' : 'light',
       y: {
-        formatter: (value: number) => {
-          return new Intl.NumberFormat('fr-FR', {
-            style: 'currency',
-            currency: 'EUR',
-          }).format(value)
-        },
+        formatter: (value: number) => formatCurrency(value),
       },
     },
   }))
@@ -121,7 +112,6 @@
 <template>
   <div class="w-full">
     <VueApexCharts
-      :key="isDark ? 'dark' : 'light'"
       type="bar"
       :height="isMobile ? 220 : 300"
       :options="chartOptions"

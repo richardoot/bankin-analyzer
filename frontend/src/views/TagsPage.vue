@@ -1,150 +1,129 @@
 <script setup lang="ts">
   import { onMounted, ref } from 'vue'
   import { useIsMobile } from '@/composables/useMediaQuery'
+  import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
-  import { useRouter } from 'vue-router'
+  import { RouterLink } from 'vue-router'
   import { useTagsStore } from '@/stores/tags'
   import type { TagDto } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
   import { formatCurrency } from '@/lib/formatters'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import BaseModal from '@/components/ui/BaseModal.vue'
+  import IconPlus from '@/components/icons/IconPlus.vue'
+  import IconChevronDown from '@/components/icons/IconChevronDown.vue'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
+  import IconPencil from '@/components/icons/IconPencil.vue'
+  import IconTrash from '@/components/icons/IconTrash.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
+  import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+  import TagForm from '@/components/tags/TagForm.vue'
+  import {
+    DEFAULT_TAG_COLOR,
+    emptyTagForm,
+    type TagFormValue,
+  } from '@/components/tags/tagFormModel'
 
-  const router = useRouter()
   const tagsStore = useTagsStore()
   const toast = useToast()
-
-  /** Preset colors offered when creating/editing a tag. */
-  const DEFAULT_COLOR = '#ef4444'
-  const COLORS = [
-    DEFAULT_COLOR,
-    '#f97316',
-    '#eab308',
-    '#22c55e',
-    '#14b8a6',
-    '#06b6d4',
-    '#6366f1',
-    '#a855f7',
-    '#ec4899',
-    '#64748b',
-  ]
 
   // Create form state
   // The creation form is a screen of controls on a phone; it folds
   // behind one button there and stays open on a desk.
   const isMobile = useIsMobile()
   const createOpen = ref(false)
-  const newName = ref('')
-  const newColor = ref<string>(DEFAULT_COLOR)
-  const newIsExceptional = ref(false)
-  const newEventStart = ref('')
-  const newEventEnd = ref('')
-  const newBudget = ref('')
+  const draft = ref<TagFormValue>(emptyTagForm())
   const creating = ref(false)
-
-  /**
-   * The envelope is a total for the whole project, never a monthly amount —
-   * a trip is decided once. Empty means "no envelope declared".
-   */
-  function parseBudget(raw: string): number | null {
-    const trimmed = raw.trim()
-    if (trimmed === '') return null
-    const parsed = Number(trimmed)
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
-  }
 
   /**
    * The event period is only meaningful for an exceptional tag, and only when
    * both bounds are known — a half-filled range would silently skew every
    * everyday average.
    */
-  function eventPeriod(
-    isExceptional: boolean,
-    start: string,
-    end: string
-  ): { eventStartDate: string | null; eventEndDate: string | null } {
+  function eventPeriod(value: TagFormValue): {
+    eventStartDate: string | null
+    eventEndDate: string | null
+  } {
+    const { isExceptional, eventStart: start, eventEnd: end } = value
     if (isExceptional && start && end && start <= end) {
       return { eventStartDate: start, eventEndDate: end }
     }
     return { eventStartDate: null, eventEndDate: null }
   }
 
+  /** The envelope only exists on an exceptional tag, and never below zero. */
+  function budgetOf(value: TagFormValue): number | null {
+    if (!value.isExceptional || value.budget === null) return null
+    return value.budget >= 0 ? value.budget : null
+  }
+
   async function createTag(): Promise<void> {
-    const name = newName.value.trim()
+    const name = draft.value.name.trim()
     if (!name || creating.value) return
     creating.value = true
-    const period = eventPeriod(
-      newIsExceptional.value,
-      newEventStart.value,
-      newEventEnd.value
-    )
+    const period = eventPeriod(draft.value)
+    const budget = budgetOf(draft.value)
     const created = await tagsStore.addTag({
       name,
-      color: newColor.value,
-      isExceptional: newIsExceptional.value,
+      color: draft.value.color,
+      isExceptional: draft.value.isExceptional,
       ...(period.eventStartDate && period.eventEndDate
         ? {
             eventStartDate: period.eventStartDate,
             eventEndDate: period.eventEndDate,
           }
         : {}),
-      ...(newIsExceptional.value && parseBudget(newBudget.value) !== null
-        ? { budgetAmount: parseBudget(newBudget.value) as number }
-        : {}),
+      ...(budget !== null ? { budgetAmount: budget } : {}),
     })
     creating.value = false
     if (created) {
-      newName.value = ''
-      newColor.value = DEFAULT_COLOR
-      newIsExceptional.value = false
-      newEventStart.value = ''
-      newEventEnd.value = ''
-      newBudget.value = ''
+      draft.value = emptyTagForm()
       createOpen.value = false
       toast.success(`Étiquette « ${created.name} » créée`)
     }
   }
 
-  // Edit state
-  const editingId = ref<string | null>(null)
-  const editName = ref('')
-  const editColor = ref<string>(DEFAULT_COLOR)
-  const editIsExceptional = ref(false)
-  const editEventStart = ref('')
-  const editEventEnd = ref('')
-  const editBudget = ref('')
+  // Edit state: the same form, in a dialog, so the card keeps its shape.
+  const editingTag = ref<TagDto | null>(null)
+  const editDraft = ref<TagFormValue>(emptyTagForm())
+  const savingEdit = ref(false)
 
   function startEdit(tag: TagDto): void {
-    editingId.value = tag.id
-    editName.value = tag.name
-    editColor.value = tag.color ?? DEFAULT_COLOR
-    editIsExceptional.value = tag.isExceptional
-    editEventStart.value = tag.eventStartDate ?? ''
-    editEventEnd.value = tag.eventEndDate ?? ''
-    editBudget.value = tag.budgetAmount === null ? '' : String(tag.budgetAmount)
+    editingTag.value = tag
+    editDraft.value = {
+      name: tag.name,
+      color: tag.color ?? DEFAULT_TAG_COLOR,
+      isExceptional: tag.isExceptional,
+      eventStart: tag.eventStartDate ?? '',
+      eventEnd: tag.eventEndDate ?? '',
+      budget: tag.budgetAmount,
+    }
   }
 
   function cancelEdit(): void {
-    editingId.value = null
+    editingTag.value = null
   }
 
-  async function saveEdit(id: string): Promise<void> {
-    const name = editName.value.trim()
-    if (!name) return
-    const period = eventPeriod(
-      editIsExceptional.value,
-      editEventStart.value,
-      editEventEnd.value
-    )
-    const ok = await tagsStore.updateTag(id, {
+  async function saveEdit(): Promise<void> {
+    const tag = editingTag.value
+    const name = editDraft.value.name.trim()
+    if (!tag || !name || savingEdit.value) return
+    savingEdit.value = true
+    const ok = await tagsStore.updateTag(tag.id, {
       name,
-      color: editColor.value,
-      isExceptional: editIsExceptional.value,
-      ...period,
+      color: editDraft.value.color,
+      isExceptional: editDraft.value.isExceptional,
+      ...eventPeriod(editDraft.value),
       // A tag that stops being exceptional stops being a project too.
-      budgetAmount: editIsExceptional.value
-        ? parseBudget(editBudget.value)
-        : null,
+      budgetAmount: budgetOf(editDraft.value),
     })
-    if (ok) editingId.value = null
+    savingEdit.value = false
+    if (ok) {
+      editingTag.value = null
+      toast.success(`Étiquette « ${name} » modifiée`)
+    }
   }
 
   /** "12 juil. – 26 juil. 2025" */
@@ -158,435 +137,233 @@
     return `${from} – ${to}`
   }
 
-  // Delete confirmation
-  const confirmingDeleteId = ref<string | null>(null)
+  // Delete confirmation: a real dialog (named, Escape closes it), not an
+  // overlay painted over the card.
+  const tagToDelete = ref<TagDto | null>(null)
+  const deleting = ref(false)
 
-  async function confirmDelete(tag: TagDto): Promise<void> {
+  async function confirmDelete(): Promise<void> {
+    const tag = tagToDelete.value
+    if (!tag || deleting.value) return
+    deleting.value = true
     const ok = await tagsStore.removeTag(tag.id)
-    confirmingDeleteId.value = null
+    deleting.value = false
+    tagToDelete.value = null
     if (ok) toast.success(`Étiquette « ${tag.name} » supprimée`)
   }
 
-  function openAnalysis(tag: TagDto): void {
-    router.push({ name: 'tag-analysis', params: { id: tag.id } })
+  // Only the initial fetch decides this: a failed creation is a toast, not
+  // a page that "could not load".
+  const loadFailed = ref(false)
+  async function loadTags(): Promise<void> {
+    await tagsStore.fetchTags()
+    loadFailed.value = tagsStore.error !== null
   }
 
   onMounted(() => {
-    tagsStore.fetchTags()
+    void loadTags()
   })
 </script>
 
 <template>
-  <div
-    class="min-h-screen bg-gray-50 dark:bg-slate-800 py-6 sm:py-8 transition-colors"
-  >
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-      <PageHeader
-        title="Étiquettes"
-        subtitle="Regroupez des transactions (événement, vacances…) et analysez-les."
-      />
+  <PageShell>
+    <PageHeader
+      title="Étiquettes"
+      subtitle="Regroupez des transactions (événement, vacances…) et analysez-les."
+    />
 
-      <!-- Create form -->
-      <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4 mb-6 dark:shadow-slate-900/20"
+    <!-- Create form -->
+    <BaseCard padding="sm" class="mb-6">
+      <button
+        type="button"
+        data-testid="toggle-create-tag"
+        class="flex min-h-[44px] w-full items-center justify-between gap-2 text-sm font-medium text-gray-800 md:hidden dark:text-gray-200"
+        :aria-expanded="createOpen"
+        @click="createOpen = !createOpen"
       >
-        <button
-          type="button"
-          data-testid="toggle-create-tag"
-          class="flex min-h-[44px] w-full items-center justify-between gap-2 text-sm font-medium text-gray-800 md:hidden dark:text-gray-200"
-          :aria-expanded="createOpen"
-          @click="createOpen = !createOpen"
+        <span class="inline-flex items-center gap-2">
+          <IconPlus class="h-4 w-4 text-primary-700 dark:text-primary-400" />
+          Nouvelle étiquette
+        </span>
+        <IconChevronDown
+          class="h-4 w-4 text-gray-500 transition-transform"
+          :class="{ 'rotate-180': createOpen }"
+        />
+      </button>
+      <div v-show="!isMobile || createOpen" class="mt-3 md:mt-0">
+        <h2
+          class="mb-3 hidden text-sm font-semibold text-gray-800 md:block dark:text-gray-200"
         >
-          <span class="inline-flex items-center gap-2">
-            <svg
-              class="h-4 w-4 text-primary-600 dark:text-primary-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            Nouvelle étiquette
-          </span>
-          <svg
-            class="h-4 w-4 text-gray-500 transition-transform"
-            :class="{ 'rotate-180': createOpen }"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </button>
-        <div v-show="!isMobile || createOpen" class="mt-3 md:mt-0">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <input
-              v-model="newName"
-              type="text"
-              placeholder="Nom de l'étiquette (ex : Vacances Italie)"
-              class="min-h-[44px] flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 focus:ring-2 focus:ring-primary-500 sm:min-h-0 sm:text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-              @keyup.enter="createTag"
-            />
-            <div class="flex items-center gap-2 sm:gap-1.5">
-              <button
-                v-for="c in COLORS"
-                :key="c"
-                type="button"
-                class="h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 sm:h-6 sm:w-6"
-                :class="
-                  newColor === c
-                    ? 'border-gray-900 dark:border-white'
-                    : 'border-transparent'
-                "
-                :style="{ backgroundColor: c }"
-                :aria-label="`Couleur ${c}`"
-                @click="newColor = c"
-              ></button>
-            </div>
-            <button
-              type="button"
-              class="min-h-[44px] rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 sm:min-h-0"
-              :disabled="!newName.trim() || creating"
-              @click="createTag"
-            >
-              Créer
-            </button>
-          </div>
-
-          <!-- Exceptional event settings -->
-          <div class="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-            <label
-              class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
-            >
-              <input
-                v-model="newIsExceptional"
-                type="checkbox"
-                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                data-testid="new-tag-exceptional"
-              />
-              Dépense exceptionnelle
-              <span class="text-xs text-gray-400">
-                — exclue des moyennes du quotidien
-              </span>
-            </label>
-
-            <div v-if="newIsExceptional" class="mt-3 pl-6">
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                Période d'absence (facultatif) — pendant ces dates vos dépenses
-                habituelles sont suspendues. Renseignez-la pour un déplacement
-                ou des vacances ; laissez vide pour une fête à la maison.
-              </p>
-              <div class="mt-2 flex flex-wrap items-center gap-2">
-                <input
-                  v-model="newEventStart"
-                  type="date"
-                  class="min-h-[40px] min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 sm:min-h-0 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                  aria-label="Début de la période d'absence"
-                />
-                <span class="text-gray-400 text-sm">→</span>
-                <input
-                  v-model="newEventEnd"
-                  type="date"
-                  class="min-h-[40px] min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 sm:min-h-0 sm:flex-none dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                  aria-label="Fin de la période d'absence"
-                />
-              </div>
-
-              <div class="mt-3 flex flex-wrap items-center gap-2">
-                <label
-                  for="new-tag-budget"
-                  class="text-xs text-gray-500 dark:text-gray-400"
-                >
-                  Enveloppe du projet (facultatif) — un total, pas un montant
-                  mensuel
-                </label>
-                <div class="relative">
-                  <input
-                    id="new-tag-budget"
-                    v-model="newBudget"
-                    type="number"
-                    min="0"
-                    step="10"
-                    placeholder="—"
-                    data-testid="new-tag-budget"
-                    class="w-28 pl-2 pr-6 py-1 text-sm text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 tabular-nums"
-                  />
-                  <span
-                    class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"
-                  >
-                    €
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Loading -->
-      <div
-        v-if="tagsStore.isLoading && tagsStore.tags.length === 0"
-        class="py-12 text-center text-gray-500 dark:text-gray-400"
-      >
-        Chargement…
-      </div>
-
-      <!-- Empty -->
-      <div
-        v-else-if="tagsStore.tags.length === 0"
-        class="py-12 text-center text-gray-500 dark:text-gray-400"
-      >
-        Aucune étiquette pour l'instant. Créez-en une ci-dessus, puis
-        attribuez-la à des transactions.
-      </div>
-
-      <!-- Tag cards -->
-      <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <div
-          v-for="tag in tagsStore.tags"
-          :key="tag.id"
-          class="group relative bg-white dark:bg-slate-900 rounded-xl shadow-sm p-4 dark:shadow-slate-900/20 border border-transparent hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
-        >
-          <!-- Edit mode -->
-          <div v-if="editingId === tag.id" class="space-y-2">
-            <input
-              v-model="editName"
-              type="text"
-              class="w-full px-2 py-1 border border-gray-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-              @keyup.enter="saveEdit(tag.id)"
-              @keyup.escape="cancelEdit"
-            />
-            <div class="flex items-center gap-1">
-              <button
-                v-for="c in COLORS"
-                :key="c"
-                type="button"
-                class="h-7 w-7 rounded-full border-2 sm:h-5 sm:w-5"
-                :class="
-                  editColor === c
-                    ? 'border-gray-900 dark:border-white'
-                    : 'border-transparent'
-                "
-                :style="{ backgroundColor: c }"
-                @click="editColor = c"
-              ></button>
-            </div>
-            <label
-              class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer"
-            >
-              <input
-                v-model="editIsExceptional"
-                type="checkbox"
-                class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              />
-              Dépense exceptionnelle
-            </label>
-            <div v-if="editIsExceptional" class="space-y-1">
-              <p class="text-[11px] text-gray-400">
-                Période d'absence (facultatif)
-              </p>
-              <div class="flex items-center gap-1">
-                <input
-                  v-model="editEventStart"
-                  type="date"
-                  class="flex-1 min-w-0 px-1.5 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                  aria-label="Début de la période d'absence"
-                />
-                <input
-                  v-model="editEventEnd"
-                  type="date"
-                  class="flex-1 min-w-0 px-1.5 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                  aria-label="Fin de la période d'absence"
-                />
-              </div>
-              <p class="text-[11px] text-gray-400 pt-1">
-                Enveloppe du projet (total)
-              </p>
-              <div class="relative">
-                <input
-                  v-model="editBudget"
-                  type="number"
-                  min="0"
-                  step="10"
-                  placeholder="—"
-                  data-testid="edit-tag-budget"
-                  class="w-full px-1.5 pr-6 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 tabular-nums text-right"
-                  aria-label="Enveloppe du projet"
-                />
-                <span
-                  class="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 pointer-events-none"
-                >
-                  €
-                </span>
-              </div>
-            </div>
-            <div class="flex justify-end gap-2 pt-1">
-              <button
-                class="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
-                @click="cancelEdit"
+          Nouvelle étiquette
+        </h2>
+        <TagForm v-model="draft" test-id="new-tag" @submit="createTag">
+          <template #actions>
+            <div class="flex justify-end">
+              <BaseButton
+                type="submit"
+                :disabled="!draft.name.trim()"
+                :loading="creating"
+                data-testid="create-tag"
               >
-                Annuler
-              </button>
-              <button
-                class="px-2 py-1 text-xs font-medium text-white bg-primary-600 rounded hover:bg-primary-700"
-                @click="saveEdit(tag.id)"
-              >
-                Enregistrer
-              </button>
-            </div>
-          </div>
-
-          <!-- Display mode -->
-          <template v-else>
-            <button
-              type="button"
-              class="w-full pr-16 text-left sm:pr-0"
-              @click="openAnalysis(tag)"
-            >
-              <div class="flex items-center gap-2">
-                <span
-                  class="inline-block h-3 w-3 rounded-full shrink-0"
-                  :style="{ backgroundColor: tag.color ?? '#9ca3af' }"
-                ></span>
-                <span
-                  class="font-semibold text-gray-900 dark:text-gray-100 truncate"
-                >
-                  {{ tag.name }}
-                </span>
-              </div>
-              <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                {{ tag.transactionCount }} transaction(s)
-              </p>
-              <div
-                v-if="tag.isExceptional"
-                class="mt-2 flex flex-wrap items-center gap-1.5"
-              >
-                <span
-                  class="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400"
-                  title="Exclue des moyennes du quotidien du tableau de bord"
-                >
-                  Exceptionnel
-                </span>
-                <span
-                  v-if="tag.eventStartDate && tag.eventEndDate"
-                  class="text-[11px] text-gray-400"
-                >
-                  {{ formatPeriod(tag.eventStartDate, tag.eventEndDate) }}
-                </span>
-                <span
-                  v-if="tag.budgetAmount !== null"
-                  :data-testid="`tag-budget-${tag.name}`"
-                  class="inline-flex items-center rounded-full bg-primary-100 dark:bg-primary-900/40 px-2 py-0.5 text-[11px] font-medium text-primary-700 dark:text-primary-400 tabular-nums"
-                  title="Enveloppe allouée au projet"
-                >
-                  {{ formatCurrency(tag.budgetAmount) }}
-                </span>
-              </div>
-              <span
-                class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-600 dark:text-primary-400"
-              >
-                Analyser
-                <svg
-                  class="h-3 w-3"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
-              </span>
-            </button>
-
-            <!-- Card actions -->
-            <div
-              class="absolute top-2 right-2 flex items-center gap-1 transition-opacity sm:top-3 sm:right-3 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
-            >
-              <button
-                class="inline-flex h-9 w-9 items-center justify-center rounded text-gray-400 hover:text-primary-500 sm:h-auto sm:w-auto sm:p-1"
-                aria-label="Modifier"
-                @click.stop="startEdit(tag)"
-              >
-                <svg
-                  class="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                  />
-                </svg>
-              </button>
-              <button
-                class="inline-flex h-9 w-9 items-center justify-center rounded text-gray-400 hover:text-red-500 sm:h-auto sm:w-auto sm:p-1"
-                aria-label="Supprimer"
-                @click.stop="confirmingDeleteId = tag.id"
-              >
-                <svg
-                  class="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <!-- Delete confirmation -->
-            <div
-              v-if="confirmingDeleteId === tag.id"
-              class="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-white/95 dark:bg-slate-900/95 p-4 text-center"
-            >
-              <p class="text-sm text-gray-700 dark:text-gray-300">
-                Supprimer « {{ tag.name }} » ?
-              </p>
-              <p class="text-xs text-gray-400">
-                Les transactions ne sont pas supprimées.
-              </p>
-              <div class="flex gap-2">
-                <button
-                  class="px-3 py-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
-                  @click.stop="confirmingDeleteId = null"
-                >
-                  Annuler
-                </button>
-                <button
-                  class="px-3 py-1 text-xs font-medium text-white bg-red-600 rounded hover:bg-red-700"
-                  @click.stop="confirmDelete(tag)"
-                >
-                  Supprimer
-                </button>
-              </div>
+                Créer
+              </BaseButton>
             </div>
           </template>
-        </div>
+        </TagForm>
       </div>
+    </BaseCard>
+
+    <!-- Loading -->
+    <div
+      v-if="tagsStore.isLoading && tagsStore.tags.length === 0"
+      class="py-12 text-center text-gray-500 dark:text-gray-400"
+    >
+      Chargement…
     </div>
-  </div>
+
+    <!-- Failed load: not the same as having no tag -->
+    <InlineAlert
+      v-else-if="loadFailed && tagsStore.tags.length === 0"
+      data-testid="tags-load-error"
+      retry-label="Réessayer"
+      retry-test-id="tags-retry"
+      :retrying="tagsStore.isLoading"
+      @retry="loadTags"
+    >
+      Les étiquettes n'ont pas pu être chargées.
+    </InlineAlert>
+
+    <!-- Empty -->
+    <div
+      v-else-if="tagsStore.tags.length === 0"
+      class="py-12 text-center text-gray-500 dark:text-gray-400"
+    >
+      Aucune étiquette pour l'instant. Créez-en une ci-dessus, puis attribuez-la
+      à des transactions.
+    </div>
+
+    <!-- Tag cards: an article, with its own link and its own actions —
+         not a button wrapped around blocks, with controls hidden until
+         hovered. -->
+    <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <BaseCard
+        v-for="tag in tagsStore.tags"
+        :key="tag.id"
+        as="article"
+        padding="sm"
+        class="flex flex-col gap-2"
+        :data-testid="`tag-card-${tag.name}`"
+      >
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex min-w-0 items-center gap-2">
+            <span
+              class="inline-block h-3 w-3 shrink-0 rounded-full"
+              :style="{ backgroundColor: tag.color ?? '#9ca3af' }"
+            ></span>
+            <h3
+              class="truncate font-semibold text-gray-900 dark:text-gray-100"
+              :title="tag.name"
+            >
+              {{ tag.name }}
+            </h3>
+          </div>
+          <div class="flex shrink-0 items-center">
+            <BaseIconButton
+              size="sm"
+              :label="`Modifier ${tag.name}`"
+              :data-testid="`edit-tag-${tag.name}`"
+              @click="startEdit(tag)"
+            >
+              <IconPencil />
+            </BaseIconButton>
+            <BaseIconButton
+              size="sm"
+              variant="danger"
+              :label="`Supprimer ${tag.name}`"
+              @click="tagToDelete = tag"
+            >
+              <IconTrash />
+            </BaseIconButton>
+          </div>
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+          {{ tag.transactionCount }} transaction(s)
+        </p>
+        <div
+          v-if="tag.isExceptional"
+          class="flex flex-wrap items-center gap-1.5"
+        >
+          <span
+            class="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+          >
+            Exceptionnel
+          </span>
+          <span
+            v-if="tag.eventStartDate && tag.eventEndDate"
+            class="text-[11px] text-gray-500 dark:text-gray-400"
+          >
+            {{ formatPeriod(tag.eventStartDate, tag.eventEndDate) }}
+          </span>
+          <span
+            v-if="tag.budgetAmount !== null"
+            :data-testid="`tag-budget-${tag.name}`"
+            class="inline-flex shrink-0 items-center rounded-full bg-primary-100 px-2 py-0.5 text-[11px] font-medium tabular-nums text-primary-700 dark:bg-primary-900/40 dark:text-primary-400"
+          >
+            Enveloppe {{ formatCurrency(tag.budgetAmount) }}
+          </span>
+        </div>
+        <RouterLink
+          :to="{ name: 'tag-analysis', params: { id: tag.id } }"
+          class="mt-auto inline-flex min-h-[44px] items-center gap-1 self-start text-sm font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
+          :data-testid="`analyse-tag-${tag.name}`"
+        >
+          Analyser
+          <IconChevronRight class="h-3.5 w-3.5" />
+        </RouterLink>
+      </BaseCard>
+    </div>
+
+    <!-- Edit: the same form as the creation, in a dialog -->
+    <BaseModal
+      :open="editingTag !== null"
+      :title="editingTag ? `Modifier « ${editingTag.name} »` : ''"
+      :closable="!savingEdit"
+      data-testid="edit-tag-modal"
+      @close="cancelEdit"
+    >
+      <TagForm
+        v-if="editingTag"
+        v-model="editDraft"
+        test-id="edit-tag"
+        @submit="saveEdit"
+      />
+      <template #footer>
+        <BaseButton
+          variant="secondary"
+          :disabled="savingEdit"
+          @click="cancelEdit"
+        >
+          Annuler
+        </BaseButton>
+        <BaseButton
+          :disabled="!editDraft.name.trim()"
+          :loading="savingEdit"
+          data-testid="save-tag"
+          @click="saveEdit"
+        >
+          Enregistrer
+        </BaseButton>
+      </template>
+    </BaseModal>
+
+    <ConfirmDialog
+      :open="tagToDelete !== null"
+      :title="`Supprimer « ${tagToDelete?.name ?? ''} » ?`"
+      :loading="deleting"
+      @confirm="confirmDelete"
+      @cancel="tagToDelete = null"
+    >
+      Les transactions qui portent cette étiquette ne sont pas supprimées.
+    </ConfirmDialog>
+  </PageShell>
 </template>

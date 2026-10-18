@@ -3,7 +3,9 @@
   import type { CategoryDataDto } from '@/lib/api'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatMonth } from '@/lib/formatters'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
 
   const props = withDefaults(
     defineProps<{
@@ -17,10 +19,16 @@
        * birthdays) from the headline figures, leaving the recurring lifestyle.
        */
       mode?: 'real' | 'everyday'
+      /**
+       * The hue each category takes in the donut beside the list, by name:
+       * drawn as a dot before the name so the two can be read together.
+       */
+      colors?: Map<string, string> | undefined
     }>(),
     {
       color: '#ef4444',
       mode: 'real',
+      colors: undefined,
     }
   )
 
@@ -38,27 +46,9 @@
     return expanded.value.has(key)
   }
 
-  const MONTH_LABELS_FR: Record<string, string> = {
-    '01': 'Jan',
-    '02': 'Fév',
-    '03': 'Mar',
-    '04': 'Avr',
-    '05': 'Mai',
-    '06': 'Juin',
-    '07': 'Juil',
-    '08': 'Août',
-    '09': 'Sep',
-    '10': 'Oct',
-    '11': 'Nov',
-    '12': 'Déc',
-  }
-
   // Display labels (Jan 2025 etc.) for the bar chart x-axis
   const displayLabels = computed(() =>
-    props.monthLabels.map(ym => {
-      const [, month] = ym.split('-')
-      return MONTH_LABELS_FR[month ?? ''] ?? ym
-    })
+    props.monthLabels.map(ym => formatMonth(ym, { year: false }))
   )
 
   function rowKey(cat: CategoryDataDto): string {
@@ -116,35 +106,34 @@
     <div
       v-for="cat in categories"
       :key="rowKey(cat)"
-      class="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden"
+      class="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700"
     >
-      <!-- Row -->
+      <!-- Row. No overflow-hidden on the card: it cut the keyboard focus
+           ring off; the row rounds its own corners instead. -->
       <button
         type="button"
         :data-testid="`category-row-${cat.category}`"
-        class="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors"
+        class="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+        :class="isExpanded(rowKey(cat)) ? 'rounded-t-lg' : 'rounded-lg'"
         :aria-expanded="isExpanded(rowKey(cat))"
         @click="toggleExpanded(rowKey(cat))"
       >
         <!-- Chevron -->
-        <svg
+        <IconChevronRight
           class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
           :class="{ 'rotate-90': isExpanded(rowKey(cat)) }"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M9 5l7 7-7 7"
-          />
-        </svg>
+        />
 
         <!-- Icon + name; the share sits beside the name on a desk and
              wraps under it on a phone, where it used to be hidden outright. -->
         <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2">
+          <span
+            v-if="colors?.get(cat.category)"
+            class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+            :style="{ backgroundColor: colors.get(cat.category) }"
+            :data-testid="`category-color-${cat.category}`"
+            aria-hidden="true"
+          />
           <span v-if="cat.icon" class="text-lg shrink-0">{{ cat.icon }}</span>
           <span
             class="min-w-0 flex-1 truncate font-medium text-gray-900 dark:text-gray-100"
@@ -185,7 +174,7 @@
           </div>
           <div
             v-if="cat.exceptionalAmount && cat.exceptionalAmount > 0"
-            class="text-xs text-amber-600 dark:text-amber-500 tabular-nums"
+            class="text-xs text-amber-700 dark:text-amber-400 tabular-nums"
             :title="
               isEveryday
                 ? 'Montant exclu de cette moyenne'
@@ -201,18 +190,14 @@
       <!-- Drill-down panel -->
       <div
         v-if="isExpanded(rowKey(cat))"
-        class="border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 px-4 py-4"
+        class="rounded-b-lg border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 px-4 py-4"
       >
         <!-- Subcategories table -->
         <div
           v-if="cat.subcategories && cat.subcategories.length > 0"
           class="mb-4"
         >
-          <h4
-            class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-          >
-            Sous-catégories
-          </h4>
+          <SectionLabel as="h4" class="mb-2"> Sous-catégories </SectionLabel>
           <div class="space-y-1">
             <div
               v-for="sub in cat.subcategories"
@@ -250,11 +235,9 @@
 
         <!-- Monthly evolution chart -->
         <div v-if="getSparklineData(cat).length >= 2">
-          <h4
-            class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-          >
+          <SectionLabel as="h4" class="mb-2">
             Évolution mensuelle
-          </h4>
+          </SectionLabel>
           <MonthlyBarChart
             :data="chartDataFor(cat)"
             :title="cat.category"

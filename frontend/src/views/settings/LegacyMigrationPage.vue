@@ -37,6 +37,9 @@
   import BaseButton from '@/components/ui/BaseButton.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
   import StepIndicator from '@/components/ui/StepIndicator.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
 
   const router = useRouter()
   const toast = useToast()
@@ -329,13 +332,16 @@
         </p>
       </div>
 
-      <div
+      <InlineAlert
         v-else-if="loadError"
-        role="alert"
-        class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+        data-testid="legacy-load-error"
+        retry-label="Réessayer"
+        retry-test-id="legacy-retry"
+        :retrying="isLoading"
+        @retry="load"
       >
         {{ loadError }}
-      </div>
+      </InlineAlert>
 
       <!-- ── Step 1 ─────────────────────────────────────────────────────── -->
       <template v-else-if="step === 1">
@@ -347,7 +353,7 @@
           <template #action>
             <RouterLink
               to="/settings/categories"
-              class="text-sm font-medium text-primary-600 hover:underline dark:text-primary-400"
+              class="text-sm font-medium text-primary-700 hover:underline dark:text-primary-400"
             >
               Retour aux catégories
             </RouterLink>
@@ -385,7 +391,7 @@
                   </span>
                   <span
                     v-if="category.isCatalog"
-                    class="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                    class="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
                     data-testid="tidy-badge"
                   >
                     Sous-catégories à ranger
@@ -409,19 +415,7 @@
                     </template>
                   </span>
                 </span>
-                <svg
-                  class="h-4 w-4 shrink-0 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
+                <IconChevronRight class="h-4 w-4 shrink-0 text-gray-400" />
               </button>
             </li>
           </ul>
@@ -451,17 +445,17 @@
           class="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
         >
           <span>Cette catégorie encodait un contexte. Créer le tag :</span>
-          <button
+          <BaseButton
             v-for="name in missingTagNames"
             :key="name"
-            type="button"
-            class="rounded-full border border-blue-300 px-2 py-0.5 font-medium hover:bg-blue-100 disabled:opacity-50 dark:border-blue-700 dark:hover:bg-blue-900/40"
-            :disabled="creatingTag === name"
+            variant="tinted"
+            size="sm"
+            :loading="creatingTag === name"
             :data-testid="`create-tag-${name}`"
             @click="createSuggestedTag(name)"
           >
             {{ creatingTag === name ? 'Création…' : `« ${name} »` }}
-          </button>
+          </BaseButton>
         </div>
 
         <ul class="space-y-3">
@@ -487,10 +481,12 @@
             </div>
 
             <div class="grid gap-2 sm:grid-cols-[1fr_minmax(10rem,14rem)]">
-              <select
+              <BaseField
                 v-model="draft.choice"
-                :aria-label="`Destination de ${lineLabel(draft.line)}`"
-                class="min-h-[44px] w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 sm:min-h-0 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                as="select"
+                size="sm"
+                :label="`Destination de ${lineLabel(draft.line)}`"
+                label-hidden
                 data-testid="line-choice"
               >
                 <option value="UNFILE">
@@ -524,28 +520,32 @@
                     {{ target.name }} › sous-catégorie personnelle…
                   </option>
                 </optgroup>
-              </select>
+              </BaseField>
 
-              <select
+              <BaseField
                 v-model="draft.tagId"
-                :aria-label="`Tag pour ${lineLabel(draft.line)}`"
-                class="min-h-[44px] w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 sm:min-h-0 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                as="select"
+                size="sm"
+                :label="`Tag pour ${lineLabel(draft.line)}`"
+                label-hidden
                 data-testid="line-tag"
               >
                 <option :value="null">Sans tag</option>
                 <option v-for="tag in tags" :key="tag.id" :value="tag.id">
                   {{ tag.icon ? tag.icon + ' ' : '' }}{{ tag.name }}
                 </option>
-              </select>
+              </BaseField>
             </div>
 
-            <input
+            <BaseField
               v-if="draft.choice.startsWith('CUSTOM:')"
               v-model="draft.customName"
+              size="sm"
               type="text"
               placeholder="Nom de la sous-catégorie personnelle"
-              :aria-label="`Nom de la sous-catégorie pour ${lineLabel(draft.line)}`"
-              class="mt-2 w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+              :label="`Nom de la sous-catégorie pour ${lineLabel(draft.line)}`"
+              label-hidden
+              class="mt-2"
               data-testid="line-custom-name"
             />
 

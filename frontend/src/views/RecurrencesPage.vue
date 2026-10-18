@@ -6,14 +6,16 @@
    * Netflix by how it is paid rather than by what it is for.
    *
    * Detection proposes, the user corrects: the ✕ on a row ("Écarter : ce
-   * n'est pas un abonnement") dismisses a series for good, "Confirmer" promotes one seen only twice.
-   * A row opens the transactions it was read from.
+   * n'est pas un abonnement") dismisses a series, after a confirmation —
+   * it hides the series until « Rétablir » — and "Confirmer" promotes one
+   * seen only twice. A row opens the transactions it was read from.
    *
    * Two tabs: what runs today, and what ran before — each ended charge with
    * when it started, when it stopped, how long it lasted and what it cost.
    */
   import { computed, onMounted, ref } from 'vue'
   import { useRouter } from 'vue-router'
+  import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
@@ -27,8 +29,16 @@
     type RecurrenceListDto,
     type RecurrencePeriod,
   } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate, formatMonth } from '@/lib/formatters'
   import { useToast } from '@/composables/useToast'
+  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconPencil from '@/components/icons/IconPencil.vue'
+  import IconClose from '@/components/icons/IconClose.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
+  import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 
   const router = useRouter()
   const toast = useToast()
@@ -45,6 +55,18 @@
   type Tab = 'current' | 'ended'
   const tab = ref<Tab>('current')
 
+  /**
+   * The tabs show two different lists, so they are tabs for real: each
+   * names its panel, and the panel names its tab back.
+   */
+  const TAB_IDS: Record<Tab, { tab: string; panel: string }> = {
+    current: {
+      tab: 'recurrences-tab-current',
+      panel: 'recurrences-panel-current',
+    },
+    ended: { tab: 'recurrences-tab-ended', panel: 'recurrences-panel-ended' },
+  }
+
   const PERIOD_LABELS: Record<RecurrencePeriod, string> = {
     WEEKLY: 'par semaine',
     FOUR_WEEKLY: 'toutes les 4 semaines',
@@ -53,20 +75,9 @@
     YEARLY: 'par an',
   }
 
-  const dateFormat = new Intl.DateTimeFormat('fr-FR', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-  const formatDate = (iso: string): string => dateFormat.format(new Date(iso))
-
-  const monthFormat = new Intl.DateTimeFormat('fr-FR', {
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-  const formatMonth = (iso: string): string => monthFormat.format(new Date(iso))
+  const formatMediumDate = (iso: string): string => formatDate(iso, 'medium')
+  const formatMonthInline = (iso: string): string =>
+    formatMonth(iso, { capitalize: false })
 
   /** What one charge covers, in months: the last one paid for its period too. */
   const PERIOD_MONTHS: Record<RecurrencePeriod, number> = {
@@ -214,6 +225,20 @@
     }
   }
 
+  /**
+   * The series about to be dismissed. The ✕ sits a thumb away from the
+   * pencil, and a dismissal hides the series until it is restored from
+   * « Écartées » — so it asks first.
+   */
+  const dismissing = ref<RecurrenceDto | null>(null)
+
+  async function confirmDismiss(): Promise<void> {
+    const row = dismissing.value
+    if (!row) return
+    await decide(row, 'DISMISSED')
+    dismissing.value = null
+  }
+
   /** The series whose name is being edited, by `rowKey`. */
   const editingKey = ref<string | null>(null)
 
@@ -261,558 +286,486 @@
 </script>
 
 <template>
-  <div
-    class="min-h-screen bg-gray-50 py-6 transition-colors sm:py-8 dark:bg-slate-800"
-  >
-    <div class="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-      <PageHeader
-        title="Récurrences"
-        subtitle="Abonnements et charges qui reviennent seules, lus dans vos dépenses."
+  <PageShell>
+    <PageHeader
+      title="Récurrences"
+      subtitle="Abonnements et charges qui reviennent seules, lus dans vos dépenses."
+    />
+
+    <div v-if="loading" class="space-y-4" data-testid="recurrences-loading">
+      <SkeletonBlock class="h-24 rounded-xl" />
+      <SkeletonBlock :lines="6" />
+    </div>
+
+    <InlineAlert
+      v-else-if="failed"
+      data-testid="recurrences-error"
+      retry-label="Réessayer"
+      @retry="load"
+    >
+      Les récurrences n'ont pas pu être chargées.
+    </InlineAlert>
+
+    <template v-else-if="list">
+      <BaseCard class="mb-6" data-testid="recurrences-total">
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+          {{ active.length }}
+          {{ active.length > 1 ? 'charges actives' : 'charge active' }}
+        </p>
+        <p
+          class="mt-1 text-3xl font-semibold tabular-nums text-gray-900 dark:text-gray-100"
+        >
+          {{ formatCurrency(list.monthlyTotal) }}
+          <span class="text-base font-normal text-gray-500 dark:text-gray-400"
+            >/ mois</span
+          >
+        </p>
+        <p
+          v-if="list.monthlyTotal > 0"
+          class="mt-2 text-xs text-gray-500 dark:text-gray-400"
+        >
+          Essentiel {{ formatCurrency(list.byNature.essential) }} · Plaisir
+          {{ formatCurrency(list.byNature.pleasure) }}
+          <template v-if="list.byNature.unclassified > 0">
+            · Non classé {{ formatCurrency(list.byNature.unclassified) }}
+          </template>
+        </p>
+      </BaseCard>
+
+      <EmptyState
+        v-if="
+          list.recurrences.length === 0 &&
+          dismissed.length === 0 &&
+          orphans.length === 0
+        "
+        title="Aucune charge récurrente détectée"
+        description="Une charge apparaît ici dès qu'elle revient trois fois au même montant et au même rythme."
       />
 
-      <div v-if="loading" class="space-y-4" data-testid="recurrences-loading">
-        <SkeletonBlock class="h-24 rounded-xl" />
-        <SkeletonBlock :lines="6" />
-      </div>
-
-      <div
-        v-else-if="failed"
-        class="rounded-xl bg-white p-6 text-center shadow-sm dark:bg-slate-900"
-        data-testid="recurrences-error"
-      >
-        <p class="text-sm text-gray-700 dark:text-gray-300">
-          Les récurrences n'ont pas pu être chargées.
-        </p>
-        <button
-          type="button"
-          class="mt-3 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
-          @click="load"
-        >
-          Réessayer
-        </button>
-      </div>
-
-      <template v-else-if="list">
-        <section
-          class="mb-6 rounded-xl bg-white p-4 shadow-sm sm:p-6 dark:bg-slate-900"
-          data-testid="recurrences-total"
-        >
-          <p class="text-sm text-gray-500 dark:text-gray-400">
-            {{ active.length }}
-            {{ active.length > 1 ? 'charges actives' : 'charge active' }}
-          </p>
-          <p
-            class="mt-1 text-3xl font-semibold tabular-nums text-gray-900 dark:text-gray-100"
-          >
-            {{ formatCurrency(list.monthlyTotal) }}
-            <span class="text-base font-normal text-gray-500 dark:text-gray-400"
-              >/ mois</span
-            >
-          </p>
-          <p
-            v-if="list.monthlyTotal > 0"
-            class="mt-2 text-xs text-gray-500 dark:text-gray-400"
-          >
-            Essentiel {{ formatCurrency(list.byNature.essential) }} · Plaisir
-            {{ formatCurrency(list.byNature.pleasure) }}
-            <template v-if="list.byNature.unclassified > 0">
-              · Non classé {{ formatCurrency(list.byNature.unclassified) }}
-            </template>
-          </p>
-        </section>
-
-        <EmptyState
-          v-if="
-            list.recurrences.length === 0 &&
-            dismissed.length === 0 &&
-            orphans.length === 0
+      <template v-else>
+        <SegmentedControl
+          v-model="tab"
+          class="mb-4"
+          label="Abonnements"
+          semantics="tablist"
+          :options="
+            tabs.map(t => ({
+              value: t.key,
+              label: `${t.label} (${t.count})`,
+              testId: `tab-${t.key}`,
+              id: TAB_IDS[t.key].tab,
+              controls: TAB_IDS[t.key].panel,
+            }))
           "
-          title="Aucune charge récurrente détectée"
-          description="Une charge apparaît ici dès qu'elle revient trois fois au même montant et au même rythme."
         />
 
-        <template v-else>
+        <div
+          v-if="tab === 'current'"
+          :id="TAB_IDS.current.panel"
+          role="tabpanel"
+          :aria-labelledby="TAB_IDS.current.tab"
+        >
           <div
-            class="mb-4 inline-flex rounded-lg border border-gray-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900"
-            role="tablist"
-            aria-label="Abonnements"
+            v-if="active.length > 0"
+            class="mb-3 flex items-center justify-end gap-2"
           >
-            <button
-              v-for="option in tabs"
-              :key="option.key"
-              type="button"
-              role="tab"
-              :aria-selected="tab === option.key"
-              :data-testid="`tab-${option.key}`"
-              class="min-h-[44px] rounded-md px-4 text-sm font-medium transition-colors"
-              :class="
-                tab === option.key
-                  ? 'bg-primary-500 text-white dark:bg-primary-600'
-                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-800'
-              "
-              @click="tab = option.key"
+            <label
+              for="recurrences-sort"
+              class="text-xs text-gray-500 dark:text-gray-400"
+              >Affichage</label
             >
-              {{ option.label }} ({{ option.count }})
-            </button>
+            <select
+              id="recurrences-sort"
+              v-model="sortBy"
+              data-testid="recurrences-sort"
+              class="min-h-[44px] rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm sm:min-h-0 dark:border-slate-600 dark:bg-slate-900 dark:text-gray-100"
+            >
+              <option value="category">Grouper par catégorie</option>
+              <option value="amount">Trier par montant</option>
+              <option value="age">Trier par ancienneté</option>
+            </select>
           </div>
 
-          <template v-if="tab === 'current'">
-            <div
-              v-if="active.length > 0"
-              class="mb-3 flex items-center justify-end gap-2"
-            >
-              <label
-                for="recurrences-sort"
-                class="text-xs text-gray-500 dark:text-gray-400"
-                >Trier</label
-              >
-              <select
-                id="recurrences-sort"
-                v-model="sortBy"
-                data-testid="recurrences-sort"
-                class="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-gray-100"
-              >
-                <option value="category">par catégorie</option>
-                <option value="amount">par montant</option>
-                <option value="age">par ancienneté</option>
-              </select>
-            </div>
-
-            <section
-              v-for="group in activeGroups"
-              :key="group.key"
-              class="mb-4 overflow-hidden rounded-xl bg-white shadow-sm dark:bg-slate-900"
-              data-testid="recurrence-group"
-            >
-              <header
-                v-if="group.title"
-                class="flex items-center justify-between border-b border-gray-100 px-4 py-2 dark:border-slate-800"
-              >
-                <h2
-                  class="text-sm font-semibold text-gray-800 dark:text-gray-200"
-                >
-                  <span v-if="group.icon" class="mr-1">{{ group.icon }}</span>
-                  {{ group.title }}
-                </h2>
-                <span
-                  class="text-sm tabular-nums text-gray-600 dark:text-gray-400"
-                >
-                  {{ formatCurrency(group.monthlyTotal) }} / mois
-                </span>
-              </header>
-              <ul class="divide-y divide-gray-100 dark:divide-slate-800">
-                <li
-                  v-for="row in group.rows"
-                  :key="row.id"
-                  class="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                  data-testid="recurrence-row"
-                >
-                  <RecurrenceNameEditor
-                    v-if="editingKey === rowKey(row)"
-                    :name="row.name"
-                    :named="row.named"
-                    :saving="busyKey !== null"
-                    @save="name => rename(row, name)"
-                    @cancel="editingKey = null"
-                  />
-                  <button
-                    v-else
-                    type="button"
-                    class="min-w-0 flex-1 text-left"
-                    :aria-label="`Voir les transactions de ${row.name}`"
-                    @click="openTransactions(row)"
-                  >
-                    <span class="flex min-w-0 items-center gap-1.5">
-                      <span
-                        class="truncate font-medium text-gray-900 hover:underline dark:text-gray-100"
-                        data-testid="recurrence-name"
-                        >{{ row.name }}</span
-                      >
-                      <DivisorBadge :divisor="row.divisor" />
-                    </span>
-                    <span
-                      v-if="row.name !== row.label"
-                      class="block truncate text-[11px] text-gray-400 dark:text-gray-500"
-                      >{{ row.label }}</span
-                    >
-                    <span
-                      class="block truncate text-xs text-gray-500 dark:text-gray-400"
-                    >
-                      {{
-                        row.subcategoryName ??
-                        row.categoryName ??
-                        'Sans catégorie'
-                      }}
-                      · depuis {{ formatMonth(row.firstDate) }} ·
-                      {{ formatCurrency(row.totalPaid) }} payés
-                    </span>
-                  </button>
-                  <div
-                    class="flex items-center justify-between gap-4 sm:justify-end"
-                  >
-                    <div class="text-right">
-                      <span
-                        class="block tabular-nums font-medium text-gray-900 dark:text-gray-100"
-                        >{{ formatCurrency(row.amount) }}
-                        <span
-                          class="text-xs font-normal text-gray-500 dark:text-gray-400"
-                          >{{ PERIOD_LABELS[row.period] }}</span
-                        ></span
-                      >
-                      <span
-                        v-if="row.period !== 'MONTHLY'"
-                        class="block text-xs tabular-nums text-gray-500 dark:text-gray-400"
-                        >soit {{ formatCurrency(row.monthlyEquivalent) }} /
-                        mois</span
-                      >
-                    </div>
-                    <button
-                      type="button"
-                      class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 dark:text-gray-500 dark:hover:bg-slate-800 dark:hover:text-gray-200"
-                      :disabled="busyKey !== null"
-                      :aria-label="`Renommer ${row.name}`"
-                      title="Renommer"
-                      data-testid="rename-recurrence"
-                      @click="editingKey = rowKey(row)"
-                    >
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-red-600 disabled:opacity-50 dark:text-gray-500 dark:hover:bg-slate-800 dark:hover:text-red-400"
-                      :disabled="busyKey !== null"
-                      :aria-label="`Écarter ${row.name} : ce n'est pas un abonnement`"
-                      title="Écarter : ce n'est pas un abonnement"
-                      data-testid="dismiss-recurrence"
-                      @click="decide(row, 'DISMISSED')"
-                    >
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          d="M6 18 18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </li>
-              </ul>
-            </section>
-
-            <section
-              v-if="candidates.length > 0"
-              class="mb-4 rounded-xl border border-dashed border-gray-300 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
-              data-testid="recurrence-candidates"
+          <BaseCard
+            v-for="group in activeGroups"
+            :key="group.key"
+            as="section"
+            padding="none"
+            class="mb-4 overflow-hidden"
+            data-testid="recurrence-group"
+          >
+            <header
+              v-if="group.title"
+              class="flex items-center justify-between border-b border-gray-100 px-4 py-2 dark:border-slate-800"
             >
               <h2
                 class="text-sm font-semibold text-gray-800 dark:text-gray-200"
               >
-                À confirmer
+                <span v-if="group.icon" class="mr-1">{{ group.icon }}</span>
+                {{ group.title }}
               </h2>
-              <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
-                Vues deux fois seulement : confirmez celles qui sont des
-                abonnements, elles compteront tout de suite.
-              </p>
-              <ul class="divide-y divide-gray-100 dark:divide-slate-800">
-                <li
-                  v-for="row in candidates"
-                  :key="row.id"
-                  class="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between"
-                  data-testid="candidate-row"
-                >
-                  <button
-                    type="button"
-                    class="min-w-0 flex-1 text-left"
-                    @click="openTransactions(row)"
-                  >
-                    <span class="flex min-w-0 items-center gap-1.5">
-                      <span
-                        class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
-                        >{{ row.name }}</span
-                      >
-                      <DivisorBadge :divisor="row.divisor" />
-                    </span>
-                    <span class="text-xs text-gray-500 dark:text-gray-400">
-                      {{ formatCurrency(row.amount) }}
-                      {{ PERIOD_LABELS[row.period] }} · le
-                      {{ formatDate(row.lastDate) }}
-                    </span>
-                  </button>
-                  <div class="flex gap-2">
-                    <button
-                      type="button"
-                      class="min-h-[44px] rounded-lg bg-primary-500 px-3 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
-                      :disabled="busyKey !== null"
-                      data-testid="confirm-recurrence"
-                      @click="decide(row, 'CONFIRMED')"
-                    >
-                      Confirmer
-                    </button>
-                    <button
-                      type="button"
-                      class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-red-600 disabled:opacity-50 dark:text-gray-500 dark:hover:bg-slate-800 dark:hover:text-red-400"
-                      :disabled="busyKey !== null"
-                      :aria-label="`Écarter ${row.name} : ce n'est pas un abonnement`"
-                      title="Écarter : ce n'est pas un abonnement"
-                      data-testid="dismiss-recurrence"
-                      @click="decide(row, 'DISMISSED')"
-                    >
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          d="M6 18 18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </li>
-              </ul>
-            </section>
-          </template>
-
-          <template v-else>
-            <p
-              v-if="stopped.length === 0"
-              class="rounded-xl bg-white p-6 text-center text-sm text-gray-500 shadow-sm dark:bg-slate-900 dark:text-gray-400"
-              data-testid="ended-empty"
-            >
-              Aucun abonnement terminé.
-            </p>
-            <section
-              v-else
-              class="mb-4 overflow-hidden rounded-xl bg-white shadow-sm dark:bg-slate-900"
-              data-testid="recurrence-ended"
-            >
-              <header
-                class="flex items-center justify-between border-b border-gray-100 px-4 py-2 text-sm dark:border-slate-800"
+              <span
+                class="text-sm tabular-nums text-gray-600 dark:text-gray-400"
               >
-                <span class="text-gray-600 dark:text-gray-400">
-                  {{ stopped.length }}
-                  {{
-                    stopped.length > 1 ? 'charges terminées' : 'charge terminée'
-                  }}
-                </span>
-                <span class="tabular-nums text-gray-600 dark:text-gray-400">
-                  {{ formatCurrency(stoppedTotal) }} payés au total
-                </span>
-              </header>
-              <ul class="divide-y divide-gray-100 dark:divide-slate-800">
-                <li
-                  v-for="row in stopped"
-                  :key="row.id"
-                  class="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                  data-testid="ended-row"
-                >
-                  <RecurrenceNameEditor
-                    v-if="editingKey === rowKey(row)"
-                    :name="row.name"
-                    :named="row.named"
-                    :saving="busyKey !== null"
-                    @save="name => rename(row, name)"
-                    @cancel="editingKey = null"
-                  />
-                  <button
-                    v-else
-                    type="button"
-                    class="min-w-0 flex-1 text-left"
-                    :aria-label="`Voir les transactions de ${row.name}`"
-                    @click="openTransactions(row)"
-                  >
-                    <span class="flex min-w-0 items-center gap-1.5">
-                      <span
-                        class="truncate font-medium text-gray-900 hover:underline dark:text-gray-100"
-                        data-testid="recurrence-name"
-                        >{{ row.name }}</span
-                      >
-                      <DivisorBadge :divisor="row.divisor" />
-                    </span>
-                    <span
-                      v-if="row.name !== row.label"
-                      class="block truncate text-[11px] text-gray-400 dark:text-gray-500"
-                      >{{ row.label }}</span
-                    >
-                    <span
-                      class="block truncate text-xs text-gray-500 dark:text-gray-400"
-                    >
-                      {{
-                        row.subcategoryName ??
-                        row.categoryName ??
-                        'Sans catégorie'
-                      }}
-                      · {{ formatMonth(row.firstDate) }} →
-                      {{ formatMonth(row.lastDate) }} ·
-                      {{ formatDuration(row) }}
-                    </span>
-                  </button>
-                  <div
-                    class="flex items-center justify-between gap-4 sm:justify-end"
-                  >
-                    <div class="text-right">
-                      <span
-                        class="block tabular-nums font-medium text-gray-900 dark:text-gray-100"
-                        >{{ formatCurrency(row.totalPaid) }}</span
-                      >
-                      <span
-                        class="block text-xs tabular-nums text-gray-500 dark:text-gray-400"
-                        >dernier tarif {{ formatCurrency(row.amount) }}
-                        {{ PERIOD_LABELS[row.period] }}</span
-                      >
-                    </div>
-                    <button
-                      type="button"
-                      class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 dark:text-gray-500 dark:hover:bg-slate-800 dark:hover:text-gray-200"
-                      :disabled="busyKey !== null"
-                      :aria-label="`Renommer ${row.name}`"
-                      title="Renommer"
-                      data-testid="rename-recurrence"
-                      @click="editingKey = rowKey(row)"
-                    >
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-red-600 disabled:opacity-50 dark:text-gray-500 dark:hover:bg-slate-800 dark:hover:text-red-400"
-                      :disabled="busyKey !== null"
-                      :aria-label="`Écarter ${row.name} : ce n'est pas un abonnement`"
-                      title="Écarter : ce n'est pas un abonnement"
-                      data-testid="dismiss-recurrence"
-                      @click="decide(row, 'DISMISSED')"
-                    >
-                      <svg
-                        class="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          d="M6 18 18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </li>
-              </ul>
-            </section>
-          </template>
-
-          <details
-            v-if="dismissed.length > 0"
-            class="mb-4 rounded-xl bg-white p-4 shadow-sm dark:bg-slate-900"
-            data-testid="recurrence-dismissed"
-          >
-            <summary
-              class="cursor-pointer text-sm font-semibold text-gray-800 dark:text-gray-200"
-            >
-              Écartées ({{ dismissed.length }})
-            </summary>
-            <ul class="mt-2 divide-y divide-gray-100 dark:divide-slate-800">
+                {{ formatCurrency(group.monthlyTotal) }} / mois
+              </span>
+            </header>
+            <ul class="divide-y divide-gray-100 dark:divide-slate-800">
               <li
-                v-for="subscription in dismissed"
-                :key="subscription.id"
-                class="flex items-center justify-between gap-2 py-2 text-sm"
+                v-for="row in group.rows"
+                :key="row.id"
+                class="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                data-testid="recurrence-row"
               >
-                <span class="truncate text-gray-700 dark:text-gray-300">
-                  {{ subscription.name }}
-                </span>
+                <RecurrenceNameEditor
+                  v-if="editingKey === rowKey(row)"
+                  :name="row.name"
+                  :named="row.named"
+                  :saving="busyKey !== null"
+                  @save="name => rename(row, name)"
+                  @cancel="editingKey = null"
+                />
                 <button
+                  v-else
                   type="button"
-                  class="min-h-[44px] rounded-lg px-2 text-xs text-primary-600 hover:bg-gray-100 disabled:opacity-50 dark:text-primary-400 dark:hover:bg-slate-800"
-                  :disabled="busyKey !== null"
-                  data-testid="restore-recurrence"
-                  @click="forget(subscription, 'Récurrence rétablie')"
+                  class="min-w-0 flex-1 text-left"
+                  :aria-label="`Voir les transactions de ${row.name}`"
+                  @click="openTransactions(row)"
                 >
-                  Rétablir
+                  <span class="flex min-w-0 items-center gap-1.5">
+                    <span
+                      class="truncate font-medium text-gray-900 hover:underline dark:text-gray-100"
+                      data-testid="recurrence-name"
+                      >{{ row.name }}</span
+                    >
+                    <DivisorBadge :divisor="row.divisor" />
+                  </span>
+                  <span
+                    v-if="row.name !== row.label"
+                    class="block truncate text-[11px] text-gray-400 dark:text-gray-500"
+                    >{{ row.label }}</span
+                  >
+                  <span
+                    class="block truncate text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    {{
+                      row.subcategoryName ??
+                      row.categoryName ??
+                      'Sans catégorie'
+                    }}
+                    · depuis {{ formatMonthInline(row.firstDate) }} ·
+                    {{ formatCurrency(row.totalPaid) }} payés
+                  </span>
                 </button>
+                <!-- The pencil and the ✕ sit either side of the amount:
+                     a thumb aiming at one no longer lands on the other. -->
+                <div
+                  class="flex items-center justify-between gap-3 sm:justify-end sm:gap-4"
+                >
+                  <BaseIconButton
+                    :disabled="busyKey !== null"
+                    :label="`Renommer ${row.name}`"
+                    data-testid="rename-recurrence"
+                    @click="editingKey = rowKey(row)"
+                  >
+                    <IconPencil />
+                  </BaseIconButton>
+                  <div class="min-w-0 flex-1 text-right sm:flex-none">
+                    <span
+                      class="block tabular-nums font-medium text-gray-900 dark:text-gray-100"
+                      >{{ formatCurrency(row.amount) }}
+                      <span
+                        class="text-xs font-normal text-gray-500 dark:text-gray-400"
+                        >{{ PERIOD_LABELS[row.period] }}</span
+                      ></span
+                    >
+                    <span
+                      v-if="row.period !== 'MONTHLY'"
+                      class="block text-xs tabular-nums text-gray-500 dark:text-gray-400"
+                      >soit {{ formatCurrency(row.monthlyEquivalent) }} /
+                      mois</span
+                    >
+                  </div>
+                  <BaseIconButton
+                    variant="danger"
+                    :disabled="busyKey !== null"
+                    :label="`Écarter ${row.name} : ce n'est pas un abonnement`"
+                    data-testid="dismiss-recurrence"
+                    @click="dismissing = row"
+                  >
+                    <IconClose />
+                  </BaseIconButton>
+                </div>
               </li>
             </ul>
-          </details>
+          </BaseCard>
 
           <section
-            v-if="orphans.length > 0"
-            class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20"
-            data-testid="recurrence-orphans"
+            v-if="candidates.length > 0"
+            class="mb-4 rounded-xl border border-dashed border-gray-300 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
+            data-testid="recurrence-candidates"
           >
-            <h2
-              class="text-sm font-semibold text-amber-900 dark:text-amber-200"
-            >
-              Suivis sans échéance retrouvée ({{ orphans.length }})
+            <h2 class="text-sm font-semibold text-gray-800 dark:text-gray-200">
+              À confirmer
             </h2>
-            <p class="mb-2 text-xs text-amber-800 dark:text-amber-300">
-              Vous suivez ces abonnements, mais aucune dépense ne leur
-              correspond plus : leurs transactions ont peut-être été supprimées
-              ou reclassées. Oubliez-les, ou rattachez-leur un paiement depuis
-              la page Transactions.
+            <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
+              Vues deux fois seulement : confirmez celles qui sont des
+              abonnements, elles compteront tout de suite.
             </p>
-            <ul class="divide-y divide-amber-100 dark:divide-amber-800/50">
+            <ul class="divide-y divide-gray-100 dark:divide-slate-800">
               <li
-                v-for="subscription in orphans"
-                :key="subscription.id"
-                class="flex items-center justify-between gap-2 py-2 text-sm"
+                v-for="row in candidates"
+                :key="row.id"
+                class="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between"
+                data-testid="candidate-row"
               >
-                <span class="truncate text-gray-800 dark:text-gray-200">
-                  {{ subscription.name }}
-                </span>
                 <button
                   type="button"
-                  class="min-h-[44px] rounded-lg px-2 text-xs text-amber-800 hover:bg-amber-100 disabled:opacity-50 dark:text-amber-300 dark:hover:bg-amber-900/40"
-                  :disabled="busyKey !== null"
-                  data-testid="forget-orphan"
-                  @click="
-                    forget(subscription, `« ${subscription.name} » oublié`)
-                  "
+                  class="min-w-0 flex-1 text-left"
+                  @click="openTransactions(row)"
                 >
-                  Oublier
+                  <span class="flex min-w-0 items-center gap-1.5">
+                    <span
+                      class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                      >{{ row.name }}</span
+                    >
+                    <DivisorBadge :divisor="row.divisor" />
+                  </span>
+                  <span class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ formatCurrency(row.amount) }}
+                    {{ PERIOD_LABELS[row.period] }} · le
+                    {{ formatMediumDate(row.lastDate) }}
+                  </span>
                 </button>
+                <div class="flex gap-2">
+                  <BaseButton
+                    size="sm"
+                    :disabled="busyKey !== null"
+                    data-testid="confirm-recurrence"
+                    @click="decide(row, 'CONFIRMED')"
+                  >
+                    Confirmer
+                  </BaseButton>
+                  <BaseIconButton
+                    variant="danger"
+                    :disabled="busyKey !== null"
+                    :label="`Écarter ${row.name} : ce n'est pas un abonnement`"
+                    data-testid="dismiss-recurrence"
+                    @click="dismissing = row"
+                  >
+                    <IconClose />
+                  </BaseIconButton>
+                </div>
               </li>
             </ul>
           </section>
-        </template>
+        </div>
+
+        <div
+          v-else
+          :id="TAB_IDS.ended.panel"
+          role="tabpanel"
+          :aria-labelledby="TAB_IDS.ended.tab"
+        >
+          <BaseCard
+            v-if="stopped.length === 0"
+            class="text-center text-sm text-gray-500 dark:text-gray-400"
+            data-testid="ended-empty"
+          >
+            Aucun abonnement terminé.
+          </BaseCard>
+          <BaseCard
+            v-else
+            as="section"
+            padding="none"
+            class="mb-4 overflow-hidden"
+            data-testid="recurrence-ended"
+          >
+            <header
+              class="flex items-center justify-between border-b border-gray-100 px-4 py-2 text-sm dark:border-slate-800"
+            >
+              <span class="text-gray-600 dark:text-gray-400">
+                {{ stopped.length }}
+                {{
+                  stopped.length > 1 ? 'charges terminées' : 'charge terminée'
+                }}
+              </span>
+              <span class="tabular-nums text-gray-600 dark:text-gray-400">
+                {{ formatCurrency(stoppedTotal) }} payés au total
+              </span>
+            </header>
+            <ul class="divide-y divide-gray-100 dark:divide-slate-800">
+              <li
+                v-for="row in stopped"
+                :key="row.id"
+                class="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                data-testid="ended-row"
+              >
+                <RecurrenceNameEditor
+                  v-if="editingKey === rowKey(row)"
+                  :name="row.name"
+                  :named="row.named"
+                  :saving="busyKey !== null"
+                  @save="name => rename(row, name)"
+                  @cancel="editingKey = null"
+                />
+                <button
+                  v-else
+                  type="button"
+                  class="min-w-0 flex-1 text-left"
+                  :aria-label="`Voir les transactions de ${row.name}`"
+                  @click="openTransactions(row)"
+                >
+                  <span class="flex min-w-0 items-center gap-1.5">
+                    <span
+                      class="truncate font-medium text-gray-900 hover:underline dark:text-gray-100"
+                      data-testid="recurrence-name"
+                      >{{ row.name }}</span
+                    >
+                    <DivisorBadge :divisor="row.divisor" />
+                  </span>
+                  <span
+                    v-if="row.name !== row.label"
+                    class="block truncate text-[11px] text-gray-400 dark:text-gray-500"
+                    >{{ row.label }}</span
+                  >
+                  <span
+                    class="block truncate text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    {{
+                      row.subcategoryName ??
+                      row.categoryName ??
+                      'Sans catégorie'
+                    }}
+                    · {{ formatMonthInline(row.firstDate) }} →
+                    {{ formatMonthInline(row.lastDate) }} ·
+                    {{ formatDuration(row) }}
+                  </span>
+                </button>
+                <!-- The pencil and the ✕ sit either side of the amount:
+                     a thumb aiming at one no longer lands on the other. -->
+                <div
+                  class="flex items-center justify-between gap-3 sm:justify-end sm:gap-4"
+                >
+                  <BaseIconButton
+                    :disabled="busyKey !== null"
+                    :label="`Renommer ${row.name}`"
+                    data-testid="rename-recurrence"
+                    @click="editingKey = rowKey(row)"
+                  >
+                    <IconPencil />
+                  </BaseIconButton>
+                  <div class="min-w-0 flex-1 text-right sm:flex-none">
+                    <span
+                      class="block tabular-nums font-medium text-gray-900 dark:text-gray-100"
+                      >{{ formatCurrency(row.totalPaid) }}</span
+                    >
+                    <span
+                      class="block text-xs tabular-nums text-gray-500 dark:text-gray-400"
+                      >dernier tarif {{ formatCurrency(row.amount) }}
+                      {{ PERIOD_LABELS[row.period] }}</span
+                    >
+                  </div>
+                  <BaseIconButton
+                    variant="danger"
+                    :disabled="busyKey !== null"
+                    :label="`Écarter ${row.name} : ce n'est pas un abonnement`"
+                    data-testid="dismiss-recurrence"
+                    @click="dismissing = row"
+                  >
+                    <IconClose />
+                  </BaseIconButton>
+                </div>
+              </li>
+            </ul>
+          </BaseCard>
+        </div>
+
+        <BaseCard
+          v-if="dismissed.length > 0"
+          padding="sm"
+          class="mb-4"
+          data-testid="recurrence-dismissed"
+        >
+          <summary
+            class="cursor-pointer text-sm font-semibold text-gray-800 dark:text-gray-200"
+          >
+            Écartées ({{ dismissed.length }})
+          </summary>
+          <ul class="mt-2 divide-y divide-gray-100 dark:divide-slate-800">
+            <li
+              v-for="subscription in dismissed"
+              :key="subscription.id"
+              class="flex items-center justify-between gap-2 py-2 text-sm"
+            >
+              <span class="truncate text-gray-700 dark:text-gray-300">
+                {{ subscription.name }}
+              </span>
+              <BaseButton
+                size="sm"
+                variant="tinted"
+                :disabled="busyKey !== null"
+                data-testid="restore-recurrence"
+                @click="forget(subscription, 'Récurrence rétablie')"
+              >
+                Rétablir
+              </BaseButton>
+            </li>
+          </ul>
+        </BaseCard>
+
+        <section
+          v-if="orphans.length > 0"
+          class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20"
+          data-testid="recurrence-orphans"
+        >
+          <h2 class="text-sm font-semibold text-amber-900 dark:text-amber-200">
+            Suivis sans échéance retrouvée ({{ orphans.length }})
+          </h2>
+          <p class="mb-2 text-xs text-amber-800 dark:text-amber-300">
+            Vous suivez ces abonnements, mais aucune dépense ne leur correspond
+            plus : leurs transactions ont peut-être été supprimées ou
+            reclassées. Oubliez-les, ou rattachez-leur un paiement depuis la
+            page Transactions.
+          </p>
+          <ul class="divide-y divide-amber-100 dark:divide-amber-800/50">
+            <li
+              v-for="subscription in orphans"
+              :key="subscription.id"
+              class="flex items-center justify-between gap-2 py-2 text-sm"
+            >
+              <span class="truncate text-gray-800 dark:text-gray-200">
+                {{ subscription.name }}
+              </span>
+              <BaseButton
+                size="sm"
+                variant="secondary"
+                :disabled="busyKey !== null"
+                data-testid="forget-orphan"
+                @click="forget(subscription, `« ${subscription.name} » oublié`)"
+              >
+                Oublier
+              </BaseButton>
+            </li>
+          </ul>
+        </section>
       </template>
-    </div>
-  </div>
+    </template>
+
+    <ConfirmDialog
+      :open="dismissing !== null"
+      title="Écarter cette récurrence ?"
+      confirm-label="Écarter"
+      cancel-label="Conserver"
+      :loading="busyKey !== null"
+      @confirm="confirmDismiss"
+      @cancel="dismissing = null"
+    >
+      <span class="font-medium text-gray-900 dark:text-gray-100"
+        >« {{ dismissing?.name }} »</span
+      >
+      ne sera plus proposée comme abonnement. Vous pourrez la rétablir depuis la
+      liste « Écartées ».
+    </ConfirmDialog>
+  </PageShell>
 </template>

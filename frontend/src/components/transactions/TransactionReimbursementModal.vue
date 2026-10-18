@@ -8,11 +8,15 @@
    * expense transaction itself, which already knows its category — the field
    * decided nothing and only asked the user to guess.
    */
-  import { ref, watch } from 'vue'
-  import { useModalA11y } from '@/composables/useModalA11y'
+  import { computed, ref, watch } from 'vue'
+  import BaseModal from '@/components/ui/BaseModal.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
   import { api } from '@/lib/api'
   import type { TransactionDto, PersonDto } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
+  import { useToast } from '@/composables/useToast'
 
   const props = defineProps<{
     isOpen: boolean
@@ -28,21 +32,15 @@
     ]
   }>()
 
-  // Escape closes, Tab stays inside, focus returns to the opener after.
-  const modalPanelRef = ref<HTMLElement | null>(null)
-  useModalA11y({
-    isOpen: () => props.isOpen,
-    onClose: () => emit('close'),
-    panel: modalPanelRef,
-  })
+  const toast = useToast()
 
-  const form = ref({
+  const form = ref<{ personId: string; amount: number | null; note: string }>({
     personId: '',
     amount: 0,
     note: '',
   })
   const isCreating = ref(false)
-  const customDivisor = ref(2)
+  const customDivisor = ref<number | null>(2)
 
   function resetForm(): void {
     form.value = {
@@ -61,13 +59,31 @@
   }
 
   function applyCustomDivisor(): void {
-    if (customDivisor.value > 0) {
-      setAmountFromDivisor(customDivisor.value)
-    }
+    const divisor = customDivisor.value ?? 0
+    if (divisor > 0) setAmountFromDivisor(divisor)
   }
 
+  const amount = computed(() => form.value.amount ?? 0)
+
+  /** Why the amount cannot be taken, said next to the field rather than by a grey button. */
+  const amountError = computed<string | undefined>(() => {
+    if (form.value.amount === null || amount.value <= 0) return undefined
+    if (amount.value > props.remainingAmount) {
+      return `Le montant dépasse le restant à assigner (${formatCurrency(props.remainingAmount)}).`
+    }
+    return undefined
+  })
+
+  const canSubmit = computed(
+    () =>
+      form.value.personId !== '' &&
+      amount.value > 0 &&
+      amountError.value === undefined &&
+      !isCreating.value
+  )
+
   async function handleSubmit(): Promise<void> {
-    if (!props.transaction || !form.value.personId) return
+    if (!props.transaction || !canSubmit.value) return
 
     try {
       isCreating.value = true
@@ -77,30 +93,27 @@
       const newReimbursement = await api.createReimbursement({
         transactionId: props.transaction.id,
         personId: form.value.personId,
-        amount: form.value.amount,
+        amount: amount.value,
         ...(form.value.note && { note: form.value.note }),
       })
       emit('created', newReimbursement)
     } catch (err) {
       console.error('Failed to create reimbursement:', err)
+      // The modal stays open with the form as typed, so the user can retry.
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'Impossible de créer le remboursement'
+      )
     } finally {
       isCreating.value = false
     }
   }
 
-  function formatDate(dateStr: string): string {
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
-
   // Reset the form whenever the modal transitions from closed to open.
   // This runs after Vue has propagated the latest `transaction` and
-  // `remainingAmount` props, so the default category lookup uses the
-  // freshly-selected transaction.
+  // `remainingAmount` props, so the defaults use the freshly-selected
+  // transaction.
   watch(
     () => props.isOpen,
     isOpen => {
@@ -112,187 +125,137 @@
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      v-if="isOpen && transaction"
-      class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
-    >
-      <div class="absolute inset-0 bg-black/50" @click="emit('close')" />
-
-      <div
-        ref="modalPanelRef"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="reimbursement-modal-title"
-        class="relative max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl sm:rounded-xl sm:p-6 sm:pb-6 dark:bg-slate-900 dark:shadow-slate-900/30"
-      >
-        <h3
-          id="reimbursement-modal-title"
-          class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
-        >
-          Assigner un remboursement
-        </h3>
-
-        <!-- Transaction info -->
-        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 mb-4">
-          <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">
-            {{ formatDate(transaction.date) }} -
-            {{ transaction.description }}
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div
-              class="bg-white dark:bg-slate-700 rounded-lg p-2 border border-gray-200 dark:border-slate-600"
-            >
-              <div class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">
-                Montant total
-              </div>
-              <div class="text-lg font-semibold text-red-600 dark:text-red-500">
-                {{ formatCurrency(transaction.amount) }}
-              </div>
-            </div>
-            <div
-              class="bg-white dark:bg-slate-700 rounded-lg p-2 border border-gray-200 dark:border-slate-600"
-            >
-              <div class="text-xs text-gray-500 dark:text-gray-400 mb-0.5">
-                Restant a assigner
-              </div>
-              <div
-                class="text-lg font-semibold"
-                :class="
-                  remainingAmount > 0
-                    ? 'text-amber-600 dark:text-amber-400'
-                    : 'text-green-600 dark:text-green-400'
-                "
-              >
-                {{ formatCurrency(remainingAmount) }}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Form -->
-        <div class="space-y-4">
-          <div>
-            <label
-              class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >
-              Personne *
-            </label>
-            <select
-              v-model="form.personId"
-              class="w-full min-h-[44px] px-3 py-2 border border-gray-300 sm:min-h-0 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
-            >
-              <option value="">Sélectionnez une personne</option>
-              <option
-                v-for="person in persons"
-                :key="person.id"
-                :value="person.id"
-              >
-                {{ person.name }}
-              </option>
-            </select>
-          </div>
-
-          <div>
-            <label
-              class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >
-              Montant *
-            </label>
-            <input
-              v-model.number="form.amount"
-              type="number"
-              step="0.01"
-              min="0.01"
-              :max="remainingAmount"
-              class="w-full min-h-[44px] px-3 py-2 border border-gray-300 sm:min-h-0 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
-            />
-
-            <div class="mt-2">
-              <div class="text-xs text-gray-500 dark:text-gray-400 mb-1.5">
-                Raccourcis (base:
-                {{ formatCurrency(Math.abs(transaction.amount)) }})
-              </div>
-              <div class="flex flex-wrap gap-2">
-                <button
-                  v-for="d in [1, 2, 3, 4]"
-                  :key="d"
-                  type="button"
-                  class="min-h-[40px] px-3 py-1 text-xs font-medium sm:min-h-0 sm:px-2 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30"
-                  @click="setAmountFromDivisor(d)"
-                >
-                  {{ d === 1 ? '100%' : `/ ${d}` }}
-                </button>
-                <div class="flex items-center gap-1">
-                  <span class="text-xs text-gray-500 dark:text-gray-400"
-                    >/</span
-                  >
-                  <input
-                    v-model.number="customDivisor"
-                    type="number"
-                    min="1"
-                    max="100"
-                    class="w-14 min-h-[40px] px-1.5 py-1 text-xs sm:min-h-0 sm:w-12 border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
-                    @keyup.enter="applyCustomDivisor"
-                  />
-                  <button
-                    type="button"
-                    class="min-h-[40px] px-3 py-1 text-xs font-medium sm:min-h-0 sm:px-2 rounded border border-primary-300 dark:border-primary-700 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/30"
-                    @click="applyCustomDivisor"
-                  >
-                    Appliquer
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label
-              class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-            >
-              Note (optionnel)
-            </label>
-            <input
-              v-model="form.note"
-              type="text"
-              placeholder="Ajouter une note..."
-              class="w-full min-h-[44px] px-3 py-2 border border-gray-300 sm:min-h-0 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400"
-            />
-          </div>
-        </div>
-
-        <!-- Buttons -->
-        <div class="flex gap-3 mt-6">
-          <button
-            class="flex-1 min-h-[44px] px-4 py-2.5 text-sm font-medium sm:min-h-0 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
-            @click="emit('close')"
+  <BaseModal
+    :open="isOpen && transaction !== null"
+    title="Assigner un remboursement"
+    max-width="md"
+    :closable="!isCreating"
+    @close="emit('close')"
+  >
+    <template v-if="transaction">
+      <!-- Transaction info -->
+      <div class="mb-4 rounded-lg bg-gray-50 p-4 dark:bg-slate-800">
+        <p class="mb-2 text-sm text-gray-600 dark:text-gray-400">
+          {{ formatDate(transaction.date) }} · {{ transaction.description }}
+        </p>
+        <div class="grid grid-cols-2 gap-3">
+          <div
+            class="rounded-lg border border-gray-200 bg-white p-2 dark:border-slate-600 dark:bg-slate-700"
           >
-            Annuler
-          </button>
-          <button
-            :disabled="
-              !form.personId ||
-              form.amount <= 0 ||
-              form.amount > remainingAmount ||
-              isCreating
-            "
-            class="flex-1 min-h-[44px] px-4 py-2.5 text-sm font-medium sm:min-h-0 text-white rounded-lg transition-colors"
-            :class="
-              form.personId &&
-              form.amount > 0 &&
-              form.amount <= remainingAmount &&
-              !isCreating
-                ? 'bg-amber-600 dark:bg-amber-500 hover:bg-amber-700 dark:hover:bg-amber-600'
-                : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
-            "
-            @click="handleSubmit"
+            <SectionLabel>Montant total</SectionLabel>
+            <p class="text-lg font-semibold text-red-600 dark:text-red-400">
+              {{ formatCurrency(transaction.amount) }}
+            </p>
+          </div>
+          <div
+            class="rounded-lg border border-gray-200 bg-white p-2 dark:border-slate-600 dark:bg-slate-700"
           >
-            <span v-if="isCreating">Creation...</span>
-            <span v-else>Confirmer</span>
-          </button>
+            <SectionLabel>Restant à assigner</SectionLabel>
+            <p
+              class="text-lg font-semibold"
+              :class="
+                remainingAmount > 0
+                  ? 'text-gray-900 dark:text-gray-100'
+                  : 'text-green-700 dark:text-green-400'
+              "
+            >
+              {{ formatCurrency(remainingAmount) }}
+            </p>
+          </div>
         </div>
       </div>
-    </div>
-  </Teleport>
+
+      <!-- Form -->
+      <div class="space-y-4">
+        <BaseField
+          v-model="form.personId"
+          as="select"
+          label="Personne *"
+          data-testid="reimbursement-person"
+        >
+          <option value="">Sélectionnez une personne</option>
+          <option v-for="person in persons" :key="person.id" :value="person.id">
+            {{ person.name }}
+          </option>
+        </BaseField>
+
+        <div>
+          <BaseField
+            v-model="form.amount"
+            amount
+            label="Montant *"
+            :error="amountError"
+            data-testid="reimbursement-amount"
+          />
+
+          <div class="mt-2">
+            <p class="mb-1.5 text-xs text-gray-500 dark:text-gray-400">
+              Raccourcis (base :
+              {{ formatCurrency(Math.abs(transaction.amount)) }})
+            </p>
+            <div class="flex flex-wrap items-center gap-2">
+              <BaseButton
+                v-for="d in [1, 2, 3, 4]"
+                :key="d"
+                variant="secondary"
+                size="sm"
+                @click="setAmountFromDivisor(d)"
+              >
+                {{ d === 1 ? '100 %' : `/ ${d}` }}
+              </BaseButton>
+              <div class="flex items-center gap-1">
+                <span class="text-xs text-gray-500 dark:text-gray-400">/</span>
+                <div class="w-20">
+                  <BaseField
+                    v-model="customDivisor"
+                    type="number"
+                    size="sm"
+                    label="Diviseur personnalisé"
+                    label-hidden
+                    min="1"
+                    max="100"
+                    @keyup.enter="applyCustomDivisor"
+                  />
+                </div>
+                <BaseButton
+                  variant="tinted"
+                  size="sm"
+                  @click="applyCustomDivisor"
+                >
+                  Appliquer
+                </BaseButton>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <BaseField
+          v-model="form.note"
+          type="text"
+          label="Note (optionnel)"
+          placeholder="Ajouter une note…"
+          data-testid="reimbursement-note"
+        />
+      </div>
+    </template>
+
+    <template #footer>
+      <BaseButton
+        variant="secondary"
+        class="flex-1"
+        :disabled="isCreating"
+        @click="emit('close')"
+      >
+        Annuler
+      </BaseButton>
+      <BaseButton
+        class="flex-1"
+        :disabled="!canSubmit"
+        :loading="isCreating"
+        @click="handleSubmit"
+      >
+        Confirmer
+      </BaseButton>
+    </template>
+  </BaseModal>
 </template>

@@ -13,7 +13,10 @@
   import { useAccountsStore } from '@/stores/accounts'
   import { useToast } from '@/composables/useToast'
   import type { AccountDto, AccountType } from '@/lib/api'
-  import ToggleSwitch from '@/components/ToggleSwitch.vue'
+  import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
+  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
 
   const props = defineProps<{
     account: AccountDto
@@ -48,10 +51,6 @@
       hint: 'Exclu du budget par défaut',
     },
   ]
-
-  /** Merging still needs an endpoint the API does not expose yet. */
-  const UNAVAILABLE_HINT =
-    'Pas encore disponible : cette action nécessite un nouvel endpoint côté serveur.'
 
   // ── Rename ────────────────────────────────────────────────────────────────
   const renameDraft = ref<string | null>(null)
@@ -130,10 +129,13 @@
    * keystroke — an intermediate "1" while typing "12" would otherwise be
    * saved. Out-of-range values are rejected by the backend, so clamp here.
    */
-  async function setDivisor(raw: string): Promise<void> {
-    const parsed = Number.parseInt(raw, 10)
+  async function setDivisor(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement
+    const parsed = Number.parseInt(input.value, 10)
     if (!Number.isFinite(parsed) || parsed < 1 || parsed > 10) {
       toast.error('Le diviseur doit être compris entre 1 et 10')
+      // The refused value must not stay on screen as if it had been kept.
+      input.value = String(props.account.divisor)
       return
     }
     if (parsed === props.account.divisor) return
@@ -169,7 +171,9 @@
 
   // ── Badges ────────────────────────────────────────────────────────────────
   // Small summary shown on the collapsed header so the card is readable
-  // without opening it.
+  // without opening it. Amber only for what needs a hand (« à réaffecter »);
+  // the account's kind is information (blue), its exclusions a setting
+  // (grey) — neither a warning nor a danger.
   function computeBadges(): { label: string; tone: string }[] {
     const list: { label: string; tone: string }[] = []
     if (props.needsReviewCount) {
@@ -181,29 +185,29 @@
     if (props.account.type === 'JOINT') {
       list.push({
         label: `Joint ÷${props.account.divisor}`,
-        tone: 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
+        tone: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
       })
     } else if (props.account.type === 'INVESTMENT') {
       list.push({
         label: 'Investissement',
-        tone: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+        tone: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
       })
     } else if (props.account.divisor !== 1) {
       list.push({
         label: `÷${props.account.divisor}`,
-        tone: 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
+        tone: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
       })
     }
     if (props.account.isExcludedFromStats) {
       list.push({
         label: 'Hors statistiques',
-        tone: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+        tone: 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-300',
       })
     }
     if (props.account.isExcludedFromBudget) {
       list.push({
         label: 'Hors budget',
-        tone: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+        tone: 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-300',
       })
     }
     return list
@@ -279,42 +283,38 @@
     >
       <!-- Name -->
       <div>
-        <label
-          class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-          :for="`account-name-${account.id}`"
-        >
-          Nom du compte
-        </label>
         <form
-          class="flex flex-col gap-2 sm:flex-row sm:items-center"
+          class="flex flex-col gap-2 sm:flex-row sm:items-end"
           @submit.prevent="submitRename"
         >
-          <input
-            :id="`account-name-${account.id}`"
+          <BaseField
+            label="Nom du compte"
+            size="sm"
             type="text"
-            :value="draft()"
+            class="flex-1"
+            :model-value="draft()"
             :disabled="renameSaving"
             maxlength="100"
-            class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-            @input="onDraftChange(($event.target as HTMLInputElement).value)"
+            @update:model-value="onDraftChange(String($event))"
           />
           <div class="flex gap-2">
-            <button
+            <BaseButton
               type="submit"
-              :disabled="!isDraftDirty() || renameSaving"
-              class="rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+              size="sm"
+              :disabled="!isDraftDirty()"
+              :loading="renameSaving"
             >
               {{ renameSaving ? 'Enregistrement…' : 'Renommer' }}
-            </button>
-            <button
+            </BaseButton>
+            <BaseButton
               v-if="isDraftDirty()"
-              type="button"
+              variant="secondary"
+              size="sm"
               :disabled="renameSaving"
-              class="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600"
               @click="cancelRename"
             >
               Annuler
-            </button>
+            </BaseButton>
           </div>
         </form>
         <p
@@ -338,49 +338,35 @@
         >
           Type de compte
         </span>
-        <div
-          class="inline-flex flex-wrap gap-1 rounded-lg border border-gray-200 p-1 dark:border-slate-700"
-          role="group"
-          :aria-label="`Type du compte ${account.name}`"
-        >
-          <button
-            v-for="option in ACCOUNT_TYPES"
-            :key="option.value"
-            type="button"
-            :aria-pressed="account.type === option.value"
-            :disabled="saving"
-            :title="option.hint"
-            class="min-h-[40px] rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 sm:min-h-0"
-            :class="
-              account.type === option.value
-                ? 'bg-primary-600 text-white'
-                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
-            "
-            @click="setType(option.value)"
-          >
-            {{ option.label }}
-          </button>
-        </div>
+        <SegmentedControl
+          :model-value="account.type"
+          size="sm"
+          :label="`Type du compte ${account.name}`"
+          :disabled="saving"
+          :options="
+            ACCOUNT_TYPES.map(t => ({
+              value: t.value,
+              label: t.label,
+              title: t.hint,
+            }))
+          "
+          @update:model-value="setType($event)"
+        />
       </div>
 
       <!-- Divisor -->
       <div>
-        <label
-          class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
-          :for="`account-divisor-${account.id}`"
-        >
-          Diviseur des montants
-        </label>
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-          <input
-            :id="`account-divisor-${account.id}`"
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
+          <BaseField
+            label="Diviseur des montants"
+            size="sm"
             type="number"
             min="1"
             max="10"
-            :value="account.divisor"
+            class="w-20"
+            :model-value="account.divisor"
             :disabled="saving"
-            class="w-20 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-            @change="setDivisor(($event.target as HTMLInputElement).value)"
+            @change="setDivisor($event)"
           />
           <p class="text-xs text-gray-500 dark:text-gray-400">
             Chaque montant de ce compte est divisé par cette valeur dans le
@@ -438,24 +424,15 @@
       <div
         class="flex flex-col gap-2 border-t border-gray-100 pt-4 sm:flex-row sm:flex-wrap dark:border-slate-700/60"
       >
-        <!-- Merging still needs a backend endpoint -->
-        <button
-          type="button"
-          disabled
-          :title="UNAVAILABLE_HINT"
-          class="min-h-[44px] cursor-not-allowed rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-400 sm:min-h-0 dark:border-slate-700 dark:text-gray-500"
-        >
-          Fusionner avec un autre compte…
-        </button>
-        <button
-          type="button"
+        <BaseButton
+          variant="danger-outline"
+          size="sm"
           :disabled="saving"
-          class="min-h-[44px] rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
           data-testid="delete-account"
           @click="emit('ask-delete')"
         >
           Supprimer le compte…
-        </button>
+        </BaseButton>
       </div>
     </div>
   </li>

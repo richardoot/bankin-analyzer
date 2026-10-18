@@ -30,10 +30,26 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Confirmation d’e-mail', guestOnly: true },
   },
   {
+    path: '/forgot-password',
+    name: 'forgot-password',
+    component: () => import('@/views/ForgotPasswordPage.vue'),
+    meta: { title: 'Mot de passe oublié', guestOnly: true },
+  },
+  // Neither guest-only nor private: the recovery link opens a session on
+  // arrival, and a signed-in user may also land here to change a password.
+  {
+    path: '/reset-password',
+    name: 'reset-password',
+    component: () => import('@/views/ResetPasswordPage.vue'),
+    meta: { title: 'Nouveau mot de passe' },
+  },
+  {
     path: '/oauth/consent',
     name: 'oauth-consent',
     component: () => import('@/views/OAuthConsentPage.vue'),
-    meta: { title: 'Autorisation', requiresAuth: true },
+    // A consent asked by another application: one decision, no way out
+    // through the tabs.
+    meta: { title: 'Autorisation', requiresAuth: true, tabBar: false },
   },
   // Where the bank redirects after authorization. Public on purpose: the
   // request arrives from the bank in whatever session state the browser was
@@ -63,11 +79,14 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Import de transactions', requiresAuth: true },
   },
   {
-    path: '/import/recap',
+    path: '/import/recap/:id',
     name: 'import-recap',
     component: () => import('@/views/ImportRecapPage.vue'),
     meta: { title: 'Récapitulatif d’import', requiresAuth: true },
   },
+  // The old recap carried its figures in the query string and nothing that
+  // names the import: a bookmark of it now lands on the history.
+  { path: '/import/recap', redirect: '/import/history' },
   {
     path: '/import/history',
     name: 'import-history',
@@ -191,6 +210,16 @@ if (import.meta.env.DEV) {
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  // A new page opens at its top — with the mobile tab bar a screen is one tap
+  // from another, and landing halfway down Budget because Transactions was
+  // scrolled reads as a broken page. Back and forward return where the user
+  // was; a change of query or hash on the same page (filters, tabs) leaves
+  // the scroll alone.
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.path === from.path) return false
+    return { top: 0 }
+  },
 })
 
 router.beforeEach(async to => {
@@ -243,5 +272,7 @@ declare module 'vue-router' {
     guestOnly?: boolean
     /** Page name shown in the tab; the product name is appended once. */
     title?: string
+    /** `false` keeps the mobile tab bar off a signed-in page. */
+    tabBar?: boolean
   }
 }

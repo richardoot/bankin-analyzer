@@ -10,7 +10,9 @@
    * row left alone because it carries work since.
    */
   import { ref } from 'vue'
-  import { useModalA11y } from '@/composables/useModalA11y'
+  import BaseModal from '@/components/ui/BaseModal.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
   import { api } from '@/lib/api'
   import type { ReassignmentOutcomeDto } from '@/lib/api'
 
@@ -32,14 +34,6 @@
     close: []
     reassigned: [ReassignmentOutcomeDto]
   }>()
-
-  // Escape closes, Tab stays inside, focus returns to the opener after.
-  const modalPanelRef = ref<HTMLElement | null>(null)
-  useModalA11y({
-    isOpen: () => props.pending !== null,
-    onClose: () => emit('close'),
-    panel: modalPanelRef,
-  })
 
   const applying = ref(false)
   const error = ref<string | null>(null)
@@ -100,21 +94,16 @@
 </script>
 
 <template>
-  <div
-    v-if="pending"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+  <BaseModal
+    :open="pending !== null"
+    :title="pending ? `Corriger « ${pending.bankAccountName} »` : undefined"
+    max-width="lg"
+    :closable="!applying"
     data-testid="reassign-modal"
+    @close="emit('close')"
   >
-    <div
-      ref="modalPanelRef"
-      role="dialog"
-      aria-modal="true"
-      class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900"
-    >
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        Corriger « {{ pending.bankAccountName }} »
-      </h2>
-      <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+    <template v-if="pending">
+      <p class="text-sm text-gray-600 dark:text-gray-400">
         Une synchronisation a déjà écrit sous l'ancien compte. La corriger vers
         <strong>{{ pending.targetAccountLabel }}</strong> va :
       </p>
@@ -134,45 +123,37 @@
 
       <!-- "— aucun —" doesn't move anything: it only stops the sync's claim
            on rows that are, right now, staying exactly where they landed. -->
-      <p
+      <InlineAlert
         v-if="pending.targetAccountId === null && pending.currentAccountLabel"
-        class="mt-3 rounded-lg bg-sky-50 p-3 text-sm text-sky-800 dark:bg-sky-900/20 dark:text-sky-200"
+        variant="info"
+        class="mt-3"
         data-testid="reassign-aucun-hint"
       >
         Ces transactions resteront sur
         <strong>{{ pending.currentAccountLabel }}</strong
         >. Si vous connaissez déjà le bon compte, choisissez-le directement dans
         la liste plutôt que de passer par « — aucun — ».
-      </p>
+      </InlineAlert>
 
-      <p
-        v-if="error"
-        role="alert"
-        class="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300"
+      <InlineAlert v-if="error" class="mt-4">{{ error }}</InlineAlert>
+    </template>
+
+    <template #footer>
+      <BaseButton
+        variant="secondary"
+        data-testid="reassign-cancel"
+        :disabled="applying"
+        @click="emit('close')"
       >
-        {{ error }}
-      </p>
-
-      <div class="mt-6 flex justify-end gap-3">
-        <button
-          type="button"
-          data-testid="reassign-cancel"
-          :disabled="applying"
-          class="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600"
-          @click="emit('close')"
-        >
-          Annuler
-        </button>
-        <button
-          type="button"
-          data-testid="reassign-confirm"
-          :disabled="applying"
-          class="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-          @click="confirm"
-        >
-          {{ applying ? 'Correction…' : 'Corriger' }}
-        </button>
-      </div>
-    </div>
-  </div>
+        Annuler
+      </BaseButton>
+      <BaseButton
+        data-testid="reassign-confirm"
+        :loading="applying"
+        @click="confirm"
+      >
+        Corriger
+      </BaseButton>
+    </template>
+  </BaseModal>
 </template>

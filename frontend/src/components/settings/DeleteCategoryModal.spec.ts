@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import DeleteCategoryModal from './DeleteCategoryModal.vue'
 import type { CategoryDeletionSummaryDto, CategoryDto } from '@/lib/api'
@@ -54,21 +54,44 @@ const fullSummary: CategoryDeletionSummaryDto = {
   reimbursementCount: 3,
 }
 
-enableAutoUnmount(() => {})
+enableAutoUnmount(afterEach)
+
+afterEach(() => {
+  document.body.innerHTML = ''
+})
+
+// The dialog teleports to <body> and the typed name lives in a brick of
+// its own, so the spec reads the document rather than stubbing the Teleport
+// (a stubbed one remounts its subtree on every render and loses the text).
+const q = <T extends Element>(selector: string): T => {
+  const el = document.body.querySelector<T>(selector)
+  if (!el) throw new Error(`no element matches ${selector}`)
+  return el
+}
+
+const text = (selector: string) => q(selector).textContent ?? ''
+
+async function type(value: string): Promise<void> {
+  const input = q<HTMLInputElement>(
+    '[data-testid="delete-category-confirmation"]'
+  )
+  input.value = value
+  input.dispatchEvent(new Event('input'))
+  await flushPromises()
+}
 
 async function mountModal(summary: CategoryDeletionSummaryDto = fullSummary) {
   mockedApi.getCategoryDeletionSummary.mockResolvedValue(summary)
   const wrapper = mount(DeleteCategoryModal, {
     props: { category },
-    // Stubbed so the dialog renders inside the wrapper rather than in <body>.
-    global: { stubs: { Teleport: true } },
+    attachTo: document.body,
   })
   await flushPromises()
   return wrapper
 }
 
-const confirmButton = (wrapper: Awaited<ReturnType<typeof mountModal>>) =>
-  wrapper.get('[data-testid="delete-category-confirm"]')
+const confirmButton = () =>
+  q<HTMLButtonElement>('[data-testid="delete-category-confirm"]')
 
 describe('DeleteCategoryModal', () => {
   beforeEach(() => {
@@ -89,9 +112,9 @@ describe('DeleteCategoryModal', () => {
   })
 
   it('separates what is kept from what is destroyed', async () => {
-    const wrapper = await mountModal()
+    await mountModal()
 
-    const kept = wrapper.get('[data-testid="deletion-kept"]').text()
+    const kept = text('[data-testid="deletion-kept"]')
     expect(kept).toContain('340')
     expect(kept).toContain('sans catégorie')
     // The date range tells the user which period loses its filing.
@@ -101,50 +124,46 @@ describe('DeleteCategoryModal', () => {
     expect(kept).toContain('312')
     expect(kept).toContain('3')
 
-    const destroyed = wrapper.get('[data-testid="deletion-destroyed"]').text()
+    const destroyed = text('[data-testid="deletion-destroyed"]')
     expect(destroyed).toContain('Courses, Restaurant')
     expect(destroyed).toContain('Budget 2024')
     expect(destroyed).toContain('450')
   })
 
   it('keeps the confirm button locked until the name is typed back', async () => {
-    const wrapper = await mountModal()
+    await mountModal()
 
-    expect(confirmButton(wrapper).attributes('disabled')).toBeDefined()
+    expect(confirmButton().disabled).toBe(true)
 
-    await wrapper
-      .get('[data-testid="delete-category-confirmation"]')
-      .setValue('Alimentation')
+    await type('Alimentation')
 
-    expect(confirmButton(wrapper).attributes('disabled')).toBeUndefined()
+    expect(confirmButton().disabled).toBe(false)
   })
 
   it('accepts the typed name regardless of case and spacing', async () => {
-    const wrapper = await mountModal()
+    await mountModal()
 
-    await wrapper
-      .get('[data-testid="delete-category-confirmation"]')
-      .setValue('  alimentation ')
+    await type('  alimentation ')
 
-    expect(confirmButton(wrapper).attributes('disabled')).toBeUndefined()
+    expect(confirmButton().disabled).toBe(false)
   })
 
   it('asks for no confirmation when nothing is attached', async () => {
-    const wrapper = await mountModal(emptySummary)
+    await mountModal(emptySummary)
 
     expect(
-      wrapper.find('[data-testid="delete-category-confirmation"]').exists()
-    ).toBe(false)
-    expect(wrapper.get('[data-testid="deletion-empty"]').text()).toContain(
-      'Rien'
-    )
-    expect(confirmButton(wrapper).attributes('disabled')).toBeUndefined()
+      document.body.querySelector(
+        '[data-testid="delete-category-confirmation"]'
+      )
+    ).toBeNull()
+    expect(text('[data-testid="deletion-empty"]')).toContain('Rien')
+    expect(confirmButton().disabled).toBe(false)
   })
 
   it('emits the outcome once the deletion went through', async () => {
     const wrapper = await mountModal(emptySummary)
 
-    await confirmButton(wrapper).trigger('click')
+    confirmButton().click()
     await flushPromises()
 
     expect(mockedApi.deleteCategory).toHaveBeenCalledWith('cat-food')
@@ -157,12 +176,10 @@ describe('DeleteCategoryModal', () => {
     mockedApi.deleteCategory.mockRejectedValue(new Error('Boom'))
     const wrapper = await mountModal(emptySummary)
 
-    await confirmButton(wrapper).trigger('click')
+    confirmButton().click()
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="deletion-error"]').text()).toContain(
-      'Boom'
-    )
+    expect(text('[data-testid="deletion-error"]')).toContain('Boom')
     expect(wrapper.emitted('deleted')).toBeUndefined()
   })
 
@@ -170,15 +187,15 @@ describe('DeleteCategoryModal', () => {
     mockedApi.getCategoryDeletionSummary.mockRejectedValue(
       new Error('Réseau indisponible')
     )
-    const wrapper = mount(DeleteCategoryModal, {
+    mount(DeleteCategoryModal, {
       props: { category },
-      global: { stubs: { Teleport: true } },
+      attachTo: document.body,
     })
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="deletion-error"]').text()).toContain(
+    expect(text('[data-testid="deletion-error"]')).toContain(
       'Réseau indisponible'
     )
-    expect(confirmButton(wrapper).attributes('disabled')).toBeDefined()
+    expect(confirmButton().disabled).toBe(true)
   })
 })

@@ -42,7 +42,7 @@
   <div class="space-y-5">
     <div>
       <div class="flex items-center justify-between mb-2 gap-3">
-        <label
+        <p
           class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 flex items-center gap-2"
         >
           Montants
@@ -68,7 +68,7 @@
             </svg>
             mise à jour…
           </span>
-        </label>
+        </p>
         <span class="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
           Total : <strong>{{ formatCurrency(previewTotal) }}</strong>
         </span>
@@ -97,7 +97,7 @@
             class="text-sm tabular-nums"
             :class="
               projectedSavings > 0
-                ? 'text-primary-600 dark:text-primary-400'
+                ? 'text-green-700 dark:text-green-400'
                 : projectedSavings < 0
                   ? 'text-red-600 dark:text-red-400'
                   : 'text-gray-500 dark:text-gray-400'
@@ -114,12 +114,12 @@
       <div
         v-if="showSavingsIndicator"
         data-testid="savings-equation"
-        class="mb-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-900/20 px-3 py-2.5 text-xs"
+        class="mb-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-3 py-2.5 text-xs"
       >
         <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
           <label
             for="savings-target"
-            class="font-medium text-indigo-900 dark:text-indigo-300"
+            class="font-medium text-gray-900 dark:text-gray-100"
           >
             Épargne décidée / mois
           </label>
@@ -127,12 +127,11 @@
             <input
               id="savings-target"
               data-testid="savings-target-input"
-              type="number"
-              min="0"
-              step="10"
+              type="text"
+              inputmode="decimal"
               :value="savingsTarget ?? ''"
               placeholder="—"
-              class="w-28 pl-2 pr-7 py-1 text-sm text-right bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-md text-gray-900 dark:text-gray-100 tabular-nums"
+              class="w-28 pl-2 pr-7 py-1 text-sm text-right bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-md text-gray-900 dark:text-gray-100 tabular-nums"
               @input="
                 emit('set-savings', ($event.target as HTMLInputElement).value)
               "
@@ -145,7 +144,7 @@
           </div>
           <span
             v-if="savingsTarget === null"
-            class="text-indigo-700/80 dark:text-indigo-400/80 leading-snug"
+            class="text-gray-600 dark:text-gray-400 leading-snug"
           >
             Décidez-la avant de répartir le reste : ce plan dégage actuellement
             {{ formatCurrency(projectedSavings) }} / mois.
@@ -158,7 +157,7 @@
           data-testid="project-reserve"
           class="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1"
         >
-          <span class="text-indigo-900 dark:text-indigo-300">
+          <span class="text-gray-900 dark:text-gray-100">
             Budget projets :
           </span>
           <strong
@@ -166,12 +165,12 @@
             :class="
               monthlyProjectReserve < 0
                 ? 'text-red-600 dark:text-red-400'
-                : 'text-indigo-700 dark:text-indigo-300'
+                : 'text-gray-900 dark:text-gray-100'
             "
           >
             {{ formatCurrency(monthlyProjectReserve) }} / mois
           </strong>
-          <span class="text-indigo-700/70 dark:text-indigo-400/70">
+          <span class="text-gray-500 dark:text-gray-400">
             soit
             {{ formatCurrency(planProjectReserve ?? 0) }} sur
             {{ planMonthCount }} mois
@@ -186,7 +185,7 @@
           :class="
             reserveGap < 0
               ? 'text-red-700 dark:text-red-400'
-              : 'text-primary-700 dark:text-primary-400'
+              : 'text-green-700 dark:text-green-400'
           "
         >
           <template v-if="reserveGap < 0">
@@ -221,78 +220,93 @@
       </div>
       <div
         v-else
-        class="space-y-1 max-h-72 overflow-y-auto pr-1 -mr-1 transition-opacity"
+        class="-m-1 max-h-72 space-y-1 overflow-y-auto p-1 transition-opacity"
         :class="{ 'opacity-60': isLoading }"
       >
         <div
           v-for="row in rows"
           :key="row.category.categoryId"
           :data-testid="`preview-row-${row.category.categoryName}`"
-          class="flex items-center gap-3 py-1.5 px-3 rounded text-sm bg-gray-50 dark:bg-slate-800"
+          class="flex flex-col gap-1.5 py-2 px-3 rounded text-sm bg-gray-50 sm:flex-row sm:items-center sm:gap-3 sm:py-1.5 dark:bg-slate-800"
         >
-          <span v-if="row.category.categoryIcon" class="text-base shrink-0">
-            {{ row.category.categoryIcon }}
-          </span>
-          <span class="flex-1 truncate text-gray-700 dark:text-gray-300">
-            {{ row.category.categoryName }}
-          </span>
-          <span
-            v-if="row.category.reimbursement && row.category.reimbursement > 0"
-            :data-testid="`preview-reimbursement-${row.category.categoryName}`"
-            class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400"
-            :title="`Remboursements reçus déduits : ${formatCurrency(row.category.reimbursement)}`"
-          >
-            −{{ formatCurrency(row.category.reimbursement) }} reçus
-          </span>
-          <span
-            v-if="
-              row.category.pendingReimbursement &&
-              row.category.pendingReimbursement > 0
-            "
-            :data-testid="`preview-pending-${row.category.categoryName}`"
-            class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
-            :title="`Remboursements en attente déduits : ${formatCurrency(row.category.pendingReimbursement)}`"
-          >
-            −{{ formatCurrency(row.category.pendingReimbursement) }} en attente
-          </span>
-          <span
-            v-if="row.excluded > 0.005"
-            :data-testid="`preview-exceptional-${row.category.categoryName}`"
-            class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400"
-            :title="`Part exceptionnelle exclue de l'enveloppe : ${formatCurrency(row.excluded)}/mois sur une moyenne de ${formatCurrency(row.category.averagePerMonth)}`"
-          >
-            −{{ formatCurrency(row.excluded) }} exceptionnel
-          </span>
-          <span
-            class="text-xs text-gray-500 dark:text-gray-400 tabular-nums hidden sm:inline shrink-0"
-          >
-            <template v-if="row.seedAverage > 0">
-              Moy. {{ formatCurrency(row.seedAverage) }}
-            </template>
-            <template v-else>Pas d'historique</template>
-          </span>
-          <div class="relative shrink-0">
-            <input
-              type="number"
-              min="0"
-              step="1"
-              :value="row.amount > 0 ? row.amount : ''"
-              placeholder="—"
-              class="w-24 pl-2 pr-7 py-1 text-sm text-right bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-md text-gray-900 dark:text-gray-100 tabular-nums"
-              @input="
-                emit(
-                  'update-entry',
-                  row.category.categoryId,
-                  ($event.target as HTMLInputElement).value
-                )
-              "
-            />
-            <span
-              class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"
-            >
-              €
+          <!-- Under sm the name has its own line, the badges wrap under it,
+               and the figure + field share a second line: the name never
+               shrinks to « Ali… » behind three badges and a field. -->
+          <span class="flex min-w-0 flex-1 items-center gap-2 sm:contents">
+            <span v-if="row.category.categoryIcon" class="text-base shrink-0">
+              {{ row.category.categoryIcon }}
             </span>
-          </div>
+            <span
+              class="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-300"
+              :title="row.category.categoryName"
+            >
+              {{ row.category.categoryName }}
+            </span>
+          </span>
+          <span class="flex flex-wrap items-center gap-1 sm:contents">
+            <span
+              v-if="
+                row.category.reimbursement && row.category.reimbursement > 0
+              "
+              :data-testid="`preview-reimbursement-${row.category.categoryName}`"
+              class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+              :title="`Remboursements reçus déduits : ${formatCurrency(row.category.reimbursement)}`"
+            >
+              −{{ formatCurrency(row.category.reimbursement) }} reçus
+            </span>
+            <span
+              v-if="
+                row.category.pendingReimbursement &&
+                row.category.pendingReimbursement > 0
+              "
+              :data-testid="`preview-pending-${row.category.categoryName}`"
+              class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-debt-100 dark:bg-debt-900/30 text-debt-700 dark:text-debt-300"
+              :title="`Remboursements en attente déduits : ${formatCurrency(row.category.pendingReimbursement)}`"
+            >
+              −{{ formatCurrency(row.category.pendingReimbursement) }} en
+              attente
+            </span>
+            <span
+              v-if="row.excluded > 0.005"
+              :data-testid="`preview-exceptional-${row.category.categoryName}`"
+              class="text-[10px] font-medium tabular-nums shrink-0 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
+              :title="`Part exceptionnelle exclue de l'enveloppe : ${formatCurrency(row.excluded)}/mois sur une moyenne de ${formatCurrency(row.category.averagePerMonth)}`"
+            >
+              −{{ formatCurrency(row.excluded) }} exceptionnel
+            </span>
+          </span>
+          <span class="flex items-center justify-between gap-3 sm:contents">
+            <span
+              class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0"
+            >
+              <template v-if="row.seedAverage > 0">
+                Moy. {{ formatCurrency(row.seedAverage) }}
+              </template>
+              <template v-else>Pas d'historique</template>
+            </span>
+            <div class="relative shrink-0">
+              <input
+                type="text"
+                inputmode="decimal"
+                :aria-label="`Enveloppe ${row.category.categoryName}`"
+                :value="row.amount > 0 ? row.amount : ''"
+                placeholder="—"
+                class="w-24 pl-2 pr-7 py-1 text-sm text-right bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 rounded-md text-gray-900 dark:text-gray-100 tabular-nums"
+                @input="
+                  emit(
+                    'update-entry',
+                    row.category.categoryId,
+                    ($event.target as HTMLInputElement).value
+                  )
+                "
+              />
+              <span
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"
+              >
+                €
+              </span>
+            </div>
+          </span>
         </div>
       </div>
     </div>

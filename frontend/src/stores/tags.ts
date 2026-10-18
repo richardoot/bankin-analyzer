@@ -15,7 +15,7 @@ export const useTagsStore = defineStore('tags', () => {
   async function fetchTags(): Promise<void> {
     await run(async () => {
       tags.value = await api.getTags()
-    }, 'Failed to fetch tags')
+    }, 'Impossible de charger les étiquettes')
   }
 
   async function addTag(dto: CreateTagDto): Promise<TagDto | null> {
@@ -24,7 +24,7 @@ export const useTagsStore = defineStore('tags', () => {
       tags.value.push(created)
       sortTags()
       return created
-    }, 'Failed to create tag')
+    }, "Impossible de créer l'étiquette")
     return result ?? null
   }
 
@@ -37,7 +37,7 @@ export const useTagsStore = defineStore('tags', () => {
         sortTags()
       }
       return true
-    }, 'Failed to update tag')
+    }, "Impossible de modifier l'étiquette")
     return result ?? false
   }
 
@@ -46,7 +46,7 @@ export const useTagsStore = defineStore('tags', () => {
       await api.deleteTag(id)
       tags.value = tags.value.filter(t => t.id !== id)
       return true
-    }, 'Failed to delete tag')
+    }, "Impossible de supprimer l'étiquette")
     return result ?? false
   }
 
@@ -63,7 +63,7 @@ export const useTagsStore = defineStore('tags', () => {
       const tag = tags.value.find(t => t.id === tagId)
       if (tag) tag.transactionCount += attached
       return attached
-    }, 'Failed to attach tag')
+    }, "Impossible d'ajouter l'étiquette")
     return result ?? 0
   }
 
@@ -77,7 +77,7 @@ export const useTagsStore = defineStore('tags', () => {
       const tag = tags.value.find(t => t.id === tagId)
       if (tag && tag.transactionCount > 0) tag.transactionCount -= 1
       return true
-    }, 'Failed to detach tag')
+    }, "Impossible de retirer l'étiquette")
     return result ?? false
   }
 

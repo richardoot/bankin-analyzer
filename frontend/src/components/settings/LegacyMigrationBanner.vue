@@ -7,6 +7,7 @@
    */
   import { computed, onMounted, ref } from 'vue'
   import { api } from '@/lib/api'
+  import BaseButton from '@/components/ui/BaseButton.vue'
 
   const props = defineProps<{
     /** Legacy categories, when the parent already counted them. */
@@ -55,11 +56,8 @@
       : catégories d'avant le catalogue, ou sous-catégories laissées à côté des
       siennes.
     </p>
-    <RouterLink
-      to="/settings/categories/migration"
-      class="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700 sm:min-h-0"
-    >
+    <BaseButton to="/settings/categories/migration" class="shrink-0">
       Ouvrir l'assistant
-    </RouterLink>
+    </BaseButton>
   </div>
 </template>

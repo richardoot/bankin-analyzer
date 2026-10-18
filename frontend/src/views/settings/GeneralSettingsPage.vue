@@ -7,9 +7,10 @@
   import { onMounted, ref } from 'vue'
   import { useThemeStore } from '@/stores/theme'
   import SettingsCard from '@/components/settings/SettingsCard.vue'
-  import ToggleSwitch from '@/components/ToggleSwitch.vue'
+  import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
   import { api } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
+  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 
   const themeStore = useThemeStore()
   const toast = useToast()
@@ -54,9 +55,9 @@
   }
 
   const THEME_MODES = [
-    { value: 'light' as const, label: 'Clair', icon: '☀️' },
-    { value: 'dark' as const, label: 'Sombre', icon: '🌙' },
-    { value: 'system' as const, label: 'Système', icon: '💻' },
+    { value: 'light' as const, label: '☀️ Clair' },
+    { value: 'dark' as const, label: '🌙 Sombre' },
+    { value: 'system' as const, label: '💻 Système' },
   ]
 
   const DATA_LINKS = [
@@ -121,28 +122,12 @@
       title="Apparence"
       description="Le thème est mémorisé sur cet appareil."
     >
-      <div
-        class="inline-flex flex-wrap gap-1 rounded-lg border border-gray-200 p-1 dark:border-slate-700"
-        role="group"
-        aria-label="Thème de l'interface"
-      >
-        <button
-          v-for="mode in THEME_MODES"
-          :key="mode.value"
-          type="button"
-          :aria-pressed="themeStore.mode === mode.value"
-          class="rounded-md px-4 py-2 text-sm font-medium transition-colors"
-          :class="
-            themeStore.mode === mode.value
-              ? 'bg-primary-600 text-white'
-              : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
-          "
-          @click="themeStore.setMode(mode.value)"
-        >
-          <span class="mr-1">{{ mode.icon }}</span>
-          {{ mode.label }}
-        </button>
-      </div>
+      <SegmentedControl
+        :model-value="themeStore.mode"
+        label="Thème de l'interface"
+        :options="THEME_MODES"
+        @update:model-value="themeStore.setMode($event)"
+      />
     </SettingsCard>
 
     <SettingsCard

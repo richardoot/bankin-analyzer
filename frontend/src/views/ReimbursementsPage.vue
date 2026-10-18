@@ -1,10 +1,10 @@
 <script setup lang="ts">
   import { ref, computed, onMounted } from 'vue'
-  import { RouterLink } from 'vue-router'
   import { usePersonsStore } from '@/stores/persons'
   import { api } from '@/lib/api'
   import type { ReimbursementDto, SettlementDto } from '@/lib/api'
   import { usePdfExport } from '@/composables/usePdfExport'
+  import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
@@ -12,9 +12,25 @@
   import SingleSettlementModal from '@/components/settlements/SingleSettlementModal.vue'
   import SettlementHistorySection from '@/components/settlements/SettlementHistorySection.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
+  import { useToast } from '@/composables/useToast'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconClipboard from '@/components/icons/IconClipboard.vue'
+  import IconDocumentDownload from '@/components/icons/IconDocumentDownload.vue'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
+  import IconCheckCircle from '@/components/icons/IconCheckCircle.vue'
+  import IconCheck from '@/components/icons/IconCheck.vue'
+  import IconClose from '@/components/icons/IconClose.vue'
+  import IconTrash from '@/components/icons/IconTrash.vue'
+  import IconPencil from '@/components/icons/IconPencil.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
+  import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
 
   const { exportReimbursementsToPdf } = usePdfExport()
+  const toast = useToast()
 
   const personsStore = usePersonsStore()
 
@@ -55,6 +71,7 @@
 
   // Settlement delete confirmation
   const settlementToDelete = ref<string | null>(null)
+  const isDeletingSettlement = ref(false)
 
   // Summary by person
   interface CategorySummary {
@@ -93,14 +110,8 @@
   }
 
   // Format transaction date
-  function formatTransactionDate(dateString: string | undefined): string {
-    if (!dateString) return '--/--/----'
-    try {
-      return new Date(dateString).toLocaleDateString('fr-FR')
-    } catch {
-      return '--/--/----'
-    }
-  }
+  const formatTransactionDate = (dateString: string | undefined): string =>
+    formatDate(dateString)
 
   const summaryByPerson = computed((): PersonSummary[] => {
     const map = new Map<
@@ -199,6 +210,19 @@
     reimbursements.value.reduce((sum, r) => sum + r.amountRemaining, 0)
   )
 
+  /** The first load: nothing to show yet, so the shape of the card stands in. */
+  const isFirstLoad = computed(
+    () => isLoadingReimbursements.value && reimbursements.value.length === 0
+  )
+
+  /** Debts exist, but every one of them has been settled. */
+  const isAllSettled = computed(
+    () =>
+      !isFirstLoad.value &&
+      reimbursements.value.length > 0 &&
+      summaryByPerson.value.length === 0
+  )
+
   // Fetch reimbursements (with transaction info)
   async function fetchReimbursements() {
     try {
@@ -208,7 +232,9 @@
       reimbursements.value = data
     } catch (err) {
       reimbursementsError.value =
-        err instanceof Error ? err.message : 'Failed to fetch reimbursements'
+        err instanceof Error
+          ? err.message
+          : 'Impossible de charger les remboursements'
     } finally {
       isLoadingReimbursements.value = false
     }
@@ -222,7 +248,9 @@
       settlements.value = await api.getSettlements()
     } catch (err) {
       settlementsError.value =
-        err instanceof Error ? err.message : 'Failed to fetch settlements'
+        err instanceof Error
+          ? err.message
+          : 'Impossible de charger les règlements'
     } finally {
       isLoadingSettlements.value = false
     }
@@ -261,6 +289,9 @@
   // Handle settlement created
   async function handleSettlementCreated(settlement: SettlementDto) {
     settlements.value.unshift(settlement)
+    toast.success(
+      `Règlement de ${formatCurrency(settlement.amountUsed)} enregistré`
+    )
     // Refresh reimbursements to get updated amounts
     await fetchReimbursements()
   }
@@ -284,6 +315,7 @@
 
   // Cancel settlement deletion
   function cancelDeleteSettlement() {
+    if (isDeletingSettlement.value) return
     settlementToDelete.value = null
   }
 
@@ -291,18 +323,26 @@
   async function confirmDeleteSettlement() {
     if (!settlementToDelete.value) return
 
+    // The dialog stays open, busy, until the server has answered: closing
+    // it first made a failure look like a cancellation.
     const idToDelete = settlementToDelete.value
-    settlementToDelete.value = null
-    showSettlementDetailModal.value = false
-    selectedSettlement.value = null
-
+    isDeletingSettlement.value = true
     try {
       await api.deleteSettlement(idToDelete)
       settlements.value = settlements.value.filter(s => s.id !== idToDelete)
+      settlementToDelete.value = null
+      showSettlementDetailModal.value = false
+      selectedSettlement.value = null
+      toast.success('Règlement annulé, les montants sont de nouveau en attente')
       // Refresh reimbursements to restore amounts
       await fetchReimbursements()
     } catch (err) {
       console.error('Failed to delete settlement:', err)
+      toast.error(
+        err instanceof Error ? err.message : "Impossible d'annuler le règlement"
+      )
+    } finally {
+      isDeletingSettlement.value = false
     }
   }
 
@@ -382,520 +422,519 @@
 </script>
 
 <template>
-  <div
-    class="min-h-screen bg-gray-50 dark:bg-slate-800 py-6 sm:py-8 transition-colors"
-  >
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <PageHeader
-        title="Remboursements"
-        subtitle="Gérez les personnes et suivez les remboursements en cours"
-      >
-        <template #actions>
-          <RouterLink
-            to="/transactions"
-            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors min-h-[44px] sm:min-h-0 w-full sm:w-auto"
-          >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-              />
-            </svg>
-            Voir les transactions
-          </RouterLink>
-        </template>
-      </PageHeader>
+  <PageShell width="wide">
+    <PageHeader
+      title="Remboursements"
+      subtitle="Gérez les personnes et suivez les remboursements en cours"
+    >
+      <!-- One link to Transactions per screen: here when there are debts,
+           in the empty state otherwise. Quieter than « Enregistrer un
+           règlement », which is the action this page exists for. -->
+      <template v-if="reimbursements.length > 0" #actions>
+        <BaseButton
+          to="/transactions"
+          variant="secondary"
+          class="w-full sm:w-auto"
+        >
+          <IconClipboard class="h-4 w-4" />
+          Voir les transactions
+        </BaseButton>
+      </template>
+    </PageHeader>
 
-      <!-- Summary Section: the balances are what the page is opened for -->
-      <div
-        v-if="reimbursements.length > 0"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
-      >
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Récapitulatif des remboursements
-          </h2>
-          <button
-            class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-            @click="exportReimbursementsToPdf(summaryByPerson, totalDue)"
-          >
-            <svg
-              class="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
-            Export PDF
-          </button>
-        </div>
+    <!-- A failed load is said as such — never as "nothing owed". -->
+    <InlineAlert
+      v-if="reimbursementsError"
+      class="mb-6"
+      data-testid="reimbursements-error"
+      title="Les remboursements n'ont pas pu être chargés."
+      retry-label="Réessayer"
+      retry-test-id="reimbursements-retry"
+      :retrying="isLoadingReimbursements"
+      @retry="fetchReimbursements"
+    >
+      {{ reimbursementsError }}
+    </InlineAlert>
 
-        <div class="space-y-4">
-          <div
-            v-for="person in summaryByPerson"
-            :key="person.personId"
-            class="border border-gray-200 dark:border-slate-700 rounded-lg p-4"
-          >
-            <!-- Person header -->
-            <div class="flex items-center justify-between mb-2">
-              <div class="flex items-center gap-3">
-                <div
-                  class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center"
+    <!-- First load: the shape of the summary, not a spinner -->
+    <BaseCard v-if="isFirstLoad" data-testid="reimbursements-loading">
+      <SkeletonBlock class="mb-6 h-6 w-64" />
+      <div class="space-y-4">
+        <SkeletonBlock class="h-28 rounded-lg" />
+        <SkeletonBlock class="h-28 rounded-lg" />
+      </div>
+    </BaseCard>
+
+    <!-- Summary Section: the balances are what the page is opened for -->
+    <BaseCard v-else-if="summaryByPerson.length > 0">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          Récapitulatif des remboursements
+        </h2>
+        <BaseButton
+          variant="tinted"
+          size="sm"
+          @click="exportReimbursementsToPdf(summaryByPerson, totalDue)"
+        >
+          <IconDocumentDownload class="h-4 w-4" />
+          Export PDF
+        </BaseButton>
+      </div>
+
+      <div class="space-y-4">
+        <div
+          v-for="person in summaryByPerson"
+          :key="person.personId"
+          class="border border-gray-200 dark:border-slate-700 rounded-lg p-4"
+        >
+          <!-- Person header -->
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-3">
+              <div
+                class="h-10 w-10 bg-debt-100 dark:bg-debt-900/30 rounded-full flex items-center justify-center"
+              >
+                <span
+                  class="text-lg font-semibold text-debt-700 dark:text-debt-300"
                 >
-                  <span
-                    class="text-lg font-semibold text-amber-700 dark:text-amber-400"
-                  >
-                    {{ person.personName.charAt(0).toUpperCase() }}
-                  </span>
-                </div>
-                <div>
-                  <h3 class="font-medium text-gray-900 dark:text-gray-100">
-                    {{ person.personName }}
-                  </h3>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Reçu : {{ formatCurrency(person.totalReceived) }} | En
-                    attente: {{ formatCurrency(person.totalRemaining) }}
-                  </p>
-                </div>
+                  {{ person.personName.charAt(0).toUpperCase() }}
+                </span>
               </div>
-              <div class="text-lg font-bold text-amber-700 dark:text-amber-400">
-                {{ formatCurrency(person.total) }}
+              <div>
+                <h3 class="font-medium text-gray-900 dark:text-gray-100">
+                  {{ person.personName }}
+                </h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ formatCurrency(person.totalReceived) }} reçus sur
+                  {{ formatCurrency(person.total) }}
+                </p>
               </div>
             </div>
-
-            <!-- Categories breakdown -->
-            <div class="mt-3 space-y-1">
+            <!-- The figure that matters is what is still owed: it is what
+                 the lines add up to and what the grand total sums. -->
+            <div class="text-right">
               <div
-                v-for="cat in person.byCategory"
-                :key="cat.categoryId ?? 'none'"
+                class="text-lg font-bold text-debt-700 dark:text-debt-400"
+                data-testid="person-remaining"
               >
-                <!-- Category header - clickable -->
-                <button
-                  class="w-full flex items-center justify-between py-2 px-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors text-sm min-h-[44px] sm:min-h-0"
-                  @click="
-                    toggleCategoryExpanded(
-                      person.personId,
-                      cat.categoryId ?? 'none'
-                    )
-                  "
-                >
-                  <span
-                    class="text-gray-600 dark:text-gray-400 flex items-center gap-1.5 sm:gap-2 flex-wrap"
-                  >
-                    <svg
-                      class="w-3 h-3 text-gray-500 dark:text-gray-400 transition-transform duration-200 shrink-0"
-                      :class="{
-                        'rotate-90': isCategoryExpanded(
-                          person.personId,
-                          cat.categoryId ?? 'none'
-                        ),
-                      }"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                    <span class="truncate">{{ cat.categoryName }}</span>
-                    <span
-                      class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
-                      >({{ cat.reimbursements.length }})</span
-                    >
-                    <!-- Status badge -->
-                    <span
-                      v-if="cat.status === 'COMPLETED'"
-                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 shrink-0"
-                    >
-                      Regle
-                    </span>
-                    <span
-                      v-else-if="cat.status === 'PARTIAL'"
-                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 shrink-0"
-                    >
-                      Partiel
-                    </span>
-                    <span
-                      v-else
-                      class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 shrink-0"
-                    >
-                      En attente
-                    </span>
-                  </span>
-                  <span
-                    class="font-medium text-gray-700 dark:text-gray-300 shrink-0 ml-2"
-                  >
-                    {{ formatCurrency(cat.amountRemaining) }}
-                  </span>
-                </button>
+                {{ formatCurrency(person.totalRemaining) }}
+              </div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                restant dû
+              </div>
+            </div>
+          </div>
 
-                <!-- Transaction details - collapsible -->
-                <div
-                  class="transition-all duration-200 ease-in-out overflow-hidden"
-                  :class="
-                    isCategoryExpanded(
-                      person.personId,
-                      cat.categoryId ?? 'none'
-                    )
-                      ? 'max-h-[500px] opacity-100'
-                      : 'max-h-0 opacity-0'
-                  "
+          <!-- Categories breakdown -->
+          <div class="mt-3 space-y-1">
+            <div
+              v-for="cat in person.byCategory"
+              :key="cat.categoryId ?? 'none'"
+            >
+              <!-- Category header - clickable -->
+              <button
+                type="button"
+                :aria-expanded="
+                  isCategoryExpanded(person.personId, cat.categoryId ?? 'none')
+                "
+                :aria-controls="`debts-${person.personId}-${cat.categoryId ?? 'none'}`"
+                class="w-full flex items-center justify-between py-2 px-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors text-sm min-h-[44px] sm:min-h-0"
+                @click="
+                  toggleCategoryExpanded(
+                    person.personId,
+                    cat.categoryId ?? 'none'
+                  )
+                "
+              >
+                <span
+                  class="text-gray-600 dark:text-gray-400 flex items-center gap-1.5 sm:gap-2 flex-wrap"
                 >
-                  <div class="ml-3 sm:ml-5 mt-1 mb-2 space-y-1">
-                    <div
-                      v-for="r in cat.reimbursements"
-                      :key="r.id"
-                      class="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-amber-200 dark:border-amber-700"
+                  <IconChevronRight
+                    class="w-3 h-3 text-gray-500 dark:text-gray-400 transition-transform duration-200 shrink-0"
+                    :class="{
+                      'rotate-90': isCategoryExpanded(
+                        person.personId,
+                        cat.categoryId ?? 'none'
+                      ),
+                    }"
+                  />
+                  <span class="truncate">{{ cat.categoryName }}</span>
+                  <span
+                    class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
+                    >({{ cat.reimbursements.length }})</span
+                  >
+                  <!-- Status badge -->
+                  <span
+                    v-if="cat.status === 'COMPLETED'"
+                    class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 shrink-0"
+                  >
+                    Réglé
+                  </span>
+                  <span
+                    v-else-if="cat.status === 'PARTIAL'"
+                    class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-debt-100 dark:bg-debt-900/30 text-debt-700 dark:text-debt-300 shrink-0"
+                  >
+                    Partiel
+                  </span>
+                  <span
+                    v-else
+                    class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 shrink-0"
+                  >
+                    En attente
+                  </span>
+                </span>
+                <span
+                  class="font-medium text-gray-700 dark:text-gray-300 shrink-0 ml-2"
+                >
+                  {{ formatCurrency(cat.amountRemaining) }}
+                </span>
+              </button>
+
+              <!-- Transaction details - collapsible. v-show, not a max-height
+                     animation: the cap cut off the lines past ~9 on a phone,
+                     and the hidden "Régler" buttons stayed tabbable. -->
+              <div
+                v-show="
+                  isCategoryExpanded(person.personId, cat.categoryId ?? 'none')
+                "
+                :id="`debts-${person.personId}-${cat.categoryId ?? 'none'}`"
+                :data-testid="`debts-${person.personId}-${cat.categoryId ?? 'none'}`"
+              >
+                <div class="ml-3 sm:ml-5 mt-1 mb-2 space-y-1">
+                  <div
+                    v-for="r in cat.reimbursements"
+                    :key="r.id"
+                    class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 dark:text-gray-400 py-1.5 sm:py-1 pl-3 border-l-2 border-debt-200 dark:border-debt-700"
+                  >
+                    <span
+                      class="min-w-0 truncate"
+                      :title="r.transaction?.description"
                     >
-                      <span class="truncate">
-                        <span class="text-gray-500 dark:text-gray-400"
-                          >[{{
-                            formatTransactionDate(r.transaction?.date)
-                          }}]</span
-                        >
-                        {{ r.transaction?.description || 'Transaction' }}
-                      </span>
-                      <span
-                        class="flex items-center gap-2 whitespace-nowrap mt-0.5 sm:mt-0 sm:ml-2"
+                      <span class="text-gray-500 dark:text-gray-400"
+                        >[{{
+                          formatTransactionDate(r.transaction?.date)
+                        }}]</span
                       >
-                        <span class="font-medium">
-                          {{ formatCurrency(r.amountRemaining) }}
-                          <span
-                            v-if="r.amountReceived > 0"
-                            class="text-primary-600 dark:text-primary-400 ml-1"
-                          >
-                            (recu: {{ formatCurrency(r.amountReceived) }})
-                          </span>
-                        </span>
-                        <button
-                          type="button"
-                          class="px-2 py-1 text-xs font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
-                          :title="`Regler uniquement ${r.transaction?.description || 'cette transaction'}`"
-                          @click="openSettlementModalForReimbursement(r)"
+                      {{ r.transaction?.description || 'Transaction' }}
+                    </span>
+                    <!-- The amount may wrap; the button never shrinks. -->
+                    <span
+                      class="flex items-center justify-between gap-2 sm:justify-end sm:ml-2"
+                    >
+                      <span class="min-w-0 font-medium">
+                        {{ formatCurrency(r.amountRemaining) }}
+                        <span
+                          v-if="r.amountReceived > 0"
+                          class="text-green-700 dark:text-green-400 ml-1"
                         >
-                          Regler
-                        </button>
+                          (reçu : {{ formatCurrency(r.amountReceived) }})
+                        </span>
                       </span>
-                    </div>
+                      <BaseButton
+                        variant="tinted"
+                        size="sm"
+                        class="shrink-0 pointer-coarse:min-h-[44px] pointer-coarse:px-4"
+                        :title="`Régler uniquement ${r.transaction?.description || 'cette transaction'}`"
+                        @click="openSettlementModalForReimbursement(r)"
+                      >
+                        Régler
+                      </BaseButton>
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
-
-            <!-- Settlement button -->
-            <div
-              v-if="person.totalRemaining > 0"
-              class="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700"
-            >
-              <button
-                type="button"
-                class="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
-                @click="openSettlementModal(person.personId, person.personName)"
-              >
-                <svg
-                  class="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                Enregistrer un règlement ({{
-                  formatCurrency(person.totalRemaining)
-                }}
-                en attente)
-              </button>
-            </div>
           </div>
 
-          <!-- Total -->
+          <!-- Settlement button -->
           <div
-            class="border-t-2 border-amber-200 dark:border-amber-700 pt-4 flex items-center justify-between"
+            v-if="person.totalRemaining > 0"
+            class="mt-4 pt-3 border-t border-gray-100 dark:border-slate-700"
           >
-            <span class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-              >Total General</span
+            <BaseButton
+              block
+              @click="openSettlementModal(person.personId, person.personName)"
             >
-            <span class="text-xl font-bold text-amber-700 dark:text-amber-400">
-              {{ formatCurrency(totalDue) }}
-            </span>
+              <IconCheckCircle class="h-4 w-4" />
+              Enregistrer un règlement ({{
+                formatCurrency(person.totalRemaining)
+              }}
+              en attente)
+            </BaseButton>
           </div>
         </div>
+
+        <!-- Total -->
+        <div
+          class="border-t-2 border-debt-200 dark:border-debt-700 pt-4 flex items-center justify-between"
+        >
+          <span class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+            >Total général</span
+          >
+          <span class="text-xl font-bold text-debt-700 dark:text-debt-400">
+            {{ formatCurrency(totalDue) }}
+          </span>
+        </div>
+      </div>
+    </BaseCard>
+
+    <!-- Every debt settled: say so, instead of a summary with nobody in it -->
+    <BaseCard v-else-if="isAllSettled" data-testid="reimbursements-settled">
+      <div class="flex items-start gap-3">
+        <div
+          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+        >
+          <IconCheckCircle class="h-6 w-6" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            Tout est soldé
+          </h2>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Aucun remboursement n'est en attente. L'historique des règlements
+            reste consultable ci-dessous, et un nouveau remboursement s'assigne
+            depuis la page Transactions.
+          </p>
+        </div>
+      </div>
+    </BaseCard>
+
+    <!-- Empty state for reimbursements -->
+    <BaseCard
+      v-else-if="
+        !isLoadingReimbursements &&
+        !reimbursementsError &&
+        reimbursements.length === 0
+      "
+      padding="none"
+    >
+      <EmptyState
+        title="Aucun remboursement en cours"
+        description="Assignez des remboursements aux transactions depuis la page Transactions."
+      >
+        <template #icon>
+          <svg
+            class="h-8 w-8"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+            />
+          </svg>
+        </template>
+        <template #action>
+          <BaseButton to="/transactions">Aller aux transactions</BaseButton>
+        </template>
+      </EmptyState>
+    </BaseCard>
+
+    <!-- Persons Section: configuration, below the balances it serves -->
+    <BaseCard class="mt-8">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+        Personnes
+      </h2>
+
+      <!-- Error state for persons -->
+      <div
+        v-if="personsStore.error"
+        role="alert"
+        class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 mb-4"
+      >
+        {{ personsStore.error }}
       </div>
 
-      <!-- Empty state for reimbursements -->
-      <div
-        v-else-if="!isLoadingReimbursements && reimbursements.length === 0"
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20"
-      >
-        <EmptyState
-          title="Aucun remboursement en cours"
-          description="Assignez des remboursements aux transactions depuis la page Transactions."
+      <!-- Add person form -->
+      <form class="flex flex-wrap gap-3 mb-6" @submit.prevent="handleAddPerson">
+        <div class="flex-1 min-w-[200px]">
+          <BaseField
+            v-model="newPersonName"
+            type="text"
+            size="sm"
+            label="Nom de la personne"
+            label-hidden
+            placeholder="Nom de la personne"
+            :disabled="isAddingPerson"
+          />
+        </div>
+        <div class="flex-1 min-w-[200px]">
+          <BaseField
+            v-model="newPersonEmail"
+            type="email"
+            size="sm"
+            label="Email (optionnel)"
+            label-hidden
+            placeholder="Email (optionnel)"
+            :disabled="isAddingPerson"
+          />
+        </div>
+        <BaseButton
+          type="submit"
+          :disabled="!newPersonName.trim()"
+          :loading="isAddingPerson"
         >
-          <template #icon>
-            <svg
-              class="h-8 w-8"
-              fill="none"
+          <span v-if="isAddingPerson">Ajout...</span>
+          <span v-else>Ajouter</span>
+        </BaseButton>
+      </form>
+
+      <!-- Persons list -->
+      <div
+        v-if="personsStore.isLoading"
+        class="flex justify-center items-center py-8"
+      >
+        <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+          <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
               stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-              />
-            </svg>
-          </template>
-          <template #action>
-            <RouterLink
-              to="/transactions"
-              class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 dark:bg-primary-500 hover:bg-primary-700 dark:hover:bg-primary-600 rounded-lg transition-colors"
-            >
-              Aller aux transactions
-            </RouterLink>
-          </template>
-        </EmptyState>
+              stroke-width="4"
+            />
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+          <span>Chargement...</span>
+        </div>
       </div>
 
-      <!-- Persons Section: configuration, below the balances it serves -->
+      <!-- Person cards grid -->
       <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6 mt-8"
+        v-else-if="personsStore.persons.length > 0"
+        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
       >
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          Personnes
-        </h2>
-
-        <!-- Error state for persons -->
         <div
-          v-if="personsStore.error"
-          role="alert"
-          class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 mb-4"
+          v-for="person in personsStore.persons"
+          :key="person.id"
+          class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700"
         >
-          {{ personsStore.error }}
-        </div>
-
-        <!-- Add person form -->
-        <form
-          class="flex flex-wrap gap-3 mb-6"
-          @submit.prevent="handleAddPerson"
-        >
-          <div class="flex-1 min-w-[200px]">
-            <input
-              v-model="newPersonName"
-              type="text"
-              placeholder="Nom de la personne"
-              class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-              :disabled="isAddingPerson"
-            />
-          </div>
-          <div class="flex-1 min-w-[200px]">
-            <input
-              v-model="newPersonEmail"
-              type="email"
-              placeholder="Email (optionnel)"
-              class="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-amber-500 dark:focus:border-amber-400 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-              :disabled="isAddingPerson"
-            />
-          </div>
-          <button
-            type="submit"
-            :disabled="!newPersonName.trim() || isAddingPerson"
-            class="px-6 py-2 text-sm font-medium text-white rounded-lg transition-colors"
-            :class="
-              newPersonName.trim() && !isAddingPerson
-                ? 'bg-amber-600 dark:bg-amber-500 hover:bg-amber-700 dark:hover:bg-amber-600'
-                : 'bg-gray-300 dark:bg-slate-600 cursor-not-allowed'
-            "
-          >
-            <span v-if="isAddingPerson">Ajout...</span>
-            <span v-else>Ajouter</span>
-          </button>
-        </form>
-
-        <!-- Persons list -->
-        <div
-          v-if="personsStore.isLoading"
-          class="flex justify-center items-center py-8"
-        >
-          <div class="flex items-center gap-3 text-gray-500 dark:text-gray-400">
-            <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-              <circle
-                class="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                stroke-width="4"
-              />
-              <path
-                class="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            <span>Chargement...</span>
-          </div>
-        </div>
-
-        <!-- Person cards grid -->
-        <div
-          v-else-if="personsStore.persons.length > 0"
-          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-        >
-          <div
-            v-for="person in personsStore.persons"
-            :key="person.id"
-            class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700"
-          >
-            <!-- Edit mode -->
-            <template v-if="editingPersonId === person.id">
-              <div class="flex items-center gap-2">
-                <!-- Avatar with first letter -->
-                <div
-                  class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center shrink-0"
+          <!-- Edit mode -->
+          <template v-if="editingPersonId === person.id">
+            <div class="flex items-center gap-2">
+              <!-- Avatar with first letter -->
+              <div
+                class="h-10 w-10 bg-debt-100 dark:bg-debt-900/30 rounded-full flex items-center justify-center shrink-0"
+              >
+                <span
+                  class="text-lg font-semibold text-debt-700 dark:text-debt-300"
                 >
-                  <span
-                    class="text-lg font-semibold text-amber-700 dark:text-amber-400"
-                  >
-                    {{ person.name.charAt(0).toUpperCase() }}
-                  </span>
-                </div>
-                <input
-                  v-model="editingPersonName"
-                  type="text"
-                  class="flex-1 px-3 py-1.5 border border-amber-300 dark:border-amber-600 rounded-lg focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100"
-                  @keyup.enter="saveEditPerson(person.id)"
-                  @keyup.escape="cancelEditPerson"
-                />
-                <button
-                  class="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
-                  @click="saveEditPerson(person.id)"
-                >
-                  <svg
-                    class="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </button>
-                <button
-                  class="p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
-                  @click="cancelEditPerson"
-                >
-                  <svg
-                    class="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
+                  {{ person.name.charAt(0).toUpperCase() }}
+                </span>
               </div>
-            </template>
-            <!-- Display mode -->
-            <template v-else>
-              <div class="flex items-start gap-3">
-                <!-- Avatar with first letter -->
-                <div
-                  class="h-10 w-10 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center shrink-0"
+              <BaseField
+                v-model="editingPersonName"
+                type="text"
+                size="sm"
+                label="Nom de la personne"
+                label-hidden
+                class="flex-1"
+                @keyup.enter="saveEditPerson(person.id)"
+                @keyup.escape="cancelEditPerson"
+              />
+              <BaseIconButton
+                size="sm"
+                variant="primary"
+                label="Enregistrer le nom"
+                @click="saveEditPerson(person.id)"
+              >
+                <IconCheck />
+              </BaseIconButton>
+              <BaseIconButton
+                size="sm"
+                label="Annuler le renommage"
+                @click="cancelEditPerson"
+              >
+                <IconClose />
+              </BaseIconButton>
+            </div>
+          </template>
+          <!-- Display mode -->
+          <template v-else>
+            <div class="flex items-start gap-3">
+              <!-- Avatar with first letter -->
+              <div
+                class="h-10 w-10 bg-debt-100 dark:bg-debt-900/30 rounded-full flex items-center justify-center shrink-0"
+              >
+                <span
+                  class="text-lg font-semibold text-debt-700 dark:text-debt-300"
                 >
-                  <span
-                    class="text-lg font-semibold text-amber-700 dark:text-amber-400"
-                  >
-                    {{ person.name.charAt(0).toUpperCase() }}
-                  </span>
-                </div>
-                <!-- Name and email -->
-                <div class="flex-1 min-w-0">
-                  <button
-                    class="text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-amber-600 dark:hover:text-amber-400 truncate block w-full"
-                    @click="startEditPerson(person.id, person.name)"
-                  >
-                    {{ person.name }}
-                  </button>
-                  <p
-                    class="text-xs text-gray-500 dark:text-gray-400 truncate"
-                    :title="person.email || 'Pas d\'email'"
-                  >
-                    {{ person.email || "Pas d'email" }}
-                  </p>
-                </div>
-                <!-- Delete button -->
-                <button
-                  class="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors shrink-0"
-                  title="Supprimer"
-                  @click="showDeleteConfirmation(person.id, person.name)"
-                >
-                  <svg
-                    class="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                </button>
+                  {{ person.name.charAt(0).toUpperCase() }}
+                </span>
               </div>
-            </template>
-          </div>
-        </div>
-
-        <!-- Empty state -->
-        <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
-          Aucune personne ajoutée. Commencez par ajouter une personne ci-dessus.
+              <!-- Name and email -->
+              <div class="flex-1 min-w-0">
+                <p
+                  class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
+                  :title="person.name"
+                >
+                  {{ person.name }}
+                </p>
+                <p
+                  class="text-xs text-gray-500 dark:text-gray-400 truncate"
+                  :title="person.email || 'Pas d\'email'"
+                >
+                  {{ person.email || "Pas d'email" }}
+                </p>
+              </div>
+              <!-- Rename: a pencil, as on Récurrences — a name that is
+                   secretly a button is a convention nobody finds. -->
+              <BaseIconButton
+                size="sm"
+                :label="`Renommer ${person.name}`"
+                data-testid="rename-person"
+                @click="startEditPerson(person.id, person.name)"
+              >
+                <IconPencil />
+              </BaseIconButton>
+              <!-- Delete button -->
+              <BaseIconButton
+                size="sm"
+                variant="danger"
+                :label="`Supprimer ${person.name}`"
+                @click="showDeleteConfirmation(person.id, person.name)"
+              >
+                <IconTrash />
+              </BaseIconButton>
+            </div>
+          </template>
         </div>
       </div>
 
-      <!-- Settlement History Section -->
-      <SettlementHistorySection
-        v-if="settlements.length > 0 || isLoadingSettlements"
-        :settlements="settlements"
-        :is-loading="isLoadingSettlements"
-        class="mt-8"
-        @delete="requestDeleteSettlement"
-        @view-details="viewSettlementDetails"
-      />
-    </div>
+      <!-- Empty state -->
+      <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
+        Aucune personne ajoutée. Commencez par ajouter une personne ci-dessus.
+      </div>
+    </BaseCard>
+
+    <!-- Settlement History Section -->
+    <InlineAlert
+      v-if="settlementsError"
+      class="mt-8"
+      data-testid="settlements-error"
+      title="L'historique des règlements n'a pas pu être chargé."
+      retry-label="Réessayer"
+      retry-test-id="settlements-retry"
+      :retrying="isLoadingSettlements"
+      @retry="fetchSettlements"
+    >
+      {{ settlementsError }}
+    </InlineAlert>
+    <SettlementHistorySection
+      v-else-if="settlements.length > 0 || isLoadingSettlements"
+      :settlements="settlements"
+      :is-loading="isLoadingSettlements"
+      class="mt-8"
+      @delete="requestDeleteSettlement"
+      @view-details="viewSettlementDetails"
+    />
 
     <!-- Delete confirmation modal -->
     <ConfirmDialog
@@ -944,11 +983,12 @@
       title="Annuler ce règlement ?"
       confirm-label="Oui, annuler"
       cancel-label="Non, conserver"
+      :loading="isDeletingSettlement"
       @confirm="confirmDeleteSettlement"
       @cancel="cancelDeleteSettlement"
     >
       Cette action va annuler le règlement et restaurer les montants en attente
       sur les remboursements associés.
     </ConfirmDialog>
-  </div>
+  </PageShell>
 </template>

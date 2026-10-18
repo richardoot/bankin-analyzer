@@ -10,12 +10,21 @@
    * that fires every time stops being read.
    */
   import { computed, ref, watch } from 'vue'
-  import { useModalA11y } from '@/composables/useModalA11y'
+  import BaseModal from '@/components/ui/BaseModal.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import ConfirmByTyping from '@/components/ui/ConfirmByTyping.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
   import {
     api,
     type CategoryDeletionSummaryDto,
     type CategoryDto,
   } from '@/lib/api'
+  import {
+    formatCompactCurrency,
+    formatDate,
+    formatMonth,
+  } from '@/lib/formatters'
 
   const props = defineProps<{
     category: CategoryDto | null
@@ -31,19 +40,12 @@
     ]
   }>()
 
-  // Escape closes, Tab stays inside, focus returns to the opener after.
-  const modalPanelRef = ref<HTMLElement | null>(null)
-  useModalA11y({
-    isOpen: () => props.category !== null,
-    onClose: () => close(),
-    panel: modalPanelRef,
-  })
-
   const summary = ref<CategoryDeletionSummaryDto | null>(null)
   const isLoadingSummary = ref(false)
   const isDeleting = ref(false)
   const error = ref<string | null>(null)
-  const confirmation = ref('')
+  /** Set by the typed-name field; true outright when no name is asked for. */
+  const typedOk = ref(false)
 
   const isOpen = computed(() => props.category !== null)
 
@@ -63,14 +65,7 @@
     () => summary.value !== null && !isEmptyCategory.value
   )
 
-  // Compared trimmed and case-insensitively: the guard is about aiming at the
-  // right category, not about typing accuracy.
-  const isConfirmed = computed(() => {
-    if (!requiresTypedName.value) return true
-    const expected = props.category?.name.trim().toLocaleLowerCase('fr')
-    if (!expected) return false
-    return confirmation.value.trim().toLocaleLowerCase('fr') === expected
-  })
+  const isConfirmed = computed(() => !requiresTypedName.value || typedOk.value)
 
   const canDelete = computed(
     () =>
@@ -80,35 +75,18 @@
       summary.value !== null
   )
 
-  const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
-
-  const monthFormatter = new Intl.DateTimeFormat('fr-FR', {
-    month: 'short',
-    year: 'numeric',
-  })
-
-  const currencyFormatter = new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'EUR',
-    maximumFractionDigits: 0,
-  })
-
   const rangeLabel = computed(() => {
     const first = summary.value?.firstTransactionDate
     const last = summary.value?.lastTransactionDate
     if (!first || !last) return null
-    const from = dateFormatter.format(new Date(first))
-    const to = dateFormatter.format(new Date(last))
+    const from = formatDate(first, 'long')
+    const to = formatDate(last, 'long')
     return from === to ? from : `du ${from} au ${to}`
   })
 
   function planWindow(entry: { startDate: string; endDate: string }): string {
-    const from = monthFormatter.format(new Date(entry.startDate))
-    const to = monthFormatter.format(new Date(entry.endDate))
+    const from = formatMonth(entry.startDate, { capitalize: false })
+    const to = formatMonth(entry.endDate, { capitalize: false })
     return from === to ? from : `${from} – ${to}`
   }
 
@@ -121,7 +99,6 @@
     async category => {
       summary.value = null
       error.value = null
-      confirmation.value = ''
       if (!category) return
 
       isLoadingSummary.value = true
@@ -166,233 +143,175 @@
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="modal">
-      <div
-        v-if="isOpen && category"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+  <BaseModal
+    :open="isOpen"
+    :title="category ? `Supprimer « ${category.name} »` : undefined"
+    tone="danger"
+    max-width="lg"
+    :closable="!isDeleting"
+    data-testid="delete-category-modal"
+    @close="close"
+  >
+    <template v-if="category">
+      <p
+        v-if="isLoadingSummary"
+        class="mb-6 text-sm text-gray-500 dark:text-gray-400"
+        data-testid="deletion-loading"
       >
-        <div class="fixed inset-0 bg-black/50" @click="close" />
+        Inventaire de ce qui est lié à cette catégorie…
+      </p>
 
-        <div
-          ref="modalPanelRef"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-category-title"
-          class="relative z-10 max-h-full w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900 dark:shadow-slate-900/30"
-          data-testid="delete-category-modal"
+      <div v-else-if="summary" class="mb-6 space-y-4">
+        <p
+          v-if="isEmptyCategory"
+          class="rounded-lg bg-gray-50 p-4 text-sm text-gray-700 dark:bg-slate-800 dark:text-gray-300"
+          data-testid="deletion-empty"
         >
-          <div class="mb-4 flex items-center gap-3">
-            <div
-              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30"
+          Rien n'est rattaché à cette catégorie de {{ typeLabel }} : aucune
+          transaction, sous-catégorie, ligne de budget, association ni demande
+          de remboursement. Sa suppression n'a aucun autre effet.
+        </p>
+
+        <template v-else>
+          <!-- Kept, but detached -->
+          <div
+            v-if="
+              summary.transactionCount > 0 || summary.reimbursementCount > 0
+            "
+            data-testid="deletion-kept"
+          >
+            <SectionLabel as="h3" class="mb-2"
+              >Conservé, mais déclassé</SectionLabel
             >
-              <svg
-                class="h-6 w-6 text-red-600 dark:text-red-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-            </div>
-            <h2
-              id="delete-category-title"
-              class="text-xl font-semibold text-gray-900 dark:text-gray-100"
+            <ul
+              class="space-y-2 rounded-lg bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-100"
             >
-              Supprimer « {{ category.name }} »
-            </h2>
+              <li v-if="summary.transactionCount > 0">
+                <strong>{{ summary.transactionCount }}</strong>
+                {{
+                  summary.transactionCount > 1
+                    ? 'transactions gardent leur montant'
+                    : 'transaction garde son montant'
+                }}
+                mais
+                {{ summary.transactionCount > 1 ? 'passent' : 'passe' }} en «
+                sans catégorie »<template v-if="rangeLabel">
+                  ({{ rangeLabel }})</template
+                >.
+              </li>
+              <li v-if="summary.labelledTransactionCount > 0">
+                Le libellé de sous-catégorie de
+                <strong>{{ summary.labelledTransactionCount }}</strong>
+                d'entre elles est effacé, sans quoi il survivrait à sa catégorie
+                dans le dashboard.
+              </li>
+              <li v-if="summary.reimbursementCount > 0">
+                <strong>{{ summary.reimbursementCount }}</strong>
+                {{
+                  summary.reimbursementCount > 1
+                    ? 'demandes de remboursement restent dues'
+                    : 'demande de remboursement reste due'
+                }}
+                mais
+                {{ summary.reimbursementCount > 1 ? 'perdent' : 'perd' }}
+                leur catégorie.
+              </li>
+            </ul>
           </div>
 
-          <p
-            v-if="isLoadingSummary"
-            class="mb-6 text-sm text-gray-500 dark:text-gray-400"
-            data-testid="deletion-loading"
+          <!-- Destroyed -->
+          <div
+            v-if="
+              summary.subcategoryNames.length > 0 ||
+              summary.budgetPlanEntries.length > 0
+            "
+            data-testid="deletion-destroyed"
           >
-            Inventaire de ce qui est lié à cette catégorie…
-          </p>
-
-          <div v-else-if="summary" class="mb-6 space-y-4">
-            <p
-              v-if="isEmptyCategory"
-              class="rounded-lg bg-gray-50 p-4 text-sm text-gray-700 dark:bg-slate-800 dark:text-gray-300"
-              data-testid="deletion-empty"
+            <SectionLabel as="h3" class="mb-2"
+              >Supprimé avec la catégorie</SectionLabel
             >
-              Rien n'est rattaché à cette catégorie de {{ typeLabel }} : aucune
-              transaction, sous-catégorie, ligne de budget, association ni
-              demande de remboursement. Sa suppression n'a aucun autre effet.
-            </p>
-
-            <template v-else>
-              <!-- Kept, but detached -->
-              <div
-                v-if="
-                  summary.transactionCount > 0 || summary.reimbursementCount > 0
-                "
-                data-testid="deletion-kept"
-              >
-                <h3
-                  class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                >
-                  Conservé, mais déclassé
-                </h3>
-                <ul
-                  class="space-y-2 rounded-lg bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-100"
-                >
-                  <li v-if="summary.transactionCount > 0">
-                    <strong>{{ summary.transactionCount }}</strong>
-                    {{
-                      summary.transactionCount > 1
-                        ? 'transactions gardent leur montant'
-                        : 'transaction garde son montant'
-                    }}
-                    mais
-                    {{ summary.transactionCount > 1 ? 'passent' : 'passe' }} en
-                    « sans catégorie »<template v-if="rangeLabel">
-                      ({{ rangeLabel }})</template
-                    >.
-                  </li>
-                  <li v-if="summary.labelledTransactionCount > 0">
-                    Le libellé de sous-catégorie de
-                    <strong>{{ summary.labelledTransactionCount }}</strong>
-                    d'entre elles est effacé, sans quoi il survivrait à sa
-                    catégorie dans le dashboard.
-                  </li>
-                  <li v-if="summary.reimbursementCount > 0">
-                    <strong>{{ summary.reimbursementCount }}</strong>
-                    {{
-                      summary.reimbursementCount > 1
-                        ? 'demandes de remboursement restent dues'
-                        : 'demande de remboursement reste due'
-                    }}
-                    mais
-                    {{ summary.reimbursementCount > 1 ? 'perdent' : 'perd' }}
-                    leur catégorie.
+            <ul
+              class="space-y-2 rounded-lg bg-red-50 p-4 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200"
+            >
+              <li v-if="summary.subcategoryNames.length > 0">
+                <strong>{{ summary.subcategoryNames.length }}</strong>
+                {{
+                  summary.subcategoryNames.length > 1
+                    ? 'sous-catégories'
+                    : 'sous-catégorie'
+                }}
+                : {{ summary.subcategoryNames.join(', ') }}
+              </li>
+              <li v-if="summary.budgetPlanEntries.length > 0">
+                <strong>{{ summary.budgetPlanEntries.length }}</strong>
+                {{
+                  summary.budgetPlanEntries.length > 1
+                    ? 'lignes de budget'
+                    : 'ligne de budget'
+                }}
+                — l'enveloppe de
+                {{
+                  summary.budgetPlanEntries.length > 1
+                    ? 'ces plans diminue'
+                    : 'ce plan diminue'
+                }}
+                d'autant :
+                <ul class="mt-1 space-y-0.5 pl-4">
+                  <li
+                    v-for="entry in summary.budgetPlanEntries"
+                    :key="`${entry.planName}-${entry.startDate}`"
+                    class="list-disc"
+                  >
+                    {{ entry.planName }} ({{ planWindow(entry) }}) :
+                    {{ formatCompactCurrency(entry.amount) }} / mois
                   </li>
                 </ul>
-              </div>
-
-              <!-- Destroyed -->
-              <div
-                v-if="
-                  summary.subcategoryNames.length > 0 ||
-                  summary.budgetPlanEntries.length > 0
-                "
-                data-testid="deletion-destroyed"
-              >
-                <h3
-                  class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                >
-                  Supprimé avec la catégorie
-                </h3>
-                <ul
-                  class="space-y-2 rounded-lg bg-red-50 p-4 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200"
-                >
-                  <li v-if="summary.subcategoryNames.length > 0">
-                    <strong>{{ summary.subcategoryNames.length }}</strong>
-                    {{
-                      summary.subcategoryNames.length > 1
-                        ? 'sous-catégories'
-                        : 'sous-catégorie'
-                    }}
-                    : {{ summary.subcategoryNames.join(', ') }}
-                  </li>
-                  <li v-if="summary.budgetPlanEntries.length > 0">
-                    <strong>{{ summary.budgetPlanEntries.length }}</strong>
-                    {{
-                      summary.budgetPlanEntries.length > 1
-                        ? 'lignes de budget'
-                        : 'ligne de budget'
-                    }}
-                    — l'enveloppe de
-                    {{
-                      summary.budgetPlanEntries.length > 1
-                        ? 'ces plans diminue'
-                        : 'ce plan diminue'
-                    }}
-                    d'autant :
-                    <ul class="mt-1 space-y-0.5 pl-4">
-                      <li
-                        v-for="entry in summary.budgetPlanEntries"
-                        :key="`${entry.planName}-${entry.startDate}`"
-                        class="list-disc"
-                      >
-                        {{ entry.planName }} ({{ planWindow(entry) }}) :
-                        {{ currencyFormatter.format(entry.amount) }} / mois
-                      </li>
-                    </ul>
-                  </li>
-                </ul>
-              </div>
-            </template>
-
-            <p class="text-sm text-gray-600 dark:text-gray-400">
-              Cette action est
-              <strong class="text-red-600 dark:text-red-400">
-                irréversible </strong
-              >: recréer une catégorie du même nom ne rattachera pas les
-              transactions déclassées.
-            </p>
+              </li>
+            </ul>
           </div>
+        </template>
 
-          <div v-if="requiresTypedName" class="mb-6">
-            <label
-              for="delete-category-confirmation"
-              class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Tapez
-              <strong class="text-red-600 dark:text-red-400">{{
-                category.name
-              }}</strong>
-              pour confirmer
-            </label>
-            <input
-              id="delete-category-confirmation"
-              v-model="confirmation"
-              type="text"
-              autocomplete="off"
-              :placeholder="category.name"
-              :disabled="isDeleting"
-              data-testid="delete-category-confirmation"
-              class="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:focus:border-red-400 dark:focus:ring-red-400"
-              @keyup.enter="confirmDelete"
-            />
-          </div>
-
-          <p
-            v-if="error"
-            role="alert"
-            class="mb-4 text-sm text-red-600 dark:text-red-400"
-            data-testid="deletion-error"
-          >
-            {{ error }}
-          </p>
-
-          <div class="flex gap-3">
-            <button
-              type="button"
-              class="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-800"
-              :disabled="isDeleting"
-              @click="close"
-            >
-              Annuler
-            </button>
-            <button
-              type="button"
-              class="flex-1 rounded-lg bg-red-600 px-4 py-2 text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-500 dark:hover:bg-red-600"
-              :disabled="!canDelete"
-              data-testid="delete-category-confirm"
-              @click="confirmDelete"
-            >
-              {{ isDeleting ? 'Suppression…' : 'Supprimer' }}
-            </button>
-          </div>
-        </div>
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+          Cette action est
+          <strong class="text-red-600 dark:text-red-400"> irréversible </strong
+          >: recréer une catégorie du même nom ne rattachera pas les
+          transactions déclassées.
+        </p>
       </div>
-    </Transition>
-  </Teleport>
+
+      <ConfirmByTyping
+        v-if="requiresTypedName"
+        v-model:confirmed="typedOk"
+        :expected="category.name"
+        :disabled="isDeleting"
+        data-testid="delete-category-confirmation"
+        @submit="confirmDelete"
+      />
+
+      <InlineAlert v-if="error" class="mt-4" data-testid="deletion-error">
+        {{ error }}
+      </InlineAlert>
+    </template>
+
+    <template #footer>
+      <BaseButton
+        variant="secondary"
+        class="flex-1"
+        :disabled="isDeleting"
+        @click="close"
+      >
+        Annuler
+      </BaseButton>
+      <BaseButton
+        variant="danger"
+        class="flex-1"
+        :disabled="!canDelete"
+        :loading="isDeleting"
+        data-testid="delete-category-confirm"
+        @click="confirmDelete"
+      >
+        Supprimer
+      </BaseButton>
+    </template>
+  </BaseModal>
 </template>

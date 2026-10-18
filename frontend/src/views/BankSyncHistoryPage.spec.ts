@@ -153,4 +153,24 @@ describe('BankSyncHistoryPage', () => {
     expect(wrapper.text()).toContain('boom')
     expect(wrapper.find('[data-testid="bank-sync-run"]').exists()).toBe(false)
   })
+
+  it('keeps the list when an undo fails, and says why above it', async () => {
+    vi.mocked(api.previewUndoBankSyncRun).mockResolvedValue({
+      deleted: 3,
+      unlinked: 1,
+      blocked: 0,
+    })
+    vi.mocked(api.undoBankSyncRun).mockRejectedValue(new Error('boom'))
+    const wrapper = await mountPage()
+
+    await wrapper.get('[data-testid="ask-undo"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="confirm-undo"]').trigger('click')
+    await flushPromises()
+
+    expect(
+      wrapper.get('[data-testid="bank-sync-action-error"]').text()
+    ).toContain('boom')
+    expect(wrapper.find('[data-testid="bank-sync-run"]').exists()).toBe(true)
+  })
 })

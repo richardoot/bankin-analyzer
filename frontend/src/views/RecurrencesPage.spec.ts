@@ -123,6 +123,21 @@ describe('RecurrencesPage', () => {
     ])
   })
 
+  it('names its tabs and panels for each other', async () => {
+    const wrapper = await mountPage(listOf([recurrence(), rent]))
+
+    const tabs = wrapper.findAll('[role="tab"]')
+    expect(tabs).toHaveLength(2)
+    expect(tabs.map(t => t.attributes('aria-selected'))).toEqual([
+      'true',
+      'false',
+    ])
+    const panel = wrapper.get('[role="tabpanel"]')
+    expect(panel.attributes('aria-labelledby')).toBe(tabs[0]?.attributes('id'))
+    expect(tabs[0]?.attributes('aria-controls')).toBe(panel.attributes('id'))
+    expect(wrapper.text()).toContain('Grouper par catégorie')
+  })
+
   it('sorts by age in one list', async () => {
     const wrapper = await mountPage(listOf([recurrence(), rent]))
 
@@ -156,7 +171,7 @@ describe('RecurrencesPage', () => {
       "Écarter Netflix : ce n'est pas un abonnement"
     )
     expect(button.attributes('title')).toBe(
-      "Écarter : ce n'est pas un abonnement"
+      "Écarter Netflix : ce n'est pas un abonnement"
     )
   })
 
@@ -234,6 +249,16 @@ describe('RecurrencesPage', () => {
     await netflixRow
       ?.find('[data-testid="dismiss-recurrence"]')
       .trigger('click')
+    await flushPromises()
+    // Nothing yet: the ✕ asks first, naming the series.
+    expect(decide).not.toHaveBeenCalled()
+    const dialog = document.body.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain('Netflix')
+    ;(
+      document.body.querySelector(
+        '[data-testid="confirm-dialog-confirm"]'
+      ) as HTMLButtonElement
+    ).click()
     await flushPromises()
 
     expect(decide).toHaveBeenCalledWith({

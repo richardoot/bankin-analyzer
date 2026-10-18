@@ -4,10 +4,12 @@
    * « Terms URL » pour toute application en environnement Production — le
    * tutoriel de la carte Enable Banking pointe ici.
    */
+
+  import PageShell from '@/components/ui/PageShell.vue'
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-4 py-10">
+  <PageShell width="narrow">
     <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
       Conditions d'utilisation
     </h1>
@@ -67,5 +69,5 @@
         >.
       </p>
     </section>
-  </div>
+  </PageShell>
 </template>

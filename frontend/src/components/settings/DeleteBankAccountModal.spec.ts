@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import DeleteBankAccountModal from './DeleteBankAccountModal.vue'
@@ -37,20 +37,42 @@ const summary = {
   settlementCount: 1,
 }
 
-enableAutoUnmount(() => {})
+enableAutoUnmount(afterEach)
+
+afterEach(() => {
+  document.body.innerHTML = ''
+})
+
+// The dialog teleports to <body> and the typed name lives in a brick of
+// its own, so the spec reads the document rather than stubbing the Teleport
+// (a stubbed one remounts its subtree on every render and loses the text).
+const q = <T extends Element>(selector: string): T => {
+  const el = document.body.querySelector<T>(selector)
+  if (!el) throw new Error(`no element matches ${selector}`)
+  return el
+}
+
+const typedInput = () =>
+  q<HTMLInputElement>('[data-testid="delete-bank-account-confirmation"]')
+
+async function type(value: string): Promise<void> {
+  const input = typedInput()
+  input.value = value
+  input.dispatchEvent(new Event('input'))
+  await flushPromises()
+}
 
 async function mountModal() {
   const wrapper = mount(DeleteBankAccountModal, {
     props: { account },
-    // Stubbed so the dialog renders inside the wrapper rather than in <body>.
-    global: { stubs: { Teleport: true } },
+    attachTo: document.body,
   })
   await flushPromises()
   return wrapper
 }
 
-const confirmButton = (wrapper: Awaited<ReturnType<typeof mountModal>>) =>
-  wrapper.get('[data-testid="confirm-delete-account"]')
+const confirmButton = () =>
+  q<HTMLButtonElement>('[data-testid="confirm-delete-account"]')
 
 describe('DeleteBankAccountModal', () => {
   beforeEach(() => {
@@ -61,9 +83,9 @@ describe('DeleteBankAccountModal', () => {
   })
 
   it('spells out what the deletion would take away', async () => {
-    const wrapper = await mountModal()
+    await mountModal()
 
-    const impact = wrapper.get('[data-testid="deletion-impact"]').text()
+    const impact = q('[data-testid="deletion-impact"]').textContent ?? ''
     expect(impact).toContain('128')
     expect(impact).toContain('transactions seront supprimées')
     expect(impact).toContain('2')
@@ -71,23 +93,32 @@ describe('DeleteBankAccountModal', () => {
     expect(mockedApi.getAccountDeletionSummary).toHaveBeenCalledWith('acc-1')
   })
 
+  it('opens as a destructive dialog named after the account', async () => {
+    await mountModal()
+
+    const dialog = q('[role="dialog"]')
+    const id = dialog.getAttribute('aria-labelledby') ?? ''
+    expect(document.getElementById(id)?.textContent).toContain('Compte Joint')
+    expect(dialog.querySelector('[data-testid="modal-tone"]')).not.toBeNull()
+  })
+
   it('keeps the delete button locked until the account name is typed back', async () => {
-    const wrapper = await mountModal()
+    await mountModal()
 
-    expect(confirmButton(wrapper).attributes('disabled')).toBeDefined()
+    expect(confirmButton().disabled).toBe(true)
 
-    await wrapper.get('input').setValue('Compte')
-    expect(confirmButton(wrapper).attributes('disabled')).toBeDefined()
+    await type('Compte')
+    expect(confirmButton().disabled).toBe(true)
 
-    await wrapper.get('input').setValue('  compte joint  ')
-    expect(confirmButton(wrapper).attributes('disabled')).toBeUndefined()
+    await type('  compte joint  ')
+    expect(confirmButton().disabled).toBe(false)
   })
 
   it('never calls the API while the confirmation is wrong', async () => {
     const wrapper = await mountModal()
 
-    await wrapper.get('input').setValue('autre compte')
-    await confirmButton(wrapper).trigger('click')
+    await type('autre compte')
+    confirmButton().click()
     await flushPromises()
 
     expect(mockedApi.deleteBankAccount).not.toHaveBeenCalled()
@@ -97,8 +128,8 @@ describe('DeleteBankAccountModal', () => {
   it('deletes and reports the account once confirmed', async () => {
     const wrapper = await mountModal()
 
-    await wrapper.get('input').setValue('Compte Joint')
-    await confirmButton(wrapper).trigger('click')
+    await type('Compte Joint')
+    confirmButton().click()
     await flushPromises()
 
     expect(mockedApi.deleteBankAccount).toHaveBeenCalledWith('acc-1')
@@ -113,11 +144,11 @@ describe('DeleteBankAccountModal', () => {
     )
     const wrapper = await mountModal()
 
-    await wrapper.get('input').setValue('Compte Joint')
-    await confirmButton(wrapper).trigger('click')
+    await type('Compte Joint')
+    confirmButton().click()
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="deletion-error"]').text()).toBe(
+    expect(q('[data-testid="deletion-error"]').textContent?.trim()).toBe(
       'Account acc-1 not found'
     )
     expect(wrapper.emitted('deleted')).toBeUndefined()
@@ -125,14 +156,15 @@ describe('DeleteBankAccountModal', () => {
 
   it('resets the typed confirmation when it is pointed at another account', async () => {
     const wrapper = await mountModal()
-    await wrapper.get('input').setValue('Compte Joint')
+    await type('Compte Joint')
+    expect(confirmButton().disabled).toBe(false)
 
     await wrapper.setProps({
       account: { ...account, id: 'acc-2', name: 'Livret A' },
     })
     await flushPromises()
 
-    expect((wrapper.get('input').element as HTMLInputElement).value).toBe('')
-    expect(confirmButton(wrapper).attributes('disabled')).toBeDefined()
+    expect(typedInput().value).toBe('')
+    expect(confirmButton().disabled).toBe(true)
   })
 })

@@ -1,13 +1,17 @@
 <script setup lang="ts">
-  import { ref, computed, watch } from 'vue'
-  import { useModalA11y } from '@/composables/useModalA11y'
+  import { ref, computed, watch, nextTick } from 'vue'
+  import BaseModal from '@/components/ui/BaseModal.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseCheckbox from '@/components/ui/BaseCheckbox.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
   import {
     api,
     type ReimbursementDto,
     type TransactionDto,
     type SettlementDto,
   } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
   import IncomeTransactionPicker from './IncomeTransactionPicker.vue'
   import {
     availableAmountOf,
@@ -27,19 +31,13 @@
     confirm: [settlement: SettlementDto]
   }>()
 
-  // Escape closes, Tab stays inside, focus returns to the opener after.
-  const modalPanelRef = ref<HTMLElement | null>(null)
-  useModalA11y({
-    isOpen: () => props.isOpen,
-    onClose: () => handleClose(),
-    panel: modalPanelRef,
-  })
-
   const selectedTransaction = ref<TransactionDto | null>(null)
   const amount = ref(0)
   const forceComplete = ref(false)
   const isSubmitting = ref(false)
   const error = ref<string | null>(null)
+  /** Scrolled to on a pick: on a phone the recap sits under the fold. */
+  const recapRef = ref<HTMLElement | null>(null)
 
   const line = computed(() =>
     props.reimbursement ? toAllocationLine(props.reimbursement) : null
@@ -80,11 +78,14 @@
       Math.min(amountDue.value, availableAmountOf(transaction))
     )
     forceComplete.value = false
+    void nextTick(() => {
+      recapRef.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    })
   }
 
-  function onAmountCommit(event: Event): void {
-    const raw = Number.parseFloat((event.target as HTMLInputElement).value)
-    const value = Number.isFinite(raw) ? raw : 0
+  /** Committed on change (BaseField `lazy`), then clamped to the line and the pot. */
+  function onAmountCommit(raw: number | null): void {
+    const value = raw ?? 0
     amount.value = round2(
       Math.min(Math.max(0, value), Math.min(amountDue.value, pot.value))
     )
@@ -146,222 +147,139 @@
       if (isOpen) reset()
     }
   )
-
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="modal">
+  <BaseModal
+    :open="isOpen && reimbursement !== null && line !== null"
+    title="Régler ce remboursement"
+    :subtitle="`${reimbursement?.personName ?? ''} · retrouvez la transaction reçue qui le solde`"
+    max-width="xl"
+    :closable="!isSubmitting"
+    @close="handleClose"
+  >
+    <template v-if="reimbursement && line">
+      <InlineAlert v-if="error" class="mb-4">{{ error }}</InlineAlert>
+
+      <!-- The debt being settled -->
       <div
-        v-if="isOpen && reimbursement && line"
-        class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
+        data-testid="single-settlement-line"
+        class="mb-4 flex items-center justify-between gap-3 rounded-lg border border-debt-200 bg-debt-50/60 p-3 dark:border-debt-800 dark:bg-debt-900/20"
       >
-        <div class="fixed inset-0 bg-black/50" @click="handleClose" />
+        <div class="min-w-0">
+          <p
+            class="truncate font-medium text-gray-900 dark:text-gray-100"
+            :title="line.description"
+          >
+            <span class="text-gray-500 dark:text-gray-400"
+              >[{{ formatDate(line.date) }}]</span
+            >
+            {{ line.description }}
+          </p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">
+            {{ line.categoryName || NO_CATEGORY_LABEL }}
+          </p>
+        </div>
+        <p
+          class="text-lg font-bold whitespace-nowrap text-debt-700 dark:text-debt-400"
+        >
+          {{ formatCurrency(amountDue) }}
+        </p>
+      </div>
+
+      <label
+        class="mb-3 block text-sm text-gray-600 dark:text-gray-400"
+        for="settlement-search"
+      >
+        Quelle transaction correspond au paiement de
+        {{ reimbursement.personName }} ?
+      </label>
+
+      <IncomeTransactionPicker
+        :context="suggestionContext"
+        :selected-transaction-id="selectedTransaction?.id ?? null"
+        @select="selectTransaction"
+      />
+
+      <!-- What will be credited, once the receipt is known -->
+      <div
+        v-if="selectedTransaction"
+        ref="recapRef"
+        class="mt-6 scroll-mt-2"
+        data-testid="single-settlement-recap"
+      >
+        <div
+          class="flex items-center justify-between gap-3 rounded-lg bg-green-50 p-3 dark:bg-green-900/20"
+        >
+          <div class="min-w-0">
+            <p
+              class="truncate font-medium text-gray-900 dark:text-gray-100"
+              :title="selectedTransaction.description"
+            >
+              {{ selectedTransaction.description }}
+            </p>
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+              {{ formatDate(selectedTransaction.date) }} &middot;
+              {{ selectedTransaction.account }}
+            </p>
+          </div>
+          <p
+            class="text-lg font-bold whitespace-nowrap text-green-700 dark:text-green-400"
+          >
+            +{{ formatCurrency(pot) }}
+          </p>
+        </div>
 
         <div
-          ref="modalPanelRef"
-          role="dialog"
-          aria-modal="true"
-          class="relative z-10 flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-slate-900 dark:shadow-slate-900/30"
+          class="mt-3 flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 dark:border-slate-700"
         >
-          <!-- Header -->
-          <div
-            class="flex items-start justify-between gap-3 border-b border-gray-200 p-4 sm:p-6 dark:border-slate-700"
-          >
-            <div class="min-w-0">
-              <h2
-                class="text-xl font-semibold text-gray-900 dark:text-gray-100"
-              >
-                Regler ce remboursement
-              </h2>
-              <p class="mt-1 text-sm text-gray-600 dark:text-gray-400 truncate">
-                {{ reimbursement.personName }} &middot; retrouvez la transaction
-                recue qui le solde
-              </p>
-            </div>
-            <button
-              type="button"
-              class="-m-2 shrink-0 p-2 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-              aria-label="Fermer"
-              @click="handleClose"
-            >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-
-          <div class="flex-1 overflow-y-auto p-4 sm:p-6">
-            <div
-              v-if="error"
-              class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400 text-sm"
-            >
-              {{ error }}
-            </div>
-
-            <!-- The debt being settled -->
-            <div
-              data-testid="single-settlement-line"
-              class="mb-4 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/20 flex items-center justify-between gap-3"
-            >
-              <div class="min-w-0">
-                <div
-                  class="font-medium text-gray-900 dark:text-gray-100 truncate"
-                >
-                  <span class="text-gray-500 dark:text-gray-400"
-                    >[{{ formatDate(line.date) }}]</span
-                  >
-                  {{ line.description }}
-                </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400">
-                  {{ line.categoryName || NO_CATEGORY_LABEL }}
-                </div>
-              </div>
-              <div
-                class="text-lg font-bold text-amber-700 dark:text-amber-400 whitespace-nowrap"
-              >
-                {{ formatCurrency(amountDue) }}
-              </div>
-            </div>
-
-            <label
-              class="block text-sm text-gray-600 dark:text-gray-400 mb-3"
-              for="settlement-search"
-            >
-              Quelle transaction correspond au paiement de
-              {{ reimbursement.personName }} ?
-            </label>
-
-            <IncomeTransactionPicker
-              :context="suggestionContext"
-              :selected-transaction-id="selectedTransaction?.id ?? null"
-              @select="selectTransaction"
+          <span class="text-sm text-gray-700 dark:text-gray-300">
+            Montant à imputer
+          </span>
+          <div class="flex shrink-0 items-center gap-1">
+            <BaseField
+              amount
+              lazy
+              size="sm"
+              label-hidden
+              label="Montant à imputer"
+              :model-value="amount"
+              class="w-24 sm:w-28 [&_input]:text-right"
+              @update:model-value="
+                value => onAmountCommit(value as number | null)
+              "
             />
-
-            <!-- What will be credited, once the receipt is known -->
-            <div v-if="selectedTransaction" class="mt-6">
-              <div
-                class="p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg flex items-center justify-between gap-3"
-              >
-                <div class="min-w-0">
-                  <div
-                    class="font-medium text-gray-900 dark:text-gray-100 truncate"
-                  >
-                    {{ selectedTransaction.description }}
-                  </div>
-                  <div class="text-sm text-gray-600 dark:text-gray-400">
-                    {{ formatDate(selectedTransaction.date) }} &middot;
-                    {{ selectedTransaction.account }}
-                  </div>
-                </div>
-                <div
-                  class="text-lg font-bold text-primary-600 dark:text-primary-400 whitespace-nowrap"
-                >
-                  +{{ formatCurrency(pot) }}
-                </div>
-              </div>
-
-              <div
-                class="mt-3 flex items-center justify-between gap-3 p-3 border border-gray-200 dark:border-slate-700 rounded-lg"
-              >
-                <label
-                  class="text-sm text-gray-700 dark:text-gray-300"
-                  for="single-settlement-amount"
-                >
-                  Montant a imputer
-                </label>
-                <div class="flex items-center gap-1 shrink-0">
-                  <input
-                    id="single-settlement-amount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    :max="Math.min(amountDue, pot)"
-                    :value="amount"
-                    :aria-label="`Montant affecte a ${line.description}`"
-                    class="w-24 min-h-[40px] px-2 py-1 text-right border border-gray-300 sm:min-h-0 sm:w-28 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500"
-                    @change="onAmountCommit"
-                  />
-                  <span class="text-gray-500 dark:text-gray-400">&euro;</span>
-                </div>
-              </div>
-
-              <!-- Settle-the-shortfall, only when the line stays short -->
-              <label
-                v-if="isShort"
-                class="mt-3 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer"
-              >
-                <input
-                  v-model="forceComplete"
-                  type="checkbox"
-                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                  :aria-label="`Solder ${line.description}`"
-                />
-                Solder cette ligne malgre l'ecart de
-                {{ formatCurrency(shortfall) }}
-              </label>
-            </div>
-          </div>
-
-          <!-- Footer -->
-          <div
-            class="flex flex-col-reverse gap-2 border-t border-gray-200 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:gap-3 sm:p-6 dark:border-slate-700"
-          >
-            <button
-              type="button"
-              class="min-h-[44px] px-4 py-2 sm:min-h-0 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-              :disabled="isSubmitting"
-              @click="handleClose"
-            >
-              Annuler
-            </button>
-            <button
-              type="button"
-              data-testid="single-settlement-confirm"
-              class="inline-flex min-h-[44px] items-center justify-center px-6 py-2 sm:min-h-0 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              :disabled="!canConfirm"
-              @click="handleConfirm"
-            >
-              <span v-if="isSubmitting" class="flex items-center gap-2">
-                <span
-                  class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"
-                />
-                Creation...
-              </span>
-              <span v-else>Confirmer le règlement</span>
-            </button>
+            <span class="text-gray-500 dark:text-gray-400">&euro;</span>
           </div>
         </div>
+
+        <!-- Settle-the-shortfall, only when the line stays short -->
+        <div v-if="isShort" class="mt-3">
+          <BaseCheckbox
+            v-model="forceComplete"
+            :label="`Solder cette ligne malgré l'écart de ${formatCurrency(shortfall)}`"
+            :aria-label="`Solder ${line.description}`"
+          />
+        </div>
       </div>
-    </Transition>
-  </Teleport>
+    </template>
+
+    <template #footer>
+      <BaseButton
+        variant="secondary"
+        :disabled="isSubmitting"
+        @click="handleClose"
+      >
+        Annuler
+      </BaseButton>
+      <BaseButton
+        data-testid="single-settlement-confirm"
+        :disabled="!canConfirm"
+        :loading="isSubmitting"
+        @click="handleConfirm"
+      >
+        Confirmer le règlement
+      </BaseButton>
+    </template>
+  </BaseModal>
 </template>
-
-<style scoped>
-  .modal-enter-active,
-  .modal-leave-active {
-    transition: opacity 0.2s ease;
-  }
-
-  .modal-enter-from,
-  .modal-leave-to {
-    opacity: 0;
-  }
-</style>

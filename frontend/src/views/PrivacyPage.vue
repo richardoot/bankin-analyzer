@@ -5,10 +5,12 @@
    * la page doit être lisible par leurs équipes comme par l'utilisateur qui
    * la déclare — le tutoriel de la carte Enable Banking pointe ici.
    */
+
+  import PageShell from '@/components/ui/PageShell.vue'
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl px-4 py-10">
+  <PageShell width="narrow">
     <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">
       Politique de confidentialité
     </h1>
@@ -65,5 +67,5 @@
         cette application.
       </p>
     </section>
-  </div>
+  </PageShell>
 </template>

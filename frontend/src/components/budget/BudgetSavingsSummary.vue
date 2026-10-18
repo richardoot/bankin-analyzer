@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import { computed } from 'vue'
   import { formatCurrency } from '@/lib/formatters'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const props = defineProps<{
     /** Label describing the plan's date range, e.g. "Mai 2026" */
@@ -25,6 +26,14 @@
      * default average.
      */
     actualPeriodLabel: string | null
+    /**
+     * When the isolated month is the one still running, how far into it we
+     * are. The verdict is then read against the budget's share to date, not
+     * against the whole envelope a half-finished month was never going to
+     * reach. Null for a complete month or the average.
+     */
+    monthProgress?:
+      { elapsedDays: number; totalDays: number } | null | undefined
 
     /** Optional comparison block. */
     comparison: {
@@ -55,9 +64,17 @@
   // ── Suivi: actual reality vs the plan's allocation ─────────────────────
   // Both sides use the *actual* income observed across complete plan months
   // — that way "Écart d'épargne" simplifies to `budget − actualExpense`,
-  // which is what the user expects to see.
+  // which is what the user expects to see. On a running month the budget
+  // is prorated to the days elapsed, so the verdict judges the pace.
+  const budgetShare = computed(() => {
+    const progress = props.monthProgress
+    if (!progress || progress.totalDays <= 0) return 1
+    return Math.min(1, Math.max(0, progress.elapsedDays / progress.totalDays))
+  })
+  const isProrated = computed(() => budgetShare.value < 1)
+  const budgetToDate = computed(() => props.planBudgetTotal * budgetShare.value)
   const followupProjectedSavings = computed(
-    () => props.planActualIncomeAvg - props.planBudgetTotal
+    () => props.planActualIncomeAvg - budgetToDate.value
   )
   const planActualSavings = computed(
     () => props.planActualIncomeAvg - props.planActualExpenseAvg
@@ -91,7 +108,7 @@
   })
 
   function colorClass(value: number): string {
-    if (value > 0) return 'text-primary-600 dark:text-primary-400'
+    if (value > 0) return 'text-green-700 dark:text-green-400'
     if (value < 0) return 'text-red-600 dark:text-red-400'
     return 'text-gray-500 dark:text-gray-400'
   }
@@ -109,15 +126,11 @@
 <template>
   <div class="space-y-4" data-testid="savings-summary">
     <!-- ── Suivi (priorité visuelle quand des mois sont complétés) ── -->
-    <section
-      v-if="showFollowupBlock"
-      data-testid="summary-followup"
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5"
-    >
+    <BaseCard v-if="showFollowupBlock" bordered data-testid="summary-followup">
       <header class="flex items-baseline justify-between gap-3 mb-4">
         <div>
           <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-            🎯 {{ followupTitle }}
+            {{ followupTitle }}
             <span
               class="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400"
             >
@@ -135,12 +148,20 @@
           <span
             class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400"
           >
-            Budget alloué
+            {{ isProrated ? 'Budget à ce jour' : 'Budget alloué' }}
           </span>
           <span
-            class="text-lg font-semibold text-primary-600 dark:text-primary-400 tabular-nums"
+            class="text-lg font-semibold text-primary-700 dark:text-primary-400 tabular-nums"
+            data-testid="summary-budget"
           >
-            {{ formatCurrency(planBudgetTotal) }}
+            {{ formatCurrency(budgetToDate) }}
+          </span>
+          <span
+            v-if="isProrated"
+            class="text-[11px] text-gray-500 dark:text-gray-400"
+            data-testid="summary-budget-prorata"
+          >
+            sur {{ formatCurrency(planBudgetTotal) }} pour le mois
           </span>
           <span class="text-[11px] text-gray-500 dark:text-gray-400">
             Épargne prévue
@@ -186,7 +207,7 @@
           </span>
           <span class="text-[11px] text-gray-500 dark:text-gray-400">
             <template v-if="trackingDelta > 0">
-              ✓ Tu épargnes plus que prévu
+              ✓ Vous épargnez plus que prévu
             </template>
             <template v-else-if="trackingDelta < 0">
               ⚠ Dépassement par rapport au plan
@@ -195,18 +216,14 @@
           </span>
         </div>
       </div>
-    </section>
+    </BaseCard>
 
     <!-- ── Planification (toujours quand comparaison active) ── -->
-    <section
-      v-if="showPlanningBlock"
-      data-testid="summary-planning"
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5"
-    >
+    <BaseCard v-if="showPlanningBlock" bordered data-testid="summary-planning">
       <header class="flex items-baseline justify-between gap-3 mb-4">
         <div>
           <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
-            📊 Planification
+            Planification
             <span
               class="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400"
             >
@@ -246,7 +263,7 @@
             Budget alloué
           </span>
           <span
-            class="text-lg font-semibold text-primary-600 dark:text-primary-400 tabular-nums"
+            class="text-lg font-semibold text-primary-700 dark:text-primary-400 tabular-nums"
           >
             {{ formatCurrency(planBudgetTotal) }}
           </span>
@@ -290,13 +307,13 @@
           </span>
         </div>
       </div>
-    </section>
+    </BaseCard>
 
     <!-- ── Fallback minimal: aucun bloc activé ── -->
-    <section
+    <BaseCard
       v-if="!showFollowupBlock && !showPlanningBlock"
+      bordered
       data-testid="summary-plan-only"
-      class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 border border-gray-200 dark:border-slate-700 p-4 sm:p-5"
     >
       <header class="mb-3">
         <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">
@@ -318,6 +335,6 @@
           {{ formatCurrency(planBudgetTotal) }}
         </span>
       </div>
-    </section>
+    </BaseCard>
   </div>
 </template>

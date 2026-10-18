@@ -3,15 +3,21 @@
   import { formatCurrency } from '@/lib/formatters'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
 
   /**
    * One category of the budget table: the row and its drill-down panel.
    *
    * Every figure arrives precomputed — averages, margins, prorata, dirty
    * state — so this component is a pure view over data the page derives
-   * once, and the three ways a row can change a budget (typing, applying
-   * the historical average, applying the actual) leave as events. The page
-   * keeps the drafts, the sorting and the API.
+   * once, and the three ways a row can change a budget (typing, taking
+   * the historical average, taking the actual) leave as events. The page
+   * keeps the drafts, the sorting and the API. Taking a reference figure
+   * is a visible « Reprendre » button under it, never the figure itself
+   * dressed as a link: a number that rewrites an envelope when clicked
+   * is a trap, not an affordance.
    */
   defineProps<{
     category: CategoryAverageDto
@@ -32,8 +38,6 @@
     remainingVsActual: number
     sparkline: number[]
     chartData: { labels: string[]; values: number[] }
-    comparisonLabel?: string | undefined
-    actualPeriodLabel: string
     breakdownMode: 'real' | 'everyday'
   }>()
 
@@ -58,20 +62,10 @@
         :aria-expanded="expanded"
         @click="emit('toggle-expand')"
       >
-        <svg
+        <IconChevronRight
           class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
           :class="{ 'rotate-90': expanded }"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M9 5l7 7-7 7"
-          />
-        </svg>
+        />
         <span v-if="category.categoryIcon" class="text-lg shrink-0">
           {{ category.categoryIcon }}
         </span>
@@ -81,14 +75,14 @@
         <!-- Status badge: over budget ⚠ or budget covers history ✓ -->
         <span
           v-if="rowStatus === 'over'"
-          class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+          class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
           title="Dépassement par rapport au budget"
         >
           ⚠ Dépassé
         </span>
         <span
           v-else-if="rowStatus === 'covered'"
-          class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400"
+          class="ml-1 px-1.5 py-0.5 text-[10px] font-semibold rounded shrink-0 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
           title="Le budget couvre la moyenne historique"
         >
           ✓ Couvert
@@ -101,32 +95,34 @@
         class="text-right text-sm tabular-nums leading-tight"
       >
         <span
-          class="block text-[10px] uppercase tracking-wide text-gray-400 sm:hidden"
+          class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
           >Historique</span
         >
-        <button
-          v-if="editing && historicalAverage > 0"
-          type="button"
-          class="text-indigo-600 dark:text-indigo-400 font-medium hover:underline decoration-dotted underline-offset-2"
-          :title="`Moyenne sur ${comparisonLabel} — cliquer pour appliquer comme budget`"
-          @click="emit('apply-budget', historicalAverage)"
-        >
-          {{ formatCurrency(historicalAverage) }}
-        </button>
         <span
-          v-else-if="historicalAverage > 0"
+          v-if="historicalAverage > 0"
           class="text-indigo-600 dark:text-indigo-400 font-medium"
         >
           {{ formatCurrency(historicalAverage) }}
         </span>
         <span v-else class="text-gray-500 dark:text-gray-400">—</span>
+        <BaseButton
+          v-if="editing && historicalAverage > 0"
+          variant="ghost"
+          size="sm"
+          class="mt-0.5 !px-1.5 !py-0.5 !text-xs"
+          :aria-label="`Reprendre la moyenne historique de ${category.categoryName} (${formatCurrency(historicalAverage)}) comme budget`"
+          :data-testid="`budget-take-historical-${category.categoryName}`"
+          @click="emit('apply-budget', historicalAverage)"
+        >
+          Reprendre
+        </BaseButton>
       </div>
 
       <!-- Budget: read as text, edited only in edit mode -->
       <div class="text-right">
         <span
           v-if="editing"
-          class="block text-[10px] uppercase tracking-wide text-gray-400 sm:hidden"
+          class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
           >Budget</span
         >
         <div v-if="editing" class="relative inline-block w-full sm:w-auto">
@@ -141,7 +137,7 @@
             class="w-full min-h-[40px] sm:min-h-0 sm:w-28 pl-2 pr-7 py-1.5 text-sm text-right bg-white dark:bg-slate-900 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900 dark:text-gray-100 tabular-nums font-medium"
             :class="
               dirty
-                ? 'border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/20'
+                ? 'border-primary-500 dark:border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                 : 'border-primary-300 dark:border-primary-800'
             "
             @input="
@@ -149,7 +145,7 @@
             "
           />
           <span
-            class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-primary-500/70 dark:text-primary-400/70 pointer-events-none"
+            class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 dark:text-gray-400 pointer-events-none"
           >
             €
           </span>
@@ -164,7 +160,7 @@
         </div>
         <div v-else class="text-sm tabular-nums leading-tight">
           <span
-            class="block text-[10px] uppercase tracking-wide text-gray-400 sm:hidden"
+            class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
             >Budget</span
           >
           <span
@@ -195,38 +191,37 @@
         class="text-right text-sm tabular-nums leading-tight"
       >
         <span
-          class="block text-[10px] uppercase tracking-wide text-gray-400 sm:hidden"
+          class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
           >Réel</span
         >
-        <button
-          v-if="editing && actualAverage > 0"
-          type="button"
-          class="text-red-600 dark:text-red-400 font-medium hover:underline decoration-dotted underline-offset-2"
-          :title="`Réel sur ${actualPeriodLabel} — cliquer pour appliquer comme budget`"
-          @click="emit('apply-budget', actualAverage)"
-        >
-          {{ formatCurrency(actualAverage) }}
-        </button>
         <span
-          v-else-if="actualAverage > 0"
+          v-if="actualAverage > 0"
           class="text-red-600 dark:text-red-400 font-medium"
         >
           {{ formatCurrency(actualAverage) }}
         </span>
         <span v-else class="text-gray-500 dark:text-gray-400">—</span>
+        <!-- The event share, said in words: « hors » when the everyday
+             reading left it out, « dont » when the real one counts it. -->
         <span
           v-if="exceptionalAverage > 0.005"
           :data-testid="`budget-exceptional-${category.categoryName}`"
-          class="block text-[10px] text-amber-600 dark:text-amber-500"
-          :title="
-            breakdownMode === 'everyday'
-              ? 'Part portée par un événement, exclue de ce réel'
-              : 'Part portée par un événement, incluse dans ce réel'
-          "
+          class="block text-[10px] text-amber-700 dark:text-amber-400"
         >
           {{ breakdownMode === 'everyday' ? 'hors' : 'dont' }}
-          {{ formatCurrency(exceptionalAverage) }}
+          {{ formatCurrency(exceptionalAverage) }} d'événements
         </span>
+        <BaseButton
+          v-if="editing && actualAverage > 0"
+          variant="ghost"
+          size="sm"
+          class="mt-0.5 !px-1.5 !py-0.5 !text-xs"
+          :aria-label="`Reprendre le réel de ${category.categoryName} (${formatCurrency(actualAverage)}) comme budget`"
+          :data-testid="`budget-take-actual-${category.categoryName}`"
+          @click="emit('apply-budget', actualAverage)"
+        >
+          Reprendre
+        </BaseButton>
       </div>
 
       <!-- Sparkline -->
@@ -263,10 +258,10 @@
             class="text-lg font-bold tabular-nums"
             :class="
               marginVsHistorical > 0
-                ? 'text-primary-600 dark:text-primary-400'
+                ? 'text-green-700 dark:text-green-400'
                 : marginVsHistorical < 0
                   ? 'text-red-600 dark:text-red-400'
-                  : 'text-gray-500'
+                  : 'text-gray-500 dark:text-gray-400'
             "
           >
             {{ marginVsHistorical > 0 ? '+' : ''
@@ -295,10 +290,10 @@
             class="text-lg font-bold tabular-nums"
             :class="
               remainingVsActual > 0
-                ? 'text-primary-600 dark:text-primary-400'
+                ? 'text-green-700 dark:text-green-400'
                 : remainingVsActual < 0
                   ? 'text-red-600 dark:text-red-400'
-                  : 'text-gray-500'
+                  : 'text-gray-500 dark:text-gray-400'
             "
           >
             {{ remainingVsActual > 0 ? '+' : ''
@@ -318,11 +313,7 @@
 
       <!-- Subcategories -->
       <div v-if="category.subcategories && category.subcategories.length > 0">
-        <h3
-          class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-        >
-          Sous-catégories
-        </h3>
+        <SectionLabel as="h3" class="mb-2"> Sous-catégories </SectionLabel>
         <div class="space-y-1">
           <div
             v-for="sub in category.subcategories"
@@ -353,11 +344,7 @@
 
       <!-- Monthly evolution chart -->
       <div v-if="(category.monthlyAmounts?.length ?? 0) >= 2">
-        <h3
-          class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2"
-        >
-          Évolution mensuelle
-        </h3>
+        <SectionLabel as="h3" class="mb-2"> Évolution mensuelle </SectionLabel>
         <MonthlyBarChart
           :data="chartData"
           :title="category.categoryName"

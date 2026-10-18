@@ -11,6 +11,12 @@ export const useAuthStore = defineStore('auth', () => {
   const dbUser = ref<DbUser | null>(null)
   const loading = ref(true)
   const error = ref<string | null>(null)
+  /**
+   * The session was opened by a password-recovery link: the only thing to
+   * do with it is choose a new password. Raised by Supabase's
+   * PASSWORD_RECOVERY event, cleared once the password is changed.
+   */
+  const passwordRecovery = ref(false)
 
   const isAuthenticated = computed(() => !!user.value)
 
@@ -45,7 +51,9 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = data.session?.user ?? null
     } catch (err) {
       error.value =
-        err instanceof Error ? err.message : 'Failed to initialize auth'
+        err instanceof Error
+          ? err.message
+          : "Impossible d'initialiser la session"
     } finally {
       // The session alone decides what the router may show. The app's own
       // user row and the filter preferences follow in the background: no
@@ -58,9 +66,10 @@ export const useAuthStore = defineStore('auth', () => {
       void syncWithBackend()
     }
 
-    supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    supabase.auth.onAuthStateChange(async (event, newSession) => {
       session.value = newSession
       user.value = newSession?.user ?? null
+      if (event === 'PASSWORD_RECOVERY') passwordRecovery.value = true
 
       if (newSession) {
         await syncWithBackend()
@@ -107,7 +116,7 @@ export const useAuthStore = defineStore('auth', () => {
         throw signInError
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to sign in'
+      error.value = err instanceof Error ? err.message : 'Connexion impossible'
       throw err
     } finally {
       loading.value = false
@@ -126,7 +135,8 @@ export const useAuthStore = defineStore('auth', () => {
         throw signUpError
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to sign up'
+      error.value =
+        err instanceof Error ? err.message : 'Inscription impossible'
       throw err
     } finally {
       loading.value = false
@@ -142,7 +152,8 @@ export const useAuthStore = defineStore('auth', () => {
         throw signOutError
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to sign out'
+      error.value =
+        err instanceof Error ? err.message : 'Déconnexion impossible'
       throw err
     } finally {
       loading.value = false
@@ -165,7 +176,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
     } catch (err) {
       error.value =
-        err instanceof Error ? err.message : 'Failed to sign in with Google'
+        err instanceof Error ? err.message : 'Connexion avec Google impossible'
       throw err
     } finally {
       loading.value = false
@@ -174,6 +185,65 @@ export const useAuthStore = defineStore('auth', () => {
 
   function clearError(): void {
     error.value = null
+  }
+
+  /** Where a recovery link lands: the page that asks for the new password. */
+  function passwordResetRedirectUrl(): string {
+    return `${window.location.origin}/reset-password`
+  }
+
+  /**
+   * Ask Supabase to e-mail a reset link. Never says whether the address is
+   * known: the caller shows the same sentence either way.
+   */
+  async function requestPasswordReset(email: string): Promise<void> {
+    try {
+      loading.value = true
+      error.value = null
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        email,
+        { redirectTo: passwordResetRedirectUrl() }
+      )
+      if (resetError) throw resetError
+    } catch (err) {
+      error.value =
+        err instanceof Error
+          ? err.message
+          : "La demande de réinitialisation n'a pas pu être envoyée"
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /** Set the new password on the session the recovery link opened. */
+  async function updatePassword(password: string): Promise<void> {
+    try {
+      loading.value = true
+      error.value = null
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
+      })
+      if (updateError) throw updateError
+      passwordRecovery.value = false
+    } catch (err) {
+      error.value =
+        err instanceof Error
+          ? err.message
+          : "Le mot de passe n'a pas pu être modifié"
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /** Send the sign-up confirmation e-mail again. */
+  async function resendConfirmation(email: string): Promise<void> {
+    const { error: resendError } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+    })
+    if (resendError) throw resendError
   }
 
   async function deleteAccount(): Promise<void> {
@@ -187,7 +257,7 @@ export const useAuthStore = defineStore('auth', () => {
       dbUser.value = null
     } catch (err) {
       error.value =
-        err instanceof Error ? err.message : 'Failed to delete account'
+        err instanceof Error ? err.message : 'Impossible de supprimer le compte'
       throw err
     } finally {
       loading.value = false
@@ -201,12 +271,16 @@ export const useAuthStore = defineStore('auth', () => {
     loading,
     error,
     isAuthenticated,
+    passwordRecovery,
     initialize,
     signIn,
     signUp,
     signOut,
     signInWithGoogle,
     clearError,
+    requestPasswordReset,
+    updatePassword,
+    resendConfirmation,
     syncWithBackend,
     deleteAccount,
   }

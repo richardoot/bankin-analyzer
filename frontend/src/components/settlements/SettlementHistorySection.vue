@@ -1,7 +1,11 @@
 <script setup lang="ts">
   import { ref, computed } from 'vue'
   import type { SettlementDto } from '@/lib/api'
-  import { formatCurrency } from '@/lib/formatters'
+  import { formatCurrency, formatDate } from '@/lib/formatters'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconEye from '@/components/icons/IconEye.vue'
+  import IconTrash from '@/components/icons/IconTrash.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const props = defineProps<{
     settlements: SettlementDto[]
@@ -31,14 +35,6 @@
     return props.settlements.filter(s => s.personId === selectedPersonId.value)
   })
 
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
-
   function getCategoryNames(settlement: SettlementDto): string {
     const uniqueCategories = new Set(
       settlement.reimbursements.map(
@@ -50,24 +46,25 @@
 </script>
 
 <template>
-  <div
-    class="bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-slate-900/20 p-6"
-  >
+  <BaseCard>
     <div
       class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4"
     >
       <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        Historique des Règlements
+        Historique des règlements
       </h2>
 
       <!-- Person filter -->
       <div v-if="persons.length > 1" class="flex items-center gap-2">
-        <label class="text-sm text-gray-600 dark:text-gray-400 shrink-0"
-          >Filtrer:</label
+        <label
+          for="settlement-history-person"
+          class="text-sm text-gray-600 dark:text-gray-400 shrink-0"
+          >Filtrer :</label
         >
         <select
+          id="settlement-history-person"
           v-model="selectedPersonId"
-          class="flex-1 sm:flex-initial px-3 py-2 sm:py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 focus:border-primary-500 dark:focus:border-primary-400 min-h-[44px] sm:min-h-0"
+          class="flex-1 sm:flex-initial px-3 py-2 sm:py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:focus:border-primary-400 min-h-[44px] sm:min-h-0"
         >
           <option :value="null">Tous</option>
           <option v-for="person in persons" :key="person.id" :value="person.id">
@@ -135,9 +132,7 @@
             <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
               {{ formatDate(settlement.createdAt) }}
             </span>
-            <span
-              class="text-lg font-bold text-primary-600 dark:text-primary-400"
-            >
+            <span class="text-lg font-bold text-green-700 dark:text-green-400">
               {{ formatCurrency(settlement.amountUsed) }}
             </span>
           </div>
@@ -145,10 +140,10 @@
           <!-- Row 2: Person -->
           <div class="flex items-center gap-2 mb-2">
             <div
-              class="h-6 w-6 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center shrink-0"
+              class="h-6 w-6 bg-debt-100 dark:bg-debt-900/30 rounded-full flex items-center justify-center shrink-0"
             >
               <span
-                class="text-xs font-semibold text-primary-700 dark:text-primary-400"
+                class="text-xs font-semibold text-debt-700 dark:text-debt-300"
               >
                 {{ settlement.personName.charAt(0).toUpperCase() }}
               </span>
@@ -193,52 +188,19 @@
 
             <!-- Actions -->
             <div class="flex gap-1 shrink-0">
-              <button
-                type="button"
-                class="p-2.5 min-h-[44px] min-w-[44px] text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
-                title="Voir les details"
+              <BaseIconButton
+                label="Voir les détails du règlement"
                 @click="emit('viewDetails', settlement)"
               >
-                <svg
-                  class="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                  />
-                </svg>
-              </button>
-              <button
-                type="button"
-                class="p-2.5 min-h-[44px] min-w-[44px] text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                title="Annuler le règlement"
+                <IconEye />
+              </BaseIconButton>
+              <BaseIconButton
+                variant="danger"
+                label="Annuler le règlement"
                 @click="emit('delete', settlement.id)"
               >
-                <svg
-                  class="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-              </button>
+                <IconTrash />
+              </BaseIconButton>
             </div>
           </div>
         </div>
@@ -257,10 +219,10 @@
               <span class="text-gray-500 dark:text-gray-400">-</span>
               <div class="flex items-center gap-2">
                 <div
-                  class="h-6 w-6 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center"
+                  class="h-6 w-6 bg-debt-100 dark:bg-debt-900/30 rounded-full flex items-center justify-center"
                 >
                   <span
-                    class="text-xs font-semibold text-primary-700 dark:text-primary-400"
+                    class="text-xs font-semibold text-debt-700 dark:text-debt-300"
                   >
                     {{ settlement.personName.charAt(0).toUpperCase() }}
                   </span>
@@ -302,9 +264,7 @@
           <!-- Amount and actions -->
           <div class="flex items-center gap-3">
             <div class="text-right">
-              <div
-                class="text-lg font-bold text-primary-600 dark:text-primary-400"
-              >
+              <div class="text-lg font-bold text-green-700 dark:text-green-400">
                 {{ formatCurrency(settlement.amountUsed) }}
               </div>
               <div class="text-xs text-gray-500 dark:text-gray-400">
@@ -314,52 +274,19 @@
 
             <!-- Actions dropdown -->
             <div class="flex gap-1">
-              <button
-                type="button"
-                class="p-2 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
-                title="Voir les details"
+              <BaseIconButton
+                label="Voir les détails du règlement"
                 @click="emit('viewDetails', settlement)"
               >
-                <svg
-                  class="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                  />
-                </svg>
-              </button>
-              <button
-                type="button"
-                class="p-2 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                title="Annuler le règlement"
+                <IconEye />
+              </BaseIconButton>
+              <BaseIconButton
+                variant="danger"
+                label="Annuler le règlement"
                 @click="emit('delete', settlement.id)"
               >
-                <svg
-                  class="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-              </button>
+                <IconTrash />
+              </BaseIconButton>
             </div>
           </div>
         </div>
@@ -373,5 +300,5 @@
         Aucun règlement pour cette personne
       </div>
     </div>
-  </div>
+  </BaseCard>
 </template>

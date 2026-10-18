@@ -24,6 +24,13 @@ vi.mock('@/lib/api', () => ({
   UNCATEGORIZED_CATEGORY_ID: '__uncategorized__',
 }))
 
+const mockToast = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+}))
+vi.mock('@/composables/useToast', () => ({ useToast: () => mockToast }))
+
 // Mock the pdf export composable
 vi.mock('@/composables/usePdfExport', () => ({
   usePdfExport: () => ({
@@ -151,10 +158,44 @@ describe('ReimbursementsPage', () => {
       )
     })
 
-    it('should display link to transactions page', async () => {
-      const wrapper = await mountComponent()
+    it('offers one link to Transactions per screen', async () => {
+      // Empty: the empty state carries the link, the header stays quiet.
+      const empty = await mountComponent()
+      expect(empty.text()).not.toContain('Voir les transactions')
+      expect(empty.text()).toContain('Aller aux transactions')
 
-      expect(wrapper.text()).toContain('Voir les transactions')
+      // With debts: the header carries it, the empty state is gone.
+      vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
+      const withDebts = mount(ReimbursementsPage, {
+        global: { plugins: [router], stubs: { Teleport: true } },
+      })
+      await flushPromises()
+      expect(withDebts.text()).toContain('Voir les transactions')
+      expect(withDebts.text()).not.toContain('Aller aux transactions')
+    })
+
+    it('stands in with a skeleton while the first load is in flight', async () => {
+      let resolve: (value: never[]) => void = () => {}
+      vi.mocked(api.getReimbursements).mockReturnValue(
+        new Promise(r => {
+          resolve = r
+        })
+      )
+      const wrapper = mount(ReimbursementsPage, {
+        global: { plugins: [router], stubs: { Teleport: true } },
+      })
+      await flushPromises()
+      expect(
+        wrapper.find('[data-testid="reimbursements-loading"]').exists()
+      ).toBe(true)
+      expect(wrapper.text()).not.toContain('Aucun remboursement en cours')
+
+      resolve([])
+      await flushPromises()
+      expect(
+        wrapper.find('[data-testid="reimbursements-loading"]').exists()
+      ).toBe(false)
+      expect(wrapper.text()).toContain('Aucun remboursement en cours')
     })
 
     it('should fetch persons and reimbursements on mount', async () => {
@@ -167,6 +208,26 @@ describe('ReimbursementsPage', () => {
   })
 
   describe('Persons section', () => {
+    it('renames a person through an explicit pencil, as Récurrences does', async () => {
+      setupDefaultMocks()
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      const wrapper = mount(ReimbursementsPage, {
+        global: { plugins: [router], stubs: { Teleport: true } },
+      })
+      await flushPromises()
+
+      // The name is text, not a secret button.
+      expect(
+        wrapper.find('button[aria-label="Renommer Alice Dupont"]').exists()
+      ).toBe(true)
+      await wrapper
+        .get('button[aria-label="Renommer Alice Dupont"]')
+        .trigger('click')
+      expect(
+        wrapper.find('button[aria-label="Enregistrer le nom"]').exists()
+      ).toBe(true)
+    })
+
     it('should display "Personnes" section title', async () => {
       const wrapper = await mountComponent()
 
@@ -348,7 +409,7 @@ describe('ReimbursementsPage', () => {
       })
       await flushPromises()
 
-      const deleteButton = wrapper.find('button[title="Supprimer"]')
+      const deleteButton = wrapper.find('button[aria-label^="Supprimer "]')
       await deleteButton.trigger('click')
 
       expect(wrapper.text()).toContain('Supprimer cette personne ?')
@@ -376,7 +437,7 @@ describe('ReimbursementsPage', () => {
       })
       await flushPromises()
 
-      const deleteButton = wrapper.find('button[title="Supprimer"]')
+      const deleteButton = wrapper.find('button[aria-label^="Supprimer "]')
       await deleteButton.trigger('click')
 
       expect(wrapper.text()).toContain('Supprimer cette personne ?')
@@ -413,7 +474,7 @@ describe('ReimbursementsPage', () => {
       })
       await flushPromises()
 
-      const deleteButton = wrapper.find('button[title="Supprimer"]')
+      const deleteButton = wrapper.find('button[aria-label^="Supprimer "]')
       await deleteButton.trigger('click')
 
       // Find and click the Supprimer button in modal
@@ -450,7 +511,69 @@ describe('ReimbursementsPage', () => {
       await flushPromises()
 
       expect(wrapper.text()).toContain('Récapitulatif des remboursements')
-      expect(wrapper.text()).toContain('Total General')
+      expect(wrapper.text()).toContain('Total général')
+    })
+
+    it('heads each person with what is still owed, not the initial debt', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getReimbursements).mockResolvedValue(
+        mockReimbursements.map(r =>
+          r.id === 'r1' ? { ...r, amountReceived: 10, amountRemaining: 15 } : r
+        )
+      )
+      vi.mocked(api.getSettlements).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            SettlementModal: true,
+            SettlementHistorySection: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      // 15 + 20 still due, out of 25 + 20 initially, 10 received.
+      const big = wrapper.get('[data-testid="person-remaining"]').text()
+      expect(big).toContain('35')
+      expect(big).not.toContain('45')
+      expect(wrapper.text()).toContain('restant dû')
+      expect(wrapper.text()).toMatch(/10,00\s*€ reçus sur 45,00\s*€/)
+    })
+
+    it('says everything is settled instead of an empty summary', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getReimbursements).mockResolvedValue(
+        mockReimbursements.map(r => ({
+          ...r,
+          amountReceived: r.amount,
+          amountRemaining: 0,
+          status: 'COMPLETED' as const,
+        }))
+      )
+      vi.mocked(api.getSettlements).mockResolvedValue([])
+
+      const wrapper = mount(ReimbursementsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            SettlementModal: true,
+            SettlementHistorySection: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="reimbursements-settled"]').text()
+      ).toContain('Tout est soldé')
+      expect(wrapper.text()).not.toContain('Récapitulatif des remboursements')
+      expect(wrapper.text()).not.toContain('Aucun remboursement en cours')
     })
 
     it('should display person totals in summary', async () => {
@@ -495,6 +618,35 @@ describe('ReimbursementsPage', () => {
 
       expect(wrapper.text()).toContain('Alimentation')
       expect(wrapper.text()).toContain('Sante')
+    })
+
+    it('folds a category with v-show and says whether it is open', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue(mockPersons)
+      vi.mocked(api.getReimbursements).mockResolvedValue(mockReimbursements)
+      vi.mocked(api.getSettlements).mockResolvedValue([])
+      const wrapper = mount(ReimbursementsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            SettlementModal: true,
+            SettlementHistorySection: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      const toggle = wrapper.get('button[aria-controls="debts-1-cat1"]')
+      const region = wrapper.get('[data-testid="debts-1-cat1"]')
+      expect(toggle.attributes('aria-expanded')).toBe('false')
+      // happy-dom's isVisible() cannot see v-show: read the style.
+      expect(region.attributes('style')).toContain('display: none')
+
+      await toggle.trigger('click')
+
+      expect(toggle.attributes('aria-expanded')).toBe('true')
+      expect(region.attributes('style') ?? '').not.toContain('display: none')
     })
 
     it('should not display summary when no reimbursements', async () => {
@@ -586,7 +738,7 @@ describe('ReimbursementsPage', () => {
         const wrapper = await mountWithDebts()
 
         await wrapper
-          .get('button[title="Regler uniquement Pharmacie"]')
+          .get('button[title="Régler uniquement Pharmacie"]')
           .trigger('click')
 
         expect(single(wrapper).props('isOpen')).toBe(true)
@@ -620,13 +772,19 @@ describe('ReimbursementsPage', () => {
         vi.mocked(api.getReimbursements).mockClear()
 
         await wrapper
-          .get('button[title="Regler uniquement Monoprix"]')
+          .get('button[title="Régler uniquement Monoprix"]')
           .trigger('click')
-        single(wrapper).vm.$emit('confirm', { id: 'settlement-1' })
+        single(wrapper).vm.$emit('confirm', {
+          id: 'settlement-1',
+          amountUsed: 30,
+        })
         await flushPromises()
 
         // Without this the page would keep showing a debt that is now settled.
         expect(api.getReimbursements).toHaveBeenCalled()
+        expect(mockToast.success).toHaveBeenCalledWith(
+          expect.stringContaining('enregistré')
+        )
       })
     })
 
@@ -674,6 +832,123 @@ describe('ReimbursementsPage', () => {
       // The error should be displayed via personsStore.error
       // Check that the component renders without crashing
       expect(wrapper.exists()).toBe(true)
+    })
+
+    const mountWith = async () => {
+      const wrapper = mount(ReimbursementsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            SettlementModal: true,
+            SettlementHistorySection: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+      return wrapper
+    }
+
+    it('says the reimbursements failed instead of "nothing owed", and retries', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue([])
+      vi.mocked(api.getSettlements).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockRejectedValueOnce(
+        new Error('Le serveur est injoignable.')
+      )
+
+      const wrapper = await mountWith()
+
+      expect(
+        wrapper.find('[data-testid="reimbursements-error"]').text()
+      ).toContain("Les remboursements n'ont pas pu être chargés.")
+      expect(wrapper.text()).not.toContain('Aucun remboursement en cours')
+
+      vi.mocked(api.getReimbursements).mockResolvedValueOnce(mockReimbursements)
+      await wrapper
+        .find('[data-testid="reimbursements-retry"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="reimbursements-error"]').exists()
+      ).toBe(false)
+      expect(wrapper.text()).toContain('Alice Dupont')
+    })
+
+    describe('cancelling a settlement', () => {
+      const settlement = {
+        id: 's1',
+        personId: '1',
+        personName: 'Alice Dupont',
+        incomeTransactionId: 't9',
+        incomeTransactionDescription: 'Virement Alice',
+        incomeTransactionDate: '2024-02-01',
+        incomeTransactionAmount: 45,
+        amountUsed: 45,
+        note: null,
+        createdAt: '2024-02-01T00:00:00.000Z',
+        reimbursements: [],
+      }
+
+      const askToCancel = async () => {
+        vi.mocked(api.getPersons).mockResolvedValue([])
+        vi.mocked(api.getReimbursements).mockResolvedValue([])
+        vi.mocked(api.getSettlements).mockResolvedValue([settlement])
+        const wrapper = await mountWith()
+        wrapper
+          .findComponent({ name: 'SettlementHistorySection' })
+          .vm.$emit('delete', 's1')
+        await flushPromises()
+        const confirm = wrapper
+          .findAll('button')
+          .find(b => b.text() === 'Oui, annuler')
+        await confirm?.trigger('click')
+        await flushPromises()
+        return wrapper
+      }
+
+      it('closes the question only once the server agreed', async () => {
+        vi.mocked(api.deleteSettlement).mockResolvedValue(undefined)
+        const wrapper = await askToCancel()
+
+        expect(api.deleteSettlement).toHaveBeenCalledWith('s1')
+        expect(mockToast.success).toHaveBeenCalled()
+        expect(wrapper.text()).not.toContain('Annuler ce règlement ?')
+      })
+
+      it('keeps the question open and says why when it fails', async () => {
+        vi.mocked(api.deleteSettlement).mockRejectedValue(
+          new Error("Impossible d'annuler le règlement")
+        )
+        const wrapper = await askToCancel()
+
+        expect(mockToast.error).toHaveBeenCalledWith(
+          "Impossible d'annuler le règlement"
+        )
+        expect(wrapper.text()).toContain('Annuler ce règlement ?')
+      })
+    })
+
+    it('says the settlement history failed, and retries', async () => {
+      vi.mocked(api.getPersons).mockResolvedValue([])
+      vi.mocked(api.getReimbursements).mockResolvedValue([])
+      vi.mocked(api.getSettlements).mockRejectedValueOnce(new Error('boom'))
+
+      const wrapper = await mountWith()
+
+      expect(wrapper.find('[data-testid="settlements-error"]').exists()).toBe(
+        true
+      )
+
+      vi.mocked(api.getSettlements).mockResolvedValueOnce([])
+      await wrapper.find('[data-testid="settlements-retry"]').trigger('click')
+      await flushPromises()
+
+      expect(api.getSettlements).toHaveBeenCalledTimes(2)
+      expect(wrapper.find('[data-testid="settlements-error"]').exists()).toBe(
+        false
+      )
     })
   })
 })

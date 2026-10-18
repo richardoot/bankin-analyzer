@@ -1,8 +1,11 @@
 <script setup lang="ts">
+  import PageShell from '@/components/ui/PageShell.vue'
   import { ref, computed, onMounted } from 'vue'
   import { useRouter, useRoute } from 'vue-router'
   import { useAuthStore } from '@/stores/auth'
   import BaseField from '@/components/ui/BaseField.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
 
   const router = useRouter()
   const route = useRoute()
@@ -84,13 +87,9 @@
 </script>
 
 <template>
-  <div
-    class="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-gray-50 dark:bg-slate-800 px-4 transition-colors"
-  >
-    <div class="w-full max-w-md">
-      <div
-        class="rounded-2xl bg-white dark:bg-slate-900 p-8 shadow-lg dark:shadow-slate-900/20"
-      >
+  <PageShell width="narrow" center>
+    <div class="mx-auto w-full max-w-md">
+      <BaseCard variant="raised" padding="lg">
         <!-- Header -->
         <div class="mb-8 text-center">
           <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
@@ -118,7 +117,7 @@
         <form class="space-y-6" @submit.prevent="handleSubmit">
           <BaseField
             v-model="email"
-            label="Email"
+            label="E-mail"
             type="email"
             required
             data-testid="login-email-input"
@@ -126,15 +125,26 @@
             autocomplete="email"
           />
 
-          <BaseField
-            v-model="password"
-            label="Mot de passe"
-            type="password"
-            required
-            data-testid="login-password-input"
-            placeholder="••••••••"
-            :autocomplete="isSignUp ? 'new-password' : 'current-password'"
-          />
+          <div>
+            <BaseField
+              v-model="password"
+              label="Mot de passe"
+              type="password"
+              required
+              data-testid="login-password-input"
+              placeholder="••••••••"
+              :autocomplete="isSignUp ? 'new-password' : 'current-password'"
+            />
+            <div v-if="!isSignUp" class="mt-2 text-right">
+              <RouterLink
+                to="/forgot-password"
+                data-testid="login-forgot-password"
+                class="inline-flex min-h-[44px] items-center text-sm text-primary-700 hover:text-primary-800 sm:min-h-0 dark:text-primary-400 dark:hover:text-primary-300"
+              >
+                Mot de passe oublié ?
+              </RouterLink>
+            </div>
+          </div>
 
           <BaseField
             v-if="isSignUp"
@@ -146,15 +156,16 @@
             autocomplete="new-password"
           />
 
-          <button
+          <BaseButton
             type="submit"
-            :disabled="loading"
+            block
+            class="py-3"
+            :loading="loading"
             data-testid="login-submit-button"
-            class="w-full rounded-lg bg-primary-500 px-4 py-3 text-base font-medium text-white transition-colors hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <span v-if="loading">Chargement...</span>
+            <span v-if="loading">Chargement…</span>
             <span v-else>{{ isSignUp ? "S'inscrire" : 'Se connecter' }}</span>
-          </button>
+          </BaseButton>
         </form>
 
         <!-- Separator -->
@@ -173,12 +184,13 @@
         </div>
 
         <!-- Google Login -->
-        <button
-          type="button"
+        <BaseButton
+          variant="secondary"
+          block
+          class="mt-6 gap-3 py-3"
           :disabled="loading"
           aria-label="Se connecter avec Google"
           data-testid="login-google-button"
-          class="mt-6 flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-base font-medium text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
           @click="handleGoogleLogin"
         >
           <svg class="h-5 w-5" viewBox="0 0 24 24">
@@ -200,7 +212,7 @@
             />
           </svg>
           Continuer avec Google
-        </button>
+        </BaseButton>
 
         <!-- Toggle mode -->
         <div class="mt-6 text-center">
@@ -212,7 +224,7 @@
                 ? 'Passer au mode connexion'
                 : 'Passer au mode inscription'
             "
-            class="text-sm text-primary-600 dark:text-primary-500 hover:text-primary-700 dark:hover:text-primary-400"
+            class="text-sm text-primary-700 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300"
             @click="toggleMode"
           >
             {{
@@ -222,7 +234,7 @@
             }}
           </button>
         </div>
-      </div>
+      </BaseCard>
 
       <!-- Back to home -->
       <div class="mt-6 text-center">
@@ -234,5 +246,5 @@
         </RouterLink>
       </div>
     </div>
-  </div>
+  </PageShell>
 </template>

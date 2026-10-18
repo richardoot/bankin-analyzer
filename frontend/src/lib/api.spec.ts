@@ -68,7 +68,7 @@ describe('api', () => {
       })
 
       await expect(api.createSettlement(dto)).rejects.toThrow(
-        'Failed to create settlement'
+        "Impossible d'enregistrer le règlement"
       )
     })
   })
@@ -109,7 +109,9 @@ describe('api', () => {
         status: 500,
       })
 
-      await expect(api.getMe()).rejects.toThrow('Failed to fetch user')
+      await expect(api.getMe()).rejects.toThrow(
+        'Impossible de charger votre profil'
+      )
     })
   })
 
@@ -198,7 +200,7 @@ describe('api', () => {
       })
 
       await expect(api.importTransactions([])).rejects.toThrow(
-        'Failed to import transactions'
+        "Impossible d'importer les transactions"
       )
     })
   })
@@ -541,7 +543,27 @@ describe('api', () => {
 
       const error = await api.getTransactions().catch(e => e)
       expect(error).toBeInstanceOf(AuthError)
-      expect(error.message).toBe('Session expiree, veuillez vous reconnecter')
+      expect(error.message).toBe('Session expirée, veuillez vous reconnecter')
+    })
+
+    it('turns an unreachable server into a French network error', async () => {
+      mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+
+      await expect(api.getTransactions()).rejects.toMatchObject({
+        name: 'NetworkError',
+        message:
+          'Le serveur est injoignable. Vérifiez votre connexion puis réessayez.',
+      })
+    })
+
+    it('lets an aborted request through untouched', async () => {
+      const abort = new DOMException(
+        'The user aborted a request.',
+        'AbortError'
+      )
+      mockFetch.mockRejectedValueOnce(abort)
+
+      await expect(api.getTransactions()).rejects.toBe(abort)
     })
 
     it('should not retry on non-401 errors', async () => {
@@ -551,7 +573,7 @@ describe('api', () => {
       })
 
       await expect(api.getTransactions()).rejects.toThrow(
-        'Failed to fetch transactions'
+        'Impossible de charger les transactions'
       )
       expect(mockRefreshSession).not.toHaveBeenCalled()
       expect(mockFetch).toHaveBeenCalledTimes(1)
@@ -577,7 +599,7 @@ describe('api', () => {
 
       // Should throw generic error after retry fails
       await expect(api.getTransactions()).rejects.toThrow(
-        'Failed to fetch transactions'
+        'Impossible de charger les transactions'
       )
       expect(mockRefreshSession).toHaveBeenCalledTimes(1)
       expect(mockFetch).toHaveBeenCalledTimes(2)

@@ -174,7 +174,7 @@ async function mountModal(options: {
 /** Tick one debt line (or a whole category) by its accessible name. */
 async function tick(wrapper: VueWrapper, label: string): Promise<void> {
   await wrapper
-    .get(`input[aria-label="Selectionner ${label}"]`)
+    .get(`input[aria-label="Sélectionner ${label}"]`)
     .trigger('change')
 }
 
@@ -220,10 +220,19 @@ async function setAmount(
   label: string,
   value: string
 ): Promise<void> {
-  const input = wrapper.find(`input[aria-label="Montant affecte a ${label}"]`)
+  const input = amountField(wrapper, label)
   await input.setValue(value)
   await input.trigger('change')
   await flushPromises()
+}
+
+/** The BaseField whose (hidden) label names the line or the category. */
+function amountField(wrapper: VueWrapper, label: string) {
+  const field = wrapper
+    .findAll('label')
+    .find(l => l.text() === `Montant affecté à ${label}`)
+  if (!field) throw new Error(`No amount field for ${label}`)
+  return wrapper.get(`#${CSS.escape(field.attributes('for') ?? '')}`)
 }
 
 /** The only emerald call-to-action on screen at the step it is called from. */
@@ -253,7 +262,7 @@ describe('SettlementModal', () => {
 
     // The receipt search is a step away, so no transaction is fetched yet.
     expect(api.getTransactions).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('que voulez-vous regler')
+    expect(wrapper.text()).toContain('que voulez-vous régler')
     // Grouped by expense category, every line visible and none ticked. The
     // income hint is null on these fixtures, as it is on most real debts:
     // grouping on it collapsed the whole list under one heading.
@@ -537,7 +546,7 @@ describe('SettlementModal', () => {
 
     // 45 EUR against the 45 EUR retained: nothing is left over, and the
     // untouched Netflix line never enters the settlement.
-    expect(wrapper.text()).toContain('Tout est affecte')
+    expect(wrapper.text()).toContain('Tout est affecté')
 
     await confirmSettlement(wrapper)
 
@@ -609,7 +618,9 @@ describe('SettlementModal', () => {
 
     await setAmount(wrapper, 'Carrefour', '18')
 
-    await wrapper.find('input[aria-label="Solder Carrefour"]').trigger('change')
+    // A real checkbox flips its state before it fires change; the brick's
+    // model follows the state, so the test ticks it rather than poking the event.
+    await wrapper.find('input[aria-label="Solder Carrefour"]').setValue(true)
     await flushPromises()
 
     await confirmSettlement(wrapper)
@@ -653,7 +664,7 @@ describe('SettlementModal', () => {
     // 20 EUR cascaded onto 57 EUR of debt, then one line pushed to its full due.
     await setAmount(wrapper, 'Carrefour', '30')
 
-    expect(wrapper.text()).toContain('Depassement')
+    expect(wrapper.text()).toContain('Dépassement')
     expect(
       wrapper.find('button[class*="bg-primary-600"]').attributes('disabled')
     ).toBeDefined()
@@ -684,10 +695,71 @@ describe('SettlementModal', () => {
     await wrapper.setProps({ isOpen: true })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('que voulez-vous regler')
+    expect(wrapper.text()).toContain('que voulez-vous régler')
     expect(
       wrapper.get('[data-testid="settlement-selection-total"]').text()
     ).toContain('0,00')
+  })
+
+  it('asks before dropping a started settlement, and closes outright otherwise', async () => {
+    const wrapper = await mountModal({})
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(wrapper.emitted('close')).toHaveLength(1)
+
+    await tick(wrapper, 'Carrefour')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+
+    // A ticked line is a draft: the shell asks instead of forgetting it.
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="modal-dirty-guard"]').exists()).toBe(
+      true
+    )
+  })
+
+  it('walks back to the selection from the header arrow', async () => {
+    const wrapper = await mountAtReceipt({}, ['Carrefour'])
+
+    const back = wrapper.get('[data-testid="settlement-back"]')
+    expect(back.attributes('aria-label')).toContain('Retour')
+    await back.trigger('click')
+
+    expect(
+      wrapper.find('[data-testid="settlement-step-select"]').exists()
+    ).toBe(true)
+  })
+
+  it('gives the receipt list the room of a phone on step 2', async () => {
+    // A phone: the step trail and « Annuler » step aside — the header's
+    // back arrow and cross already do both jobs.
+    const original = window.matchMedia
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('max-width'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia
+    try {
+      const wrapper = await mountModal({})
+      expect(wrapper.find('[aria-current="step"]').exists()).toBe(true)
+      expect(
+        wrapper.get('[data-testid="settlement-cancel"]').classes()
+      ).not.toContain('max-sm:hidden')
+
+      await goToReceipt(wrapper, ['Carrefour'])
+
+      expect(wrapper.find('[aria-current="step"]').exists()).toBe(false)
+      expect(
+        wrapper.get('[data-testid="settlement-cancel"]').classes()
+      ).toContain('max-sm:hidden')
+      expect(wrapper.find('[data-testid="settlement-back"]').exists()).toBe(
+        true
+      )
+    } finally {
+      window.matchMedia = original
+    }
   })
 
   it('says so when the person owes nothing', async () => {

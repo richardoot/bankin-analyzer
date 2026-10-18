@@ -4,6 +4,8 @@
    * mobile fit (smaller text, placeholder); the behavior — Enter saves,
    * Escape cancels, the two buttons — is identical by construction.
    */
+  import { onMounted, ref } from 'vue'
+
   withDefaults(
     defineProps<{
       dense?: boolean | undefined
@@ -14,13 +16,19 @@
   const emit = defineEmits<{ save: []; cancel: [] }>()
 
   const model = defineModel<string>({ default: '' })
+
+  // « + Note » opens the field to type in it: focus it, no second tap.
+  const input = ref<HTMLInputElement | null>(null)
+  onMounted(() => input.value?.focus())
 </script>
 
 <template>
   <div class="flex items-center gap-1.5">
     <input
+      ref="input"
       v-model="model"
       type="text"
+      aria-label="Note de la transaction"
       :placeholder="dense ? 'Ajouter une note...' : undefined"
       class="flex-1 border border-primary-300 dark:border-primary-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-primary-500"
       :class="dense ? 'px-2.5 py-1.5 text-xs' : 'px-2 py-1 text-sm rounded'"
@@ -28,8 +36,10 @@
       @keyup.escape="emit('cancel')"
     />
     <button
-      class="p-1.5 text-primary-600 dark:text-primary-400 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20"
+      class="p-1.5 text-primary-700 dark:text-primary-400 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20"
+      type="button"
       title="Sauvegarder"
+      aria-label="Enregistrer la note"
       @click="emit('save')"
     >
       <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -42,7 +52,9 @@
     </button>
     <button
       class="p-1.5 text-gray-500 dark:text-gray-400 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"
+      type="button"
       title="Annuler"
+      aria-label="Annuler la note"
       @click="emit('cancel')"
     >
       <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">

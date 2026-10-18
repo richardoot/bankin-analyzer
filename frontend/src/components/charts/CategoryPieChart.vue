@@ -5,6 +5,8 @@
   import type { ApexOptions } from 'apexcharts'
   import { useChartTheme } from '@/composables/useChartTheme'
   import { useIsMobile } from '@/composables/useMediaQuery'
+  import { formatCompactCurrency, formatCurrency } from '@/lib/formatters'
+  import { assignCategoryColors } from '@/lib/chartPalette'
 
   export interface ChartData {
     labels: string[]
@@ -23,25 +25,16 @@
     }
   )
 
-  const { isDark, strokeColor, donutNameColor, donutValueColor } =
-    useChartTheme()
-  // No hover on a touch screen: the legend is the only way to name a slice.
+  const {
+    isDark,
+    strokeColor,
+    donutNameColor,
+    donutValueColor,
+    chartAnimations,
+  } = useChartTheme()
+  // The legend is always drawn — under the donut on a phone, beside it on
+  // a desk — so a slice can be named without hovering it.
   const isMobile = useIsMobile()
-
-  const PALETTE = [
-    '#f97316', // orange-500
-    '#8b5cf6', // violet-500
-    '#06b6d4', // cyan-500
-    '#eab308', // yellow-500
-    '#ec4899', // pink-500
-    '#14b8a6', // teal-500
-    '#6366f1', // indigo-500
-    '#f59e0b', // amber-500
-    '#a855f7', // purple-500
-    '#0ea5e9', // sky-500
-  ]
-  const OTHERS_COLOR_LIGHT = '#9ca3af' // gray-400
-  const OTHERS_COLOR_DARK = '#64748b' // slate-500
 
   /**
    * Build the displayed data: keep the top N categories by value
@@ -77,19 +70,16 @@
     }
   })
 
+  // The same assignment the category list uses, so a slice and its row
+  // share a color by construction.
   const sliceColors = computed(() => {
-    const baseCount =
-      processedData.value.othersCount > 0
-        ? processedData.value.labels.length - 1
-        : processedData.value.labels.length
-    const colors = Array.from(
-      { length: baseCount },
-      (_, i) => PALETTE[i % PALETTE.length] ?? '#888'
+    const colors = assignCategoryColors(
+      processedData.value.labels,
+      processedData.value.values,
+      props.topN,
+      isDark.value
     )
-    if (processedData.value.othersCount > 0) {
-      colors.push(isDark.value ? OTHERS_COLOR_DARK : OTHERS_COLOR_LIGHT)
-    }
-    return colors
+    return processedData.value.labels.map(label => colors.get(label) ?? '#888')
   })
 
   const chartOptions = computed<ApexOptions>(() => ({
@@ -106,24 +96,12 @@
         blur: 8,
         opacity: isDark.value ? 0.3 : 0.15,
       },
-      animations: {
-        enabled: true,
-        easing: 'easeinout',
-        speed: 600,
-        animateGradually: {
-          enabled: true,
-          delay: 100,
-        },
-        dynamicAnimation: {
-          enabled: true,
-          speed: 300,
-        },
-      },
+      animations: chartAnimations.value,
     },
     labels: processedData.value.labels,
     legend: {
-      show: isMobile.value,
-      position: 'bottom',
+      show: true,
+      position: isMobile.value ? 'bottom' : 'right',
       fontSize: '12px',
       fontFamily: 'Inter, system-ui, sans-serif',
       labels: { colors: donutNameColor.value },
@@ -147,12 +125,7 @@
         fontFamily: 'Inter, system-ui, sans-serif',
       },
       y: {
-        formatter: (value: number) => {
-          return new Intl.NumberFormat('fr-FR', {
-            style: 'currency',
-            currency: 'EUR',
-          }).format(value)
-        },
+        formatter: (value: number) => formatCurrency(value),
       },
     },
     plotOptions: {
@@ -178,13 +151,7 @@
               fontWeight: 700,
               color: donutValueColor.value,
               offsetY: 4,
-              formatter: (val: string) => {
-                return new Intl.NumberFormat('fr-FR', {
-                  style: 'currency',
-                  currency: 'EUR',
-                  maximumFractionDigits: 0,
-                }).format(Number(val))
-              },
+              formatter: (val: string) => formatCompactCurrency(Number(val)),
             },
             total: {
               show: true,
@@ -199,11 +166,7 @@
                   (sum, val) => sum + val,
                   0
                 )
-                return new Intl.NumberFormat('fr-FR', {
-                  style: 'currency',
-                  currency: 'EUR',
-                  maximumFractionDigits: 0,
-                }).format(total)
+                return formatCompactCurrency(total)
               },
             },
           },
@@ -232,9 +195,10 @@
 
 <template>
   <div class="w-full h-full">
+    <!-- No remount on a theme switch: the options are reactive and the
+         chart updates in place, instead of replaying its whole intro. -->
     <VueApexCharts
       v-if="data.values.length > 0"
-      :key="isDark ? 'dark' : 'light'"
       type="donut"
       height="100%"
       :options="chartOptions"

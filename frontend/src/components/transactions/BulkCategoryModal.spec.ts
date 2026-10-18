@@ -60,7 +60,7 @@ describe('BulkCategoryModal', () => {
   it('spells out how many transactions are about to move', () => {
     const wrapper = mountModal(412)
 
-    expect(wrapper.text()).toContain('Deplacer 412 transactions')
+    expect(wrapper.text()).toContain('Déplacer 412 transactions')
   })
 
   it('offers only the subcategories of the chosen category', async () => {
@@ -88,7 +88,7 @@ describe('BulkCategoryModal', () => {
     // rather than let the user find out in the dashboard.
     expect(
       wrapper.get('[data-testid="bulk-subcategory-warning"]').text()
-    ).toContain('retirees')
+    ).toContain('retirées')
   })
 
   it('says they will be replaced when one is picked', async () => {
@@ -103,7 +103,7 @@ describe('BulkCategoryModal', () => {
 
     expect(
       wrapper.get('[data-testid="bulk-subcategory-warning"]').text()
-    ).toContain('remplacees')
+    ).toContain('remplacées')
   })
 
   it('forgets the subcategory when the category changes under it', async () => {

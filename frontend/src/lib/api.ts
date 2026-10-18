@@ -14,6 +14,31 @@ export class AuthError extends Error {
   }
 }
 
+/**
+ * The browser could not reach the server at all — offline, DNS, CORS, a
+ * server that is down. `fetch` reports it as a bare `TypeError: Failed to
+ * fetch`, which is neither French nor something the user can act on.
+ */
+export class NetworkError extends Error {
+  constructor() {
+    super(
+      'Le serveur est injoignable. Vérifiez votre connexion puis réessayez.'
+    )
+    this.name = 'NetworkError'
+  }
+}
+
+/** `fetch`, with a network failure turned into a `NetworkError`. */
+async function send(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init)
+  } catch (err) {
+    // An abort is the caller's own decision, not a failure to report.
+    if (err instanceof TypeError) throw new NetworkError()
+    throw err
+  }
+}
+
 export interface DbUser {
   id: string
   supabaseId: string
@@ -672,7 +697,8 @@ export interface StartImportDto {
 
 export interface FinalizeImportDto {
   transactionsImported: number
-  categoriesCreated: number
+  /** Retired: an import creates no category since the catalogue. */
+  categoriesCreated?: number
   duplicatesSkipped: number
   dateRangeStart: string
   dateRangeEnd: string
@@ -1065,7 +1091,7 @@ async function fetchWithAuth(
 ): Promise<Response> {
   // First attempt
   const headers = await getAuthHeaders()
-  let response = await fetch(url, { ...options, headers })
+  let response = await send(url, { ...options, headers })
 
   // If 401, try to refresh token and retry
   if (response.status === 401) {
@@ -1073,12 +1099,12 @@ async function fetchWithAuth(
 
     if (error) {
       // Refresh failed - session is invalid
-      throw new AuthError('Session expiree, veuillez vous reconnecter')
+      throw new AuthError('Session expirée, veuillez vous reconnecter')
     }
 
     // Retry with new token
     const newHeaders = await getAuthHeaders()
-    response = await fetch(url, { ...options, headers: newHeaders })
+    response = await send(url, { ...options, headers: newHeaders })
   }
 
   return response
@@ -1099,14 +1125,14 @@ async function fetchWithAuthForFormData(
     return { Authorization: `Bearer ${session.access_token}` }
   }
 
-  let response = await fetch(url, { ...options, headers: await authHeader() })
+  let response = await send(url, { ...options, headers: await authHeader() })
 
   if (response.status === 401) {
     const { error } = await supabase.auth.refreshSession()
     if (error) {
-      throw new AuthError('Session expiree, veuillez vous reconnecter')
+      throw new AuthError('Session expirée, veuillez vous reconnecter')
     }
-    response = await fetch(url, { ...options, headers: await authHeader() })
+    response = await send(url, { ...options, headers: await authHeader() })
   }
 
   return response
@@ -1118,9 +1144,9 @@ async function fetchWithAuthForFormData(
  */
 async function readErrorMessage(
   response: Response,
-  fallbackAction: string
+  fallback: string
 ): Promise<string> {
-  let message = `Failed to ${fallbackAction}`
+  let message = fallback
   try {
     const body = (await response.json()) as {
       message?: string | string[]
@@ -1259,7 +1285,12 @@ export const api = {
   async getBankSyncStatus(): Promise<{ configured: boolean }> {
     const response = await fetchWithAuth(`${API_BASE_URL}/bank-sync/status`)
     if (!response.ok)
-      throw new Error(await readErrorMessage(response, 'read bank sync status'))
+      throw new Error(
+        await readErrorMessage(
+          response,
+          "Impossible de lire l'état de la synchronisation bancaire"
+        )
+      )
     return response.json() as Promise<{ configured: boolean }>
   },
 
@@ -1272,7 +1303,10 @@ export const api = {
     )
     if (!response.ok)
       throw new Error(
-        await readErrorMessage(response, 'read your Enable Banking application')
+        await readErrorMessage(
+          response,
+          'Impossible de lire votre application Enable Banking'
+        )
       )
     return response.json() as Promise<{ applicationId: string | null }>
   },
@@ -1302,7 +1336,10 @@ export const api = {
     )
     if (!response.ok)
       throw new Error(
-        await readErrorMessage(response, 'save your Enable Banking application')
+        await readErrorMessage(
+          response,
+          "Impossible d'enregistrer votre application Enable Banking"
+        )
       )
     return response.json() as Promise<{
       applicationId: string | null
@@ -1321,7 +1358,7 @@ export const api = {
       throw new Error(
         await readErrorMessage(
           response,
-          'remove your Enable Banking application'
+          'Impossible de supprimer votre application Enable Banking'
         )
       )
   },
@@ -1336,7 +1373,12 @@ export const api = {
       `${API_BASE_URL}/bank-sync/aspsps?country=${encodeURIComponent(country)}`
     )
     if (!response.ok)
-      throw new Error(await readErrorMessage(response, 'list the banks'))
+      throw new Error(
+        await readErrorMessage(
+          response,
+          'Impossible de charger la liste des banques'
+        )
+      )
     return response.json() as Promise<
       { name: string; country: string; beta: boolean; logo: string | null }[]
     >
@@ -1347,7 +1389,12 @@ export const api = {
       `${API_BASE_URL}/bank-sync/connections`
     )
     if (!response.ok)
-      throw new Error(await readErrorMessage(response, 'list bank connections'))
+      throw new Error(
+        await readErrorMessage(
+          response,
+          'Impossible de charger vos connexions bancaires'
+        )
+      )
     return response.json() as Promise<BankConnectionDto[]>
   },
 
@@ -1364,7 +1411,10 @@ export const api = {
     )
     if (!response.ok)
       throw new Error(
-        await readErrorMessage(response, 'list accounts needing review')
+        await readErrorMessage(
+          response,
+          'Impossible de charger les comptes à vérifier'
+        )
       )
     return response.json() as Promise<
       { accountId: string; accountLabel: string; count: number }[]
@@ -1375,7 +1425,12 @@ export const api = {
   async getBankSyncRuns(): Promise<BankSyncRunDto[]> {
     const response = await fetchWithAuth(`${API_BASE_URL}/bank-sync/runs`)
     if (!response.ok)
-      throw new Error(await readErrorMessage(response, 'list sync runs'))
+      throw new Error(
+        await readErrorMessage(
+          response,
+          "Impossible de charger l'historique des synchronisations"
+        )
+      )
     return response.json() as Promise<BankSyncRunDto[]>
   },
 
@@ -1387,7 +1442,10 @@ export const api = {
     )
     if (!response.ok)
       throw new Error(
-        await readErrorMessage(response, 'preview undoing this sync')
+        await readErrorMessage(
+          response,
+          "Impossible de calculer l'annulation de cette synchronisation"
+        )
       )
     return response.json() as Promise<UndoRunOutcomeDto>
   },
@@ -1399,7 +1457,12 @@ export const api = {
       { method: 'POST' }
     )
     if (!response.ok)
-      throw new Error(await readErrorMessage(response, 'undo this sync'))
+      throw new Error(
+        await readErrorMessage(
+          response,
+          "Impossible d'annuler cette synchronisation"
+        )
+      )
     return response.json() as Promise<UndoRunOutcomeDto>
   },
 
@@ -1418,7 +1481,10 @@ export const api = {
     )
     if (!response.ok)
       throw new Error(
-        await readErrorMessage(response, 'start the authorization')
+        await readErrorMessage(
+          response,
+          "Impossible de lancer l'autorisation bancaire"
+        )
       )
     return response.json() as Promise<{ url: string; state: string }>
   },
@@ -1434,7 +1500,10 @@ export const api = {
     )
     if (!response.ok)
       throw new Error(
-        await readErrorMessage(response, 'finish the authorization')
+        await readErrorMessage(
+          response,
+          "Impossible de finaliser l'autorisation bancaire"
+        )
       )
     return response.json() as Promise<BankConnectionDto>
   },
@@ -1450,7 +1519,10 @@ export const api = {
     )
     if (!response.ok)
       throw new Error(
-        await readErrorMessage(response, 'update the bank account')
+        await readErrorMessage(
+          response,
+          'Impossible de modifier le compte bancaire'
+        )
       )
     return response.json() as Promise<DiscoveredAccountDto>
   },
@@ -1472,7 +1544,10 @@ export const api = {
     )
     if (!response.ok)
       throw new Error(
-        await readErrorMessage(response, 'preview this correction')
+        await readErrorMessage(
+          response,
+          'Impossible de calculer cette correction'
+        )
       )
     return response.json() as Promise<ReassignmentOutcomeDto>
   },
@@ -1487,7 +1562,9 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ accountId }) }
     )
     if (!response.ok)
-      throw new Error(await readErrorMessage(response, 'correct this account'))
+      throw new Error(
+        await readErrorMessage(response, 'Impossible de corriger ce compte')
+      )
     return response.json() as Promise<ReassignmentOutcomeDto>
   },
 
@@ -1498,7 +1575,12 @@ export const api = {
       { method: 'POST' }
     )
     if (!response.ok)
-      throw new Error(await readErrorMessage(response, 'sync this bank'))
+      throw new Error(
+        await readErrorMessage(
+          response,
+          'Impossible de synchroniser cette banque'
+        )
+      )
     return response.json() as Promise<SyncOutcomeDto>
   },
 
@@ -1506,7 +1588,7 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/users/me`)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch user')
+      throw new Error('Impossible de charger votre profil')
     }
 
     return response.json() as Promise<DbUser>
@@ -1518,7 +1600,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to delete account')
+      throw new Error('Impossible de supprimer le compte')
     }
   },
 
@@ -1534,7 +1616,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to preview import')
+      throw new Error("Impossible d'analyser le fichier")
     }
 
     return response.json() as Promise<ImportPreviewResultDto>
@@ -1553,7 +1635,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to import transactions')
+      throw new Error("Impossible d'importer les transactions")
     }
 
     return response.json() as Promise<ImportResultDto>
@@ -1563,7 +1645,7 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/categories`)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch categories')
+      throw new Error('Impossible de charger les catégories')
     }
 
     return response.json() as Promise<CategoryDto[]>
@@ -1579,7 +1661,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to create category')
+      throw new Error('Impossible de créer la catégorie')
     }
 
     return response.json() as Promise<CategoryDto>
@@ -1597,7 +1679,7 @@ export const api = {
     if (!response.ok) {
       // A rename can clash with an existing category; the server explains
       // which one, so the message is worth surfacing verbatim.
-      let message = 'Failed to update category'
+      let message = 'Impossible de modifier la catégorie'
       try {
         const payload = (await response.json()) as { message?: string }
         if (payload?.message) message = payload.message
@@ -1646,7 +1728,7 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/categories/legacy`)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch legacy categories')
+      throw new Error('Impossible de charger les anciennes catégories')
     }
 
     return response.json() as Promise<LegacyOverviewDto>
@@ -1709,7 +1791,7 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/subcategories`)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch subcategories')
+      throw new Error('Impossible de charger les sous-catégories')
     }
 
     return response.json() as Promise<SubcategoryDto[]>
@@ -1723,7 +1805,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to fetch subcategories')
+      throw new Error('Impossible de charger les sous-catégories')
     }
 
     return response.json() as Promise<SubcategoryDto[]>
@@ -1741,7 +1823,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to create subcategory')
+      throw new Error('Impossible de créer la sous-catégorie')
     }
 
     return response.json() as Promise<SubcategoryDto>
@@ -1783,7 +1865,7 @@ export const api = {
     const response = await fetchWithAuth(url)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch transactions')
+      throw new Error('Impossible de charger les transactions')
     }
 
     return response.json() as Promise<PaginatedResponse<TransactionDto>>
@@ -1805,7 +1887,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to update transaction')
+      throw new Error('Impossible de modifier la transaction')
     }
 
     return response.json() as Promise<TransactionDto>
@@ -1843,7 +1925,9 @@ export const api = {
       const detail = (await response.json().catch(() => null)) as {
         message?: string
       } | null
-      throw new Error(detail?.message ?? 'Failed to bulk update transactions')
+      throw new Error(
+        detail?.message ?? 'Impossible de modifier les transactions'
+      )
     }
 
     return response.json() as Promise<{ updated: number }>
@@ -1853,7 +1937,7 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/filter-preferences`)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch filter preferences')
+      throw new Error('Impossible de charger les préférences de filtre')
     }
 
     return response.json() as Promise<FilterPreferencesDto>
@@ -1868,7 +1952,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to update filter preferences')
+      throw new Error("Impossible d'enregistrer les préférences de filtre")
     }
 
     return response.json() as Promise<FilterPreferencesDto>
@@ -1879,7 +1963,7 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/accounts`)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch accounts')
+      throw new Error('Impossible de charger les comptes')
     }
 
     return response.json() as Promise<AccountDto[]>
@@ -1889,7 +1973,7 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/accounts/${id}`)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch account')
+      throw new Error('Impossible de charger le compte')
     }
 
     return response.json() as Promise<AccountDto>
@@ -1902,7 +1986,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      let message = 'Failed to update account'
+      let message = 'Impossible de modifier le compte'
       try {
         const payload = (await response.json()) as { message?: string }
         if (payload?.message) message = payload.message
@@ -1936,7 +2020,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      let message = 'Failed to delete account'
+      let message = 'Impossible de supprimer le compte'
       try {
         const payload = (await response.json()) as { message?: string }
         if (payload?.message) message = payload.message
@@ -1959,7 +2043,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to fetch dashboard summary')
+      throw new Error('Impossible de charger le tableau de bord')
     }
 
     return response.json() as Promise<DashboardSummaryDto>
@@ -1970,7 +2054,7 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/persons`)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch persons')
+      throw new Error('Impossible de charger les personnes')
     }
 
     return response.json() as Promise<PersonDto[]>
@@ -1983,7 +2067,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to create person')
+      throw new Error('Impossible de créer la personne')
     }
 
     return response.json() as Promise<PersonDto>
@@ -1996,7 +2080,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to update person')
+      throw new Error('Impossible de modifier la personne')
     }
 
     return response.json() as Promise<PersonDto>
@@ -2008,7 +2092,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to delete person')
+      throw new Error('Impossible de supprimer la personne')
     }
   },
 
@@ -2017,7 +2101,7 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/recurrences`)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch recurrences')
+      throw new Error('Impossible de charger les récurrences')
     }
 
     return response.json() as Promise<RecurrenceListDto>
@@ -2034,7 +2118,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to record the decision')
+      throw new Error("Impossible d'enregistrer la décision")
     }
 
     return response.json() as Promise<RecurrenceListDto>
@@ -2051,7 +2135,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to rename the recurring charge')
+      throw new Error('Impossible de renommer la charge récurrente')
     }
 
     return response.json() as Promise<RecurrenceListDto>
@@ -2068,7 +2152,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to attach the transaction')
+      throw new Error('Impossible de rattacher la transaction')
     }
 
     return response.json() as Promise<RecurrenceListDto>
@@ -2083,7 +2167,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to detach the transaction')
+      throw new Error('Impossible de détacher la transaction')
     }
 
     return response.json() as Promise<RecurrenceListDto>
@@ -2099,7 +2183,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to mark the transaction as recurring')
+      throw new Error('Impossible de marquer la transaction comme récurrente')
     }
 
     return response.json() as Promise<RecurrenceListDto>
@@ -2113,7 +2197,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to forget the subscription')
+      throw new Error("Impossible d'oublier l'abonnement")
     }
 
     return response.json() as Promise<RecurrenceListDto>
@@ -2123,7 +2207,7 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/tags`)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch tags')
+      throw new Error('Impossible de charger les étiquettes')
     }
 
     return response.json() as Promise<TagDto[]>
@@ -2139,7 +2223,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to fetch tag budget summary')
+      throw new Error("Impossible de charger le budget de l'étiquette")
     }
 
     return response.json() as Promise<TagBudgetSummaryDto>
@@ -2155,7 +2239,7 @@ export const api = {
       const message =
         response.status === 409
           ? 'Une étiquette porte déjà ce nom'
-          : 'Failed to create tag'
+          : "Impossible de créer l'étiquette"
       throw new Error(message)
     }
 
@@ -2172,7 +2256,7 @@ export const api = {
       const message =
         response.status === 409
           ? 'Une étiquette porte déjà ce nom'
-          : 'Failed to update tag'
+          : "Impossible de modifier l'étiquette"
       throw new Error(message)
     }
 
@@ -2185,7 +2269,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to delete tag')
+      throw new Error("Impossible de supprimer l'étiquette")
     }
   },
 
@@ -2202,7 +2286,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to attach tag')
+      throw new Error("Impossible d'ajouter l'étiquette")
     }
 
     return response.json() as Promise<{ attached: number }>
@@ -2218,7 +2302,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to detach tag')
+      throw new Error("Impossible de retirer l'étiquette")
     }
   },
 
@@ -2226,7 +2310,7 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/tags/${id}/analysis`)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch tag analysis')
+      throw new Error("Impossible de charger l'analyse de l'étiquette")
     }
 
     return response.json() as Promise<TagAnalysisDto>
@@ -2239,7 +2323,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to fetch reimbursements')
+      throw new Error('Impossible de charger les remboursements')
     }
 
     return response.json() as Promise<ReimbursementDto[]>
@@ -2254,7 +2338,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to create reimbursement')
+      throw new Error('Impossible de créer le remboursement')
     }
 
     return response.json() as Promise<ReimbursementDto>
@@ -2278,7 +2362,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to update reimbursement')
+      throw new Error('Impossible de modifier le remboursement')
     }
 
     return response.json() as Promise<ReimbursementDto>
@@ -2293,7 +2377,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to delete reimbursement')
+      throw new Error('Impossible de supprimer le remboursement')
     }
   },
 
@@ -2305,7 +2389,7 @@ export const api = {
     const response = await fetchWithAuth(url)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch settlements')
+      throw new Error('Impossible de charger les règlements')
     }
 
     return response.json() as Promise<SettlementDto[]>
@@ -2315,7 +2399,7 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/settlements/${id}`)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch settlement')
+      throw new Error('Impossible de charger le règlement')
     }
 
     return response.json() as Promise<SettlementDto>
@@ -2329,7 +2413,9 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to fetch transaction available amount')
+      throw new Error(
+        'Impossible de lire le montant disponible de la transaction'
+      )
     }
 
     return response.json() as Promise<TransactionAvailableAmountDto>
@@ -2344,8 +2430,13 @@ export const api = {
     if (!response.ok) {
       // The server explains *why* it refused — which line overdraws the
       // receipt, which debt is already credited. Swallowing that left the
-      // modal showing "Failed to create settlement" and nothing to act on.
-      throw new Error(await readErrorMessage(response, 'create settlement'))
+      // modal showing "Impossible d'enregistrer le règlement" and nothing to act on.
+      throw new Error(
+        await readErrorMessage(
+          response,
+          "Impossible d'enregistrer le règlement"
+        )
+      )
     }
 
     return response.json() as Promise<SettlementDto>
@@ -2357,7 +2448,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to delete settlement')
+      throw new Error('Impossible de supprimer le règlement')
     }
   },
 
@@ -2366,10 +2457,26 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/import-histories`)
 
     if (!response.ok) {
-      throw new Error('Failed to fetch import histories')
+      throw new Error("Impossible de charger l'historique des imports")
     }
 
     return response.json() as Promise<ImportHistoryDto[]>
+  },
+
+  /** One import, read back from the history — the recap's source of truth. */
+  async getImportHistory(id: string): Promise<ImportHistoryDto> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/import-histories/${encodeURIComponent(id)}`
+    )
+
+    if (response.status === 404) {
+      throw new Error('Cet import est introuvable')
+    }
+    if (!response.ok) {
+      throw new Error("Impossible de charger le récapitulatif de l'import")
+    }
+
+    return response.json() as Promise<ImportHistoryDto>
   },
 
   async getLatestImportDate(): Promise<{ date: string | null }> {
@@ -2378,7 +2485,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to fetch latest import date')
+      throw new Error('Impossible de lire la date du dernier import')
     }
 
     return response.json() as Promise<{ date: string | null }>
@@ -2393,7 +2500,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to create import history')
+      throw new Error("Impossible d'enregistrer l'historique d'import")
     }
 
     return response.json() as Promise<ImportHistoryDto>
@@ -2409,7 +2516,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to start import')
+      throw new Error("Impossible de démarrer l'import")
     }
 
     return response.json() as Promise<ImportHistoryDto>
@@ -2428,7 +2535,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to finalize import')
+      throw new Error("Impossible de finaliser l'import")
     }
 
     return response.json() as Promise<ImportHistoryDto>
@@ -2443,7 +2550,7 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error('Failed to delete import')
+      throw new Error("Impossible de supprimer l'import")
     }
   },
 
@@ -2452,7 +2559,7 @@ export const api = {
   async getBudgetPlans(): Promise<BudgetPlanSummaryDto[]> {
     const response = await fetchWithAuth(`${API_BASE_URL}/budget-plans`)
     if (!response.ok) {
-      throw new Error('Failed to fetch budget plans')
+      throw new Error('Impossible de charger les budgets')
     }
     return response.json() as Promise<BudgetPlanSummaryDto[]>
   },
@@ -2460,7 +2567,7 @@ export const api = {
   async getCurrentBudgetPlan(): Promise<BudgetPlanDto | null> {
     const response = await fetchWithAuth(`${API_BASE_URL}/budget-plans/current`)
     if (!response.ok) {
-      throw new Error('Failed to fetch current budget plan')
+      throw new Error('Impossible de charger le budget en cours')
     }
     // The backend returns an empty body when no plan covers today (Express
     // serializes `null` as Content-Length: 0, not the JSON string "null").
@@ -2473,7 +2580,7 @@ export const api = {
   async getBudgetPlan(id: string): Promise<BudgetPlanDto> {
     const response = await fetchWithAuth(`${API_BASE_URL}/budget-plans/${id}`)
     if (!response.ok) {
-      throw new Error('Failed to fetch budget plan')
+      throw new Error('Impossible de charger le budget')
     }
     return response.json() as Promise<BudgetPlanDto>
   },
@@ -2484,7 +2591,10 @@ export const api = {
       body: JSON.stringify(dto),
     })
     if (!response.ok) {
-      const message = await readErrorMessage(response, 'create budget plan')
+      const message = await readErrorMessage(
+        response,
+        'Impossible de créer le budget'
+      )
       throw new Error(message)
     }
     return response.json() as Promise<BudgetPlanDto>
@@ -2499,7 +2609,10 @@ export const api = {
       body: JSON.stringify(dto),
     })
     if (!response.ok) {
-      const message = await readErrorMessage(response, 'update budget plan')
+      const message = await readErrorMessage(
+        response,
+        "Impossible d'enregistrer le budget"
+      )
       throw new Error(message)
     }
     return response.json() as Promise<BudgetPlanDto>
@@ -2510,7 +2623,7 @@ export const api = {
       method: 'DELETE',
     })
     if (!response.ok) {
-      throw new Error('Failed to delete budget plan')
+      throw new Error('Impossible de supprimer le budget')
     }
   },
 
@@ -2523,7 +2636,7 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Failed to fetch budget statistics')
+      throw new Error('Impossible de charger les statistiques du budget')
     }
 
     return response.json() as Promise<BudgetStatisticsDto>
@@ -2537,7 +2650,7 @@ export const api = {
       }
     )
     if (!response.ok) {
-      throw new Error('Failed to generate category icons')
+      throw new Error('Impossible de générer les icônes de catégorie')
     }
     return response.json() as Promise<{ updated: number }>
   },

@@ -145,6 +145,30 @@ beforeEach(() => {
 })
 
 describe('CategoriesSettingsPage', () => {
+  it('says the catalogue failed to load and offers a retry', async () => {
+    vi.mocked(api.getCategories).mockRejectedValueOnce(new Error('boom'))
+    vi.mocked(api.getSubcategories).mockResolvedValue([groceriesSub])
+    const wrapper = mount(CategoriesSettingsPage, {
+      global: {
+        stubs: { Teleport: true, RouterLink: { template: '<a><slot /></a>' } },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="categories-load-error"]').exists()).toBe(
+      true
+    )
+
+    vi.mocked(api.getCategories).mockResolvedValue([{ ...foodCategory }])
+    await wrapper.find('[data-testid="categories-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="categories-load-error"]').exists()).toBe(
+      false
+    )
+    expect(wrapper.findAll('[data-testid="category-row"]')).toHaveLength(1)
+  })
+
   it('groups the catalogue by kind, transfers included', async () => {
     const wrapper = await mountPage({
       categories: [foodCategory, salaryCategory, savingsCategory],

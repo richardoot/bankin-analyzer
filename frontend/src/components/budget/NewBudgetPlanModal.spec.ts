@@ -531,7 +531,7 @@ describe('NewBudgetPlanModal', () => {
     expect(rows.length).toBe(sampleCategories.length)
     rows.forEach(row => {
       const input = row.querySelector(
-        'input[type="number"]'
+        'input[inputmode="decimal"]'
       ) as HTMLInputElement
       expect(input.value).toBe('')
     })
@@ -595,7 +595,7 @@ describe('NewBudgetPlanModal', () => {
     // is left empty so the user must opt in explicitly.
     expect(loisirsRow?.textContent).toContain("Pas d'historique")
     const loisirsInput = loisirsRow?.querySelector(
-      'input[type="number"]'
+      'input[inputmode="decimal"]'
     ) as HTMLInputElement
     expect(loisirsInput.value).toBe('')
   })
@@ -777,6 +777,78 @@ describe('NewBudgetPlanModal', () => {
       }
     )
     wrapper.unmount()
+  })
+
+  describe('closing with a draft', () => {
+    const escape = () =>
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+
+    it('closes outright while nothing has been touched', async () => {
+      const wrapper = mountModal()
+      await flushPromises()
+
+      escape()
+      await flushPromises()
+
+      expect(wrapper.emitted('close')).toHaveLength(1)
+      wrapper.unmount()
+    })
+
+    it('asks before throwing a walked wizard away, and keeps it on cancel', async () => {
+      const wrapper = mountModal()
+      await flushPromises()
+      await clickNext()
+
+      // The backdrop, the cross and Escape all go through the same guard;
+      // the page protects its draft and the wizard now does too.
+      escape()
+      await flushPromises()
+
+      expect(wrapper.emitted('close')).toBeUndefined()
+      expect(
+        document.body.querySelector('[data-testid="modal-dirty-guard"]')
+      ).not.toBeNull()
+      ;(
+        Array.from(document.body.querySelectorAll('button')).find(
+          b => b.textContent?.trim() === 'Continuer la saisie'
+        ) as HTMLButtonElement
+      ).click()
+      await flushPromises()
+
+      // Still on step 2, nothing reset.
+      expect(
+        document.body.querySelector('[data-testid="init-source-empty"]')
+      ).not.toBeNull()
+      expect(wrapper.emitted('close')).toBeUndefined()
+
+      ;(
+        document.body.querySelector(
+          '[data-testid="create-plan-button"], [data-testid="next-step-button"]'
+        ) as HTMLButtonElement
+      ).click()
+      wrapper.unmount()
+    })
+
+    it('closes and resets once the loss is confirmed, from « Annuler » too', async () => {
+      const wrapper = mountModal()
+      await flushPromises()
+      await clickNext()
+      ;(
+        Array.from(document.body.querySelectorAll('button')).find(
+          b => b.textContent?.trim() === 'Annuler'
+        ) as HTMLButtonElement
+      ).click()
+      await flushPromises()
+      ;(
+        document.body.querySelector(
+          '[data-testid="modal-dirty-discard"]'
+        ) as HTMLButtonElement
+      ).click()
+      await flushPromises()
+
+      expect(wrapper.emitted('close')).toHaveLength(1)
+      wrapper.unmount()
+    })
   })
 
   it('surfaces a backend error message (e.g. overlap)', async () => {

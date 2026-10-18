@@ -1,6 +1,21 @@
 <script setup lang="ts">
+  import PageShell from '@/components/ui/PageShell.vue'
   import { ref, onMounted, computed } from 'vue'
   import { api, type ImportHistoryDto } from '@/lib/api'
+  import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+  import { useToast } from '@/composables/useToast'
+  import { formatDate, formatDateTime } from '@/lib/formatters'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconUpload from '@/components/icons/IconUpload.vue'
+  import IconTrash from '@/components/icons/IconTrash.vue'
+  import IconPlus from '@/components/icons/IconPlus.vue'
+  import BaseCard from '@/components/ui/BaseCard.vue'
+  import PageHeader from '@/components/ui/PageHeader.vue'
+  import BackLink from '@/components/ui/BackLink.vue'
+
+  const toast = useToast()
 
   const histories = ref<ImportHistoryDto[]>([])
   const latestDate = ref<string | null>(null)
@@ -11,33 +26,14 @@
 
   const hasHistories = computed(() => histories.value.length > 0)
 
-  const formatDateTime = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
+  /** The import the dialog is asking about. */
+  const importToDelete = computed(
+    () => histories.value.find(h => h.id === deleteConfirmId.value) ?? null
+  )
 
-  const formatDate = (dateString: string | null): string => {
-    if (!dateString) return '-'
-    return new Date(dateString).toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
-
-  const formatLatestDate = computed(() => {
-    if (!latestDate.value) return null
-    return new Date(latestDate.value).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    })
-  })
+  const formatLatestDate = computed(() =>
+    latestDate.value ? formatDate(latestDate.value, 'long') : null
+  )
 
   const getStatusLabel = (status: string): string => {
     switch (status) {
@@ -46,7 +42,7 @@
       case 'IN_PROGRESS':
         return 'En cours'
       case 'FAILED':
-        return 'Echoue'
+        return 'Échoué'
       default:
         return status
     }
@@ -58,26 +54,26 @@
     switch (status) {
       case 'COMPLETED':
         return {
-          bg: 'bg-primary-100',
-          text: 'text-primary-600',
+          bg: 'bg-green-100 dark:bg-green-900/30',
+          text: 'text-green-700 dark:text-green-300',
           icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
         }
       case 'IN_PROGRESS':
         return {
-          bg: 'bg-amber-100',
-          text: 'text-amber-600',
+          bg: 'bg-blue-100 dark:bg-blue-900/30',
+          text: 'text-blue-700 dark:text-blue-300',
           icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
         }
       case 'FAILED':
         return {
-          bg: 'bg-red-100',
-          text: 'text-red-600',
+          bg: 'bg-red-100 dark:bg-red-900/30',
+          text: 'text-red-700 dark:text-red-300',
           icon: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z',
         }
       default:
         return {
-          bg: 'bg-gray-100',
-          text: 'text-gray-600',
+          bg: 'bg-gray-100 dark:bg-slate-700',
+          text: 'text-gray-600 dark:text-gray-300',
           icon: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
         }
     }
@@ -110,18 +106,26 @@
   }
 
   const cancelDelete = (): void => {
+    if (isDeleting.value) return
     deleteConfirmId.value = null
   }
 
-  const deleteImport = async (id: string): Promise<void> => {
+  // The backend deletes every transaction of the import along with it; the
+  // dialog says so, with the count, before anything goes.
+  const deleteImport = async (): Promise<void> => {
+    const id = deleteConfirmId.value
+    if (!id) return
     try {
       isDeleting.value = true
       await api.deleteImport(id)
       deleteConfirmId.value = null
+      toast.success('Import supprimé, avec ses transactions')
       await fetchData()
     } catch (e) {
-      error.value =
-        e instanceof Error ? e.message : 'Erreur lors de la suppression'
+      // A toast, not the page's error block: the list stays as it was.
+      toast.error(
+        e instanceof Error ? e.message : "Impossible de supprimer l'import"
+      )
     } finally {
       isDeleting.value = false
     }
@@ -131,178 +135,100 @@
 </script>
 
 <template>
-  <div
-    class="min-h-[calc(100vh-4rem)] bg-gray-50 dark:bg-slate-800 py-6 sm:py-12 transition-colors"
-  >
-    <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-      <!-- Header -->
-      <div class="mb-8">
-        <h1
-          class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
-        >
-          Historique des imports
-        </h1>
-        <p
-          v-if="formatLatestDate"
-          class="mt-2 text-gray-600 dark:text-gray-400"
-        >
-          Dernière transaction importée : {{ formatLatestDate }}
-        </p>
-        <p v-else-if="!isLoading" class="mt-2 text-gray-600 dark:text-gray-400">
-          Aucun import effectué pour le moment
-        </p>
-      </div>
+  <PageShell>
+    <BackLink to="/accounts" class="mb-4">Comptes</BackLink>
+    <PageHeader
+      title="Historique des imports"
+      :subtitle="
+        formatLatestDate
+          ? `Dernière transaction importée : ${formatLatestDate}`
+          : isLoading
+            ? undefined
+            : 'Aucun import effectué pour le moment'
+      "
+    >
+      <template v-if="hasHistories" #actions>
+        <BaseButton to="/import" class="w-full sm:w-auto">
+          <IconPlus class="h-5 w-5" />
+          Nouvel import
+        </BaseButton>
+      </template>
+    </PageHeader>
 
-      <!-- Loading State -->
-      <div
-        v-if="isLoading"
-        class="flex items-center justify-center rounded-2xl bg-white dark:bg-slate-900 p-12 shadow-lg dark:shadow-slate-900/20"
-      >
-        <div class="text-center">
-          <div
-            class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-500"
-          ></div>
-          <p class="mt-4 text-gray-600 dark:text-gray-400">
-            Chargement de l'historique...
-          </p>
-        </div>
-      </div>
-
-      <!-- Error State -->
-      <div
-        v-else-if="error"
-        class="rounded-2xl border-2 border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-8 text-center"
-      >
-        <svg
-          class="mx-auto h-12 w-12 text-red-500"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-          />
-        </svg>
-        <p class="mt-4 text-red-700 dark:text-red-400">{{ error }}</p>
-        <button
-          class="mt-4 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
-          @click="fetchData"
-        >
-          Reessayer
-        </button>
-      </div>
-
-      <!-- Empty State -->
-      <div
-        v-else-if="!hasHistories"
-        class="rounded-2xl bg-white dark:bg-slate-900 p-12 text-center shadow-lg dark:shadow-slate-900/20"
-      >
-        <svg
-          class="mx-auto h-16 w-16 text-gray-500 dark:text-gray-400"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-          />
-        </svg>
-        <h3 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Aucun import effectué
-        </h3>
-        <p class="mt-2 text-gray-600 dark:text-gray-400">
-          Commencez par importer vos transactions depuis un fichier CSV.
-        </p>
-        <RouterLink
-          to="/import"
-          class="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-white transition-colors hover:bg-primary-700"
-        >
-          <svg
-            class="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-            />
-          </svg>
-          Importer un CSV
-        </RouterLink>
-      </div>
-
-      <!-- History List -->
-      <div v-else class="space-y-4">
+    <!-- Loading State -->
+    <BaseCard
+      v-if="isLoading"
+      variant="raised"
+      padding="none"
+      class="flex items-center justify-center p-12"
+    >
+      <div class="text-center">
         <div
-          v-for="history in histories"
-          :key="history.id"
-          class="rounded-2xl bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-lg dark:shadow-slate-900/20 transition-shadow hover:shadow-xl dark:hover:shadow-slate-900/40"
+          class="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-primary-200 dark:border-primary-800 border-t-primary-600 dark:border-t-primary-500"
+        ></div>
+        <p class="mt-4 text-gray-600 dark:text-gray-400">
+          Chargement de l'historique…
+        </p>
+      </div>
+    </BaseCard>
+
+    <!-- Error State -->
+    <InlineAlert v-else-if="error" retry-label="Réessayer" @retry="fetchData">
+      {{ error }}
+    </InlineAlert>
+
+    <!-- Empty State -->
+    <BaseCard
+      v-else-if="!hasHistories"
+      variant="raised"
+      padding="none"
+      class="p-12 text-center"
+    >
+      <svg
+        class="mx-auto h-16 w-16 text-gray-500 dark:text-gray-400"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+        />
+      </svg>
+      <h3 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+        Aucun import effectué
+      </h3>
+      <p class="mt-2 text-gray-600 dark:text-gray-400">
+        Commencez par importer vos transactions depuis un fichier CSV.
+      </p>
+      <BaseButton to="/import" class="mt-6">
+        <IconUpload class="h-5 w-5" />
+        Importer un CSV
+      </BaseButton>
+    </BaseCard>
+
+    <!-- History List -->
+    <div v-else class="space-y-4">
+      <BaseCard
+        v-for="history in histories"
+        :key="history.id"
+        variant="raised"
+        class="transition-shadow hover:shadow-xl dark:hover:shadow-slate-900/40"
+      >
+        <!-- Date Header -->
+        <div
+          class="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 dark:border-slate-700 pb-4"
         >
-          <!-- Date Header -->
-          <div
-            class="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 dark:border-slate-700 pb-4"
-          >
-            <div class="flex min-w-0 flex-1 items-center gap-3">
-              <div
-                class="flex h-10 w-10 items-center justify-center rounded-full"
-                :class="getStatusClass(history.status).bg"
-              >
-                <svg
-                  class="h-5 w-5"
-                  :class="getStatusClass(history.status).text"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    :d="getStatusClass(history.status).icon"
-                  />
-                </svg>
-              </div>
-              <div class="min-w-0">
-                <div class="flex flex-wrap items-center gap-2">
-                  <p class="font-semibold text-gray-900 dark:text-gray-100">
-                    {{ formatDateTime(history.createdAt) }}
-                  </p>
-                  <span
-                    class="rounded-full px-2 py-0.5 text-xs font-medium"
-                    :class="[
-                      getStatusClass(history.status).bg,
-                      getStatusClass(history.status).text,
-                    ]"
-                  >
-                    {{ getStatusLabel(history.status) }}
-                  </span>
-                </div>
-                <p
-                  v-if="history.fileName"
-                  class="truncate text-sm text-gray-500 dark:text-gray-400"
-                >
-                  {{ history.fileName }}
-                </p>
-              </div>
-            </div>
-            <!-- Delete Button -->
-            <button
-              v-if="deleteConfirmId !== history.id"
-              class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 sm:h-9 sm:w-9"
-              title="Supprimer cet import"
-              @click="confirmDelete(history.id)"
+          <div class="flex min-w-0 flex-1 items-center gap-3">
+            <div
+              class="flex h-10 w-10 items-center justify-center rounded-full"
+              :class="getStatusClass(history.status).bg"
             >
               <svg
                 class="h-5 w-5"
+                :class="getStatusClass(history.status).text"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -311,161 +237,171 @@
                   stroke-linecap="round"
                   stroke-linejoin="round"
                   stroke-width="2"
-                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  :d="getStatusClass(history.status).icon"
                 />
               </svg>
-            </button>
-            <!-- Delete Confirmation -->
-            <div
-              v-else
-              class="flex w-full items-center justify-end gap-2 sm:w-auto"
-            >
-              <span class="text-sm text-red-600 dark:text-red-400"
-                >Supprimer ?</span
-              >
-              <button
-                class="min-h-[40px] rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50 sm:min-h-0"
-                :disabled="isDeleting"
-                @click="deleteImport(history.id)"
-              >
-                {{ isDeleting ? 'Suppression...' : 'Oui' }}
-              </button>
-              <button
-                class="min-h-[40px] rounded-lg bg-gray-200 dark:bg-slate-700 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-300 dark:hover:bg-slate-600 sm:min-h-0"
-                :disabled="isDeleting"
-                @click="cancelDelete"
-              >
-                Non
-              </button>
             </div>
-          </div>
-
-          <!-- Stats Grid -->
-          <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <!-- Transactions Imported -->
-            <div class="rounded-lg bg-primary-50 dark:bg-primary-900/30 p-3">
-              <p
-                class="text-2xl font-bold text-primary-700 dark:text-primary-400"
-              >
-                {{ history.transactionsImported.toLocaleString('fr-FR') }}
-              </p>
-              <p class="text-sm text-primary-600 dark:text-primary-500">
-                transactions importées
-              </p>
-            </div>
-
-            <!-- Total in File -->
-            <div class="rounded-lg bg-gray-50 dark:bg-slate-800 p-3">
-              <p class="text-2xl font-bold text-gray-700 dark:text-gray-300">
-                {{ history.totalInFile.toLocaleString('fr-FR') }}
-              </p>
-              <p class="text-sm text-gray-600 dark:text-gray-400">
-                dans le fichier
-              </p>
-            </div>
-
-            <!-- Duplicates Skipped -->
-            <div class="rounded-lg bg-amber-50 dark:bg-amber-900/30 p-3">
-              <p class="text-2xl font-bold text-amber-700 dark:text-amber-400">
-                {{ history.duplicatesSkipped.toLocaleString('fr-FR') }}
-              </p>
-              <p class="text-sm text-amber-600 dark:text-amber-500">
-                doublons ignores
-              </p>
-            </div>
-
-            <!-- Categories Created -->
-            <div class="rounded-lg bg-primary-50 dark:bg-primary-900/30 p-3">
-              <p
-                class="text-2xl font-bold text-primary-700 dark:text-primary-400"
-              >
-                {{ history.categoriesCreated.toLocaleString('fr-FR') }}
-              </p>
-              <p class="text-sm text-primary-600 dark:text-primary-500">
-                nouvelles categories
-              </p>
-            </div>
-          </div>
-
-          <!-- Period and Accounts -->
-          <div
-            class="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400"
-          >
-            <!-- Date Range -->
-            <div class="flex items-center gap-2">
-              <svg
-                class="h-4 w-4 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-              <span>
-                Du {{ formatDate(history.dateRangeStart) }} au
-                {{ formatDate(history.dateRangeEnd) }}
-              </span>
-            </div>
-
-            <!-- Accounts -->
-            <div
-              v-if="history.accounts.length > 0"
-              class="flex items-center gap-2"
-            >
-              <svg
-                class="h-4 w-4 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                />
-              </svg>
-              <div class="flex flex-wrap gap-1">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <p class="font-semibold text-gray-900 dark:text-gray-100">
+                  {{ formatDateTime(history.createdAt) }}
+                </p>
                 <span
-                  v-for="account in history.accounts"
-                  :key="account"
-                  class="rounded-full bg-gray-100 dark:bg-slate-700 px-2 py-0.5 text-xs font-medium text-gray-700 dark:text-gray-300"
+                  class="rounded-full px-2 py-0.5 text-xs font-medium"
+                  :class="[
+                    getStatusClass(history.status).bg,
+                    getStatusClass(history.status).text,
+                  ]"
                 >
-                  {{ account }}
+                  {{ getStatusLabel(history.status) }}
                 </span>
               </div>
+              <p
+                v-if="history.fileName"
+                class="truncate text-sm text-gray-500 dark:text-gray-400"
+              >
+                {{ history.fileName }}
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <BaseButton
+              :to="{ name: 'import-recap', params: { id: history.id } }"
+              variant="secondary"
+              size="sm"
+              data-testid="open-recap-button"
+            >
+              Récapitulatif
+            </BaseButton>
+            <!-- Delete Button -->
+            <BaseIconButton
+              variant="danger"
+              data-testid="delete-import-button"
+              :label="`Supprimer l'import du ${formatDateTime(history.createdAt)}`"
+              @click="confirmDelete(history.id)"
+            >
+              <IconTrash />
+            </BaseIconButton>
+          </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-3 gap-4">
+          <!-- Transactions Imported -->
+          <div class="rounded-lg bg-green-50 dark:bg-green-900/30 p-3">
+            <p class="text-2xl font-bold text-green-700 dark:text-green-400">
+              {{ history.transactionsImported.toLocaleString('fr-FR') }}
+            </p>
+            <p class="text-sm text-green-700 dark:text-green-300">
+              transactions importées
+            </p>
+          </div>
+
+          <!-- Total in File -->
+          <div class="rounded-lg bg-gray-50 dark:bg-slate-800 p-3">
+            <p class="text-2xl font-bold text-gray-700 dark:text-gray-300">
+              {{ history.totalInFile.toLocaleString('fr-FR') }}
+            </p>
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+              dans le fichier
+            </p>
+          </div>
+
+          <!-- Duplicates Skipped -->
+          <div class="rounded-lg bg-amber-50 dark:bg-amber-900/30 p-3">
+            <p class="text-2xl font-bold text-amber-700 dark:text-amber-400">
+              {{ history.duplicatesSkipped.toLocaleString('fr-FR') }}
+            </p>
+            <p class="text-sm text-amber-700 dark:text-amber-300">
+              doublons ignorés
+            </p>
+          </div>
+        </div>
+
+        <!-- Period and Accounts -->
+        <div
+          class="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400"
+        >
+          <!-- Date Range -->
+          <div class="flex items-center gap-2">
+            <svg
+              class="h-4 w-4 text-gray-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+            <span>
+              Du {{ formatDate(history.dateRangeStart) }} au
+              {{ formatDate(history.dateRangeEnd) }}
+            </span>
+          </div>
+
+          <!-- Accounts -->
+          <div
+            v-if="history.accounts.length > 0"
+            class="flex items-center gap-2"
+          >
+            <svg
+              class="h-4 w-4 text-gray-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+              />
+            </svg>
+            <div class="flex flex-wrap gap-1">
+              <span
+                v-for="account in history.accounts"
+                :key="account"
+                class="rounded-full bg-gray-100 dark:bg-slate-700 px-2 py-0.5 text-xs font-medium text-gray-700 dark:text-gray-300"
+              >
+                {{ account }}
+              </span>
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- Quick Actions -->
-      <div v-if="hasHistories" class="mt-8 text-center">
-        <RouterLink
-          to="/import"
-          class="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 text-white transition-colors hover:bg-primary-700"
-        >
-          <svg
-            class="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-            />
-          </svg>
-          Nouvel import
-        </RouterLink>
-      </div>
+      </BaseCard>
     </div>
-  </div>
+
+    <ConfirmDialog
+      :open="importToDelete !== null"
+      title="Supprimer cet import ?"
+      :confirm-label="
+        importToDelete && importToDelete.transactionsImported > 0
+          ? 'Tout supprimer'
+          : 'Supprimer'
+      "
+      :loading="isDeleting"
+      @confirm="deleteImport"
+      @cancel="cancelDelete"
+    >
+      <template
+        v-if="importToDelete && importToDelete.transactionsImported > 0"
+      >
+        Les
+        <span class="font-medium text-gray-900 dark:text-gray-100"
+          >{{ importToDelete.transactionsImported }} transactions</span
+        >
+        importées par cet import seront supprimées aussi, avec leurs catégories,
+        notes et étiquettes. Vos comptes et catégories restent. Cette action est
+        irréversible.
+      </template>
+      <template v-else>
+        Cet import n'a ajouté aucune transaction ; seule sa trace dans
+        l'historique disparaîtra.
+      </template>
+    </ConfirmDialog>
+  </PageShell>
 </template>

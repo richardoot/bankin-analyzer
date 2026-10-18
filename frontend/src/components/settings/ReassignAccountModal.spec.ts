@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import type { ComponentMountingOptions } from '@vue/test-utils'
 import ReassignAccountModal from './ReassignAccountModal.vue'
 import type { PendingReassignment } from './ReassignAccountModal.vue'
 
@@ -33,9 +34,17 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+/** Stubbed so the dialog renders inside the wrapper rather than in <body>. */
+const teleport: ComponentMountingOptions<
+  typeof ReassignAccountModal
+>['global'] = { stubs: { Teleport: true } }
+
 describe('ReassignAccountModal', () => {
   it('renders nothing when there is no pending correction', () => {
-    const wrapper = mount(ReassignAccountModal, { props: { pending: null } })
+    const wrapper = mount(ReassignAccountModal, {
+      props: { pending: null },
+      global: teleport,
+    })
     expect(wrapper.find('[data-testid="reassign-modal"]').exists()).toBe(false)
   })
 
@@ -52,6 +61,7 @@ describe('ReassignAccountModal', () => {
           },
         }),
       },
+      global: teleport,
     })
 
     expect(wrapper.find('[data-testid="reassign-line-moved"]').exists()).toBe(
@@ -75,6 +85,7 @@ describe('ReassignAccountModal', () => {
           },
         }),
       },
+      global: teleport,
     })
 
     expect(
@@ -101,6 +112,7 @@ describe('ReassignAccountModal', () => {
           },
         }),
       },
+      global: teleport,
     })
 
     expect(wrapper.get('[data-testid="reassign-aucun-hint"]').text()).toContain(
@@ -111,6 +123,7 @@ describe('ReassignAccountModal', () => {
   it('says nothing extra when correcting to a real account', () => {
     const wrapper = mount(ReassignAccountModal, {
       props: { pending: pending() },
+      global: teleport,
     })
 
     expect(wrapper.find('[data-testid="reassign-aucun-hint"]').exists()).toBe(
@@ -128,6 +141,7 @@ describe('ReassignAccountModal', () => {
     })
     const wrapper = mount(ReassignAccountModal, {
       props: { pending: pending() },
+      global: teleport,
     })
 
     await wrapper.get('[data-testid="reassign-confirm"]').trigger('click')
@@ -141,6 +155,7 @@ describe('ReassignAccountModal', () => {
     vi.mocked(api.reassignLink).mockRejectedValue(new Error('No such account'))
     const wrapper = mount(ReassignAccountModal, {
       props: { pending: pending() },
+      global: teleport,
     })
 
     await wrapper.get('[data-testid="reassign-confirm"]').trigger('click')
@@ -153,6 +168,7 @@ describe('ReassignAccountModal', () => {
   it('emits close without calling the API when cancelled', async () => {
     const wrapper = mount(ReassignAccountModal, {
       props: { pending: pending() },
+      global: teleport,
     })
 
     await wrapper.get('[data-testid="reassign-cancel"]').trigger('click')

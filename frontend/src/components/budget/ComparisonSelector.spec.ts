@@ -112,6 +112,52 @@ describe('ComparisonSelector', () => {
     })
   })
 
+  it('is a menu button: says when it is open, closes on Escape and outside', async () => {
+    const wrapper = mount(ComparisonSelector, {
+      props: {
+        plan: samplePlan,
+        yearAgoAvailable: false,
+        preset: 'none',
+        customStartDate: '',
+        customEndDate: '',
+      },
+      attachTo: document.body,
+    })
+    const trigger = wrapper.find('[data-testid="comparison-trigger"]')
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    expect(trigger.attributes('aria-haspopup')).toBe('menu')
+
+    await openDropdown(wrapper)
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('[role="menu"]').exists()).toBe(true)
+
+    await trigger.trigger('keydown', { key: 'Escape' })
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+
+    await openDropdown(wrapper)
+    document.body.click()
+    await wrapper.vm.$nextTick()
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    wrapper.unmount()
+  })
+
+  it('refuses an inverted custom range and says why', async () => {
+    const wrapper = mount(ComparisonSelector, {
+      props: {
+        plan: samplePlan,
+        yearAgoAvailable: false,
+        preset: 'custom',
+        customStartDate: '2026-03-01',
+        customEndDate: '2026-01-31',
+      },
+    })
+    await wrapper.vm.$nextTick()
+    expect(
+      wrapper.find('[data-testid="comparison-custom-inverted"]').exists()
+    ).toBe(true)
+    expect(wrapper.emitted('update:range')?.at(-1)).toEqual([null])
+  })
+
   it('resolves a "custom" range from the provided date inputs', async () => {
     const wrapper = mount(ComparisonSelector, {
       props: {

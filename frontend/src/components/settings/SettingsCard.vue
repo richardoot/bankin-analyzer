@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import BaseCard from '@/components/ui/BaseCard.vue'
   /**
    * The one card shape every settings section uses: title, optional
    * description, an optional action slot in the header, then the content.
@@ -11,9 +12,7 @@
 </script>
 
 <template>
-  <section
-    class="rounded-2xl bg-white p-4 shadow-lg sm:p-8 dark:bg-slate-900 dark:shadow-slate-900/20"
-  >
+  <BaseCard as="section" variant="raised" padding="lg">
     <div class="mb-5 flex flex-wrap items-start justify-between gap-4 sm:mb-6">
       <div>
         <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
@@ -30,5 +29,5 @@
     </div>
 
     <slot />
-  </section>
+  </BaseCard>
 </template>

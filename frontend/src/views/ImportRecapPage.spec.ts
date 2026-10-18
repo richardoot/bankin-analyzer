@@ -1,232 +1,109 @@
-import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { createRouter, createWebHistory } from 'vue-router'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import ImportRecapPage from './ImportRecapPage.vue'
+import type { ImportHistoryDto } from '@/lib/api'
+
+vi.mock('@/lib/api', () => ({
+  api: { getImportHistory: vi.fn() },
+}))
+
+import { api } from '@/lib/api'
+
+const history: ImportHistoryDto = {
+  id: 'import-1',
+  status: 'COMPLETED',
+  transactionsImported: 45,
+  categoriesCreated: 0,
+  duplicatesSkipped: 5,
+  totalInFile: 50,
+  dateRangeStart: '2024-01-03T00:00:00.000Z',
+  dateRangeEnd: '2024-01-28T00:00:00.000Z',
+  accounts: ['Compte Courant'],
+  fileName: 'export.csv',
+  createdAt: '2024-02-01T10:30:00.000Z',
+}
+
+const stub = { template: '<div />' }
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [
+    { path: '/', component: stub },
+    { path: '/accounts', component: stub },
+    { path: '/import', name: 'import', component: stub },
+    { path: '/import/history', component: stub },
+    { path: '/transactions', component: stub },
+    {
+      path: '/import/recap/:id',
+      name: 'import-recap',
+      component: ImportRecapPage,
+    },
+  ],
+})
+
+async function mountPage(id = 'import-1') {
+  await router.push(`/import/recap/${id}`)
+  await router.isReady()
+  const wrapper = mount(ImportRecapPage, { global: { plugins: [router] } })
+  await flushPromises()
+  return wrapper
+}
 
 describe('ImportRecapPage', () => {
-  const createRouterWithQuery = (query: Record<string, string>) => {
-    const router = createRouter({
-      history: createWebHistory(),
-      routes: [
-        { path: '/', name: 'home', component: { template: '<div>Home</div>' } },
-        {
-          path: '/import',
-          name: 'import',
-          component: { template: '<div>Import</div>' },
-        },
-        {
-          path: '/dashboard',
-          name: 'dashboard',
-          component: { template: '<div>Dashboard</div>' },
-        },
-        {
-          path: '/import/recap',
-          name: 'import-recap',
-          component: ImportRecapPage,
-        },
-      ],
-    })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
-    router.push({ name: 'import-recap', query })
-    return router
-  }
+  it('reads the import back from the history and shows its figures', async () => {
+    vi.mocked(api.getImportHistory).mockResolvedValue(history)
+    const wrapper = await mountPage()
 
-  it('should display import statistics', async () => {
-    const router = createRouterWithQuery({
-      imported: '45',
-      duplicates: '5',
-      total: '50',
-      categories: '12',
-    })
-
-    await router.isReady()
-
-    const wrapper = mount(ImportRecapPage, {
-      global: {
-        plugins: [router],
-      },
-    })
-
+    expect(api.getImportHistory).toHaveBeenCalledWith('import-1')
     expect(wrapper.text()).toContain('Import terminé')
-    expect(wrapper.text()).toContain('45') // imported
-    expect(wrapper.text()).toContain('Transactions importées')
-    expect(wrapper.text()).toContain('12') // categories
-    expect(wrapper.text()).toContain('Catégories')
-    expect(wrapper.text()).toContain('5') // duplicates
-    expect(wrapper.text()).toContain('Doublons ignorés')
-    expect(wrapper.text()).toContain('50') // total
-    expect(wrapper.text()).toContain('Total traité')
+    expect(wrapper.get('[data-testid="recap-imported"]').text()).toBe('45')
+    expect(wrapper.get('[data-testid="recap-duplicates"]').text()).toBe('5')
+    expect(wrapper.get('[data-testid="recap-total"]').text()).toBe('50')
+    expect(wrapper.get('[data-testid="recap-accounts"]').text()).toBe('1')
+    expect(wrapper.text()).toContain('export.csv')
+    expect(wrapper.text()).toContain('5 transactions en doublon')
+    // No invented « catégories » figure any more.
+    expect(wrapper.text()).not.toContain('Catégories')
   })
 
-  it('should display success icon', async () => {
-    const router = createRouterWithQuery({
-      imported: '10',
-      duplicates: '0',
-      total: '10',
-      categories: '5',
-    })
+  it('closes the flow: transactions it imported, accounts, history, a new import', async () => {
+    vi.mocked(api.getImportHistory).mockResolvedValue(history)
+    const wrapper = await mountPage()
 
-    await router.isReady()
-
-    const wrapper = mount(ImportRecapPage, {
-      global: {
-        plugins: [router],
-      },
-    })
-
-    // Check for success checkmark icon
-    expect(wrapper.find('.bg-green-100').exists()).toBe(true)
-    expect(wrapper.html()).toContain('M5 13l4 4L19 7') // checkmark path
+    const transactions = wrapper.get('[data-testid="recap-transactions"]')
+    expect(transactions.attributes('href')).toBe(
+      '/transactions?from=2024-01-03&to=2024-01-28&account=Compte+Courant'
+    )
+    expect(wrapper.get('[data-testid="back-link"]').attributes('href')).toBe(
+      '/accounts'
+    )
+    expect(
+      wrapper.get('[data-testid="recap-history"]').attributes('href')
+    ).toBe('/import/history')
+    expect(
+      wrapper.get('[data-testid="recap-new-import"]').attributes('href')
+    ).toBe('/import')
   })
 
-  it('should show info message when there are duplicates', async () => {
-    const router = createRouterWithQuery({
-      imported: '8',
-      duplicates: '2',
-      total: '10',
-      categories: '5',
-    })
+  it('stands in with a skeleton, then says when the import cannot be read', async () => {
+    let reject: (err: Error) => void = () => {}
+    vi.mocked(api.getImportHistory).mockReturnValue(
+      new Promise((_, r) => {
+        reject = r
+      })
+    )
+    const wrapper = await mountPage('missing')
+    expect(wrapper.find('[data-testid="recap-loading"]').exists()).toBe(true)
 
-    await router.isReady()
-
-    const wrapper = mount(ImportRecapPage, {
-      global: {
-        plugins: [router],
-      },
-    })
-
-    expect(wrapper.text()).toContain('2 transactions en doublon')
-    expect(wrapper.text()).toContain('automatiquement ignorées')
-  })
-
-  it('should not show info message when there are no duplicates', async () => {
-    const router = createRouterWithQuery({
-      imported: '10',
-      duplicates: '0',
-      total: '10',
-      categories: '5',
-    })
-
-    await router.isReady()
-
-    const wrapper = mount(ImportRecapPage, {
-      global: {
-        plugins: [router],
-      },
-    })
-
-    expect(wrapper.text()).not.toContain('transactions en doublon')
-  })
-
-  it('should have navigation buttons', async () => {
-    const router = createRouterWithQuery({
-      imported: '10',
-      duplicates: '0',
-      total: '10',
-      categories: '5',
-    })
-
-    await router.isReady()
-
-    const wrapper = mount(ImportRecapPage, {
-      global: {
-        plugins: [router],
-      },
-    })
-
-    expect(wrapper.text()).toContain('Nouvel import')
-    expect(wrapper.text()).toContain('Voir le dashboard')
-  })
-
-  it('should navigate to import page when clicking "Nouvel import"', async () => {
-    const router = createRouterWithQuery({
-      imported: '10',
-      duplicates: '0',
-      total: '10',
-      categories: '5',
-    })
-
-    await router.isReady()
-    const pushSpy = vi.spyOn(router, 'push')
-
-    const wrapper = mount(ImportRecapPage, {
-      global: {
-        plugins: [router],
-      },
-    })
-
-    const newImportButton = wrapper
-      .findAll('button')
-      .find(b => b.text().includes('Nouvel import'))
-    if (newImportButton) {
-      await newImportButton.trigger('click')
-    }
-
-    expect(pushSpy).toHaveBeenCalledWith({ name: 'import' })
-  })
-
-  it('should navigate to dashboard when clicking "Voir le dashboard"', async () => {
-    const router = createRouterWithQuery({
-      imported: '10',
-      duplicates: '0',
-      total: '10',
-      categories: '5',
-    })
-
-    await router.isReady()
-    const pushSpy = vi.spyOn(router, 'push')
-
-    const wrapper = mount(ImportRecapPage, {
-      global: {
-        plugins: [router],
-      },
-    })
-
-    const dashboardButton = wrapper
-      .findAll('button')
-      .find(b => b.text().includes('Voir le dashboard'))
-    if (dashboardButton) {
-      await dashboardButton.trigger('click')
-    }
-
-    expect(pushSpy).toHaveBeenCalledWith({ name: 'dashboard' })
-  })
-
-  it('should handle missing query parameters gracefully', async () => {
-    const router = createRouterWithQuery({})
-
-    await router.isReady()
-
-    const wrapper = mount(ImportRecapPage, {
-      global: {
-        plugins: [router],
-      },
-    })
-
-    // Should display 0 for all values
-    expect(wrapper.text()).toContain('0')
-    expect(wrapper.text()).toContain('Import terminé')
-  })
-
-  it('should use correct color styling for stats', async () => {
-    const router = createRouterWithQuery({
-      imported: '10',
-      duplicates: '5',
-      total: '15',
-      categories: '3',
-    })
-
-    await router.isReady()
-
-    const wrapper = mount(ImportRecapPage, {
-      global: {
-        plugins: [router],
-      },
-    })
-
-    // Check color classes
-    expect(wrapper.find('.bg-green-50').exists()).toBe(true) // imported
-    expect(wrapper.find('.bg-blue-50').exists()).toBe(true) // categories
-    expect(wrapper.find('.bg-amber-50').exists()).toBe(true) // duplicates
+    reject(new Error('Cet import est introuvable'))
+    await flushPromises()
+    expect(wrapper.get('[data-testid="recap-error"]').text()).toContain(
+      'introuvable'
+    )
+    expect(wrapper.find('[data-testid="recap-retry"]').exists()).toBe(true)
   })
 })

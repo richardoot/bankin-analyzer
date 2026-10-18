@@ -38,12 +38,22 @@
   import LegacyMigrationBanner from '@/components/settings/LegacyMigrationBanner.vue'
   import SettingsCard from '@/components/settings/SettingsCard.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
+  import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import IconClose from '@/components/icons/IconClose.vue'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
 
   const toast = useToast()
 
   const categories = ref<CategoryDto[]>([])
   const subcategories = ref<SubcategoryDto[]>([])
   const isLoadingCategories = ref(false)
+  const categoriesLoadFailed = ref(false)
 
   onMounted(async () => {
     await Promise.all([loadCategories(), loadSubcategories()])
@@ -52,13 +62,18 @@
   async function loadCategories(): Promise<void> {
     try {
       isLoadingCategories.value = true
+      categoriesLoadFailed.value = false
       categories.value = await api.getCategories()
     } catch (err) {
       console.error('Failed to load categories:', err)
-      toast.error('Erreur lors du chargement des catégories')
+      categoriesLoadFailed.value = true
     } finally {
       isLoadingCategories.value = false
     }
+  }
+
+  async function reloadAll(): Promise<void> {
+    await Promise.all([loadCategories(), loadSubcategories()])
   }
 
   async function loadSubcategories(): Promise<void> {
@@ -90,12 +105,14 @@
   type CategoryStateFilter = 'all' | 'legacy'
   const categorySearch = ref('')
   const categoryStateFilter = ref<CategoryStateFilter>('all')
-  const categoryStateOptions = computed<
-    { key: CategoryStateFilter; label: string }[]
-  >(() => [
-    { key: 'all', label: 'Toutes' },
-    ...(hasLegacy.value ? [{ key: 'legacy' as const, label: 'À migrer' }] : []),
-  ])
+  const categoryStateOptions = computed<SegmentedOption<CategoryStateFilter>[]>(
+    () => [
+      { value: 'all', label: 'Toutes' },
+      ...(hasLegacy.value
+        ? [{ value: 'legacy' as const, label: 'À migrer' }]
+        : []),
+    ]
+  )
 
   /** A category matches when its name does, or one of its subcategories'. */
   function matchesFilters(category: CategoryDto): boolean {
@@ -394,10 +411,11 @@
       description="Le catalogue impose les catégories ; à l'intérieur, vos sous-catégories restent les vôtres. Choisissez où chaque catégorie apparaît."
     >
       <template #action>
-        <button
-          type="button"
-          class="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-primary-200 px-4 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:w-auto dark:border-primary-800 dark:text-primary-300 dark:hover:bg-primary-900/20"
-          :disabled="isGeneratingIcons || missingIconCount === 0"
+        <BaseButton
+          variant="tinted"
+          class="w-full sm:w-auto"
+          :disabled="missingIconCount === 0"
+          :loading="isGeneratingIcons"
           :title="
             missingIconCount === 0
               ? 'Tout a une icône'
@@ -414,7 +432,7 @@
                 : `Générer les icônes (${missingIconCount})`
             }}
           </span>
-        </button>
+        </BaseButton>
       </template>
 
       <div v-if="isLoadingCategories && totalCategoryCount === 0" class="py-8">
@@ -422,6 +440,17 @@
           Chargement…
         </p>
       </div>
+
+      <InlineAlert
+        v-else-if="categoriesLoadFailed && totalCategoryCount === 0"
+        data-testid="categories-load-error"
+        retry-label="Réessayer"
+        retry-test-id="categories-retry"
+        :retrying="isLoadingCategories"
+        @retry="reloadAll"
+      >
+        Les catégories n'ont pas pu être chargées.
+      </InlineAlert>
 
       <div v-else class="space-y-6">
         <!-- Search + quick state filters -->
@@ -443,57 +472,33 @@
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
             </svg>
-            <input
+            <BaseField
               v-model="categorySearch"
               type="text"
+              size="sm"
               placeholder="Rechercher une catégorie ou une sous-catégorie…"
-              aria-label="Rechercher une catégorie"
-              class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-9 text-base text-gray-800 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 sm:py-2 sm:text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:placeholder-gray-500"
+              label="Rechercher une catégorie"
+              label-hidden
+              class="pl-9 pr-9"
             />
-            <button
+            <BaseIconButton
               v-if="categorySearch"
-              type="button"
-              aria-label="Effacer la recherche"
-              class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              size="sm"
+              label="Effacer la recherche"
+              class="absolute right-1 top-1/2 -translate-y-1/2"
               @click="categorySearch = ''"
             >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+              <IconClose />
+            </BaseIconButton>
           </div>
 
-          <div
-            class="flex shrink-0 rounded-lg border border-gray-200 p-0.5 sm:inline-flex dark:border-slate-700"
-            role="group"
-            aria-label="Filtrer les catégories par état"
-          >
-            <button
-              v-for="opt in categoryStateOptions"
-              :key="opt.key"
-              type="button"
-              :aria-pressed="categoryStateFilter === opt.key"
-              class="min-h-[40px] flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors sm:min-h-0 sm:flex-none"
-              :class="
-                categoryStateFilter === opt.key
-                  ? 'bg-primary-500 text-white dark:bg-primary-600'
-                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700'
-              "
-              @click="categoryStateFilter = opt.key"
-            >
-              {{ opt.label }}
-            </button>
-          </div>
+          <SegmentedControl
+            v-model="categoryStateFilter"
+            size="sm"
+            full-width
+            label="Filtrer les catégories par état"
+            :options="categoryStateOptions"
+          />
         </div>
 
         <!-- No-match state -->
@@ -504,7 +509,7 @@
           Aucune catégorie ne correspond.
           <button
             type="button"
-            class="ml-1 font-medium text-primary-600 hover:underline dark:text-primary-400"
+            class="ml-1 font-medium text-primary-700 hover:underline dark:text-primary-400"
             @click="clearCategoryFilters"
           >
             Réinitialiser les filtres
@@ -535,32 +540,21 @@
                 class="px-3 py-2.5 transition-colors hover:bg-gray-50 sm:py-2 dark:hover:bg-slate-800/50"
               >
                 <div class="flex min-w-0 items-center gap-2">
-                  <button
-                    type="button"
-                    class="shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-300"
+                  <BaseIconButton
+                    size="sm"
                     :aria-expanded="isExpanded(category.id)"
-                    :aria-label="
+                    :label="
                       isExpanded(category.id)
                         ? `Replier ${category.name}`
                         : `Déplier ${category.name}`
                     "
                     @click="toggleExpanded(category.id)"
                   >
-                    <svg
-                      class="h-4 w-4 transition-transform"
+                    <IconChevronRight
+                      class="transition-transform"
                       :class="isExpanded(category.id) ? 'rotate-90' : ''"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </button>
+                    />
+                  </BaseIconButton>
                   <CategoryIcon :icon="category.icon" :name="category.name">
                     <span class="text-sm text-gray-800 dark:text-gray-200">
                       {{ category.name }}
@@ -626,55 +620,45 @@
                   </div>
 
                   <div>
-                    <label
-                      :for="`category-name-${category.id}`"
-                      class="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                    >
-                      Nom
-                    </label>
                     <form
-                      class="flex flex-col gap-2 sm:flex-row sm:items-center"
+                      class="flex flex-col gap-2 sm:flex-row sm:items-end"
                       @submit.prevent="submitRename(category)"
                     >
-                      <input
-                        :id="`category-name-${category.id}`"
+                      <BaseField
+                        label="Nom"
+                        size="sm"
                         type="text"
                         maxlength="100"
-                        :value="renameDraftFor(category)"
+                        class="flex-1"
+                        :model-value="renameDraftFor(category)"
                         :disabled="renameSaving[category.id]"
                         data-testid="rename-input"
-                        class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                        @input="
-                          onRenameDraftChange(
-                            category.id,
-                            ($event.target as HTMLInputElement).value
-                          )
+                        @update:model-value="
+                          onRenameDraftChange(category.id, String($event))
                         "
                       />
                       <div class="flex gap-2">
-                        <button
+                        <BaseButton
                           type="submit"
-                          :disabled="
-                            !isRenameDirty(category) ||
-                            renameSaving[category.id]
-                          "
-                          class="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          size="sm"
+                          :disabled="!isRenameDirty(category)"
+                          :loading="renameSaving[category.id]"
                         >
                           {{
                             renameSaving[category.id]
                               ? 'Enregistrement…'
                               : 'Renommer'
                           }}
-                        </button>
-                        <button
+                        </BaseButton>
+                        <BaseButton
                           v-if="isRenameDirty(category)"
-                          type="button"
+                          variant="secondary"
+                          size="sm"
                           :disabled="renameSaving[category.id]"
-                          class="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-slate-700 dark:text-gray-200 dark:hover:bg-slate-600"
                           @click="cancelRename(category.id)"
                         >
                           Annuler
-                        </button>
+                        </BaseButton>
                       </div>
                     </form>
                     <p
@@ -711,11 +695,21 @@
 
                 <!-- Subcategories -->
                 <div v-if="acceptsSubcategories(category)">
-                  <h4
-                    class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                  >
+                  <SectionLabel as="h4" class="mb-1">
                     Sous-catégories
-                  </h4>
+                  </SectionLabel>
+                  <!-- The two attributes every calculation reads, defined
+                       where they are set — not only in a tooltip. -->
+                  <p
+                    v-if="kindOf(category) === 'EXPENSE'"
+                    class="mb-2 text-xs text-gray-500 dark:text-gray-400"
+                    data-testid="attribute-definitions"
+                  >
+                    Nature — Essentiel : dépense contrainte ; Plaisir : dépense
+                    choisie. Rythme — Engagé : continue tout seul, jamais déduit
+                    pendant une absence ; Variable : dépend de ce que vous
+                    faites, suspendu pendant une absence.
+                  </p>
                   <ul
                     v-if="subcategoriesFor(category.id).length > 0"
                     class="mb-2 flex flex-wrap gap-1.5"
@@ -737,24 +731,12 @@
                       <button
                         v-if="!isLockedSubcategory(sub)"
                         type="button"
-                        class="-mr-1 rounded-full p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                        class="relative -mr-1 rounded-full p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 pointer-coarse:before:absolute pointer-coarse:before:-inset-3 pointer-coarse:before:content-[''] dark:hover:bg-red-900/20 dark:hover:text-red-400"
                         :aria-label="`Supprimer la sous-catégorie ${sub.name}`"
                         :data-testid="`delete-subcategory-${sub.id}`"
                         @click="askDeleteSubcategory(sub)"
                       >
-                        <svg
-                          class="h-3 w-3"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
+                        <IconClose class="h-3.5 w-3.5" />
                       </button>
                     </li>
                   </ul>
@@ -766,25 +748,30 @@
                   </p>
 
                   <form
-                    class="flex flex-col gap-2 sm:flex-row"
+                    class="flex flex-col gap-2 sm:flex-row sm:items-end"
                     @submit.prevent="addSubcategory(category)"
                   >
-                    <input
-                      v-model="newSubcategoryNames[category.id]"
+                    <BaseField
+                      :model-value="newSubcategoryNames[category.id] ?? ''"
+                      size="sm"
                       type="text"
+                      class="flex-1"
                       :placeholder="`Ajouter une sous-catégorie à ${category.name}…`"
-                      :aria-label="`Nouvelle sous-catégorie de ${category.name}`"
-                      class="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                      :label="`Nouvelle sous-catégorie de ${category.name}`"
+                      label-hidden
+                      @update:model-value="
+                        newSubcategoryNames[category.id] = String($event)
+                      "
                     />
                     <template v-if="kindOf(category) === 'EXPENSE'">
-                      <select
-                        :value="natureDraftFor(category)"
-                        :aria-label="`Nature de la nouvelle sous-catégorie de ${category.name}`"
-                        class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                        @change="
-                          newSubcategoryNature[category.id] = (
-                            $event.target as HTMLSelectElement
-                          ).value as CategoryNature
+                      <BaseField
+                        as="select"
+                        size="sm"
+                        label="Nature"
+                        :model-value="natureDraftFor(category)"
+                        @update:model-value="
+                          newSubcategoryNature[category.id] =
+                            $event as CategoryNature
                         "
                       >
                         <option
@@ -794,15 +781,15 @@
                         >
                           {{ label }}
                         </option>
-                      </select>
-                      <select
-                        :value="rhythmDraftFor(category)"
-                        :aria-label="`Rythme de la nouvelle sous-catégorie de ${category.name}`"
-                        class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-                        @change="
-                          newSubcategoryRhythm[category.id] = (
-                            $event.target as HTMLSelectElement
-                          ).value as CategoryRhythm
+                      </BaseField>
+                      <BaseField
+                        as="select"
+                        size="sm"
+                        label="Rythme"
+                        :model-value="rhythmDraftFor(category)"
+                        @update:model-value="
+                          newSubcategoryRhythm[category.id] =
+                            $event as CategoryRhythm
                         "
                       >
                         <option
@@ -812,18 +799,16 @@
                         >
                           {{ label }}
                         </option>
-                      </select>
+                      </BaseField>
                     </template>
-                    <button
+                    <BaseButton
                       type="submit"
-                      :disabled="
-                        !newSubcategoryNames[category.id]?.trim() ||
-                        creatingSubcategory.has(category.id)
-                      "
-                      class="rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      size="sm"
+                      :disabled="!newSubcategoryNames[category.id]?.trim()"
+                      :loading="creatingSubcategory.has(category.id)"
                     >
                       Ajouter
-                    </button>
+                    </BaseButton>
                   </form>
                 </div>
 
@@ -831,14 +816,15 @@
                   v-if="isLegacyCategory(category)"
                   class="flex flex-wrap gap-2 border-t border-gray-200 pt-3 dark:border-slate-700"
                 >
-                  <button
-                    type="button"
+                  <BaseButton
+                    variant="danger-outline"
+                    size="sm"
+                    class="flex-1 sm:flex-none"
                     :data-testid="`delete-category-${category.id}`"
-                    class="min-h-[40px] flex-1 rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 sm:min-h-0 sm:flex-none dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
                     @click="askDelete(category)"
                   >
                     Supprimer
-                  </button>
+                  </BaseButton>
                 </div>
               </div>
             </li>
