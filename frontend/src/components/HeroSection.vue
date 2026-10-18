@@ -12,7 +12,7 @@
   const highlights = [
     {
       value: 'Chaque nuit',
-      label: 'Vos transactions arrivent toutes seules',
+      label: 'Une fois la banque connectée, vos transactions arrivent seules',
     },
     {
       value: '0 €',
@@ -70,10 +70,12 @@
         <p
           class="mx-auto mt-6 max-w-2xl text-lg text-gray-600 dark:text-gray-400 sm:text-xl"
         >
-          Connectez votre banque : chaque nuit, vos transactions sont
-          récupérées, classées d’après vos habitudes et vos soldes mis à jour.
-          Il ne reste qu’à suivre votre budget, vos étiquettes et vos
-          remboursements partagés.
+          Deux façons d’alimenter vos comptes : un export CSV Bankin, importé en
+          quatre écrans, ou votre banque connectée via Enable Banking — une
+          configuration guidée en quelques minutes, puis chaque nuit vos
+          transactions arrivent classées d’après vos habitudes et vos soldes
+          sont mis à jour. Il ne reste qu’à suivre votre budget, vos étiquettes
+          et vos remboursements partagés.
         </p>
 
         <!-- CTA Buttons -->

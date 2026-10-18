@@ -27,15 +27,15 @@
   const steps: Step[] = [
     {
       number: '1',
-      title: 'Connectez votre banque',
+      title: 'Connectez votre banque, ou importez un CSV',
       description:
-        'Vous vous identifiez chez votre banque, via le standard européen DSP2. Sans banque compatible, un export CSV Bankin fait l’affaire.',
+        'La connexion passe par Enable Banking (standard européen DSP2) et demande de créer votre propre application, guidé pas à pas depuis les réglages. Sans banque compatible, un export CSV Bankin fait l’affaire.',
     },
     {
       number: '2',
       title: 'Laissez tourner',
       description:
-        'Chaque nuit, les nouvelles transactions sont récupérées, classées d’après vos habitudes, et les soldes relevés. Un bouton relance tout à la demande.',
+        'Une banque connectée livre ses nouvelles transactions chaque nuit, classées d’après vos habitudes, soldes relevés ; un bouton relance tout à la demande. Un CSV se réimporte quand vous voulez, doublons détectés.',
     },
     {
       number: '3',
@@ -187,7 +187,8 @@
         <p
           class="mx-auto mt-4 max-w-2xl text-lg text-gray-600 dark:text-gray-400"
         >
-          Une connexion, puis plus rien à saisir
+          Un import CSV, ou une connexion bancaire à configurer une fois — puis
+          plus rien à saisir
         </p>
       </div>
 
