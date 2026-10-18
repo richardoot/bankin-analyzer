@@ -260,6 +260,89 @@ describe('TransactionsPage — optimistic updates', () => {
     })
   })
 
+  describe('smoothing an expense over several months', () => {
+    it('asks for a duration, then records it and badges the line', async () => {
+      const wrapper = await mountPage()
+      vi.mocked(api.updateTransaction).mockResolvedValue(
+        makeTx({ amortizationMonths: 24 })
+      )
+
+      await wrapper.find('[data-testid="open-amortization"]').trigger('click')
+      await flushPromises()
+      await wrapper
+        .find('[data-testid="amortization-confirm"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(api.updateTransaction).toHaveBeenCalledWith('tx-1', {
+        amortizationMonths: 24,
+      })
+      expect(mockToast.success).toHaveBeenCalledWith(
+        '« Cafe » étalé sur 24 mois'
+      )
+      expect(wrapper.find('[data-testid="amortization-modal"]').exists()).toBe(
+        false
+      )
+      expect(
+        wrapper.find('[data-testid="amortization-badge"]').text()
+      ).toContain('lissé · 24 mois')
+    })
+
+    it('keeps the dialog open on the server refusal, its message shown', async () => {
+      const wrapper = await mountPage()
+      vi.mocked(api.updateTransaction).mockRejectedValue(
+        new Error('Refusé : une raison du serveur')
+      )
+
+      await wrapper.find('[data-testid="open-amortization"]').trigger('click')
+      await flushPromises()
+      await wrapper
+        .find('[data-testid="amortization-confirm"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="amortization-error"]').text()
+      ).toContain('Refusé : une raison du serveur')
+      expect(mockToast.success).not.toHaveBeenCalled()
+    })
+
+    it('refuses up front a line carrying an exceptional tag, naming it', async () => {
+      setupDefaultMocks([
+        makeTx({
+          tags: [{ id: 'tag-1', name: 'Japon', color: null, icon: null }],
+        }),
+      ])
+      vi.mocked(api.getTags).mockResolvedValue([
+        { id: 'tag-1', name: 'Japon', isExceptional: true },
+      ] as Awaited<ReturnType<typeof api.getTags>>)
+      await router.replace({ query: {} })
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      await wrapper.find('[data-testid="open-amortization"]').trigger('click')
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="amortization-blocked"]').text()
+      ).toContain('« Japon »')
+      expect(
+        wrapper.find('[data-testid="amortization-confirm"]').exists()
+      ).toBe(false)
+    })
+  })
+
   describe('the lines of one recurring charge', () => {
     it('reads the series from the URL, names it in a chip, and asks for its lines', async () => {
       setupDefaultMocks()
@@ -678,6 +761,24 @@ describe('TransactionsPage — optimistic updates', () => {
       expect(api.getTransactions).toHaveBeenLastCalledWith(
         expect.objectContaining({ needsBankReview: true })
       )
+    })
+
+    it('narrows to the smoothed expenses, in a chip and in the URL', async () => {
+      const wrapper = await mountPage()
+      vi.mocked(api.getTransactions).mockClear()
+
+      await wrapper
+        .find('[data-testid="transactions-amortized-filter"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ amortized: true })
+      )
+      expect(router.currentRoute.value.query.amortized).toBe('1')
+      expect(
+        wrapper.find('[data-testid="active-filter-chips"]').text()
+      ).toContain('Lissées')
     })
 
     it('debounces the keyword search before calling the API', async () => {
@@ -1353,6 +1454,35 @@ describe('TransactionsPage — optimistic updates', () => {
       expect(
         wrapper.find('[data-testid="transactions-context-gross"]').exists()
       ).toBe(false)
+    })
+
+    it('adds the smoothed purchases a cell counts by a slice, and says why', async () => {
+      const wrapper = await mountAt({
+        category: 'cat-1',
+        from: '2026-08-01',
+        to: '2026-08-31',
+        exceptional: 'exclude',
+        also: 'tx-9',
+        label: 'Alimentation · août',
+        gross: '1',
+      })
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ categoryId: 'cat-1', alsoIds: ['tx-9'] })
+      )
+      const banner = wrapper.find('[data-testid="transactions-context"]')
+      expect(banner.text()).toContain('Alimentation · août')
+      expect(
+        wrapper.find('[data-testid="transactions-context-smoothed"]').text()
+      ).toContain('S’y ajoute un achat lissé')
+
+      await wrapper
+        .find('[data-testid="transactions-context-clear"]')
+        .trigger('click')
+      await flushPromises()
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ alsoIds: undefined })
+      )
     })
 
     it('reads « sans catégorie » as a choice of the category select', async () => {

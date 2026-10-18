@@ -317,6 +317,7 @@ describe('TransactionRow', () => {
         'Ajouter une note',
         'Ajouter un remboursement',
         'Ajouter une étiquette',
+        'Étaler sur plusieurs mois…',
         'Suivre comme abonnement',
       ])
 
@@ -431,6 +432,68 @@ describe('TransactionRow', () => {
       expect(line.text()).toContain('Vacances')
       // 12px, not the 10px of before.
       expect(line.find('span.rounded-full').classes()).toContain('text-xs')
+    })
+  })
+
+  describe('a smoothed purchase', () => {
+    it('says it in a badge that opens the smoothing dialog', async () => {
+      const wrapper = mountRow({
+        transaction: tx({ amount: -1300, amortizationMonths: 24 }),
+      })
+
+      const badge = wrapper.get('[data-testid="amortization-badge"]')
+      expect(badge.text()).toContain('lissé · 24 mois')
+      await badge.trigger('click')
+
+      expect(wrapper.emitted('open-amortization')).toHaveLength(1)
+      // The line takes its tags line for the badge alone.
+      expect(wrapper.get('[data-testid="row-tags"]').classes()).toContain(
+        'mt-1.5'
+      )
+    })
+
+    it('offers « Étaler » on an expense, on hover and focus alike', async () => {
+      const wrapper = mountRow()
+
+      const button = wrapper.get('[data-testid="open-amortization"]')
+      expect(button.classes()).toContain('group-focus-within:opacity-100')
+      await button.trigger('click')
+
+      expect(wrapper.emitted('open-amortization')).toHaveLength(1)
+      expect(wrapper.find('[data-testid="amortization-badge"]').exists()).toBe(
+        false
+      )
+    })
+
+    it('does not offer it on an income or a transfer', () => {
+      for (const transaction of [
+        tx({ type: 'INCOME', amount: 100 }),
+        tx({ type: 'TRANSFER', amount: -100 }),
+      ]) {
+        expect(
+          mountRow({ transaction })
+            .find('[data-testid="open-amortization"]')
+            .exists()
+        ).toBe(false)
+      }
+    })
+
+    it('names the current smoothing in the « … » menu', async () => {
+      const wrapper = mountRow(
+        { transaction: tx({ amortizationMonths: 36 }) },
+        { attachTo: document.body }
+      )
+      await wrapper
+        .get('[data-testid="row-menu"] button[aria-haspopup="menu"]')
+        .trigger('click')
+      await nextTick()
+
+      await wrapper
+        .get('[data-testid="row-menu-amortization"]')
+        .trigger('click')
+
+      expect(wrapper.emitted('open-amortization')).toHaveLength(1)
+      wrapper.unmount()
     })
   })
 
