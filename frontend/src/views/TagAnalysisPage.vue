@@ -365,7 +365,67 @@
         >
           Détail par catégorie
         </div>
-        <div class="overflow-x-auto">
+        <!-- Under md, one card per category: a four-column table scrolled
+             sideways in silence is not a reading. -->
+        <ul
+          class="divide-y divide-gray-100 md:hidden dark:divide-slate-700"
+          data-testid="category-cards"
+        >
+          <li
+            v-for="cat in analysis.byCategory"
+            :key="`card-${cat.categoryId}-${cat.type}`"
+            class="px-4 py-3"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <span
+                class="flex min-w-0 items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
+              >
+                <span v-if="cat.categoryIcon">{{ cat.categoryIcon }}</span>
+                <span class="truncate">{{ cat.categoryName }}</span>
+                <span class="shrink-0 text-xs text-gray-400"
+                  >({{ cat.transactionCount }})</span
+                >
+              </span>
+              <span
+                class="shrink-0 text-sm font-medium tabular-nums"
+                :class="
+                  cat.type === 'EXPENSE'
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-green-700 dark:text-green-400'
+                "
+              >
+                {{ formatCurrency(cat.amount) }}
+              </span>
+            </div>
+            <dl
+              v-if="analysis.baseline && cat.baselineAmount !== undefined"
+              class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-500 dark:text-gray-400"
+            >
+              <div class="flex gap-1">
+                <dt>En temps normal</dt>
+                <dd class="tabular-nums">
+                  {{ formatCurrency(cat.baselineAmount) }}
+                </dd>
+              </div>
+              <div v-if="cat.surplusAmount !== undefined" class="flex gap-1">
+                <dt>Surcoût</dt>
+                <dd
+                  class="font-semibold tabular-nums"
+                  :class="
+                    cat.surplusAmount >= 0
+                      ? 'text-amber-700 dark:text-amber-400'
+                      : 'text-green-700 dark:text-green-400'
+                  "
+                >
+                  {{ cat.surplusAmount >= 0 ? '+' : ''
+                  }}{{ formatCurrency(cat.surplusAmount) }}
+                </dd>
+              </div>
+            </dl>
+          </li>
+        </ul>
+
+        <div class="overflow-x-auto max-md:hidden">
           <table class="w-full text-sm">
             <thead>
               <tr
@@ -376,9 +436,11 @@
                 <template v-if="analysis.baseline">
                   <th
                     class="px-4 py-2 font-medium text-right whitespace-nowrap"
-                    :title="`Ce que vous dépensez habituellement dans cette catégorie sur ${analysis.baseline.eventDays} jour(s)`"
                   >
                     En temps normal
+                    <span class="block text-[10px] font-normal text-gray-400"
+                      >sur {{ analysis.baseline.eventDays }} jour(s)</span
+                    >
                   </th>
                   <th class="px-4 py-2 font-medium text-right">Surcoût</th>
                 </template>

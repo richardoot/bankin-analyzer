@@ -49,7 +49,22 @@
     <PageHeader
       title="Mon profil"
       subtitle="Gérez vos informations personnelles"
-    />
+    >
+      <!-- Leaving is not dangerous: it belongs with the page's actions,
+           not above the red zone where deleting the account lives. -->
+      <template #actions>
+        <BaseButton
+          variant="secondary"
+          class="w-full sm:w-auto"
+          :loading="loading"
+          data-testid="sign-out"
+          @click="handleSignOut"
+        >
+          <span v-if="loading">Déconnexion…</span>
+          <span v-else>Se déconnecter</span>
+        </BaseButton>
+      </template>
+    </PageHeader>
 
     <!-- Profile Card -->
     <BaseCard variant="raised" padding="lg">
@@ -62,8 +77,10 @@
         >
           {{ user?.email?.charAt(0).toUpperCase() || '?' }}
         </div>
-        <div>
-          <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
+        <div class="min-w-0">
+          <h2
+            class="break-all text-xl font-semibold text-gray-900 dark:text-gray-100"
+          >
             {{ user?.email || 'Utilisateur' }}
           </h2>
           <p class="text-gray-600 dark:text-gray-400">
@@ -73,10 +90,10 @@
       </div>
 
       <!-- Profile Info -->
-      <div class="space-y-6 py-8">
+      <div class="space-y-6 pt-8">
         <div>
           <p class="block text-sm font-medium text-gray-500 dark:text-gray-400">
-            Adresse email
+            Adresse e-mail
           </p>
           <p class="mt-1 text-lg text-gray-900 dark:text-gray-100">
             {{ user?.email }}
@@ -108,24 +125,10 @@
           <p
             class="mt-1 flex items-center gap-2 text-lg text-gray-900 dark:text-gray-100"
           >
-            <span
-              class="inline-flex h-2 w-2 rounded-full bg-primary-600"
-            ></span>
-            Email vérifié
+            <span class="inline-flex h-2 w-2 rounded-full bg-green-600"></span>
+            E-mail vérifié
           </p>
         </div>
-      </div>
-
-      <!-- Actions -->
-      <div class="border-t border-gray-200 dark:border-slate-700 pt-8">
-        <BaseButton
-          variant="danger-outline"
-          :loading="loading"
-          @click="handleSignOut"
-        >
-          <span v-if="loading">Déconnexion...</span>
-          <span v-else>Se déconnecter</span>
-        </BaseButton>
       </div>
     </BaseCard>
 

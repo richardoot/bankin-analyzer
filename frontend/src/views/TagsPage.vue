@@ -3,7 +3,7 @@
   import { useIsMobile } from '@/composables/useMediaQuery'
   import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
-  import { useRouter } from 'vue-router'
+  import { RouterLink } from 'vue-router'
   import { useTagsStore } from '@/stores/tags'
   import type { TagDto } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
@@ -11,165 +11,119 @@
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import BaseModal from '@/components/ui/BaseModal.vue'
   import IconPlus from '@/components/icons/IconPlus.vue'
   import IconChevronDown from '@/components/icons/IconChevronDown.vue'
+  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
   import IconPencil from '@/components/icons/IconPencil.vue'
   import IconTrash from '@/components/icons/IconTrash.vue'
-  import BaseField from '@/components/ui/BaseField.vue'
-  import BaseCheckbox from '@/components/ui/BaseCheckbox.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+  import TagForm from '@/components/tags/TagForm.vue'
+  import {
+    DEFAULT_TAG_COLOR,
+    emptyTagForm,
+    type TagFormValue,
+  } from '@/components/tags/tagFormModel'
 
-  const router = useRouter()
   const tagsStore = useTagsStore()
   const toast = useToast()
-
-  /** Preset colors offered when creating/editing a tag. */
-  const DEFAULT_COLOR = '#ef4444'
-  const COLORS = [
-    DEFAULT_COLOR,
-    '#f97316',
-    '#eab308',
-    '#22c55e',
-    '#14b8a6',
-    '#06b6d4',
-    '#6366f1',
-    '#a855f7',
-    '#ec4899',
-    '#64748b',
-  ]
-  /** Spoken names of the swatches: a hex code is not a name. */
-  const COLOR_NAMES: Record<string, string> = {
-    [DEFAULT_COLOR]: 'Rouge',
-    '#f97316': 'Orange',
-    '#eab308': 'Jaune',
-    '#22c55e': 'Vert',
-    '#14b8a6': 'Sarcelle',
-    '#06b6d4': 'Cyan',
-    '#6366f1': 'Indigo',
-    '#a855f7': 'Violet',
-    '#ec4899': 'Rose',
-    '#64748b': 'Gris',
-  }
 
   // Create form state
   // The creation form is a screen of controls on a phone; it folds
   // behind one button there and stays open on a desk.
   const isMobile = useIsMobile()
   const createOpen = ref(false)
-  const newName = ref('')
-  const newColor = ref<string>(DEFAULT_COLOR)
-  const newIsExceptional = ref(false)
-  const newEventStart = ref('')
-  const newEventEnd = ref('')
-  const newBudget = ref('')
+  const draft = ref<TagFormValue>(emptyTagForm())
   const creating = ref(false)
-
-  /**
-   * The envelope is a total for the whole project, never a monthly amount —
-   * a trip is decided once. Empty means "no envelope declared".
-   */
-  function parseBudget(raw: string): number | null {
-    const trimmed = raw.trim()
-    if (trimmed === '') return null
-    const parsed = Number(trimmed)
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
-  }
 
   /**
    * The event period is only meaningful for an exceptional tag, and only when
    * both bounds are known — a half-filled range would silently skew every
    * everyday average.
    */
-  function eventPeriod(
-    isExceptional: boolean,
-    start: string,
-    end: string
-  ): { eventStartDate: string | null; eventEndDate: string | null } {
+  function eventPeriod(value: TagFormValue): {
+    eventStartDate: string | null
+    eventEndDate: string | null
+  } {
+    const { isExceptional, eventStart: start, eventEnd: end } = value
     if (isExceptional && start && end && start <= end) {
       return { eventStartDate: start, eventEndDate: end }
     }
     return { eventStartDate: null, eventEndDate: null }
   }
 
+  /** The envelope only exists on an exceptional tag, and never below zero. */
+  function budgetOf(value: TagFormValue): number | null {
+    if (!value.isExceptional || value.budget === null) return null
+    return value.budget >= 0 ? value.budget : null
+  }
+
   async function createTag(): Promise<void> {
-    const name = newName.value.trim()
+    const name = draft.value.name.trim()
     if (!name || creating.value) return
     creating.value = true
-    const period = eventPeriod(
-      newIsExceptional.value,
-      newEventStart.value,
-      newEventEnd.value
-    )
+    const period = eventPeriod(draft.value)
+    const budget = budgetOf(draft.value)
     const created = await tagsStore.addTag({
       name,
-      color: newColor.value,
-      isExceptional: newIsExceptional.value,
+      color: draft.value.color,
+      isExceptional: draft.value.isExceptional,
       ...(period.eventStartDate && period.eventEndDate
         ? {
             eventStartDate: period.eventStartDate,
             eventEndDate: period.eventEndDate,
           }
         : {}),
-      ...(newIsExceptional.value && parseBudget(newBudget.value) !== null
-        ? { budgetAmount: parseBudget(newBudget.value) as number }
-        : {}),
+      ...(budget !== null ? { budgetAmount: budget } : {}),
     })
     creating.value = false
     if (created) {
-      newName.value = ''
-      newColor.value = DEFAULT_COLOR
-      newIsExceptional.value = false
-      newEventStart.value = ''
-      newEventEnd.value = ''
-      newBudget.value = ''
+      draft.value = emptyTagForm()
       createOpen.value = false
       toast.success(`Étiquette « ${created.name} » créée`)
     }
   }
 
-  // Edit state
-  const editingId = ref<string | null>(null)
-  const editName = ref('')
-  const editColor = ref<string>(DEFAULT_COLOR)
-  const editIsExceptional = ref(false)
-  const editEventStart = ref('')
-  const editEventEnd = ref('')
-  const editBudget = ref('')
+  // Edit state: the same form, in a dialog, so the card keeps its shape.
+  const editingTag = ref<TagDto | null>(null)
+  const editDraft = ref<TagFormValue>(emptyTagForm())
+  const savingEdit = ref(false)
 
   function startEdit(tag: TagDto): void {
-    editingId.value = tag.id
-    editName.value = tag.name
-    editColor.value = tag.color ?? DEFAULT_COLOR
-    editIsExceptional.value = tag.isExceptional
-    editEventStart.value = tag.eventStartDate ?? ''
-    editEventEnd.value = tag.eventEndDate ?? ''
-    editBudget.value = tag.budgetAmount === null ? '' : String(tag.budgetAmount)
+    editingTag.value = tag
+    editDraft.value = {
+      name: tag.name,
+      color: tag.color ?? DEFAULT_TAG_COLOR,
+      isExceptional: tag.isExceptional,
+      eventStart: tag.eventStartDate ?? '',
+      eventEnd: tag.eventEndDate ?? '',
+      budget: tag.budgetAmount,
+    }
   }
 
   function cancelEdit(): void {
-    editingId.value = null
+    editingTag.value = null
   }
 
-  async function saveEdit(id: string): Promise<void> {
-    const name = editName.value.trim()
-    if (!name) return
-    const period = eventPeriod(
-      editIsExceptional.value,
-      editEventStart.value,
-      editEventEnd.value
-    )
-    const ok = await tagsStore.updateTag(id, {
+  async function saveEdit(): Promise<void> {
+    const tag = editingTag.value
+    const name = editDraft.value.name.trim()
+    if (!tag || !name || savingEdit.value) return
+    savingEdit.value = true
+    const ok = await tagsStore.updateTag(tag.id, {
       name,
-      color: editColor.value,
-      isExceptional: editIsExceptional.value,
-      ...period,
+      color: editDraft.value.color,
+      isExceptional: editDraft.value.isExceptional,
+      ...eventPeriod(editDraft.value),
       // A tag that stops being exceptional stops being a project too.
-      budgetAmount: editIsExceptional.value
-        ? parseBudget(editBudget.value)
-        : null,
+      budgetAmount: budgetOf(editDraft.value),
     })
-    if (ok) editingId.value = null
+    savingEdit.value = false
+    if (ok) {
+      editingTag.value = null
+      toast.success(`Étiquette « ${name} » modifiée`)
+    }
   }
 
   /** "12 juil. – 26 juil. 2025" */
@@ -196,10 +150,6 @@
     deleting.value = false
     tagToDelete.value = null
     if (ok) toast.success(`Étiquette « ${tag.name} » supprimée`)
-  }
-
-  function openAnalysis(tag: TagDto): void {
-    router.push({ name: 'tag-analysis', params: { id: tag.id } })
   }
 
   // Only the initial fetch decides this: a failed creation is a toast, not
@@ -241,106 +191,25 @@
         />
       </button>
       <div v-show="!isMobile || createOpen" class="mt-3 md:mt-0">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <BaseField
-            v-model="newName"
-            size="sm"
-            type="text"
-            label="Nom de l'étiquette"
-            label-hidden
-            class="flex-1"
-            placeholder="Nom de l'étiquette (ex : Vacances Italie)"
-            @keyup.enter="createTag"
-          />
-          <div class="flex flex-wrap items-center gap-2 sm:gap-1.5">
-            <button
-              v-for="c in COLORS"
-              :key="c"
-              type="button"
-              :aria-pressed="newColor === c"
-              class="h-8 w-8 shrink-0 rounded-full border-2 transition-transform hover:scale-110 sm:h-6 sm:w-6"
-              :class="
-                newColor === c
-                  ? 'border-gray-900 dark:border-white'
-                  : 'border-transparent'
-              "
-              :style="{ backgroundColor: c }"
-              :aria-label="`Couleur ${COLOR_NAMES[c] ?? c}`"
-              @click="newColor = c"
-            ></button>
-          </div>
-          <BaseButton
-            :disabled="!newName.trim()"
-            :loading="creating"
-            @click="createTag"
-          >
-            Créer
-          </BaseButton>
-        </div>
-
-        <!-- Exceptional event settings -->
-        <div class="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-          <BaseCheckbox
-            v-model="newIsExceptional"
-            label="Dépense exceptionnelle"
-            description="Exclue des moyennes du quotidien"
-            data-testid="new-tag-exceptional"
-          />
-
-          <div v-if="newIsExceptional" class="mt-3 pl-6">
-            <p class="text-xs text-gray-500 dark:text-gray-400">
-              Période d'absence (facultatif) — pendant ces dates vos dépenses
-              habituelles sont suspendues. Renseignez-la pour un déplacement ou
-              des vacances ; laissez vide pour une fête à la maison.
-            </p>
-            <div class="mt-2 flex flex-wrap items-center gap-2">
-              <BaseField
-                v-model="newEventStart"
-                type="date"
-                size="sm"
-                label="Début de la période d'absence"
-                label-hidden
-                class="min-w-0 flex-1 sm:flex-none"
-              />
-              <span class="text-gray-400 text-sm">→</span>
-              <BaseField
-                v-model="newEventEnd"
-                type="date"
-                size="sm"
-                label="Fin de la période d'absence"
-                label-hidden
-                class="min-w-0 flex-1 sm:flex-none"
-              />
-            </div>
-
-            <div class="mt-3 flex flex-wrap items-center gap-2">
-              <label
-                for="new-tag-budget"
-                class="text-xs text-gray-500 dark:text-gray-400"
+        <h2
+          class="mb-3 hidden text-sm font-semibold text-gray-800 md:block dark:text-gray-200"
+        >
+          Nouvelle étiquette
+        </h2>
+        <TagForm v-model="draft" test-id="new-tag" @submit="createTag">
+          <template #actions>
+            <div class="flex justify-end">
+              <BaseButton
+                type="submit"
+                :disabled="!draft.name.trim()"
+                :loading="creating"
+                data-testid="create-tag"
               >
-                Enveloppe du projet (facultatif) — un total, pas un montant
-                mensuel
-              </label>
-              <div class="relative">
-                <input
-                  id="new-tag-budget"
-                  v-model="newBudget"
-                  type="number"
-                  min="0"
-                  step="10"
-                  placeholder="—"
-                  data-testid="new-tag-budget"
-                  class="w-28 pl-2 pr-6 py-1 text-sm text-right border border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 tabular-nums"
-                />
-                <span
-                  class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none"
-                >
-                  €
-                </span>
-              </div>
+                Créer
+              </BaseButton>
             </div>
-          </div>
-        </div>
+          </template>
+        </TagForm>
       </div>
     </BaseCard>
 
@@ -373,173 +242,37 @@
       à des transactions.
     </div>
 
-    <!-- Tag cards -->
+    <!-- Tag cards: an article, with its own link and its own actions —
+         not a button wrapped around blocks, with controls hidden until
+         hovered. -->
     <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <BaseCard
         v-for="tag in tagsStore.tags"
         :key="tag.id"
+        as="article"
         padding="sm"
-        class="group relative border border-transparent hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+        class="flex flex-col gap-2"
+        :data-testid="`tag-card-${tag.name}`"
       >
-        <!-- Edit mode -->
-        <div v-if="editingId === tag.id" class="space-y-2">
-          <BaseField
-            v-model="editName"
-            type="text"
-            size="sm"
-            label="Nom de l'étiquette"
-            label-hidden
-            @keyup.enter="saveEdit(tag.id)"
-            @keyup.escape="cancelEdit"
-          />
-          <div class="flex flex-wrap items-center gap-1">
-            <button
-              v-for="c in COLORS"
-              :key="c"
-              type="button"
-              :aria-label="`Couleur ${COLOR_NAMES[c] ?? c}`"
-              :aria-pressed="editColor === c"
-              class="h-7 w-7 shrink-0 rounded-full border-2 sm:h-5 sm:w-5"
-              :class="
-                editColor === c
-                  ? 'border-gray-900 dark:border-white'
-                  : 'border-transparent'
-              "
-              :style="{ backgroundColor: c }"
-              @click="editColor = c"
-            ></button>
-          </div>
-          <BaseCheckbox
-            v-model="editIsExceptional"
-            label="Dépense exceptionnelle"
-          />
-          <div v-if="editIsExceptional" class="space-y-1">
-            <p class="text-[11px] text-gray-400">
-              Période d'absence (facultatif)
-            </p>
-            <div class="flex items-center gap-1">
-              <BaseField
-                v-model="editEventStart"
-                type="date"
-                size="sm"
-                label="Début de la période d'absence"
-                label-hidden
-                class="min-w-0 flex-1"
-              />
-              <BaseField
-                v-model="editEventEnd"
-                type="date"
-                size="sm"
-                label="Fin de la période d'absence"
-                label-hidden
-                class="min-w-0 flex-1"
-              />
-            </div>
-            <p class="text-[11px] text-gray-400 pt-1">
-              Enveloppe du projet (total)
-            </p>
-            <div class="relative">
-              <input
-                v-model="editBudget"
-                type="number"
-                min="0"
-                step="10"
-                placeholder="—"
-                data-testid="edit-tag-budget"
-                class="w-full px-1.5 pr-6 py-1 border border-gray-300 dark:border-slate-600 rounded text-xs bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 tabular-nums text-right"
-                aria-label="Enveloppe du projet"
-              />
-              <span
-                class="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 pointer-events-none"
-              >
-                €
-              </span>
-            </div>
-          </div>
-          <div class="flex justify-end gap-2 pt-1">
-            <BaseButton variant="ghost" size="sm" @click="cancelEdit"
-              >Annuler</BaseButton
-            >
-            <BaseButton size="sm" @click="saveEdit(tag.id)"
-              >Enregistrer</BaseButton
-            >
-          </div>
-        </div>
-
-        <!-- Display mode -->
-        <template v-else>
-          <button
-            type="button"
-            class="w-full pr-16 text-left sm:pr-0"
-            @click="openAnalysis(tag)"
-          >
-            <div class="flex items-center gap-2">
-              <span
-                class="inline-block h-3 w-3 rounded-full shrink-0"
-                :style="{ backgroundColor: tag.color ?? '#9ca3af' }"
-              ></span>
-              <span
-                class="font-semibold text-gray-900 dark:text-gray-100 truncate"
-              >
-                {{ tag.name }}
-              </span>
-            </div>
-            <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              {{ tag.transactionCount }} transaction(s)
-            </p>
-            <div
-              v-if="tag.isExceptional"
-              class="mt-2 flex flex-wrap items-center gap-1.5"
-            >
-              <span
-                class="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400"
-                title="Exclue des moyennes du quotidien du tableau de bord"
-              >
-                Exceptionnel
-              </span>
-              <span
-                v-if="tag.eventStartDate && tag.eventEndDate"
-                class="text-[11px] text-gray-400"
-              >
-                {{ formatPeriod(tag.eventStartDate, tag.eventEndDate) }}
-              </span>
-              <span
-                v-if="tag.budgetAmount !== null"
-                :data-testid="`tag-budget-${tag.name}`"
-                class="inline-flex items-center rounded-full bg-primary-100 dark:bg-primary-900/40 px-2 py-0.5 text-[11px] font-medium text-primary-700 dark:text-primary-400 tabular-nums"
-                title="Enveloppe allouée au projet"
-              >
-                {{ formatCurrency(tag.budgetAmount) }}
-              </span>
-            </div>
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex min-w-0 items-center gap-2">
             <span
-              class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary-700 dark:text-primary-400"
+              class="inline-block h-3 w-3 shrink-0 rounded-full"
+              :style="{ backgroundColor: tag.color ?? '#9ca3af' }"
+            ></span>
+            <h3
+              class="truncate font-semibold text-gray-900 dark:text-gray-100"
+              :title="tag.name"
             >
-              Analyser
-              <svg
-                class="h-3 w-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </span>
-          </button>
-
-          <!-- Card actions -->
-          <div
-            class="absolute top-2 right-2 flex items-center gap-1 transition-opacity sm:top-3 sm:right-3 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100"
-          >
+              {{ tag.name }}
+            </h3>
+          </div>
+          <div class="flex shrink-0 items-center">
             <BaseIconButton
               size="sm"
               :label="`Modifier ${tag.name}`"
-              @click.stop="startEdit(tag)"
+              :data-testid="`edit-tag-${tag.name}`"
+              @click="startEdit(tag)"
             >
               <IconPencil />
             </BaseIconButton>
@@ -547,14 +280,81 @@
               size="sm"
               variant="danger"
               :label="`Supprimer ${tag.name}`"
-              @click.stop="tagToDelete = tag"
+              @click="tagToDelete = tag"
             >
               <IconTrash />
             </BaseIconButton>
           </div>
-        </template>
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+          {{ tag.transactionCount }} transaction(s)
+        </p>
+        <div
+          v-if="tag.isExceptional"
+          class="flex flex-wrap items-center gap-1.5"
+        >
+          <span
+            class="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+          >
+            Exceptionnel
+          </span>
+          <span
+            v-if="tag.eventStartDate && tag.eventEndDate"
+            class="text-[11px] text-gray-500 dark:text-gray-400"
+          >
+            {{ formatPeriod(tag.eventStartDate, tag.eventEndDate) }}
+          </span>
+          <span
+            v-if="tag.budgetAmount !== null"
+            :data-testid="`tag-budget-${tag.name}`"
+            class="inline-flex shrink-0 items-center rounded-full bg-primary-100 px-2 py-0.5 text-[11px] font-medium tabular-nums text-primary-700 dark:bg-primary-900/40 dark:text-primary-400"
+          >
+            Enveloppe {{ formatCurrency(tag.budgetAmount) }}
+          </span>
+        </div>
+        <RouterLink
+          :to="{ name: 'tag-analysis', params: { id: tag.id } }"
+          class="mt-auto inline-flex min-h-[44px] items-center gap-1 self-start text-sm font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
+          :data-testid="`analyse-tag-${tag.name}`"
+        >
+          Analyser
+          <IconChevronRight class="h-3.5 w-3.5" />
+        </RouterLink>
       </BaseCard>
     </div>
+
+    <!-- Edit: the same form as the creation, in a dialog -->
+    <BaseModal
+      :open="editingTag !== null"
+      :title="editingTag ? `Modifier « ${editingTag.name} »` : ''"
+      :closable="!savingEdit"
+      data-testid="edit-tag-modal"
+      @close="cancelEdit"
+    >
+      <TagForm
+        v-if="editingTag"
+        v-model="editDraft"
+        test-id="edit-tag"
+        @submit="saveEdit"
+      />
+      <template #footer>
+        <BaseButton
+          variant="secondary"
+          :disabled="savingEdit"
+          @click="cancelEdit"
+        >
+          Annuler
+        </BaseButton>
+        <BaseButton
+          :disabled="!editDraft.name.trim()"
+          :loading="savingEdit"
+          data-testid="save-tag"
+          @click="saveEdit"
+        >
+          Enregistrer
+        </BaseButton>
+      </template>
+    </BaseModal>
 
     <ConfirmDialog
       :open="tagToDelete !== null"
