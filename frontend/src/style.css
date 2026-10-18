@@ -74,6 +74,18 @@
   --tab-bar-space: 0px;
 }
 
+/*
+ * Native controls follow the theme: without it a scroll area in dark mode
+ * (a modal body, a bounded list) draws the browser's light scrollbar, a
+ * white strip down the side of a slate panel.
+ */
+:root {
+  color-scheme: light;
+}
+:root.dark {
+  color-scheme: dark;
+}
+
 @media (width < 64rem) {
   :root:has([data-tab-bar]) {
     --tab-bar-space: calc(3.5rem + env(safe-area-inset-bottom));
