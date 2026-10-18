@@ -37,6 +37,19 @@ describe('BaseModal', () => {
     expect(dialog()?.textContent).toContain('Un sous-titre')
   })
 
+  it('leaves room in its scroll area for a ring on edge-to-edge content', () => {
+    mountModal({}, { default: '<p data-testid="body-content">Corps</p>' })
+
+    const scroller = document.body.querySelector(
+      '[data-testid="body-content"]'
+    )?.parentElement
+    // A scroll area clips its overflow: the gutter keeps a 2px ring plus
+    // its 1px offset visible, the negative margin keeps the content in place.
+    expect(scroller?.classList.contains('overflow-y-auto')).toBe(true)
+    expect(scroller?.classList.contains('p-1')).toBe(true)
+    expect(scroller?.classList.contains('-m-1')).toBe(true)
+  })
+
   it('hands its attributes to the dialog element', () => {
     mount(BaseModal, {
       props: { open: true, title: 'T' },

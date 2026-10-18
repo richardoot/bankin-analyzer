@@ -220,7 +220,7 @@
       </div>
       <div
         v-else
-        class="space-y-1 max-h-72 overflow-y-auto pr-1 -mr-1 transition-opacity"
+        class="-m-1 max-h-72 space-y-1 overflow-y-auto p-1 transition-opacity"
         :class="{ 'opacity-60': isLoading }"
       >
         <div
