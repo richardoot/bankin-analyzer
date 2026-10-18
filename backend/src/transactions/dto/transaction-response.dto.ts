@@ -88,6 +88,14 @@ export class TransactionResponseDto {
   @ApiProperty({ type: Number, nullable: true, minimum: 2, maximum: 60 })
   amortizationMonths!: number | null
 
+  /**
+   * The one smoothing duration proposed for its subcategory (High-tech 24,
+   * Maison et déco 48, Entretien et réparation 12…), 12 when the
+   * subcategory says nothing. Expenses only.
+   */
+  @ApiProperty({ type: Number, required: false, minimum: 2, maximum: 60 })
+  suggestedAmortizationMonths?: number
+
   /** Category ID */
   categoryId?: string | null
 

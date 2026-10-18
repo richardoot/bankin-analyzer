@@ -36,10 +36,11 @@ import { PaginatedTransactionsResponseDto } from './dto/paginated-transactions-r
 import { createPaginationMeta } from '../common/dto/pagination.dto'
 import { SupabaseGuard, CurrentUser } from '../auth'
 import type { User, TransactionType, Transaction } from '../generated/prisma'
+import { suggestedAmortizationMonths } from './smoothing-suggestions'
 
 type TransactionWithRelations = Transaction & {
   category?: { name: string; icon?: string | null }
-  subcategoryRef?: { id: string; name: string }
+  subcategoryRef?: { id: string; name: string; catalogKey?: string | null }
   accountRef: { name: string }
   settlementsAsIncome?: {
     id: string
@@ -109,6 +110,13 @@ export class TransactionsController {
       note: tx.note,
       isPointed: tx.isPointed,
       amortizationMonths: tx.amortizationMonths,
+      // The duration proposed for its subcategory, by catalogue key: the
+      // smoothing dialog opens on it. An expense only.
+      ...(tx.type === 'EXPENSE' && {
+        suggestedAmortizationMonths: suggestedAmortizationMonths(
+          tx.subcategoryRef?.catalogKey
+        ),
+      }),
       categoryId: tx.categoryId,
       categoryName: tx.category?.name,
       subcategoryId: tx.subcategoryId,

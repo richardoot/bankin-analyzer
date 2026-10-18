@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { TransactionsController } from './transactions.controller'
 import { TransactionsService } from './transactions.service'
+import { SmoothingSuggestionsService } from './smoothing-suggestions.service'
 import { CategoriesModule } from '../categories/categories.module'
 import { SubcategoriesModule } from '../subcategories/subcategories.module'
 import { AccountsModule } from '../accounts/accounts.module'
@@ -14,7 +15,7 @@ import { AiSuggestionsModule } from '../ai-suggestions/ai-suggestions.module'
     AiSuggestionsModule,
   ],
   controllers: [TransactionsController],
-  providers: [TransactionsService],
-  exports: [TransactionsService],
+  providers: [TransactionsService, SmoothingSuggestionsService],
+  exports: [TransactionsService, SmoothingSuggestionsService],
 })
 export class TransactionsModule {}

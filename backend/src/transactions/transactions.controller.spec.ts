@@ -1014,6 +1014,27 @@ describe('TransactionsController', () => {
         { amortizationMonths: 24 }
       )
     })
+
+    it('proposes the duration of its subcategory, to an expense only', async () => {
+      mockTransactionsService.update.mockResolvedValueOnce({
+        ...mockTransaction,
+        subcategoryRef: {
+          id: 'sub-home',
+          name: 'Maison et déco',
+          catalogKey: 'shopping.home',
+        },
+      })
+      const home = await controller.update(mockUser, mockTransaction.id, {})
+      mockTransactionsService.update.mockResolvedValueOnce({
+        ...mockTransaction,
+        amount: new Decimal(2000),
+        type: TransactionType.INCOME,
+      })
+      const salary = await controller.update(mockUser, mockTransaction.id, {})
+
+      expect(home.suggestedAmortizationMonths).toBe(48)
+      expect(salary.suggestedAmortizationMonths).toBeUndefined()
+    })
   })
 
   describe('delete', () => {
