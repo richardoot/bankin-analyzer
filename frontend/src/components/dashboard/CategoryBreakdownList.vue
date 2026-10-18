@@ -1,7 +1,11 @@
 <script setup lang="ts">
   import { computed, ref } from 'vue'
   import { useRouter } from 'vue-router'
-  import { UNCATEGORIZED_CATEGORY_ID, type CategoryDataDto } from '@/lib/api'
+  import {
+    UNCATEGORIZED_CATEGORY_ID,
+    type CategoryDataDto,
+    type SubcategoryDataDto,
+  } from '@/lib/api'
   import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
@@ -65,6 +69,27 @@
       gross: true,
       label: cat.category,
     })
+  }
+
+  /**
+   * A subcategory line opens the rows it sums — by the subcategory's id,
+   * `none` for the line of the rows filed under none. Its figure counts
+   * every row, events included, so the link never narrows on them.
+   */
+  function subcategoryLink(cat: CategoryDataDto, sub: SubcategoryDataDto) {
+    return transactionsLink({
+      type: 'EXPENSE',
+      categoryId: linkCategoryId(cat),
+      subcategoryId: sub.subcategoryId ?? NO_CATEGORY,
+      from: props.window?.from,
+      to: props.window?.to,
+      gross: true,
+      label: `${cat.category} · ${subcategoryName(sub)}`,
+    })
+  }
+
+  function subcategoryName(sub: SubcategoryDataDto): string {
+    return sub.subcategory || 'sans sous-catégorie'
   }
 
   function openMonth(cat: CategoryDataDto, month: string): void {
@@ -258,8 +283,9 @@
           <div class="space-y-1">
             <div
               v-for="sub in cat.subcategories"
-              :key="sub.subcategory || '(sans sous-catégorie)'"
-              class="flex items-center gap-3 px-3 py-1.5 rounded text-sm bg-white dark:bg-slate-900"
+              :key="sub.subcategoryId ?? '(sans sous-catégorie)'"
+              class="flex items-center gap-3 py-1.5 pl-3 pr-1 rounded text-sm bg-white dark:bg-slate-900"
+              :data-testid="`subcategory-line-${cat.category}-${sub.subcategory || 'none'}`"
             >
               <span
                 v-if="sub.icon"
@@ -286,6 +312,13 @@
               >
                 {{ formatCurrency(sub.averagePerMonth) }}/mois
               </span>
+              <TransactionsLink
+                :to="subcategoryLink(cat, sub)"
+                :subject="`${cat.category} · ${subcategoryName(sub)}`"
+                icon-only
+                class="-my-1"
+                :data-testid="`subcategory-link-${cat.category}-${sub.subcategory || 'none'}`"
+              />
             </div>
           </div>
         </div>

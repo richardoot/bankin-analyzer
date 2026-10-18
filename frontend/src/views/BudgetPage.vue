@@ -419,6 +419,16 @@
     )
   }
 
+  /** The whole window the statistics cover, behind the subcategory lines. */
+  const breakdownWindow = computed(() => {
+    const range = referenceDateRange.value
+    if (!range) return null
+    return {
+      from: range.startDate.slice(0, 10),
+      to: range.endDate.slice(0, 10),
+    }
+  })
+
   /** The comparison months, behind « Historique ». */
   const historicalWindow = computed(() => {
     const range = comparisonRange.value
@@ -1265,6 +1275,7 @@
             :historical-window="historicalWindow"
             :actual-window="actualWindow"
             :month-keys="statistics?.monthLabels ?? []"
+            :breakdown-window="breakdownWindow"
             @select-month="ym => openCategoryMonth(cat, ym)"
             @toggle-expand="toggleCategoryExpanded(cat.categoryId)"
             @update-budget="value => updateBudgetInput(cat.categoryId, value)"

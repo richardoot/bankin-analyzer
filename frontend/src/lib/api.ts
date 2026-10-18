@@ -744,6 +744,9 @@ export interface MonthlyDataDto {
 }
 
 export interface SubcategoryDataDto {
+  /** The subcategory this line sums, or null for the rows filed under none. */
+  subcategoryId: string | null
+  /** Its name; empty for none. */
   subcategory: string
   icon?: string | null
   amount: number
@@ -987,6 +990,9 @@ export interface UpdateBudgetPlanDto {
 }
 
 export interface SubcategoryAverageDto {
+  /** The subcategory this line sums, or null for the rows filed under none. */
+  subcategoryId: string | null
+  /** Its name; empty for none. */
   subcategory: string
   totalAmount: number
   transactionCount: number

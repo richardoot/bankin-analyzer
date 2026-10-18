@@ -35,13 +35,15 @@ describe('CategoryBreakdownList', () => {
       monthlyAmounts: [200, 250, 150],
       subcategories: [
         {
+          subcategoryId: 'sub-courses',
           subcategory: 'Courses',
           amount: 400,
           transactionCount: 8,
           averagePerMonth: 133.33,
         },
         {
-          subcategory: 'Restaurant',
+          subcategoryId: null,
+          subcategory: '',
           amount: 200,
           transactionCount: 4,
           averagePerMonth: 66.66,
@@ -103,7 +105,7 @@ describe('CategoryBreakdownList', () => {
 
     expect(wrapper.text()).toContain('Sous-catégories')
     expect(wrapper.text()).toContain('Courses')
-    expect(wrapper.text()).toContain('Restaurant')
+    expect(wrapper.text()).toContain('(sans sous-catégorie)')
     expect(wrapper.text()).toContain('Évolution mensuelle')
     expect(wrapper.find('.apexcharts-mock').exists()).toBe(true)
   })
@@ -331,6 +333,39 @@ describe('CategoryBreakdownList', () => {
       ).toContain('category=none')
       // Outside the toggle: following the link does not expand the row.
       expect(wrapper.text()).not.toContain('Sous-catégories')
+    })
+
+    it('links each subcategory line to its rows by id, « none » for the unfiled', async () => {
+      const wrapper = mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
+        props: {
+          categories,
+          monthLabels,
+          total: 900,
+          mode: 'everyday',
+          window: { from: '2024-01-01', to: '2024-03-31' },
+        },
+      })
+      await wrapper
+        .find('[data-testid="category-row-Alimentation"]')
+        .trigger('click')
+
+      expect(
+        wrapper
+          .get('[data-testid="subcategory-link-Alimentation-Courses"]')
+          .attributes('href')
+      ).toBe(
+        '/transactions?type=EXPENSE&category=cat-1&subcategory=sub-courses&from=2024-01-01&to=2024-03-31&label=Alimentation+%C2%B7+Courses&gross=1'
+      )
+      const none = wrapper.get(
+        '[data-testid="subcategory-link-Alimentation-none"]'
+      )
+      expect(none.attributes('href')).toContain('subcategory=none')
+      expect(none.attributes('aria-label')).toBe(
+        'Voir les transactions de Alimentation · sans sous-catégorie'
+      )
+      // The line's figure counts the events too: no narrowing on them.
+      expect(none.attributes('href')).not.toContain('exceptional')
     })
 
     it('opens the month a bar of the drill-down chart stands for', async () => {

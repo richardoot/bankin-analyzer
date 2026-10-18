@@ -269,6 +269,7 @@ describe('BudgetPage', () => {
             ...sampleStatistics.expensesByCategory[0]!,
             subcategories: [
               {
+                subcategoryId: 'sub-courses',
                 subcategory: 'Courses',
                 totalAmount: 250,
                 transactionCount: 4,
@@ -1516,6 +1517,70 @@ describe('BudgetPage', () => {
       expect(link.attributes('aria-label')).toBe(
         'Voir les transactions de Alimentation · plan'
       )
+    })
+
+    it('links each subcategory line to its rows over the statistics window, « none » included', async () => {
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...sampleStatistics,
+        periodMonths: 7,
+        monthLabels: ['2026-06', '2026-07', '2026-08'],
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            totalAmount: 900,
+            transactionCount: 12,
+            averagePerMonth: 128,
+            subcategories: [
+              {
+                subcategoryId: 'sub-courses',
+                subcategory: 'Courses',
+                totalAmount: 800,
+                transactionCount: 10,
+                averagePerMonth: 114,
+              },
+              {
+                subcategoryId: null,
+                subcategory: '',
+                totalAmount: 100,
+                transactionCount: 2,
+                averagePerMonth: 14,
+              },
+            ],
+          },
+        ],
+      })
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      await wrapper
+        .get('[data-testid="budget-row-Alimentation"]')
+        .find('button')
+        .trigger('click')
+
+      const named = wrapper.get(
+        '[data-testid="budget-subcategory-link-Alimentation-Courses"]'
+      )
+      expect(JSON.parse(named.attributes('data-to') ?? '{}')).toEqual({
+        path: '/transactions',
+        query: {
+          type: 'EXPENSE',
+          category: 'cat-food',
+          subcategory: 'sub-courses',
+          from: '2026-06-01',
+          to: '2026-12-31',
+          label: 'Alimentation · Courses',
+          gross: '1',
+        },
+      })
+      const none = wrapper.get(
+        '[data-testid="budget-subcategory-link-Alimentation-none"]'
+      )
+      expect(
+        JSON.parse(none.attributes('data-to') ?? '{}').query
+      ).toMatchObject({
+        subcategory: 'none',
+        label: 'Alimentation · sans sous-catégorie',
+      })
     })
 
     it('opens a month from a bar of the expenses chart', async () => {
