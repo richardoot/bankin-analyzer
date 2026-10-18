@@ -1,7 +1,12 @@
 <script setup lang="ts">
-  import { computed, ref, useId, watch } from 'vue'
-  import { useModalA11y } from '@/composables/useModalA11y'
+  import { computed, ref, watch } from 'vue'
+  import BaseModal from '@/components/ui/BaseModal.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
+  import IconTrash from '@/components/icons/IconTrash.vue'
+  import { useIsMobile } from '@/composables/useMediaQuery'
   import { api } from '@/lib/api'
   import type { BudgetPlanSummaryDto } from '@/lib/api'
   import { formatCurrency, formatDate } from '@/lib/formatters'
@@ -18,13 +23,12 @@
     (e: 'deleted', planId: string): void
   }>()
 
-  // Escape closes, Tab stays inside, focus returns to the opener after.
-  const modalPanelRef = ref<HTMLElement | null>(null)
-  useModalA11y({
-    isOpen: () => props.open,
-    onClose: () => onClose(),
-    panel: modalPanelRef,
-  })
+  /**
+   * Six columns do not fit in 358px: under `md` each plan is a card that
+   * says the same things on three lines, with its own open and delete
+   * controls, instead of a table whose total and bin sit off screen.
+   */
+  const isMobile = useIsMobile()
 
   const plans = ref<BudgetPlanSummaryDto[]>([])
   const isLoading = ref(false)
@@ -32,7 +36,6 @@
   const deletingId = ref<string | null>(null)
   /** The plan the confirmation is asking about. */
   const planToDelete = ref<BudgetPlanSummaryDto | null>(null)
-  const titleId = useId()
 
   type Status = 'past' | 'current' | 'future'
 
@@ -152,202 +155,177 @@
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      v-if="open"
-      ref="modalPanelRef"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-      data-testid="budget-history-modal"
-      role="dialog"
-      aria-modal="true"
-      :aria-labelledby="titleId"
-      @click.self="onClose"
+  <BaseModal
+    :open="open"
+    title="Historique des budgets"
+    max-width="2xl"
+    data-testid="budget-history-modal"
+    @close="onClose"
+  >
+    <p v-if="isLoading" class="py-8 text-sm text-gray-500 dark:text-gray-400">
+      Chargement…
+    </p>
+    <InlineAlert v-else-if="error" retry-label="Réessayer" @retry="loadPlans">
+      {{ error }}
+    </InlineAlert>
+    <p
+      v-else-if="plans.length === 0"
+      class="py-12 text-center text-sm text-gray-500 dark:text-gray-400"
     >
-      <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-3xl max-h-[90dvh] flex flex-col"
+      Aucun budget enregistré pour l'instant.
+    </p>
+
+    <!-- Phone: one card per plan -->
+    <ul v-else-if="isMobile" class="space-y-2" data-testid="history-cards">
+      <li
+        v-for="plan in sortedPlans"
+        :key="plan.id"
+        :data-testid="`history-row-${plan.id}`"
+        :aria-current="plan.id === activePlanId ? 'true' : undefined"
+        class="flex items-start gap-2 rounded-lg border p-3"
+        :class="
+          plan.id === activePlanId
+            ? 'border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-900/20'
+            : 'border-gray-200 dark:border-slate-700'
+        "
       >
-        <div
-          class="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700"
+        <button
+          type="button"
+          class="min-w-0 flex-1 text-left"
+          :aria-label="`Afficher le budget ${plan.name}`"
+          @click="selectPlan(plan.id)"
         >
-          <h2
-            :id="titleId"
-            class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-          >
-            Historique des budgets
-          </h2>
-          <button
-            type="button"
-            aria-label="Fermer"
-            class="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
-            @click="onClose"
-          >
-            <svg
-              class="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <span class="flex items-center gap-2">
+            <span
+              class="truncate font-medium text-gray-900 dark:text-gray-100"
+              :title="plan.name"
             >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <div class="flex-1 overflow-y-auto">
-          <div
-            v-if="isLoading"
-            class="px-5 py-8 text-sm text-gray-500 dark:text-gray-400"
-          >
-            Chargement…
-          </div>
-          <div
-            v-else-if="error"
-            role="alert"
-            class="m-5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 py-2 rounded-lg text-sm"
-          >
-            {{ error }}
-          </div>
-          <div
-            v-else-if="plans.length === 0"
-            class="px-5 py-12 text-center text-sm text-gray-500 dark:text-gray-400"
-          >
-            Aucun budget enregistré pour l'instant.
-          </div>
-          <table v-else class="w-full text-sm">
-            <thead
-              class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800/40"
+              {{ plan.name }}
+            </span>
+            <span
+              class="inline-block shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
+              :class="statusClass(planStatus(plan))"
             >
-              <tr>
-                <th class="text-left px-5 py-2">Nom</th>
-                <th class="text-left px-3 py-2">Plage</th>
-                <th class="text-center px-3 py-2">Statut</th>
-                <th class="text-right px-3 py-2">Mois</th>
-                <th class="text-right px-3 py-2">Total budgété</th>
-                <th class="px-3 py-2 w-10">
-                  <span class="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
-              <tr
-                v-for="plan in sortedPlans"
-                :key="plan.id"
-                :data-testid="`history-row-${plan.id}`"
-                tabindex="0"
-                :aria-current="plan.id === activePlanId ? 'true' : undefined"
-                :aria-label="`Afficher le budget ${plan.name}`"
-                class="cursor-pointer transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-500"
-                :class="
-                  plan.id === activePlanId
-                    ? 'bg-indigo-50 dark:bg-indigo-900/20'
-                    : 'hover:bg-gray-50 dark:hover:bg-slate-800/40'
-                "
-                @click="selectPlan(plan.id)"
-                @keydown.enter.self.prevent="selectPlan(plan.id)"
-                @keydown.space.self.prevent="selectPlan(plan.id)"
-              >
-                <td
-                  class="px-5 py-3 font-medium text-gray-900 dark:text-gray-100"
-                >
-                  {{ plan.name }}
-                  <span
-                    v-if="plan.id === activePlanId"
-                    class="ml-1.5 text-xs text-indigo-600 dark:text-indigo-400"
-                  >
-                    (affiché)
-                  </span>
-                </td>
-                <td
-                  class="px-3 py-3 text-gray-600 dark:text-gray-400 tabular-nums"
-                >
-                  {{ formatRange(plan.startDate, plan.endDate) }}
-                </td>
-                <td class="px-3 py-3 text-center">
-                  <span
-                    class="inline-block px-2 py-0.5 text-xs font-medium rounded-full"
-                    :class="statusClass(planStatus(plan))"
-                  >
-                    {{ statusLabel(planStatus(plan)) }}
-                  </span>
-                </td>
-                <td
-                  class="px-3 py-3 text-right text-gray-600 dark:text-gray-400 tabular-nums"
-                >
-                  {{ plan.monthCount }}
-                </td>
-                <td
-                  class="px-3 py-3 text-right text-gray-900 dark:text-gray-100 tabular-nums font-medium"
-                >
-                  {{ formatCurrency(plan.totalAmount) }}
-                </td>
-                <td class="px-3 py-3 text-right">
-                  <button
-                    type="button"
-                    :data-testid="`delete-row-${plan.id}`"
-                    class="p-1.5 rounded text-gray-400 hover:text-red-600 dark:text-gray-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-wait"
-                    :disabled="deletingId === plan.id"
-                    :aria-label="`Supprimer le budget ${plan.name}`"
-                    @click.stop="onDelete(plan)"
-                  >
-                    <svg
-                      v-if="deletingId === plan.id"
-                      class="animate-spin h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        class="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        stroke-width="4"
-                      />
-                      <path
-                        class="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    <svg
-                      v-else
-                      class="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"
-                      />
-                    </svg>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div
-          class="flex items-center justify-end px-5 py-3 border-t border-gray-100 dark:border-slate-700"
+              {{ statusLabel(planStatus(plan)) }}
+            </span>
+          </span>
+          <span
+            class="mt-1 block text-sm text-gray-600 tabular-nums dark:text-gray-400"
+          >
+            {{ formatRange(plan.startDate, plan.endDate) }}
+          </span>
+          <span
+            class="mt-1 block text-sm text-gray-600 tabular-nums dark:text-gray-400"
+          >
+            {{ plan.monthCount }} mois ·
+            <span class="font-medium text-gray-900 dark:text-gray-100">
+              {{ formatCurrency(plan.totalAmount) }}
+            </span>
+            <span
+              v-if="plan.id === activePlanId"
+              class="ml-1.5 text-xs text-indigo-600 dark:text-indigo-400"
+            >
+              (affiché)
+            </span>
+          </span>
+        </button>
+        <BaseIconButton
+          size="sm"
+          variant="danger"
+          :label="`Supprimer le budget ${plan.name}`"
+          :data-testid="`delete-row-${plan.id}`"
+          :loading="deletingId === plan.id"
+          @click="onDelete(plan)"
         >
-          <button
-            type="button"
-            class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
-            @click="onClose"
+          <IconTrash />
+        </BaseIconButton>
+      </li>
+    </ul>
+
+    <!-- Desk: the table -->
+    <table v-else class="w-full text-sm">
+      <thead
+        class="bg-gray-50 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:bg-slate-800/40 dark:text-gray-400"
+      >
+        <tr>
+          <th class="px-3 py-2 text-left">Nom</th>
+          <th class="px-3 py-2 text-left">Plage</th>
+          <th class="px-3 py-2 text-center">Statut</th>
+          <th class="px-3 py-2 text-right">Mois</th>
+          <th class="px-3 py-2 text-right">Total budgété</th>
+          <th class="w-10 px-3 py-2">
+            <span class="sr-only">Actions</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100 dark:divide-slate-700">
+        <tr
+          v-for="plan in sortedPlans"
+          :key="plan.id"
+          :data-testid="`history-row-${plan.id}`"
+          tabindex="0"
+          :aria-current="plan.id === activePlanId ? 'true' : undefined"
+          :aria-label="`Afficher le budget ${plan.name}`"
+          class="cursor-pointer transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-500"
+          :class="
+            plan.id === activePlanId
+              ? 'bg-indigo-50 dark:bg-indigo-900/20'
+              : 'hover:bg-gray-50 dark:hover:bg-slate-800/40'
+          "
+          @click="selectPlan(plan.id)"
+          @keydown.enter.self.prevent="selectPlan(plan.id)"
+          @keydown.space.self.prevent="selectPlan(plan.id)"
+        >
+          <td class="px-3 py-3 font-medium text-gray-900 dark:text-gray-100">
+            {{ plan.name }}
+            <span
+              v-if="plan.id === activePlanId"
+              class="ml-1.5 text-xs text-indigo-600 dark:text-indigo-400"
+            >
+              (affiché)
+            </span>
+          </td>
+          <td class="px-3 py-3 text-gray-600 tabular-nums dark:text-gray-400">
+            {{ formatRange(plan.startDate, plan.endDate) }}
+          </td>
+          <td class="px-3 py-3 text-center">
+            <span
+              class="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+              :class="statusClass(planStatus(plan))"
+            >
+              {{ statusLabel(planStatus(plan)) }}
+            </span>
+          </td>
+          <td
+            class="px-3 py-3 text-right text-gray-600 tabular-nums dark:text-gray-400"
           >
-            Fermer
-          </button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+            {{ plan.monthCount }}
+          </td>
+          <td
+            class="px-3 py-3 text-right font-medium text-gray-900 tabular-nums dark:text-gray-100"
+          >
+            {{ formatCurrency(plan.totalAmount) }}
+          </td>
+          <td class="px-3 py-3 text-right">
+            <BaseIconButton
+              size="sm"
+              variant="danger"
+              :label="`Supprimer le budget ${plan.name}`"
+              :data-testid="`delete-row-${plan.id}`"
+              :loading="deletingId === plan.id"
+              @click.stop="onDelete(plan)"
+            >
+              <IconTrash />
+            </BaseIconButton>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <template #footer>
+      <BaseButton variant="secondary" @click="onClose">Fermer</BaseButton>
+    </template>
+  </BaseModal>
 
   <ConfirmDialog
     :open="planToDelete !== null"

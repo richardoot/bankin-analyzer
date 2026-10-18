@@ -1,6 +1,5 @@
 <script setup lang="ts">
-  import { computed, ref, useId, watch } from 'vue'
-  import { useModalA11y } from '@/composables/useModalA11y'
+  import { computed, ref, watch } from 'vue'
   import { api } from '@/lib/api'
   import type {
     BudgetPlanDto,
@@ -9,6 +8,9 @@
     CategoryAverageDto,
     CategoryDto,
   } from '@/lib/api'
+  import BaseModal from '@/components/ui/BaseModal.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import InlineAlert from '@/components/ui/InlineAlert.vue'
   import StepIndicator from '@/components/ui/StepIndicator.vue'
   import PlanStepPeriod from './wizard/PlanStepPeriod.vue'
   import PlanStepSource from './wizard/PlanStepSource.vue'
@@ -27,15 +29,7 @@
     (e: 'created', plan: BudgetPlanDto): void
   }>()
 
-  const titleId = useId()
-
-  // Escape closes, Tab stays inside, focus returns to the opener after.
-  const modalPanelRef = ref<HTMLElement | null>(null)
-  useModalA11y({
-    isOpen: () => props.open,
-    onClose: () => onClose(),
-    panel: modalPanelRef,
-  })
+  const modalRef = ref<InstanceType<typeof BaseModal> | null>(null)
 
   const filtersStore = useFiltersStore()
 
@@ -688,10 +682,26 @@
     return Math.round(value * 100) / 100
   }
 
+  /**
+   * Whether the wizard holds anything worth asking about before it is thrown
+   * away: a step walked, a name typed, a period chosen by hand. The page
+   * protects its draft; the dialog that creates one must too.
+   */
+  const isDirty = computed(
+    () =>
+      step.value > 1 || userEditedName.value || preset.value !== 'next-month'
+  )
+
+  /** Confirmed by the user (or nothing to lose): the draft goes. */
   function onClose() {
     if (isSubmitting.value) return
     reset()
     emit('close')
+  }
+
+  /** « Annuler » closes the way the cross does — through the draft guard. */
+  function requestClose() {
+    modalRef.value?.requestClose()
   }
 
   // Initialize defaults the first time the modal opens
@@ -707,185 +717,101 @@
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      v-if="open"
-      ref="modalPanelRef"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-      data-testid="new-budget-plan-modal"
-      role="dialog"
-      aria-modal="true"
-      :aria-labelledby="titleId"
-      @click.self="onClose"
-    >
-      <div
-        class="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-3xl max-h-[90dvh] flex flex-col"
+  <BaseModal
+    ref="modalRef"
+    :open="open"
+    title="Nouveau budget"
+    max-width="2xl"
+    :closable="!isSubmitting"
+    :dirty="isDirty"
+    :back-label="step > 1 ? 'Étape précédente' : undefined"
+    back-test-id="prev-step-button"
+    data-testid="new-budget-plan-modal"
+    @back="prevStep"
+    @close="onClose"
+  >
+    <template #subheader>
+      <StepIndicator
+        class="justify-start"
+        :steps="STEP_LABELS"
+        :current="step"
+      />
+    </template>
+
+    <!-- Step 1 : the period and the name -->
+    <PlanStepPeriod
+      v-if="step === 1"
+      v-model:start-month="startMonth"
+      v-model:end-month="endMonth"
+      v-model:name="name"
+      :preset="preset"
+      :plan-month-count="planMonthCount"
+      @set-preset="applyPreset"
+      @name-edited="userEditedName = true"
+    />
+
+    <!-- Step 2 : how the envelopes start -->
+    <PlanStepSource
+      v-else-if="step === 2"
+      v-model:init-source="initSource"
+      v-model:lookback="lookback"
+      v-model:seed-basis="seedBasis"
+      v-model:deduct-reimbursements="deductReimbursements"
+      v-model:deduct-pending-reimbursements="deductPendingReimbursements"
+      v-model:copy-from-plan-id="copyFromPlanId"
+      :existing-plans="existingPlans"
+      :is-loading-plans="isLoadingPlans"
+      :has-exceptional-in-lookback="hasExceptionalInLookback"
+    />
+
+    <!-- Step 3 : the envelopes themselves, and the savings equation -->
+    <PlanStepEnvelopes
+      v-else
+      :rows="envelopeRows"
+      :is-loading="isLoadingPreview"
+      :copy-without-plan="initSource === 'copy' && !copyFromPlanId"
+      :preview-total="previewTotal"
+      :show-savings-indicator="showSavingsIndicator"
+      :reference-income-avg="referenceIncomeAvg"
+      :reference-income-label="referenceIncomeLabel"
+      :projected-savings="projectedSavings"
+      :savings-target="savingsTarget"
+      :monthly-project-reserve="monthlyProjectReserve"
+      :plan-project-reserve="planProjectReserve"
+      :plan-month-count="planMonthCount"
+      :reserve-gap="reserveGap"
+      :lookback-exceptional-per-month="lookbackExceptionalPerMonth"
+      @update-entry="setEntryAmount"
+      @set-savings="setSavingsTarget"
+    />
+
+    <InlineAlert v-if="error" class="mt-4" data-testid="modal-error">
+      {{ error }}
+    </InlineAlert>
+
+    <template #footer>
+      <BaseButton
+        variant="secondary"
+        :disabled="isSubmitting"
+        @click="requestClose"
       >
-        <!-- Header -->
-        <div
-          class="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-700"
-        >
-          <div class="min-w-0">
-            <h2
-              :id="titleId"
-              class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-            >
-              Nouveau budget
-            </h2>
-            <StepIndicator
-              class="mt-2 justify-start"
-              :steps="STEP_LABELS"
-              :current="step"
-            />
-          </div>
-          <button
-            type="button"
-            aria-label="Fermer"
-            class="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
-            :disabled="isSubmitting"
-            @click="onClose"
-          >
-            <svg
-              class="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <!-- Body -->
-        <div class="flex-1 overflow-y-auto px-5 py-4">
-          <!-- Step 1 : the period and the name -->
-          <PlanStepPeriod
-            v-if="step === 1"
-            v-model:start-month="startMonth"
-            v-model:end-month="endMonth"
-            v-model:name="name"
-            :preset="preset"
-            :plan-month-count="planMonthCount"
-            @set-preset="applyPreset"
-            @name-edited="userEditedName = true"
-          />
-
-          <!-- Step 2 : how the envelopes start -->
-          <PlanStepSource
-            v-else-if="step === 2"
-            v-model:init-source="initSource"
-            v-model:lookback="lookback"
-            v-model:seed-basis="seedBasis"
-            v-model:deduct-reimbursements="deductReimbursements"
-            v-model:deduct-pending-reimbursements="deductPendingReimbursements"
-            v-model:copy-from-plan-id="copyFromPlanId"
-            :existing-plans="existingPlans"
-            :is-loading-plans="isLoadingPlans"
-            :has-exceptional-in-lookback="hasExceptionalInLookback"
-          />
-
-          <!-- Step 3 : the envelopes themselves, and the savings equation -->
-          <PlanStepEnvelopes
-            v-else
-            :rows="envelopeRows"
-            :is-loading="isLoadingPreview"
-            :copy-without-plan="initSource === 'copy' && !copyFromPlanId"
-            :preview-total="previewTotal"
-            :show-savings-indicator="showSavingsIndicator"
-            :reference-income-avg="referenceIncomeAvg"
-            :reference-income-label="referenceIncomeLabel"
-            :projected-savings="projectedSavings"
-            :savings-target="savingsTarget"
-            :monthly-project-reserve="monthlyProjectReserve"
-            :plan-project-reserve="planProjectReserve"
-            :plan-month-count="planMonthCount"
-            :reserve-gap="reserveGap"
-            :lookback-exceptional-per-month="lookbackExceptionalPerMonth"
-            @update-entry="setEntryAmount"
-            @set-savings="setSavingsTarget"
-          />
-
-          <!-- Error banner -->
-          <div
-            v-if="error"
-            class="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 py-2 rounded-lg text-sm"
-            data-testid="modal-error"
-          >
-            {{ error }}
-          </div>
-        </div>
-
-        <!-- Footer -->
-        <div
-          class="flex items-center justify-between px-5 py-4 border-t border-gray-100 dark:border-slate-700"
-        >
-          <button
-            v-if="step > 1"
-            type="button"
-            data-testid="prev-step-button"
-            class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
-            :disabled="isSubmitting"
-            @click="prevStep"
-          >
-            ← Retour
-          </button>
-          <span v-else />
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
-              :disabled="isSubmitting"
-              @click="onClose"
-            >
-              Annuler
-            </button>
-            <button
-              v-if="step < 3"
-              type="button"
-              data-testid="next-step-button"
-              class="px-4 py-1.5 text-sm font-medium bg-primary-600 dark:bg-primary-500 text-white rounded-md hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              @click="nextStep"
-            >
-              Suivant →
-            </button>
-            <button
-              v-else
-              type="button"
-              data-testid="create-plan-button"
-              class="px-4 py-1.5 text-sm font-medium bg-primary-600 dark:bg-primary-500 text-white rounded-md hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
-              :disabled="isSubmitting"
-              @click="submit"
-            >
-              <svg
-                v-if="isSubmitting"
-                class="animate-spin h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  class="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  stroke-width="4"
-                />
-                <path
-                  class="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              Créer le budget
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+        Annuler
+      </BaseButton>
+      <BaseButton
+        v-if="step < 3"
+        data-testid="next-step-button"
+        @click="nextStep"
+      >
+        Suivant
+      </BaseButton>
+      <BaseButton
+        v-else
+        data-testid="create-plan-button"
+        :loading="isSubmitting"
+        @click="submit"
+      >
+        Créer le budget
+      </BaseButton>
+    </template>
+  </BaseModal>
 </template>

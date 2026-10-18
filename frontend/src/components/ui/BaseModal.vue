@@ -111,6 +111,10 @@
     panel: panelRef,
   })
 
+  // A dialog's own « Annuler » button closes the way the cross does — through
+  // the draft guard when there is one.
+  defineExpose({ requestClose })
+
   const WIDTHS: Record<NonNullable<typeof props.maxWidth>, string> = {
     sm: 'max-w-sm',
     md: 'max-w-md',

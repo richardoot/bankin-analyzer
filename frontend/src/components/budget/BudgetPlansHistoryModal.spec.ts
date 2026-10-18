@@ -10,7 +10,17 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
+// One shared ref: a test flips it to see the phone layout.
+vi.mock('@/composables/useMediaQuery', async () => {
+  const { ref } = await import('vue')
+  const isMobile = ref(false)
+  return { useIsMobile: () => isMobile }
+})
+
 import { api } from '@/lib/api'
+import { useIsMobile } from '@/composables/useMediaQuery'
+
+const isMobile = useIsMobile()
 
 enableAutoUnmount(afterEach)
 
@@ -73,6 +83,7 @@ function makePlans(): BudgetPlanSummaryDto[] {
 describe('BudgetPlansHistoryModal', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    isMobile.value = false
   })
 
   afterEach(() => {
@@ -178,6 +189,43 @@ describe('BudgetPlansHistoryModal', () => {
     expect(activeRow.className).toContain('bg-indigo-50')
     expect(activeRow.textContent).toContain('(affiché)')
 
+    wrapper.unmount()
+  })
+
+  it('lays the plans out as cards on a phone, with the same controls', async () => {
+    isMobile.value = true
+    vi.mocked(api.getBudgetPlans).mockResolvedValue(makePlans())
+
+    const wrapper = mount(BudgetPlansHistoryModal, {
+      props: { open: true, activePlanId: 'plan-current' },
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    // Six columns in 358px put the total and the bin off screen; a card
+    // says the same on three lines and keeps both within reach.
+    expect(document.body.querySelector('table')).toBeNull()
+    const cards = Array.from(
+      document.body.querySelectorAll(
+        '[data-testid="history-cards"] [data-testid^="history-row-"]'
+      )
+    )
+    expect(cards.map(c => c.getAttribute('data-testid'))).toEqual([
+      'history-row-plan-current',
+      'history-row-plan-future',
+      'history-row-plan-past',
+    ])
+    expect(cards[0]?.textContent).toContain('(affiché)')
+    expect(cards[1]?.textContent).toContain('3 mois')
+
+    ;(
+      cards[2]?.querySelector('button[aria-label^="Afficher"]') as HTMLElement
+    ).click()
+    expect(wrapper.emitted('select')?.[0]).toEqual(['plan-past'])
+
+    expect(
+      document.body.querySelector('[data-testid="delete-row-plan-past"]')
+    ).not.toBeNull()
     wrapper.unmount()
   })
 
