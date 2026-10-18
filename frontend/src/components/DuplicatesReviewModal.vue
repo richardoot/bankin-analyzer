@@ -1,9 +1,18 @@
 <script setup lang="ts">
   import { ref, computed, watch } from 'vue'
-  import { useModalA11y } from '@/composables/useModalA11y'
+  import BaseModal from '@/components/ui/BaseModal.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import BaseCheckbox from '@/components/ui/BaseCheckbox.vue'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
   import type { ImportPreviewResultDto } from '@/lib/api'
   import { formatCurrency, formatDate } from '@/lib/formatters'
 
+  /**
+   * The decision « import this row or not » rests on a checkbox: the whole
+   * row is the label, 44px tall on a touch screen, rather than a 16px square
+   * beside it. The side-by-side comparison of a row already in the base
+   * stacks under md, where two columns would truncate both.
+   */
   const props = defineProps<{
     isOpen: boolean
     loading: boolean
@@ -14,14 +23,6 @@
     close: []
     confirm: [selectedIndices: Set<number>]
   }>()
-
-  // Escape closes, Tab stays inside, focus returns to the opener after.
-  const modalPanelRef = ref<HTMLElement | null>(null)
-  useModalA11y({
-    isOpen: () => props.isOpen,
-    onClose: () => handleClose(),
-    panel: modalPanelRef,
-  })
 
   // Track selected indices for internal duplicates (which ones to import)
   const selectedInternalIndices = ref<Set<number>>(new Set())
@@ -185,435 +186,299 @@
     emit('confirm', allSelected)
   }
 
-  const formatAmount = formatCurrency
+  function amountClass(amount: number): string {
+    return amount < 0
+      ? 'text-red-600 dark:text-red-500'
+      : 'text-green-600 dark:text-green-500'
+  }
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="modal">
-      <div
-        v-if="isOpen && previewResult"
-        class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
-      >
-        <div class="fixed inset-0 bg-black/50" @click="handleClose" />
-
-        <div
-          ref="modalPanelRef"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="duplicates-modal-title"
-          class="relative z-10 flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-slate-900 dark:shadow-slate-900/30"
-        >
-          <!-- Header -->
-          <div
-            class="flex items-center justify-between gap-3 p-4 sm:p-6 border-b dark:border-slate-700"
-          >
-            <div class="flex items-center gap-3">
-              <div
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30"
-              >
-                <svg
-                  class="h-6 w-6 text-amber-600 dark:text-amber-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
-              </div>
-              <h2
-                id="duplicates-modal-title"
-                class="text-xl font-semibold text-gray-900 dark:text-gray-100"
-              >
-                Doublons détectés
-              </h2>
-            </div>
-            <button
-              class="-m-2 shrink-0 p-2 text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
-              aria-label="Fermer"
-              @click="handleClose"
-            >
-              <svg
-                class="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+  <BaseModal
+    :open="isOpen && previewResult !== null"
+    title="Doublons détectés"
+    tone="warning"
+    max-width="2xl"
+    :closable="!loading"
+    data-testid="duplicates-modal"
+    @close="handleClose"
+  >
+    <div v-if="previewResult" class="space-y-6">
+      <!-- Summary -->
+      <div class="rounded-lg bg-gray-50 p-4 dark:bg-slate-800">
+        <h3 class="mb-3 font-medium text-gray-900 dark:text-gray-100">
+          Résumé
+        </h3>
+        <div class="grid grid-cols-3 gap-2 text-sm sm:gap-4">
+          <div class="text-center">
+            <p class="text-2xl font-bold text-green-600 dark:text-green-400">
+              {{ previewResult.newCount }}
+            </p>
+            <p class="text-gray-600 dark:text-gray-400">Nouvelles</p>
           </div>
-
-          <!-- Content -->
-          <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-            <!-- Summary -->
-            <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
-              <h3 class="font-medium text-gray-900 dark:text-gray-100 mb-3">
-                Résumé
-              </h3>
-              <div class="grid grid-cols-3 gap-2 sm:gap-4 text-sm">
-                <div class="text-center">
-                  <div
-                    class="text-2xl font-bold text-green-600 dark:text-green-400"
-                  >
-                    {{ previewResult.newCount }}
-                  </div>
-                  <div class="text-gray-600 dark:text-gray-400">Nouvelles</div>
-                </div>
-                <div class="text-center">
-                  <div
-                    class="text-2xl font-bold text-amber-600 dark:text-amber-400"
-                  >
-                    {{ previewResult.internalDuplicateCount }}
-                  </div>
-                  <div class="text-gray-600 dark:text-gray-400">
-                    Doublons internes
-                  </div>
-                </div>
-                <div class="text-center">
-                  <div
-                    class="text-2xl font-bold text-red-600 dark:text-red-400"
-                  >
-                    {{ previewResult.externalDuplicateCount }}
-                  </div>
-                  <div class="text-gray-600 dark:text-gray-400">
-                    Déjà importées
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Internal Duplicates -->
-            <div
-              v-if="previewResult.internalDuplicates.length > 0"
-              class="space-y-4"
-            >
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <h3
-                  class="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2"
-                >
-                  <svg
-                    class="w-5 h-5 text-amber-500 dark:text-amber-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                    />
-                  </svg>
-                  Doublons internes (dans ce fichier)
-                </h3>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    :checked="allInternalSelected"
-                    :indeterminate="someInternalSelected"
-                    class="h-4 w-4 text-primary-600 dark:text-primary-500 rounded border-gray-300 dark:border-slate-600 focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
-                    @change="toggleAllInternalDuplicates"
-                  />
-                  <span class="text-sm text-gray-600 dark:text-gray-400"
-                    >Tout sélectionner</span
-                  >
-                </label>
-              </div>
-              <p class="text-sm text-gray-500 dark:text-gray-400">
-                Ces transactions apparaissent plusieurs fois dans votre fichier.
-                Sélectionnez celles à importer.
-              </p>
-
-              <div
-                v-for="(group, groupIdx) in previewResult.internalDuplicates"
-                :key="group.hash"
-                class="border dark:border-slate-700 rounded-lg overflow-hidden"
-              >
-                <div
-                  class="bg-amber-50 dark:bg-amber-900/20 px-4 py-2 border-b dark:border-amber-800"
-                >
-                  <span
-                    class="text-sm font-medium text-amber-800 dark:text-amber-400"
-                  >
-                    Groupe {{ groupIdx + 1 }} : {{ group.indices.length }}
-                    transactions identiques
-                  </span>
-                </div>
-                <div class="divide-y dark:divide-slate-700">
-                  <div
-                    v-for="tx in group.transactions"
-                    :key="tx.index"
-                    class="px-4 py-3 flex items-center gap-4 hover:bg-gray-50 dark:hover:bg-slate-800"
-                  >
-                    <input
-                      type="checkbox"
-                      :checked="selectedInternalIndices.has(tx.index)"
-                      class="h-4 w-4 text-primary-600 dark:text-primary-500 rounded border-gray-300 dark:border-slate-600 focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
-                      @change="toggleInternalIndex(tx.index)"
-                    />
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center justify-between">
-                        <span class="text-xs text-gray-500 dark:text-gray-400"
-                          >#{{ tx.index + 1 }}</span
-                        >
-                        <span
-                          class="font-semibold"
-                          :class="
-                            tx.amount < 0
-                              ? 'text-red-600 dark:text-red-500'
-                              : 'text-green-600 dark:text-green-500'
-                          "
-                        >
-                          {{ formatAmount(tx.amount) }}
-                        </span>
-                      </div>
-                      <div
-                        class="font-medium text-gray-900 dark:text-gray-100 truncate"
-                      >
-                        {{ tx.description }}
-                      </div>
-                      <div class="text-sm text-gray-500 dark:text-gray-400">
-                        {{ formatDate(tx.date) }} - {{ tx.category }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- External Duplicates -->
-            <div
-              v-if="previewResult.externalDuplicates.length > 0"
-              class="space-y-4"
-            >
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <h3
-                  class="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2"
-                >
-                  <svg
-                    class="w-5 h-5 text-red-500 dark:text-red-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
-                    />
-                  </svg>
-                  Déjà en base de données
-                </h3>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    :checked="allExternalSelected"
-                    :indeterminate="someExternalSelected"
-                    class="h-4 w-4 text-primary-600 dark:text-primary-500 rounded border-gray-300 dark:border-slate-600 focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
-                    @change="toggleAllExternalDuplicates"
-                  />
-                  <span class="text-sm text-gray-600 dark:text-gray-400"
-                    >Tout sélectionner</span
-                  >
-                </label>
-              </div>
-              <p class="text-sm text-gray-500 dark:text-gray-400">
-                Ces transactions existent déjà dans votre historique. Cochez
-                pour les importer quand même.
-              </p>
-
-              <div
-                v-for="dup in previewResult.externalDuplicates"
-                :key="dup.hash"
-                class="border dark:border-slate-700 rounded-lg overflow-hidden"
-              >
-                <div
-                  class="bg-red-50 dark:bg-red-900/20 px-4 py-2 border-b dark:border-red-800"
-                >
-                  <span
-                    class="text-sm font-medium text-red-800 dark:text-red-400"
-                  >
-                    Transaction #{{ dup.uploaded.index + 1 }} existe déjà
-                  </span>
-                </div>
-
-                <!-- Side by side comparison -->
-                <div
-                  class="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0 dark:divide-slate-700"
-                >
-                  <!-- Uploaded -->
-                  <div class="p-4">
-                    <div
-                      class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-2"
-                    >
-                      Dans l'import
-                    </div>
-                    <div class="space-y-1 text-sm">
-                      <div>
-                        <span class="text-gray-500 dark:text-gray-400"
-                          >Date :</span
-                        >
-                        {{ formatDate(dup.uploaded.date) }}
-                      </div>
-                      <div class="truncate">
-                        <span class="text-gray-500 dark:text-gray-400"
-                          >Description :</span
-                        >
-                        {{ dup.uploaded.description }}
-                      </div>
-                      <div>
-                        <span class="text-gray-500 dark:text-gray-400"
-                          >Montant :</span
-                        >
-                        <span
-                          :class="
-                            dup.uploaded.amount < 0
-                              ? 'text-red-600 dark:text-red-500'
-                              : 'text-green-600 dark:text-green-500'
-                          "
-                        >
-                          {{ formatAmount(dup.uploaded.amount) }}
-                        </span>
-                      </div>
-                      <div>
-                        <span class="text-gray-500 dark:text-gray-400"
-                          >Catégorie :</span
-                        >
-                        {{ dup.uploaded.category }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Existing -->
-                  <div class="p-4 bg-gray-50 dark:bg-slate-800">
-                    <div
-                      class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-2"
-                    >
-                      En base
-                    </div>
-                    <div class="space-y-1 text-sm">
-                      <div>
-                        <span class="text-gray-500 dark:text-gray-400"
-                          >Date :</span
-                        >
-                        {{ formatDate(dup.existing.date) }}
-                      </div>
-                      <div class="truncate">
-                        <span class="text-gray-500 dark:text-gray-400"
-                          >Description :</span
-                        >
-                        {{ dup.existing.description }}
-                      </div>
-                      <div>
-                        <span class="text-gray-500 dark:text-gray-400"
-                          >Montant :</span
-                        >
-                        <span
-                          :class="
-                            dup.existing.amount < 0
-                              ? 'text-red-600 dark:text-red-500'
-                              : 'text-green-600 dark:text-green-500'
-                          "
-                        >
-                          {{ formatAmount(dup.existing.amount) }}
-                        </span>
-                      </div>
-                      <div>
-                        <span class="text-gray-500 dark:text-gray-400"
-                          >Catégorie :</span
-                        >
-                        {{ dup.existing.categoryName || '-' }}
-                      </div>
-                      <div class="text-xs text-gray-500 dark:text-gray-400">
-                        Importé le {{ formatDate(dup.existing.createdAt) }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Force import checkbox -->
-                <div
-                  class="px-4 py-3 bg-gray-50 dark:bg-slate-800 border-t dark:border-slate-700"
-                >
-                  <label class="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      :checked="selectedExternalIndices.has(dup.uploaded.index)"
-                      class="h-4 w-4 text-primary-600 dark:text-primary-500 rounded border-gray-300 dark:border-slate-600 focus:ring-primary-500 dark:focus:ring-primary-400 dark:bg-slate-700"
-                      @change="toggleExternalIndex(dup.uploaded.index)"
-                    />
-                    <span class="text-sm text-gray-700 dark:text-gray-300"
-                      >Importer quand même</span
-                    >
-                  </label>
-                </div>
-              </div>
-            </div>
+          <div class="text-center">
+            <p class="text-2xl font-bold text-amber-600 dark:text-amber-400">
+              {{ previewResult.internalDuplicateCount }}
+            </p>
+            <p class="text-gray-600 dark:text-gray-400">Doublons internes</p>
           </div>
-
-          <!-- Footer -->
-          <div
-            class="flex flex-col gap-3 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t sm:flex-row sm:items-center sm:justify-between sm:p-6 dark:border-slate-700 bg-gray-50 dark:bg-slate-800"
-          >
-            <div class="text-sm text-gray-600 dark:text-gray-400">
-              <span class="font-medium text-green-600 dark:text-green-400">{{
-                totalToImport
-              }}</span>
-              à importer,
-              <span class="font-medium text-gray-500 dark:text-gray-400">{{
-                totalSkipped
-              }}</span>
-              ignorés
-            </div>
-            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
-              <button
-                type="button"
-                class="min-h-[44px] px-4 py-2 sm:min-h-0 border border-gray-300 dark:border-slate-600 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-                :disabled="loading"
-                @click="handleClose"
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                class="min-h-[44px] px-4 py-2 sm:min-h-0 bg-primary-600 dark:bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-700 dark:hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                :disabled="loading || totalToImport === 0"
-                @click="handleConfirm"
-              >
-                {{
-                  loading
-                    ? 'Import en cours…'
-                    : `Importer ${totalToImport} transactions`
-                }}
-              </button>
-            </div>
+          <div class="text-center">
+            <p class="text-2xl font-bold text-red-600 dark:text-red-400">
+              {{ previewResult.externalDuplicateCount }}
+            </p>
+            <p class="text-gray-600 dark:text-gray-400">Déjà importées</p>
           </div>
         </div>
       </div>
-    </Transition>
-  </Teleport>
+
+      <!-- Internal Duplicates -->
+      <section
+        v-if="previewResult.internalDuplicates.length > 0"
+        class="space-y-4"
+        data-testid="internal-duplicates"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="font-medium text-gray-900 dark:text-gray-100">
+            Doublons internes (dans ce fichier)
+          </h3>
+          <BaseCheckbox
+            :model-value="allInternalSelected"
+            :indeterminate="someInternalSelected"
+            label="Tout sélectionner"
+            data-testid="internal-select-all"
+            @update:model-value="toggleAllInternalDuplicates"
+          />
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+          Ces transactions apparaissent plusieurs fois dans votre fichier.
+          Sélectionnez celles à importer.
+        </p>
+
+        <div
+          v-for="(group, groupIdx) in previewResult.internalDuplicates"
+          :key="group.hash"
+          class="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700"
+        >
+          <div
+            class="border-b border-amber-200 bg-amber-50 px-4 py-2 dark:border-amber-800 dark:bg-amber-900/20"
+          >
+            <span
+              class="text-sm font-medium text-amber-800 dark:text-amber-400"
+            >
+              Groupe {{ groupIdx + 1 }} : {{ group.indices.length }}
+              transactions identiques
+            </span>
+          </div>
+          <div class="divide-y divide-gray-100 dark:divide-slate-700">
+            <!-- The whole row is the label: the decision does not rest on 16px. -->
+            <label
+              v-for="tx in group.transactions"
+              :key="tx.index"
+              class="flex cursor-pointer items-start gap-3 px-4 py-3 hover:bg-gray-50 pointer-coarse:min-h-[44px] dark:hover:bg-slate-800"
+              :data-testid="`internal-row-${tx.index}`"
+            >
+              <input
+                type="checkbox"
+                :checked="selectedInternalIndices.has(tx.index)"
+                :aria-label="`Importer la transaction ${tx.index + 1}`"
+                class="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-2 focus:ring-primary-500 focus:ring-offset-0 dark:border-slate-600 dark:bg-slate-800"
+                @change="toggleInternalIndex(tx.index)"
+              />
+              <span class="min-w-0 flex-1">
+                <span class="flex items-center justify-between gap-3">
+                  <span class="text-xs text-gray-500 dark:text-gray-400"
+                    >#{{ tx.index + 1 }}</span
+                  >
+                  <span
+                    class="font-semibold tabular-nums"
+                    :class="amountClass(tx.amount)"
+                  >
+                    {{ formatCurrency(tx.amount) }}
+                  </span>
+                </span>
+                <span
+                  class="block truncate font-medium text-gray-900 dark:text-gray-100"
+                  :title="tx.description"
+                >
+                  {{ tx.description }}
+                </span>
+                <span class="block text-sm text-gray-500 dark:text-gray-400">
+                  {{ formatDate(tx.date) }} · {{ tx.category }}
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- External Duplicates -->
+      <section
+        v-if="previewResult.externalDuplicates.length > 0"
+        class="space-y-4"
+        data-testid="external-duplicates"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="font-medium text-gray-900 dark:text-gray-100">
+            Déjà en base de données
+          </h3>
+          <BaseCheckbox
+            :model-value="allExternalSelected"
+            :indeterminate="someExternalSelected"
+            label="Tout sélectionner"
+            data-testid="external-select-all"
+            @update:model-value="toggleAllExternalDuplicates"
+          />
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+          Ces transactions existent déjà dans votre historique. Cochez pour les
+          importer quand même.
+        </p>
+
+        <div
+          v-for="dup in previewResult.externalDuplicates"
+          :key="dup.hash"
+          class="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700"
+          :data-testid="`external-row-${dup.uploaded.index}`"
+        >
+          <div
+            class="border-b border-red-200 bg-red-50 px-4 py-2 dark:border-red-800 dark:bg-red-900/20"
+          >
+            <span class="text-sm font-medium text-red-800 dark:text-red-400">
+              Transaction #{{ dup.uploaded.index + 1 }} existe déjà
+            </span>
+          </div>
+
+          <!-- Side by side on a desk, stacked as two cards under md -->
+          <div
+            class="grid grid-cols-1 divide-y divide-gray-200 md:grid-cols-2 md:divide-x md:divide-y-0 dark:divide-slate-700"
+          >
+            <!-- Uploaded -->
+            <div class="p-4">
+              <SectionLabel class="mb-2">Dans l'import</SectionLabel>
+              <dl class="space-y-1 text-sm">
+                <div class="flex gap-2">
+                  <dt class="shrink-0 text-gray-500 dark:text-gray-400">
+                    Date :
+                  </dt>
+                  <dd>{{ formatDate(dup.uploaded.date) }}</dd>
+                </div>
+                <div class="flex min-w-0 gap-2">
+                  <dt class="shrink-0 text-gray-500 dark:text-gray-400">
+                    Description :
+                  </dt>
+                  <dd class="truncate" :title="dup.uploaded.description">
+                    {{ dup.uploaded.description }}
+                  </dd>
+                </div>
+                <div class="flex gap-2">
+                  <dt class="shrink-0 text-gray-500 dark:text-gray-400">
+                    Montant :
+                  </dt>
+                  <dd
+                    class="tabular-nums"
+                    :class="amountClass(dup.uploaded.amount)"
+                  >
+                    {{ formatCurrency(dup.uploaded.amount) }}
+                  </dd>
+                </div>
+                <div class="flex min-w-0 gap-2">
+                  <dt class="shrink-0 text-gray-500 dark:text-gray-400">
+                    Catégorie :
+                  </dt>
+                  <dd class="truncate" :title="dup.uploaded.category">
+                    {{ dup.uploaded.category }}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <!-- Existing -->
+            <div class="bg-gray-50 p-4 dark:bg-slate-800">
+              <SectionLabel class="mb-2">En base</SectionLabel>
+              <dl class="space-y-1 text-sm">
+                <div class="flex gap-2">
+                  <dt class="shrink-0 text-gray-500 dark:text-gray-400">
+                    Date :
+                  </dt>
+                  <dd>{{ formatDate(dup.existing.date) }}</dd>
+                </div>
+                <div class="flex min-w-0 gap-2">
+                  <dt class="shrink-0 text-gray-500 dark:text-gray-400">
+                    Description :
+                  </dt>
+                  <dd class="truncate" :title="dup.existing.description">
+                    {{ dup.existing.description }}
+                  </dd>
+                </div>
+                <div class="flex gap-2">
+                  <dt class="shrink-0 text-gray-500 dark:text-gray-400">
+                    Montant :
+                  </dt>
+                  <dd
+                    class="tabular-nums"
+                    :class="amountClass(dup.existing.amount)"
+                  >
+                    {{ formatCurrency(dup.existing.amount) }}
+                  </dd>
+                </div>
+                <div class="flex min-w-0 gap-2">
+                  <dt class="shrink-0 text-gray-500 dark:text-gray-400">
+                    Catégorie :
+                  </dt>
+                  <dd
+                    class="truncate"
+                    :title="dup.existing.categoryName || undefined"
+                  >
+                    {{ dup.existing.categoryName || '—' }}
+                  </dd>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  Importée le {{ formatDate(dup.existing.createdAt) }}
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          <!-- Force import checkbox -->
+          <div
+            class="border-t border-gray-200 bg-gray-50 px-4 py-1 dark:border-slate-700 dark:bg-slate-800"
+          >
+            <BaseCheckbox
+              :model-value="selectedExternalIndices.has(dup.uploaded.index)"
+              label="Importer quand même"
+              :data-testid="`external-force-${dup.uploaded.index}`"
+              @update:model-value="toggleExternalIndex(dup.uploaded.index)"
+            />
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <template #footer-start>
+      <p class="text-gray-600 dark:text-gray-400" data-testid="import-summary">
+        <span class="font-medium text-green-600 dark:text-green-400">{{
+          totalToImport
+        }}</span>
+        à importer,
+        <span class="font-medium text-gray-500 dark:text-gray-400">{{
+          totalSkipped
+        }}</span>
+        ignorées
+      </p>
+    </template>
+
+    <template #footer>
+      <BaseButton variant="secondary" :disabled="loading" @click="handleClose">
+        Annuler
+      </BaseButton>
+      <BaseButton
+        :disabled="totalToImport === 0"
+        :loading="loading"
+        data-testid="duplicates-confirm"
+        @click="handleConfirm"
+      >
+        Importer {{ totalToImport }} transactions
+      </BaseButton>
+    </template>
+  </BaseModal>
 </template>
-
-<style scoped>
-  .modal-enter-active,
-  .modal-leave-active {
-    transition: opacity 0.2s ease;
-  }
-
-  .modal-enter-from,
-  .modal-leave-to {
-    opacity: 0;
-  }
-</style>
