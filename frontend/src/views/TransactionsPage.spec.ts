@@ -1461,6 +1461,44 @@ describe('TransactionsPage — optimistic updates', () => {
       )
     })
 
+    it('names several categories and several series in chips, each removable', async () => {
+      const wrapper = await mountAt({
+        categories: 'cat-1,none',
+        recurrences: '15:com netflix,9:spotify',
+      })
+
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          categoryIds: ['cat-1', 'none'],
+          recurrences: ['15:com netflix', '9:spotify'],
+        })
+      )
+      const chips = wrapper.find('[data-testid="active-filter-chips"]')
+      expect(chips.text()).toMatch(/Catégories : .+, Sans catégorie/)
+      expect(chips.text()).toContain('2 charges récurrentes')
+
+      await chips
+        .find('[aria-label="Retirer le filtre 2 charges récurrentes"]')
+        .trigger('click')
+      await flushPromises()
+      expect(api.getTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          categoryIds: ['cat-1', 'none'],
+          recurrences: undefined,
+        })
+      )
+      expect(router.currentRoute.value.query.categories).toBe('cat-1,none')
+      expect(router.currentRoute.value.query.recurrences).toBeUndefined()
+    })
+
+    it('counts a long category list rather than naming it', async () => {
+      const wrapper = await mountAt({ categories: 'a,b,c,d,e' })
+
+      expect(
+        wrapper.find('[data-testid="active-filter-chips"]').text()
+      ).toContain('5 catégories')
+    })
+
     it('follows a link pushed while the page is open, and Back as well', async () => {
       const wrapper = await mountAt({ type: 'EXPENSE' })
       expect(api.getTransactions).toHaveBeenCalledTimes(1)

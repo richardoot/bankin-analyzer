@@ -105,6 +105,13 @@ export interface TransactionsLinkFilters {
   nature?: NatureFilter | undefined
   /** Engagé, Variable, or « à migrer ». */
   rhythm?: RhythmFilter | undefined
+  /**
+   * Any of these categories — `NO_CATEGORY` among them for the rows filed
+   * nowhere. Only links carry a list; the page's select picks one.
+   */
+  categoryIds?: string[] | undefined
+  /** The lines of any of these series, each `<amountBucket>:<merchantKey>`. */
+  recurrences?: string[] | undefined
   /** What the context banner says, when the filters alone would not. */
   label?: string | undefined
   /** The figure the link came from was netted and shared; the list is not. */
@@ -144,6 +151,8 @@ export const TRANSACTIONS_QUERY_KEYS = [
   'exceptional',
   'nature',
   'rhythm',
+  'categories',
+  'recurrences',
   'label',
   'gross',
   'sort',
@@ -180,6 +189,17 @@ function trimmed(value: string | number | undefined): string | undefined {
   if (value === undefined) return undefined
   const text = String(value).trim()
   return text === '' ? undefined : text
+}
+
+/**
+ * The most values a list may carry: the server refuses more rather than
+ * truncate. A sender with a longer list offers no link.
+ */
+export const MAX_LINK_LIST = 200
+
+/** A list trimmed, blanks out, duplicates out, in its first order. */
+function cleanList(values: string[] | undefined): string[] {
+  return [...new Set((values ?? []).map(v => v.trim()).filter(v => v !== ''))]
 }
 
 /**
@@ -236,6 +256,10 @@ export function transactionsQuery(
   if (filters.exceptional) query.exceptional = filters.exceptional
   if (filters.nature) query.nature = filters.nature
   if (filters.rhythm) query.rhythm = filters.rhythm
+  const categories = cleanList(filters.categoryIds)
+  if (categories.length > 0) query.categories = categories.join(',')
+  const recurrences = cleanList(filters.recurrences)
+  if (recurrences.length > 0) query.recurrences = recurrences.join(',')
   const label = trimmed(filters.label)
   if (label) query.label = label
   if (filters.gross) query.gross = '1'
@@ -328,6 +352,10 @@ export function parseTransactionsQuery(
   const rhythm = get('rhythm')
   if (rhythm === 'COMMITTED' || rhythm === 'VARIABLE' || rhythm === NO_CATEGORY)
     filters.rhythm = rhythm
+  const categories = cleanList((get('categories') ?? '').split(','))
+  if (categories.length > 0) filters.categoryIds = categories
+  const recurrences = cleanList((get('recurrences') ?? '').split(','))
+  if (recurrences.length > 0) filters.recurrences = recurrences
   const label = get('label')
   if (label?.trim()) filters.label = label.trim()
   if (get('gross') === '1') filters.gross = true

@@ -22,8 +22,9 @@
       /**
        * The id behind each label, aligned with `data.labels`. Given, a
        * slice becomes a way to its category: the chart emits `select` with
-       * the id and draws the slices with a pointer. « Autres » has no id
-       * and stays mute. The keyboard way is the list beside the chart.
+       * the id and draws the slices with a pointer. « Autres » has no id of
+       * its own: it emits `select-others` with the ids it merges. The
+       * keyboard way is the list beside the chart.
        */
       ids?: (string | null)[] | undefined
     }>(),
@@ -36,6 +37,11 @@
   const emit = defineEmits<{
     /** A slice was clicked — the id of its category. */
     (e: 'select', id: string): void
+    /**
+     * The « Autres » slice was clicked — the ids of the categories it
+     * merges, those that have one.
+     */
+    (e: 'select-others', ids: string[]): void
   }>()
 
   const selectable = computed(() => props.ids !== undefined)
@@ -60,6 +66,8 @@
     values: number[]
     ids: (string | null)[]
     othersCount: number
+    /** The ids merged into « Autres », in the order of their values. */
+    othersIds: string[]
   }>(() => {
     const pairs = props.data.labels.map((label, i) => ({
       label,
@@ -75,6 +83,7 @@
         values: pairs.map(p => p.value),
         ids: pairs.map(p => p.id),
         othersCount: 0,
+        othersIds: [],
       }
     }
 
@@ -86,12 +95,22 @@
       values: [...top.map(p => p.value), othersValue],
       ids: [...top.map(p => p.id), null],
       othersCount: rest.length,
+      othersIds: rest.flatMap(p => p.id ?? []),
     }
   })
 
   function onSliceSelected(config?: { dataPointIndex: number }): void {
-    const id = processedData.value.ids[config?.dataPointIndex ?? -1]
-    if (id) emit('select', id)
+    const index = config?.dataPointIndex ?? -1
+    const data = processedData.value
+    const id = data.ids[index]
+    if (id) {
+      emit('select', id)
+      return
+    }
+    // « Autres » is the last slice when there is one.
+    const isOthers = data.othersCount > 0 && index === data.labels.length - 1
+    if (isOthers && data.othersIds.length > 0)
+      emit('select-others', data.othersIds)
   }
 
   // The same assignment the category list uses, so a slice and its row

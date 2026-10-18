@@ -732,6 +732,17 @@ describe('DashboardPage', () => {
           gross: '1',
         },
       })
+      expensesDonut?.vm.$emit('select-others', ['cat-a', 'none'])
+      expect(push).toHaveBeenLastCalledWith({
+        path: '/transactions',
+        query: {
+          type: 'EXPENSE',
+          categories: 'cat-a,none',
+          exceptional: 'exclude',
+          label: 'Dépenses · Autres (2)',
+          gross: '1',
+        },
+      })
       push.mockRestore()
     })
 

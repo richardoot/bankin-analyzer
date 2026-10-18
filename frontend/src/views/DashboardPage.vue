@@ -16,7 +16,11 @@
   import { useFiltersStore } from '@/stores/filters'
   import { formatCurrency, formatMonth } from '@/lib/formatters'
   import { UNCATEGORIZED_CATEGORY_ID } from '@/lib/api'
-  import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
+  import {
+    MAX_LINK_LIST,
+    NO_CATEGORY,
+    transactionsLink,
+  } from '@/lib/transactionsLink'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
   import { assignCategoryColors } from '@/lib/chartPalette'
   import { useChartTheme } from '@/composables/useChartTheme'
@@ -237,6 +241,24 @@
             : undefined,
         gross: true,
         label: nameOf(type, id),
+      })
+    )
+  }
+
+  /** The « Autres » slice: every category it merges, at once. */
+  function openCategories(type: LinkType, ids: string[]): void {
+    if (ids.length === 0 || ids.length > MAX_LINK_LIST) return
+    void router.push(
+      transactionsLink({
+        type,
+        categoryIds: ids,
+        ...linkWindow.value,
+        exceptional:
+          type === 'EXPENSE' && breakdownMode.value === 'everyday'
+            ? 'exclude'
+            : undefined,
+        gross: true,
+        label: `${KIND_LABEL[type]} · Autres (${ids.length})`,
       })
     )
   }
@@ -649,6 +671,7 @@
                   title="Dépenses"
                   :ids="expenseSliceIds"
                   @select="id => openCategory('EXPENSE', id)"
+                  @select-others="ids => openCategories('EXPENSE', ids)"
                 />
               </div>
               <div
@@ -813,6 +836,7 @@
                   title="Revenus"
                   :ids="incomeSliceIds"
                   @select="id => openCategory('INCOME', id)"
+                  @select-others="ids => openCategories('INCOME', ids)"
                 />
               </div>
               <div

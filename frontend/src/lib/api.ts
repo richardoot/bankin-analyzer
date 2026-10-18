@@ -425,6 +425,10 @@ export interface TransactionQueryParams {
    * else the category's; `none`: « à migrer ».
    */
   rhythm?: 'COMMITTED' | 'VARIABLE' | 'none' | undefined
+  /** Any of these categories, `none` for the unfiled rows (at most 200). */
+  categoryIds?: string[] | undefined
+  /** The lines of any of these series, `<amountBucket>:<merchantKey>`. */
+  recurrences?: string[] | undefined
   sortBy?: 'date' | 'amount' | undefined
   sortOrder?: 'asc' | 'desc' | undefined
 }

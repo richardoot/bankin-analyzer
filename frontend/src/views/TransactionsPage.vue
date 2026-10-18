@@ -243,6 +243,13 @@
   const natureFilter = ref<NatureFilter | null>(initialLink.nature ?? null)
   const rhythmFilter = ref<RhythmFilter | null>(initialLink.rhythm ?? null)
   /**
+   * Several categories, several series at once: only a link names them —
+   * the « Autres » of a donut, a group of recurrences. The selects above
+   * keep picking one; these are named in a chip and dropped from it.
+   */
+  const categoryIdsFilter = ref<string[]>(initialLink.categoryIds ?? [])
+  const recurrencesFilter = ref<string[]>(initialLink.recurrences ?? [])
+  /**
    * The context a link can carry and the controls above cannot express: a
    * person's debts, a settlement, an import, a sync run, an exact list of
    * rows. Named in the banner above the list rather than in a chip, and
@@ -326,6 +333,8 @@
     exceptionalFilter.value = null
     natureFilter.value = null
     rhythmFilter.value = null
+    categoryIdsFilter.value = []
+    recurrencesFilter.value = []
     clearContext()
     localStorage.removeItem(FILTERS_STORAGE_KEY)
   }
@@ -371,6 +380,8 @@
       exceptionalFilter.value !== null ||
       natureFilter.value !== null ||
       rhythmFilter.value !== null ||
+      categoryIdsFilter.value.length > 0 ||
+      recurrencesFilter.value.length > 0 ||
       hasContextFilter.value
     )
   })
@@ -405,6 +416,21 @@
   })
 
   /**
+   * « Catégories : A, B, C » for a short list, « 5 catégories » beyond: a
+   * chip is one line, not an inventory.
+   */
+  const categoriesChipLabel = computed(() => {
+    const ids = categoryIdsFilter.value
+    if (ids.length > 3) return `${ids.length} catégories`
+    const names = ids.map(id =>
+      id === NO_CATEGORY
+        ? 'Sans catégorie'
+        : (allCategories.value.find(c => c.id === id)?.name ?? '…')
+    )
+    return `Catégories : ${names.join(', ')}`
+  })
+
+  /**
    * The active filters as removable chips: what the list is currently NOT
    * showing, named in one line under the controls that caused it.
    */
@@ -428,6 +454,9 @@
         c => c.id === selectedCategory.value
       )?.name
       chips.push({ key: 'category', label: `Catégorie : ${name ?? '…'}` })
+    }
+    if (categoryIdsFilter.value.length > 0) {
+      chips.push({ key: 'categories', label: categoriesChipLabel.value })
     }
     if (selectedSubcategory.value === NO_CATEGORY) {
       chips.push({ key: 'subcategory', label: 'Sans sous-catégorie' })
@@ -457,6 +486,14 @@
       chips.push({
         key: 'recurrence',
         label: `Charge récurrente${recurrenceLabel.value ? ` : ${recurrenceLabel.value}` : ''}`,
+      })
+    }
+    if (recurrencesFilter.value.length > 0) {
+      const count = recurrencesFilter.value.length
+      chips.push({
+        key: 'recurrences',
+        label:
+          count === 1 ? '1 charge récurrente' : `${count} charges récurrentes`,
       })
     }
     if (exceptionalFilter.value) {
@@ -529,6 +566,12 @@
         break
       case 'exceptional':
         exceptionalFilter.value = null
+        break
+      case 'categories':
+        categoryIdsFilter.value = []
+        break
+      case 'recurrences':
+        recurrencesFilter.value = []
         break
       case 'nature':
         natureFilter.value = null
@@ -777,6 +820,14 @@
       exceptional: exceptionalFilter.value || undefined,
       nature: natureFilter.value || undefined,
       rhythm: rhythmFilter.value || undefined,
+      categoryIds:
+        categoryIdsFilter.value.length > 0
+          ? categoryIdsFilter.value
+          : undefined,
+      recurrences:
+        recurrencesFilter.value.length > 0
+          ? recurrencesFilter.value
+          : undefined,
     }
   })
 
@@ -1145,6 +1196,8 @@
       exceptional: exceptionalFilter.value ?? undefined,
       nature: natureFilter.value ?? undefined,
       rhythm: rhythmFilter.value ?? undefined,
+      categoryIds: categoryIdsFilter.value,
+      recurrences: recurrencesFilter.value,
       label: contextLabel.value ?? undefined,
       gross: grossAmounts.value,
       sort: sortBy.value,
@@ -1202,6 +1255,8 @@
     exceptionalFilter.value = link.exceptional ?? null
     natureFilter.value = link.nature ?? null
     rhythmFilter.value = link.rhythm ?? null
+    categoryIdsFilter.value = link.categoryIds ?? []
+    recurrencesFilter.value = link.recurrences ?? []
     contextLabel.value = link.label ?? null
     grossAmounts.value = link.gross ?? false
     // Sort and page size are how the list reads, not what it shows: a link
@@ -1279,6 +1334,8 @@
       exceptionalFilter,
       natureFilter,
       rhythmFilter,
+      categoryIdsFilter,
+      recurrencesFilter,
       personFilter,
       reimbursementFilter,
       settlementFilter,

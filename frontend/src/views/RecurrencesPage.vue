@@ -39,7 +39,8 @@
   import IconClose from '@/components/icons/IconClose.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
-  import { transactionsLink } from '@/lib/transactionsLink'
+  import { MAX_LINK_LIST, transactionsLink } from '@/lib/transactionsLink'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
 
   const router = useRouter()
   const toast = useToast()
@@ -201,6 +202,34 @@
     )
   }
 
+  /**
+   * A total opens the lines of every series it adds up. Its figure is a
+   * monthly equivalent, already the user's share on a joint account: the
+   * list shows full amounts, and says so. No link beyond the cap.
+   */
+  function seriesLink(rows: RecurrenceDto[], label: string) {
+    if (rows.length === 0 || rows.length > MAX_LINK_LIST) return null
+    return transactionsLink({
+      recurrences: rows.map(recurrenceFilterKey),
+      gross: true,
+      label,
+    })
+  }
+
+  type Nature = 'ESSENTIAL' | 'PLEASURE' | null
+  /**
+   * The split of the active total, by the nature the server gave each
+   * series: its latest charge's subcategory, else its category. Not the
+   * Transactions page's nature filter — a series is read through its latest
+   * filing, the page reads each line — so the link names the series.
+   */
+  function natureLink(nature: Nature, label: string) {
+    return seriesLink(
+      active.value.filter(r => (r.nature ?? null) === nature),
+      `Charges actives · ${label}`
+    )
+  }
+
   async function decide(
     row: RecurrenceDto,
     decision: 'CONFIRMED' | 'DISMISSED'
@@ -320,14 +349,54 @@
             >/ mois</span
           >
         </p>
+        <TransactionsLink
+          v-if="seriesLink(active, 'Charges actives')"
+          :to="seriesLink(active, 'Charges actives')!"
+          subject="toutes les charges actives"
+          class="mt-1"
+          data-testid="recurrences-total-link"
+        >
+          Voir les transactions
+        </TransactionsLink>
         <p
           v-if="list.monthlyTotal > 0"
-          class="mt-2 text-xs text-gray-500 dark:text-gray-400"
+          class="mt-2 flex flex-wrap items-center gap-x-1 text-xs text-gray-500 dark:text-gray-400"
         >
-          Essentiel {{ formatCurrency(list.byNature.essential) }} · Plaisir
-          {{ formatCurrency(list.byNature.pleasure) }}
-          <template v-if="list.byNature.unclassified > 0">
-            · Non classé {{ formatCurrency(list.byNature.unclassified) }}
+          <template
+            v-for="(part, index) in [
+              {
+                key: 'essential',
+                nature: 'ESSENTIAL' as Nature,
+                label: 'Essentiel',
+                amount: list.byNature.essential,
+              },
+              {
+                key: 'pleasure',
+                nature: 'PLEASURE' as Nature,
+                label: 'Plaisir',
+                amount: list.byNature.pleasure,
+              },
+              {
+                key: 'unclassified',
+                nature: null as Nature,
+                label: 'Non classé',
+                amount: list.byNature.unclassified,
+              },
+            ].filter(p => p.key !== 'unclassified' || p.amount > 0)"
+            :key="part.key"
+          >
+            <span v-if="index > 0" aria-hidden="true">·</span>
+            <span class="inline-flex items-center">
+              {{ part.label }} {{ formatCurrency(part.amount) }}
+              <TransactionsLink
+                v-if="natureLink(part.nature, part.label)"
+                :to="natureLink(part.nature, part.label)!"
+                :subject="`Charges actives · ${part.label}`"
+                icon-only
+                class="-my-1 h-6 w-6"
+                :data-testid="`recurrences-nature-link-${part.key}`"
+              />
+            </span>
           </template>
         </p>
       </BaseCard>
@@ -405,9 +474,21 @@
                 {{ group.title }}
               </h2>
               <span
-                class="text-sm tabular-nums text-gray-600 dark:text-gray-400"
+                class="inline-flex items-center gap-1 text-sm tabular-nums text-gray-600 dark:text-gray-400"
               >
                 {{ formatCurrency(group.monthlyTotal) }} / mois
+                <TransactionsLink
+                  v-if="
+                    seriesLink(group.rows, `Charges actives · ${group.title}`)
+                  "
+                  :to="
+                    seriesLink(group.rows, `Charges actives · ${group.title}`)!
+                  "
+                  :subject="`Charges actives · ${group.title}`"
+                  icon-only
+                  class="-my-1 h-6 w-6"
+                  :data-testid="`recurrence-group-link-${group.key}`"
+                />
               </span>
             </header>
             <ul class="divide-y divide-gray-100 dark:divide-slate-800">
@@ -590,8 +671,18 @@
                   stopped.length > 1 ? 'charges terminées' : 'charge terminée'
                 }}
               </span>
-              <span class="tabular-nums text-gray-600 dark:text-gray-400">
+              <span
+                class="inline-flex items-center gap-1 tabular-nums text-gray-600 dark:text-gray-400"
+              >
                 {{ formatCurrency(stoppedTotal) }} payés au total
+                <TransactionsLink
+                  v-if="seriesLink(stopped, 'Charges terminées')"
+                  :to="seriesLink(stopped, 'Charges terminées')!"
+                  subject="Charges terminées"
+                  icon-only
+                  class="-my-1 h-6 w-6"
+                  data-testid="recurrences-ended-link"
+                />
               </span>
             </header>
             <ul class="divide-y divide-gray-100 dark:divide-slate-800">
