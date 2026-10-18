@@ -497,7 +497,8 @@
         >
           Toutes les transactions reçues
         </h3>
-        <div class="space-y-2 sm:max-h-64 sm:overflow-y-auto">
+        <!-- Bounded on every screen: a hundred rows of 80px under the recap is where a phone lost the recap. -->
+        <div class="max-h-64 space-y-2 overflow-y-auto overscroll-contain">
           <button
             v-for="entry in otherTransactions"
             :key="entry.transaction.id"

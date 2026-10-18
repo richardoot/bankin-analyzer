@@ -1,6 +1,9 @@
 <script setup lang="ts">
-  import { ref, computed } from 'vue'
-  import { useModalA11y } from '@/composables/useModalA11y'
+  import { computed } from 'vue'
+  import BaseModal from '@/components/ui/BaseModal.vue'
+  import BaseButton from '@/components/ui/BaseButton.vue'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
+  import IconTrash from '@/components/icons/IconTrash.vue'
   import type { SettlementDto } from '@/lib/api'
   import { formatCurrency, formatDate, formatDateTime } from '@/lib/formatters'
 
@@ -18,14 +21,6 @@
     delete: []
   }>()
 
-  // Escape closes, Tab stays inside, focus returns to the opener after.
-  const modalPanelRef = ref<HTMLElement | null>(null)
-  useModalA11y({
-    isOpen: () => props.isOpen,
-    onClose: () => emit('close'),
-    panel: modalPanelRef,
-  })
-
   const totalSettled = computed(() => {
     if (!props.settlement) return 0
     return props.settlement.reimbursements.reduce(
@@ -36,276 +31,150 @@
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="modal">
-      <div
-        v-if="isOpen && settlement"
-        class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
-      >
-        <!-- Backdrop -->
-        <div class="fixed inset-0 bg-black/50" @click="emit('close')" />
-
-        <!-- Modal -->
+  <BaseModal
+    :open="isOpen && settlement !== null"
+    title="Détails du règlement"
+    :subtitle="
+      settlement ? `Créé le ${formatDateTime(settlement.createdAt)}` : undefined
+    "
+    max-width="lg"
+    @close="emit('close')"
+  >
+    <template v-if="settlement">
+      <!-- Person info -->
+      <div class="mb-6 flex items-center gap-3">
         <div
-          ref="modalPanelRef"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="settlement-detail-modal-title"
-          class="relative z-10 flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-slate-900 dark:shadow-slate-900/30"
+          class="flex h-12 w-12 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30"
         >
-          <!-- Header -->
-          <div
-            class="flex items-start justify-between gap-3 border-b border-gray-200 p-4 sm:p-6 dark:border-slate-700"
+          <span
+            class="text-xl font-semibold text-primary-700 dark:text-primary-400"
           >
-            <div class="min-w-0">
-              <h2
-                id="settlement-detail-modal-title"
-                class="text-xl font-semibold text-gray-900 dark:text-gray-100"
-              >
-                Détails du règlement
-              </h2>
-              <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                Créé le {{ formatDateTime(settlement.createdAt) }}
-              </p>
-            </div>
-            <button
-              type="button"
-              class="-m-2 shrink-0 p-2 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-              aria-label="Fermer"
-              @click="emit('close')"
-            >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
+            {{ settlement.personName.charAt(0).toUpperCase() }}
+          </span>
+        </div>
+        <div>
+          <h3 class="font-medium text-gray-900 dark:text-gray-100">
+            {{ settlement.personName }}
+          </h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400">
+            Montant réglé : {{ formatCurrency(settlement.amountUsed) }}
+          </p>
+        </div>
+      </div>
 
-          <!-- Content -->
-          <div class="flex-1 overflow-y-auto p-4 sm:p-6">
-            <!-- Person info -->
-            <div class="flex items-center gap-3 mb-6">
-              <div
-                class="h-12 w-12 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center"
-              >
-                <span
-                  class="text-xl font-semibold text-primary-700 dark:text-primary-400"
+      <!-- Income transaction -->
+      <div class="mb-6 rounded-lg bg-primary-50 p-4 dark:bg-primary-900/20">
+        <SectionLabel as="h4" class="mb-2">
+          Transaction de règlement
+        </SectionLabel>
+        <p class="font-medium text-gray-900 dark:text-gray-100">
+          {{ settlement.incomeTransactionDescription }}
+        </p>
+        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          {{ formatDate(settlement.incomeTransactionDate) }}
+        </p>
+        <div
+          class="mt-2 flex items-center justify-between border-t border-primary-200 pt-2 dark:border-primary-800"
+        >
+          <span class="text-sm text-gray-600 dark:text-gray-400"
+            >Montant total</span
+          >
+          <span class="font-bold text-primary-600 dark:text-primary-400">
+            +{{ formatCurrency(settlement.incomeTransactionAmount) }}
+          </span>
+        </div>
+        <div class="mt-1 flex items-center justify-between">
+          <span class="text-sm text-gray-600 dark:text-gray-400"
+            >Montant utilisé</span
+          >
+          <span class="font-medium text-gray-700 dark:text-gray-300">
+            {{ formatCurrency(settlement.amountUsed) }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Reimbursements list -->
+      <div>
+        <SectionLabel as="h4" class="mb-3">
+          Remboursements réglés ({{ settlement.reimbursements.length }})
+        </SectionLabel>
+
+        <div class="space-y-2">
+          <div
+            v-for="reimbursement in settlement.reimbursements"
+            :key="reimbursement.reimbursementId"
+            class="rounded-lg bg-gray-50 p-3 dark:bg-slate-800"
+          >
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0 flex-1">
+                <p
+                  class="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                  :title="reimbursement.transactionDescription"
                 >
-                  {{ settlement.personName.charAt(0).toUpperCase() }}
-                </span>
+                  {{ reimbursement.transactionDescription }}
+                </p>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ formatDate(reimbursement.transactionDate) }}
+                  <span v-if="reimbursement.expenseCategoryName" class="ml-2">
+                    - {{ reimbursement.expenseCategoryName }}
+                  </span>
+                </p>
               </div>
-              <div>
-                <h3 class="font-medium text-gray-900 dark:text-gray-100">
-                  {{ settlement.personName }}
-                </h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  Montant réglé : {{ formatCurrency(settlement.amountUsed) }}
+              <div class="shrink-0 text-right">
+                <p
+                  class="text-sm font-semibold text-gray-900 dark:text-gray-100"
+                >
+                  {{ formatCurrency(reimbursement.amountSettled) }}
+                </p>
+                <p
+                  v-if="
+                    reimbursement.amountSettled < reimbursement.originalAmount
+                  "
+                  class="text-xs text-amber-700 dark:text-amber-400"
+                >
+                  sur {{ formatCurrency(reimbursement.originalAmount) }}
                 </p>
               </div>
             </div>
-
-            <!-- Income transaction -->
-            <div
-              class="mb-6 p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg"
-            >
-              <h4
-                class="text-sm font-medium text-primary-700 dark:text-primary-400 mb-2 flex items-center gap-2"
-              >
-                <svg
-                  class="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
-                  />
-                </svg>
-                Transaction de règlement
-              </h4>
-              <div class="text-gray-900 dark:text-gray-100 font-medium">
-                {{ settlement.incomeTransactionDescription }}
-              </div>
-              <div class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                {{ formatDate(settlement.incomeTransactionDate) }}
-              </div>
-              <div
-                class="flex justify-between items-center mt-2 pt-2 border-t border-primary-200 dark:border-primary-800"
-              >
-                <span class="text-sm text-gray-600 dark:text-gray-400"
-                  >Montant total</span
-                >
-                <span class="font-bold text-primary-600 dark:text-primary-400">
-                  +{{ formatCurrency(settlement.incomeTransactionAmount) }}
-                </span>
-              </div>
-              <div class="flex justify-between items-center mt-1">
-                <span class="text-sm text-gray-600 dark:text-gray-400"
-                  >Montant utilisé</span
-                >
-                <span class="font-medium text-gray-700 dark:text-gray-300">
-                  {{ formatCurrency(settlement.amountUsed) }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Reimbursements list -->
-            <div>
-              <h4
-                class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2"
-              >
-                <svg
-                  class="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                  />
-                </svg>
-                Remboursements réglés ({{ settlement.reimbursements.length }})
-              </h4>
-
-              <div class="space-y-2">
-                <div
-                  v-for="reimbursement in settlement.reimbursements"
-                  :key="reimbursement.reimbursementId"
-                  class="p-3 bg-gray-50 dark:bg-slate-800 rounded-lg"
-                >
-                  <div class="flex justify-between items-start">
-                    <div class="flex-1 min-w-0">
-                      <div
-                        class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
-                      >
-                        {{ reimbursement.transactionDescription }}
-                      </div>
-                      <div
-                        class="text-xs text-gray-500 dark:text-gray-400 mt-0.5"
-                      >
-                        {{ formatDate(reimbursement.transactionDate) }}
-                        <span
-                          v-if="reimbursement.expenseCategoryName"
-                          class="ml-2"
-                        >
-                          - {{ reimbursement.expenseCategoryName }}
-                        </span>
-                      </div>
-                    </div>
-                    <div class="text-right ml-4">
-                      <div
-                        class="text-sm font-semibold text-gray-900 dark:text-gray-100"
-                      >
-                        {{ formatCurrency(reimbursement.amountSettled) }}
-                      </div>
-                      <div
-                        v-if="
-                          reimbursement.amountSettled <
-                          reimbursement.originalAmount
-                        "
-                        class="text-xs text-orange-600 dark:text-orange-400"
-                      >
-                        sur {{ formatCurrency(reimbursement.originalAmount) }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Total -->
-              <div
-                class="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center"
-              >
-                <span class="font-medium text-gray-700 dark:text-gray-300"
-                  >Total réglé</span
-                >
-                <span
-                  class="text-lg font-bold text-primary-600 dark:text-primary-400"
-                >
-                  {{ formatCurrency(totalSettled) }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Note -->
-            <div
-              v-if="settlement.note"
-              class="mt-4 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg"
-            >
-              <h4
-                class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1"
-              >
-                Note
-              </h4>
-              <p class="text-sm text-gray-700 dark:text-gray-300">
-                {{ settlement.note }}
-              </p>
-            </div>
-          </div>
-
-          <!-- Footer -->
-          <div
-            class="flex flex-col-reverse gap-2 border-t border-gray-200 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:p-6 dark:border-slate-700"
-            :class="hideDelete ? 'sm:justify-end' : 'sm:justify-between'"
-          >
-            <button
-              v-if="!hideDelete"
-              type="button"
-              class="min-h-[44px] justify-center px-4 py-2 sm:min-h-0 sm:justify-start text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex items-center gap-2"
-              @click="emit('delete')"
-            >
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                />
-              </svg>
-              Annuler ce règlement
-            </button>
-            <button
-              type="button"
-              class="min-h-[44px] px-6 py-2 sm:min-h-0 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
-              @click="emit('close')"
-            >
-              Fermer
-            </button>
           </div>
         </div>
+
+        <!-- Total -->
+        <div
+          class="mt-4 flex items-center justify-between border-t border-gray-200 pt-3 dark:border-slate-700"
+        >
+          <span class="font-medium text-gray-700 dark:text-gray-300"
+            >Total réglé</span
+          >
+          <span
+            class="text-lg font-bold text-primary-600 dark:text-primary-400"
+          >
+            {{ formatCurrency(totalSettled) }}
+          </span>
+        </div>
       </div>
-    </Transition>
-  </Teleport>
+
+      <!-- Note -->
+      <div
+        v-if="settlement.note"
+        class="mt-4 rounded-lg bg-gray-50 p-3 dark:bg-slate-800"
+      >
+        <SectionLabel as="h4" class="mb-1">Note</SectionLabel>
+        <p class="text-sm text-gray-700 dark:text-gray-300">
+          {{ settlement.note }}
+        </p>
+      </div>
+    </template>
+
+    <template v-if="!hideDelete" #footer-start>
+      <BaseButton variant="danger-outline" @click="emit('delete')">
+        <IconTrash class="h-4 w-4" />
+        Annuler ce règlement
+      </BaseButton>
+    </template>
+
+    <template #footer>
+      <BaseButton variant="secondary" @click="emit('close')">Fermer</BaseButton>
+    </template>
+  </BaseModal>
 </template>
-
-<style scoped>
-  .modal-enter-active,
-  .modal-leave-active {
-    transition: opacity 0.2s ease;
-  }
-
-  .modal-enter-from,
-  .modal-leave-to {
-    opacity: 0;
-  }
-</style>

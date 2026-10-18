@@ -537,7 +537,7 @@ describe('SettlementModal', () => {
 
     // 45 EUR against the 45 EUR retained: nothing is left over, and the
     // untouched Netflix line never enters the settlement.
-    expect(wrapper.text()).toContain('Tout est affecte')
+    expect(wrapper.text()).toContain('Tout est affecté')
 
     await confirmSettlement(wrapper)
 
@@ -609,7 +609,9 @@ describe('SettlementModal', () => {
 
     await setAmount(wrapper, 'Carrefour', '18')
 
-    await wrapper.find('input[aria-label="Solder Carrefour"]').trigger('change')
+    // A real checkbox flips its state before it fires change; the brick's
+    // model follows the state, so the test ticks it rather than poking the event.
+    await wrapper.find('input[aria-label="Solder Carrefour"]').setValue(true)
     await flushPromises()
 
     await confirmSettlement(wrapper)
@@ -688,6 +690,36 @@ describe('SettlementModal', () => {
     expect(
       wrapper.get('[data-testid="settlement-selection-total"]').text()
     ).toContain('0,00')
+  })
+
+  it('asks before dropping a started settlement, and closes outright otherwise', async () => {
+    const wrapper = await mountModal({})
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(wrapper.emitted('close')).toHaveLength(1)
+
+    await tick(wrapper, 'Carrefour')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+
+    // A ticked line is a draft: the shell asks instead of forgetting it.
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="modal-dirty-guard"]').exists()).toBe(
+      true
+    )
+  })
+
+  it('walks back to the selection from the header arrow', async () => {
+    const wrapper = await mountAtReceipt({}, ['Carrefour'])
+
+    const back = wrapper.get('[data-testid="settlement-back"]')
+    expect(back.attributes('aria-label')).toContain('Retour')
+    await back.trigger('click')
+
+    expect(
+      wrapper.find('[data-testid="settlement-step-select"]').exists()
+    ).toBe(true)
   })
 
   it('says so when the person owes nothing', async () => {
