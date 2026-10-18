@@ -26,6 +26,10 @@ import {
   daysBetweenInclusive,
   toEventIntervals,
 } from '../common/exceptional-periods'
+import {
+  exceptionalOnSmoothedError,
+  SMOOTHED_ROWS_NAMED,
+} from '../transactions/amortization'
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
@@ -245,7 +249,12 @@ export class TagsService {
     userId: string,
     dto: UpdateTagDto
   ): Promise<TagResponseDto> {
-    await this.getOwned(id, userId)
+    const current = await this.getOwned(id, userId)
+    // Turning a tag exceptional turns every row it carries into an episode,
+    // which a smoothed purchase cannot be.
+    if (dto.isExceptional === true && !current.isExceptional) {
+      await this.assertNoneSmoothed({ tags: { some: { tagId: id } } }, userId)
+    }
     try {
       const tag = await this.prisma.tag.update({
         where: { id },
@@ -296,7 +305,14 @@ export class TagsService {
     userId: string,
     transactionIds: string[]
   ): Promise<{ attached: number }> {
-    await this.getOwned(tagId, userId)
+    const tag = await this.getOwned(tagId, userId)
+
+    // An exceptional tag makes each row an episode; a smoothed purchase stays
+    // in everyday life. Refused as a whole rather than skipping those rows,
+    // so the user is told instead of finding some rows silently untagged.
+    if (tag.isExceptional) {
+      await this.assertNoneSmoothed({ id: { in: transactionIds } }, userId)
+    }
 
     // Keep only transactions that actually belong to the user.
     const owned = await this.prisma.transaction.findMany({
@@ -312,6 +328,34 @@ export class TagsService {
     })
 
     return { attached: result.count }
+  }
+
+  /**
+   * Refuse when any of the user's transactions matching `where` is smoothed,
+   * naming a few of them so the user knows which to look at.
+   */
+  private async assertNoneSmoothed(
+    where: Prisma.TransactionWhereInput,
+    userId: string
+  ): Promise<void> {
+    const smoothedWhere: Prisma.TransactionWhereInput = {
+      AND: [where, { userId, amortizationMonths: { not: null } }],
+    }
+    const [total, named] = await Promise.all([
+      this.prisma.transaction.count({ where: smoothedWhere }),
+      this.prisma.transaction.findMany({
+        where: smoothedWhere,
+        select: { description: true },
+        orderBy: { date: 'desc' },
+        take: SMOOTHED_ROWS_NAMED,
+      }),
+    ])
+    if (total > 0) {
+      throw exceptionalOnSmoothedError(
+        named.map(t => t.description),
+        total
+      )
+    }
   }
 
   /** Remove the link between a tag and a single transaction. */

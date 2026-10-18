@@ -81,6 +81,13 @@ export class TransactionResponseDto {
   /** Is transaction reconciled */
   isPointed!: boolean
 
+  /**
+   * Over how many months the expense is smoothed in the everyday reading,
+   * from the month of its date (2 to 60). Null: counted whole at its date.
+   */
+  @ApiProperty({ type: Number, nullable: true, minimum: 2, maximum: 60 })
+  amortizationMonths!: number | null
+
   /** Category ID */
   categoryId?: string | null
 

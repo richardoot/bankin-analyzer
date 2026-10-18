@@ -92,6 +92,13 @@ model Transaction {
   /// that earlier run still finds it.
   syncRunId String? @map("sync_run_id")
 
+  /// Over how many months this expense is smoothed in the everyday reading,
+  /// starting at the month of `date`. Null: counted whole at its date. A
+  /// CHECK constraint keeps it between 2 and 60. Never set together with an
+  /// exceptional tag — a purchase is either an episode or a smoothed cost of
+  /// everyday life (agent-os/product/amortization-framework.md).
+  amortizationMonths Int? @map("amortization_months") @db.SmallInt
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

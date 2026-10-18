@@ -968,6 +968,24 @@ describe('TransactionsController', () => {
       expect(result.categoryId).toBe(newCategoryId)
       expect(result.categoryName).toBe('Transport')
     })
+
+    it('forwards the smoothing and returns it', async () => {
+      mockTransactionsService.update.mockResolvedValue({
+        ...mockTransaction,
+        amortizationMonths: 24,
+      })
+
+      const result = await controller.update(mockUser, mockTransaction.id, {
+        amortizationMonths: 24,
+      })
+
+      expect(result.amortizationMonths).toBe(24)
+      expect(mockTransactionsService.update).toHaveBeenCalledWith(
+        mockTransaction.id,
+        mockUser.id,
+        { amortizationMonths: 24 }
+      )
+    })
   })
 
   describe('delete', () => {

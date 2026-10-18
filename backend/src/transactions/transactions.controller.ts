@@ -108,6 +108,7 @@ export class TransactionsController {
       subcategory: tx.subcategory,
       note: tx.note,
       isPointed: tx.isPointed,
+      amortizationMonths: tx.amortizationMonths,
       categoryId: tx.categoryId,
       categoryName: tx.category?.name,
       subcategoryId: tx.subcategoryId,
@@ -505,7 +506,8 @@ export class TransactionsController {
 
   @Patch(':id')
   @ApiOperation({
-    summary: 'Update a transaction (note, category, subcategory, isPointed)',
+    summary:
+      'Update a transaction (note, category, subcategory, isPointed, amortizationMonths)',
   })
   @ApiResponse({ status: 200, type: TransactionResponseDto })
   async update(
@@ -518,6 +520,8 @@ export class TransactionsController {
       categoryId?: string | null
       subcategoryId?: string | null
       isPointed?: boolean
+      /** Smooth the expense over 2 to 60 months; null stops smoothing it. */
+      amortizationMonths?: number | null
     }
   ): Promise<TransactionResponseDto> {
     const tx = await this.transactionsService.update(id, user.id, body)

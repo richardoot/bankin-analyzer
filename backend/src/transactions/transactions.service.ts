@@ -28,6 +28,11 @@ import {
   type LedgerTransaction,
   type StagedTransaction,
 } from '../bank-sync/reconciliation'
+import {
+  assertAmortizationMonths,
+  notAnExpenseError,
+  smoothingAnExceptionalError,
+} from './amortization'
 import type {
   CreateTransactionDto,
   ImportResultDto,
@@ -822,6 +827,11 @@ export class TransactionsService {
    * a transfer category is what turns it into a transfer, and filing it back
    * under an expense or income category (or unfiling it) gives it the type
    * its sign says. That is the only way a row ever changes type.
+   *
+   * `amortizationMonths` smooths an expense over that many months (2 to 60),
+   * null stops smoothing it. Only an expense is smoothed, and never one that
+   * carries an exceptional tag: the row is an episode or a smoothed cost of
+   * everyday life, not both.
    */
   async update(
     id: string,
@@ -832,8 +842,17 @@ export class TransactionsService {
       categoryId?: string | null
       subcategoryId?: string | null
       isPointed?: boolean
+      /** Null stops smoothing the transaction. */
+      amortizationMonths?: number | null
     }
   ): Promise<Transaction> {
+    if (
+      data.amortizationMonths !== undefined &&
+      data.amortizationMonths !== null
+    ) {
+      assertAmortizationMonths(data.amortizationMonths)
+    }
+
     const current = await this.findOne(id, userId) // Verify ownership
 
     // Build update data, handling subcategoryId explicitly
@@ -844,10 +863,14 @@ export class TransactionsService {
       subcategory?: string | null
       isPointed?: boolean
       type?: TransactionType
+      amortizationMonths?: number | null
     } = {}
 
     if (data.note !== undefined) updateData.note = data.note
     if (data.isPointed !== undefined) updateData.isPointed = data.isPointed
+    if (data.amortizationMonths !== undefined) {
+      updateData.amortizationMonths = data.amortizationMonths
+    }
 
     if (data.categoryId === null) {
       updateData.categoryId = null
@@ -884,6 +907,8 @@ export class TransactionsService {
       }
     }
 
+    await this.assertSmoothable(current, updateData, data.amortizationMonths)
+
     const updated = await this.prisma.transaction.update({
       where: { id },
       data: updateData,
@@ -894,6 +919,40 @@ export class TransactionsService {
       },
     })
     return updated
+  }
+
+  /**
+   * Refuse a smoothing the framework does not allow, once the update is known.
+   *
+   * Checked whenever the row will be smoothed after the update and either the
+   * smoothing or the type changes: smoothing a row, or filing a smoothed row
+   * under an income or transfer category. The exceptional tags only matter
+   * when the smoothing itself is being set, since this endpoint never touches
+   * tags (the tags service guards the other direction).
+   */
+  private async assertSmoothable(
+    current: Transaction,
+    updateData: { type?: TransactionType },
+    requested: number | null | undefined
+  ): Promise<void> {
+    const months =
+      requested !== undefined ? requested : current.amortizationMonths
+    if (months === null) return
+    if (requested === undefined && updateData.type === undefined) return
+
+    const type = updateData.type ?? current.type
+    if (type !== 'EXPENSE' || current.amount.toNumber() >= 0) {
+      throw notAnExpenseError()
+    }
+
+    if (requested === undefined) return
+    const exceptional = await this.prisma.transactionTag.findMany({
+      where: { transactionId: current.id, tag: { isExceptional: true } },
+      select: { tag: { select: { name: true } } },
+    })
+    if (exceptional.length > 0) {
+      throw smoothingAnExceptionalError(exceptional.map(t => t.tag.name))
+    }
   }
 
   /**
@@ -1142,6 +1201,15 @@ export class TransactionsService {
           `Selection changed: ${selection.expectedCount} transactions were shown, ${actual} match now. Refresh and try again.`
         )
       }
+    }
+
+    // A smoothed row stays an expense: filing it under an income or transfer
+    // category would leave a smoothing on something no longer smoothable.
+    if (updateData.type !== undefined && updateData.type !== 'EXPENSE') {
+      const smoothed = await this.prisma.transaction.count({
+        where: { AND: [where, { amortizationMonths: { not: null } }] },
+      })
+      if (smoothed > 0) throw notAnExpenseError()
     }
 
     const result = await this.prisma.transaction.updateMany({
