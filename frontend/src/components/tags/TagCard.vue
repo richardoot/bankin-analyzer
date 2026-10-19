@@ -2,11 +2,13 @@
   import { RouterLink } from 'vue-router'
   import type { TagDto } from '@/lib/api'
   import { formatCurrency } from '@/lib/formatters'
+  import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
   import IconPencil from '@/components/icons/IconPencil.vue'
+  import IconPlus from '@/components/icons/IconPlus.vue'
   import IconTrash from '@/components/icons/IconTrash.vue'
   import TagStatusBadge from '@/components/tags/TagStatusBadge.vue'
   import { transactionsLink } from '@/lib/transactionsLink'
@@ -15,13 +17,16 @@
    * One tag on the tags page: an article, with its own link and its own
    * actions — not a button wrapped around blocks, with controls hidden
    * until hovered. A dated tag says where it stands today; a tag nobody
-   * has used yet says so rather than linking to an empty list.
+   * has used yet says so rather than linking to an empty list. A past
+   * event offers its next edition: events come back, and the next one is
+   * made from this one rather than from a blank form.
    */
   defineProps<{ tag: TagDto }>()
 
   const emit = defineEmits<{
     (e: 'edit'): void
     (e: 'delete'): void
+    (e: 'new-edition'): void
   }>()
 
   /** "12 juil. – 26 juil. 2025" */
@@ -114,13 +119,26 @@
         Enveloppe {{ formatCurrency(tag.budgetAmount) }}
       </span>
     </div>
-    <RouterLink
-      :to="{ name: 'tag-analysis', params: { id: tag.id } }"
-      class="mt-auto inline-flex min-h-[44px] items-center gap-1 self-start text-sm font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
-      :data-testid="`analyse-tag-${tag.name}`"
-    >
-      Analyser
-      <IconChevronRight class="h-3.5 w-3.5" />
-    </RouterLink>
+    <div class="mt-auto flex flex-wrap items-center justify-between gap-2">
+      <RouterLink
+        :to="{ name: 'tag-analysis', params: { id: tag.id } }"
+        class="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
+        :data-testid="`analyse-tag-${tag.name}`"
+      >
+        Analyser
+        <IconChevronRight class="h-3.5 w-3.5" />
+      </RouterLink>
+      <BaseButton
+        v-if="tag.status === 'past'"
+        variant="ghost"
+        size="sm"
+        :aria-label="`Nouvelle édition de ${tag.name}`"
+        :data-testid="`new-edition-${tag.name}`"
+        @click="emit('new-edition')"
+      >
+        <IconPlus class="h-3.5 w-3.5" />
+        Nouvelle édition
+      </BaseButton>
+    </div>
   </BaseCard>
 </template>

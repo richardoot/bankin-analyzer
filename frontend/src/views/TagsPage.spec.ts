@@ -541,4 +541,101 @@ describe('TagsPage', () => {
       )
     })
   })
+
+  describe('new edition', () => {
+    const races = family('fam-r', 'Compétitions', { color: '#ef4444' })
+    const pastRace = inFamily(
+      event('HYROX Paris 2025', '2025-04-12', '2025-04-13', 'past', {
+        color: '#f97316',
+        icon: 'trophy',
+      }),
+      races
+    )
+
+    it('is offered on a past event only', async () => {
+      const wrapper = await mountPage()
+
+      const offered = wrapper
+        .findAll('[data-testid^="new-edition-"]')
+        .map(b => b.attributes('data-testid'))
+      expect(offered).toEqual([
+        'new-edition-Fêtes de Bayonne 2026',
+        'new-edition-HYROX Paris 2025',
+      ])
+    })
+
+    it('fills the creation form with the next year, the family and the colour', async () => {
+      const createTag = vi
+        .spyOn(api, 'createTag')
+        .mockResolvedValue(
+          inFamily(
+            tag({ name: 'HYROX Paris 2026', isExceptional: true }),
+            races
+          )
+        )
+      const wrapper = await mountPage([pastRace], [races])
+
+      await wrapper
+        .get('[data-testid="new-edition-HYROX Paris 2025"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(
+        (
+          wrapper.get('[data-testid="new-tag-name"]')
+            .element as HTMLInputElement
+        ).value
+      ).toBe('HYROX Paris 2026')
+      expect(
+        (
+          wrapper.get('[data-testid="new-tag-exceptional"]')
+            .element as HTMLInputElement
+        ).checked
+      ).toBe(true)
+      expect(
+        (
+          wrapper.get('select[data-testid="new-tag-family"]')
+            .element as HTMLSelectElement
+        ).value
+      ).toBe('fam-r')
+      // The window is left to fill, and no envelope is asked.
+      expect(
+        (
+          wrapper.get('[data-testid="new-tag-event-start"]')
+            .element as HTMLInputElement
+        ).value
+      ).toBe('')
+      expect(wrapper.find('[data-testid="new-tag-budget"]').exists()).toBe(
+        false
+      )
+
+      await wrapper.get('[data-testid="create-tag"]').trigger('submit')
+      await flushPromises()
+      expect(createTag).toHaveBeenCalledWith({
+        name: 'HYROX Paris 2026',
+        color: '#f97316',
+        isExceptional: true,
+        familyId: 'fam-r',
+        icon: 'trophy',
+      })
+    })
+
+    it('keeps a name that does not end in a year', async () => {
+      const wrapper = await mountPage([
+        event('Fêtes de Bayonne', '2025-07-26', '2025-07-30', 'past'),
+      ])
+
+      await wrapper
+        .get('[data-testid="new-edition-Fêtes de Bayonne"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(
+        (
+          wrapper.get('[data-testid="new-tag-name"]')
+            .element as HTMLInputElement
+        ).value
+      ).toBe('Fêtes de Bayonne')
+    })
+  })
 })

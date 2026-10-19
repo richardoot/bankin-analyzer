@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { computed, onMounted, ref } from 'vue'
+  import { computed, nextTick, onMounted, ref } from 'vue'
   import { RouterLink } from 'vue-router'
   import { useIsMobile } from '@/composables/useMediaQuery'
   import PageShell from '@/components/ui/PageShell.vue'
@@ -37,6 +37,7 @@
   import {
     DEFAULT_TAG_COLOR,
     emptyTagForm,
+    newEditionForm,
     type TagFormValue,
   } from '@/components/tags/tagFormModel'
 
@@ -100,6 +101,7 @@
           }
         : {}),
       ...(familyId !== null ? { familyId } : {}),
+      ...(draft.value.icon ? { icon: draft.value.icon } : {}),
     })
     creating.value = false
     if (created) {
@@ -107,6 +109,21 @@
       createOpen.value = false
       toast.success(`Étiquette « ${created.name} » créée`)
     }
+  }
+
+  // A past event's next edition starts from the creation form, filled from
+  // it; the form is brought into view with its name ready to adjust.
+  const createCard = ref<InstanceType<typeof BaseCard> | null>(null)
+
+  async function startNewEdition(tag: TagDto): Promise<void> {
+    draft.value = newEditionForm(tag)
+    createOpen.value = true
+    await nextTick()
+    const root = createCard.value?.$el as HTMLElement | undefined
+    root?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    root
+      ?.querySelector<HTMLInputElement>('input[data-testid="new-tag-name"]')
+      ?.focus()
   }
 
   // Edit state: the same form, in a dialog, so the card keeps its shape.
@@ -286,7 +303,7 @@
     />
 
     <!-- Create form -->
-    <BaseCard padding="sm" class="mb-6">
+    <BaseCard ref="createCard" padding="sm" class="mb-6">
       <button
         type="button"
         data-testid="toggle-create-tag"
@@ -397,6 +414,7 @@
             :tag="tag"
             @edit="startEdit(tag)"
             @delete="tagToDelete = tag"
+            @new-edition="startNewEdition(tag)"
           />
         </div>
         <div v-else class="flex flex-col gap-5">
@@ -442,6 +460,7 @@
                 :tag="tag"
                 @edit="startEdit(tag)"
                 @delete="tagToDelete = tag"
+                @new-edition="startNewEdition(tag)"
               />
             </div>
           </div>
