@@ -1,6 +1,7 @@
 import {
   IsBoolean,
   IsDateString,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
@@ -51,4 +52,11 @@ export class UpdateTagDto {
   @IsNumber()
   @Min(0)
   budgetAmount?: number | null
+
+  /** The family this tag is an edition of; explicit null takes it out */
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @IsNotEmpty()
+  familyId?: string | null
 }

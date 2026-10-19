@@ -3,6 +3,7 @@ import {
   recurringTransactionsJoin,
 } from '../recurrences/recurrence-rhythm.sql'
 import { RecurrencesService } from '../recurrences/recurrences.service'
+import { TagFamiliesService } from '../tag-families/tag-families.service'
 import {
   ConflictException,
   Injectable,
@@ -33,6 +34,14 @@ import {
 } from '../transactions/amortization'
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+/** What a tag response reads besides the row: its count and its family. */
+const TAG_INCLUDE = {
+  _count: { select: { transactions: true } },
+  family: { select: { id: true, name: true, color: true } },
+} as const
+
+type TagFamilySummary = { id: string; name: string; color: string | null }
 
 /** Raw row: per-category aggregation for one tag. */
 interface TagCategoryRow {
@@ -97,7 +106,8 @@ function parseEventDate(value: string | null | undefined): Date | null {
 export class TagsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly recurrences: RecurrencesService
+    private readonly recurrences: RecurrencesService,
+    private readonly families: TagFamiliesService
   ) {}
 
   /**
@@ -105,7 +115,10 @@ export class TagsService {
    * computes it once so every tag of the response agrees.
    */
   private toResponse(
-    tag: Tag & { _count?: { transactions: number } },
+    tag: Tag & {
+      _count?: { transactions: number }
+      family?: TagFamilySummary | null
+    },
     today: string = calendarDayIn(new Date())
   ): TagResponseDto {
     const eventStartDate = toIsoDate(tag.eventStartDate)
@@ -121,6 +134,10 @@ export class TagsService {
       eventEndDate,
       budgetAmount: tag.budgetAmount === null ? null : Number(tag.budgetAmount),
       status: tagEventStatus(eventStartDate, eventEndDate, today),
+      familyId: tag.familyId,
+      family: tag.family
+        ? { id: tag.family.id, name: tag.family.name, color: tag.family.color }
+        : null,
       createdAt: tag.createdAt,
       updatedAt: tag.updatedAt,
     }
@@ -129,7 +146,7 @@ export class TagsService {
   async findAllByUser(userId: string): Promise<TagResponseDto[]> {
     const tags = await this.prisma.tag.findMany({
       where: { userId },
-      include: { _count: { select: { transactions: true } } },
+      include: TAG_INCLUDE,
       orderBy: { name: 'asc' },
     })
     const today = calendarDayIn(new Date())
@@ -219,7 +236,7 @@ export class TagsService {
   async findOne(id: string, userId: string): Promise<TagResponseDto> {
     const tag = await this.prisma.tag.findFirst({
       where: { id, userId },
-      include: { _count: { select: { transactions: true } } },
+      include: TAG_INCLUDE,
     })
     if (!tag) {
       throw new NotFoundException(`Tag with ID ${id} not found`)
@@ -228,6 +245,8 @@ export class TagsService {
   }
 
   async create(userId: string, dto: CreateTagDto): Promise<TagResponseDto> {
+    // Someone else's family is a 404, as it would be on its own route.
+    if (dto.familyId) await this.families.assertOwned(dto.familyId, userId)
     try {
       const tag = await this.prisma.tag.create({
         data: {
@@ -239,8 +258,9 @@ export class TagsService {
           eventStartDate: parseEventDate(dto.eventStartDate),
           eventEndDate: parseEventDate(dto.eventEndDate),
           budgetAmount: dto.budgetAmount ?? null,
+          familyId: dto.familyId ?? null,
         },
-        include: { _count: { select: { transactions: true } } },
+        include: TAG_INCLUDE,
       })
       return this.toResponse(tag)
     } catch (e) {
@@ -265,6 +285,7 @@ export class TagsService {
     if (dto.isExceptional === true && !current.isExceptional) {
       await this.assertNoneSmoothed({ tags: { some: { tagId: id } } }, userId)
     }
+    if (dto.familyId) await this.families.assertOwned(dto.familyId, userId)
     try {
       const tag = await this.prisma.tag.update({
         where: { id },
@@ -284,8 +305,9 @@ export class TagsService {
           ...(dto.budgetAmount !== undefined && {
             budgetAmount: dto.budgetAmount,
           }),
+          ...(dto.familyId !== undefined && { familyId: dto.familyId }),
         },
-        include: { _count: { select: { transactions: true } } },
+        include: TAG_INCLUDE,
       })
       return this.toResponse(tag)
     } catch (e) {

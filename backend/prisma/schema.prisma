@@ -26,6 +26,7 @@ model User {
   settlements           Settlement[]
   budgetPlans           BudgetPlan[]
   tags                  Tag[]
+  tagFamilies           TagFamily[]
   reimbursementPayments ReimbursementPayment[]
   bankSyncRuns          BankSyncRun[]
   bankStagedTransactions BankStagedTransaction[]
@@ -613,15 +614,49 @@ model Tag {
   /// against the plan's project reserve (BudgetPlan.savingsTarget).
   budgetAmount Decimal? @map("budget_amount") @db.Decimal(12, 2)
 
+  /// The genre of context this tag is an edition of (trips, competitions,
+  /// concerts). Optional, one level only. Deleting the family leaves the tag
+  /// without one, never deletes it.
+  familyId String? @map("family_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family       TagFamily?       @relation(fields: [familyId], references: [id], onDelete: SetNull)
   transactions TransactionTag[]
 
   @@unique([userId, name])
   @@index([userId])
+  @@index([familyId])
   @@map("tags")
+  @@schema("app")
+}
+
+/// A genre above the tag: « Voyages », « HYROX », « Concerts ». Defined by the
+/// user, like the tag, and never a purpose (that is what categories say). It
+/// changes no existing computation: a family's reading is the union of its
+/// tags, each transaction counted once (see agent-os/product/tag-families.md).
+model TagFamily {
+  id     String  @id @default(uuid())
+  userId String  @map("user_id")
+  name   String
+  color  String?
+  icon   String?
+
+  /// Envelope for the whole family over a calendar year (« Voyages : 4 000 €
+  /// par an »). Read from lot 3 on; null when none was decided.
+  annualBudget Decimal? @map("annual_budget") @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tags Tag[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("tag_families")
   @@schema("app")
 }
 

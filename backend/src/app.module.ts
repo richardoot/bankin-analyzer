@@ -21,6 +21,7 @@ import { BudgetsModule } from './budgets/budgets.module'
 import { AccountsModule } from './accounts/accounts.module'
 import { McpModule } from './mcp/mcp.module'
 import { TagsModule } from './tags/tags.module'
+import { TagFamiliesModule } from './tag-families/tag-families.module'
 import { RecurrencesModule } from './recurrences/recurrences.module'
 import { BankSyncModule } from './bank-sync/bank-sync.module'
 
@@ -60,6 +61,7 @@ import { BankSyncModule } from './bank-sync/bank-sync.module'
     DashboardModule,
     BudgetsModule,
     TagsModule,
+    TagFamiliesModule,
     RecurrencesModule,
     BankSyncModule,
     McpModule,

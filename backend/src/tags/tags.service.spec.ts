@@ -8,11 +8,17 @@ import {
 } from '@nestjs/common'
 import { TagsService } from './tags.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
+import { TagFamiliesService } from '../tag-families/tag-families.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { Prisma } from '../generated/prisma'
 import type { Tag } from '../generated/prisma'
 
 const USER = 'user-1'
+
+const TAG_INCLUDE = {
+  _count: { select: { transactions: true } },
+  family: { select: { id: true, name: true, color: true } },
+}
 
 const mockTag = {
   id: 'tag-1',
@@ -24,6 +30,7 @@ const mockTag = {
   eventStartDate: null,
   eventEndDate: null,
   budgetAmount: null,
+  familyId: null,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 }
@@ -35,6 +42,9 @@ const mockPrismaService = {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+  },
+  tagFamily: {
+    findFirst: vi.fn(),
   },
   transaction: {
     findMany: vi.fn(),
@@ -55,6 +65,7 @@ describe('TagsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TagsService,
+        TagFamiliesService,
         { provide: PrismaService, useValue: mockPrismaService },
         {
           provide: RecurrencesService,
@@ -87,6 +98,8 @@ describe('TagsService', () => {
           eventEndDate: null,
           budgetAmount: null,
           status: null,
+          familyId: null,
+          family: null,
           createdAt: mockTag.createdAt,
           updatedAt: mockTag.updatedAt,
         },
@@ -177,9 +190,50 @@ describe('TagsService', () => {
           eventStartDate: null,
           eventEndDate: null,
           budgetAmount: null,
+          familyId: null,
         },
-        include: { _count: { select: { transactions: true } } },
+        include: TAG_INCLUDE,
       })
+    })
+
+    it('files the tag under one of the user’s families', async () => {
+      mockPrismaService.tagFamily.findFirst.mockResolvedValue({ id: 'fam-1' })
+      mockPrismaService.tag.create.mockResolvedValue({
+        ...mockTag,
+        familyId: 'fam-1',
+        family: { id: 'fam-1', name: 'Voyages', color: '#22c55e' },
+        _count: { transactions: 0 },
+      })
+
+      const result = await service.create(USER, {
+        name: mockTag.name,
+        familyId: 'fam-1',
+      })
+
+      expect(mockPrismaService.tagFamily.findFirst).toHaveBeenCalledWith({
+        where: { id: 'fam-1', userId: USER },
+        select: { id: true },
+      })
+      expect(mockPrismaService.tag.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ familyId: 'fam-1' }),
+        })
+      )
+      expect(result.familyId).toBe('fam-1')
+      expect(result.family).toEqual({
+        id: 'fam-1',
+        name: 'Voyages',
+        color: '#22c55e',
+      })
+    })
+
+    it('refuses another user’s family as not found, writing nothing', async () => {
+      mockPrismaService.tagFamily.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.create(USER, { name: mockTag.name, familyId: 'foreign' })
+      ).rejects.toThrow(NotFoundException)
+      expect(mockPrismaService.tag.create).not.toHaveBeenCalled()
     })
 
     it('throws ConflictException on duplicate name', async () => {
@@ -261,6 +315,61 @@ describe('TagsService', () => {
       })
 
       expect(mockPrismaService.transaction.count).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('update, family', () => {
+    it('moves a tag into one of the user’s families', async () => {
+      mockPrismaService.tag.findFirst.mockResolvedValue(mockTag)
+      mockPrismaService.tagFamily.findFirst.mockResolvedValue({ id: 'fam-1' })
+      mockPrismaService.tag.update.mockResolvedValue({
+        ...mockTag,
+        familyId: 'fam-1',
+        family: { id: 'fam-1', name: 'Voyages', color: null },
+        _count: { transactions: 2 },
+      })
+
+      const result = await service.update(mockTag.id, USER, {
+        familyId: 'fam-1',
+      })
+
+      expect(mockPrismaService.tag.update).toHaveBeenCalledWith({
+        where: { id: mockTag.id },
+        data: { familyId: 'fam-1' },
+        include: TAG_INCLUDE,
+      })
+      expect(result.family?.name).toBe('Voyages')
+    })
+
+    it('takes a tag out of its family on an explicit null', async () => {
+      mockPrismaService.tag.findFirst.mockResolvedValue({
+        ...mockTag,
+        familyId: 'fam-1',
+      })
+      mockPrismaService.tag.update.mockResolvedValue({
+        ...mockTag,
+        family: null,
+        _count: { transactions: 0 },
+      })
+
+      const result = await service.update(mockTag.id, USER, { familyId: null })
+
+      expect(mockPrismaService.tagFamily.findFirst).not.toHaveBeenCalled()
+      expect(mockPrismaService.tag.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { familyId: null } })
+      )
+      expect(result.familyId).toBeNull()
+      expect(result.family).toBeNull()
+    })
+
+    it('refuses another user’s family as not found, writing nothing', async () => {
+      mockPrismaService.tag.findFirst.mockResolvedValue(mockTag)
+      mockPrismaService.tagFamily.findFirst.mockResolvedValue(null)
+
+      await expect(
+        service.update(mockTag.id, USER, { familyId: 'foreign' })
+      ).rejects.toThrow(NotFoundException)
+      expect(mockPrismaService.tag.update).not.toHaveBeenCalled()
     })
   })
 
