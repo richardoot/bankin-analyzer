@@ -4,7 +4,8 @@
    * one created on the spot without leaving the tag's form. While the user
    * has no family, a few names are offered as shortcuts; choosing one only
    * opens the creation, pre-filled — nothing is written until « Créer la
-   * famille » is pressed.
+   * famille » is pressed. The annual envelope can be set right away, or
+   * later from the family's own dialog.
    */
   import { computed, nextTick, ref } from 'vue'
   import BaseField from '@/components/ui/BaseField.vue'
@@ -31,6 +32,7 @@
   const pendingChoice = ref<string | null>(null)
   const newName = ref('')
   const newColor = ref<string | null>(DEFAULT_TAG_COLOR)
+  const newBudget = ref<number | null>(null)
   const saving = ref(false)
   const nameField = ref<InstanceType<typeof BaseField> | null>(null)
 
@@ -46,6 +48,7 @@
       pendingChoice.value = choice
       newName.value = choice === NEW ? '' : choice.slice(SUGGESTION.length)
       newColor.value = DEFAULT_TAG_COLOR
+      newBudget.value = null
       void nextTick(() => {
         const input = (
           nameField.value?.$el as HTMLElement | undefined
@@ -69,6 +72,9 @@
     const created = await props.createFamily({
       name,
       ...(newColor.value ? { color: newColor.value } : {}),
+      ...(newBudget.value !== null && newBudget.value >= 0
+        ? { annualBudget: newBudget.value }
+        : {}),
     })
     saving.value = false
     if (created) {
@@ -124,6 +130,16 @@
         @keydown.enter.prevent="confirm"
       />
       <TagColorPicker v-model="newColor" legend="Couleur de la famille" />
+      <BaseField
+        v-model="newBudget"
+        amount
+        size="sm"
+        label="Enveloppe annuelle (facultatif)"
+        hint="Par année civile, pour toute la famille"
+        placeholder="—"
+        class="w-48 [&_input]:text-right"
+        :data-testid="`${testId}-new-family-budget`"
+      />
       <div class="flex justify-end gap-2">
         <BaseButton
           variant="secondary"

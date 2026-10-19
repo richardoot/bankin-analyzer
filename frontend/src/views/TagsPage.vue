@@ -19,6 +19,7 @@
   import TagColorPicker from '@/components/tags/TagColorPicker.vue'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
   import { transactionsLink } from '@/lib/transactionsLink'
+  import { formatCompactCurrency } from '@/lib/formatters'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import TagForm from '@/components/tags/TagForm.vue'
@@ -87,7 +88,6 @@
     if (!name || creating.value) return
     creating.value = true
     const period = eventPeriod(draft.value)
-    const budget = budgetOf(draft.value)
     const familyId = familyOf(draft.value)
     const created = await tagsStore.addTag({
       name,
@@ -99,7 +99,6 @@
             eventEndDate: period.eventEndDate,
           }
         : {}),
-      ...(budget !== null ? { budgetAmount: budget } : {}),
       ...(familyId !== null ? { familyId } : {}),
     })
     creating.value = false
@@ -201,6 +200,7 @@
   const editingFamily = ref<TagFamilyDto | null>(null)
   const familyName = ref('')
   const familyColor = ref<string | null>(null)
+  const familyBudget = ref<number | null>(null)
   const savingFamily = ref(false)
 
   function startEditFamily(id: string): void {
@@ -209,6 +209,7 @@
     editingFamily.value = family
     familyName.value = family.name
     familyColor.value = family.color
+    familyBudget.value = family.annualBudget
   }
 
   async function saveFamily(): Promise<void> {
@@ -216,9 +217,16 @@
     const name = familyName.value.trim()
     if (!family || !name || savingFamily.value) return
     savingFamily.value = true
+    // Emptied, the envelope is cleared; never below zero. Sent only when it
+    // changed, like a field the dialog did not touch.
+    const annualBudget =
+      familyBudget.value !== null && familyBudget.value >= 0
+        ? familyBudget.value
+        : null
     const ok = await tagsStore.updateFamily(family.id, {
       name,
       color: familyColor.value,
+      ...(annualBudget !== family.annualBudget ? { annualBudget } : {}),
     })
     savingFamily.value = false
     if (ok) {
@@ -511,6 +519,13 @@
               >
                 {{ tagCountOf(family.id) }} étiquette(s)
               </span>
+              <span
+                v-if="family.annualBudget !== null"
+                class="shrink-0 text-xs tabular-nums text-gray-500 dark:text-gray-400"
+                :data-testid="`family-row-budget-${family.id}`"
+              >
+                {{ formatCompactCurrency(family.annualBudget) }} par an
+              </span>
               <TransactionsLink
                 v-if="tagCountOf(family.id) > 0"
                 :to="transactionsLink({ tagFamilyId: family.id })"
@@ -554,6 +569,7 @@
         test-id="edit-tag"
         :families="tagsStore.families"
         :create-family="createFamily"
+        :show-budget="editingTag.budgetAmount !== null"
         @submit="saveEdit"
       />
       <template #footer>
@@ -603,6 +619,16 @@
           data-testid="edit-family-name"
         />
         <TagColorPicker v-model="familyColor" />
+        <BaseField
+          v-model="familyBudget"
+          amount
+          size="sm"
+          label="Enveloppe annuelle (facultatif)"
+          hint="Par année civile, pour toute la famille ; vide pour aucune"
+          placeholder="—"
+          class="w-48 [&_input]:text-right"
+          data-testid="edit-family-budget"
+        />
       </form>
       <template #footer>
         <BaseButton

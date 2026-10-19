@@ -568,7 +568,7 @@ export interface TagFamilyDto {
   name: string
   color: string | null
   icon: string | null
-  /** Envelope over a calendar year, or null (read from lot 3 on) */
+  /** Envelope over a calendar year, or null */
   annualBudget: number | null
   tagCount: number
   createdAt: string
@@ -579,12 +579,16 @@ export interface CreateTagFamilyDto {
   name: string
   color?: string
   icon?: string
+  /** Envelope over a calendar year, ≥ 0 */
+  annualBudget?: number
 }
 
 export interface UpdateTagFamilyDto {
   name?: string
   /** null clears the colour */
   color?: string | null
+  /** null clears the envelope */
+  annualBudget?: number | null
 }
 
 export interface CreateTagDto {

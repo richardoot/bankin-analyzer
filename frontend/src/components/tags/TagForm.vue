@@ -7,6 +7,10 @@
    *
    * The family is asked of an exceptional tag only: it groups events, and a
    * theme is not the edition of anything (agent-os/product/tag-families.md).
+   *
+   * The envelope is set on the family, by year. A tag's own envelope is no
+   * longer asked at creation; editing shows it only to a tag that already
+   * carries one, so it can still be read, changed or cleared.
    */
   import BaseField from '@/components/ui/BaseField.vue'
   import BaseCheckbox from '@/components/ui/BaseCheckbox.vue'
@@ -28,8 +32,10 @@
        */
       createFamily?:
         ((dto: CreateTagFamilyDto) => Promise<TagFamilyDto | null>) | undefined
+      /** Shows the tag's own envelope: only for a tag that carries one. */
+      showBudget?: boolean
     }>(),
-    { families: () => [], createFamily: undefined }
+    { families: () => [], createFamily: undefined, showBudget: false }
   )
 
   const emit = defineEmits<{ submit: [] }>()
@@ -108,7 +114,7 @@
           </div>
         </div>
 
-        <div class="flex flex-wrap items-end gap-2">
+        <div v-if="showBudget" class="flex flex-wrap items-end gap-2">
           <BaseField
             :model-value="model.budget"
             amount

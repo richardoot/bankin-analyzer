@@ -133,6 +133,25 @@ describe('TagFamilyField', () => {
     expect(wrapper.props('modelValue')).toBe('fam-9')
   })
 
+  it('creates a family with its annual envelope when one is typed', async () => {
+    const createFamily = vi.fn(() =>
+      Promise.resolve(family({ id: 'fam-9', name: 'Voyages' }))
+    )
+    const { wrapper } = mountField({ families: [family()], createFamily })
+
+    await select(wrapper).setValue('__new__')
+    await wrapper.get('[data-testid="tag-new-family-name"]').setValue('Voyages')
+    await wrapper.get('[data-testid="tag-new-family-budget"]').setValue('4 000')
+    await wrapper.get('[data-testid="tag-new-family-create"]').trigger('click')
+    await flushPromises()
+
+    expect(createFamily).toHaveBeenCalledWith({
+      name: 'Voyages',
+      color: DEFAULT_TAG_COLOR,
+      annualBudget: 4000,
+    })
+  })
+
   it('keeps the creation open when it failed', async () => {
     const createFamily = vi.fn(() => Promise.resolve(null))
     const { wrapper } = mountField({ createFamily })

@@ -390,6 +390,94 @@ describe('TagsPage', () => {
       ])
     })
 
+    it('sets a family’s annual envelope and says it on its row', async () => {
+      const updateFamily = vi
+        .spyOn(api, 'updateTagFamily')
+        .mockResolvedValue({ ...trips, annualBudget: 4000 })
+      const wrapper = await mountPage(FAMILY_TAGS, [races, trips])
+      expect(
+        wrapper.find('[data-testid="family-row-budget-fam-t"]').exists()
+      ).toBe(false)
+
+      await wrapper.get('[data-testid="edit-family-fam-t"]').trigger('click')
+      await wrapper.get('[data-testid="edit-family-budget"]').setValue('4 000')
+      await wrapper.get('[data-testid="save-family"]').trigger('click')
+      await flushPromises()
+
+      expect(updateFamily).toHaveBeenCalledWith('fam-t', {
+        name: 'Voyages',
+        color: '#22c55e',
+        annualBudget: 4000,
+      })
+      expect(
+        wrapper
+          .get('[data-testid="family-row-budget-fam-t"]')
+          .text()
+          .replace(/\s+/g, ' ')
+      ).toBe('4 000 € par an')
+    })
+
+    it('clears a family’s envelope when its field is emptied', async () => {
+      const funded = { ...trips, annualBudget: 4000 }
+      const updateFamily = vi
+        .spyOn(api, 'updateTagFamily')
+        .mockResolvedValue({ ...trips, annualBudget: null })
+      const wrapper = await mountPage(FAMILY_TAGS, [races, funded])
+
+      await wrapper.get('[data-testid="edit-family-fam-t"]').trigger('click')
+      const field = wrapper.get('[data-testid="edit-family-budget"]')
+      expect((field.element as HTMLInputElement).value).toBe('4000')
+      await field.setValue('')
+      await wrapper.get('[data-testid="save-family"]').trigger('click')
+      await flushPromises()
+
+      expect(updateFamily).toHaveBeenCalledWith('fam-t', {
+        name: 'Voyages',
+        color: '#22c55e',
+        annualBudget: null,
+      })
+      expect(
+        wrapper.find('[data-testid="family-row-budget-fam-t"]').exists()
+      ).toBe(false)
+    })
+
+    it('asks a tag’s own envelope only when editing a tag that has one', async () => {
+      const funded = event('Lyon 2025', '2025-05-10', '2025-05-11', 'past', {
+        budgetAmount: 600,
+      })
+      const bare = event('Nice 2025', '2025-10-04', '2025-10-04', 'past')
+      const updateTag = vi
+        .spyOn(api, 'updateTag')
+        .mockResolvedValue({ ...funded, budgetAmount: null })
+      const wrapper = await mountPage([funded, bare])
+
+      // Creation: an exceptional tag is asked no envelope any more.
+      await wrapper.get('[data-testid="new-tag-exceptional"]').setValue(true)
+      expect(wrapper.find('[data-testid="new-tag-budget"]').exists()).toBe(
+        false
+      )
+
+      await wrapper.get('[data-testid="edit-tag-Nice 2025"]').trigger('click')
+      expect(wrapper.find('[data-testid="edit-tag-budget"]').exists()).toBe(
+        false
+      )
+
+      await wrapper.get('[data-testid="edit-tag-Lyon 2025"]').trigger('click')
+      const field = wrapper.get('[data-testid="edit-tag-budget"]')
+      await field.setValue('')
+      // Emptied, it stays on screen until the dialog closes.
+      expect(wrapper.find('[data-testid="edit-tag-budget"]').exists()).toBe(
+        true
+      )
+      await wrapper.get('[data-testid="save-tag"]').trigger('click')
+      await flushPromises()
+
+      expect(updateTag).toHaveBeenCalledWith(
+        funded.id,
+        expect.objectContaining({ budgetAmount: null })
+      )
+    })
+
     it('deletes a family after saying its tags are kept, without one', async () => {
       const deleteFamily = vi
         .spyOn(api, 'deleteTagFamily')
