@@ -58,6 +58,8 @@ export class TagAnalysisDto {
     eventEndDate: string | null
     /** Total envelope allocated to the event, or null. */
     budgetAmount: number | null
+    /** The family the tag is filed under, or null. */
+    family: { id: string; name: string; color: string | null } | null
   }
 
   /** Total expenses (absolute, joint-account-adjusted). */

@@ -1,7 +1,7 @@
 <script setup lang="ts">
   import PageShell from '@/components/ui/PageShell.vue'
   import { computed, onMounted, ref } from 'vue'
-  import { useRoute, useRouter } from 'vue-router'
+  import { RouterLink, useRoute, useRouter } from 'vue-router'
   import { api } from '@/lib/api'
   import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
@@ -196,11 +196,24 @@
           class="inline-block h-4 w-4 rounded-full shrink-0"
           :style="{ backgroundColor: analysis.tag.color ?? '#9ca3af' }"
         ></span>
-        <h1
-          class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
-        >
-          {{ analysis.tag.name }}
-        </h1>
+        <div class="min-w-0">
+          <h1
+            class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
+          >
+            {{ analysis.tag.name }}
+          </h1>
+          <RouterLink
+            v-if="analysis.tag.family"
+            :to="{
+              name: 'tag-family',
+              params: { id: analysis.tag.family.id },
+            }"
+            class="inline-flex min-h-[44px] items-center text-sm font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
+            data-testid="tag-family-link"
+          >
+            Famille {{ analysis.tag.family.name }}
+          </RouterLink>
+        </div>
       </div>
 
       <!-- Summary cards -->

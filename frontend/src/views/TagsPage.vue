@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { computed, onMounted, ref } from 'vue'
+  import { RouterLink } from 'vue-router'
   import { useIsMobile } from '@/composables/useMediaQuery'
   import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
@@ -406,7 +407,15 @@
               <h3
                 class="text-sm font-semibold text-gray-700 dark:text-gray-300"
               >
-                {{ group.family?.name ?? 'Sans famille' }}
+                <RouterLink
+                  v-if="group.family"
+                  :to="{ name: 'tag-family', params: { id: group.family.id } }"
+                  class="hover:text-primary-700 hover:underline dark:hover:text-primary-400"
+                  :data-testid="`family-group-link-${group.family.id}`"
+                >
+                  {{ group.family.name }}
+                </RouterLink>
+                <template v-else>Sans famille</template>
               </h3>
               <BaseIconButton
                 v-if="group.family"
@@ -490,11 +499,13 @@
                 :style="{ backgroundColor: family.color ?? '#9ca3af' }"
                 aria-hidden="true"
               ></span>
-              <span
-                class="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-gray-100"
+              <RouterLink
+                :to="{ name: 'tag-family', params: { id: family.id } }"
+                class="min-w-0 flex-1 truncate text-sm text-gray-900 hover:text-primary-700 hover:underline dark:text-gray-100 dark:hover:text-primary-400"
+                :data-testid="`family-row-link-${family.id}`"
               >
                 {{ family.name }}
-              </span>
+              </RouterLink>
               <span
                 class="shrink-0 text-xs tabular-nums text-gray-500 dark:text-gray-400"
               >

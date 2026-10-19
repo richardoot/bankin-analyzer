@@ -136,6 +136,13 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Étiquettes', requiresAuth: true },
   },
   {
+    // Two segments after /tags: never mistaken for a tag id by /tags/:id.
+    path: '/tags/families/:id',
+    name: 'tag-family',
+    component: () => import('@/views/TagFamilyPage.vue'),
+    meta: { title: 'Famille d’étiquettes', requiresAuth: true },
+  },
+  {
     path: '/tags/:id',
     name: 'tag-analysis',
     component: () => import('@/views/TagAnalysisPage.vue'),

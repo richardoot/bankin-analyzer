@@ -422,6 +422,28 @@ describe('TagsPage', () => {
       ])
     })
 
+    it('opens a family’s page from its group heading and from its row', async () => {
+      const wrapper = await mountPage(FAMILY_TAGS, [races, trips])
+
+      const familyPage = JSON.stringify({
+        name: 'tag-family',
+        params: { id: 'fam-r' },
+      })
+      expect(
+        wrapper.get('[data-testid="family-group-link-fam-r"]').attributes()
+      ).toMatchObject({ 'data-to': familyPage })
+      expect(
+        wrapper.get('[data-testid="family-row-link-fam-r"]').attributes()
+      ).toMatchObject({ 'data-to': familyPage })
+      // « Sans famille » is no family: no page to open.
+      expect(
+        wrapper
+          .get('[data-testid="tags-family-group-none"] h3')
+          .find('a')
+          .exists()
+      ).toBe(false)
+    })
+
     it('links each family to its transactions', async () => {
       const wrapper = await mountPage(FAMILY_TAGS, [races, trips])
 

@@ -600,6 +600,30 @@ describe('TagsService', () => {
       expect(result.byCategory).toEqual([])
     })
 
+    it('names the family the tag is filed under, for the page to link it', async () => {
+      mockPrismaService.tag.findFirst.mockResolvedValue({
+        ...mockTag,
+        familyId: 'fam-1',
+        family: { id: 'fam-1', name: 'Voyages', color: '#22c55e' },
+      })
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+
+      const result = await service.getAnalysis(mockTag.id, USER)
+
+      expect(mockPrismaService.tag.findFirst).toHaveBeenCalledWith({
+        where: { id: mockTag.id, userId: USER },
+        include: { family: TAG_INCLUDE.family },
+      })
+      expect(result.tag.family).toEqual({
+        id: 'fam-1',
+        name: 'Voyages',
+        color: '#22c55e',
+      })
+    })
+
     it('throws NotFoundException when the tag is not owned', async () => {
       mockPrismaService.tag.findFirst.mockResolvedValue(null)
 

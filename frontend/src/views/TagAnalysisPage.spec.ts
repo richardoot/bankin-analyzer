@@ -50,6 +50,7 @@ const baseTag = {
   eventStartDate: '2025-12-10',
   eventEndDate: '2025-12-14',
   budgetAmount: null,
+  family: null,
 }
 
 const analysisWithBaseline: TagAnalysisDto = {
@@ -141,6 +142,33 @@ async function mountPage() {
 describe('TagAnalysisPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('links the tag to its family’s page', async () => {
+    mockAnalysis({
+      ...analysisWithBaseline,
+      tag: {
+        ...baseTag,
+        family: { id: 'fam-1', name: 'Voyages', color: null },
+      },
+    })
+    const wrapper = await mountPage()
+
+    const link = wrapper
+      .findAllComponents(RouterLinkStub)
+      .find(s => s.attributes('data-testid') === 'tag-family-link')
+    expect(link?.props('to')).toEqual({
+      name: 'tag-family',
+      params: { id: 'fam-1' },
+    })
+    expect(link?.text()).toBe('Famille Voyages')
+  })
+
+  it('names no family when the tag has none', async () => {
+    mockAnalysis(analysisWithBaseline)
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="tag-family-link"]').exists()).toBe(false)
   })
 
   it('offers a retry when the analysis fails to load', async () => {

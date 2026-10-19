@@ -668,6 +668,8 @@ export interface TagAnalysisDto {
     eventStartDate: string | null
     eventEndDate: string | null
     budgetAmount: number | null
+    /** The family the tag is filed under, or null */
+    family: TagFamilySummaryDto | null
   }
   totalExpenses: number
   totalIncome: number
@@ -681,6 +683,84 @@ export interface TagAnalysisDto {
   baseline: TagAnalysisBaselineDto | null
   /** Sum of the per-category surplus; null when no baseline applies */
   totalSurplus: number | null
+}
+
+/**
+ * Which year a transaction of a family belongs to: `event`, the year its
+ * dated tag starts in (a January trip paid in November is the trip's year);
+ * `cash`, the year it was paid.
+ */
+export type TagFamilyAnalysisBasis = 'event' | 'cash'
+
+export interface TagFamilyAnalysisYearDto {
+  year: number
+  expenses: number
+  income: number
+  transactionCount: number
+}
+
+/** One tag of a family, over its transactions in the chosen scope. */
+export interface TagFamilyAnalysisTagDto {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+  isExceptional: boolean
+  status: TagEventStatus | null
+  eventStartDate: string | null
+  eventEndDate: string | null
+  /** Days of the window, both bounds included; null without a window */
+  days: number | null
+  spent: number
+  spentPerDay: number | null
+  /** The edition's surplus, as on its own page; null without a window or in part */
+  surplus: number | null
+  budgetAmount: number | null
+  transactionCount: number
+  /** Some of its transactions fall outside the scope (paid across two years) */
+  isPartial: boolean
+}
+
+export interface TagFamilyEditionRefDto {
+  id: string
+  name: string
+  spent: number
+}
+
+/** The dated editions of the scope weighed against each other. */
+export interface TagFamilyEditionComparisonDto {
+  editionCount: number
+  averageSpent: number
+  medianSpent: number
+  /** Total spent over total days of window */
+  averagePerDay: number
+  mostExpensive: TagFamilyEditionRefDto
+  leastExpensive: TagFamilyEditionRefDto
+}
+
+/** The union of a family's tags, each transaction counted once. */
+export interface TagFamilyAnalysisDto {
+  family: {
+    id: string
+    name: string
+    color: string | null
+    icon: string | null
+    annualBudget: number | null
+  }
+  basis: TagFamilyAnalysisBasis
+  year: number | null
+  /** Every year the family touches in the chosen basis, ascending */
+  availableYears: number[]
+  totalExpenses: number
+  totalIncome: number
+  net: number
+  transactionCount: number
+  /** Sum of the tags' surplus; null when none has one */
+  totalSurplus: number | null
+  byCategory: TagAnalysisCategoryDto[]
+  byYear: TagFamilyAnalysisYearDto[]
+  tags: TagFamilyAnalysisTagDto[]
+  comparison: TagFamilyEditionComparisonDto | null
 }
 
 export interface TransactionSummaryDto {
@@ -2587,6 +2667,27 @@ export const api = {
     }
 
     return response.json() as Promise<TagAnalysisDto>
+  },
+
+  async getTagFamilyAnalysis(
+    id: string,
+    params: { year?: number | null; basis?: TagFamilyAnalysisBasis } = {}
+  ): Promise<TagFamilyAnalysisDto> {
+    const searchParams = new URLSearchParams()
+    if (params.year !== undefined && params.year !== null) {
+      searchParams.set('year', String(params.year))
+    }
+    if (params.basis) searchParams.set('basis', params.basis)
+    const query = searchParams.toString()
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/tag-families/${id}/analysis${query ? `?${query}` : ''}`
+    )
+
+    if (!response.ok) {
+      throw new Error("Impossible de charger l'analyse de la famille")
+    }
+
+    return response.json() as Promise<TagFamilyAnalysisDto>
   },
 
   // Reimbursements API

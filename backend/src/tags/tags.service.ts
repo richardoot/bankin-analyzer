@@ -391,7 +391,12 @@ export class TagsService {
    * stats-excluded accounts are ignored.
    */
   async getAnalysis(tagId: string, userId: string): Promise<TagAnalysisDto> {
-    const tag = await this.getOwned(tagId, userId)
+    // The family rides along: the page links to it.
+    const tag = await this.prisma.tag.findFirst({
+      where: { id: tagId, userId },
+      include: { family: TAG_INCLUDE.family },
+    })
+    if (!tag) throw new NotFoundException(`Tag with ID ${tagId} not found`)
 
     const [categoryRows, monthRows, summaryRows] = await Promise.all([
       this.prisma.$queryRaw<TagCategoryRow[]>(Prisma.sql`
@@ -520,6 +525,13 @@ export class TagsService {
         eventEndDate: toIsoDate(tag.eventEndDate),
         budgetAmount:
           tag.budgetAmount === null ? null : Number(tag.budgetAmount),
+        family: tag.family
+          ? {
+              id: tag.family.id,
+              name: tag.family.name,
+              color: tag.family.color,
+            }
+          : null,
       },
       totalExpenses,
       totalIncome,
