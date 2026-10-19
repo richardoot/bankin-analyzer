@@ -23,10 +23,21 @@
  * - the analysis weighs the envelope by event year, the same in either basis;
  * - `GET /tags/budget-summary` charges a family with an envelope its prorata
  *   of the window, in place of its tags' envelopes, its spend counted once.
+ *
+ * Lot 5, the families of the year on the dashboard (`POST /dashboard/summary`):
+ *
+ * - over the current calendar year in Paris, in event basis: a line paid the
+ *   year before for an edition of this year counts, a deposit paid this year
+ *   for next year's edition does not; a line carrying two of the family's
+ *   tags counts once;
+ * - the year's real expenses, the share's denominator, are every expense
+ *   dated in that year;
+ * - a user without a family reads an empty list.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import request from 'supertest'
 import type { PrismaService } from '../src/prisma/prisma.service'
+import { calendarDayIn } from '../src/tags/tag-status'
 import { createE2eApp, e2eIdentity } from './e2e-app'
 import type { E2eContext } from './e2e-app'
 
@@ -572,6 +583,121 @@ describe('Tag families (e2e)', () => {
         [tag, 150, 90],
       ])
       expect(body.totalBudget).toBe(150)
+    })
+  })
+
+  describe('dashboard, the families of the year', () => {
+    interface FamilyOfYearBody {
+      id: string
+      year: number
+      spent: number
+      annualBudget: number | null
+      remaining: number | null
+      transactionCount: number
+      tagCount: number
+    }
+    interface DashboardBody {
+      tagFamiliesOfYear: FamilyOfYearBody[]
+      realExpensesOfYear: number | null
+      totalExpenses: number
+    }
+
+    /** The calendar year the server reads, in Paris. */
+    const year = Number(calendarDayIn(new Date()).slice(0, 4))
+
+    async function datedTag(
+      name: string,
+      familyId: string,
+      start: string,
+      end: string
+    ): Promise<string> {
+      const response = await http().post('/tags').set(ctx.auth(owner)).send({
+        name,
+        familyId,
+        isExceptional: true,
+        eventStartDate: start,
+        eventEndDate: end,
+      })
+      expect(response.status).toBe(201)
+      return (response.body as TagBody).id
+    }
+
+    async function dashboard(): Promise<DashboardBody> {
+      const response = await http()
+        .post('/dashboard/summary')
+        .set(ctx.auth(owner))
+        // A period that is not the year: the card reads the year anyway.
+        .send({ startDate: `${year}-01-01`, endDate: `${year}-01-31` })
+      // A POST without @HttpCode: Nest answers 201.
+      expect(response.status).toBe(201)
+      return response.body as DashboardBody
+    }
+
+    it('is empty for a user without a family', async () => {
+      await expense([], { date: `${year}-01-10`, amount: -50 })
+
+      const body = await dashboard()
+
+      expect(body.tagFamiliesOfYear).toEqual([])
+      expect(body.realExpensesOfYear).toBeNull()
+      expect(body.totalExpenses).toBe(50)
+    })
+
+    it('reads the year in event basis, each line once, with the envelope', async () => {
+      const travel = (await createFamily('Voyages')).body as FamilyBody
+      await http()
+        .patch(`/tag-families/${travel.id}`)
+        .set(ctx.auth(owner))
+        .send({ annualBudget: 1000 })
+        .expect(200)
+      const rome = await datedTag(
+        `Rome ${year}`,
+        travel.id,
+        `${year}-12-05`,
+        `${year}-12-09`
+      )
+      const train = await datedTag(
+        `Train Rome ${year}`,
+        travel.id,
+        `${year}-12-05`,
+        `${year}-12-05`
+      )
+      const lisbon = await datedTag(
+        `Lisbonne ${year + 1}`,
+        travel.id,
+        `${year + 1}-01-03`,
+        `${year + 1}-01-08`
+      )
+      // Both tags of the family on one line: once.
+      await expense([rome, train], { date: `${year}-03-10`, amount: -200 })
+      // Paid the year before, for this year's edition: this year.
+      await expense([rome], { date: `${year - 1}-11-20`, amount: -340 })
+      // Paid this year, for next year's edition: next year.
+      await expense([lisbon], { date: `${year}-02-01`, amount: -500 })
+      await expense([], { date: `${year}-01-15`, amount: -1000 })
+      // A family with nothing this year is not listed.
+      await createFamily('Concerts')
+
+      const body = await dashboard()
+
+      expect(body.tagFamiliesOfYear).toEqual([
+        {
+          id: travel.id,
+          name: 'Voyages',
+          color: '#22c55e',
+          icon: null,
+          year,
+          spent: 540,
+          annualBudget: 1000,
+          remaining: 460,
+          transactionCount: 2,
+          tagCount: 2,
+        },
+      ])
+      // Every expense dated this year: 200 + 500 + 1 000.
+      expect(body.realExpensesOfYear).toBe(1700)
+      // The period itself is unchanged by the card.
+      expect(body.totalExpenses).toBe(1000)
     })
   })
 })

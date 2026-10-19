@@ -114,6 +114,9 @@ describe('DashboardService', () => {
     tag: {
       findMany: vi.fn(),
     },
+    tagFamily: {
+      findMany: vi.fn(),
+    },
   }
 
   // The user's preference for debts still owed. Off here so that every test
@@ -177,6 +180,8 @@ describe('DashboardService', () => {
 
     // Default mocks
     mockPrismaService.tag.findMany.mockResolvedValue([])
+    // No tag family: the families of the year read nothing more.
+    mockPrismaService.tagFamily.findMany.mockResolvedValue([])
   })
 
   describe('a debt still owed', () => {
@@ -1731,6 +1736,156 @@ describe('DashboardService', () => {
       expect(
         result.expensesByCategory[0]?.subcategories?.[0]
       ).not.toHaveProperty('everydayAmount')
+    })
+  })
+
+  describe('the tag families of the year', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    /** The SQL and the values of the families-of-the-year query. */
+    function familiesQuery(): { sql: string; values: unknown[] } {
+      const call = mockPrismaService.$queryRaw.mock.calls.find(
+        ([sql]: [{ strings: string[] }]) =>
+          sql.strings.join('?').includes('year_tx AS')
+      ) as [{ strings: string[]; values: unknown[] }] | undefined
+      if (!call) throw new Error('no families-of-the-year query')
+      return { sql: call[0].strings.join('?'), values: call[0].values }
+    }
+
+    const travel = {
+      id: 'fam-travel',
+      name: 'Voyages',
+      color: '#22c55e',
+      icon: 'plane',
+      annualBudget: 1000,
+    }
+    const hyrox = {
+      id: 'fam-hyrox',
+      name: 'HYROX',
+      color: null,
+      icon: null,
+      annualBudget: null,
+    }
+
+    it('is empty without a family, and reads nothing more', async () => {
+      setupMocks([createRow({ total_amount: 100 })])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.tagFamiliesOfYear).toEqual([])
+      expect(result.realExpensesOfYear).toBeNull()
+      // The four queries of the summary, not one more.
+      expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(4)
+      expect(mockPrismaService.tagFamily.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: mockUserId } })
+      )
+    })
+
+    it('lists the families with spending, biggest first, with envelope and remainder', async () => {
+      mockPrismaService.tagFamily.findMany.mockResolvedValue([hyrox, travel])
+      setupMocks([createRow({ total_amount: 100 })])
+      mockPrismaService.$queryRaw.mockResolvedValueOnce([
+        {
+          family_id: 'fam-hyrox',
+          transaction_count: 2,
+          spent: 180.004,
+          tag_count: 1,
+          real_expenses: 12000.456,
+        },
+        {
+          family_id: 'fam-travel',
+          transaction_count: 5,
+          spent: 1250.5,
+          tag_count: 2,
+          real_expenses: 12000.456,
+        },
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2026-10-01',
+        endDate: '2026-10-31',
+      })
+
+      const year = Number(
+        new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Europe/Paris',
+          year: 'numeric',
+        }).format(new Date())
+      )
+      expect(result.tagFamiliesOfYear).toEqual([
+        {
+          id: 'fam-travel',
+          name: 'Voyages',
+          color: '#22c55e',
+          icon: 'plane',
+          year,
+          spent: 1250.5,
+          annualBudget: 1000,
+          remaining: -250.5,
+          transactionCount: 5,
+          tagCount: 2,
+        },
+        {
+          id: 'fam-hyrox',
+          name: 'HYROX',
+          color: null,
+          icon: null,
+          year,
+          spent: 180,
+          annualBudget: null,
+          remaining: null,
+          transactionCount: 2,
+          tagCount: 1,
+        },
+      ])
+      expect(result.realExpensesOfYear).toBe(12000.46)
+      // The period's own figures are untouched.
+      expect(result.totalExpenses).toBe(100)
+    })
+
+    it('reads the calendar year in Paris, not the period nor the UTC day', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      // 23:30 UTC on New Year's Eve is already 2027 in Paris.
+      vi.setSystemTime(new Date('2026-12-31T23:30:00Z'))
+      mockPrismaService.tagFamily.findMany.mockResolvedValue([travel])
+      setupMocks([])
+      mockPrismaService.$queryRaw.mockResolvedValueOnce([])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2025-01-01',
+        endDate: '2025-12-31',
+      })
+
+      const { values } = familiesQuery()
+      expect(values).toContain(2027)
+      expect(values).toContainEqual(new Date('2027-01-01T00:00:00Z'))
+      expect(values).toContainEqual(new Date('2028-01-01T00:00:00Z'))
+      // No family spent anything that year: nothing to show, no share.
+      expect(result.tagFamiliesOfYear).toEqual([])
+      expect(result.realExpensesOfYear).toBeNull()
+    })
+
+    it('counts a line once per family, in event basis, with the family conventions', async () => {
+      mockPrismaService.tagFamily.findMany.mockResolvedValue([travel])
+      setupMocks([])
+      mockPrismaService.$queryRaw.mockResolvedValueOnce([])
+
+      await service.getSummary(mockUserId, {})
+
+      const { sql } = familiesQuery()
+      // Grouped by transaction and family before anything is summed.
+      expect(sql).toContain('GROUP BY tt.transaction_id, tg.family_id')
+      // A line belongs to the year its dated tag starts in.
+      expect(sql).toContain(
+        'EXTRACT(YEAR FROM COALESCE(ft.event_start, t.date))::int ='
+      )
+      expect(sql).toContain('ABS(t.amount::numeric) / COALESCE(a.divisor, 1)')
+      expect(sql).toContain('COALESCE(a.is_excluded_from_stats, false) = false')
+      // The year's real expenses are netted as the period's totals are.
+      expect(sql).toContain('expense_credit')
+      expect(sql).toContain('LEFT JOIN expense_credit ec')
     })
   })
 })

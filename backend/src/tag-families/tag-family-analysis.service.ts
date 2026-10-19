@@ -18,6 +18,10 @@ import type {
   TagFamilyEditionRefDto,
   TagFamilyEnvelopeDto,
 } from './dto'
+import {
+  FAMILY_EVENT_YEAR,
+  familyTransactionsCte,
+} from './family-transactions.sql'
 
 /** Raw row: the family's transactions, each once, per year and category. */
 interface FamilyRow {
@@ -127,12 +131,9 @@ export class TagFamilyAnalysisService {
     })
     if (!family) throw new NotFoundException(`Tag family ${familyId} not found`)
 
-    // Event basis: a transaction belongs to the year its dated tag starts in.
-    // Carrying two dated tags of the family that start in different years
-    // (rare: an edition and the next one's deposit on a single line), it
-    // goes to the earliest start, so that it is counted in one year only.
-    // Without a dated tag of the family, it keeps its own year.
-    const eventYearOf = Prisma.sql`EXTRACT(YEAR FROM COALESCE(ft.event_start, t.date))::int`
+    // Event basis: a transaction belongs to the year its dated tag starts in
+    // (see familyTransactionsCte); without one, it keeps its own year.
+    const eventYearOf = FAMILY_EVENT_YEAR
     const yearOf =
       basis === 'event'
         ? eventYearOf
@@ -143,20 +144,7 @@ export class TagFamilyAnalysisService {
       // Each transaction once: grouped by transaction first, whatever number
       // of the family's tags it carries.
       this.prisma.$queryRaw<FamilyRow[]>(Prisma.sql`
-        WITH family_tx AS (
-          SELECT
-            tt.transaction_id,
-            MIN(
-              CASE WHEN tg.event_start_date IS NOT NULL
-                    AND tg.event_end_date IS NOT NULL
-                THEN tg.event_start_date END
-            ) AS event_start
-          FROM app.transaction_tags tt
-          JOIN app.tags tg ON tg.id = tt.tag_id
-          WHERE tg.family_id = ${familyId}
-            AND tg.user_id = ${userId}
-          GROUP BY tt.transaction_id
-        )
+        WITH ${familyTransactionsCte(userId, familyId)}
         SELECT
           ${yearOf} AS year,
           ${eventYearOf} AS event_year,

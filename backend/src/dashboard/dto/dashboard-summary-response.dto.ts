@@ -163,6 +163,39 @@ export class ExceptionalEventDto {
 }
 
 /**
+ * One tag family over the current calendar year, in event basis: a line
+ * belongs to the year its dated tag starts in, to its own year without one,
+ * and counts once in the family whatever number of its tags it carries.
+ */
+export class TagFamilyOfYearDto {
+  id!: string
+  name!: string
+  color!: string | null
+  icon!: string | null
+
+  /** The calendar year read, in Paris. */
+  year!: number
+
+  /**
+   * Expenses of the family for the year: gross (ABS), divided by the account
+   * divisor, stats-excluded accounts ignored — the family analysis's rules.
+   */
+  spent!: number
+
+  /** The family's envelope per year, null when none was decided. */
+  annualBudget!: number | null
+
+  /** `annualBudget - spent`, negative when over; null without an envelope. */
+  remaining!: number | null
+
+  /** Expenses and income of the family for the year, each line once. */
+  transactionCount!: number
+
+  /** The family's tags carrying at least one of those lines. */
+  tagCount!: number
+}
+
+/**
  * Expenses read through the two attributes of their subcategory: constrained
  * (essential) or chosen (pleasure), running on its own (committed) or
  * following the user (variable). A row filed at the category alone takes the
@@ -237,6 +270,21 @@ export class DashboardSummaryDto {
   /** Events overlapping the period, biggest first */
   @ApiProperty({ type: [ExceptionalEventDto] })
   exceptionalEvents!: ExceptionalEventDto[]
+
+  /**
+   * The user's tag families with expenses in the current calendar year (in
+   * Paris, whatever the period asked), biggest first. Empty without one.
+   */
+  @ApiProperty({ type: [TagFamilyOfYearDto] })
+  tagFamiliesOfYear!: TagFamilyOfYearDto[]
+
+  /**
+   * Real expenses of that calendar year — every expense, exceptional ones
+   * included, net of reimbursements as the filters ask, stats-excluded
+   * accounts ignored: what `totalExpenses` reads over the year. The share of
+   * a family is its `spent` over this. Null when `tagFamiliesOfYear` is empty.
+   */
+  realExpensesOfYear!: number | null
 
   /** The period as it was: every expense, exceptional ones included. */
   spendingStructure!: SpendingStructureDto
