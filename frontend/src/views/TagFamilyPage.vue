@@ -123,16 +123,23 @@
     }
   })
 
-  /** The annual envelope weighed against the chosen year's spending. */
+  /**
+   * The annual envelope, weighed against the chosen year in event basis
+   * whatever the reading shown: the server reads it that way, so a trip
+   * paid in November for January draws on January's envelope. `year` is
+   * null until a year is chosen.
+   */
   const envelope = computed(() => {
     const budget = analysis.value?.family.annualBudget ?? null
     if (budget === null) return null
-    const spent = analysis.value?.totalExpenses ?? 0
+    const weighed = analysis.value?.envelope ?? null
+    if (!weighed) return { budget, year: null }
     return {
       budget,
-      spent,
-      ratio: budget > 0 ? spent / budget : 0,
-      remaining: budget - spent,
+      year: weighed.year,
+      spent: weighed.spentEventBasis,
+      ratio: budget > 0 ? weighed.spentEventBasis / budget : 0,
+      remaining: weighed.remaining,
     }
   })
 
@@ -230,7 +237,7 @@
             formatCurrency(envelope.budget)
           }}</strong>
         </p>
-        <template v-if="year !== null">
+        <template v-if="envelope.year !== null">
           <div
             class="mt-2 h-2 w-full overflow-hidden rounded-full bg-primary-100 dark:bg-primary-950"
           >
@@ -241,7 +248,7 @@
             ></div>
           </div>
           <p class="mt-2 text-xs text-primary-700 dark:text-primary-400">
-            {{ year }} :
+            {{ envelope.year }} :
             <strong class="tabular-nums">{{
               formatCurrency(envelope.spent)
             }}</strong>
@@ -253,6 +260,14 @@
               dépassement de {{ formatCurrency(-envelope.remaining) }}
             </span>
             <span v-else>reste {{ formatCurrency(envelope.remaining) }}</span>
+          </p>
+          <p
+            v-if="basis === 'cash'"
+            data-testid="family-envelope-event-note"
+            class="mt-1 text-xs text-primary-700 dark:text-primary-400"
+          >
+            L’enveloppe se lit par année d’événement : un voyage payé l’année
+            d’avant compte dans l’année du voyage.
           </p>
         </template>
         <p v-else class="mt-1 text-xs text-primary-700 dark:text-primary-400">

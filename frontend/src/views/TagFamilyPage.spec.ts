@@ -99,6 +99,7 @@ const analysis: TagFamilyAnalysisDto = {
     mostExpensive: { id: 'lyon', name: 'HYROX Lyon 2026', spent: 300 },
     leastExpensive: { id: 'nice', name: 'HYROX Nice 2025', spent: 220 },
   },
+  envelope: null,
 }
 
 async function mountPage(): Promise<VueWrapper> {
@@ -290,11 +291,50 @@ describe('TagFamilyPage', () => {
       family: { ...analysis.family, annualBudget: 1000 },
       year: 2026,
       totalExpenses: 300,
+      envelope: {
+        annualBudget: 1000,
+        year: 2026,
+        spentEventBasis: 300,
+        remaining: 700,
+      },
     })
     await wrapper.get('[data-testid="family-year-2026"]').trigger('click')
     await flushPromises()
 
     expect(envelope()).toContain('2026 : 300,00 € dépensés · reste 700,00 €')
+    expect(
+      wrapper.find('[data-testid="family-envelope-event-note"]').exists()
+    ).toBe(false)
+  })
+
+  it('keeps weighing the envelope by event year in the cash reading', async () => {
+    // A January trip paid in November: 900 € left the account in 2026, but
+    // only 300 € of 2026's events — the envelope reads the latter.
+    const cashYear: TagFamilyAnalysisDto = {
+      ...analysis,
+      family: { ...analysis.family, annualBudget: 1000 },
+      basis: 'cash',
+      year: 2026,
+      totalExpenses: 900,
+      envelope: {
+        annualBudget: 1000,
+        year: 2026,
+        spentEventBasis: 300,
+        remaining: 700,
+      },
+    }
+    vi.mocked(api.getTagFamilyAnalysis).mockResolvedValue(cashYear)
+    const wrapper = await mountPage()
+    await wrapper.get('[data-testid="family-year-2026"]').trigger('click')
+    await wrapper.get('[data-testid="family-basis-cash"]').trigger('click')
+    await flushPromises()
+
+    const text = norm(wrapper.get('[data-testid="family-envelope"]').text())
+    expect(text).toContain('2026 : 300,00 € dépensés · reste 700,00 €')
+    expect(text).not.toContain('900,00 €')
+    expect(
+      wrapper.get('[data-testid="family-envelope-event-note"]').text()
+    ).toContain('par année d’événement')
   })
 
   it('offers a retry when the analysis fails to load', async () => {

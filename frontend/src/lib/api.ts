@@ -765,6 +765,20 @@ export interface TagFamilyAnalysisDto {
   byYear: TagFamilyAnalysisYearDto[]
   tags: TagFamilyAnalysisTagDto[]
   comparison: TagFamilyEditionComparisonDto | null
+  /**
+   * The envelope over the year asked for, read in event basis whatever
+   * `basis`; null without an envelope or without a year
+   */
+  envelope: TagFamilyEnvelopeDto | null
+}
+
+/** The annual envelope weighed against one year, in event basis. */
+export interface TagFamilyEnvelopeDto {
+  annualBudget: number
+  year: number
+  spentEventBasis: number
+  /** Negative on an overrun */
+  remaining: number
 }
 
 export interface TransactionSummaryDto {

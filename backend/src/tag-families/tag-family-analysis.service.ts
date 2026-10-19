@@ -16,11 +16,14 @@ import type {
   TagFamilyAnalysisYearDto,
   TagFamilyEditionComparisonDto,
   TagFamilyEditionRefDto,
+  TagFamilyEnvelopeDto,
 } from './dto'
 
 /** Raw row: the family's transactions, each once, per year and category. */
 interface FamilyRow {
   year: number
+  /** The event-basis year, whatever the basis: what the envelope reads. */
+  event_year: number
   category_id: string | null
   category_name: string
   category_icon: string | null
@@ -129,9 +132,10 @@ export class TagFamilyAnalysisService {
     // (rare: an edition and the next one's deposit on a single line), it
     // goes to the earliest start, so that it is counted in one year only.
     // Without a dated tag of the family, it keeps its own year.
+    const eventYearOf = Prisma.sql`EXTRACT(YEAR FROM COALESCE(ft.event_start, t.date))::int`
     const yearOf =
       basis === 'event'
-        ? Prisma.sql`EXTRACT(YEAR FROM COALESCE(ft.event_start, t.date))::int`
+        ? eventYearOf
         : Prisma.sql`EXTRACT(YEAR FROM t.date)::int`
 
     const [tags, familyRows, tagRows] = await Promise.all([
@@ -155,6 +159,7 @@ export class TagFamilyAnalysisService {
         )
         SELECT
           ${yearOf} AS year,
+          ${eventYearOf} AS event_year,
           c.id AS category_id,
           COALESCE(c.name, 'Autre') AS category_name,
           c.icon AS category_icon,
@@ -173,7 +178,7 @@ export class TagFamilyAnalysisService {
         WHERE t.user_id = ${userId}
           AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
-        GROUP BY 1, c.id, COALESCE(c.name, 'Autre'), c.icon, t.type
+        GROUP BY 1, 2, c.id, COALESCE(c.name, 'Autre'), c.icon, t.type
       `),
       // Per tag, not deduplicated: a line shared by two tags is in both.
       // The year of a tag's line is the tag's own start, which differs from
@@ -382,6 +387,24 @@ export class TagFamilyAnalysisService {
         return a.name.localeCompare(b.name, 'fr')
       })
 
+    // The envelope is charged in event basis, whatever the reading shown.
+    const annualBudget =
+      family.annualBudget === null ? null : Number(family.annualBudget)
+    let envelope: TagFamilyEnvelopeDto | null = null
+    if (annualBudget !== null && year !== null) {
+      const spentEventBasis = round(
+        familyRows
+          .filter(r => r.event_year === year && r.type === 'EXPENSE')
+          .reduce((sum, r) => sum + (r.total_amount ?? 0), 0)
+      )
+      envelope = {
+        annualBudget,
+        year,
+        spentEventBasis,
+        remaining: round(annualBudget - spentEventBasis),
+      }
+    }
+
     const surpluses = tagLines
       .map(t => t.surplus)
       .filter((s): s is number => s !== null)
@@ -392,8 +415,7 @@ export class TagFamilyAnalysisService {
         name: family.name,
         color: family.color,
         icon: family.icon,
-        annualBudget:
-          family.annualBudget === null ? null : Number(family.annualBudget),
+        annualBudget,
       },
       basis,
       year,
@@ -410,6 +432,7 @@ export class TagFamilyAnalysisService {
       byYear,
       tags: tagLines,
       comparison: compareEditions(tagLines),
+      envelope,
     }
   }
 }

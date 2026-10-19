@@ -51,9 +51,11 @@ const familyRow = (
   amount: number,
   count: number,
   category: string | null = 'c-sport',
-  type = 'EXPENSE'
+  type = 'EXPENSE',
+  eventYear = year
 ) => ({
   year,
+  event_year: eventYear,
   category_id: category,
   category_name: category === null ? 'Autre' : category,
   category_icon: null,
@@ -169,8 +171,11 @@ describe('TagFamilyAnalysisService', () => {
     prisma.$queryRaw.mockReset()
     rows([], [])
     await service.getAnalysis('fam-1', USER, { basis: 'cash' })
-    expect(queries()[0]).not.toContain('COALESCE(ft.event_start, t.date)')
     expect(queries()[0]).toContain('EXTRACT(YEAR FROM t.date)::int AS year')
+    // The event year still travels along: the envelope reads it.
+    expect(queries()[0]).toContain(
+      'EXTRACT(YEAR FROM COALESCE(ft.event_start, t.date))::int AS event_year'
+    )
   })
 
   it('sums the years into the total and merges a category across years', async () => {
@@ -395,6 +400,78 @@ describe('TagFamilyAnalysisService', () => {
     })
     expect(result.comparison).toBeNull()
     expect(result.totalSurplus).toBeNull()
+    // No year asked for: nothing to weigh the envelope against.
+    expect(result.envelope).toBeNull()
+  })
+
+  describe('annual envelope', () => {
+    // A January 2027 trip paid in November 2026 (800), a 2026 edition paid
+    // in 2026 (500), a refund of it (30) that never consumes the envelope.
+    const lines = (basis: 'event' | 'cash'): ReturnType<typeof familyRow>[] =>
+      basis === 'event'
+        ? [
+            familyRow(2026, 500, 2),
+            familyRow(2026, 30, 1, 'c-refund', 'INCOME'),
+            familyRow(2027, 800, 1),
+          ]
+        : [
+            familyRow(2026, 500, 2),
+            familyRow(2026, 30, 1, 'c-refund', 'INCOME'),
+            familyRow(2026, 800, 1, 'c-sport', 'EXPENSE', 2027),
+          ]
+
+    it('weighs the year in event basis, whatever the basis shown', async () => {
+      prisma.tag.findMany.mockResolvedValue([])
+      rows(lines('event'), [])
+      const event = await service.getAnalysis('fam-1', USER, {
+        year: 2026,
+        basis: 'event',
+      })
+
+      prisma.$queryRaw.mockReset()
+      rows(lines('cash'), [])
+      const cash = await service.getAnalysis('fam-1', USER, {
+        year: 2026,
+        basis: 'cash',
+      })
+
+      expect(event.envelope).toEqual({
+        annualBudget: 1500,
+        year: 2026,
+        spentEventBasis: 500,
+        remaining: 1000,
+      })
+      expect(cash.envelope).toEqual(event.envelope)
+      // The cash reading itself still shows what left the account in 2026.
+      expect(cash.totalExpenses).toBe(1300)
+    })
+
+    it('says an overrun as a negative remainder', async () => {
+      prisma.tag.findMany.mockResolvedValue([])
+      rows([familyRow(2027, 1800, 3)], [])
+
+      const result = await service.getAnalysis('fam-1', USER, { year: 2027 })
+
+      expect(result.envelope).toEqual({
+        annualBudget: 1500,
+        year: 2027,
+        spentEventBasis: 1800,
+        remaining: -300,
+      })
+    })
+
+    it('is null for a family without an envelope', async () => {
+      prisma.tagFamily.findFirst.mockResolvedValue({
+        ...family,
+        annualBudget: null,
+      })
+      prisma.tag.findMany.mockResolvedValue([])
+      rows([familyRow(2026, 500, 2)], [])
+
+      const result = await service.getAnalysis('fam-1', USER, { year: 2026 })
+
+      expect(result.envelope).toBeNull()
+    })
   })
 })
 

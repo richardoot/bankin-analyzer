@@ -124,6 +124,26 @@ export class TagFamilyEditionComparisonDto {
 }
 
 /**
+ * The annual envelope weighed against one year. Always read in event basis,
+ * whatever the basis of the analysis: a trip of January paid in November
+ * consumes the envelope of January's year. The cash toggle changes how the
+ * amounts are shown, never which year's envelope they draw on.
+ */
+export class TagFamilyEnvelopeDto {
+  /** The family's envelope over a calendar year. */
+  annualBudget!: number
+
+  /** The year it is weighed against. */
+  year!: number
+
+  /** Expenses of the year in event basis (absolute, joint-adjusted). */
+  spentEventBasis!: number
+
+  /** annualBudget - spentEventBasis; negative on an overrun. */
+  remaining!: number
+}
+
+/**
  * The union of a family's tags, each transaction counted once however many
  * of the family's tags it carries.
  */
@@ -173,4 +193,11 @@ export class TagFamilyAnalysisDto {
   /** Null when no edition is in scope. */
   @ApiProperty({ type: TagFamilyEditionComparisonDto, nullable: true })
   comparison!: TagFamilyEditionComparisonDto | null
+
+  /**
+   * The envelope over the year asked for, in event basis whatever `basis`.
+   * Null when the family has no envelope or no year is asked for.
+   */
+  @ApiProperty({ type: TagFamilyEnvelopeDto, nullable: true })
+  envelope!: TagFamilyEnvelopeDto | null
 }
