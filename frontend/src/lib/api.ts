@@ -524,6 +524,9 @@ export interface UpdatePersonDto {
   email?: string
 }
 
+/** Where a dated tag's window stands relative to today (Paris day). */
+export type TagEventStatus = 'upcoming' | 'ongoing' | 'past'
+
 export interface TagDto {
   id: string
   name: string
@@ -537,6 +540,8 @@ export interface TagDto {
   eventEndDate: string | null
   /** Total envelope allocated to the event (never a monthly amount) */
   budgetAmount: number | null
+  /** Computed by the server; null when the tag has no complete window */
+  status: TagEventStatus | null
   createdAt: string
   updatedAt: string
 }

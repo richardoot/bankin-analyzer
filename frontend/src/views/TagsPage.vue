@@ -1,27 +1,29 @@
 <script setup lang="ts">
-  import { onMounted, ref } from 'vue'
+  import { computed, onMounted, ref } from 'vue'
   import { useIsMobile } from '@/composables/useMediaQuery'
   import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
-  import { RouterLink } from 'vue-router'
   import { useTagsStore } from '@/stores/tags'
   import type { TagDto } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
-  import { formatCurrency } from '@/lib/formatters'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
-  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import BaseModal from '@/components/ui/BaseModal.vue'
   import IconPlus from '@/components/icons/IconPlus.vue'
   import IconChevronDown from '@/components/icons/IconChevronDown.vue'
-  import IconChevronRight from '@/components/icons/IconChevronRight.vue'
-  import IconPencil from '@/components/icons/IconPencil.vue'
-  import IconTrash from '@/components/icons/IconTrash.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import TagForm from '@/components/tags/TagForm.vue'
-  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
-  import { transactionsLink } from '@/lib/transactionsLink'
+  import SectionLabel from '@/components/ui/SectionLabel.vue'
+  import SegmentedControl, {
+    type SegmentedOption,
+  } from '@/components/ui/SegmentedControl.vue'
+  import TagCard from '@/components/tags/TagCard.vue'
+  import {
+    eventYear,
+    eventYears,
+    splitTagSections,
+  } from '@/components/tags/tagSections'
   import {
     DEFAULT_TAG_COLOR,
     emptyTagForm,
@@ -128,16 +130,39 @@
     }
   }
 
-  /** "12 juil. – 26 juil. 2025" */
-  function formatPeriod(start: string, end: string): string {
-    const opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' }
-    const from = new Date(start).toLocaleDateString('fr-FR', opts)
-    const to = new Date(end).toLocaleDateString('fr-FR', {
-      ...opts,
-      year: 'numeric',
-    })
-    return `${from} – ${to}`
-  }
+  // Three natures of tag, three sections: dated events, undated episodes,
+  // long-running themes.
+  const sections = computed(() => splitTagSections(tagsStore.tags))
+
+  // Events filter by the year their window starts in; null is every year.
+  const selectedYear = ref<number | null>(null)
+  const years = computed(() => eventYears(sections.value.events))
+  // A year that no longer has an event (its last one deleted or re-dated)
+  // falls back to every year rather than showing an empty section.
+  const activeYear = computed(() =>
+    selectedYear.value !== null && years.value.includes(selectedYear.value)
+      ? selectedYear.value
+      : null
+  )
+  const yearOptions = computed<SegmentedOption<number | null>[]>(() => [
+    { value: null, label: 'Toutes', testId: 'events-year-all' },
+    ...years.value.map(year => ({
+      value: year,
+      label: String(year),
+      testId: `events-year-${year}`,
+    })),
+  ])
+  const yearModel = computed<number | null>({
+    get: () => activeYear.value,
+    set: value => {
+      selectedYear.value = value
+    },
+  })
+  const visibleEvents = computed(() =>
+    activeYear.value === null
+      ? sections.value.events
+      : sections.value.events.filter(tag => eventYear(tag) === activeYear.value)
+  )
 
   // Delete confirmation: a real dialog (named, Escape closes it), not an
   // overlay painted over the card.
@@ -244,92 +269,78 @@
       à des transactions.
     </div>
 
-    <!-- Tag cards: an article, with its own link and its own actions —
-         not a button wrapped around blocks, with controls hidden until
-         hovered. -->
-    <div v-else class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      <BaseCard
-        v-for="tag in tagsStore.tags"
-        :key="tag.id"
-        as="article"
-        padding="sm"
-        class="flex flex-col gap-2"
-        :data-testid="`tag-card-${tag.name}`"
+    <!-- Three sections, one per nature of tag. A section with no tag is
+         left out rather than shown empty. -->
+    <div v-else class="flex flex-col gap-8">
+      <section
+        v-if="sections.events.length > 0"
+        aria-labelledby="tags-events-heading"
+        data-testid="tags-section-events"
       >
-        <div class="flex items-start justify-between gap-2">
-          <div class="flex min-w-0 items-center gap-2">
-            <span
-              class="inline-block h-3 w-3 shrink-0 rounded-full"
-              :style="{ backgroundColor: tag.color ?? '#9ca3af' }"
-            ></span>
-            <h3
-              class="truncate font-semibold text-gray-900 dark:text-gray-100"
-              :title="tag.name"
-            >
-              {{ tag.name }}
-            </h3>
-          </div>
-          <div class="flex shrink-0 items-center">
-            <BaseIconButton
-              size="sm"
-              :label="`Modifier ${tag.name}`"
-              :data-testid="`edit-tag-${tag.name}`"
-              @click="startEdit(tag)"
-            >
-              <IconPencil />
-            </BaseIconButton>
-            <BaseIconButton
-              size="sm"
-              variant="danger"
-              :label="`Supprimer ${tag.name}`"
-              @click="tagToDelete = tag"
-            >
-              <IconTrash />
-            </BaseIconButton>
-          </div>
-        </div>
-        <p class="text-sm text-gray-500 dark:text-gray-400">
-          <TransactionsLink
-            :to="transactionsLink({ tagId: tag.id, label: tag.name })"
-            :subject="tag.name"
-            size="md"
-            :data-testid="`tag-transactions-link-${tag.id}`"
-          >
-            {{ tag.transactionCount }} transaction(s)
-          </TransactionsLink>
-        </p>
         <div
-          v-if="tag.isExceptional"
-          class="flex flex-wrap items-center gap-1.5"
+          class="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2"
         >
-          <span
-            class="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
-          >
-            Exceptionnel
-          </span>
-          <span
-            v-if="tag.eventStartDate && tag.eventEndDate"
-            class="text-[11px] text-gray-500 dark:text-gray-400"
-          >
-            {{ formatPeriod(tag.eventStartDate, tag.eventEndDate) }}
-          </span>
-          <span
-            v-if="tag.budgetAmount !== null"
-            :data-testid="`tag-budget-${tag.name}`"
-            class="inline-flex shrink-0 items-center rounded-full bg-primary-100 px-2 py-0.5 text-[11px] font-medium tabular-nums text-primary-700 dark:bg-primary-900/40 dark:text-primary-400"
-          >
-            Enveloppe {{ formatCurrency(tag.budgetAmount) }}
-          </span>
+          <SectionLabel id="tags-events-heading" as="h2">
+            Événements
+          </SectionLabel>
+          <SegmentedControl
+            v-if="years.length > 1"
+            v-model="yearModel"
+            :options="yearOptions"
+            label="Année des événements"
+            size="sm"
+            scrollable
+            data-testid="events-year-filter"
+          />
         </div>
-        <RouterLink
-          :to="{ name: 'tag-analysis', params: { id: tag.id } }"
-          class="mt-auto inline-flex min-h-[44px] items-center gap-1 self-start text-sm font-medium text-primary-700 hover:underline sm:min-h-0 dark:text-primary-400"
-          :data-testid="`analyse-tag-${tag.name}`"
-        >
-          Analyser
-          <IconChevronRight class="h-3.5 w-3.5" />
-        </RouterLink>
-      </BaseCard>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <TagCard
+            v-for="tag in visibleEvents"
+            :key="tag.id"
+            :tag="tag"
+            @edit="startEdit(tag)"
+            @delete="tagToDelete = tag"
+          />
+        </div>
+      </section>
+
+      <section
+        v-if="sections.episodes.length > 0"
+        aria-labelledby="tags-episodes-heading"
+        data-testid="tags-section-episodes"
+      >
+        <SectionLabel id="tags-episodes-heading" as="h2" class="mb-3">
+          Épisodes sans date
+        </SectionLabel>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <TagCard
+            v-for="tag in sections.episodes"
+            :key="tag.id"
+            :tag="tag"
+            @edit="startEdit(tag)"
+            @delete="tagToDelete = tag"
+          />
+        </div>
+      </section>
+
+      <section
+        v-if="sections.themes.length > 0"
+        aria-labelledby="tags-themes-heading"
+        data-testid="tags-section-themes"
+      >
+        <SectionLabel id="tags-themes-heading" as="h2" class="mb-3">
+          Thèmes
+        </SectionLabel>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <TagCard
+            v-for="tag in sections.themes"
+            :key="tag.id"
+            :tag="tag"
+            @edit="startEdit(tag)"
+            @delete="tagToDelete = tag"
+          />
+        </div>
+      </section>
     </div>
 
     <!-- Edit: the same form as the creation, in a dialog -->

@@ -39,6 +39,7 @@ function makeTag(overrides: Partial<TagDto> = {}): TagDto {
     eventStartDate: null,
     eventEndDate: null,
     budgetAmount: null,
+    status: null,
     createdAt: '',
     updatedAt: '',
     ...overrides,
