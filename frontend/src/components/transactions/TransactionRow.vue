@@ -186,7 +186,7 @@
     () => props.transaction.amortizationMonths ?? null
   )
   /**
-   * A smoothing reads like a subscription (same edge, same badge): blue
+   * A smoothing reads like a subscription (same edge, same badge), in teal
    * while its slices fall, grey and « terminé » once the last one has.
    */
   const smoothingStatus = computed<'ACTIVE' | 'STOPPED' | null>(() => {
@@ -201,10 +201,20 @@
       ? 'STOPPED'
       : 'ACTIVE'
   })
-  /** The status the line's left edge shows: the subscription's first. */
-  const edgeStatus = computed(
-    () => props.transaction.recurrence?.status ?? smoothingStatus.value
-  )
+  /**
+   * The line's left edge, the subscription's first: blue for a running
+   * subscription, teal for a running smoothing (the Budget page's colour
+   * for it), grey once either has ended.
+   */
+  const edgeClass = computed(() => {
+    const recurrence = props.transaction.recurrence?.status
+    const status = recurrence ?? smoothingStatus.value
+    if (status === 'STOPPED') return 'border-l-gray-300 dark:border-l-slate-600'
+    if (recurrence === 'ACTIVE')
+      return 'border-l-blue-400 dark:border-l-blue-500'
+    if (status === 'ACTIVE') return 'border-l-teal-400 dark:border-l-teal-500'
+    return 'border-l-transparent'
+  })
 
   /** Whether the tags line has something to show on a phone. */
   const hasTagLineContent = computed(
@@ -341,15 +351,15 @@
 <template>
   <div
     class="group border-l-4 px-4 py-2.5 transition-colors hover:bg-gray-50 lg:py-3 dark:hover:bg-slate-800"
-    :class="{
-      'bg-primary-50/50 dark:bg-primary-900/10': selectionMode && selected,
-      // A subscription or a smoothed line reads apart at a glance: a blue
-      // edge while it runs, a grey one once it has ended. The left edge
-      // only: the divider below the row keeps the list's colour.
-      'border-l-blue-400 dark:border-l-blue-500': edgeStatus === 'ACTIVE',
-      'border-l-gray-300 dark:border-l-slate-600': edgeStatus === 'STOPPED',
-      'border-l-transparent': !edgeStatus,
-    }"
+    :class="[
+      {
+        'bg-primary-50/50 dark:bg-primary-900/10': selectionMode && selected,
+      },
+      // A subscription or a smoothed line reads apart at a glance by its
+      // edge. The left edge only: the divider below the row keeps the
+      // list's colour.
+      edgeClass,
+    ]"
     :data-recurring="transaction.recurrence ? 'true' : undefined"
   >
     <!-- ==================== CARD (below lg) ==================== -->
@@ -767,15 +777,15 @@
         <IconClose />
       </BaseIconButton>
       <!-- A smoothed expense says so, and over how long, in the subscription
-           badge's format; the badge opens the dialog that changes or stops
-           it. -->
+           badge's format but teal; the badge opens the dialog that changes
+           or stops it. -->
       <button
         v-if="amortizationMonths !== null"
         type="button"
         class="relative inline-flex min-h-[28px] items-center gap-1 rounded-full px-2 text-xs font-medium transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 pointer-coarse:before:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-default"
         :class="
           smoothingStatus === 'ACTIVE'
-            ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:hover:bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50'
+            ? 'bg-teal-50 text-teal-800 hover:bg-teal-100 disabled:hover:bg-teal-50 dark:bg-teal-900/30 dark:text-teal-300 dark:hover:bg-teal-900/50'
             : 'bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:hover:bg-gray-100 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600'
         "
         :title="`Compté en vie courante par tranches sur ${amortizationMonths} mois — modifier`"

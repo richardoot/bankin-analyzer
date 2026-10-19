@@ -452,7 +452,7 @@ describe('TransactionRow', () => {
       )
     })
 
-    it('reads like a subscription: a blue edge and badge while it runs', () => {
+    it('reads like a subscription, in teal, while it runs', () => {
       const wrapper = mountRow({
         transaction: tx({
           amount: -1300,
@@ -461,9 +461,10 @@ describe('TransactionRow', () => {
         }),
       })
 
-      expect(wrapper.classes()).toContain('border-l-blue-400')
+      expect(wrapper.classes()).toContain('border-l-teal-400')
+      expect(wrapper.classes()).not.toContain('border-l-blue-400')
       const badge = wrapper.get('[data-testid="amortization-badge"]')
-      expect(badge.classes()).toContain('bg-blue-50')
+      expect(badge.classes()).toContain('bg-teal-50')
       expect(badge.text()).not.toContain('terminé')
     })
 
