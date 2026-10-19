@@ -1,3 +1,6 @@
+import { ApiProperty } from '@nestjs/swagger'
+import { TAG_EVENT_STATUSES, type TagEventStatus } from '../tag-status'
+
 export class TagResponseDto {
   /** Tag ID */
   id!: string
@@ -25,6 +28,13 @@ export class TagResponseDto {
 
   /** Total envelope allocated to this event, or null */
   budgetAmount!: number | null
+
+  /**
+   * Where the event window stands relative to today (Paris calendar day,
+   * bounds included). Null when the tag has no complete window.
+   */
+  @ApiProperty({ enum: TAG_EVENT_STATUSES, nullable: true })
+  status!: TagEventStatus | null
 
   /** Creation date */
   createdAt!: Date

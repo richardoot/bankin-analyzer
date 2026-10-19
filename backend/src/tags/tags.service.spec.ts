@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
 import {
@@ -10,6 +10,7 @@ import { TagsService } from './tags.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { Prisma } from '../generated/prisma'
+import type { Tag } from '../generated/prisma'
 
 const USER = 'user-1'
 
@@ -85,10 +86,63 @@ describe('TagsService', () => {
           eventStartDate: null,
           eventEndDate: null,
           budgetAmount: null,
+          status: null,
           createdAt: mockTag.createdAt,
           updatedAt: mockTag.updatedAt,
         },
       ])
+    })
+
+    describe('status of a dated tag', () => {
+      /** A dated tag as Prisma hands it back: `@db.Date` as UTC midnights. */
+      const dated = (id: string, start: string, end: string): Tag => ({
+        ...mockTag,
+        id,
+        isExceptional: true,
+        eventStartDate: new Date(`${start}T00:00:00.000Z`),
+        eventEndDate: new Date(`${end}T00:00:00.000Z`),
+      })
+
+      afterEach(() => {
+        vi.useRealTimers()
+      })
+
+      it('reads each window against the Paris day, bounds included', async () => {
+        // 22:30 UTC on the 14th: already the 15th in Paris.
+        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.setSystemTime(new Date('2026-07-14T22:30:00.000Z'))
+        mockPrismaService.tag.findMany.mockResolvedValue([
+          dated('starts-today', '2026-07-15', '2026-07-20'),
+          dated('ends-today', '2026-07-10', '2026-07-15'),
+          dated('one-day-today', '2026-07-15', '2026-07-15'),
+          dated('starts-tomorrow', '2026-07-16', '2026-07-16'),
+          dated('ended-yesterday', '2026-07-01', '2026-07-14'),
+          { ...mockTag, id: 'no-window', isExceptional: true },
+        ])
+
+        const result = await service.findAllByUser(USER)
+
+        expect(result.map(t => [t.id, t.status])).toEqual([
+          ['starts-today', 'ongoing'],
+          ['ends-today', 'ongoing'],
+          ['one-day-today', 'ongoing'],
+          ['starts-tomorrow', 'upcoming'],
+          ['ended-yesterday', 'past'],
+          ['no-window', null],
+        ])
+      })
+
+      it('carries the status on a single tag too', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.setSystemTime(new Date('2026-07-15T10:00:00.000Z'))
+        mockPrismaService.tag.findFirst.mockResolvedValue(
+          dated('tag-1', '2026-07-16', '2026-07-18')
+        )
+
+        const result = await service.findOne('tag-1', USER)
+
+        expect(result.status).toBe('upcoming')
+      })
     })
 
     it('defaults transactionCount to 0 when _count is missing', async () => {

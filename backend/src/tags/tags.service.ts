@@ -26,6 +26,7 @@ import {
   daysBetweenInclusive,
   toEventIntervals,
 } from '../common/exceptional-periods'
+import { calendarDayIn, tagEventStatus } from './tag-status'
 import {
   exceptionalOnSmoothedError,
   SMOOTHED_ROWS_NAMED,
@@ -99,9 +100,16 @@ export class TagsService {
     private readonly recurrences: RecurrencesService
   ) {}
 
+  /**
+   * `today` is the Paris calendar day the status is read against; a list
+   * computes it once so every tag of the response agrees.
+   */
   private toResponse(
-    tag: Tag & { _count?: { transactions: number } }
+    tag: Tag & { _count?: { transactions: number } },
+    today: string = calendarDayIn(new Date())
   ): TagResponseDto {
+    const eventStartDate = toIsoDate(tag.eventStartDate)
+    const eventEndDate = toIsoDate(tag.eventEndDate)
     return {
       id: tag.id,
       name: tag.name,
@@ -109,9 +117,10 @@ export class TagsService {
       icon: tag.icon,
       transactionCount: tag._count?.transactions ?? 0,
       isExceptional: tag.isExceptional,
-      eventStartDate: toIsoDate(tag.eventStartDate),
-      eventEndDate: toIsoDate(tag.eventEndDate),
+      eventStartDate,
+      eventEndDate,
       budgetAmount: tag.budgetAmount === null ? null : Number(tag.budgetAmount),
+      status: tagEventStatus(eventStartDate, eventEndDate, today),
       createdAt: tag.createdAt,
       updatedAt: tag.updatedAt,
     }
@@ -123,7 +132,8 @@ export class TagsService {
       include: { _count: { select: { transactions: true } } },
       orderBy: { name: 'asc' },
     })
-    return tags.map(t => this.toResponse(t))
+    const today = calendarDayIn(new Date())
+    return tags.map(t => this.toResponse(t, today))
   }
 
   /**
