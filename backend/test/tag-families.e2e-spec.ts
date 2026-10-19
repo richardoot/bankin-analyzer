@@ -4,7 +4,9 @@
  *
  * - a family name is unique per user (409), someone else's family is a 404,
  *   on its own routes and when a tag is filed under it;
- * - deleting a family keeps its tags, without a family (ON DELETE SET NULL).
+ * - deleting a family keeps its tags, without a family (ON DELETE SET NULL);
+ * - `GET /transactions?tagFamilyId=` lists each row carrying one of the
+ *   family's tags once, even when it carries two of them.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import request from 'supertest'
@@ -32,6 +34,8 @@ interface TagBody {
 describe('Tag families (e2e)', () => {
   let ctx: E2eContext
   let prisma: PrismaService
+  let userId: string
+  let accountId: string
 
   beforeAll(async () => {
     ctx = await createE2eApp([owner, stranger])
@@ -46,8 +50,15 @@ describe('Tag families (e2e)', () => {
 
   beforeEach(async () => {
     await prisma.user.deleteMany()
-    await http().get('/users/me').set(ctx.auth(owner))
+    userId = (
+      (await http().get('/users/me').set(ctx.auth(owner))).body as {
+        id: string
+      }
+    ).id
     await http().get('/users/me').set(ctx.auth(stranger))
+    accountId = (
+      await prisma.account.create({ data: { userId, name: 'Courant' } })
+    ).id
   })
 
   async function createFamily(
@@ -68,6 +79,27 @@ describe('Tag families (e2e)', () => {
       .post('/tags')
       .set(ctx.auth(owner))
       .send({ name, ...(familyId && { familyId }) })
+  }
+
+  let sequence = 0
+  async function expense(tagIds: string[]): Promise<string> {
+    const row = await prisma.transaction.create({
+      data: {
+        userId,
+        accountId,
+        hash: `e2e-family-${(sequence += 1)}`,
+        date: new Date('2026-06-10'),
+        description: 'CB',
+        amount: -40,
+        type: 'EXPENSE',
+      },
+    })
+    for (const tagId of tagIds) {
+      await prisma.transactionTag.create({
+        data: { tagId, transactionId: row.id },
+      })
+    }
+    return row.id
   }
 
   it('creates, lists with a tag count, and refuses a duplicate name', async () => {
@@ -148,5 +180,41 @@ describe('Tag families (e2e)', () => {
     const kept = await prisma.tag.findUnique({ where: { id: tag.id } })
     expect(kept).not.toBeNull()
     expect(kept?.familyId).toBeNull()
+  })
+
+  it('lists each row of a family once, even carrying two of its tags', async () => {
+    const family = (await createFamily('HYROX')).body as FamilyBody
+    const other = (await createFamily('Voyages')).body as FamilyBody
+    const race = (await createTag('HYROX Lyon 2026', family.id)).body as TagBody
+    const trip = (await createTag('Déplacement Lyon', family.id))
+      .body as TagBody
+    const rome = (await createTag('Rome 2026', other.id)).body as TagBody
+    const loose = (await createTag('Cadeaux')).body as TagBody
+
+    const both = await expense([race.id, trip.id])
+    const raceOnly = await expense([race.id])
+    await expense([rome.id])
+    await expense([loose.id])
+    await expense([])
+
+    const response = await http()
+      .get('/transactions')
+      .query({ tagFamilyId: family.id, limit: '100' })
+      .set(ctx.auth(owner))
+    expect(response.status).toBe(200)
+    const body = response.body as {
+      data: Array<{ id: string }>
+      meta: { total: number }
+    }
+    expect(body.data.map(t => t.id).sort()).toEqual([both, raceOnly].sort())
+    expect(body.meta.total).toBe(2)
+
+    // Someone else's family matches nothing of mine.
+    const foreign = (await createFamily('HYROX', stranger)).body as FamilyBody
+    const none = await http()
+      .get('/transactions')
+      .query({ tagFamilyId: foreign.id })
+      .set(ctx.auth(owner))
+    expect((none.body as { data: unknown[] }).data).toEqual([])
   })
 })

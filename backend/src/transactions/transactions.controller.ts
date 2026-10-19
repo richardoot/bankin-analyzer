@@ -213,6 +213,12 @@ export class TransactionsController {
   @ApiQuery({ name: 'account', required: false, type: String })
   @ApiQuery({ name: 'tagId', required: false, type: String })
   @ApiQuery({
+    name: 'tagFamilyId',
+    required: false,
+    type: String,
+    description: 'Rows carrying at least one tag of this family, each row once',
+  })
+  @ApiQuery({
     name: 'search',
     required: false,
     type: String,
@@ -385,7 +391,8 @@ export class TransactionsController {
     @Query('categoryIds') categoryIds?: string,
     @Query('recurrences') recurrences?: string,
     @Query('amortized') amortized?: string,
-    @Query('alsoIds') alsoIds?: string
+    @Query('alsoIds') alsoIds?: string,
+    @Query('tagFamilyId') tagFamilyId?: string
   ): Promise<PaginatedTransactionsResponseDto> {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
@@ -421,6 +428,7 @@ export class TransactionsController {
       ...(isPointed !== undefined && { isPointed }),
       ...(account && { account }),
       ...(tagId && { tagId }),
+      ...(tagFamilyId && { tagFamilyId }),
       ...(search && { search }),
       ...(amountMin !== undefined && { amountMin }),
       ...(amountMax !== undefined && { amountMax }),

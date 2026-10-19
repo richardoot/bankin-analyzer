@@ -401,6 +401,8 @@ export interface TransactionQueryParams {
   isPointed?: boolean | undefined
   account?: string | undefined
   tagId?: string | undefined
+  /** The rows carrying at least one tag of this family, each once. */
+  tagFamilyId?: string | undefined
   search?: string | undefined
   amountMin?: number | undefined
   amountMax?: number | undefined
@@ -2023,6 +2025,7 @@ export const api = {
       searchParams.set('isPointed', params.isPointed.toString())
     if (params?.account) searchParams.set('account', params.account)
     if (params?.tagId) searchParams.set('tagId', params.tagId)
+    if (params?.tagFamilyId) searchParams.set('tagFamilyId', params.tagFamilyId)
     if (params?.search) searchParams.set('search', params.search)
     if (params?.amountMin !== undefined)
       searchParams.set('amountMin', params.amountMin.toString())

@@ -63,6 +63,19 @@ describe('transactionsLink', () => {
     ).toEqual({})
   })
 
+  it('names a tag family under `family`', () => {
+    expect(transactionsQuery({ tagFamilyId: ' fam-1 ' })).toEqual({
+      family: 'fam-1',
+    })
+    expect(transactionsLink({ tagFamilyId: 'fam-1' })).toEqual({
+      path: '/transactions',
+      query: { family: 'fam-1' },
+    })
+    expect(parseTransactionsQuery({ family: 'fam-1' })).toEqual({
+      tagFamilyId: 'fam-1',
+    })
+  })
+
   it('keeps no subcategory under « sans catégorie »', () => {
     expect(
       transactionsQuery({ categoryId: NO_CATEGORY, subcategoryId: 'sub-1' })
@@ -84,6 +97,7 @@ describe('parseTransactionsQuery', () => {
     subcategoryId: 'sub-1',
     account: 'Compte joint',
     tagId: 'tag-1',
+    tagFamilyId: 'fam-1',
     from: '2026-10-01',
     to: '2026-10-31',
     min: '10',

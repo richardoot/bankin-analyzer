@@ -418,6 +418,35 @@ describe('buildTransactionWhere', () => {
     })
   })
 
+  describe('a tag family', () => {
+    it('reads the family off the wire', () => {
+      expect(parseTransactionFilters({ tagFamilyId: 'fam-1' })).toEqual({
+        tagFamilyId: 'fam-1',
+      })
+    })
+
+    it('keeps each row carrying one of the user’s tags of the family, once', () => {
+      // `some` is an EXISTS on the row, not a join: two tags of the family on
+      // one row still return that row once.
+      expect(
+        buildTransactionWhere('user-1', { tagFamilyId: 'fam-1' }).AND
+      ).toEqual([
+        { tags: { some: { tag: { userId: 'user-1', familyId: 'fam-1' } } } },
+      ])
+    })
+
+    it('narrows a tag filter instead of overwriting it', () => {
+      const where = buildTransactionWhere('user-1', {
+        tagId: 't-1',
+        tagFamilyId: 'fam-1',
+      })
+      expect(where.tags).toEqual({ some: { tagId: 't-1' } })
+      expect(where.AND).toEqual([
+        { tags: { some: { tag: { userId: 'user-1', familyId: 'fam-1' } } } },
+      ])
+    })
+  })
+
   describe('nature and rhythm', () => {
     it('reads the enum values and none, and refuses the rest', () => {
       expect(

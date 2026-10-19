@@ -421,5 +421,14 @@ describe('TagsPage', () => {
         ],
       ])
     })
+
+    it('links each family to its transactions', async () => {
+      const wrapper = await mountPage(FAMILY_TAGS, [races, trips])
+
+      const link = wrapper.get('[data-testid="family-transactions-link-fam-t"]')
+      expect(link.attributes('data-to')).toBe(
+        JSON.stringify({ path: '/transactions', query: { family: 'fam-t' } })
+      )
+    })
   })
 })

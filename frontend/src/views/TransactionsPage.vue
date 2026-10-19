@@ -256,6 +256,21 @@
    */
   const amortizedFilter = ref(initialLink.amortized ?? false)
   /**
+   * The rows of one tag family — any of its tags, each row once. Reached
+   * from a family's figures; not saved, like the event filter.
+   */
+  const tagFamilyFilter = ref<string | null>(initialLink.tagFamilyId ?? null)
+  // The chip names the family: its list is only needed once one is asked for.
+  watch(
+    tagFamilyFilter,
+    id => {
+      const known = tagsStore.families.some(f => f.id === id)
+      if (id && !known && !tagsStore.familiesLoading)
+        void tagsStore.fetchFamilies()
+    },
+    { immediate: true }
+  )
+  /**
    * The context a link can carry and the controls above cannot express: a
    * person's debts, a settlement, an import, a sync run, an exact list of
    * rows. Named in the banner above the list rather than in a chip, and
@@ -347,6 +362,7 @@
     categoryIdsFilter.value = []
     recurrencesFilter.value = []
     amortizedFilter.value = false
+    tagFamilyFilter.value = null
     clearContext()
     localStorage.removeItem(FILTERS_STORAGE_KEY)
   }
@@ -397,6 +413,7 @@
       categoryIdsFilter.value.length > 0 ||
       recurrencesFilter.value.length > 0 ||
       amortizedFilter.value ||
+      tagFamilyFilter.value !== null ||
       hasContextFilter.value
     )
   })
@@ -492,6 +509,12 @@
       const name = tagsStore.tags.find(t => t.id === selectedTag.value)?.name
       chips.push({ key: 'tag', label: `Étiquette : ${name ?? '…'}` })
     }
+    if (tagFamilyFilter.value) {
+      const name = tagsStore.families.find(
+        f => f.id === tagFamilyFilter.value
+      )?.name
+      chips.push({ key: 'family', label: `Famille : ${name ?? '…'}` })
+    }
     if (showOnlyNotPointed.value) {
       chips.push({ key: 'notPointed', label: 'Non pointées' })
     }
@@ -573,6 +596,9 @@
         break
       case 'tag':
         selectedTag.value = null
+        break
+      case 'family':
+        tagFamilyFilter.value = null
         break
       case 'notPointed':
         showOnlyNotPointed.value = false
@@ -823,6 +849,7 @@
         : undefined,
       account: selectedAccount.value || undefined,
       tagId: selectedTag.value || undefined,
+      tagFamilyId: tagFamilyFilter.value || undefined,
       isPointed: showOnlyNotPointed.value ? false : undefined,
       search: searchKeyword.value.trim() || undefined,
       startDate: filterStartDate.value || undefined,
@@ -1202,6 +1229,7 @@
       subcategoryId: selectedSubcategory.value ?? undefined,
       account: selectedAccount.value ?? undefined,
       tagId: selectedTag.value ?? undefined,
+      tagFamilyId: tagFamilyFilter.value ?? undefined,
       notPointed: showOnlyNotPointed.value,
       review: needsBankReview.value,
       recurrence: recurrenceFilter.value ?? undefined,
@@ -1284,6 +1312,7 @@
     categoryIdsFilter.value = link.categoryIds ?? []
     recurrencesFilter.value = link.recurrences ?? []
     amortizedFilter.value = link.amortized ?? false
+    tagFamilyFilter.value = link.tagFamilyId ?? null
     alsoIdsFilter.value = link.alsoIds ?? []
     contextLabel.value = link.label ?? null
     grossAmounts.value = link.gross ?? false
@@ -1365,6 +1394,7 @@
       categoryIdsFilter,
       recurrencesFilter,
       amortizedFilter,
+      tagFamilyFilter,
       alsoIdsFilter,
       personFilter,
       reimbursementFilter,

@@ -16,6 +16,8 @@
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import BaseField from '@/components/ui/BaseField.vue'
   import TagColorPicker from '@/components/tags/TagColorPicker.vue'
+  import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import { transactionsLink } from '@/lib/transactionsLink'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import TagForm from '@/components/tags/TagForm.vue'
@@ -498,6 +500,13 @@
               >
                 {{ tagCountOf(family.id) }} étiquette(s)
               </span>
+              <TransactionsLink
+                v-if="tagCountOf(family.id) > 0"
+                :to="transactionsLink({ tagFamilyId: family.id })"
+                :subject="`la famille ${family.name}`"
+                icon-only
+                :data-testid="`family-transactions-link-${family.id}`"
+              />
               <BaseIconButton
                 size="sm"
                 :label="`Modifier la famille ${family.name}`"

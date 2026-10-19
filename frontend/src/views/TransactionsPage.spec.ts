@@ -21,6 +21,7 @@ vi.mock('@/lib/api', () => ({
     bulkUpdateTransactions: vi.fn(),
     getSettlement: vi.fn(),
     getTags: vi.fn(),
+    getTagFamilies: vi.fn(),
     attachTagToTransactions: vi.fn(),
     detachTagFromTransaction: vi.fn(),
     markTransactionRecurring: vi.fn(),
@@ -368,6 +369,44 @@ describe('TransactionsPage — optimistic updates', () => {
       )
       expect(wrapper.text()).toContain('Charge récurrente : CB Netflix')
       expect(router.currentRoute.value.query.recurrence).toBe('15:com netflix')
+    })
+  })
+
+  describe('the rows of one tag family', () => {
+    it('reads the family from the URL, names it in a chip, and asks for its rows', async () => {
+      setupDefaultMocks()
+      vi.mocked(api.getTagFamilies).mockResolvedValue([
+        {
+          id: 'fam-1',
+          name: 'Voyages',
+          color: '#22c55e',
+          icon: null,
+          annualBudget: null,
+          tagCount: 2,
+          createdAt: '',
+          updatedAt: '',
+        },
+      ])
+      await router.replace({ query: { family: 'fam-1' } })
+      const wrapper = mount(TransactionsPage, {
+        global: {
+          plugins: [router],
+          stubs: {
+            Teleport: true,
+            CategorySubcategoryModal: true,
+            TransactionReimbursementModal: true,
+            BulkCategoryModal: true,
+            SettlementDetailModal: true,
+          },
+        },
+      })
+      await flushPromises()
+
+      expect(api.getTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({ tagFamilyId: 'fam-1' })
+      )
+      expect(wrapper.text()).toContain('Famille : Voyages')
+      expect(router.currentRoute.value.query.family).toBe('fam-1')
     })
   })
 
