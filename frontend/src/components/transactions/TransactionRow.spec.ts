@@ -442,7 +442,7 @@ describe('TransactionRow', () => {
       })
 
       const badge = wrapper.get('[data-testid="amortization-badge"]')
-      expect(badge.text()).toContain('lissé · 24 mois')
+      expect(badge.text()).toContain('Lissé · 24 mois')
       await badge.trigger('click')
 
       expect(wrapper.emitted('open-amortization')).toHaveLength(1)
@@ -450,6 +450,36 @@ describe('TransactionRow', () => {
       expect(wrapper.get('[data-testid="row-tags"]').classes()).toContain(
         'mt-1.5'
       )
+    })
+
+    it('reads like a subscription: a blue edge and badge while it runs', () => {
+      const wrapper = mountRow({
+        transaction: tx({
+          amount: -1300,
+          date: new Date().toISOString(),
+          amortizationMonths: 24,
+        }),
+      })
+
+      expect(wrapper.classes()).toContain('border-l-blue-400')
+      const badge = wrapper.get('[data-testid="amortization-badge"]')
+      expect(badge.classes()).toContain('bg-blue-50')
+      expect(badge.text()).not.toContain('terminé')
+    })
+
+    it('turns grey and « terminé » once its last slice has fallen', () => {
+      const wrapper = mountRow({
+        transaction: tx({
+          amount: -1300,
+          date: '2020-01-15T00:00:00.000Z',
+          amortizationMonths: 12,
+        }),
+      })
+
+      expect(wrapper.classes()).toContain('border-l-gray-300')
+      const badge = wrapper.get('[data-testid="amortization-badge"]')
+      expect(badge.classes()).toContain('bg-gray-100')
+      expect(badge.text()).toMatch(/^Lissé · 12 mois\s+· terminé/)
     })
 
     it('offers « Étaler » on an expense, on hover and focus alike', async () => {

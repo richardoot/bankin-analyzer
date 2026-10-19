@@ -44,6 +44,18 @@ export function remainingSlices(
   return monthsBetween(currentMonth, purchase.lastMonth)
 }
 
+/**
+ * Whether a smoothing has let its last slice fall before `currentMonth`: the
+ * slices start at the purchase's own month and run for `months` months.
+ */
+export function smoothingEnded(
+  date: string,
+  months: number,
+  currentMonth: string
+): boolean {
+  return monthsBetween(date.slice(0, 7), currentMonth) > months
+}
+
 export interface SmoothedScope {
   /** A category id; absent for every category. */
   categoryId?: string | undefined

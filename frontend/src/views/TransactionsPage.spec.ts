@@ -285,7 +285,7 @@ describe('TransactionsPage — optimistic updates', () => {
       )
       expect(
         wrapper.find('[data-testid="amortization-badge"]').text()
-      ).toContain('lissé · 24 mois')
+      ).toContain('Lissé · 24 mois')
     })
 
     it('keeps the dialog open on the server refusal, its message shown', async () => {

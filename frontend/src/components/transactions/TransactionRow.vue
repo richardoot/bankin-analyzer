@@ -28,6 +28,7 @@
   import TransactionReimbursementList from './TransactionReimbursementList.vue'
   import TransactionSettlementLinks from './TransactionSettlementLinks.vue'
   import { rowGridClass } from './rowGrid'
+  import { smoothingEnded } from '@/lib/amortization'
 
   /**
    * One transaction, one declaration.
@@ -184,6 +185,26 @@
   const amortizationMonths = computed(
     () => props.transaction.amortizationMonths ?? null
   )
+  /**
+   * A smoothing reads like a subscription (same edge, same badge): blue
+   * while its slices fall, grey and « terminé » once the last one has.
+   */
+  const smoothingStatus = computed<'ACTIVE' | 'STOPPED' | null>(() => {
+    if (amortizationMonths.value === null) return null
+    const today = new Date()
+    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+    return smoothingEnded(
+      props.transaction.date,
+      amortizationMonths.value,
+      currentMonth
+    )
+      ? 'STOPPED'
+      : 'ACTIVE'
+  })
+  /** The status the line's left edge shows: the subscription's first. */
+  const edgeStatus = computed(
+    () => props.transaction.recurrence?.status ?? smoothingStatus.value
+  )
 
   /** Whether the tags line has something to show on a phone. */
   const hasTagLineContent = computed(
@@ -322,14 +343,12 @@
     class="group border-l-4 px-4 py-2.5 transition-colors hover:bg-gray-50 lg:py-3 dark:hover:bg-slate-800"
     :class="{
       'bg-primary-50/50 dark:bg-primary-900/10': selectionMode && selected,
-      // A subscription line reads apart at a glance: a blue edge while
-      // it runs, a grey one once it has ended. The left edge only: the
-      // divider below the row keeps the list's colour.
-      'border-l-blue-400 dark:border-l-blue-500':
-        transaction.recurrence?.status === 'ACTIVE',
-      'border-l-gray-300 dark:border-l-slate-600':
-        transaction.recurrence?.status === 'STOPPED',
-      'border-l-transparent': !transaction.recurrence,
+      // A subscription or a smoothed line reads apart at a glance: a blue
+      // edge while it runs, a grey one once it has ended. The left edge
+      // only: the divider below the row keeps the list's colour.
+      'border-l-blue-400 dark:border-l-blue-500': edgeStatus === 'ACTIVE',
+      'border-l-gray-300 dark:border-l-slate-600': edgeStatus === 'STOPPED',
+      'border-l-transparent': !edgeStatus,
     }"
     :data-recurring="transaction.recurrence ? 'true' : undefined"
   >
@@ -747,19 +766,26 @@
       >
         <IconClose />
       </BaseIconButton>
-      <!-- A smoothed expense says so, and over how long; the badge opens the
-           dialog that changes or stops it. -->
+      <!-- A smoothed expense says so, and over how long, in the subscription
+           badge's format; the badge opens the dialog that changes or stops
+           it. -->
       <button
         v-if="amortizationMonths !== null"
         type="button"
-        class="relative inline-flex min-h-[28px] items-center gap-1 rounded-full bg-teal-50 px-2 text-xs font-medium text-teal-800 transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 pointer-coarse:before:content-[''] hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-default disabled:hover:bg-teal-50 dark:bg-teal-900/30 dark:text-teal-300 dark:hover:bg-teal-900/50"
+        class="relative inline-flex min-h-[28px] items-center gap-1 rounded-full px-2 text-xs font-medium transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 pointer-coarse:before:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-default"
+        :class="
+          smoothingStatus === 'ACTIVE'
+            ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:hover:bg-blue-50 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50'
+            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:hover:bg-gray-100 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600'
+        "
         :title="`Compté en vie courante par tranches sur ${amortizationMonths} mois — modifier`"
         :disabled="selectionMode"
         data-testid="amortization-badge"
         @click="emit('open-amortization')"
       >
         <IconCalendar class="h-3.5 w-3.5" />
-        lissé · {{ amortizationMonths }} mois
+        Lissé · {{ amortizationMonths }} mois
+        <template v-if="smoothingStatus === 'STOPPED'"> · terminé </template>
         <span class="sr-only">, modifier l'étalement</span>
       </button>
       <TagChip

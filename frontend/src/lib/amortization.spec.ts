@@ -5,6 +5,7 @@ import {
   monthsBetween,
   purchasesWithSlicesIn,
   remainingSlices,
+  smoothingEnded,
   smoothedSourceIds,
 } from './amortization'
 
@@ -53,6 +54,13 @@ describe('months', () => {
     expect(remainingSlices(phone, '2026-03')).toBe(24)
     expect(remainingSlices(phone, '2028-02')).toBe(1)
     expect(remainingSlices(phone, '2028-03')).toBe(0)
+  })
+
+  it('ends a smoothing once its last slice has fallen', () => {
+    const date = '2026-03-14T00:00:00.000Z'
+    expect(smoothingEnded(date, 24, '2026-03')).toBe(false)
+    expect(smoothingEnded(date, 24, '2028-02')).toBe(false)
+    expect(smoothingEnded(date, 24, '2028-03')).toBe(true)
   })
 })
 
