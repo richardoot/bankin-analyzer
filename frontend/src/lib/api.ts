@@ -1125,6 +1125,25 @@ export interface SpendingStructureDto {
   total: number
 }
 
+/**
+ * One tag family over the current calendar year (in Paris), in event basis:
+ * a line belongs to the year its dated tag starts in, and counts once.
+ */
+export interface TagFamilyOfYearDto {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+  year: number
+  /** Gross expenses, divided, stats-excluded accounts ignored. */
+  spent: number
+  annualBudget: number | null
+  /** `annualBudget - spent`, negative over; null without an envelope. */
+  remaining: number | null
+  transactionCount: number
+  tagCount: number
+}
+
 export interface DashboardSummaryDto {
   monthlyData: MonthlyDataDto[]
   expensesByCategory: CategoryDataDto[]
@@ -1150,6 +1169,13 @@ export interface DashboardSummaryDto {
   remainingToLive?: number | null
   /** What is still owed to the user across every open debt, a stock in full euros. */
   pendingReceivables?: number
+  /**
+   * The tag families with expenses in the current calendar year, whatever
+   * the period, biggest first. Absent on an older server.
+   */
+  tagFamiliesOfYear?: TagFamilyOfYearDto[]
+  /** Real expenses of that year: the share's denominator. Null without families. */
+  realExpensesOfYear?: number | null
 }
 
 // Budget plan DTOs

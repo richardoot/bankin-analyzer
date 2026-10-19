@@ -10,6 +10,7 @@
   import PageHeader from '@/components/ui/PageHeader.vue'
   import LegacyMigrationBanner from '@/components/settings/LegacyMigrationBanner.vue'
   import SpendingStructureCard from '@/components/dashboard/SpendingStructureCard.vue'
+  import TagFamiliesOfYearCard from '@/components/dashboard/TagFamiliesOfYearCard.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
   import { useDashboardData } from '@/composables/useDashboardData'
@@ -59,6 +60,8 @@
     pendingReceivables,
     savingsRate,
     remainingToLive,
+    tagFamiliesOfYear,
+    realExpensesOfYear,
     expensesSparkline,
     incomeSparkline,
     savingsSparkline,
@@ -597,6 +600,15 @@
           :period-months="periodMonths"
           :reading="breakdownMode === 'everyday' ? 'everyday' : 'actual'"
           :window="linkWindow"
+        />
+
+        <!-- The families over the year: only where an event touches the
+             period, like the reading selector. -->
+        <TagFamiliesOfYearCard
+          v-if="hasExceptionalExpenses && tagFamiliesOfYear.length > 0"
+          class="mb-8"
+          :families="tagFamiliesOfYear"
+          :real-expenses="realExpensesOfYear"
         />
 
         <!-- Expenses section (primary) -->

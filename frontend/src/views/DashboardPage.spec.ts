@@ -772,4 +772,65 @@ describe('DashboardPage', () => {
       )
     })
   })
+
+  describe('the families of the year', () => {
+    const family = {
+      id: 'fam-travel',
+      name: 'Voyages',
+      color: null,
+      icon: null,
+      year: 2026,
+      spent: 300,
+      annualBudget: null,
+      remaining: null,
+      transactionCount: 2,
+      tagCount: 1,
+    }
+    const withEvent: DashboardSummaryDto = {
+      ...mockSummary,
+      totalExceptionalExpenses: 300,
+      exceptionalEvents: [
+        { id: 'tag-1', name: 'Rome', color: null, icon: null, amount: 300 },
+      ],
+    }
+
+    async function mountWith(summary: DashboardSummaryDto) {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(summary)
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+      return wrapper.find('[data-testid="tag-families-of-year"]')
+    }
+
+    it('shows the card when an event touches the period and a family spent this year', async () => {
+      const card = await mountWith({
+        ...withEvent,
+        tagFamiliesOfYear: [family],
+        realExpensesOfYear: 6000,
+      })
+
+      expect(card.exists()).toBe(true)
+      expect(card.text()).toContain("Épisodes de l'année 2026")
+      expect(card.text()).toContain('5 % du réel')
+    })
+
+    it('leaves it out without a family', async () => {
+      const card = await mountWith({
+        ...withEvent,
+        tagFamiliesOfYear: [],
+        realExpensesOfYear: null,
+      })
+
+      expect(card.exists()).toBe(false)
+    })
+
+    it('leaves it out when no event touches the period', async () => {
+      const card = await mountWith({
+        ...mockSummary,
+        tagFamiliesOfYear: [family],
+        realExpensesOfYear: 6000,
+      })
+
+      expect(card.exists()).toBe(false)
+    })
+  })
 })
