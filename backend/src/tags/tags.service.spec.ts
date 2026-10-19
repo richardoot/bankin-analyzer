@@ -6,7 +6,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common'
-import { TagsService } from './tags.service'
+import { TagsService, windowMonthCount } from './tags.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
 import { TagFamiliesService } from '../tag-families/tag-families.service'
 import { TagBaselineService } from './tag-baseline.service'
@@ -46,6 +46,7 @@ const mockPrismaService = {
   },
   tagFamily: {
     findFirst: vi.fn(),
+    findMany: vi.fn(),
   },
   transaction: {
     findMany: vi.fn(),
@@ -646,6 +647,12 @@ describe('TagsService', () => {
       ...over,
     })
 
+    // A user without a family with an envelope: what every case above the
+    // family ones reads, unchanged by the families.
+    beforeEach(() => {
+      mockPrismaService.tagFamily.findMany.mockResolvedValue([])
+    })
+
     it('weighs each project against its envelope', async () => {
       mockPrismaService.$queryRaw.mockResolvedValue([row()])
 
@@ -721,6 +728,128 @@ describe('TagsService', () => {
       // An additive event with no period is still in scope when it has spend.
       expect(sql).toContain('COUNT(t.id) > 0')
       expect(call.values).toContain(USER)
+    })
+
+    describe('with a family carrying an annual envelope', () => {
+      const travel = {
+        id: 'fam-travel',
+        userId: USER,
+        name: 'Voyages',
+        color: '#0ea5e9',
+        icon: null,
+        annualBudget: new Prisma.Decimal('1200.00'),
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      }
+
+      it('charges its prorata in place of its tags’ envelopes', async () => {
+        mockPrismaService.tagFamily.findMany.mockResolvedValue([travel])
+        mockPrismaService.$queryRaw
+          .mockResolvedValueOnce([
+            row({ family_id: 'fam-travel', budget_amount: 900, spent: 400 }),
+            row({
+              id: 'tag-rome',
+              name: 'Rome 2026',
+              family_id: 'fam-travel',
+              budget_amount: 700,
+              spent: 150,
+            }),
+            row({
+              id: 'tag-move',
+              name: 'Déménagement',
+              family_id: null,
+              budget_amount: 500,
+              spent: 80,
+            }),
+          ])
+          // One line carries both trips: the family counts it once.
+          .mockResolvedValueOnce([{ family_id: 'fam-travel', spent: 520 }])
+
+        const result = await service.getBudgetSummary(
+          USER,
+          '2026-01-01',
+          '2026-03-31'
+        )
+
+        // 1 200 € a year over 3 months: 300 €, the tags' 900 and 700 ignored.
+        expect(result.families).toEqual([
+          {
+            id: 'fam-travel',
+            name: 'Voyages',
+            color: '#0ea5e9',
+            icon: null,
+            annualBudget: 1200,
+            proratedBudget: 300,
+            spent: 520,
+            items: [
+              expect.objectContaining({ id: 'tag-trip', budgetAmount: 900 }),
+              expect.objectContaining({ id: 'tag-rome', budgetAmount: 700 }),
+            ],
+          },
+        ])
+        // The tag outside any family keeps its own envelope.
+        expect(result.items.map(i => [i.id, i.budgetAmount])).toEqual([
+          ['tag-move', 500],
+        ])
+        expect(result.totalBudget).toBe(800)
+        expect(result.totalSpent).toBe(600)
+
+        const familySql = mockPrismaService.$queryRaw.mock.calls[1][0]
+        expect(familySql.strings.join('')).toContain(
+          'SELECT DISTINCT tg.family_id, tt.transaction_id'
+        )
+        expect(mockPrismaService.tagFamily.findMany).toHaveBeenCalledWith({
+          where: { userId: USER, annualBudget: { not: null } },
+          orderBy: { name: 'asc' },
+        })
+      })
+
+      it('commits its prorata even without a tag in the window', async () => {
+        mockPrismaService.tagFamily.findMany.mockResolvedValue([travel])
+        mockPrismaService.$queryRaw
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+
+        const result = await service.getBudgetSummary(
+          USER,
+          '2026-01-01',
+          '2026-12-31'
+        )
+
+        expect(
+          result.families.map(f => [f.id, f.proratedBudget, f.spent, f.items])
+        ).toEqual([['fam-travel', 1200, 0, []]])
+        expect(result.totalBudget).toBe(1200)
+        expect(result.totalSpent).toBe(0)
+      })
+
+      it('leaves a family without an envelope to its tags', async () => {
+        // Only families with an envelope come back from the lookup.
+        mockPrismaService.$queryRaw.mockResolvedValueOnce([
+          row({ family_id: 'fam-concerts', budget_amount: 150, spent: 90 }),
+        ])
+
+        const result = await service.getBudgetSummary(
+          USER,
+          '2026-01-01',
+          '2026-03-31'
+        )
+
+        expect(result.families).toEqual([])
+        expect(result.items.map(i => i.id)).toEqual(['tag-trip'])
+        expect(result.totalBudget).toBe(150)
+        expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(1)
+      })
+    })
+  })
+
+  describe('windowMonthCount', () => {
+    it('counts whole months, both ends included, like a plan', () => {
+      const d = (iso: string): Date => new Date(`${iso}T00:00:00.000Z`)
+      expect(windowMonthCount(d('2026-01-01'), d('2026-03-31'))).toBe(3)
+      expect(windowMonthCount(d('2026-01-01'), d('2026-12-31'))).toBe(12)
+      expect(windowMonthCount(d('2025-11-01'), d('2026-02-28'))).toBe(4)
+      expect(windowMonthCount(d('2026-03-10'), d('2026-03-12'))).toBe(1)
     })
   })
 })

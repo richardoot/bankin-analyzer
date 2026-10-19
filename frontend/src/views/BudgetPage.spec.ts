@@ -124,6 +124,7 @@ describe('BudgetPage', () => {
     vi.mocked(api.getTags).mockResolvedValue([])
     vi.mocked(api.getTagBudgetSummary).mockResolvedValue({
       items: [],
+      families: [],
       totalBudget: 0,
       totalSpent: 0,
     })
@@ -1336,6 +1337,7 @@ describe('BudgetPage', () => {
             spent: 1259,
           },
         ],
+        families: [],
         totalBudget: 1500,
         totalSpent: 1259,
       })
@@ -1374,6 +1376,7 @@ describe('BudgetPage', () => {
             spent: 450,
           },
         ],
+        families: [],
         totalBudget: 0,
         totalSpent: 450,
       })
@@ -1416,6 +1419,7 @@ describe('BudgetPage', () => {
             spent: 1259,
           },
         ],
+        families: [],
         totalBudget: 1500,
         totalSpent: 1259,
       })

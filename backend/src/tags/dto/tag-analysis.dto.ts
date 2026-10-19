@@ -118,14 +118,52 @@ export class TagBudgetSummaryItemDto {
   spent!: number
 }
 
+/**
+ * A family with an annual envelope, charged against the window as a whole:
+ * its envelope prorated to the window replaces its tags' own envelopes.
+ */
+export class TagBudgetSummaryFamilyDto {
+  id!: string
+  name!: string
+  color!: string | null
+  icon!: string | null
+
+  /** The family's envelope over a calendar year. */
+  annualBudget!: number
+
+  /** annualBudget × months of the window / 12: what the window commits. */
+  proratedBudget!: number
+
+  /**
+   * Expenses of its exceptional tags inside the window, net of tagged income,
+   * each transaction once however many of the family's tags it carries.
+   */
+  spent!: number
+
+  /** Its exceptional tags overlapping the window; may be empty. */
+  @ApiProperty({ type: [TagBudgetSummaryItemDto] })
+  items!: TagBudgetSummaryItemDto[]
+}
+
 /** Every project overlapping a window, weighed against their envelopes. */
 export class TagBudgetSummaryDto {
+  /** Projects outside any family with an annual envelope. */
   @ApiProperty({ type: [TagBudgetSummaryItemDto] })
   items!: TagBudgetSummaryItemDto[]
 
-  /** Sum of the declared envelopes. Projects without one contribute 0. */
+  /**
+   * Every family with an annual envelope, whether or not one of its tags
+   * overlaps the window: an annual envelope commits the reserve on its own.
+   */
+  @ApiProperty({ type: [TagBudgetSummaryFamilyDto] })
+  families!: TagBudgetSummaryFamilyDto[]
+
+  /**
+   * What the window commits: the envelopes of `items` (0 without one) plus
+   * the prorated envelope of each family — never its tags' envelopes.
+   */
   totalBudget!: number
 
-  /** Sum of what was actually spent on those projects. */
+  /** What was actually spent on `items` and `families`. */
   totalSpent!: number
 }

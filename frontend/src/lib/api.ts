@@ -629,9 +629,33 @@ export interface TagBudgetSummaryItemDto {
   spent: number
 }
 
-export interface TagBudgetSummaryDto {
+/**
+ * A family with an annual envelope, charged against the window as a whole:
+ * its prorated envelope replaces its tags' own envelopes.
+ */
+export interface TagBudgetSummaryFamilyDto {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+  annualBudget: number
+  /** annualBudget × months of the window / 12 */
+  proratedBudget: number
+  /** Its exceptional tags' spending in the window, each transaction once */
+  spent: number
+  /** Its exceptional tags overlapping the window; may be empty */
   items: TagBudgetSummaryItemDto[]
-  /** Sum of declared envelopes; projects without one contribute 0 */
+}
+
+export interface TagBudgetSummaryDto {
+  /** Projects outside any family with an annual envelope */
+  items: TagBudgetSummaryItemDto[]
+  /** Every family with an annual envelope, a tag in the window or not */
+  families: TagBudgetSummaryFamilyDto[]
+  /**
+   * What the window commits: the items' envelopes plus each family's
+   * prorated envelope — the only figure the reserve is charged with
+   */
   totalBudget: number
   totalSpent: number
 }

@@ -16,6 +16,7 @@ import type {
   TagAnalysisCategoryDto,
   TagAnalysisMonthDto,
   TagBudgetSummaryDto,
+  TagBudgetSummaryItemDto,
 } from './dto'
 import { calendarDayIn, tagEventStatus } from './tag-status'
 import {
@@ -66,7 +67,26 @@ interface TagBudgetRow {
   event_start_date: Date | null
   event_end_date: Date | null
   budget_amount: number | null
+  family_id?: string | null
   spent: number
+}
+
+/** Raw row: what a family's tags spent in a window, each transaction once. */
+interface FamilyBudgetRow {
+  family_id: string
+  spent: number
+}
+
+/**
+ * Whole months between two days, both inclusive — the convention of a
+ * budget plan's `monthCount`, so the prorata matches the plan's reserve.
+ */
+export function windowMonthCount(start: Date, end: Date): number {
+  const months =
+    (end.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+    (end.getUTCMonth() - start.getUTCMonth()) +
+    1
+  return Math.max(1, months)
 }
 
 function round(n: number): number {
@@ -159,6 +179,7 @@ export class TagsService {
         tg.event_start_date,
         tg.event_end_date,
         tg.budget_amount::float AS budget_amount,
+        tg.family_id,
         COALESCE(SUM(
           CASE WHEN t.type = 'EXPENSE'
             THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
@@ -176,7 +197,8 @@ export class TagsService {
         AND tg.is_exceptional = true
         AND COALESCE(a.is_excluded_from_stats, false) = false
       GROUP BY tg.id, tg.name, tg.color, tg.icon,
-               tg.event_start_date, tg.event_end_date, tg.budget_amount
+               tg.event_start_date, tg.event_end_date, tg.budget_amount,
+               tg.family_id
       HAVING
         (
           tg.event_start_date IS NOT NULL
@@ -188,7 +210,7 @@ export class TagsService {
       ORDER BY tg.event_start_date ASC NULLS LAST, tg.name ASC
     `)
 
-    const items = rows.map(r => ({
+    const toItem = (r: TagBudgetRow): TagBudgetSummaryItemDto => ({
       id: r.id,
       name: r.name,
       color: r.color,
@@ -197,12 +219,78 @@ export class TagsService {
       eventEndDate: toIsoDate(r.event_end_date),
       budgetAmount: r.budget_amount === null ? null : round(r.budget_amount),
       spent: round(r.spent ?? 0),
-    }))
+    })
+
+    // A family with an annual envelope is charged as a whole, prorated to
+    // the window, in place of its tags' envelopes. It is listed even with no
+    // tag in the window: "4 000 € a year" commits the reserve by itself.
+    const enveloped = await this.prisma.tagFamily.findMany({
+      where: { userId, annualBudget: { not: null } },
+      orderBy: { name: 'asc' },
+    })
+    const familySpent = new Map<string, number>()
+    if (enveloped.length > 0) {
+      const spentRows = await this.prisma.$queryRaw<FamilyBudgetRow[]>(
+        Prisma.sql`
+          WITH family_tx AS (
+            SELECT DISTINCT tg.family_id, tt.transaction_id
+            FROM app.transaction_tags tt
+            JOIN app.tags tg ON tg.id = tt.tag_id
+            WHERE tg.user_id = ${userId}
+              AND tg.is_exceptional = true
+              AND tg.family_id IN (${Prisma.join(enveloped.map(f => f.id))})
+          )
+          SELECT
+            ft.family_id,
+            COALESCE(SUM(
+              CASE WHEN t.type = 'EXPENSE'
+                THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
+                ELSE -t.amount::numeric / COALESCE(a.divisor, 1)
+              END
+            ), 0)::float AS spent
+          FROM family_tx ft
+          JOIN app.transactions t
+            ON t.id = ft.transaction_id
+           AND t.date >= ${start}
+           AND t.date <= ${end}
+          LEFT JOIN app.accounts a ON a.id = t.account_id
+          WHERE COALESCE(a.is_excluded_from_stats, false) = false
+          GROUP BY ft.family_id
+        `
+      )
+      for (const r of spentRows) familySpent.set(r.family_id, r.spent ?? 0)
+    }
+
+    const months = windowMonthCount(start, end)
+    const envelopedIds = new Set(enveloped.map(f => f.id))
+    const families = enveloped.map(f => {
+      const annualBudget = Number(f.annualBudget)
+      return {
+        id: f.id,
+        name: f.name,
+        color: f.color,
+        icon: f.icon,
+        annualBudget,
+        proratedBudget: round((annualBudget * months) / 12),
+        spent: round(familySpent.get(f.id) ?? 0),
+        items: rows.filter(r => r.family_id === f.id).map(toItem),
+      }
+    })
+    const items = rows
+      .filter(r => !r.family_id || !envelopedIds.has(r.family_id))
+      .map(toItem)
 
     return {
       items,
-      totalBudget: round(items.reduce((s, i) => s + (i.budgetAmount ?? 0), 0)),
-      totalSpent: round(items.reduce((s, i) => s + i.spent, 0)),
+      families,
+      totalBudget: round(
+        items.reduce((s, i) => s + (i.budgetAmount ?? 0), 0) +
+          families.reduce((s, f) => s + f.proratedBudget, 0)
+      ),
+      totalSpent: round(
+        items.reduce((s, i) => s + i.spent, 0) +
+          families.reduce((s, f) => s + f.spent, 0)
+      ),
     }
   }
 

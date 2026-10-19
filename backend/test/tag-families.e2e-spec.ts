@@ -17,6 +17,12 @@
  *   for that family and that year;
  * - a line paid in 2026 for an edition starting in 2027 is a 2027 expense in
  *   event basis, a 2026 one in cash basis.
+ *
+ * Lot 3, the annual envelope:
+ *
+ * - the analysis weighs the envelope by event year, the same in either basis;
+ * - `GET /tags/budget-summary` charges a family with an envelope its prorata
+ *   of the window, in place of its tags' envelopes, its spend counted once.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import request from 'supertest'
@@ -435,6 +441,43 @@ describe('Tag families (e2e)', () => {
       expect(cash2027.totalExpenses).toBe(0)
     })
 
+    it('weighs the envelope by event year, the same in either basis', async () => {
+      const family = (await createFamily('Vacances')).body as FamilyBody
+      await http()
+        .patch(`/tag-families/${family.id}`)
+        .set(ctx.auth(owner))
+        .send({ annualBudget: 1000 })
+        .expect(200)
+      const lisbon = await datedTag(
+        'Lisbonne 2027',
+        family.id,
+        '2027-01-03',
+        '2027-01-08'
+      )
+      const rome = await datedTag(
+        'Rome 2026',
+        family.id,
+        '2026-12-05',
+        '2026-12-09'
+      )
+      await expense([lisbon.id], { date: '2026-11-20', amount: -340 })
+      await expense([rome.id], { date: '2026-10-02', amount: -250 })
+
+      const event = (await analyse(family.id, { year: '2026' }))
+        .body as AnalysisBody & { envelope: unknown }
+      const cash = (await analyse(family.id, { year: '2026', basis: 'cash' }))
+        .body as AnalysisBody & { envelope: unknown }
+
+      expect(event.envelope).toEqual({
+        annualBudget: 1000,
+        year: 2026,
+        spentEventBasis: 250,
+        remaining: 750,
+      })
+      expect(cash.envelope).toEqual(event.envelope)
+      expect(cash.totalExpenses).toBe(590)
+    })
+
     it('answers 404 on someone else’s family and 400 on an unknown basis', async () => {
       const foreign = (await createFamily('HYROX', stranger)).body as FamilyBody
       expect((await analyse(foreign.id)).status).toBe(404)
@@ -442,6 +485,93 @@ describe('Tag families (e2e)', () => {
       const mine = (await createFamily('HYROX')).body as FamilyBody
       expect((await analyse(mine.id, { basis: 'budget' })).status).toBe(400)
       expect((await analyse(mine.id, { year: 'soon' })).status).toBe(400)
+    })
+  })
+
+  describe('budget summary', () => {
+    interface SummaryBody {
+      items: Array<{ id: string; budgetAmount: number | null; spent: number }>
+      families: Array<{
+        id: string
+        proratedBudget: number
+        spent: number
+        items: Array<{ id: string }>
+      }>
+      totalBudget: number
+      totalSpent: number
+    }
+
+    async function project(
+      name: string,
+      budgetAmount: number,
+      familyId?: string
+    ): Promise<string> {
+      const response = await http()
+        .post('/tags')
+        .set(ctx.auth(owner))
+        .send({
+          name,
+          isExceptional: true,
+          budgetAmount,
+          ...(familyId && { familyId }),
+        })
+      expect(response.status).toBe(201)
+      return (response.body as TagBody).id
+    }
+
+    async function summary(): Promise<SummaryBody> {
+      const response = await http()
+        .get('/tags/budget-summary')
+        .query({ startDate: '2026-01-01', endDate: '2026-03-31' })
+        .set(ctx.auth(owner))
+      expect(response.status).toBe(200)
+      return response.body as SummaryBody
+    }
+
+    it('charges a family its prorata, in place of its tags’ envelopes', async () => {
+      const travel = (await createFamily('Voyages')).body as FamilyBody
+      await http()
+        .patch(`/tag-families/${travel.id}`)
+        .set(ctx.auth(owner))
+        .send({ annualBudget: 1200 })
+        .expect(200)
+      const ski = await project('Ski 2026', 900, travel.id)
+      const train = await project('Train ski 2026', 700, travel.id)
+      const move = await project('Déménagement', 500)
+      // One line carries both tags of the family: counted once.
+      await expense([ski, train], { date: '2026-02-10', amount: -200 })
+      await expense([ski], { date: '2026-02-12', amount: -50 })
+      await expense([move], { date: '2026-03-01', amount: -80 })
+      // Outside the window: not spent in it.
+      await expense([ski], { date: '2026-05-01', amount: -999 })
+
+      const body = await summary()
+
+      expect(body.families.map(f => [f.id, f.proratedBudget, f.spent])).toEqual(
+        [[travel.id, 300, 250]]
+      )
+      expect(body.families.flatMap(f => f.items.map(i => i.id)).sort()).toEqual(
+        [ski, train].sort()
+      )
+      expect(body.items.map(i => [i.id, i.budgetAmount, i.spent])).toEqual([
+        [move, 500, 80],
+      ])
+      expect(body.totalBudget).toBe(800)
+      expect(body.totalSpent).toBe(330)
+    })
+
+    it('leaves the tags of a family without an envelope as they were', async () => {
+      const concerts = (await createFamily('Concerts')).body as FamilyBody
+      const tag = await project('Bad Bunny 2026', 150, concerts.id)
+      await expense([tag], { date: '2026-01-20', amount: -90 })
+
+      const body = await summary()
+
+      expect(body.families).toEqual([])
+      expect(body.items.map(i => [i.id, i.budgetAmount, i.spent])).toEqual([
+        [tag, 150, 90],
+      ])
+      expect(body.totalBudget).toBe(150)
     })
   })
 })
