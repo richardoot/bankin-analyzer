@@ -9,6 +9,7 @@ import {
 import { TagsService } from './tags.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
 import { TagFamiliesService } from '../tag-families/tag-families.service'
+import { TagBaselineService } from './tag-baseline.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { Prisma } from '../generated/prisma'
 import type { Tag } from '../generated/prisma'
@@ -65,6 +66,7 @@ describe('TagsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TagsService,
+        TagBaselineService,
         TagFamiliesService,
         { provide: PrismaService, useValue: mockPrismaService },
         {

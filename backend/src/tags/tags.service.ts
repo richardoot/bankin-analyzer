@@ -1,8 +1,4 @@
-import {
-  EFFECTIVE_RHYTHM,
-  recurringTransactionsJoin,
-} from '../recurrences/recurrence-rhythm.sql'
-import { RecurrencesService } from '../recurrences/recurrences.service'
+import { TagBaselineService, categorySurplus } from './tag-baseline.service'
 import { TagFamiliesService } from '../tag-families/tag-families.service'
 import {
   ConflictException,
@@ -17,23 +13,15 @@ import type {
   UpdateTagDto,
   TagResponseDto,
   TagAnalysisDto,
-  TagAnalysisBaselineDto,
   TagAnalysisCategoryDto,
   TagAnalysisMonthDto,
   TagBudgetSummaryDto,
 } from './dto'
-import {
-  countDaysInWindow,
-  daysBetweenInclusive,
-  toEventIntervals,
-} from '../common/exceptional-periods'
 import { calendarDayIn, tagEventStatus } from './tag-status'
 import {
   exceptionalOnSmoothedError,
   SMOOTHED_ROWS_NAMED,
 } from '../transactions/amortization'
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 /** What a tag response reads besides the row: its count and its family. */
 const TAG_INCLUDE = {
@@ -69,12 +57,6 @@ interface TagSummaryRow {
   last_date: Date | null
 }
 
-/** Raw row: everyday spending per category over the reference window. */
-interface BaselineCategoryRow {
-  category_id: string | null
-  total_amount: number
-}
-
 /** Raw row: one exceptional tag weighed against its envelope. */
 interface TagBudgetRow {
   id: string
@@ -106,7 +88,7 @@ function parseEventDate(value: string | null | undefined): Date | null {
 export class TagsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly recurrences: RecurrencesService,
+    private readonly baselines: TagBaselineService,
     private readonly families: TagFamiliesService
   ) {}
 
@@ -403,131 +385,6 @@ export class TagsService {
   }
 
   /**
-   * Everyday spending rate per category, projected onto the event's duration.
-   *
-   * The reference is the 12 months preceding the event (clamped to the user's
-   * actual history), stripped of every exceptional transaction and normalised
-   * over the days actually spent living an everyday life. Only the *variable*
-   * subcategories count: a trip suspends groceries and fuel, not rent or
-   * insurance, so committed spending is never part of what gets deducted. Returns null when the
-   * tag declares no period: such an event is *additive* (a party at home did
-   * not stop the user buying groceries), so no baseline should be deducted.
-   */
-  private async computeBaseline(
-    tag: Tag,
-    userId: string
-  ): Promise<{
-    baseline: TagAnalysisBaselineDto
-    ratePerCategory: Map<string | null, number>
-  } | null> {
-    if (!tag.eventStartDate || !tag.eventEndDate) return null
-
-    const eventDays = daysBetweenInclusive(tag.eventStartDate, tag.eventEndDate)
-    if (eventDays <= 0) return null
-
-    // The baseline leaves out what is committed, recurrences included.
-    await this.recurrences.refreshQuietly(userId)
-
-    // Reference window: the 12 months ending the day before the event starts.
-    const refEnd = new Date(tag.eventStartDate.getTime() - MS_PER_DAY)
-    let refStart = new Date(
-      Date.UTC(
-        refEnd.getUTCFullYear() - 1,
-        refEnd.getUTCMonth(),
-        refEnd.getUTCDate() + 1
-      )
-    )
-
-    // Clamp to the user's history: dividing four months of data by a full year
-    // would silently halve every baseline.
-    const firstTransaction = await this.prisma.transaction.findFirst({
-      where: { userId },
-      orderBy: { date: 'asc' },
-      select: { date: true },
-    })
-    if (!firstTransaction) return null
-    if (firstTransaction.date > refStart) refStart = firstTransaction.date
-    if (refEnd < refStart) return null
-
-    // Days of the window swallowed by other events, removed from the divisor.
-    const exceptionalTags = await this.prisma.tag.findMany({
-      where: {
-        userId,
-        isExceptional: true,
-        eventStartDate: { not: null, lte: refEnd },
-        eventEndDate: { not: null, gte: refStart },
-      },
-      select: { eventStartDate: true, eventEndDate: true },
-    })
-    const exceptionalDays = countDaysInWindow(
-      toEventIntervals(exceptionalTags),
-      refStart,
-      refEnd
-    )
-
-    const everydayDays =
-      daysBetweenInclusive(refStart, refEnd) - exceptionalDays
-    if (everydayDays <= 0) return null
-
-    // Everyday expenses per category. Transactions carrying an exceptional tag
-    // are excluded, and so are this tag's own — an event paid for in advance
-    // (a deposit booked months earlier) would otherwise inflate its own
-    // reference and hide the surplus it is meant to reveal.
-    const rows = await this.prisma.$queryRaw<BaselineCategoryRow[]>(Prisma.sql`
-      SELECT
-        c.id AS category_id,
-        SUM(ABS(t.amount::numeric) / COALESCE(a.divisor, 1))::float AS total_amount
-      FROM app.transactions t
-      LEFT JOIN app.categories c ON c.id = t.category_id
-      LEFT JOIN app.subcategories sc ON sc.id = t.subcategory_id
-      LEFT JOIN app.accounts a ON a.id = t.account_id
-      ${recurringTransactionsJoin(userId)}
-      WHERE t.user_id = ${userId}
-        AND t.type = 'EXPENSE'
-        AND t.date >= ${refStart}
-        AND t.date <= ${refEnd}
-        AND COALESCE(a.is_excluded_from_stats, false) = false
-        -- Only what the trip suspends. Rent, insurance, a subscription keep
-        -- running while the user is away, so they are never deducted from an
-        -- event's surplus. Unknown (legacy rows) counts as variable, which is
-        -- what every row used to be. A line of a detected recurrence is
-        -- committed whatever its subcategory says.
-        AND ${EFFECTIVE_RHYTHM} IS DISTINCT FROM 'COMMITTED'
-        -- A smoothed purchase is committed too: its slices keep falling
-        -- while the user is away, like rent, so a trip suspends none of it.
-        -- Left in, a phone bought in the reference year would inflate the
-        -- daily rate and hide the trip's surplus.
-        AND (t.amortization_months IS NULL OR t.amount >= 0)
-        AND NOT EXISTS (
-          SELECT 1
-          FROM app.transaction_tags tt2
-          JOIN app.tags tg2 ON tg2.id = tt2.tag_id
-          WHERE tt2.transaction_id = t.id
-            AND (tg2.is_exceptional = true OR tg2.id = ${tag.id})
-        )
-      GROUP BY c.id
-    `)
-
-    const ratePerCategory = new Map<string | null, number>()
-    for (const row of rows) {
-      ratePerCategory.set(
-        row.category_id,
-        (row.total_amount ?? 0) / everydayDays
-      )
-    }
-
-    return {
-      baseline: {
-        startDate: refStart.toISOString().slice(0, 10),
-        endDate: refEnd.toISOString().slice(0, 10),
-        everydayDays,
-        eventDays,
-      },
-      ratePerCategory,
-    }
-  }
-
-  /**
    * Aggregate every transaction carrying the tag: totals, per-category and
    * per-month breakdowns. Mirrors the dashboard conventions — expenses use
    * ABS, amounts are divided by the account divisor (joint accounts) and
@@ -608,7 +465,7 @@ export class TagsService {
       `),
     ])
 
-    const reference = await this.computeBaseline(tag, userId)
+    const reference = await this.baselines.computeBaseline(tag, userId)
 
     let totalSurplus: number | null = reference ? 0 : null
 
@@ -628,10 +485,13 @@ export class TagsService {
         }
 
         if (reference && type === 'EXPENSE') {
-          const rate = reference.ratePerCategory.get(r.category_id) ?? 0
-          const baselineAmount = round(rate * reference.baseline.eventDays)
+          const { baselineAmount, surplusAmount } = categorySurplus(
+            amount,
+            r.category_id,
+            reference
+          )
           dto.baselineAmount = baselineAmount
-          dto.surplusAmount = round(amount - baselineAmount)
+          dto.surplusAmount = surplusAmount
           totalSurplus = round((totalSurplus ?? 0) + dto.surplusAmount)
         }
 

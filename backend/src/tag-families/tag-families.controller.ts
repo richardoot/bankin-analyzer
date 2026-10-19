@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common'
 import {
@@ -15,8 +16,11 @@ import {
   ApiTags,
 } from '@nestjs/swagger'
 import { TagFamiliesService } from './tag-families.service'
+import { TagFamilyAnalysisService } from './tag-family-analysis.service'
 import {
   CreateTagFamilyDto,
+  TagFamilyAnalysisDto,
+  TagFamilyAnalysisQueryDto,
   TagFamilyResponseDto,
   UpdateTagFamilyDto,
 } from './dto'
@@ -28,13 +32,32 @@ import type { User } from '../generated/prisma'
 @UseGuards(SupabaseGuard)
 @Controller('tag-families')
 export class TagFamiliesController {
-  constructor(private readonly tagFamiliesService: TagFamiliesService) {}
+  constructor(
+    private readonly tagFamiliesService: TagFamiliesService,
+    private readonly analysisService: TagFamilyAnalysisService
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Get all tag families of the current user' })
   @ApiResponse({ status: 200, type: [TagFamilyResponseDto] })
   async findAll(@CurrentUser() user: User): Promise<TagFamilyResponseDto[]> {
     return this.tagFamiliesService.findAllByUser(user.id)
+  }
+
+  @Get(':id/analysis')
+  @ApiOperation({
+    summary:
+      'Analyse a tag family: the union of its tags, each transaction once, ' +
+      'per category, per year (event or cash basis) and per edition',
+  })
+  @ApiResponse({ status: 200, type: TagFamilyAnalysisDto })
+  @ApiResponse({ status: 404, description: 'Tag family not found' })
+  async getAnalysis(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Query() query: TagFamilyAnalysisQueryDto
+  ): Promise<TagFamilyAnalysisDto> {
+    return this.analysisService.getAnalysis(id, user.id, query)
   }
 
   @Get(':id')

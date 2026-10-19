@@ -7,6 +7,16 @@
  * - deleting a family keeps its tags, without a family (ON DELETE SET NULL);
  * - `GET /transactions?tagFamilyId=` lists each row carrying one of the
  *   family's tags once, even when it carries two of them.
+ *
+ * Lot 2, `GET /tag-families/:id/analysis`, against the real SQL:
+ *
+ * - the family's total is the sum of its tags without a shared line, less
+ *   than it by exactly the shared part otherwise;
+ * - its years sum to its total, in either basis;
+ * - in cash basis, a year of the family is what the transaction list shows
+ *   for that family and that year;
+ * - a line paid in 2026 for an edition starting in 2027 is a 2027 expense in
+ *   event basis, a 2026 one in cash basis.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import request from 'supertest'
@@ -82,15 +92,18 @@ describe('Tag families (e2e)', () => {
   }
 
   let sequence = 0
-  async function expense(tagIds: string[]): Promise<string> {
+  async function expense(
+    tagIds: string[],
+    { date = '2026-06-10', amount = -40 } = {}
+  ): Promise<string> {
     const row = await prisma.transaction.create({
       data: {
         userId,
         accountId,
         hash: `e2e-family-${(sequence += 1)}`,
-        date: new Date('2026-06-10'),
+        date: new Date(date),
         description: 'CB',
-        amount: -40,
+        amount,
         type: 'EXPENSE',
       },
     })
@@ -216,5 +229,219 @@ describe('Tag families (e2e)', () => {
       .query({ tagFamilyId: foreign.id })
       .set(ctx.auth(owner))
     expect((none.body as { data: unknown[] }).data).toEqual([])
+  })
+
+  describe('analysis', () => {
+    interface AnalysisBody {
+      family: { id: string; name: string }
+      basis: string
+      year: number | null
+      availableYears: number[]
+      totalExpenses: number
+      transactionCount: number
+      byYear: Array<{
+        year: number
+        expenses: number
+        transactionCount: number
+      }>
+      byCategory: Array<{ amount: number; type: string }>
+      tags: Array<{
+        id: string
+        spent: number
+        days: number | null
+        transactionCount: number
+        surplus: number | null
+      }>
+      comparison: { editionCount: number; medianSpent: number } | null
+    }
+
+    async function datedTag(
+      name: string,
+      familyId: string,
+      start: string,
+      end: string
+    ): Promise<TagBody> {
+      const response = await http().post('/tags').set(ctx.auth(owner)).send({
+        name,
+        familyId,
+        isExceptional: true,
+        eventStartDate: start,
+        eventEndDate: end,
+      })
+      expect(response.status).toBe(201)
+      return response.body as TagBody
+    }
+
+    async function analyse(
+      familyId: string,
+      query: Record<string, string> = {},
+      who = owner
+    ): Promise<request.Response> {
+      return http()
+        .get(`/tag-families/${familyId}/analysis`)
+        .query(query)
+        .set(ctx.auth(who))
+    }
+
+    const sumOf = (values: number[]): number =>
+      Math.round(values.reduce((s, v) => s + v, 0) * 100) / 100
+
+    it('totals the sum of its tags, less the shared part exactly', async () => {
+      const family = (await createFamily('HYROX')).body as FamilyBody
+      const race = await datedTag(
+        'HYROX Lyon 2026',
+        family.id,
+        '2026-03-14',
+        '2026-03-15'
+      )
+      const trip = (await createTag('Déplacement Lyon', family.id))
+        .body as TagBody
+      await expense([race.id], { date: '2026-01-10', amount: -120 })
+      await expense([trip.id], { date: '2026-03-14', amount: -65.5 })
+
+      const apart = (await analyse(family.id)).body as AnalysisBody
+      expect(apart.totalExpenses).toBe(185.5)
+      expect(apart.totalExpenses).toBe(sumOf(apart.tags.map(t => t.spent)))
+
+      // One line carrying both tags: in each tag, once in the family.
+      await expense([race.id, trip.id], { date: '2026-03-15', amount: -30 })
+
+      const shared = await analyse(family.id)
+      expect(shared.status).toBe(200)
+      const body = shared.body as AnalysisBody
+      expect(body.totalExpenses).toBe(215.5)
+      expect(body.transactionCount).toBe(3)
+      expect(sumOf(body.tags.map(t => t.spent))).toBe(245.5)
+      expect(sumOf(body.tags.map(t => t.spent)) - body.totalExpenses).toBe(30)
+      expect(sumOf(body.byCategory.map(c => c.amount))).toBe(215.5)
+      // The edition's surplus comes from its own baseline, as on its page.
+      const tagAnalysis = await http()
+        .get(`/tags/${race.id}/analysis`)
+        .set(ctx.auth(owner))
+      const raceLine = body.tags.find(t => t.id === race.id)
+      expect(raceLine?.surplus).toBe(
+        (tagAnalysis.body as { totalSurplus: number | null }).totalSurplus
+      )
+      expect(raceLine?.days).toBe(2)
+      expect(body.comparison).toMatchObject({
+        editionCount: 1,
+        medianSpent: 150,
+      })
+    })
+
+    it('sums its years to its total, in either basis', async () => {
+      const family = (await createFamily('Voyages')).body as FamilyBody
+      const prague = await datedTag(
+        'Prague 2025',
+        family.id,
+        '2025-05-01',
+        '2025-05-04'
+      )
+      const lisbon = await datedTag(
+        'Lisbonne 2027',
+        family.id,
+        '2027-01-03',
+        '2027-01-08'
+      )
+      const loose = (await createTag('Valises', family.id)).body as TagBody
+      await expense([prague.id], { date: '2024-12-02', amount: -210 })
+      await expense([prague.id], { date: '2025-05-02', amount: -90 })
+      await expense([lisbon.id], { date: '2026-11-20', amount: -340 })
+      await expense([loose.id], { date: '2026-02-11', amount: -75 })
+
+      for (const basis of ['event', 'cash']) {
+        const body = (await analyse(family.id, { basis })).body as AnalysisBody
+        expect(body.basis).toBe(basis)
+        expect(body.totalExpenses).toBe(715)
+        expect(sumOf(body.byYear.map(y => y.expenses))).toBe(body.totalExpenses)
+        expect(sumOf(body.byYear.map(y => y.transactionCount))).toBe(4)
+        for (const year of body.availableYears) {
+          const one = (await analyse(family.id, { basis, year: String(year) }))
+            .body as AnalysisBody
+          expect(one.totalExpenses).toBe(
+            body.byYear.find(y => y.year === year)?.expenses
+          )
+        }
+      }
+      const event = (await analyse(family.id)).body as AnalysisBody
+      expect(event.availableYears).toEqual([2025, 2026, 2027])
+      const cash = (await analyse(family.id, { basis: 'cash' }))
+        .body as AnalysisBody
+      expect(cash.availableYears).toEqual([2024, 2025, 2026])
+    })
+
+    it('in cash basis, a year is what the transaction list shows', async () => {
+      const family = (await createFamily('Concerts')).body as FamilyBody
+      const show = await datedTag(
+        'Bad Bunny 2026',
+        family.id,
+        '2026-06-20',
+        '2026-06-20'
+      )
+      const other = (await createTag('Fêtes', family.id)).body as TagBody
+      await expense([show.id], { date: '2025-11-03', amount: -150 })
+      await expense([show.id, other.id], { date: '2026-06-20', amount: -42 })
+      await expense([other.id], { date: '2026-12-31', amount: -18.4 })
+      await expense([other.id], { date: '2027-01-01', amount: -9 })
+
+      const analysis = (
+        await analyse(family.id, { basis: 'cash', year: '2026' })
+      ).body as AnalysisBody
+      const list = await http()
+        .get('/transactions')
+        .query({
+          tagFamilyId: family.id,
+          startDate: '2026-01-01',
+          endDate: '2026-12-31',
+          limit: '100',
+        })
+        .set(ctx.auth(owner))
+      const rows = (list.body as { data: Array<{ amount: number | string }> })
+        .data
+
+      expect(analysis.transactionCount).toBe(rows.length)
+      expect(analysis.totalExpenses).toBe(
+        sumOf(rows.map(r => Math.abs(Number(r.amount))))
+      )
+      expect(analysis.totalExpenses).toBe(60.4)
+    })
+
+    it('counts a line paid in 2026 for a 2027 edition in 2027, in 2026 in cash', async () => {
+      const family = (await createFamily('Vacances')).body as FamilyBody
+      const lisbon = await datedTag(
+        'Lisbonne 2027',
+        family.id,
+        '2027-01-03',
+        '2027-01-08'
+      )
+      await expense([lisbon.id], { date: '2026-11-20', amount: -340 })
+
+      const event2027 = (await analyse(family.id, { year: '2027' }))
+        .body as AnalysisBody
+      expect(event2027.totalExpenses).toBe(340)
+      expect(event2027.tags.map(t => t.id)).toEqual([lisbon.id])
+      const event2026 = (await analyse(family.id, { year: '2026' }))
+        .body as AnalysisBody
+      expect(event2026.totalExpenses).toBe(0)
+      expect(event2026.tags).toEqual([])
+
+      const cash2026 = (
+        await analyse(family.id, { year: '2026', basis: 'cash' })
+      ).body as AnalysisBody
+      expect(cash2026.totalExpenses).toBe(340)
+      const cash2027 = (
+        await analyse(family.id, { year: '2027', basis: 'cash' })
+      ).body as AnalysisBody
+      expect(cash2027.totalExpenses).toBe(0)
+    })
+
+    it('answers 404 on someone else’s family and 400 on an unknown basis', async () => {
+      const foreign = (await createFamily('HYROX', stranger)).body as FamilyBody
+      expect((await analyse(foreign.id)).status).toBe(404)
+
+      const mine = (await createFamily('HYROX')).body as FamilyBody
+      expect((await analyse(mine.id, { basis: 'budget' })).status).toBe(400)
+      expect((await analyse(mine.id, { year: 'soon' })).status).toBe(400)
+    })
   })
 })
