@@ -27,11 +27,11 @@
   <span
     v-for="settlement in settlements"
     :key="settlement.id"
-    class="inline-flex items-center gap-0.5"
+    class="inline-flex min-w-0 max-w-full items-center gap-0.5"
   >
     <button
       type="button"
-      class="relative inline-flex items-center gap-1 rounded text-primary-700 transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 pointer-coarse:before:content-[''] disabled:opacity-50 dark:text-primary-400"
+      class="relative inline-flex min-w-0 items-center gap-1 rounded text-primary-700 transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 pointer-coarse:before:content-[''] disabled:opacity-50 dark:text-primary-400"
       :class="
         dense
           ? 'min-h-[28px] px-2 text-xs hover:bg-primary-50 dark:hover:bg-primary-900/20'
@@ -41,8 +41,8 @@
       :title="`Voir le règlement de ${settlement.personName}`"
       @click="emit('open', settlement)"
     >
-      <IconLink class="h-3.5 w-3.5" />
-      {{ settlement.personName }}
+      <IconLink class="h-3.5 w-3.5 shrink-0" />
+      <span class="truncate">{{ settlement.personName }}</span>
     </button>
     <!-- The expenses this settlement closed, beside the detail it opens. -->
     <TransactionsLink
@@ -54,7 +54,7 @@
       "
       :subject="`le règlement de ${settlement.personName}`"
       icon-only
-      class="h-6 w-6"
+      class="h-6 w-6 shrink-0"
       :data-testid="`settlement-rows-link-${settlement.id}`"
     />
   </span>

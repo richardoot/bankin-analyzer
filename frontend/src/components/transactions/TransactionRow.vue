@@ -171,6 +171,16 @@
     'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 aria-expanded:opacity-100'
 
   const canAssign = computed(() => isExpense.value && props.remainingAmount > 0)
+  /**
+   * An income's settlement links take the actions column: the empty slots
+   * that keep « Assigner » in place elsewhere would push them over the
+   * pointed toggle.
+   */
+  const hasSettlementLinks = computed(
+    () =>
+      props.transaction.type === 'INCOME' &&
+      (props.transaction.settlements ?? []).length > 0
+  )
   const canFollow = computed(
     () => isExpense.value && !props.transaction.recurrence
   )
@@ -651,8 +661,10 @@
       </div>
 
       <!-- Actions: the primary one always drawn, the secondary ones
-           (étiquette, abonnement) on hover or focus within the row -->
-      <div class="flex items-center justify-end gap-1">
+           (étiquette, abonnement) on hover or focus within the row. The
+           column is fixed: what does not fit shrinks, never spills over
+           the pointed toggle. -->
+      <div class="flex min-w-0 items-center justify-end gap-1">
         <BaseButton
           v-if="canAssign"
           size="sm"
@@ -672,7 +684,7 @@
         <!-- Settlement links (one per person settled by this income) -->
         <div
           v-else-if="transaction.type === 'INCOME' && transaction.settlements"
-          class="flex flex-wrap justify-end gap-1"
+          class="flex min-w-0 flex-wrap justify-end gap-1"
         >
           <TransactionSettlementLinks
             :settlements="transaction.settlements"
@@ -705,7 +717,7 @@
         <!-- Keeps « Assigner » in the same place on rows that cannot be
              followed (already a subscription, income). -->
         <span
-          v-else-if="!selectionMode"
+          v-else-if="!selectionMode && !hasSettlementLinks"
           aria-hidden="true"
           class="h-8 w-8 shrink-0"
           data-testid="mark-recurring-placeholder"
@@ -727,9 +739,10 @@
           <IconCalendar />
         </BaseIconButton>
         <span
-          v-else-if="!selectionMode"
+          v-else-if="!selectionMode && !hasSettlementLinks"
           aria-hidden="true"
           class="h-8 w-8 shrink-0"
+          data-testid="amortization-placeholder"
         />
       </div>
     </div>

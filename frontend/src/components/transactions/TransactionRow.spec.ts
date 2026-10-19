@@ -435,6 +435,46 @@ describe('TransactionRow', () => {
     })
   })
 
+  describe('an income with settlements', () => {
+    it('gives its links the empty slots, so they stay within the column', () => {
+      const wrapper = mountRow({
+        transaction: tx({
+          type: 'INCOME',
+          amount: 49.69,
+          settlements: [
+            {
+              id: 's-1',
+              personId: 'p-1',
+              personName: 'BoursoBank',
+              amountUsed: 49.69,
+            },
+          ],
+        }),
+      })
+
+      expect(wrapper.text()).toContain('BoursoBank')
+      expect(
+        wrapper.find('[data-testid="mark-recurring-placeholder"]').exists()
+      ).toBe(false)
+      expect(
+        wrapper.find('[data-testid="amortization-placeholder"]').exists()
+      ).toBe(false)
+    })
+
+    it('keeps the slots on an income without one', () => {
+      const wrapper = mountRow({
+        transaction: tx({ type: 'INCOME', amount: 100 }),
+      })
+
+      expect(
+        wrapper.find('[data-testid="mark-recurring-placeholder"]').exists()
+      ).toBe(true)
+      expect(
+        wrapper.find('[data-testid="amortization-placeholder"]').exists()
+      ).toBe(true)
+    })
+  })
+
   describe('a smoothed purchase', () => {
     it('says it in a badge that opens the smoothing dialog', async () => {
       const wrapper = mountRow({
