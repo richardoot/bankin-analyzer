@@ -852,4 +852,94 @@ describe('TagsService', () => {
       expect(windowMonthCount(d('2026-03-10'), d('2026-03-12'))).toBe(1)
     })
   })
+
+  describe('spentByTag', () => {
+    it('maps each tag to its rounded spend, in one query', async () => {
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        { tag_id: 'tag-1', spent: 120.456 },
+        { tag_id: 'tag-2', spent: 30 },
+      ])
+
+      const spent = await service.spentByTag(USER)
+
+      expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(1)
+      expect([...spent.entries()]).toEqual([
+        ['tag-1', 120.46],
+        ['tag-2', 30],
+      ])
+    })
+  })
+
+  describe('findCandidates', () => {
+    it('refuses a tag without a window, naming it', async () => {
+      mockPrismaService.tag.findFirst.mockResolvedValue(mockTag)
+
+      await expect(service.findCandidates('tag-1', USER)).rejects.toThrow(
+        BadRequestException
+      )
+      await expect(service.findCandidates('tag-1', USER)).rejects.toThrow(
+        "L'étiquette « Vacances Italie » n'a pas de fenêtre"
+      )
+      expect(mockPrismaService.$queryRaw).not.toHaveBeenCalled()
+    })
+
+    it("is a 404 on someone else's tag", async () => {
+      mockPrismaService.tag.findFirst.mockResolvedValue(null)
+
+      await expect(service.findCandidates('tag-x', USER)).rejects.toThrow(
+        NotFoundException
+      )
+    })
+
+    it('says the window it searched, two days wider on each side', async () => {
+      mockPrismaService.tag.findFirst.mockResolvedValue({
+        ...mockTag,
+        isExceptional: true,
+        eventStartDate: new Date('2026-03-01T00:00:00.000Z'),
+        eventEndDate: new Date('2026-03-02T00:00:00.000Z'),
+      })
+      mockPrismaService.$queryRaw.mockResolvedValue([
+        {
+          id: 'tx-1',
+          date: new Date('2026-02-27T00:00:00.000Z'),
+          description: 'CB TRAITEUR',
+          amount: -42.5,
+          account_id: 'acc-1',
+          category_id: null,
+          category_name: null,
+          category_key: null,
+          subcategory_id: null,
+          subcategory_name: null,
+          subcategory_key: null,
+          rhythm: null,
+          amortization_months: null,
+        },
+      ])
+
+      const result = await service.findCandidates('tag-1', USER)
+
+      expect(result).toMatchObject({
+        tag: { eventStartDate: '2026-03-01', eventEndDate: '2026-03-02' },
+        searchedFrom: '2026-02-27',
+        searchedTo: '2026-03-04',
+      })
+      expect(result.candidates).toEqual([
+        {
+          id: 'tx-1',
+          date: '2026-02-27',
+          label: 'CB TRAITEUR',
+          amount: -42.5,
+          accountId: 'acc-1',
+          categoryId: null,
+          category: null,
+          categoryKey: null,
+          subcategoryId: null,
+          subcategory: null,
+          subcategoryKey: null,
+          rhythm: null,
+          amortizationMonths: null,
+        },
+      ])
+    })
+  })
 })

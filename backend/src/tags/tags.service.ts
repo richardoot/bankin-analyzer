@@ -1,6 +1,7 @@
 import { TagBaselineService, categorySurplus } from './tag-baseline.service'
 import { TagFamiliesService } from '../tag-families/tag-families.service'
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -23,6 +24,10 @@ import {
   exceptionalOnSmoothedError,
   SMOOTHED_ROWS_NAMED,
 } from '../transactions/amortization'
+import {
+  EFFECTIVE_RHYTHM,
+  recurringTransactionsJoin,
+} from '../recurrences/recurrence-rhythm.sql'
 
 /** What a tag response reads besides the row: its count and its family. */
 const TAG_INCLUDE = {
@@ -76,6 +81,70 @@ interface FamilyBudgetRow {
   family_id: string
   spent: number
 }
+
+/** Raw row: what one tag's rows spent. */
+interface TagSpentRow {
+  tag_id: string
+  spent: number
+}
+
+/** Raw row: an expense in a dated tag's window that does not carry it yet. */
+interface TagCandidateRow {
+  id: string
+  date: Date
+  description: string
+  amount: number
+  account_id: string | null
+  category_id: string | null
+  category_name: string | null
+  category_key: string | null
+  subcategory_id: string | null
+  subcategory_name: string | null
+  subcategory_key: string | null
+  rhythm: string | null
+  amortization_months: number | null
+}
+
+/**
+ * Days added on each side of an event's window when looking for the rows it
+ * may have missed: a dinner the evening before, a card payment booked two
+ * days late.
+ */
+export const TAG_CANDIDATE_MARGIN_DAYS = 2
+
+/** An expense that may belong to a dated tag, for an agent to propose. */
+export interface TagCandidate {
+  id: string
+  date: string
+  label: string
+  amount: number
+  accountId: string | null
+  categoryId: string | null
+  category: string | null
+  categoryKey: string | null
+  subcategoryId: string | null
+  subcategory: string | null
+  subcategoryKey: string | null
+  /** VARIABLE, or null when neither the subcategory nor its category says. */
+  rhythm: string | null
+  amortizationMonths: number | null
+}
+
+export interface TagCandidates {
+  tag: {
+    id: string
+    name: string
+    isExceptional: boolean
+    eventStartDate: string
+    eventEndDate: string
+  }
+  /** The window searched: the event's, widened by the margin on each side. */
+  searchedFrom: string
+  searchedTo: string
+  candidates: TagCandidate[]
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
 
 /**
  * Whole months between two days, both inclusive — the convention of a
@@ -153,6 +222,118 @@ export class TagsService {
     })
     const today = calendarDayIn(new Date())
     return tags.map(t => this.toResponse(t, today))
+  }
+
+  /**
+   * What each of the user's tags has spent, by tag id: the expenses it
+   * carries, in absolute value, divided by their account's divisor (a joint
+   * account counts for the user's share), stats-excluded accounts ignored —
+   * the conventions of the tag's analysis (`totalExpenses`). One grouped
+   * query for every tag; a tag with no expense is absent from the map.
+   */
+  async spentByTag(userId: string): Promise<Map<string, number>> {
+    const rows = await this.prisma.$queryRaw<TagSpentRow[]>(Prisma.sql`
+      SELECT
+        tt.tag_id,
+        SUM(ABS(t.amount::numeric) / COALESCE(a.divisor, 1))::float AS spent
+      FROM app.transaction_tags tt
+      JOIN app.tags tg ON tg.id = tt.tag_id
+      JOIN app.transactions t ON t.id = tt.transaction_id
+      LEFT JOIN app.accounts a ON a.id = t.account_id
+      WHERE tg.user_id = ${userId}
+        AND t.user_id = ${userId}
+        AND t.type = 'EXPENSE'
+        AND COALESCE(a.is_excluded_from_stats, false) = false
+      GROUP BY tt.tag_id
+    `)
+    return new Map(rows.map(r => [r.tag_id, round(r.spent ?? 0)]))
+  }
+
+  /**
+   * The expenses that may belong to a dated tag and do not carry it yet:
+   * dated within its window widened by two days on each side (bounds
+   * included), on an account counted in the statistics, and variable — a
+   * line whose effective rhythm is committed (a subscription, the rent, a
+   * line of a proven recurrence) runs on its own whatever the event.
+   *
+   * What was bought months before (the train, the entry fee) is not in the
+   * window by construction; it is found by merchant, not here.
+   */
+  async findCandidates(tagId: string, userId: string): Promise<TagCandidates> {
+    const tag = await this.getOwned(tagId, userId)
+    if (!tag.eventStartDate || !tag.eventEndDate) {
+      throw new BadRequestException(
+        `L'étiquette « ${tag.name} » n'a pas de fenêtre (dates de début et de fin) : ses candidates ne se cherchent pas par date. Renseignez sa période dans l'application, ou cherchez les transactions par libellé.`
+      )
+    }
+    const from = new Date(
+      tag.eventStartDate.getTime() - TAG_CANDIDATE_MARGIN_DAYS * DAY_MS
+    )
+    // Exclusive upper bound: the whole last day counts, whatever the time
+    // a row carries.
+    const until = new Date(
+      tag.eventEndDate.getTime() + (TAG_CANDIDATE_MARGIN_DAYS + 1) * DAY_MS
+    )
+
+    const rows = await this.prisma.$queryRaw<TagCandidateRow[]>(Prisma.sql`
+      SELECT
+        t.id,
+        t.date,
+        t.description,
+        t.amount::float AS amount,
+        t.account_id,
+        c.id AS category_id,
+        c.name AS category_name,
+        c.catalog_key AS category_key,
+        sc.id AS subcategory_id,
+        sc.name AS subcategory_name,
+        sc.catalog_key AS subcategory_key,
+        ${EFFECTIVE_RHYTHM} AS rhythm,
+        t.amortization_months
+      FROM app.transactions t
+      LEFT JOIN app.categories c ON c.id = t.category_id
+      LEFT JOIN app.subcategories sc ON sc.id = t.subcategory_id
+      LEFT JOIN app.accounts a ON a.id = t.account_id
+      ${recurringTransactionsJoin(userId)}
+      WHERE t.user_id = ${userId}
+        AND t.type = 'EXPENSE'
+        AND t.date >= ${from}
+        AND t.date < ${until}
+        AND COALESCE(a.is_excluded_from_stats, false) = false
+        AND NOT EXISTS (
+          SELECT 1 FROM app.transaction_tags tt
+          WHERE tt.transaction_id = t.id AND tt.tag_id = ${tagId}
+        )
+        AND (${EFFECTIVE_RHYTHM}) IS DISTINCT FROM 'COMMITTED'
+      ORDER BY t.date ASC, t.id ASC
+    `)
+
+    return {
+      tag: {
+        id: tag.id,
+        name: tag.name,
+        isExceptional: tag.isExceptional,
+        eventStartDate: toIsoDate(tag.eventStartDate) as string,
+        eventEndDate: toIsoDate(tag.eventEndDate) as string,
+      },
+      searchedFrom: toIsoDate(from) as string,
+      searchedTo: toIsoDate(new Date(until.getTime() - DAY_MS)) as string,
+      candidates: rows.map(r => ({
+        id: r.id,
+        date: r.date.toISOString().slice(0, 10),
+        label: r.description,
+        amount: Number(r.amount),
+        accountId: r.account_id,
+        categoryId: r.category_id,
+        category: r.category_name,
+        categoryKey: r.category_key,
+        subcategoryId: r.subcategory_id,
+        subcategory: r.subcategory_name,
+        subcategoryKey: r.subcategory_key,
+        rhythm: r.rhythm,
+        amortizationMonths: r.amortization_months,
+      })),
+    }
   }
 
   /**
