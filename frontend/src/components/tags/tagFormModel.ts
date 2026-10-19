@@ -7,6 +7,8 @@ export interface TagFormValue {
   eventEnd: string
   /** The project's envelope, a total for the whole event; null when none. */
   budget: number | null
+  /** The family the tag is an edition of; null when none. */
+  familyId: string | null
 }
 
 export const DEFAULT_TAG_COLOR = '#ef4444'
@@ -46,5 +48,17 @@ export function emptyTagForm(): TagFormValue {
     eventStart: '',
     eventEnd: '',
     budget: null,
+    familyId: null,
   }
 }
+
+/**
+ * Names offered while the user has no family yet: shortcuts to create one,
+ * nothing written until they confirm. No « Gros achats »: a durable purchase
+ * is smoothed, not tagged (agent-os/product/amortization-framework.md).
+ */
+export const FAMILY_SUGGESTIONS = [
+  'Voyages',
+  'Compétitions',
+  'Concerts et fêtes',
+] as const

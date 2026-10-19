@@ -542,8 +542,47 @@ export interface TagDto {
   budgetAmount: number | null
   /** Computed by the server; null when the tag has no complete window */
   status: TagEventStatus | null
+  /** The family this tag is an edition of, or null */
+  familyId: string | null
+  /** That family, named, or null */
+  family: TagFamilySummaryDto | null
   createdAt: string
   updatedAt: string
+}
+
+/** A family as a tag names it. */
+export interface TagFamilySummaryDto {
+  id: string
+  name: string
+  color: string | null
+}
+
+/**
+ * A genre above the tag (« Voyages », « HYROX »), defined by the user. One
+ * level only; deleting it keeps its tags, without a family.
+ */
+export interface TagFamilyDto {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+  /** Envelope over a calendar year, or null (read from lot 3 on) */
+  annualBudget: number | null
+  tagCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateTagFamilyDto {
+  name: string
+  color?: string
+  icon?: string
+}
+
+export interface UpdateTagFamilyDto {
+  name?: string
+  /** null clears the colour */
+  color?: string | null
 }
 
 export interface CreateTagDto {
@@ -554,6 +593,7 @@ export interface CreateTagDto {
   eventStartDate?: string
   eventEndDate?: string
   budgetAmount?: number
+  familyId?: string
 }
 
 export interface UpdateTagDto {
@@ -566,6 +606,8 @@ export interface UpdateTagDto {
   eventEndDate?: string | null
   /** null clears the envelope */
   budgetAmount?: number | null
+  /** null takes the tag out of its family */
+  familyId?: string | null
 }
 
 /** One project (exceptional tag) weighed against its envelope. */
@@ -2436,6 +2478,65 @@ export const api = {
 
     if (!response.ok) {
       throw new Error("Impossible de supprimer l'étiquette")
+    }
+  },
+
+  // Tag families API
+
+  async getTagFamilies(): Promise<TagFamilyDto[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tag-families`)
+
+    if (!response.ok) {
+      throw new Error("Impossible de charger les familles d'étiquettes")
+    }
+
+    return response.json() as Promise<TagFamilyDto[]>
+  },
+
+  async createTagFamily(dto: CreateTagFamilyDto): Promise<TagFamilyDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tag-families`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      const message =
+        response.status === 409
+          ? 'Une famille porte déjà ce nom'
+          : 'Impossible de créer la famille'
+      throw new Error(message)
+    }
+
+    return response.json() as Promise<TagFamilyDto>
+  },
+
+  async updateTagFamily(
+    id: string,
+    dto: UpdateTagFamilyDto
+  ): Promise<TagFamilyDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tag-families/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      const message =
+        response.status === 409
+          ? 'Une famille porte déjà ce nom'
+          : 'Impossible de modifier la famille'
+      throw new Error(message)
+    }
+
+    return response.json() as Promise<TagFamilyDto>
+  },
+
+  async deleteTagFamily(id: string): Promise<void> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tag-families/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      throw new Error('Impossible de supprimer la famille')
     }
   },
 

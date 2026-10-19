@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import type { TagDto } from '@/lib/api'
-import { eventYear, eventYears, splitTagSections } from './tagSections'
+import {
+  eventYear,
+  eventYears,
+  groupEventsByFamily,
+  splitTagSections,
+} from './tagSections'
 
 function tag(overrides: Partial<TagDto> & { name: string }): TagDto {
   return {
@@ -13,6 +18,8 @@ function tag(overrides: Partial<TagDto> & { name: string }): TagDto {
     eventEndDate: null,
     budgetAmount: null,
     status: null,
+    familyId: null,
+    family: null,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -94,5 +101,43 @@ describe('event years', () => {
         event('C', '2025-08-01', '2025-08-02', 'past'),
       ])
     ).toEqual([2026, 2025])
+  })
+})
+
+describe('groupEventsByFamily', () => {
+  const trips = { id: 'fam-t', name: 'Voyages', color: '#22c55e' }
+  const races = { id: 'fam-r', name: 'Compétitions', color: null }
+  const of = (
+    t: TagDto,
+    family: { id: string; name: string; color: string | null }
+  ): TagDto => ({ ...t, familyId: family.id, family })
+
+  it('groups the families by name, those without one last, keeping the order', () => {
+    const groups = groupEventsByFamily([
+      of(event('Rome 2026', '2026-12-05', '2026-12-09', 'upcoming'), trips),
+      event('Bad Bunny 2026', '2026-10-19', '2026-10-19', 'ongoing'),
+      of(event('HYROX Lyon 2026', '2026-05-02', '2026-05-03', 'past'), races),
+      of(event('Prague 2025', '2025-08-01', '2025-08-07', 'past'), trips),
+      of(event('HYROX Paris 2025', '2025-04-12', '2025-04-13', 'past'), races),
+    ])
+
+    expect(
+      groups.map(g => [g.family?.name ?? null, g.tags.map(t => t.name)])
+    ).toEqual([
+      ['Compétitions', ['HYROX Lyon 2026', 'HYROX Paris 2025']],
+      ['Voyages', ['Rome 2026', 'Prague 2025']],
+      [null, ['Bad Bunny 2026']],
+    ])
+  })
+
+  it('has no « Sans famille » group when every event has one', () => {
+    const groups = groupEventsByFamily([
+      of(event('Rome 2026', '2026-12-05', '2026-12-09', 'upcoming'), trips),
+    ])
+    expect(groups.map(g => g.family?.id ?? null)).toEqual(['fam-t'])
+  })
+
+  it('gives nothing for no event', () => {
+    expect(groupEventsByFamily([])).toEqual([])
   })
 })

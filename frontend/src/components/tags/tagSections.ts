@@ -1,4 +1,4 @@
-import type { TagDto, TagEventStatus } from '@/lib/api'
+import type { TagDto, TagEventStatus, TagFamilySummaryDto } from '@/lib/api'
 
 /**
  * The tags page reads three natures of tag, which a single alphabetical grid
@@ -70,4 +70,36 @@ export function eventYears(events: readonly TagDto[]): number[] {
     if (year !== null) years.add(year)
   }
   return [...years].sort((a, b) => b - a)
+}
+
+/** The events of one family, or of none (`family` null, « Sans famille »). */
+export interface TagFamilyGroup {
+  family: TagFamilySummaryDto | null
+  tags: TagDto[]
+}
+
+/**
+ * The events grouped by family: the families by name, then the events
+ * without one last. Within a group the events keep the order they came in
+ * (upcoming, ongoing, past). A family with no event here has no group.
+ */
+export function groupEventsByFamily(
+  events: readonly TagDto[]
+): TagFamilyGroup[] {
+  const byFamily = new Map<string, TagFamilyGroup>()
+  const loose: TagDto[] = []
+  for (const tag of events) {
+    if (!tag.family) {
+      loose.push(tag)
+      continue
+    }
+    const group = byFamily.get(tag.family.id)
+    if (group) group.tags.push(tag)
+    else byFamily.set(tag.family.id, { family: tag.family, tags: [tag] })
+  }
+  const groups = [...byFamily.values()].sort((a, b) =>
+    (a.family?.name ?? '').localeCompare(b.family?.name ?? '')
+  )
+  if (loose.length > 0) groups.push({ family: null, tags: loose })
+  return groups
 }

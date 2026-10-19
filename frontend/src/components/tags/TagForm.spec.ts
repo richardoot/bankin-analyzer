@@ -31,6 +31,7 @@ describe('TagForm', () => {
       eventStart: '2026-07-01',
       eventEnd: '2026-07-14',
       budget: 1200.5,
+      familyId: null,
     })
   })
 
@@ -40,5 +41,24 @@ describe('TagForm', () => {
     })
     expect(wrapper.find('[data-testid="tag-event-start"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="tag-budget"]').exists()).toBe(false)
+  })
+
+  it('asks for a family on an exceptional tag only', async () => {
+    const wrapper = mount(TagForm, {
+      props: {
+        modelValue: emptyTagForm(),
+        testId: 'tag',
+        families: [],
+        createFamily: () => Promise.resolve(null),
+        'onUpdate:modelValue': (value: unknown) =>
+          wrapper.setProps({
+            modelValue: value as ReturnType<typeof emptyTagForm>,
+          }),
+      },
+    })
+    expect(wrapper.find('[data-testid="tag-family"]').exists()).toBe(false)
+
+    await wrapper.find('[data-testid="tag-exceptional"]').setValue(true)
+    expect(wrapper.find('[data-testid="tag-family"]').exists()).toBe(true)
   })
 })

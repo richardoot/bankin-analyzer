@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useTagsStore } from './tags'
-import type { TagDto } from '@/lib/api'
+import type { TagDto, TagFamilyDto } from '@/lib/api'
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -11,6 +11,10 @@ vi.mock('@/lib/api', () => ({
     deleteTag: vi.fn(),
     attachTagToTransactions: vi.fn(),
     detachTagFromTransaction: vi.fn(),
+    getTagFamilies: vi.fn(),
+    createTagFamily: vi.fn(),
+    updateTagFamily: vi.fn(),
+    deleteTagFamily: vi.fn(),
   },
 }))
 
@@ -40,6 +44,22 @@ function makeTag(overrides: Partial<TagDto> = {}): TagDto {
     eventEndDate: null,
     budgetAmount: null,
     status: null,
+    familyId: null,
+    family: null,
+    createdAt: '',
+    updatedAt: '',
+    ...overrides,
+  }
+}
+
+function makeFamily(overrides: Partial<TagFamilyDto> = {}): TagFamilyDto {
+  return {
+    id: 'fam-1',
+    name: 'Voyages',
+    color: '#22c55e',
+    icon: null,
+    annualBudget: null,
+    tagCount: 0,
     createdAt: '',
     updatedAt: '',
     ...overrides,
@@ -132,5 +152,87 @@ describe('useTagsStore', () => {
 
     expect(ok).toBe(true)
     expect(store.tags[0]?.transactionCount).toBe(1)
+  })
+
+  describe('families', () => {
+    it('fetchFamilies() loads them without passing for the tags loading', async () => {
+      mockedApi.getTagFamilies.mockResolvedValue([makeFamily()])
+      const store = useTagsStore()
+
+      const pending = store.fetchFamilies()
+      expect(store.isLoading).toBe(false)
+      await pending
+
+      expect(store.families.map(f => f.name)).toEqual(['Voyages'])
+    })
+
+    it('addFamily() adds it and keeps the list by name', async () => {
+      const store = useTagsStore()
+      store.families = [makeFamily({ id: 'fam-2', name: 'HYROX' })]
+      mockedApi.createTagFamily.mockResolvedValue(
+        makeFamily({ id: 'fam-1', name: 'Concerts' })
+      )
+
+      const created = await store.addFamily({ name: 'Concerts' })
+
+      expect(created?.id).toBe('fam-1')
+      expect(store.families.map(f => f.name)).toEqual(['Concerts', 'HYROX'])
+    })
+
+    it('addFamily() returns null on a refusal', async () => {
+      mockedApi.createTagFamily.mockRejectedValue(
+        new Error('Une famille porte déjà ce nom')
+      )
+      const store = useTagsStore()
+
+      expect(await store.addFamily({ name: 'Voyages' })).toBeNull()
+      expect(store.families).toEqual([])
+    })
+
+    it('updateFamily() renames it on the tags that carry it', async () => {
+      const store = useTagsStore()
+      const family = { id: 'fam-1', name: 'Voyages', color: '#22c55e' }
+      store.families = [makeFamily()]
+      store.tags = [
+        makeTag({ id: '1', familyId: 'fam-1', family }),
+        makeTag({ id: '2', name: 'Cadeaux' }),
+      ]
+      mockedApi.updateTagFamily.mockResolvedValue(
+        makeFamily({ name: 'Vacances', color: '#6366f1' })
+      )
+
+      const ok = await store.updateFamily('fam-1', {
+        name: 'Vacances',
+        color: '#6366f1',
+      })
+
+      expect(ok).toBe(true)
+      expect(store.families.map(f => f.name)).toEqual(['Vacances'])
+      expect(store.tags.map(t => t.family)).toEqual([
+        { id: 'fam-1', name: 'Vacances', color: '#6366f1' },
+        null,
+      ])
+    })
+
+    it('removeFamily() keeps its tags, without a family', async () => {
+      const store = useTagsStore()
+      store.families = [makeFamily()]
+      store.tags = [
+        makeTag({
+          id: '1',
+          familyId: 'fam-1',
+          family: { id: 'fam-1', name: 'Voyages', color: null },
+        }),
+      ]
+      mockedApi.deleteTagFamily.mockResolvedValue(undefined)
+
+      const ok = await store.removeFamily('fam-1')
+
+      expect(ok).toBe(true)
+      expect(store.families).toEqual([])
+      expect(store.tags.map(t => [t.id, t.familyId, t.family])).toEqual([
+        ['1', null, null],
+      ])
+    })
   })
 })

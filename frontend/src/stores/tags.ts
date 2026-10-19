@@ -1,12 +1,28 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '@/lib/api'
-import type { CreateTagDto, TagDto, UpdateTagDto } from '@/lib/api'
+import type {
+  CreateTagDto,
+  CreateTagFamilyDto,
+  TagDto,
+  TagFamilyDto,
+  UpdateTagDto,
+  UpdateTagFamilyDto,
+} from '@/lib/api'
 import { useAsyncAction } from '@/composables/useAsyncAction'
 
 export const useTagsStore = defineStore('tags', () => {
   const tags = ref<TagDto[]>([])
   const { isLoading, error, run, clearError } = useAsyncAction()
+
+  /**
+   * The user's tag families. Kept beside the tags because a family's name
+   * and colour are shown on its tags, and deleting it orphans them: one
+   * store keeps both readings in step. Its own loading state, so fetching
+   * the families never passes for the tags loading.
+   */
+  const families = ref<TagFamilyDto[]>([])
+  const familiesAction = useAsyncAction()
 
   function sortTags(): void {
     tags.value.sort((a, b) => a.name.localeCompare(b.name))
@@ -81,8 +97,72 @@ export const useTagsStore = defineStore('tags', () => {
     return result ?? false
   }
 
+  function sortFamilies(): void {
+    families.value.sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  async function fetchFamilies(): Promise<void> {
+    await familiesAction.run(async () => {
+      families.value = await api.getTagFamilies()
+    }, "Impossible de charger les familles d'étiquettes")
+  }
+
+  async function addFamily(
+    dto: CreateTagFamilyDto
+  ): Promise<TagFamilyDto | null> {
+    const result = await familiesAction.run(async () => {
+      const created = await api.createTagFamily(dto)
+      families.value.push(created)
+      sortFamilies()
+      return created
+    }, 'Impossible de créer la famille')
+    return result ?? null
+  }
+
+  /** Renamed or recoloured: the tags that name it follow. */
+  async function updateFamily(
+    id: string,
+    dto: UpdateTagFamilyDto
+  ): Promise<boolean> {
+    const result = await familiesAction.run(async () => {
+      const updated = await api.updateTagFamily(id, dto)
+      families.value = families.value.map(f => (f.id === id ? updated : f))
+      sortFamilies()
+      for (const tag of tags.value) {
+        if (tag.familyId === id) {
+          tag.family = { id, name: updated.name, color: updated.color }
+        }
+      }
+      return true
+    }, 'Impossible de modifier la famille')
+    return result ?? false
+  }
+
+  /** Deleted: its tags stay, without a family, as the server leaves them. */
+  async function removeFamily(id: string): Promise<boolean> {
+    const result = await familiesAction.run(async () => {
+      await api.deleteTagFamily(id)
+      families.value = families.value.filter(f => f.id !== id)
+      for (const tag of tags.value) {
+        if (tag.familyId === id) {
+          tag.familyId = null
+          tag.family = null
+        }
+      }
+      return true
+    }, 'Impossible de supprimer la famille')
+    return result ?? false
+  }
+
   return {
     tags,
+    families,
+    familiesLoading: familiesAction.isLoading,
+    familiesError: familiesAction.error,
+    fetchFamilies,
+    addFamily,
+    updateFamily,
+    removeFamily,
     isLoading,
     error,
     fetchTags,

@@ -156,6 +156,8 @@ const proTag: TagDto = {
   eventEndDate: null,
   budgetAmount: null,
   status: null,
+  familyId: null,
+  family: null,
   createdAt: '2026-01-01',
   updatedAt: '2026-01-01',
 }

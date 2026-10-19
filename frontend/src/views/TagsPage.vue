@@ -4,13 +4,18 @@
   import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
   import { useTagsStore } from '@/stores/tags'
-  import type { TagDto } from '@/lib/api'
+  import type { CreateTagFamilyDto, TagDto, TagFamilyDto } from '@/lib/api'
   import { useToast } from '@/composables/useToast'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseModal from '@/components/ui/BaseModal.vue'
   import IconPlus from '@/components/icons/IconPlus.vue'
   import IconChevronDown from '@/components/icons/IconChevronDown.vue'
+  import IconPencil from '@/components/icons/IconPencil.vue'
+  import IconTrash from '@/components/icons/IconTrash.vue'
+  import BaseIconButton from '@/components/ui/BaseIconButton.vue'
+  import BaseField from '@/components/ui/BaseField.vue'
+  import TagColorPicker from '@/components/tags/TagColorPicker.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
   import TagForm from '@/components/tags/TagForm.vue'
@@ -22,6 +27,7 @@
   import {
     eventYear,
     eventYears,
+    groupEventsByFamily,
     splitTagSections,
   } from '@/components/tags/tagSections'
   import {
@@ -57,6 +63,16 @@
     return { eventStartDate: null, eventEndDate: null }
   }
 
+  /** A family groups events: only an exceptional tag is filed under one. */
+  function familyOf(value: TagFormValue): string | null {
+    return value.isExceptional ? value.familyId : null
+  }
+
+  /** The form creates a family on the spot; the store keeps the list. */
+  function createFamily(dto: CreateTagFamilyDto): Promise<TagFamilyDto | null> {
+    return tagsStore.addFamily(dto)
+  }
+
   /** The envelope only exists on an exceptional tag, and never below zero. */
   function budgetOf(value: TagFormValue): number | null {
     if (!value.isExceptional || value.budget === null) return null
@@ -69,6 +85,7 @@
     creating.value = true
     const period = eventPeriod(draft.value)
     const budget = budgetOf(draft.value)
+    const familyId = familyOf(draft.value)
     const created = await tagsStore.addTag({
       name,
       color: draft.value.color,
@@ -80,6 +97,7 @@
           }
         : {}),
       ...(budget !== null ? { budgetAmount: budget } : {}),
+      ...(familyId !== null ? { familyId } : {}),
     })
     creating.value = false
     if (created) {
@@ -103,6 +121,7 @@
       eventStart: tag.eventStartDate ?? '',
       eventEnd: tag.eventEndDate ?? '',
       budget: tag.budgetAmount,
+      familyId: tag.familyId,
     }
   }
 
@@ -122,6 +141,7 @@
       ...eventPeriod(editDraft.value),
       // A tag that stops being exceptional stops being a project too.
       budgetAmount: budgetOf(editDraft.value),
+      familyId: familyOf(editDraft.value),
     })
     savingEdit.value = false
     if (ok) {
@@ -164,6 +184,60 @@
       : sections.value.events.filter(tag => eventYear(tag) === activeYear.value)
   )
 
+  // Events grouped by family, those without one last.
+  const eventGroups = computed(() => groupEventsByFamily(visibleEvents.value))
+  const hasFamilies = computed(() => tagsStore.families.length > 0)
+
+  /** How many tags a family holds, read off the tags as they stand now. */
+  function tagCountOf(familyId: string): number {
+    return tagsStore.tags.filter(t => t.familyId === familyId).length
+  }
+
+  // A family is renamed or recoloured in a dialog, from its group's heading
+  // or from the list of families.
+  const editingFamily = ref<TagFamilyDto | null>(null)
+  const familyName = ref('')
+  const familyColor = ref<string | null>(null)
+  const savingFamily = ref(false)
+
+  function startEditFamily(id: string): void {
+    const family = tagsStore.families.find(f => f.id === id)
+    if (!family) return
+    editingFamily.value = family
+    familyName.value = family.name
+    familyColor.value = family.color
+  }
+
+  async function saveFamily(): Promise<void> {
+    const family = editingFamily.value
+    const name = familyName.value.trim()
+    if (!family || !name || savingFamily.value) return
+    savingFamily.value = true
+    const ok = await tagsStore.updateFamily(family.id, {
+      name,
+      color: familyColor.value,
+    })
+    savingFamily.value = false
+    if (ok) {
+      editingFamily.value = null
+      toast.success(`Famille « ${name} » modifiée`)
+    }
+  }
+
+  // Deleting a family keeps its tags, without a family: the dialog says so.
+  const familyToDelete = ref<TagFamilyDto | null>(null)
+  const deletingFamily = ref(false)
+
+  async function confirmDeleteFamily(): Promise<void> {
+    const family = familyToDelete.value
+    if (!family || deletingFamily.value) return
+    deletingFamily.value = true
+    const ok = await tagsStore.removeFamily(family.id)
+    deletingFamily.value = false
+    familyToDelete.value = null
+    if (ok) toast.success(`Famille « ${family.name} » supprimée`)
+  }
+
   // Delete confirmation: a real dialog (named, Escape closes it), not an
   // overlay painted over the card.
   const tagToDelete = ref<TagDto | null>(null)
@@ -189,6 +263,7 @@
 
   onMounted(() => {
     void loadTags()
+    void tagsStore.fetchFamilies()
   })
 </script>
 
@@ -223,7 +298,13 @@
         >
           Nouvelle étiquette
         </h2>
-        <TagForm v-model="draft" test-id="new-tag" @submit="createTag">
+        <TagForm
+          v-model="draft"
+          test-id="new-tag"
+          :families="tagsStore.families"
+          :create-family="createFamily"
+          @submit="createTag"
+        >
           <template #actions>
             <div class="flex justify-end">
               <BaseButton
@@ -293,7 +374,12 @@
             data-testid="events-year-filter"
           />
         </div>
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <!-- Without any family the grid stays as it was: one « Sans
+             famille » heading over every event would say nothing. -->
+        <div
+          v-if="!hasFamilies"
+          class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        >
           <TagCard
             v-for="tag in visibleEvents"
             :key="tag.id"
@@ -301,6 +387,45 @@
             @edit="startEdit(tag)"
             @delete="tagToDelete = tag"
           />
+        </div>
+        <div v-else class="flex flex-col gap-5">
+          <div
+            v-for="group in eventGroups"
+            :key="group.family?.id ?? 'none'"
+            :data-testid="`tags-family-group-${group.family?.id ?? 'none'}`"
+          >
+            <div class="mb-2 flex items-center gap-2">
+              <span
+                v-if="group.family"
+                class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                :style="{ backgroundColor: group.family.color ?? '#9ca3af' }"
+                aria-hidden="true"
+              ></span>
+              <h3
+                class="text-sm font-semibold text-gray-700 dark:text-gray-300"
+              >
+                {{ group.family?.name ?? 'Sans famille' }}
+              </h3>
+              <BaseIconButton
+                v-if="group.family"
+                size="sm"
+                :label="`Modifier la famille ${group.family.name}`"
+                :data-testid="`edit-family-${group.family.id}`"
+                @click="startEditFamily(group.family.id)"
+              >
+                <IconPencil />
+              </BaseIconButton>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <TagCard
+                v-for="tag in group.tags"
+                :key="tag.id"
+                :tag="tag"
+                @edit="startEdit(tag)"
+                @delete="tagToDelete = tag"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -341,6 +466,58 @@
           />
         </div>
       </section>
+
+      <section
+        v-if="hasFamilies"
+        aria-labelledby="tags-families-heading"
+        data-testid="tags-section-families"
+      >
+        <SectionLabel id="tags-families-heading" as="h2" class="mb-3">
+          Familles
+        </SectionLabel>
+        <BaseCard padding="none">
+          <ul class="divide-y divide-gray-100 dark:divide-slate-700">
+            <li
+              v-for="family in tagsStore.families"
+              :key="family.id"
+              class="flex items-center gap-2 px-4 py-2"
+              :data-testid="`family-row-${family.id}`"
+            >
+              <span
+                class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                :style="{ backgroundColor: family.color ?? '#9ca3af' }"
+                aria-hidden="true"
+              ></span>
+              <span
+                class="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-gray-100"
+              >
+                {{ family.name }}
+              </span>
+              <span
+                class="shrink-0 text-xs tabular-nums text-gray-500 dark:text-gray-400"
+              >
+                {{ tagCountOf(family.id) }} étiquette(s)
+              </span>
+              <BaseIconButton
+                size="sm"
+                :label="`Modifier la famille ${family.name}`"
+                @click="startEditFamily(family.id)"
+              >
+                <IconPencil />
+              </BaseIconButton>
+              <BaseIconButton
+                size="sm"
+                variant="danger"
+                :label="`Supprimer la famille ${family.name}`"
+                :data-testid="`delete-family-${family.id}`"
+                @click="familyToDelete = family"
+              >
+                <IconTrash />
+              </BaseIconButton>
+            </li>
+          </ul>
+        </BaseCard>
+      </section>
     </div>
 
     <!-- Edit: the same form as the creation, in a dialog -->
@@ -355,6 +532,8 @@
         v-if="editingTag"
         v-model="editDraft"
         test-id="edit-tag"
+        :families="tagsStore.families"
+        :create-family="createFamily"
         @submit="saveEdit"
       />
       <template #footer>
@@ -384,6 +563,59 @@
       @cancel="tagToDelete = null"
     >
       Les transactions qui portent cette étiquette ne sont pas supprimées.
+    </ConfirmDialog>
+
+    <BaseModal
+      :open="editingFamily !== null"
+      :title="
+        editingFamily ? `Modifier la famille « ${editingFamily.name} »` : ''
+      "
+      :closable="!savingFamily"
+      data-testid="edit-family-modal"
+      @close="editingFamily = null"
+    >
+      <form class="space-y-4" @submit.prevent="saveFamily">
+        <BaseField
+          v-model="familyName"
+          size="sm"
+          type="text"
+          label="Nom de la famille"
+          data-testid="edit-family-name"
+        />
+        <TagColorPicker v-model="familyColor" />
+      </form>
+      <template #footer>
+        <BaseButton
+          variant="secondary"
+          :disabled="savingFamily"
+          @click="editingFamily = null"
+        >
+          Annuler
+        </BaseButton>
+        <BaseButton
+          :disabled="!familyName.trim()"
+          :loading="savingFamily"
+          data-testid="save-family"
+          @click="saveFamily"
+        >
+          Enregistrer
+        </BaseButton>
+      </template>
+    </BaseModal>
+
+    <ConfirmDialog
+      :open="familyToDelete !== null"
+      :title="`Supprimer la famille « ${familyToDelete?.name ?? ''} » ?`"
+      :loading="deletingFamily"
+      data-testid="delete-family-dialog"
+      @confirm="confirmDeleteFamily"
+      @cancel="familyToDelete = null"
+    >
+      {{
+        familyToDelete && tagCountOf(familyToDelete.id) > 0
+          ? `Ses ${tagCountOf(familyToDelete.id)} étiquette(s) sont conservées, sans famille.`
+          : 'Elle ne contient aucune étiquette.'
+      }}
     </ConfirmDialog>
   </PageShell>
 </template>
