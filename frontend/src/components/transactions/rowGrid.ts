@@ -14,11 +14,11 @@
  * file as they are, and would not see a class assembled at run time.
  */
 export const ROW_GRID_CLASS =
-  'lg:grid-cols-[5.5rem_minmax(0,3fr)_minmax(0,2fr)_6.5rem_minmax(0,2fr)_3.5rem_12rem]'
+  'lg:grid-cols-[5.5rem_minmax(0,3fr)_minmax(0,2fr)_6.5rem_minmax(0,2fr)_3.5rem_13.5rem]'
 
 /** With the selection column in front. */
 export const ROW_GRID_SELECTION_CLASS =
-  'lg:grid-cols-[1.5rem_5.5rem_minmax(0,3fr)_minmax(0,2fr)_6.5rem_minmax(0,2fr)_3.5rem_12rem]'
+  'lg:grid-cols-[1.5rem_5.5rem_minmax(0,3fr)_minmax(0,2fr)_6.5rem_minmax(0,2fr)_3.5rem_13.5rem]'
 
 export function rowGridClass(selectionMode: boolean): string {
   return selectionMode ? ROW_GRID_SELECTION_CLASS : ROW_GRID_CLASS

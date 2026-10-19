@@ -447,4 +447,75 @@ describe('CategoryBreakdownList', () => {
       push.mockRestore()
     })
   })
+
+  describe('smoothed purchases', () => {
+    const withPhone: CategoryDataDto[] = [
+      {
+        categoryId: 'cat-tech',
+        category: 'High-tech',
+        amount: 80,
+        averagePerMonth: 26.67,
+        everydayAmount: 242.51,
+        everydayAveragePerMonth: 80.84,
+        transactionCount: 1,
+        monthlyAmounts: [80, 0, 0],
+        amortizedAmount: 162.51,
+        subcategories: [
+          {
+            subcategoryId: 'sub-cable',
+            subcategory: 'Accessoires',
+            amount: 80,
+            transactionCount: 1,
+            averagePerMonth: 26.67,
+          },
+          {
+            subcategoryId: 'sub-phone',
+            subcategory: 'Téléphone',
+            amount: 0,
+            transactionCount: 0,
+            averagePerMonth: 0,
+            everydayAmount: 162.51,
+            everydayAveragePerMonth: 54.17,
+            amortizedAmount: 162.51,
+          },
+        ],
+      },
+    ]
+
+    async function expand(mode: 'real' | 'everyday') {
+      const wrapper = mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
+        props: { categories: withPhone, monthLabels, total: 300, mode },
+      })
+      await wrapper
+        .find('[data-testid="category-row-High-tech"]')
+        .trigger('click')
+      return wrapper
+    }
+
+    it('reads a line its slices reach in « Vie courante »', async () => {
+      const wrapper = await expand('everyday')
+
+      expect(
+        wrapper
+          .get('[data-testid="subcategory-line-High-tech-Téléphone"]')
+          .text()
+      ).toMatch(/162,51/)
+    })
+
+    it('leaves that line out of the real reading, as before smoothing', async () => {
+      const wrapper = await expand('real')
+
+      expect(
+        wrapper
+          .find('[data-testid="subcategory-line-High-tech-Téléphone"]')
+          .exists()
+      ).toBe(false)
+      expect(
+        wrapper
+          .find('[data-testid="subcategory-line-High-tech-Accessoires"]')
+          .exists()
+      ).toBe(true)
+    })
+  })
 })

@@ -22,6 +22,7 @@
     type MarkRecurringChoice,
   } from '@/components/transactions/MarkRecurringModal.vue'
   import BulkCategoryModal from '@/components/transactions/BulkCategoryModal.vue'
+  import TransactionAmortizationModal from '@/components/transactions/TransactionAmortizationModal.vue'
   import TransactionRow from '@/components/transactions/TransactionRow.vue'
   import SettlementDetailModal from '@/components/settlements/SettlementDetailModal.vue'
   import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
@@ -250,6 +251,11 @@
   const categoryIdsFilter = ref<string[]>(initialLink.categoryIds ?? [])
   const recurrencesFilter = ref<string[]>(initialLink.recurrences ?? [])
   /**
+   * « Lissées »: only the expenses smoothed over several months. Not saved,
+   * like the event filter: a question asked now, not a way to read the list.
+   */
+  const amortizedFilter = ref(initialLink.amortized ?? false)
+  /**
    * The context a link can carry and the controls above cannot express: a
    * person's debts, a settlement, an import, a sync run, an exact list of
    * rows. Named in the banner above the list rather than in a chip, and
@@ -263,6 +269,11 @@
   const importFilter = ref<string | null>(initialLink.importId ?? null)
   const syncRunFilter = ref<string | null>(initialLink.syncRunId ?? null)
   const idsFilter = ref<string[]>(initialLink.ids ?? [])
+  /**
+   * Rows shown on top of the filters: the smoothed purchases a « Vie
+   * courante » figure counts by a slice although they are dated elsewhere.
+   */
+  const alsoIdsFilter = ref<string[]>(initialLink.alsoIds ?? [])
   /** What the sender called the view, and whether its figure was netted. */
   const contextLabel = ref<string | null>(initialLink.label ?? null)
   const grossAmounts = ref(initialLink.gross ?? false)
@@ -335,6 +346,7 @@
     rhythmFilter.value = null
     categoryIdsFilter.value = []
     recurrencesFilter.value = []
+    amortizedFilter.value = false
     clearContext()
     localStorage.removeItem(FILTERS_STORAGE_KEY)
   }
@@ -347,6 +359,7 @@
     importFilter.value = null
     syncRunFilter.value = null
     idsFilter.value = []
+    alsoIdsFilter.value = []
     contextLabel.value = null
     grossAmounts.value = false
   }
@@ -358,7 +371,8 @@
       settlementFilter.value !== null ||
       importFilter.value !== null ||
       syncRunFilter.value !== null ||
-      idsFilter.value.length > 0
+      idsFilter.value.length > 0 ||
+      alsoIdsFilter.value.length > 0
   )
 
   // Check if any filter is active
@@ -382,6 +396,7 @@
       rhythmFilter.value !== null ||
       categoryIdsFilter.value.length > 0 ||
       recurrencesFilter.value.length > 0 ||
+      amortizedFilter.value ||
       hasContextFilter.value
     )
   })
@@ -411,6 +426,7 @@
     const count = idsFilter.value.length
     if (count === 1) return 'Une transaction'
     if (count > 1) return `${count} transactions choisies`
+    if (alsoIdsFilter.value.length > 0) return 'Le détail d’un total'
     if (grossAmounts.value) return 'Le détail d’un total'
     return null
   })
@@ -514,6 +530,9 @@
         label: `Rythme : ${RHYTHM_LABEL[rhythmFilter.value]}`,
       })
     }
+    if (amortizedFilter.value) {
+      chips.push({ key: 'amortized', label: 'Lissées' })
+    }
     if (searchKeyword.value.trim()) {
       chips.push({ key: 'q', label: `« ${searchKeyword.value.trim()} »` })
     }
@@ -578,6 +597,9 @@
         break
       case 'rhythm':
         rhythmFilter.value = null
+        break
+      case 'amortized':
+        amortizedFilter.value = false
         break
       case 'q':
         searchKeyword.value = ''
@@ -828,6 +850,8 @@
         recurrencesFilter.value.length > 0
           ? recurrencesFilter.value
           : undefined,
+      amortized: amortizedFilter.value || undefined,
+      alsoIds: alsoIdsFilter.value.length > 0 ? alsoIdsFilter.value : undefined,
     }
   })
 
@@ -1198,6 +1222,8 @@
       rhythm: rhythmFilter.value ?? undefined,
       categoryIds: categoryIdsFilter.value,
       recurrences: recurrencesFilter.value,
+      amortized: amortizedFilter.value,
+      alsoIds: alsoIdsFilter.value,
       label: contextLabel.value ?? undefined,
       gross: grossAmounts.value,
       sort: sortBy.value,
@@ -1257,6 +1283,8 @@
     rhythmFilter.value = link.rhythm ?? null
     categoryIdsFilter.value = link.categoryIds ?? []
     recurrencesFilter.value = link.recurrences ?? []
+    amortizedFilter.value = link.amortized ?? false
+    alsoIdsFilter.value = link.alsoIds ?? []
     contextLabel.value = link.label ?? null
     grossAmounts.value = link.gross ?? false
     // Sort and page size are how the list reads, not what it shows: a link
@@ -1336,6 +1364,8 @@
       rhythmFilter,
       categoryIdsFilter,
       recurrencesFilter,
+      amortizedFilter,
+      alsoIdsFilter,
       personFilter,
       reimbursementFilter,
       settlementFilter,
@@ -1576,6 +1606,63 @@
   function goToPage(page: number) {
     if (page >= 1 && page <= totalPages.value) {
       currentPage.value = page
+    }
+  }
+
+  // ── Smoothing over several months ──
+  /** The expense whose smoothing is being set, while its dialog is open. */
+  const amortizationTx = ref<TransactionDto | null>(null)
+  const isSavingAmortization = ref(false)
+  /** The server's refusal, kept in the dialog rather than a toast. */
+  const amortizationError = ref<string | null>(null)
+
+  function openAmortization(tx: TransactionDto): void {
+    amortizationTx.value = tx
+    amortizationError.value = null
+  }
+
+  function closeAmortization(): void {
+    if (isSavingAmortization.value) return
+    amortizationTx.value = null
+  }
+
+  /**
+   * The exceptional tags a row carries: the dialog refuses the smoothing
+   * with their names before the server has to.
+   */
+  function exceptionalTagNamesOf(tx: TransactionDto | null): string[] {
+    if (!tx) return []
+    const exceptional = new Set(
+      tagsStore.tags.filter(t => t.isExceptional).map(t => t.id)
+    )
+    return (tx.tags ?? []).filter(t => exceptional.has(t.id)).map(t => t.name)
+  }
+
+  async function saveAmortization(months: number | null): Promise<void> {
+    const tx = amortizationTx.value
+    if (!tx || isSavingAmortization.value) return
+    isSavingAmortization.value = true
+    amortizationError.value = null
+    try {
+      const updated = await api.updateTransaction(tx.id, {
+        amortizationMonths: months,
+      })
+      // Located again: the list may have been replaced while waiting.
+      const found = locate(tx.id)
+      if (found) transactions.value[found.index] = updated
+      toast.success(
+        months === null
+          ? `« ${tx.description} » n'est plus étalé`
+          : `« ${tx.description} » étalé sur ${months} mois`
+      )
+      amortizationTx.value = null
+    } catch (err) {
+      amortizationError.value =
+        err instanceof Error
+          ? err.message
+          : "L'étalement n'a pas pu être enregistré"
+    } finally {
+      isSavingAmortization.value = false
     }
   }
 
@@ -1938,6 +2025,25 @@
           </div>
         </div>
 
+        <!-- Expenses smoothed over several months in the everyday reading -->
+        <div class="col-span-2 flex flex-col gap-1 md:col-span-1">
+          <SectionLabel as="span">Lissage</SectionLabel>
+          <div
+            class="inline-flex h-11 md:h-9 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 dark:border-slate-600 dark:bg-slate-800"
+          >
+            <ToggleSwitch
+              :checked="amortizedFilter"
+              label="Afficher uniquement les dépenses lissées sur plusieurs mois"
+              data-testid="transactions-amortized-filter"
+              @change="amortizedFilter = $event"
+            />
+            <span
+              class="whitespace-nowrap text-sm text-gray-600 dark:text-gray-300"
+              >Lissées</span
+            >
+          </div>
+        </div>
+
         <!-- A row a bank sync inserted or claimed and then lost the
                reference to: cleared to "aucun", or a correction still
                pending on the other side of a swap. -->
@@ -2042,6 +2148,19 @@
       <span v-if="grossAmounts" data-testid="transactions-context-gross">
         Montants complets, avant votre part du compte joint et les
         remboursements.
+      </span>
+      <span
+        v-if="alsoIdsFilter.length > 0"
+        class="block"
+        data-testid="transactions-context-smoothed"
+      >
+        {{
+          alsoIdsFilter.length === 1
+            ? 'S’y ajoute un achat lissé'
+            : `S’y ajoutent ${alsoIdsFilter.length} achats lissés`
+        }}
+        : le total n'en compte qu'une tranche par mois, même s'ils sont datés
+        d'un autre mois.
       </span>
       <template #actions>
         <BaseButton
@@ -2341,6 +2460,7 @@
               @detach-tag="id => handleDetachTag(tx, id)"
               @create-tag="name => handleCreateTag(tx, name)"
               @mark-recurring="openMarkRecurring(tx)"
+              @open-amortization="openAmortization(tx)"
               @unlink-recurrence="unlinkRecurrence(tx)"
               @show-recurrence="showRecurrence(tx)"
             />
@@ -2446,6 +2566,24 @@
       :loading="isMarkingRecurring"
       @cancel="markRecurringTx = null"
       @confirm="confirmMarkRecurring"
+    />
+
+    <TransactionAmortizationModal
+      :open="amortizationTx !== null"
+      :transaction="amortizationTx"
+      :reimbursed-amount="
+        amortizationTx
+          ? Math.abs(amortizationTx.amount) - getRemainingAmount(amortizationTx)
+          : 0
+      "
+      :divisor="
+        amortizationTx ? accountsStore.getDivisor(amortizationTx.accountId) : 1
+      "
+      :exceptional-tag-names="exceptionalTagNamesOf(amortizationTx)"
+      :loading="isSavingAmortization"
+      :error="amortizationError"
+      @cancel="closeAmortization"
+      @confirm="saveAmortization"
     />
 
     <ConfirmDialog

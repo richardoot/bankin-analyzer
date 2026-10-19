@@ -15,6 +15,7 @@
   import BaseIconButton from '@/components/ui/BaseIconButton.vue'
   import BaseMenu, { type MenuItem } from '@/components/ui/BaseMenu.vue'
   import IconArrowPath from '@/components/icons/IconArrowPath.vue'
+  import IconCalendar from '@/components/icons/IconCalendar.vue'
   import IconCash from '@/components/icons/IconCash.vue'
   import IconCheck from '@/components/icons/IconCheck.vue'
   import IconClock from '@/components/icons/IconClock.vue'
@@ -27,6 +28,7 @@
   import TransactionReimbursementList from './TransactionReimbursementList.vue'
   import TransactionSettlementLinks from './TransactionSettlementLinks.vue'
   import { rowGridClass } from './rowGrid'
+  import { smoothingEnded } from '@/lib/amortization'
 
   /**
    * One transaction, one declaration.
@@ -42,9 +44,10 @@
    *   toggle stays in view: it is the one quick flip a line has. In
    *   selection mode a tap ticks the line.
    * - from `lg`, a table row: the secondary affordances (« + Note »,
-   *   « Étiquette », « Abonnement ») show on hover *and* on focus within
-   *   the row, never on hover alone; what exists (a note, tags, a
-   *   subscription badge, reimbursements) is always drawn.
+   *   « Étiquette », « Abonnement », « Étaler ») show on hover *and* on
+   *   focus within the row, never on hover alone; what exists (a note,
+   *   tags, a subscription or smoothing badge, reimbursements) is always
+   *   drawn.
    *
    * Every target reaches 44px on a touch screen, through an invisible halo
    * where the visible control is smaller.
@@ -91,6 +94,8 @@
     'mark-recurring': []
     'show-recurrence': []
     'unlink-recurrence': []
+    /** « Étaler sur… »: the smoothing dialog, to set, change or stop it. */
+    'open-amortization': []
   }>()
 
   const RECURRENCE_PERIOD_LABELS: Record<RecurrencePeriod, string> = {
@@ -170,10 +175,52 @@
     () => isExpense.value && !props.transaction.recurrence
   )
 
+  /**
+   * Only an expense is smoothed (agent-os/product/amortization-framework.md):
+   * the action is not offered on an income or a transfer.
+   */
+  const canSmooth = computed(
+    () => isExpense.value && props.transaction.amount < 0
+  )
+  const amortizationMonths = computed(
+    () => props.transaction.amortizationMonths ?? null
+  )
+  /**
+   * A smoothing reads like a subscription (same edge, same badge), in teal
+   * while its slices fall, grey and « terminé » once the last one has.
+   */
+  const smoothingStatus = computed<'ACTIVE' | 'STOPPED' | null>(() => {
+    if (amortizationMonths.value === null) return null
+    const today = new Date()
+    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+    return smoothingEnded(
+      props.transaction.date,
+      amortizationMonths.value,
+      currentMonth
+    )
+      ? 'STOPPED'
+      : 'ACTIVE'
+  })
+  /**
+   * The line's left edge, the subscription's first: blue for a running
+   * subscription, teal for a running smoothing (the Budget page's colour
+   * for it), grey once either has ended.
+   */
+  const edgeClass = computed(() => {
+    const recurrence = props.transaction.recurrence?.status
+    const status = recurrence ?? smoothingStatus.value
+    if (status === 'STOPPED') return 'border-l-gray-300 dark:border-l-slate-600'
+    if (recurrence === 'ACTIVE')
+      return 'border-l-blue-400 dark:border-l-blue-500'
+    if (status === 'ACTIVE') return 'border-l-teal-400 dark:border-l-teal-500'
+    return 'border-l-transparent'
+  })
+
   /** Whether the tags line has something to show on a phone. */
   const hasTagLineContent = computed(
     () =>
       Boolean(props.transaction.recurrence) ||
+      amortizationMonths.value !== null ||
       (props.transaction.tags ?? []).length > 0
   )
 
@@ -210,6 +257,17 @@
       icon: IconTag,
       testId: 'row-menu-tag',
     })
+    if (canSmooth.value) {
+      items.push({
+        key: 'amortization',
+        label:
+          amortizationMonths.value !== null
+            ? `Étalé sur ${amortizationMonths.value} mois…`
+            : 'Étaler sur plusieurs mois…',
+        icon: IconCalendar,
+        testId: 'row-menu-amortization',
+      })
+    }
     if (canFollow.value) {
       items.push({
         key: 'recurring',
@@ -248,6 +306,9 @@
             'button'
           ) ?? null
         )
+        break
+      case 'amortization':
+        emit('open-amortization')
         break
       case 'recurring':
         emit('mark-recurring')
@@ -290,17 +351,15 @@
 <template>
   <div
     class="group border-l-4 px-4 py-2.5 transition-colors hover:bg-gray-50 lg:py-3 dark:hover:bg-slate-800"
-    :class="{
-      'bg-primary-50/50 dark:bg-primary-900/10': selectionMode && selected,
-      // A subscription line reads apart at a glance: a blue edge while
-      // it runs, a grey one once it has ended. The left edge only: the
-      // divider below the row keeps the list's colour.
-      'border-l-blue-400 dark:border-l-blue-500':
-        transaction.recurrence?.status === 'ACTIVE',
-      'border-l-gray-300 dark:border-l-slate-600':
-        transaction.recurrence?.status === 'STOPPED',
-      'border-l-transparent': !transaction.recurrence,
-    }"
+    :class="[
+      {
+        'bg-primary-50/50 dark:bg-primary-900/10': selectionMode && selected,
+      },
+      // A subscription or a smoothed line reads apart at a glance by its
+      // edge. The left edge only: the divider below the row keeps the
+      // list's colour.
+      edgeClass,
+    ]"
     :data-recurring="transaction.recurrence ? 'true' : undefined"
   >
     <!-- ==================== CARD (below lg) ==================== -->
@@ -651,6 +710,27 @@
           class="h-8 w-8 shrink-0"
           data-testid="mark-recurring-placeholder"
         />
+        <!-- Smooth over several months: an expense only. A smoothed row
+             reaches the dialog through its badge too. -->
+        <BaseIconButton
+          v-if="canSmooth && !selectionMode"
+          size="sm"
+          :label="
+            amortizationMonths !== null
+              ? `Étalé sur ${amortizationMonths} mois, modifier`
+              : 'Étaler sur plusieurs mois'
+          "
+          :class="REVEAL_ON_HOVER"
+          data-testid="open-amortization"
+          @click="emit('open-amortization')"
+        >
+          <IconCalendar />
+        </BaseIconButton>
+        <span
+          v-else-if="!selectionMode"
+          aria-hidden="true"
+          class="h-8 w-8 shrink-0"
+        />
       </div>
     </div>
 
@@ -696,6 +776,28 @@
       >
         <IconClose />
       </BaseIconButton>
+      <!-- A smoothed expense says so, and over how long, in the subscription
+           badge's format but teal; the badge opens the dialog that changes
+           or stops it. -->
+      <button
+        v-if="amortizationMonths !== null"
+        type="button"
+        class="relative inline-flex min-h-[28px] items-center gap-1 rounded-full px-2 text-xs font-medium transition-colors pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 pointer-coarse:before:content-[''] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-default"
+        :class="
+          smoothingStatus === 'ACTIVE'
+            ? 'bg-teal-50 text-teal-800 hover:bg-teal-100 disabled:hover:bg-teal-50 dark:bg-teal-900/30 dark:text-teal-300 dark:hover:bg-teal-900/50'
+            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:hover:bg-gray-100 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600'
+        "
+        :title="`Compté en vie courante par tranches sur ${amortizationMonths} mois — modifier`"
+        :disabled="selectionMode"
+        data-testid="amortization-badge"
+        @click="emit('open-amortization')"
+      >
+        <IconCalendar class="h-3.5 w-3.5" />
+        Lissé · {{ amortizationMonths }} mois
+        <template v-if="smoothingStatus === 'STOPPED'"> · terminé </template>
+        <span class="sr-only">, modifier l'étalement</span>
+      </button>
       <TagChip
         v-for="t in transaction.tags ?? []"
         :key="t.id"

@@ -810,7 +810,8 @@ describe('TransactionsController', () => {
 
     /**
      * The phase 3 filters sit after the 21 earlier optional parameters, in
-     * this order: exceptional, nature, rhythm, categoryIds, recurrences.
+     * this order: exceptional, nature, rhythm, categoryIds, recurrences, then
+     * the smoothing filters: amortized, alsoIds.
      */
     const findAllWithPhase3 = (
       ...phase3: (string | undefined)[]
@@ -893,6 +894,33 @@ describe('TransactionsController', () => {
       )
     })
 
+    it('passes the smoothing filter and the extra rows through', async () => {
+      mockTransactionsService.findAllByUserPaginated.mockResolvedValue({
+        data: [],
+        total: 0,
+      })
+      const id = '550e8400-e29b-41d4-a716-446655440001'
+
+      await findAllWithPhase3(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'true',
+        id
+      )
+
+      expect(
+        mockTransactionsService.findAllByUserPaginated
+      ).toHaveBeenCalledWith(
+        mockUser.id,
+        { page: 1, limit: 20 },
+        { amortized: true, alsoIds: [id] },
+        undefined
+      )
+    })
+
     it('rejects a sort column outside the allowlist', async () => {
       await expect(
         controller.findAll(
@@ -967,6 +995,45 @@ describe('TransactionsController', () => {
 
       expect(result.categoryId).toBe(newCategoryId)
       expect(result.categoryName).toBe('Transport')
+    })
+
+    it('forwards the smoothing and returns it', async () => {
+      mockTransactionsService.update.mockResolvedValue({
+        ...mockTransaction,
+        amortizationMonths: 24,
+      })
+
+      const result = await controller.update(mockUser, mockTransaction.id, {
+        amortizationMonths: 24,
+      })
+
+      expect(result.amortizationMonths).toBe(24)
+      expect(mockTransactionsService.update).toHaveBeenCalledWith(
+        mockTransaction.id,
+        mockUser.id,
+        { amortizationMonths: 24 }
+      )
+    })
+
+    it('proposes the duration of its subcategory, to an expense only', async () => {
+      mockTransactionsService.update.mockResolvedValueOnce({
+        ...mockTransaction,
+        subcategoryRef: {
+          id: 'sub-home',
+          name: 'Maison et déco',
+          catalogKey: 'shopping.home',
+        },
+      })
+      const home = await controller.update(mockUser, mockTransaction.id, {})
+      mockTransactionsService.update.mockResolvedValueOnce({
+        ...mockTransaction,
+        amount: new Decimal(2000),
+        type: TransactionType.INCOME,
+      })
+      const salary = await controller.update(mockUser, mockTransaction.id, {})
+
+      expect(home.suggestedAmortizationMonths).toBe(48)
+      expect(salary.suggestedAmortizationMonths).toBeUndefined()
     })
   })
 

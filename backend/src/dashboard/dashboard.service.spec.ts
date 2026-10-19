@@ -2,11 +2,46 @@ import type { TestingModule } from '@nestjs/testing'
 import { Test } from '@nestjs/testing'
 import { DashboardService } from './dashboard.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { AmortizedSlicesService } from '../transactions/amortized-slices.service'
+import type { SmoothedPurchaseRow } from '../transactions/amortized-slices.service'
 import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
 
 /** Brought up to date before every summary; a cache these tests do not read. */
 const mockRecurrences = { refreshQuietly: vi.fn() }
+
+/** Smoothed purchases, everyday reading only; none unless a test says so. */
+const mockAmortizedSlices = { read: vi.fn() }
+
+/** A smoothed purchase as the slices query returns it. */
+function smoothedRow(
+  overrides: Partial<SmoothedPurchaseRow> = {}
+): SmoothedPurchaseRow {
+  return {
+    transaction_id: 'tx-iphone',
+    description: 'IPHONE',
+    date: '2026-06-12',
+    months: 24,
+    net: 1300,
+    monthly: 54.17,
+    first_month: '2026-06',
+    last_month: '2028-05',
+    category_id: 'cat-High-tech',
+    category_name: 'High-tech',
+    category_icon: null,
+    subcategory_id: 'sub-Telephone',
+    subcategory: 'Telephone',
+    subcategory_icon: null,
+    nature: 'PLEASURE',
+    rhythm: 'VARIABLE',
+    is_recurring: false,
+    pending: 0,
+    source_month: '2026-06',
+    source_in_window: false,
+    slices: [],
+    ...overrides,
+  }
+}
 
 describe('DashboardService', () => {
   let service: DashboardService
@@ -125,12 +160,14 @@ describe('DashboardService', () => {
           useValue: mockFilterPreferencesService,
         },
         { provide: RecurrencesService, useValue: mockRecurrences },
+        { provide: AmortizedSlicesService, useValue: mockAmortizedSlices },
       ],
     }).compile()
 
     service = module.get<DashboardService>(DashboardService)
 
     vi.clearAllMocks()
+    mockAmortizedSlices.read.mockResolvedValue([])
     mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
       false
     )
@@ -1590,6 +1627,110 @@ describe('DashboardService', () => {
       expect(travel?.amount).toBe(500)
       expect(travel?.exceptionalAmount).toBe(300)
       expect(travel?.everydayAmount).toBe(200)
+    })
+  })
+
+  describe('a smoothed purchase', () => {
+    it('trades its own month for its slices in the everyday reading only', async () => {
+      setupMocks([
+        createRow({
+          month_key: '2026-06',
+          category_name: 'High-tech',
+          subcategory: 'Telephone',
+          total_amount: 1300,
+          nature: 'PLEASURE',
+          rhythm: 'VARIABLE',
+        }),
+      ])
+      mockAmortizedSlices.read.mockResolvedValue([
+        smoothedRow({
+          source_in_window: true,
+          slices: [
+            { month: '2026-06', amount: 54.17 },
+            { month: '2026-07', amount: 54.17 },
+          ],
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2026-06-01',
+        endDate: '2026-07-31',
+        includeCategoryBreakdown: true,
+      })
+
+      // Real: untouched, the phone in June.
+      expect(result.monthlyData.map(m => [m.month, m.netExpenses])).toEqual([
+        ['2026-06', 1300],
+        ['2026-07', 0],
+      ])
+      expect(result.totalExpenses).toBe(1300)
+      expect(result.spendingStructure.variable).toBe(1300)
+      // Everyday: a slice a month, read as committed.
+      expect(
+        result.monthlyData.map(m => [
+          m.everydayNetExpenses,
+          m.amortizedExpenses,
+        ])
+      ).toEqual([
+        [54.17, 54.17],
+        [54.17, 54.17],
+      ])
+      expect(result.everydaySpendingStructure).toMatchObject({
+        variable: 0,
+        committed: 108.34,
+        pleasure: 108.34,
+        recurring: 0,
+        total: 108.34,
+      })
+      const hightech = result.expensesByCategory[0]
+      expect(hightech?.amount).toBe(1300)
+      expect(hightech?.everydayAmount).toBe(108.34)
+      expect(hightech?.everydayMonthlyAmounts).toEqual([54.17, 54.17])
+      expect(hightech?.amortizedAmount).toBe(108.34)
+      expect(hightech?.amortizedMonthlyAmounts).toEqual([54.17, 54.17])
+      expect(hightech?.subcategories?.[0]).toMatchObject({
+        amount: 1300,
+        everydayAmount: 108.34,
+        amortizedAmount: 108.34,
+      })
+    })
+
+    it('stops the slices at the current month when the period has no end', async () => {
+      setupMocks([])
+
+      await service.getSummary(mockUserId, {})
+
+      const [query] = mockAmortizedSlices.read.mock.calls[0] as [
+        { firstMonth: string; lastMonth: string; scope: { strings: string[] } },
+      ]
+      const now = new Date()
+      expect(query.firstMonth).toBe('1970-01-01')
+      expect(query.lastMonth).toBe(
+        `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`
+      )
+      expect(query.scope.strings.join('')).toContain('is_excluded_from_stats')
+    })
+
+    it('leaves a month and a category it never touches as they were', async () => {
+      setupMocks([
+        createRow({
+          month_key: '2026-07',
+          category_name: 'Courses',
+          total_amount: 200,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2026-07-01',
+        endDate: '2026-07-31',
+        includeCategoryBreakdown: true,
+      })
+
+      expect(result.monthlyData[0]).not.toHaveProperty('amortizedExpenses')
+      expect(result.expensesByCategory[0]).not.toHaveProperty('amortizedAmount')
+      expect(
+        result.expensesByCategory[0]?.subcategories?.[0]
+      ).not.toHaveProperty('everydayAmount')
     })
   })
 })

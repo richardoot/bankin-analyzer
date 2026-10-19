@@ -6,6 +6,7 @@ import {
 } from '@/lib/api'
 import { useFiltersStore } from '@/stores/filters'
 import { useAccountsStore } from '@/stores/accounts'
+import { isAmortizationCarrier } from '@/lib/amortization'
 
 export interface MonthlyData {
   month: string // "2024-01", "2024-02", ...
@@ -85,9 +86,28 @@ export function useDashboardData() {
     () => filtersStore.lastSyncError ?? null
   )
 
-  // Transform backend data to component format
-  const monthlyData = computed<MonthlyData[]>(
-    () => summaryData.value?.monthlyData ?? []
+  /**
+   * The months of the period. A month only slices of smoothed purchases
+   * reach (nothing real in it) carries the everyday reading only: the real
+   * reading leaves it out, to look — and divide — exactly as it did.
+   */
+  const monthlyData = computed<MonthlyData[]>(() => {
+    const months = summaryData.value?.monthlyData ?? []
+    if (breakdownMode.value === 'everyday') return months
+    return months.filter(
+      m =>
+        m.amortizedExpenses === undefined ||
+        m.expenses !== 0 ||
+        m.income !== 0 ||
+        m.netExpenses !== 0
+    )
+  })
+
+  /** Whether the everyday reading spreads a smoothed purchase here. */
+  const hasAmortizedExpenses = computed(() =>
+    (summaryData.value?.monthlyData ?? []).some(
+      m => m.amortizedExpenses !== undefined
+    )
   )
 
   const expensesByMonth = computed<ChartData>(() => ({
@@ -183,13 +203,21 @@ export function useDashboardData() {
       ? averageEverydayMonthlyExpenses.value
       : averageMonthlyExpenses.value
   )
-  /** What the two readings differ by, per month: the events. */
-  const averageExceptionalMonthlyExpenses = computed(
-    () =>
-      Math.round(
-        (averageMonthlyExpenses.value - averageEverydayMonthlyExpenses.value) *
-          100
-      ) / 100
+  /**
+   * The events, per month. Read from their own total: the everyday reading
+   * also spreads smoothed purchases, so the gap between the two readings is
+   * no longer the events alone once one is smoothed.
+   */
+  const averageExceptionalMonthlyExpenses = computed(() =>
+    hasAmortizedExpenses.value
+      ? Math.round(
+          (totalExceptionalExpenses.value / periodMonths.value) * 100
+        ) / 100
+      : Math.round(
+          (averageMonthlyExpenses.value -
+            averageEverydayMonthlyExpenses.value) *
+            100
+        ) / 100
   )
 
   // Per-month series for sparklines
@@ -234,9 +262,13 @@ export function useDashboardData() {
   })
 
   // Detailed category breakdown (with monthlyAmounts, subcategories, etc.)
-  const expenseCategoriesDetailed = computed(
-    () => summaryData.value?.expensesByCategory ?? []
-  )
+  // The real reading leaves out a category only slices reach.
+  const expenseCategoriesDetailed = computed(() => {
+    const categories = summaryData.value?.expensesByCategory ?? []
+    return isEverydayMode.value
+      ? categories
+      : categories.filter(c => !isAmortizationCarrier(c))
+  })
   const incomeCategoriesDetailed = computed(
     () => summaryData.value?.incomeByCategory ?? []
   )
@@ -413,6 +445,7 @@ export function useDashboardData() {
     averageEverydayMonthlyExpenses,
     exceptionalEvents,
     hasExceptionalExpenses,
+    hasAmortizedExpenses,
     expensesSparkline,
     incomeSparkline,
     savingsSparkline,

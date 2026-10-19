@@ -120,6 +120,18 @@ export interface TransactionFilters {
   categoryIds?: (string | null)[]
   /** The lines of any of these recurring charges, named as `recurrence`. */
   recurrences?: { merchantKey: string; amountBucket: number }[]
+  /**
+   * Only the rows smoothed over several months (`amortizationMonths` set),
+   * whatever the everyday reading then makes of them.
+   */
+  amortized?: boolean
+  /**
+   * Rows shown on top of what the other filters match: a budget cell read
+   * « Vie courante » counts the slices of a smoothed purchase dated in
+   * another month, and its link names that purchase so the list shows it
+   * too. Unlike `ids`, a union, not a narrowing; still scoped to the user.
+   */
+  alsoIds?: string[]
 }
 
 /**
@@ -160,6 +172,9 @@ export interface RawTransactionFilters {
   categoryIds?: string | string[]
   /** `<amountBucket>:<merchantKey>` each; comma-separated or an array. */
   recurrences?: string | string[]
+  amortized?: string | boolean
+  /** Comma-separated in a query string, an array in a JSON body. */
+  alsoIds?: string | string[]
 }
 
 /**
@@ -167,7 +182,10 @@ export interface RawTransactionFilters {
  * cap is refused rather than truncated: a silently shortened list would
  * show a wrong answer with a straight face.
  */
-function parseIds(value: string | string[] | undefined): string[] | null {
+function parseIds(
+  value: string | string[] | undefined,
+  name = 'ids'
+): string[] | null {
   if (value === undefined) return null
   const raw = (Array.isArray(value) ? value : value.split(','))
     .map(id => id.trim())
@@ -175,7 +193,7 @@ function parseIds(value: string | string[] | undefined): string[] | null {
   if (raw.length === 0) return null
   if (raw.length > MAX_TRANSACTION_IDS) {
     throw new BadRequestException(
-      `ids accepts at most ${MAX_TRANSACTION_IDS} values, got ${raw.length}`
+      `${name} accepts at most ${MAX_TRANSACTION_IDS} values, got ${raw.length}`
     )
   }
   return [...new Set(raw.filter(id => UUID_PATTERN.test(id)))]
@@ -285,6 +303,18 @@ export function parseTransactionFilters(
 
   const ids = parseIds(raw.ids)
   if (ids) filters.ids = ids
+  // An extra row that is not an id adds nothing: dropped, and an empty
+  // union is no union at all.
+  const alsoIds = parseIds(raw.alsoIds, 'alsoIds')
+  if (alsoIds && alsoIds.length > 0) filters.alsoIds = alsoIds
+
+  if (raw.amortized !== undefined) {
+    const amortized =
+      typeof raw.amortized === 'boolean'
+        ? raw.amortized
+        : raw.amortized === 'true'
+    if (amortized) filters.amortized = true
+  }
 
   // Category ids are uuids; `none` stands for the rows filed nowhere.
   // What is neither is dropped, and a list left empty matches nothing.
@@ -532,12 +562,14 @@ export function buildTransactionWhere(
     }
   }
 
+  if (filters?.amortized) and.push({ amortizationMonths: { not: null } })
+
   // Date window: each bound is optional and applied independently.
   const dateFilter: Prisma.DateTimeFilter = {}
   if (filters?.startDate) dateFilter.gte = filters.startDate
   if (filters?.endDate) dateFilter.lte = filters.endDate
 
-  return {
+  const where: Prisma.TransactionWhereInput = {
     userId,
     ...(filters?.type && { type: filters.type }),
     // `null` is a value here: the rows filed nowhere.
@@ -568,4 +600,14 @@ export function buildTransactionWhere(
     ...(Object.keys(dateFilter).length > 0 && { date: dateFilter }),
     ...(and.length > 0 && { AND: and }),
   }
+
+  // The named extra rows join whatever the rest matched, the user's own
+  // only: a union can widen a view, never reach across accounts.
+  if (filters?.alsoIds && filters.alsoIds.length > 0) {
+    return {
+      userId,
+      OR: [where, { id: { in: filters.alsoIds } }],
+    }
+  }
+  return where
 }

@@ -35,8 +35,17 @@ export class MonthlyDataDto {
   /** Share of `expenses` carried by transactions tagged as exceptional */
   exceptionalExpenses!: number
 
-  /** `netExpenses` minus the exceptional share — the everyday lifestyle */
+  /**
+   * `netExpenses` minus the exceptional share — the everyday lifestyle — with
+   * each smoothed purchase traded for its slices.
+   */
   everydayNetExpenses!: number
+
+  /**
+   * Slices of smoothed purchases in `everydayNetExpenses`. Only on a month a
+   * smoothed purchase touches.
+   */
+  amortizedExpenses?: number
 }
 
 export class SubcategoryDataDto {
@@ -61,6 +70,19 @@ export class SubcategoryDataDto {
 
   /** Average per month for the subcategory */
   averagePerMonth!: number
+
+  /**
+   * Everyday counterpart of `amount`: exceptional rows out, smoothed
+   * purchases spread into their slices. Only on a line a smoothed purchase
+   * touches this period.
+   */
+  everydayAmount?: number
+
+  /** `everydayAmount` per month. Same presence rule. */
+  everydayAveragePerMonth?: number
+
+  /** Slices of smoothed purchases falling in the period. Same presence rule. */
+  amortizedAmount?: number
 }
 
 export class CategoryDataDto {
@@ -103,7 +125,10 @@ export class CategoryDataDto {
    */
   exceptionalAmount?: number
 
-  /** `amount - exceptionalAmount`: the recurring, predictable part */
+  /**
+   * `amount - exceptionalAmount`, the recurring, predictable part, with each
+   * smoothed purchase traded for its slices falling in the period.
+   */
   everydayAmount?: number
 
   /**
@@ -115,6 +140,15 @@ export class CategoryDataDto {
 
   /** Per-month everyday amounts, matching monthLabels indexes */
   everydayMonthlyAmounts?: number[]
+
+  /**
+   * Slices of smoothed purchases in `everydayAmount` — the « dont X €
+   * lissés ». Only with the breakdown and when one touches the category.
+   */
+  amortizedAmount?: number
+
+  /** Same, per month, matching monthLabels. Same presence rule. */
+  amortizedMonthlyAmounts?: number[]
 }
 
 /** One exceptional event overlapping the dashboard period. */

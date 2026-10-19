@@ -9,7 +9,16 @@ import {
   netAmountSql,
   reimbursementCreditCtes,
 } from '../reimbursements/reimbursement-credit.sql'
+import {
+  AmortizedSlicesService,
+  everydayShift,
+  everydayShiftByMonth,
+  slicesTotal,
+  utcMonthStart,
+} from '../transactions/amortized-slices.service'
+import type { SmoothedPurchaseRow } from '../transactions/amortized-slices.service'
 import type {
+  AmortizedPurchaseDto,
   BudgetStatisticsResponseDto,
   BudgetStatisticsFiltersDto,
   CategoryAverageDto,
@@ -59,6 +68,27 @@ interface SubcategoryTotal {
   name: string
   total: number
   count: number
+  /** Share of `total` carried by exceptional transactions. */
+  exceptional: number
+}
+
+/**
+ * What the everyday reading changes on a breakdown line once smoothed
+ * purchases are spread: + their slices in the window, − the purchases the
+ * real reading counted. See AmortizedSlicesService.
+ */
+interface EverydayShift {
+  /** Net change of the everyday total. */
+  shift: number
+  /** Slices falling in the window — the « dont X € lissés ». */
+  slices: number
+}
+
+/** The same, per category, month by month too. */
+interface CategoryEverydayShift extends EverydayShift {
+  shiftByMonth: Map<string, number>
+  slicesByMonth: Map<string, number>
+  subcategories: Map<string, EverydayShift>
 }
 
 /** Debt still owed on an expense that falls outside the statistics window. */
@@ -79,7 +109,8 @@ interface MonthlyBreakdownRow {
 export class BudgetsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly filterPreferences: FilterPreferencesService
+    private readonly filterPreferences: FilterPreferencesService,
+    private readonly amortizedSlices: AmortizedSlicesService
   ) {}
 
   /**
@@ -116,8 +147,9 @@ export class BudgetsService {
       deductPending: shouldDeductPending,
     })
 
-    const [rows, monthlyRows, outOfPeriodPendingRows] = await Promise.all([
-      this.prisma.$queryRaw<AggregatedTransactionRow[]>(Prisma.sql`
+    const [rows, monthlyRows, outOfPeriodPendingRows, smoothedRows] =
+      await Promise.all([
+        this.prisma.$queryRaw<AggregatedTransactionRow[]>(Prisma.sql`
         WITH exceptional_tx AS (
           SELECT DISTINCT tt.transaction_id
           FROM app.transaction_tags tt
@@ -153,8 +185,8 @@ export class BudgetsService {
           AND COALESCE(a.is_excluded_from_budget, false) = false
         GROUP BY t.category_id, c.name, c.icon, t.type, t.subcategory_id, sc.name, (et.transaction_id IS NOT NULL)
       `),
-      shouldIncludeMonthly
-        ? this.prisma.$queryRaw<MonthlyBreakdownRow[]>(Prisma.sql`
+        shouldIncludeMonthly
+          ? this.prisma.$queryRaw<MonthlyBreakdownRow[]>(Prisma.sql`
             WITH exceptional_tx AS (
               SELECT DISTINCT tt.transaction_id
               FROM app.transaction_tags tt
@@ -182,12 +214,12 @@ export class BudgetsService {
             GROUP BY t.category_id, t.type, TO_CHAR(t.date, 'YYYY-MM'), (et.transaction_id IS NOT NULL)
             ORDER BY t.category_id, TO_CHAR(t.date, 'YYYY-MM')
           `)
-        : Promise.resolve([]),
-      // Debts on expenses outside the window, keyed by the expense's own
-      // category — the deduction anchors on the spending now, so no category
-      // mapping is involved. Only fetched when the caller asks for it.
-      shouldDeductPending && includeAllPending
-        ? this.prisma.$queryRaw<OutOfPeriodPendingRow[]>(Prisma.sql`
+          : Promise.resolve([]),
+        // Debts on expenses outside the window, keyed by the expense's own
+        // category — the deduction anchors on the spending now, so no category
+        // mapping is involved. Only fetched when the caller asks for it.
+        shouldDeductPending && includeAllPending
+          ? this.prisma.$queryRaw<OutOfPeriodPendingRow[]>(Prisma.sql`
             SELECT
               t.category_id,
               SUM(
@@ -212,8 +244,20 @@ export class BudgetsService {
               AND COALESCE(a.is_excluded_from_budget, false) = false
             GROUP BY t.category_id
           `)
-        : Promise.resolve([] as OutOfPeriodPendingRow[]),
-    ])
+          : Promise.resolve([] as OutOfPeriodPendingRow[]),
+        // The everyday reading only: smoothed purchases spread over their
+        // months, in the same scope as the aggregation above. The real reading
+        // never sees this query.
+        this.amortizedSlices.read({
+          userId,
+          netAmount,
+          start: startDate,
+          end: endDate,
+          firstMonth: utcMonthStart(startDate),
+          lastMonth: utcMonthStart(endDate),
+          scope: Prisma.sql`t.category_id IS NOT NULL AND COALESCE(a.is_excluded_from_budget, false) = false`,
+        }),
+      ])
 
     // Process aggregated rows into maps
     const expenseMap = new Map<
@@ -260,16 +304,19 @@ export class BudgetsService {
       count: number
     ): void => {
       const key = row.subcategory_id ?? ''
+      const exceptional = row.is_exceptional ? amount : 0
       const existing = subcategories.get(key)
       if (existing) {
         existing.total += amount
         existing.count += count
+        existing.exceptional += exceptional
       } else {
         subcategories.set(key, {
           subcategoryId: row.subcategory_id,
           name: row.subcategory_id ? row.subcategory : '',
           total: amount,
           count,
+          exceptional,
         })
       }
     }
@@ -454,10 +501,12 @@ export class BudgetsService {
     // for sizing a future plan against money still owed today — needs its own
     // pass. Applied only to categories the period actually shows, exactly as
     // before.
+    const outOfPeriodPendingApplied = new Set<string>()
     if (shouldDeductPending && includeAllPending) {
       for (const row of outOfPeriodPendingRows) {
         const expenseData = expenseMap.get(row.category_id)
         if (!expenseData) continue
+        outOfPeriodPendingApplied.add(row.category_id)
         expenseData.total -= row.pending_amount
         totalExpenses -= row.pending_amount
         totalPendingReimbursements += row.pending_amount
@@ -468,6 +517,23 @@ export class BudgetsService {
         )
       }
     }
+
+    const shiftByCategory = this.everydayShifts(
+      smoothedRows,
+      expenseMap,
+      // The out-of-period pass took the whole debt of a purchase dated
+      // before the window off its category, while the slices in the window
+      // are already net of it: the everyday reading gives it back, so the
+      // debt is deducted once.
+      p =>
+        shouldDeductPending &&
+        includeAllPending &&
+        !p.source_in_window &&
+        p.slices.length > 0 &&
+        outOfPeriodPendingApplied.has(p.category_id ?? '')
+          ? p.pending
+          : 0
+    )
 
     // Net expense carried by exceptional events, accumulated while building
     // the category DTOs below.
@@ -481,23 +547,37 @@ export class BudgetsService {
         // Subcategory totals are exact: each carries the credit of its own
         // transactions. Sharing the deduction out pro rata used to move money
         // between subcategories that had been refunded nothing.
+        const shift = shiftByCategory.get(e.categoryId)
         const subcategories: SubcategoryAverageDto[] = Array.from(
           e.subcategories.values()
         )
-          .map(data => ({
-            subcategoryId: data.subcategoryId,
-            subcategory: data.name,
-            totalAmount: this.round(data.total),
-            transactionCount: data.count,
-            averagePerMonth: this.round(data.total / periodMonths),
-          }))
+          .map(data => {
+            const line: SubcategoryAverageDto = {
+              subcategoryId: data.subcategoryId,
+              subcategory: data.name,
+              totalAmount: this.round(data.total),
+              transactionCount: data.count,
+              averagePerMonth: this.round(data.total / periodMonths),
+            }
+            // Only on a line a smoothed purchase touches, so every other
+            // line reads exactly as before.
+            const lineShift = shift?.subcategories.get(data.subcategoryId ?? '')
+            if (lineShift) {
+              const everyday = data.total - data.exceptional + lineShift.shift
+              line.everydayAmount = this.round(everyday)
+              line.everydayAveragePerMonth = this.round(everyday / periodMonths)
+              line.amortizedAmount = this.round(lineShift.slices)
+            }
+            return line
+          })
           .sort((a, b) => b.totalAmount - a.totalAmount)
 
         // Both shares are sums of netted transactions, so the split is exact
-        // rather than a ratio taken on gross and re-applied to net.
+        // rather than a ratio taken on gross and re-applied to net. Smoothed
+        // purchases then trade their own month for their slices.
         const exceptionalAmount =
           netExceptionalByCategory.get(e.categoryId) ?? 0
-        const everydayAmount = e.total - exceptionalAmount
+        const everydayAmount = e.total - exceptionalAmount + (shift?.shift ?? 0)
         totalExceptionalExpenses += exceptionalAmount
 
         const result: CategoryAverageDto = {
@@ -527,14 +607,35 @@ export class BudgetsService {
           result.pendingReimbursement = this.round(pendingReimb)
         }
 
+        if (shift) {
+          result.amortizedAmount = this.round(shift.slices)
+        }
+
         if (shouldIncludeMonthly) {
-          const monthly = monthlyByCategory.get(e.categoryId)
+          // A category only slices reach has no row of its own this period:
+          // its real months are zero.
+          const zeros = (): number[] => allMonths.map(() => 0)
+          const monthly =
+            monthlyByCategory.get(e.categoryId) ?? (shift ? zeros() : undefined)
           if (monthly) {
             result.monthlyAmounts = monthly
           }
-          const everydayMonthly = everydayMonthlyByCategory.get(e.categoryId)
+          const everydayMonthly =
+            everydayMonthlyByCategory.get(e.categoryId) ??
+            (shift ? zeros() : undefined)
           if (everydayMonthly) {
-            result.everydayMonthlyAmounts = everydayMonthly
+            result.everydayMonthlyAmounts = shift
+              ? everydayMonthly.map((v, i) =>
+                  this.round(
+                    v + (shift.shiftByMonth.get(allMonths[i] ?? '') ?? 0)
+                  )
+                )
+              : everydayMonthly
+          }
+          if (shift) {
+            result.amortizedMonthlyAmounts = allMonths.map(m =>
+              this.round(shift.slicesByMonth.get(m) ?? 0)
+            )
           }
         }
 
@@ -604,8 +705,117 @@ export class BudgetsService {
     if (shouldIncludeMonthly && allMonths.length > 0) {
       response.monthLabels = allMonths
     }
+    if (smoothedRows.length > 0) {
+      response.amortizedPurchases = smoothedRows.map(p =>
+        this.toAmortizedPurchase(p)
+      )
+    }
 
     return response
+  }
+
+  /**
+   * The everyday shift of every smoothed purchase, per category and
+   * subcategory. A category or a line only slices reach this period is added
+   * to `expenseMap` with nothing real in it, so the everyday reading can show
+   * it.
+   */
+  private everydayShifts(
+    smoothedRows: SmoothedPurchaseRow[],
+    expenseMap: Map<
+      string,
+      {
+        categoryId: string
+        categoryName: string
+        categoryIcon: string | null
+        total: number
+        count: number
+        subcategories: Map<string, SubcategoryTotal>
+      }
+    >,
+    pendingGivenBack: (p: SmoothedPurchaseRow) => number
+  ): Map<string, CategoryEverydayShift> {
+    const shifts = new Map<string, CategoryEverydayShift>()
+    for (const p of smoothedRows) {
+      // The scope requires a category; a row without one never comes back.
+      if (!p.category_id) continue
+      const categoryId = p.category_id
+
+      let category = expenseMap.get(categoryId)
+      if (!category) {
+        category = {
+          categoryId,
+          categoryName: p.category_name,
+          categoryIcon: p.category_icon,
+          total: 0,
+          count: 0,
+          subcategories: new Map(),
+        }
+        expenseMap.set(categoryId, category)
+      }
+      const lineKey = p.subcategory_id ?? ''
+      if (!category.subcategories.has(lineKey)) {
+        category.subcategories.set(lineKey, {
+          subcategoryId: p.subcategory_id,
+          name: p.subcategory_id ? p.subcategory : '',
+          total: 0,
+          count: 0,
+          exceptional: 0,
+        })
+      }
+
+      let entry = shifts.get(categoryId)
+      if (!entry) {
+        entry = {
+          shift: 0,
+          slices: 0,
+          shiftByMonth: new Map(),
+          slicesByMonth: new Map(),
+          subcategories: new Map(),
+        }
+        shifts.set(categoryId, entry)
+      }
+
+      const shift = everydayShift(p) + pendingGivenBack(p)
+      const slices = slicesTotal(p)
+      entry.shift += shift
+      entry.slices += slices
+      for (const [month, amount] of everydayShiftByMonth(p)) {
+        entry.shiftByMonth.set(
+          month,
+          (entry.shiftByMonth.get(month) ?? 0) + amount
+        )
+      }
+      for (const slice of p.slices) {
+        entry.slicesByMonth.set(
+          slice.month,
+          (entry.slicesByMonth.get(slice.month) ?? 0) + slice.amount
+        )
+      }
+      const line = entry.subcategories.get(lineKey) ?? { shift: 0, slices: 0 }
+      line.shift += shift
+      line.slices += slices
+      entry.subcategories.set(lineKey, line)
+    }
+    return shifts
+  }
+
+  private toAmortizedPurchase(p: SmoothedPurchaseRow): AmortizedPurchaseDto {
+    return {
+      transactionId: p.transaction_id,
+      description: p.description,
+      date: p.date,
+      months: p.months,
+      netAmount: this.round(p.net),
+      monthlyAmount: this.round(p.monthly),
+      firstMonth: p.first_month,
+      lastMonth: p.last_month,
+      categoryId: p.category_id,
+      subcategoryId: p.subcategory_id,
+      amountInPeriod: this.round(slicesTotal(p)),
+      sliceMonthsInPeriod: p.slices.map(s => s.month),
+      dateInPeriod: p.source_in_window,
+    }
   }
 
   /**

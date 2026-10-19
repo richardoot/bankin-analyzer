@@ -104,6 +104,8 @@ describe('parseTransactionsQuery', () => {
     rhythm: 'none',
     categoryIds: ['cat-2', 'none'],
     recurrences: ['15:com netflix', '9:spotify'],
+    amortized: true,
+    alsoIds: ['tx-3'],
     label: 'Dettes ouvertes de Julien',
     gross: true,
     sort: 'amount',
@@ -176,6 +178,13 @@ describe('parseTransactionsQuery', () => {
     ).toEqual({ categoryIds: ['a', 'b'] })
   })
 
+  it('carries the smoothed rows, and the purchases a figure adds by their slices', () => {
+    expect(
+      transactionsQuery({ amortized: true, alsoIds: ['tx-1', ' tx-1', ''] })
+    ).toEqual({ amortized: '1', also: 'tx-1' })
+    expect(parseTransactionsQuery({ amortized: 'yes', also: ' ' })).toEqual({})
+  })
+
   it('reads an id list, blanks removed', () => {
     expect(parseTransactionsQuery({ ids: 'a, b,,c' })).toEqual({
       ids: ['a', 'b', 'c'],
@@ -209,6 +218,8 @@ describe('isTransactionsContext', () => {
     expect(isTransactionsContext({ syncRunId: 'r' })).toBe(true)
     expect(isTransactionsContext({ ids: ['a'] })).toBe(true)
     expect(isTransactionsContext({ ids: [] })).toBe(false)
+    expect(isTransactionsContext({ alsoIds: ['a'] })).toBe(true)
+    expect(isTransactionsContext({ amortized: true })).toBe(false)
   })
 })
 

@@ -39,6 +39,7 @@ const mockTransaction = {
   subcategory: 'Restaurant - Autres',
   note: null,
   isPointed: false,
+  amortizationMonths: null as number | null,
   importHistoryId: null,
   createdAt: new Date('2024-01-15T10:30:00.000Z'),
   updatedAt: new Date('2024-01-15T10:30:00.000Z'),
@@ -114,6 +115,9 @@ const mockPrismaService = {
   },
   filterPreferences: {
     findUnique: vi.fn(),
+  },
+  transactionTag: {
+    findMany: vi.fn(),
   },
 }
 
@@ -1494,9 +1498,203 @@ describe('TransactionsService', () => {
   })
 
   // -------------------------------------------------------------------
+  // update: smoothing (amortizationMonths)
+  // -------------------------------------------------------------------
+  describe('update: smoothing', () => {
+    const smoothed = { ...mockTransaction, amortizationMonths: 24 }
+
+    it('smooths an expense over the months asked', async () => {
+      mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction)
+      mockPrismaService.transactionTag.findMany.mockResolvedValue([])
+      mockPrismaService.transaction.update.mockResolvedValue(smoothed)
+
+      const result = await service.update(mockTransaction.id, mockUserId, {
+        amortizationMonths: 24,
+      })
+
+      expect(result.amortizationMonths).toBe(24)
+      expect(mockPrismaService.transactionTag.findMany).toHaveBeenCalledWith({
+        where: {
+          transactionId: mockTransaction.id,
+          tag: { isExceptional: true },
+        },
+        select: { tag: { select: { name: true } } },
+      })
+      expect(mockPrismaService.transaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { amortizationMonths: 24 } })
+      )
+    })
+
+    it('stops smoothing on null, whatever the row carries', async () => {
+      mockPrismaService.transaction.findFirst.mockResolvedValue(smoothed)
+      mockPrismaService.transaction.update.mockResolvedValue(mockTransaction)
+
+      await service.update(mockTransaction.id, mockUserId, {
+        amortizationMonths: null,
+      })
+
+      expect(mockPrismaService.transactionTag.findMany).not.toHaveBeenCalled()
+      expect(mockPrismaService.transaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { amortizationMonths: null } })
+      )
+    })
+
+    it.each([1, 61, 0, -12, 2.5, Number.NaN])(
+      'refuses %s months',
+      async months => {
+        mockPrismaService.transaction.findFirst.mockResolvedValue(
+          mockTransaction
+        )
+
+        await expect(
+          service.update(mockTransaction.id, mockUserId, {
+            amortizationMonths: months,
+          })
+        ).rejects.toThrow(/de 2 à 60/)
+        expect(mockPrismaService.transaction.update).not.toHaveBeenCalled()
+      }
+    )
+
+    it('refuses a value that is not a number', async () => {
+      await expect(
+        service.update(mockTransaction.id, mockUserId, {
+          amortizationMonths: '24' as unknown as number,
+        })
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('refuses to smooth an income', async () => {
+      mockPrismaService.transaction.findFirst.mockResolvedValue({
+        ...mockTransaction,
+        amount: new Decimal(1200),
+        type: TransactionType.INCOME,
+      })
+
+      await expect(
+        service.update(mockTransaction.id, mockUserId, {
+          amortizationMonths: 12,
+        })
+      ).rejects.toThrow(/Seule une dépense peut être étalée/)
+      expect(mockPrismaService.transaction.update).not.toHaveBeenCalled()
+    })
+
+    it('refuses a positive amount even filed under an expense category', async () => {
+      // A refund filed under its expense's category: money in, nothing to spread.
+      mockPrismaService.transaction.findFirst.mockResolvedValue({
+        ...mockTransaction,
+        amount: new Decimal(45.5),
+      })
+
+      await expect(
+        service.update(mockTransaction.id, mockUserId, {
+          amortizationMonths: 12,
+        })
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('refuses a transfer', async () => {
+      mockPrismaService.transaction.findFirst.mockResolvedValue({
+        ...mockTransaction,
+        type: TransactionType.TRANSFER,
+      })
+
+      await expect(
+        service.update(mockTransaction.id, mockUserId, {
+          amortizationMonths: 12,
+        })
+      ).rejects.toThrow(BadRequestException)
+    })
+
+    it('refuses to smooth a row carrying an exceptional tag, naming it', async () => {
+      mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction)
+      mockPrismaService.transactionTag.findMany.mockResolvedValue([
+        { tag: { name: 'Mariage' } },
+      ])
+
+      await expect(
+        service.update(mockTransaction.id, mockUserId, {
+          amortizationMonths: 24,
+        })
+      ).rejects.toThrow(/étiquette exceptionnelle « Mariage »/)
+      expect(mockPrismaService.transaction.update).not.toHaveBeenCalled()
+    })
+
+    it('refuses to file a smoothed row under a transfer category', async () => {
+      mockPrismaService.transaction.findFirst.mockResolvedValue(smoothed)
+      mockPrismaService.category.findFirst.mockResolvedValue({
+        id: 'savings',
+        userId: mockUserId,
+        type: TransactionType.TRANSFER,
+      })
+
+      await expect(
+        service.update(mockTransaction.id, mockUserId, {
+          categoryId: 'savings',
+        })
+      ).rejects.toThrow(/Seule une dépense peut être étalée/)
+      expect(mockPrismaService.transaction.update).not.toHaveBeenCalled()
+    })
+
+    it('files a row under a transfer category when the same call stops smoothing it', async () => {
+      mockPrismaService.transaction.findFirst.mockResolvedValue(smoothed)
+      mockPrismaService.category.findFirst.mockResolvedValue({
+        id: 'savings',
+        userId: mockUserId,
+        type: TransactionType.TRANSFER,
+      })
+      mockPrismaService.transaction.update.mockResolvedValue(mockTransaction)
+
+      await service.update(mockTransaction.id, mockUserId, {
+        categoryId: 'savings',
+        amortizationMonths: null,
+      })
+
+      expect(mockPrismaService.transaction.update).toHaveBeenCalled()
+    })
+
+    it('leaves a smoothed row alone on an unrelated edit', async () => {
+      mockPrismaService.transaction.findFirst.mockResolvedValue(smoothed)
+      mockPrismaService.transaction.update.mockResolvedValue(smoothed)
+
+      await service.update(mockTransaction.id, mockUserId, { note: 'iPhone' })
+
+      expect(mockPrismaService.transactionTag.findMany).not.toHaveBeenCalled()
+      expect(mockPrismaService.transaction.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { note: 'iPhone' } })
+      )
+    })
+  })
+
+  // -------------------------------------------------------------------
   // bulkUpdate
   // -------------------------------------------------------------------
   describe('bulkUpdate', () => {
+    it('refuses to file smoothed rows under an income category', async () => {
+      mockPrismaService.category.findFirst.mockResolvedValue({
+        id: 'cat-income',
+        userId: mockUserId,
+        type: TransactionType.INCOME,
+      })
+      mockPrismaService.transaction.count.mockResolvedValue(1)
+
+      await expect(
+        service.bulkUpdate(
+          mockUserId,
+          { ids: ['tx-1', 'tx-2'] },
+          { categoryId: 'cat-income' }
+        )
+      ).rejects.toThrow(/Seule une dépense peut être étalée/)
+      expect(mockPrismaService.transaction.count).toHaveBeenCalledWith({
+        where: {
+          AND: [
+            { id: { in: ['tx-1', 'tx-2'] }, userId: mockUserId },
+            { amortizationMonths: { not: null } },
+          ],
+        },
+      })
+      expect(mockPrismaService.transaction.updateMany).not.toHaveBeenCalled()
+    })
+
     const ownedCategory = { id: 'cat-2', userId: mockUserId, name: 'Courses' }
 
     it('should clear the subcategory when moving to another category', async () => {

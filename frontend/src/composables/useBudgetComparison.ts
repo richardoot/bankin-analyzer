@@ -312,6 +312,43 @@ export function useBudgetComparison({
   }
 
   /**
+   * The smoothed purchases each category counted whole at their date, per
+   * `YYYY-MM`: what the everyday reading took out to put the slices in.
+   */
+  const smoothedSourcesByCategory = computed(() => {
+    const byCategory = new Map<string, Map<string, number>>()
+    for (const p of statistics.value?.amortizedPurchases ?? []) {
+      if (!p.dateInPeriod || !p.categoryId) continue
+      const months = byCategory.get(p.categoryId) ?? new Map<string, number>()
+      const ym = p.date.slice(0, 7)
+      months.set(ym, (months.get(ym) ?? 0) + p.netAmount)
+      byCategory.set(p.categoryId, months)
+    }
+    return byCategory
+  })
+
+  /**
+   * The exceptional share of one month of a category. The everyday series
+   * also trades each smoothed purchase for its slices, so the gap between
+   * the two series is the events only once that trade is undone: + the
+   * slices, − the purchases counted at their date. There, rounded to the
+   * cent, a gap below two cents being the rounding of the three series, not
+   * an event.
+   */
+  function exceptionalAt(cat: CategoryAverageDto, index: number): number {
+    const real = cat.monthlyAmounts?.[index] ?? 0
+    const everyday = cat.everydayMonthlyAmounts?.[index] ?? 0
+    // No smoothed purchase in the category: the gap is the events, as ever.
+    if (!cat.amortizedMonthlyAmounts) return real - everyday
+    const slices = cat.amortizedMonthlyAmounts?.[index] ?? 0
+    const ym = monthLabels.value[index] ?? ''
+    const sources =
+      smoothedSourcesByCategory.value.get(cat.categoryId)?.get(ym) ?? 0
+    const gap = Math.round((real - everyday + slices - sources) * 100) / 100
+    return Math.abs(gap) < 0.02 ? 0 : gap
+  }
+
+  /**
    * Exceptional share of a category's "Réel à date" — how much of the row a
    * one-off event carries. Independent of the active mode: it is what the
    * everyday reading leaves out. Zero when the backend sent no split.
@@ -319,10 +356,18 @@ export function useBudgetComparison({
   function planActualExceptionalAverage(cat: CategoryAverageDto): number {
     if (!cat.everydayMonthlyAmounts) return 0
     const indices = actualIndices.value
-    return (
-      avgOverIndices(cat.monthlyAmounts, indices) -
-      avgOverIndices(cat.everydayMonthlyAmounts, indices)
-    )
+    if (indices.length === 0) return 0
+    let sum = 0
+    for (const i of indices) sum += exceptionalAt(cat, i)
+    return sum / indices.length
+  }
+
+  /**
+   * Slices of smoothed purchases in a category's "Réel à date", read
+   * « Vie courante » — the « dont X € lissés ». Zero when none touches it.
+   */
+  function planActualAmortizedAverage(cat: CategoryAverageDto): number {
+    return avgOverIndices(cat.amortizedMonthlyAmounts, actualIndices.value)
   }
 
   /** Sum across categories at the given month index, for a chosen series. */
@@ -447,6 +492,7 @@ export function useBudgetComparison({
     planActualAverage,
     comparisonAverage,
     planActualExceptionalAverage,
+    planActualAmortizedAverage,
     aggregatesFor,
     incomeAggregates,
     completePlanMonthsCount,

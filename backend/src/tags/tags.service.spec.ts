@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Test } from '@nestjs/testing'
 import type { TestingModule } from '@nestjs/testing'
-import { ConflictException, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common'
 import { TagsService } from './tags.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
 import { PrismaService } from '../prisma/prisma.service'
@@ -34,6 +38,7 @@ const mockPrismaService = {
   transaction: {
     findMany: vi.fn(),
     findFirst: vi.fn(),
+    count: vi.fn(),
   },
   transactionTag: {
     createMany: vi.fn(),
@@ -144,6 +149,65 @@ describe('TagsService', () => {
         service.update('tag-x', USER, { name: 'x' })
       ).rejects.toThrow(NotFoundException)
     })
+
+    it('refuses to make a tag exceptional while it carries smoothed purchases', async () => {
+      mockPrismaService.tag.findFirst.mockResolvedValue(mockTag)
+      mockPrismaService.transaction.count.mockResolvedValue(1)
+      mockPrismaService.transaction.findMany.mockResolvedValue([
+        { description: 'APPLE STORE IPHONE 17 PRO' },
+      ])
+
+      const refusal = service.update(mockTag.id, USER, { isExceptional: true })
+
+      await expect(refusal).rejects.toThrow(BadRequestException)
+      await expect(refusal).rejects.toThrow(
+        /« APPLE STORE IPHONE 17 PRO » est étalée/
+      )
+      expect(mockPrismaService.transaction.count).toHaveBeenCalledWith({
+        where: {
+          AND: [
+            { tags: { some: { tagId: mockTag.id } } },
+            { userId: USER, amortizationMonths: { not: null } },
+          ],
+        },
+      })
+      expect(mockPrismaService.tag.update).not.toHaveBeenCalled()
+    })
+
+    it('makes a tag exceptional when none of its rows is smoothed', async () => {
+      mockPrismaService.tag.findFirst.mockResolvedValue(mockTag)
+      mockPrismaService.transaction.count.mockResolvedValue(0)
+      mockPrismaService.transaction.findMany.mockResolvedValue([])
+      mockPrismaService.tag.update.mockResolvedValue({
+        ...mockTag,
+        isExceptional: true,
+      })
+
+      const result = await service.update(mockTag.id, USER, {
+        isExceptional: true,
+      })
+
+      expect(result.isExceptional).toBe(true)
+    })
+
+    it('does not look for smoothed rows when the flag does not turn on', async () => {
+      mockPrismaService.tag.findFirst.mockResolvedValue({
+        ...mockTag,
+        isExceptional: true,
+      })
+      mockPrismaService.tag.update.mockResolvedValue({
+        ...mockTag,
+        isExceptional: true,
+        name: 'Italie',
+      })
+
+      await service.update(mockTag.id, USER, {
+        name: 'Italie',
+        isExceptional: true,
+      })
+
+      expect(mockPrismaService.transaction.count).not.toHaveBeenCalled()
+    })
   })
 
   describe('attachTransactions', () => {
@@ -183,6 +247,50 @@ describe('TagsService', () => {
       await expect(
         service.attachTransactions('tag-x', USER, ['tx-1'])
       ).rejects.toThrow(NotFoundException)
+    })
+
+    it('refuses an exceptional tag on smoothed purchases, naming them', async () => {
+      mockPrismaService.tag.findFirst.mockResolvedValue({
+        ...mockTag,
+        isExceptional: true,
+      })
+      mockPrismaService.transaction.count.mockResolvedValue(5)
+      mockPrismaService.transaction.findMany.mockResolvedValue([
+        { description: 'IPHONE' },
+        { description: 'MACBOOK' },
+        { description: 'LAVE-LINGE' },
+      ])
+
+      const refusal = service.attachTransactions(mockTag.id, USER, [
+        'tx-1',
+        'tx-2',
+      ])
+
+      await expect(refusal).rejects.toThrow(BadRequestException)
+      await expect(refusal).rejects.toThrow(
+        /5 transactions sont étalées .*« IPHONE », « MACBOOK », « LAVE-LINGE » et 2 autre\(s\)/
+      )
+      expect(mockPrismaService.transaction.count).toHaveBeenCalledWith({
+        where: {
+          AND: [
+            { id: { in: ['tx-1', 'tx-2'] } },
+            { userId: USER, amortizationMonths: { not: null } },
+          ],
+        },
+      })
+      expect(mockPrismaService.transactionTag.createMany).not.toHaveBeenCalled()
+    })
+
+    it('lets an ordinary tag land on a smoothed purchase', async () => {
+      mockPrismaService.tag.findFirst.mockResolvedValue(mockTag)
+      mockPrismaService.transaction.findMany.mockResolvedValue([{ id: 'tx-1' }])
+      mockPrismaService.transactionTag.createMany.mockResolvedValue({
+        count: 1,
+      })
+
+      await service.attachTransactions(mockTag.id, USER, ['tx-1'])
+
+      expect(mockPrismaService.transaction.count).not.toHaveBeenCalled()
     })
   })
 
@@ -296,6 +404,11 @@ describe('TagsService', () => {
         "WHEN rtx.transaction_id IS NOT NULL THEN 'COMMITTED'"
       )
       expect(clause).toContain('COALESCE(sc.rhythm, c.default_rhythm)')
+      // A smoothed purchase keeps falling while the user is away: committed,
+      // never part of what a trip suspends.
+      expect(withRhythm[0]).toContain(
+        'AND (t.amortization_months IS NULL OR t.amount >= 0)'
+      )
     })
 
     it('returns zeroed analysis when the tag has no transactions', async () => {

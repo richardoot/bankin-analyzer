@@ -241,4 +241,4 @@ pnpm ts-node src/scripts/provision-category-catalog.ts
 - La portée du type `TRANSFER` : le lot 0 l'introduit parce que la migration doit connaître sa cible. Son traitement dans le dashboard attend le lot 4.
 - Le catalogue des revenus et des transferts n'a pas encore été discuté en détail.
 - Surcharge des attributs par transaction : prévue par le modèle, pas implémentée au départ.
-- Suggestion de tag exceptionnel quand un montant dépasse largement l'habitude de sa sous-catégorie : hors périmètre de ce chantier, noté pour le cadre suivant.
+- Suggestion de tag exceptionnel quand un montant dépasse largement l'habitude de sa sous-catégorie : hors périmètre de ce chantier, reprise par le cadre des achats lissés (lot 3) sous la forme « Épisode ou achat à lisser ? ».

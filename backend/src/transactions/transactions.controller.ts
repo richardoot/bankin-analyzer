@@ -36,10 +36,11 @@ import { PaginatedTransactionsResponseDto } from './dto/paginated-transactions-r
 import { createPaginationMeta } from '../common/dto/pagination.dto'
 import { SupabaseGuard, CurrentUser } from '../auth'
 import type { User, TransactionType, Transaction } from '../generated/prisma'
+import { suggestedAmortizationMonths } from './smoothing-suggestions'
 
 type TransactionWithRelations = Transaction & {
   category?: { name: string; icon?: string | null }
-  subcategoryRef?: { id: string; name: string }
+  subcategoryRef?: { id: string; name: string; catalogKey?: string | null }
   accountRef: { name: string }
   settlementsAsIncome?: {
     id: string
@@ -108,6 +109,14 @@ export class TransactionsController {
       subcategory: tx.subcategory,
       note: tx.note,
       isPointed: tx.isPointed,
+      amortizationMonths: tx.amortizationMonths,
+      // The duration proposed for its subcategory, by catalogue key: the
+      // smoothing dialog opens on it. An expense only.
+      ...(tx.type === 'EXPENSE' && {
+        suggestedAmortizationMonths: suggestedAmortizationMonths(
+          tx.subcategoryRef?.catalogKey
+        ),
+      }),
       categoryId: tx.categoryId,
       categoryName: tx.category?.name,
       subcategoryId: tx.subcategoryId,
@@ -319,6 +328,21 @@ export class TransactionsController {
       '`<amountBucket>:<merchantKey>` (at most 200).',
   })
   @ApiQuery({
+    name: 'amortized',
+    required: false,
+    type: Boolean,
+    description: 'Only the rows smoothed over several months.',
+  })
+  @ApiQuery({
+    name: 'alsoIds',
+    required: false,
+    type: String,
+    description:
+      'Rows shown on top of what the other filters match, comma-separated ' +
+      '(at most 200): the smoothed purchases whose slices a « Vie courante » ' +
+      'figure counts although they are dated elsewhere.',
+  })
+  @ApiQuery({
     name: 'sortBy',
     required: false,
     enum: ['date', 'amount'],
@@ -359,7 +383,9 @@ export class TransactionsController {
     @Query('nature') nature?: string,
     @Query('rhythm') rhythm?: string,
     @Query('categoryIds') categoryIds?: string,
-    @Query('recurrences') recurrences?: string
+    @Query('recurrences') recurrences?: string,
+    @Query('amortized') amortized?: string,
+    @Query('alsoIds') alsoIds?: string
   ): Promise<PaginatedTransactionsResponseDto> {
     // Clamp limit to max 100
     const clampedLimit = Math.min(Math.max(limit, 1), 100)
@@ -411,6 +437,8 @@ export class TransactionsController {
       ...(rhythm && { rhythm }),
       ...(categoryIds && { categoryIds }),
       ...(recurrences && { recurrences }),
+      ...(amortized !== undefined && { amortized }),
+      ...(alsoIds && { alsoIds }),
     })
 
     const { data: transactions, total } =
@@ -505,7 +533,8 @@ export class TransactionsController {
 
   @Patch(':id')
   @ApiOperation({
-    summary: 'Update a transaction (note, category, subcategory, isPointed)',
+    summary:
+      'Update a transaction (note, category, subcategory, isPointed, amortizationMonths)',
   })
   @ApiResponse({ status: 200, type: TransactionResponseDto })
   async update(
@@ -518,6 +547,8 @@ export class TransactionsController {
       categoryId?: string | null
       subcategoryId?: string | null
       isPointed?: boolean
+      /** Smooth the expense over 2 to 60 months; null stops smoothing it. */
+      amortizationMonths?: number | null
     }
   ): Promise<TransactionResponseDto> {
     const tx = await this.transactionsService.update(id, user.id, body)

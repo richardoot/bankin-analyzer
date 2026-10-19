@@ -328,6 +328,17 @@ export interface TransactionDto {
   subcategory?: string | null
   note?: string | null
   isPointed: boolean
+  /**
+   * Over how many months the expense is smoothed in the everyday reading,
+   * from the month of its date (2 to 60). Null: counted whole at its date.
+   */
+  amortizationMonths?: number | null
+  /**
+   * The one smoothing duration the server proposes for its subcategory
+   * (High-tech 24, Maison et déco 48, Entretien et réparation 12…), 12 when
+   * the subcategory says nothing. Expenses only.
+   */
+  suggestedAmortizationMonths?: number
   categoryId?: string | null
   // Mirrors the backend, which omits the key entirely when the transaction has
   // no category. Under `exactOptionalPropertyTypes` an absent property and one
@@ -429,6 +440,14 @@ export interface TransactionQueryParams {
   categoryIds?: string[] | undefined
   /** The lines of any of these series, `<amountBucket>:<merchantKey>`. */
   recurrences?: string[] | undefined
+  /** Only the rows smoothed over several months. */
+  amortized?: boolean | undefined
+  /**
+   * Rows shown on top of what the other filters match (at most 200): the
+   * smoothed purchases a « Vie courante » figure counts by their slices
+   * although they are dated elsewhere.
+   */
+  alsoIds?: string[] | undefined
   sortBy?: 'date' | 'amount' | undefined
   sortOrder?: 'asc' | 'desc' | undefined
 }
@@ -755,8 +774,16 @@ export interface MonthlyDataDto {
   income: number
   /** Share of the month's expenses tagged as exceptional */
   exceptionalExpenses: number
-  /** netExpenses minus the exceptional share */
+  /**
+   * netExpenses minus the exceptional share, each smoothed purchase traded
+   * for its slices
+   */
   everydayNetExpenses: number
+  /**
+   * Slices of smoothed purchases in `everydayNetExpenses`. Only on a month a
+   * smoothed purchase touches — such a month may carry nothing real at all.
+   */
+  amortizedExpenses?: number
 }
 
 export interface SubcategoryDataDto {
@@ -768,6 +795,16 @@ export interface SubcategoryDataDto {
   amount: number
   transactionCount: number
   averagePerMonth: number
+  /**
+   * Everyday counterpart of `amount`: exceptional rows out, smoothed
+   * purchases spread into their slices. Only on a line a smoothed purchase
+   * touches; elsewhere read `amount`.
+   */
+  everydayAmount?: number
+  /** `everydayAmount` per month. Same presence rule. */
+  everydayAveragePerMonth?: number
+  /** Slices of smoothed purchases on the line. Same presence rule. */
+  amortizedAmount?: number
 }
 
 export interface CategoryDataDto {
@@ -791,6 +828,13 @@ export interface CategoryDataDto {
   everydayAveragePerMonth?: number
   /** Per-month everyday amounts, matching monthLabels */
   everydayMonthlyAmounts?: number[]
+  /**
+   * Slices of smoothed purchases in `everydayAmount` — the « dont X €
+   * lissés ». Only when a smoothed purchase touches the category.
+   */
+  amortizedAmount?: number
+  /** Same, per month, matching monthLabels. Same presence rule. */
+  amortizedMonthlyAmounts?: number[]
 }
 
 export interface ExceptionalEventDto {
@@ -1013,6 +1057,44 @@ export interface SubcategoryAverageDto {
   totalAmount: number
   transactionCount: number
   averagePerMonth: number
+  /**
+   * Everyday counterpart of `totalAmount`: exceptional rows out, smoothed
+   * purchases spread into their slices. Only on a line a smoothed purchase
+   * touches this period; elsewhere read `totalAmount`.
+   */
+  everydayAmount?: number
+  /** `everydayAmount` over the period. Same presence rule. */
+  everydayAveragePerMonth?: number
+  /** Slices of smoothed purchases falling in the period. Same presence rule. */
+  amortizedAmount?: number
+}
+
+/**
+ * A smoothed purchase whose slices or date touch the period: what the
+ * « Achats lissés en cours » list and the links to the source need.
+ */
+export interface AmortizedPurchaseDto {
+  transactionId: string
+  description: string
+  /** The purchase's own date, `YYYY-MM-DD`. */
+  date: string
+  /** Number of monthly slices. */
+  months: number
+  /** Net of reimbursements and divided: what the slices sum to. */
+  netAmount: number
+  /** The regular slice; the last one absorbs the rounding gap. */
+  monthlyAmount: number
+  /** `YYYY-MM` of the first and last slice. */
+  firstMonth: string
+  lastMonth: string
+  categoryId: string | null
+  subcategoryId: string | null
+  /** Sum of its slices falling in the period. */
+  amountInPeriod: number
+  /** `YYYY-MM` of each of those slices, chronological. */
+  sliceMonthsInPeriod: string[]
+  /** The purchase itself is dated in the period: the real reading counts it whole. */
+  dateInPeriod: boolean
 }
 
 export interface CategoryAverageDto {
@@ -1033,6 +1115,14 @@ export interface CategoryAverageDto {
   everydayAveragePerMonth?: number
   /** Everyday counterpart of `monthlyAmounts`, same indexes. */
   everydayMonthlyAmounts?: number[]
+  /**
+   * Slices of smoothed purchases in `everydayAmount` — the « dont X €
+   * lissés ». Only when a smoothed purchase touches the category, which may
+   * then carry nothing real at all (`transactionCount` 0).
+   */
+  amortizedAmount?: number
+  /** Same, per month, matching `monthLabels`. Same presence rule. */
+  amortizedMonthlyAmounts?: number[]
   subcategories?: SubcategoryAverageDto[]
 }
 
@@ -1063,6 +1153,8 @@ export interface BudgetStatisticsDto {
   totalPendingReimbursements?: number
   /** Expense carried by exceptional events over the period, net. */
   totalExceptionalExpenses?: number
+  /** Smoothed purchases touching the period, in date order. Absent when none. */
+  amortizedPurchases?: AmortizedPurchaseDto[]
   monthLabels?: string[]
 }
 
@@ -1902,6 +1994,15 @@ export const api = {
     if (params?.importId) searchParams.set('importId', params.importId)
     if (params?.syncRunId) searchParams.set('syncRunId', params.syncRunId)
     if (params?.exceptional) searchParams.set('exceptional', params.exceptional)
+    if (params?.nature) searchParams.set('nature', params.nature)
+    if (params?.rhythm) searchParams.set('rhythm', params.rhythm)
+    if (params?.categoryIds && params.categoryIds.length > 0)
+      searchParams.set('categoryIds', params.categoryIds.join(','))
+    if (params?.recurrences && params.recurrences.length > 0)
+      searchParams.set('recurrences', params.recurrences.join(','))
+    if (params?.amortized) searchParams.set('amortized', 'true')
+    if (params?.alsoIds && params.alsoIds.length > 0)
+      searchParams.set('alsoIds', params.alsoIds.join(','))
     if (params?.sortBy) searchParams.set('sortBy', params.sortBy)
     if (params?.sortOrder) searchParams.set('sortOrder', params.sortOrder)
 
@@ -1927,6 +2028,8 @@ export const api = {
       categoryId?: string | null
       subcategoryId?: string | null
       isPointed?: boolean
+      /** Smooth the expense over 2 to 60 months; null stops smoothing it. */
+      amortizationMonths?: number | null
     }
   ): Promise<TransactionDto> {
     const response = await fetchWithAuth(`${API_BASE_URL}/transactions/${id}`, {
@@ -1935,7 +2038,13 @@ export const api = {
     })
 
     if (!response.ok) {
-      throw new Error('Impossible de modifier la transaction')
+      // A refused smoothing says why (an exceptional tag, an income).
+      throw new Error(
+        await readErrorMessage(
+          response,
+          'Impossible de modifier la transaction'
+        )
+      )
     }
 
     return response.json() as Promise<TransactionDto>
@@ -2301,10 +2410,14 @@ export const api = {
     })
 
     if (!response.ok) {
+      // A tag turned exceptional over smoothed purchases is refused with why.
       const message =
         response.status === 409
           ? 'Une étiquette porte déjà ce nom'
-          : "Impossible de modifier l'étiquette"
+          : await readErrorMessage(
+              response,
+              "Impossible de modifier l'étiquette"
+            )
       throw new Error(message)
     }
 
@@ -2334,7 +2447,10 @@ export const api = {
     )
 
     if (!response.ok) {
-      throw new Error("Impossible d'ajouter l'étiquette")
+      // An exceptional tag on a smoothed purchase is refused with why.
+      throw new Error(
+        await readErrorMessage(response, "Impossible d'ajouter l'étiquette")
+      )
     }
 
     return response.json() as Promise<{ attached: number }>
