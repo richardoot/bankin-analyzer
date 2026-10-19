@@ -121,3 +121,25 @@ Chaque lot livre ses tests (`pnpm --filter backend test`, `pnpm --filter fronten
 - Une famille supprimée : rendre ses étiquettes orphelines (décision ci-dessus) ou refuser tant qu'elle en a, comme une sous-catégorie du catalogue. Orphelines, parce que la famille n'est qu'un regroupement et que rien ne dépend d'elle pour un calcul.
 - L'enveloppe annuelle en lecture trésorerie : un voyage de janvier payé en novembre consomme l'enveloppe de quelle année ? Événement, par cohérence avec l'année de l'étiquette ; la bascule trésorerie ne touche que l'affichage des montants, pas l'imputation de l'enveloppe.
 - Un thème (« Cadeaux ») peut-il avoir une famille ? Rien ne l'interdit dans le modèle ; l'écran ne le propose pas, le groupement par famille ne s'applique qu'à la section Événements. À revoir si un usage apparaît (« Cadeaux Noël 2026 » comme édition d'une famille « Cadeaux »).
+
+## Décisions du lot 3 et du lot 4
+
+Décisions des lots précédents, notées ici faute de place ailleurs :
+
+- **Le champ Famille n'est proposé qu'aux étiquettes exceptionnelles** (lot 1). Une famille groupe des événements ; un thème n'est l'édition de rien. Le serveur l'accepte sur toute étiquette, l'écran ne l'envoie que pour une exceptionnelle.
+- **Une ligne portée par deux éditions datées de la même famille** (une édition et l'acompte de la suivante) compte pour l'année de la date de début la plus ancienne (lot 2), une seule fois.
+
+Décisions du lot 3 :
+
+- **Le prorata vit dans `getBudgetSummary`** (`GET /tags/budget-summary`), pas dans `budget-plans.service.ts`. La page Budget retranche le `totalBudget` de ce résumé de la réserve projets du plan (`BudgetProjectsSection.vue`) ; le plan reste ignorant des étiquettes et des familles, et l'effet à l'écran est le même que prévu au chapitre Calcul.
+- **Une famille à enveloppe sans étiquette dans la fenêtre apparaît quand même**, avec son prorata et un dépensé nul : « 4 000 € par an » engage la réserve à lui seul.
+- **`spentEventBasis` est en dépenses brutes** : les dépenses de l'année d'événement, en valeur absolue, sans déduire les revenus étiquetés.
+
+Décisions du lot 4 :
+
+- **Nouvelle édition** : le bouton n'apparaît que sur une carte `past`. Il remplit le formulaire de création existant (même famille, couleur, icône, exceptionnel coché, fenêtre vide, pas d'enveloppe) l'ouvre (il est replié sur téléphone), le fait défiler à l'écran et place le focus sur le nom. L'année n'est incrémentée que si le nom se termine par exactement quatre chiffres précédés d'un non-chiffre (`nextEditionName`, `tagFormModel.ts`) : « Vol AF12345 » ou « HYROX 2025 Paris » restent tels quels.
+- **`get_tag_candidates`, « variable »** : exclut une ligne dont le rythme effectif est engagé, par la règle commune `EFFECTIVE_RHYTHM` (`recurrence-rhythm.sql.ts`, celle du tableau de bord) : sous-catégorie ou catégorie `COMMITTED`, ou ligne d'une récurrence active ou arrêtée. Les lignes non classées (rythme nul) restent : une dépense d'événement est souvent encore à classer. Chaque ligne porte son `rhythm`. Les lignes lissées restent aussi, avec `amortizationMonths`, pour que l'agent sache qu'elles refuseront une étiquette exceptionnelle.
+- **Fenêtre élargie** : bornes à J-2 et J+2 incluses, la borne haute est exclusive au lendemain de J+2 pour compter une ligne horodatée en fin de journée.
+- **`spent` dans `get_tags`** : `TagsService.spentByTag`, une requête groupée pour toutes les étiquettes, dépenses seules en valeur absolue divisées par le diviseur du compte, comptes exclus ignorés ; les mêmes conventions que `totalExpenses` de l'analyse d'une étiquette. `TagResponseDto` ne change pas.
+- **`set_transaction_tags` sans écriture partielle** : transaction, garde-fou et propriété de chaque étiquette sont vérifiés avant d'écrire ; les étiquettes exceptionnelles sont posées en premier, si bien que le refus croisé de `attachTransactions` (mots du service) tombe avant toute écriture. Pas de transaction base de données englobante : les écritures passent par les méthodes existantes du service, une à une.
+- **Idempotence** : une étiquette déjà présente ou déjà absente est rendue dans `alreadyPresent` / `alreadyAbsent` ; un appel qui n'a rien à faire répond `unchanged` sans écrire.

@@ -24,6 +24,8 @@ que le modèle les lise comme des données et non comme des instructions.
 | `get_dashboard_summary`     | Dépenses et revenus par mois et par catégorie, structure des dépenses (dont la part récurrente), épargne, ce qui reste dû. Les transferts sont hors des dépenses et des revenus.                                                                                                                                                                                                                      |
 | `get_smoothing_suggestions` | Les dépenses récentes (`months`, 6 par défaut, 24 au plus) qui dépassent largement l'habitude de leur sous-catégorie, pas encore tranchées, chacune avec une question et deux réponses. Voir « Lissage » plus bas.                                                                                                                                                                                    |
 | `get_recurrences`           | Charges récurrentes détectées ou suivies (abonnements, loyer, assurances) : `name` (nom du service), `label` (libellé bancaire), catégorie, `period`, `amount`, `monthlyEquivalent`, `occurrences`, `totalPaid`, `firstDate`, `lastDate`, `nextExpected`, `status` (`ACTIVE`, `STOPPED`, `CANDIDATE`, filtrable), et le `monthlyTotal` des actives.                                                   |
+| `get_tags`                  | Les étiquettes : `id`, `name`, `color`, `isExceptional`, `eventStartDate`, `eventEndDate`, `status` (`upcoming`, `ongoing`, `past`, null sans fenêtre), `family` (`id`, `name`, `annualBudget`, ou null), `transactionCount`, `spent` (dépenses en valeur absolue, part du compte joint, comptes exclus des statistiques ignorés). Filtres : `status`, `familyId`, `isExceptional`.                   |
+| `get_tag_candidates`        | Pour une étiquette datée (`tagId`), les dépenses qui pourraient lui appartenir et ne la portent pas encore. Voir « Étiquettes et familles » plus bas.                                                                                                                                                                                                                                                 |
 
 `categoryName` dans `get_transactions` suit la même règle de nom que les écritures (ci-dessous) ;
 quand le filtre `type` est donné, seules les catégories de ce type sont candidates, ce qui
@@ -31,7 +33,7 @@ départage un nom porté par une catégorie de dépense et une de revenu.
 
 ## Outils d'écriture
 
-Quatre écritures, toutes réversibles. Il n'y a **aucun outil de suppression** : supprimer une
+Cinq écritures, toutes réversibles : reclasser, demander, régler, lisser, étiqueter. Il n'y a **aucun outil de suppression** : supprimer une
 transaction, une demande ou un règlement reste dans l'application.
 
 ### Désigner une cible
@@ -121,13 +123,35 @@ porte les refus, rendus avec leurs mots : durée hors bornes, revenu ou transfer
 porte une étiquette exceptionnelle. Réponse : `status` (`updated` ou `unchanged`), la transaction,
 `before` et `after` (`amortizationMonths`). **Annuler** : rappeler l'outil avec le `before`.
 
+### `set_transaction_tags`
+
+`transactionId`, `add` et `remove` (identifiants d'étiquettes, voir `get_tags` ; l'un des deux
+non vide, 50 au plus chacun), `expectedAmount` (optionnel : montant absolu de la transaction).
+
+Tout est vérifié avant la première écriture : la transaction et chaque étiquette doivent être à
+l'utilisateur, le garde-fou doit correspondre (« Garde-fou : la transaction est de X €, pas de
+Y €. Rien n'a été écrit. »), une même étiquette ne peut être à la fois ajoutée et retirée.
+L'écriture passe par `TagsService.attachTransactions` et `detachTransaction`. Le service refuse
+une étiquette exceptionnelle sur une dépense lissée ; le refus est rendu avec ses mots, comme à
+l'écran. Les étiquettes exceptionnelles sont posées en premier : un refus arrive avant toute
+écriture.
+
+Ajouter une étiquette déjà présente ou retirer une absente n'est pas une erreur : la réponse les
+liste (`alreadyPresent`, `alreadyAbsent`) et répond `unchanged` si rien d'autre n'est à faire.
+Sinon : `status: updated`, la transaction, `added`, `removed`, et les étiquettes `before` et
+`after` (`id`, `name`, `isExceptional`). **Annuler** : rappeler l'outil en inversant `add` et
+`remove`.
+
+Le MCP ne crée ni étiquette ni famille.
+
 ### Lissage ou épisode : la règle
 
 Le test, à appliquer avant toute écriture sur une grosse dépense : **est-ce que ça reviendra sous
 une forme comparable dans les deux à trois ans ?** (`agent-os/product/amortization-framework.md`)
 
 - **Épisode** (voyage, mariage, déménagement, compétition, fête) : non. Étiquette exceptionnelle,
-  hors vie courante. Elle se pose dans l'application : le MCP n'écrit pas les étiquettes.
+  hors vie courante. Elle se pose avec `set_transaction_tags` sur une étiquette qui existe déjà ;
+  l'étiquette elle-même se crée dans l'application.
 - **Bien durable renouvelé** (téléphone, ordinateur, électroménager, mobilier, vélo, équipement de
   sport) : oui. Lissage sur la durée d'usage (téléphone, ordinateur 24 à 36 mois ; électroménager,
   mobilier 36 à 60). Jamais exceptionnel.
@@ -151,8 +175,41 @@ mois précédents. Sa sous-catégorie, par clé de catalogue, choisit la questio
 
 L'étiquette exceptionnelle n'est jamais proposée pour un équipement ni pour un imprévu. L'outil ne
 fait que lire : l'agent pose la question, l'utilisateur tranche, `set_transaction_amortization`
-lisse. `KEEP` (laisser à sa date) n'est pas mémorisé : la dépense reviendra dans la liste tant
+lisse, `set_transaction_tags` étiquette. `KEEP` (laisser à sa date) n'est pas mémorisé : la dépense reviendra dans la liste tant
 qu'elle est dans la fenêtre.
+
+## Étiquettes et familles
+
+Une étiquette dit le contexte d'une dépense (un événement daté, un épisode, un thème) ; une
+famille regroupe les éditions d'un même genre d'événement (« HYROX Paris 2025 », « HYROX Lyon
+2026 » dans « Compétitions ») et peut porter une enveloppe annuelle
+(`agent-os/product/tag-families.md`).
+
+`get_tag_candidates` cherche, pour une étiquette datée, les dépenses :
+
+| Critère        | Règle                                                                                                                             |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Date           | dans la fenêtre de l'étiquette élargie de deux jours de chaque côté, bornes incluses (`searchedFrom`, `searchedTo`)               |
+| Type           | `EXPENSE` seulement                                                                                                               |
+| Compte         | compté dans les statistiques (`isExcludedFromStats = false`)                                                                      |
+| Déjà étiquetée | exclue si elle porte déjà l'étiquette                                                                                             |
+| Rythme         | exclue si son rythme effectif est engagé : sous-catégorie (ou catégorie) `COMMITTED`, ou ligne d'une récurrence active ou arrêtée |
+
+Chaque ligne porte `id`, `date`, `label`, `amount`, `accountId`, la catégorie et la
+sous-catégorie avec leurs clés, `rhythm` (`VARIABLE`, ou null pour une ligne non classée) et
+`amortizationMonths` (une dépense lissée ne peut pas recevoir d'étiquette exceptionnelle). Une
+étiquette sans fenêtre est refusée.
+
+La règle d'usage :
+
+1. `get_tags` pour trouver l'étiquette (une édition passée : `status: past`).
+2. `get_tag_candidates` pour proposer. Le déplacement, l'hébergement ou l'inscription achetés
+   des mois avant ne sont pas dans la fenêtre : les chercher par marchand
+   (`get_transactions` avec `search`).
+3. L'utilisateur tranche, puis `set_transaction_tags` rattache, ligne par ligne, avec
+   `expectedAmount`.
+4. Une nouvelle édition se crée dans l'application (« Nouvelle édition » sur la carte de
+   l'édition passée), jamais par le MCP.
 
 ## Garde-fous et erreurs
 
@@ -204,6 +261,6 @@ arrière avec le même outil et le `before` de la réponse.
 - **Pas de portée d'écriture.** Le garde accepte tout jeton Supabase valide : un agent connecté
   pour lire peut, de fait, écrire. Un scope OAuth ou un en-tête réservé aux écritures serait
   propre ; non fait.
-- **Pas de création** de sous-catégorie ni de personne par le MCP.
+- **Pas de création** de sous-catégorie, de personne, d'étiquette ni de famille par le MCP.
 - **Pas d'annulation groupée** ni de journal persistant : l'annulation se fait ligne à ligne avec
   le `before` rendu.
