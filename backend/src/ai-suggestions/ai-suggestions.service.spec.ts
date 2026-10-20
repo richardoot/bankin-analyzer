@@ -8,10 +8,17 @@ import { buildMerchantMemory } from './merchant-memory'
 // Store mock invoke function for tests
 const mockInvoke = vi.fn()
 
+/** What the service handed the client's constructor, latest last. */
+const clientFields: Record<string, unknown>[] = []
+
 // Mock @langchain/anthropic
 vi.mock('@langchain/anthropic', () => {
   return {
     ChatAnthropic: class MockChatAnthropic {
+      constructor(fields: Record<string, unknown>) {
+        clientFields.push(fields)
+      }
+
       // The service asks for the raw message too, for the token counts;
       // the mock answers the shape the real client returns then.
       withStructuredOutput(
@@ -67,6 +74,28 @@ describe('AiSuggestionsService', () => {
           ],
         }).compile()
       ).rejects.toThrow(InternalServerErrorException)
+    })
+
+    // Haiku 5.5 returns a 400 on any temperature but its own, and LangChain
+    // 1.5 only strips the field for the models it knows: the one place that
+    // names the model is the one place this can regress.
+    it('talks to Claude Haiku 5.5 without a sampling temperature', async () => {
+      await Test.createTestingModule({
+        providers: [
+          AiSuggestionsService,
+          { provide: PrismaService, useValue: mockPrismaService },
+          { provide: MerchantMemoryService, useValue: mockMerchantMemory },
+        ],
+      }).compile()
+
+      const fields = clientFields.at(-1)
+      expect(fields).toMatchObject({
+        model: 'claude-haiku-5-5',
+        maxTokens: 8192,
+      })
+      expect(fields).not.toHaveProperty('temperature')
+      expect(fields).not.toHaveProperty('topP')
+      expect(fields).not.toHaveProperty('topK')
     })
   })
 

@@ -71,8 +71,16 @@ const CategorizationSchema = z.object({
 /** How many transactions go in one prompt. */
 const CATEGORIZATION_BATCH_SIZE = 40
 
-/** Le modèle le moins cher ($1 / $5 par MTok) ; le nom part dans chaque événement. */
-const MODEL = 'claude-haiku-4-5-20251001'
+/**
+ * Le modèle le moins cher (0,10 $ / 0,50 $ par MTok sous 100 k jetons de
+ * prompt) ; le nom part dans chaque événement. Migré de Haiku 4.5 le
+ * 2026-10-21 : ce modèle refuse toute température autre que la sienne et
+ * réfléchit de lui-même, sauf quand l'appel force un outil — ce que fait la
+ * sortie structurée ci-dessous, qui garde donc des réponses aussi courtes
+ * qu'avant. Même texte, 30 % de jetons en plus ; la facture reste divisée
+ * par sept.
+ */
+const MODEL = 'claude-haiku-5-5'
 
 @Injectable()
 export class AiSuggestionsService {
@@ -94,7 +102,15 @@ export class AiSuggestionsService {
     this.llm = new ChatAnthropic({
       model: MODEL,
       apiKey,
-      temperature: 0.1, // Faible température pour des réponses cohérentes
+      // Pas de température : Haiku 5.5 n'en accepte pas d'autre que la
+      // sienne (la 0,1 d'avant ferait un 400). La cohérence vient du schéma
+      // et des noms exacts du catalogue, pas de l'échantillonnage.
+      //
+      // LangChain 1.5 ne connaît pas encore ce modèle et retomberait sur un
+      // plafond de 4 096 jetons de sortie. Un lot de 40 classements ou une
+      // centaine d'icônes tiennent bien en deçà ; le plafond est dit pour ne
+      // pas dépendre de ce repli.
+      maxTokens: 8192,
     })
   }
 
