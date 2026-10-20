@@ -163,3 +163,7 @@ Avant cette date, toutes les lectures d'étiquettes (analyse d'une étiquette, d
 - **Un revenu entièrement tiré pour rembourser une dette n'est ni compté ni listé** (`visibleRowSql`) : il est déjà déduit de la dépense qu'il rembourse. Un revenu tiré en partie reste pour son reliquat.
 - **La base de référence** du surcoût est nette elle aussi : un surcoût compare du net à du net.
 - Le tableau de bord nette ses événements et ses familles de l'année avec la règle de la période affichée (`deductReimbursements` compris).
+
+## Jeu de démonstration (2026-10-20)
+
+`backend/prisma/seed.mjs` (`./scripts/docker-start.sh --demo`, compte `demo@bankin.local`) couvre désormais tout le chantier : trois familles (Voyages 4 000 € par an, Compétitions 600 € par an, Fêtes sans enveloppe), des éditions passées, une en cours et une à venir dont l'acompte est payé cette année (lectures événement et trésorerie), deux éditions d'une même course pour la comparaison, une ligne portée par la course et son déplacement (comptée une fois), un revenu de remboursement étiqueté avec son événement (masqué par le netting), un thème « Cadeaux » non exceptionnel, des épisodes sans date avec et sans enveloppe. Les achats durables (voiture, lave-linge) sont lissés et plus étiquetés. Les remboursements sont écrits sur le registre des paiements, comme l'application le fait.
