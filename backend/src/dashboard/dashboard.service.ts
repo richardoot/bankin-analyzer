@@ -14,6 +14,7 @@ import {
   REIMBURSEMENT_CREDIT_JOINS,
   netAmountSql,
   reimbursementCreditCtes,
+  visibleRowSql,
 } from '../reimbursements/reimbursement-credit.sql'
 import {
   AmortizedSlicesService,
@@ -32,7 +33,13 @@ import type {
   SpendingStructureDto,
   SubcategoryDataDto,
   ExceptionalEventDto,
+  TagFamilyOfYearDto,
 } from './dto'
+import {
+  FAMILY_EVENT_YEAR,
+  familyTransactionsCte,
+} from '../tag-families/family-transactions.sql'
+import { calendarDayIn } from '../tags/tag-status'
 
 const MONTH_LABELS: Record<string, string> = {
   '01': 'Jan',
@@ -204,6 +211,22 @@ interface AccountRow {
   account: string
 }
 
+/** One family over the current year, and the year's real expenses. */
+interface FamilyOfYearRow {
+  family_id: string
+  transaction_count: number
+  spent: number
+  tag_count: number
+  /** The same on every row: the year's real expenses. */
+  real_expenses: number
+}
+
+/** The families of the current year and what they are a share of. */
+interface FamiliesOfYear {
+  families: TagFamilyOfYearDto[]
+  realExpenses: number | null
+}
+
 /** The transfer categories whose rows mean money set aside. */
 const SAVINGS_CATALOG_KEYS = new Set([
   'emergency-savings',
@@ -297,11 +320,17 @@ export class DashboardService {
     // Fetch aggregated data, the accounts list and the exceptional events.
     // `CategoryAssociation` no longer takes part: it was the only thing
     // linking a refund to a category, and the link is now the transaction.
-    const [rows, accountRows, eventRows, receivableRows, smoothedRows] =
-      await Promise.all([
-        // Query 1: Aggregation by month + category + subcategory + type
-        // (excludes stats-excluded accounts).
-        this.prisma.$queryRaw<DashboardAggregatedRow[]>(Prisma.sql`
+    const [
+      rows,
+      accountRows,
+      eventRows,
+      receivableRows,
+      smoothedRows,
+      familiesOfYear,
+    ] = await Promise.all([
+      // Query 1: Aggregation by month + category + subcategory + type
+      // (excludes stats-excluded accounts).
+      this.prisma.$queryRaw<DashboardAggregatedRow[]>(Prisma.sql`
         WITH exceptional_tx AS (
           SELECT DISTINCT tt.transaction_id
           FROM app.transaction_tags tt
@@ -345,10 +374,10 @@ export class DashboardService {
           AND COALESCE(a.is_excluded_from_stats, false) = false
         GROUP BY TO_CHAR(t.date, 'YYYY-MM'), c.id, COALESCE(c.name, 'Autre'), c.icon, c.catalog_key, t.type, t.subcategory_id, sc.name, sc.icon, sc.nature, sc.rhythm, c.default_nature, c.default_rhythm, (et.transaction_id IS NOT NULL), ${IS_RECURRING}
       `),
-        // Query 2: Distinct account names (including excluded from stats, for
-        // filter panel). Sourced from the Account relation since the legacy
-        // string column on transactions has been dropped.
-        this.prisma.$queryRaw<AccountRow[]>(Prisma.sql`
+      // Query 2: Distinct account names (including excluded from stats, for
+      // filter panel). Sourced from the Account relation since the legacy
+      // string column on transactions has been dropped.
+      this.prisma.$queryRaw<AccountRow[]>(Prisma.sql`
         SELECT DISTINCT a.name AS account
         FROM app.transactions t
         JOIN app.accounts a ON a.id = t.account_id
@@ -357,19 +386,23 @@ export class DashboardService {
           AND t.date <= ${endDate}
         ORDER BY a.name
       `),
-        // Query 3: exceptional events overlapping the period, so the dashboard
-        // can name what the exceptional share is made of.
-        this.prisma.$queryRaw<ExceptionalEventRow[]>(Prisma.sql`
+      // Query 3: exceptional events overlapping the period, so the dashboard
+      // can name what the exceptional share is made of.
+      // Net as the share they explain: an event's figure is read off the
+      // same rule as the period's totals.
+      this.prisma.$queryRaw<ExceptionalEventRow[]>(Prisma.sql`
+        WITH ${reimbursementCreditCtes(userId)}
         SELECT
           tg.id,
           tg.name,
           tg.color,
           tg.icon,
-          SUM(ABS(t.amount::numeric) / COALESCE(a.divisor, 1))::float AS amount
+          SUM(${netAmount})::float AS amount
         FROM app.tags tg
         JOIN app.transaction_tags tt ON tt.tag_id = tg.id
         JOIN app.transactions t ON t.id = tt.transaction_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${REIMBURSEMENT_CREDIT_JOINS}
         WHERE tg.user_id = ${userId}
           AND tg.is_exceptional = true
           AND t.type = 'EXPENSE'
@@ -379,11 +412,11 @@ export class DashboardService {
         GROUP BY tg.id, tg.name, tg.color, tg.icon
         ORDER BY amount DESC
       `),
-        // Query 4: what is still owed to the user, all debts together. A
-        // stock, not a flow: it ignores the period, because a loan made last
-        // year and not yet repaid is owed today. In full euros, never divided:
-        // the person owes what was claimed, whichever account paid.
-        this.prisma.$queryRaw<ReceivableRow[]>(Prisma.sql`
+      // Query 4: what is still owed to the user, all debts together. A
+      // stock, not a flow: it ignores the period, because a loan made last
+      // year and not yet repaid is owed today. In full euros, never divided:
+      // the person owes what was claimed, whichever account paid.
+      this.prisma.$queryRaw<ReceivableRow[]>(Prisma.sql`
         SELECT COALESCE(SUM(GREATEST(r.amount - COALESCE(p.credited, 0), 0)), 0)::float AS pending
         FROM app.reimbursement_requests r
         LEFT JOIN (
@@ -393,20 +426,27 @@ export class DashboardService {
         ) p ON p.reimbursement_id = r.id
         WHERE r.user_id = ${userId}
       `),
-        // Query 5, the everyday reading only: smoothed purchases spread over
-        // their months, in the aggregation's scope. Without an end date the
-        // slices stop at the current month — an open-ended period is « to
-        // date », and the slices still to come are not spent yet.
-        this.amortizedSlices.read({
-          userId,
-          netAmount,
-          start: startDate,
-          end: endDate,
-          firstMonth: utcMonthStart(startDate),
-          lastMonth: utcMonthStart(filters.endDate ? endDate : new Date()),
-          scope: Prisma.sql`COALESCE(a.is_excluded_from_stats, false) = false`,
-        }),
-      ])
+      // Query 5, the everyday reading only: smoothed purchases spread over
+      // their months, in the aggregation's scope. Without an end date the
+      // slices stop at the current month — an open-ended period is « to
+      // date », and the slices still to come are not spent yet.
+      this.amortizedSlices.read({
+        userId,
+        netAmount,
+        start: startDate,
+        end: endDate,
+        firstMonth: utcMonthStart(startDate),
+        lastMonth: utcMonthStart(filters.endDate ? endDate : new Date()),
+        scope: Prisma.sql`COALESCE(a.is_excluded_from_stats, false) = false`,
+      }),
+      // Query 6: the tag families over the current calendar year, whatever
+      // the period — the card reads « the year so far ».
+      this.tagFamiliesOfYear(
+        userId,
+        netAmount,
+        visibleRowSql({ deductReceived: shouldDeductReimbursements })
+      ),
+    ])
 
     // Extract all categories from aggregated rows, keyed by category id.
     const allExpenseCategories = new Map<string, string>()
@@ -947,6 +987,8 @@ export class DashboardService {
       availableAccounts: accountRows.map(r => r.account),
       totalExceptionalExpenses,
       exceptionalEvents,
+      tagFamiliesOfYear: familiesOfYear.families,
+      realExpensesOfYear: familiesOfYear.realExpenses,
       spendingStructure: roundStructure(structure),
       everydaySpendingStructure: roundStructure(everydayStructure),
       savingsTransfers: roundedSavings,
@@ -969,5 +1011,121 @@ export class DashboardService {
     }
 
     return response
+  }
+
+  /**
+   * The user's tag families over the current calendar year (in Paris, as the
+   * status of a tag reads « today »), in event basis: a line belongs to the
+   * year its dated tag starts in, so a deposit paid in December for a
+   * January trip counts in January's year. Each line once per family, with
+   * the family analysis's conventions (expenses in ABS, divided by the
+   * account divisor, stats-excluded accounts ignored).
+   *
+   * Alongside, the year's real expenses, read as `totalExpenses` reads a
+   * period (every expense, net as `netAmount` says), so that the share of a
+   * family is a single division on screen.
+   *
+   * One cheap read of the families first: without one, nothing else runs.
+   */
+  private async tagFamiliesOfYear(
+    userId: string,
+    netAmount: Prisma.Sql,
+    visible: Prisma.Sql
+  ): Promise<FamiliesOfYear> {
+    const families = await this.prisma.tagFamily.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        icon: true,
+        annualBudget: true,
+      },
+    })
+    if (families.length === 0) return { families: [], realExpenses: null }
+
+    const year = Number(calendarDayIn(new Date()).slice(0, 4))
+    const yearStart = new Date(Date.UTC(year, 0, 1))
+    const nextYearStart = new Date(Date.UTC(year + 1, 0, 1))
+
+    const rows = await this.prisma.$queryRaw<FamilyOfYearRow[]>(Prisma.sql`
+      WITH ${familyTransactionsCte(userId)},
+      ${reimbursementCreditCtes(userId)},
+      year_tx AS (
+        SELECT
+          ft.family_id,
+          ft.tag_ids,
+          t.type,
+          ${netAmount} AS amount
+        FROM family_tx ft
+        JOIN app.transactions t ON t.id = ft.transaction_id
+        LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${REIMBURSEMENT_CREDIT_JOINS}
+        WHERE t.user_id = ${userId}
+          AND t.type IN ('EXPENSE', 'INCOME')
+          AND COALESCE(a.is_excluded_from_stats, false) = false
+          AND ${visible}
+          AND ${FAMILY_EVENT_YEAR} = ${year}
+      ),
+      real_year AS (
+        SELECT COALESCE(SUM(${netAmount}), 0)::float AS expenses
+        FROM app.transactions t
+        LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${REIMBURSEMENT_CREDIT_JOINS}
+        WHERE t.user_id = ${userId}
+          AND t.type = 'EXPENSE'
+          AND t.date >= ${yearStart}
+          AND t.date < ${nextYearStart}
+          AND COALESCE(a.is_excluded_from_stats, false) = false
+      )
+      SELECT
+        y.family_id,
+        COUNT(*)::int AS transaction_count,
+        SUM(y.amount) FILTER (WHERE y.type = 'EXPENSE')::float AS spent,
+        (
+          SELECT COUNT(DISTINCT tag_id)
+          FROM year_tx y2
+          CROSS JOIN LATERAL UNNEST(y2.tag_ids) AS tag_id
+          WHERE y2.family_id = y.family_id
+        )::int AS tag_count,
+        (SELECT expenses FROM real_year) AS real_expenses
+      FROM year_tx y
+      GROUP BY y.family_id
+      HAVING SUM(y.amount) FILTER (WHERE y.type = 'EXPENSE') > 0
+    `)
+    if (rows.length === 0) return { families: [], realExpenses: null }
+
+    const round = (v: number): number => Math.round(v * 100) / 100
+    const byId = new Map(families.map(f => [f.id, f]))
+    const lines = rows.flatMap((r): TagFamilyOfYearDto[] => {
+      const family = byId.get(r.family_id)
+      if (!family) return []
+      const spent = round(r.spent ?? 0)
+      const annualBudget =
+        family.annualBudget === null ? null : Number(family.annualBudget)
+      return [
+        {
+          id: family.id,
+          name: family.name,
+          color: family.color,
+          icon: family.icon,
+          year,
+          spent,
+          annualBudget,
+          remaining: annualBudget === null ? null : round(annualBudget - spent),
+          transactionCount: r.transaction_count,
+          tagCount: r.tag_count,
+        },
+      ]
+    })
+    if (lines.length === 0) return { families: [], realExpenses: null }
+    lines.sort(
+      (a, b) => b.spent - a.spent || a.name.localeCompare(b.name, 'fr')
+    )
+
+    return {
+      families: lines,
+      realExpenses: round(rows[0]?.real_expenses ?? 0),
+    }
   }
 }

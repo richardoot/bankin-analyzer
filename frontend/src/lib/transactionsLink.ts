@@ -82,6 +82,11 @@ export interface TransactionsLinkFilters {
   /** The account's name, as the page's select knows it. */
   account?: string | undefined
   tagId?: string | undefined
+  /**
+   * The rows carrying at least one tag of this family, each once — the
+   * union of its tags, as the family's figures read it.
+   */
+  tagFamilyId?: string | undefined
   /** `YYYY-MM`: expanded to `from` / `to` covering the whole month. */
   month?: string | undefined
   /** `YYYY-MM-DD`, inclusive. */
@@ -150,6 +155,7 @@ export const TRANSACTIONS_QUERY_KEYS = [
   'subcategory',
   'account',
   'tag',
+  'family',
   'notPointed',
   'review',
   'recurrence',
@@ -242,6 +248,8 @@ export function transactionsQuery(
   if (account) query.account = account
   const tag = trimmed(filters.tagId)
   if (tag) query.tag = tag
+  const family = trimmed(filters.tagFamilyId)
+  if (family) query.family = family
   if (filters.notPointed) query.notPointed = '1'
   if (filters.review) query.review = '1'
   const recurrence = trimmed(filters.recurrence)
@@ -331,6 +339,8 @@ export function parseTransactionsQuery(
   if (account) filters.account = account
   const tag = get('tag')
   if (tag) filters.tagId = tag
+  const family = get('family')
+  if (family) filters.tagFamilyId = family
   if (get('notPointed') === '1') filters.notPointed = true
   if (get('review') === '1') filters.review = true
   const recurrence = get('recurrence')

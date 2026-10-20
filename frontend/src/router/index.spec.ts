@@ -79,6 +79,19 @@ describe('router guard', () => {
   })
 })
 
+describe('router tags', () => {
+  it('opens a family’s page, and a tag’s page beside it', () => {
+    expect(router.resolve('/tags/families/fam-1')).toMatchObject({
+      name: 'tag-family',
+      params: { id: 'fam-1' },
+    })
+    expect(router.resolve('/tags/tag-1')).toMatchObject({
+      name: 'tag-analysis',
+      params: { id: 'tag-1' },
+    })
+  })
+})
+
 describe('router scroll', () => {
   const scroll = router.options.scrollBehavior
   // The scroll hook takes normalized locations; a resolved one carries the

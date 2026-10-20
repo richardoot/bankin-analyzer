@@ -401,6 +401,8 @@ export interface TransactionQueryParams {
   isPointed?: boolean | undefined
   account?: string | undefined
   tagId?: string | undefined
+  /** The rows carrying at least one tag of this family, each once. */
+  tagFamilyId?: string | undefined
   search?: string | undefined
   amountMin?: number | undefined
   amountMax?: number | undefined
@@ -524,6 +526,9 @@ export interface UpdatePersonDto {
   email?: string
 }
 
+/** Where a dated tag's window stands relative to today (Paris day). */
+export type TagEventStatus = 'upcoming' | 'ongoing' | 'past'
+
 export interface TagDto {
   id: string
   name: string
@@ -537,8 +542,53 @@ export interface TagDto {
   eventEndDate: string | null
   /** Total envelope allocated to the event (never a monthly amount) */
   budgetAmount: number | null
+  /** Computed by the server; null when the tag has no complete window */
+  status: TagEventStatus | null
+  /** The family this tag is an edition of, or null */
+  familyId: string | null
+  /** That family, named, or null */
+  family: TagFamilySummaryDto | null
   createdAt: string
   updatedAt: string
+}
+
+/** A family as a tag names it. */
+export interface TagFamilySummaryDto {
+  id: string
+  name: string
+  color: string | null
+}
+
+/**
+ * A genre above the tag (« Voyages », « HYROX »), defined by the user. One
+ * level only; deleting it keeps its tags, without a family.
+ */
+export interface TagFamilyDto {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+  /** Envelope over a calendar year, or null */
+  annualBudget: number | null
+  tagCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateTagFamilyDto {
+  name: string
+  color?: string
+  icon?: string
+  /** Envelope over a calendar year, ≥ 0 */
+  annualBudget?: number
+}
+
+export interface UpdateTagFamilyDto {
+  name?: string
+  /** null clears the colour */
+  color?: string | null
+  /** null clears the envelope */
+  annualBudget?: number | null
 }
 
 export interface CreateTagDto {
@@ -549,6 +599,7 @@ export interface CreateTagDto {
   eventStartDate?: string
   eventEndDate?: string
   budgetAmount?: number
+  familyId?: string
 }
 
 export interface UpdateTagDto {
@@ -561,6 +612,8 @@ export interface UpdateTagDto {
   eventEndDate?: string | null
   /** null clears the envelope */
   budgetAmount?: number | null
+  /** null takes the tag out of its family */
+  familyId?: string | null
 }
 
 /** One project (exceptional tag) weighed against its envelope. */
@@ -576,9 +629,33 @@ export interface TagBudgetSummaryItemDto {
   spent: number
 }
 
-export interface TagBudgetSummaryDto {
+/**
+ * A family with an annual envelope, charged against the window as a whole:
+ * its prorated envelope replaces its tags' own envelopes.
+ */
+export interface TagBudgetSummaryFamilyDto {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+  annualBudget: number
+  /** annualBudget × months of the window / 12 */
+  proratedBudget: number
+  /** Its exceptional tags' spending in the window, each transaction once */
+  spent: number
+  /** Its exceptional tags overlapping the window; may be empty */
   items: TagBudgetSummaryItemDto[]
-  /** Sum of declared envelopes; projects without one contribute 0 */
+}
+
+export interface TagBudgetSummaryDto {
+  /** Projects outside any family with an annual envelope */
+  items: TagBudgetSummaryItemDto[]
+  /** Every family with an annual envelope, a tag in the window or not */
+  families: TagBudgetSummaryFamilyDto[]
+  /**
+   * What the window commits: the items' envelopes plus each family's
+   * prorated envelope — the only figure the reserve is charged with
+   */
   totalBudget: number
   totalSpent: number
 }
@@ -619,6 +696,8 @@ export interface TagAnalysisDto {
     eventStartDate: string | null
     eventEndDate: string | null
     budgetAmount: number | null
+    /** The family the tag is filed under, or null */
+    family: TagFamilySummaryDto | null
   }
   totalExpenses: number
   totalIncome: number
@@ -632,6 +711,98 @@ export interface TagAnalysisDto {
   baseline: TagAnalysisBaselineDto | null
   /** Sum of the per-category surplus; null when no baseline applies */
   totalSurplus: number | null
+}
+
+/**
+ * Which year a transaction of a family belongs to: `event`, the year its
+ * dated tag starts in (a January trip paid in November is the trip's year);
+ * `cash`, the year it was paid.
+ */
+export type TagFamilyAnalysisBasis = 'event' | 'cash'
+
+export interface TagFamilyAnalysisYearDto {
+  year: number
+  expenses: number
+  income: number
+  transactionCount: number
+}
+
+/** One tag of a family, over its transactions in the chosen scope. */
+export interface TagFamilyAnalysisTagDto {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+  isExceptional: boolean
+  status: TagEventStatus | null
+  eventStartDate: string | null
+  eventEndDate: string | null
+  /** Days of the window, both bounds included; null without a window */
+  days: number | null
+  spent: number
+  spentPerDay: number | null
+  /** The edition's surplus, as on its own page; null without a window or in part */
+  surplus: number | null
+  budgetAmount: number | null
+  transactionCount: number
+  /** Some of its transactions fall outside the scope (paid across two years) */
+  isPartial: boolean
+}
+
+export interface TagFamilyEditionRefDto {
+  id: string
+  name: string
+  spent: number
+}
+
+/** The dated editions of the scope weighed against each other. */
+export interface TagFamilyEditionComparisonDto {
+  editionCount: number
+  averageSpent: number
+  medianSpent: number
+  /** Total spent over total days of window */
+  averagePerDay: number
+  mostExpensive: TagFamilyEditionRefDto
+  leastExpensive: TagFamilyEditionRefDto
+}
+
+/** The union of a family's tags, each transaction counted once. */
+export interface TagFamilyAnalysisDto {
+  family: {
+    id: string
+    name: string
+    color: string | null
+    icon: string | null
+    annualBudget: number | null
+  }
+  basis: TagFamilyAnalysisBasis
+  year: number | null
+  /** Every year the family touches in the chosen basis, ascending */
+  availableYears: number[]
+  totalExpenses: number
+  totalIncome: number
+  net: number
+  transactionCount: number
+  /** Sum of the tags' surplus; null when none has one */
+  totalSurplus: number | null
+  byCategory: TagAnalysisCategoryDto[]
+  byYear: TagFamilyAnalysisYearDto[]
+  tags: TagFamilyAnalysisTagDto[]
+  comparison: TagFamilyEditionComparisonDto | null
+  /**
+   * The envelope over the year asked for, read in event basis whatever
+   * `basis`; null without an envelope or without a year
+   */
+  envelope: TagFamilyEnvelopeDto | null
+}
+
+/** The annual envelope weighed against one year, in event basis. */
+export interface TagFamilyEnvelopeDto {
+  annualBudget: number
+  year: number
+  spentEventBasis: number
+  /** Negative on an overrun */
+  remaining: number
 }
 
 export interface TransactionSummaryDto {
@@ -954,6 +1125,25 @@ export interface SpendingStructureDto {
   total: number
 }
 
+/**
+ * One tag family over the current calendar year (in Paris), in event basis:
+ * a line belongs to the year its dated tag starts in, and counts once.
+ */
+export interface TagFamilyOfYearDto {
+  id: string
+  name: string
+  color: string | null
+  icon: string | null
+  year: number
+  /** Gross expenses, divided, stats-excluded accounts ignored. */
+  spent: number
+  annualBudget: number | null
+  /** `annualBudget - spent`, negative over; null without an envelope. */
+  remaining: number | null
+  transactionCount: number
+  tagCount: number
+}
+
 export interface DashboardSummaryDto {
   monthlyData: MonthlyDataDto[]
   expensesByCategory: CategoryDataDto[]
@@ -979,6 +1169,13 @@ export interface DashboardSummaryDto {
   remainingToLive?: number | null
   /** What is still owed to the user across every open debt, a stock in full euros. */
   pendingReceivables?: number
+  /**
+   * The tag families with expenses in the current calendar year, whatever
+   * the period, biggest first. Absent on an older server.
+   */
+  tagFamiliesOfYear?: TagFamilyOfYearDto[]
+  /** Real expenses of that year: the share's denominator. Null without families. */
+  realExpensesOfYear?: number | null
 }
 
 // Budget plan DTOs
@@ -1976,6 +2173,7 @@ export const api = {
       searchParams.set('isPointed', params.isPointed.toString())
     if (params?.account) searchParams.set('account', params.account)
     if (params?.tagId) searchParams.set('tagId', params.tagId)
+    if (params?.tagFamilyId) searchParams.set('tagFamilyId', params.tagFamilyId)
     if (params?.search) searchParams.set('search', params.search)
     if (params?.amountMin !== undefined)
       searchParams.set('amountMin', params.amountMin.toString())
@@ -2434,6 +2632,65 @@ export const api = {
     }
   },
 
+  // Tag families API
+
+  async getTagFamilies(): Promise<TagFamilyDto[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tag-families`)
+
+    if (!response.ok) {
+      throw new Error("Impossible de charger les familles d'étiquettes")
+    }
+
+    return response.json() as Promise<TagFamilyDto[]>
+  },
+
+  async createTagFamily(dto: CreateTagFamilyDto): Promise<TagFamilyDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tag-families`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      const message =
+        response.status === 409
+          ? 'Une famille porte déjà ce nom'
+          : 'Impossible de créer la famille'
+      throw new Error(message)
+    }
+
+    return response.json() as Promise<TagFamilyDto>
+  },
+
+  async updateTagFamily(
+    id: string,
+    dto: UpdateTagFamilyDto
+  ): Promise<TagFamilyDto> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tag-families/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    })
+
+    if (!response.ok) {
+      const message =
+        response.status === 409
+          ? 'Une famille porte déjà ce nom'
+          : 'Impossible de modifier la famille'
+      throw new Error(message)
+    }
+
+    return response.json() as Promise<TagFamilyDto>
+  },
+
+  async deleteTagFamily(id: string): Promise<void> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tag-families/${id}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      throw new Error('Impossible de supprimer la famille')
+    }
+  },
+
   async attachTagToTransactions(
     tagId: string,
     transactionIds: string[]
@@ -2478,6 +2735,27 @@ export const api = {
     }
 
     return response.json() as Promise<TagAnalysisDto>
+  },
+
+  async getTagFamilyAnalysis(
+    id: string,
+    params: { year?: number | null; basis?: TagFamilyAnalysisBasis } = {}
+  ): Promise<TagFamilyAnalysisDto> {
+    const searchParams = new URLSearchParams()
+    if (params.year !== undefined && params.year !== null) {
+      searchParams.set('year', String(params.year))
+    }
+    if (params.basis) searchParams.set('basis', params.basis)
+    const query = searchParams.toString()
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/tag-families/${id}/analysis${query ? `?${query}` : ''}`
+    )
+
+    if (!response.ok) {
+      throw new Error("Impossible de charger l'analyse de la famille")
+    }
+
+    return response.json() as Promise<TagFamilyAnalysisDto>
   },
 
   // Reimbursements API

@@ -141,6 +141,13 @@ export function useDashboardData() {
   const pendingReceivables = computed(
     () => summaryData.value?.pendingReceivables ?? 0
   )
+  // The tag families over the current calendar year, whatever the period.
+  const tagFamiliesOfYear = computed(
+    () => summaryData.value?.tagFamiliesOfYear ?? []
+  )
+  const realExpensesOfYear = computed(
+    () => summaryData.value?.realExpensesOfYear ?? null
+  )
 
   // Number of months in the period (used for averages)
   const periodMonths = computed(() => monthlyData.value.length || 1)
@@ -470,6 +477,8 @@ export function useDashboardData() {
     pendingReceivables,
     savingsRate,
     remainingToLive,
+    tagFamiliesOfYear,
+    realExpensesOfYear,
     isLoading,
     error,
     fetchData,

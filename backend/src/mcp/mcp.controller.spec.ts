@@ -13,6 +13,9 @@ import { ReimbursementsService } from '../reimbursements/reimbursements.service'
 import { SettlementsService } from '../settlements/settlements.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
 import { SmoothingSuggestionsService } from '../transactions/smoothing-suggestions.service'
+import { TagsService } from '../tags/tags.service'
+import { TagFamiliesService } from '../tag-families/tag-families.service'
+import { exceptionalOnSmoothedError } from '../transactions/amortization'
 import { NotFoundException, BadRequestException } from '@nestjs/common'
 
 /* ──────────────────────────────────────────────────────────────
@@ -106,6 +109,18 @@ const mockSmoothingSuggestionsService = {
   list: vi.fn(),
 }
 
+const mockTagsService = {
+  findAllByUser: vi.fn(),
+  spentByTag: vi.fn(),
+  findCandidates: vi.fn(),
+  attachTransactions: vi.fn(),
+  detachTransaction: vi.fn(),
+}
+
+const mockTagFamiliesService = {
+  findAllByUser: vi.fn(),
+}
+
 /** The JSON inside a <user_financial_data> answer. */
 const parseData = (result: { content: Array<{ text: string }> }): any =>
   JSON.parse(
@@ -148,6 +163,8 @@ describe('McpController', () => {
           provide: SmoothingSuggestionsService,
           useValue: mockSmoothingSuggestionsService,
         },
+        { provide: TagsService, useValue: mockTagsService },
+        { provide: TagFamiliesService, useValue: mockTagFamiliesService },
       ],
     })
       .overrideGuard(McpAuthGuard)
@@ -183,10 +200,13 @@ describe('McpController', () => {
         'get_recurrences',
         'get_reimbursements',
         'get_smoothing_suggestions',
+        'get_tag_candidates',
+        'get_tags',
         'get_transaction',
         'get_transactions',
         'set_transaction_amortization',
         'set_transaction_category',
+        'set_transaction_tags',
         'set_transactions_category',
         'settle_reimbursements',
       ])
@@ -1700,6 +1720,429 @@ describe('McpController', () => {
 
       expect(parsed.counts).toEqual({ updated: 1, unchanged: 0, refused: 1 })
       expect(parsed.results[0].reason).toContain('Seule une dépense')
+    })
+  })
+
+  describe('tags', () => {
+    /** A tag as TagsService.findAllByUser renders it. */
+    function tagDto(
+      id: string,
+      name: string,
+      overrides: Record<string, unknown> = {}
+    ): Record<string, unknown> {
+      return {
+        id,
+        name,
+        color: '#ef4444',
+        icon: null,
+        transactionCount: 0,
+        isExceptional: false,
+        eventStartDate: null,
+        eventEndDate: null,
+        budgetAmount: null,
+        status: null,
+        familyId: null,
+        family: null,
+        createdAt: new Date('2026-01-01'),
+        updatedAt: new Date('2026-01-01'),
+        ...overrides,
+      }
+    }
+
+    const races = {
+      id: 'fam-r',
+      name: 'Compétitions',
+      color: '#ef4444',
+      icon: null,
+      annualBudget: 1500,
+      tagCount: 2,
+    }
+
+    const TAGS = [
+      tagDto('tag-gifts', 'Cadeaux', { transactionCount: 4 }),
+      tagDto('tag-paris', 'HYROX Paris 2025', {
+        isExceptional: true,
+        eventStartDate: '2025-04-12',
+        eventEndDate: '2025-04-13',
+        status: 'past',
+        familyId: 'fam-r',
+        family: { id: 'fam-r', name: 'Compétitions', color: '#ef4444' },
+        transactionCount: 3,
+      }),
+      tagDto('tag-lyon', 'HYROX Lyon 2026', {
+        isExceptional: true,
+        eventStartDate: '2026-11-07',
+        eventEndDate: '2026-11-08',
+        status: 'upcoming',
+        familyId: 'fam-r',
+        family: { id: 'fam-r', name: 'Compétitions', color: '#ef4444' },
+      }),
+    ]
+
+    function givenTags(): void {
+      mockTagsService.findAllByUser.mockResolvedValue(TAGS)
+      mockTagFamiliesService.findAllByUser.mockResolvedValue([races])
+      mockTagsService.spentByTag.mockResolvedValue(
+        new Map([
+          ['tag-gifts', 120.5],
+          ['tag-paris', 342],
+        ])
+      )
+    }
+
+    describe('get_tags', () => {
+      it('lists every tag with its family, status, count and spend', async () => {
+        givenTags()
+        const tools = await registerTools()
+
+        const parsed = parseData(await tools.get('get_tags')!({}))
+
+        expect(mockTagsService.findAllByUser).toHaveBeenCalledWith(mockUser.id)
+        expect(mockTagsService.spentByTag).toHaveBeenCalledWith(mockUser.id)
+        expect(parsed.total).toBe(3)
+        expect(parsed.tags[1]).toEqual({
+          id: 'tag-paris',
+          name: 'HYROX Paris 2025',
+          color: '#ef4444',
+          isExceptional: true,
+          eventStartDate: '2025-04-12',
+          eventEndDate: '2025-04-13',
+          status: 'past',
+          family: { id: 'fam-r', name: 'Compétitions', annualBudget: 1500 },
+          transactionCount: 3,
+          spent: 342,
+        })
+        // A tag with no expense spent nothing; a theme has no family.
+        expect(
+          parsed.tags.map((t: { spent: number; family: unknown }) => [
+            t.spent,
+            t.family === null,
+          ])
+        ).toEqual([
+          [120.5, true],
+          [342, false],
+          [0, false],
+        ])
+      })
+
+      it('fences the answer as user data', async () => {
+        givenTags()
+        const tools = await registerTools()
+
+        const result = await tools.get('get_tags')!({})
+
+        expect(result.content[0]?.text).toMatch(
+          /^<user_financial_data>\n[\s\S]*\n<\/user_financial_data>$/
+        )
+      })
+
+      it('filters by status, family and exceptional flag', async () => {
+        givenTags()
+        const tools = await registerTools()
+
+        const names = async (
+          params: Record<string, unknown>
+        ): Promise<string[]> =>
+          parseData(await tools.get('get_tags')!(params)).tags.map(
+            (t: { name: string }) => t.name
+          )
+
+        expect(await names({ status: 'past' })).toEqual(['HYROX Paris 2025'])
+        expect(await names({ familyId: 'fam-r' })).toEqual([
+          'HYROX Paris 2025',
+          'HYROX Lyon 2026',
+        ])
+        expect(await names({ isExceptional: false })).toEqual(['Cadeaux'])
+      })
+    })
+
+    describe('get_tag_candidates', () => {
+      it('reads the candidates of the tag, with the rule on what is left out', async () => {
+        mockTagsService.findCandidates.mockResolvedValue({
+          tag: {
+            id: 'tag-paris',
+            name: 'HYROX Paris 2025',
+            isExceptional: true,
+            eventStartDate: '2025-04-12',
+            eventEndDate: '2025-04-13',
+          },
+          searchedFrom: '2025-04-10',
+          searchedTo: '2025-04-15',
+          candidates: [
+            {
+              id: 'tx-1',
+              date: '2025-04-12',
+              label: 'CB BRASSERIE',
+              amount: -42,
+              accountId: 'acc-1',
+              categoryId: 'cat-food',
+              category: 'Alimentation',
+              categoryKey: 'food',
+              subcategoryId: 'sub-rest',
+              subcategory: 'Restaurants',
+              subcategoryKey: 'food.restaurants',
+              rhythm: 'VARIABLE',
+              amortizationMonths: null,
+            },
+          ],
+        })
+        const tools = await registerTools()
+
+        const parsed = parseData(
+          await tools.get('get_tag_candidates')!({ tagId: 'tag-paris' })
+        )
+
+        expect(mockTagsService.findCandidates).toHaveBeenCalledWith(
+          'tag-paris',
+          mockUser.id
+        )
+        expect(parsed).toMatchObject({
+          searchedFrom: '2025-04-10',
+          searchedTo: '2025-04-15',
+          total: 1,
+          candidates: [{ id: 'tx-1', rhythm: 'VARIABLE' }],
+        })
+        expect(parsed.rule).toContain('par marchand')
+      })
+
+      it("answers the service's refusal of an undated tag", async () => {
+        mockTagsService.findCandidates.mockRejectedValue(
+          new BadRequestException(
+            "L'étiquette « Cadeaux » n'a pas de fenêtre (dates de début et de fin)"
+          )
+        )
+        const tools = await registerTools()
+
+        const result = await tools.get('get_tag_candidates')!({
+          tagId: 'tag-gifts',
+        })
+
+        expect(result.isError).toBe(true)
+        expect(result.content[0]?.text).toContain(
+          "Refusé par le serveur : L'étiquette « Cadeaux » n'a pas de fenêtre"
+        )
+      })
+    })
+
+    describe('set_transaction_tags', () => {
+      /** An expense, read with the tags it carries. */
+      function tagged(
+        tagIds: string[],
+        overrides: Record<string, unknown> = {}
+      ): Record<string, unknown> {
+        return {
+          id: 'tx-1',
+          date: new Date('2025-04-12'),
+          amount: -85,
+          description: 'CB HOTEL',
+          type: 'EXPENSE',
+          amortizationMonths: null,
+          tags: tagIds.map(id => ({
+            tag: { id, name: TAGS.find(t => t.id === id)?.name },
+          })),
+          ...overrides,
+        }
+      }
+
+      /** The row as read before the write, then after it. */
+      function givenTransaction(before: string[], after: string[]): void {
+        mockTransactionsService.findOne
+          .mockResolvedValueOnce(tagged(before))
+          .mockResolvedValueOnce(tagged(after))
+      }
+
+      beforeEach(() => {
+        mockTagsService.findAllByUser.mockResolvedValue(TAGS)
+        mockTagsService.attachTransactions.mockResolvedValue({ attached: 1 })
+        mockTagsService.detachTransaction.mockResolvedValue(undefined)
+      })
+
+      it('adds and removes, and answers the tags before and after', async () => {
+        givenTransaction(['tag-gifts'], ['tag-paris'])
+        const tools = await registerTools()
+
+        const result = await tools.get('set_transaction_tags')!({
+          transactionId: 'tx-1',
+          add: ['tag-paris'],
+          remove: ['tag-gifts'],
+          expectedAmount: 85,
+        })
+
+        expect(result.isError).toBeUndefined()
+        expect(mockTagsService.attachTransactions).toHaveBeenCalledWith(
+          'tag-paris',
+          mockUser.id,
+          ['tx-1']
+        )
+        expect(mockTagsService.detachTransaction).toHaveBeenCalledWith(
+          'tag-gifts',
+          mockUser.id,
+          'tx-1'
+        )
+        expect(parseData(result)).toMatchObject({
+          status: 'updated',
+          transaction: { id: 'tx-1', amount: -85 },
+          added: [{ id: 'tag-paris', name: 'HYROX Paris 2025' }],
+          removed: [{ id: 'tag-gifts', name: 'Cadeaux' }],
+          before: [{ id: 'tag-gifts', isExceptional: false }],
+          after: [{ id: 'tag-paris', isExceptional: true }],
+        })
+      })
+
+      it('is idempotent: a tag already there or already gone is said, not refused', async () => {
+        mockTransactionsService.findOne.mockResolvedValue(tagged(['tag-paris']))
+        const tools = await registerTools()
+
+        const result = await tools.get('set_transaction_tags')!({
+          transactionId: 'tx-1',
+          add: ['tag-paris'],
+          remove: ['tag-gifts'],
+        })
+
+        expect(result.isError).toBeUndefined()
+        expect(parseData(result)).toMatchObject({
+          status: 'unchanged',
+          alreadyPresent: [{ id: 'tag-paris' }],
+          alreadyAbsent: [{ id: 'tag-gifts' }],
+        })
+        expect(mockTagsService.attachTransactions).not.toHaveBeenCalled()
+        expect(mockTagsService.detachTransaction).not.toHaveBeenCalled()
+      })
+
+      it('writes only what changes when part of the call is already done', async () => {
+        givenTransaction(['tag-paris'], ['tag-paris', 'tag-gifts'])
+        const tools = await registerTools()
+
+        const parsed = parseData(
+          await tools.get('set_transaction_tags')!({
+            transactionId: 'tx-1',
+            add: ['tag-paris', 'tag-gifts'],
+          })
+        )
+
+        expect(mockTagsService.attachTransactions).toHaveBeenCalledTimes(1)
+        expect(mockTagsService.attachTransactions).toHaveBeenCalledWith(
+          'tag-gifts',
+          mockUser.id,
+          ['tx-1']
+        )
+        expect(parsed).toMatchObject({
+          status: 'updated',
+          added: [{ id: 'tag-gifts' }],
+          alreadyPresent: [{ id: 'tag-paris' }],
+        })
+      })
+
+      it('refuses without writing when the amount guard disagrees', async () => {
+        mockTransactionsService.findOne.mockResolvedValue(tagged([]))
+        const tools = await registerTools()
+
+        const result = await tools.get('set_transaction_tags')!({
+          transactionId: 'tx-1',
+          add: ['tag-paris'],
+          expectedAmount: 99,
+        })
+
+        expect(result.isError).toBe(true)
+        expect(result.content[0]?.text).toBe(
+          "Garde-fou : la transaction est de 85 €, pas de 99 €. Rien n'a été écrit."
+        )
+        expect(mockTagsService.attachTransactions).not.toHaveBeenCalled()
+      })
+
+      it("refuses someone else's transaction, cleanly", async () => {
+        mockTransactionsService.findOne.mockRejectedValue(
+          new NotFoundException('Transaction with ID tx-x not found')
+        )
+        const tools = await registerTools()
+
+        const result = await tools.get('set_transaction_tags')!({
+          transactionId: 'tx-x',
+          add: ['tag-paris'],
+        })
+
+        expect(result.isError).toBe(true)
+        expect(result.content[0]?.text).toContain(
+          'Transaction tx-x introuvable chez cet utilisateur'
+        )
+        expect(mockTagsService.attachTransactions).not.toHaveBeenCalled()
+      })
+
+      it('refuses a tag that is not the user’s, before writing anything', async () => {
+        mockTransactionsService.findOne.mockResolvedValue(tagged(['tag-gifts']))
+        const tools = await registerTools()
+
+        const result = await tools.get('set_transaction_tags')!({
+          transactionId: 'tx-1',
+          add: ['tag-paris', 'tag-foreign'],
+          remove: ['tag-gifts'],
+        })
+
+        expect(result.isError).toBe(true)
+        expect(result.content[0]?.text).toContain('tag-foreign')
+        expect(result.content[0]?.text).toContain("Rien n'a été écrit")
+        expect(mockTagsService.attachTransactions).not.toHaveBeenCalled()
+        expect(mockTagsService.detachTransaction).not.toHaveBeenCalled()
+      })
+
+      it('refuses an empty call and the same tag added and removed', async () => {
+        const tools = await registerTools()
+
+        const empty = await tools.get('set_transaction_tags')!({
+          transactionId: 'tx-1',
+        })
+        const both = await tools.get('set_transaction_tags')!({
+          transactionId: 'tx-1',
+          add: ['tag-paris'],
+          remove: ['tag-paris'],
+        })
+
+        expect([empty.isError, both.isError]).toEqual([true, true])
+        expect(mockTransactionsService.findOne).not.toHaveBeenCalled()
+      })
+
+      it("refuses an exceptional tag on a smoothed expense with the service's words, writing nothing", async () => {
+        mockTransactionsService.findOne.mockResolvedValue(
+          tagged(['tag-lyon'], { amortizationMonths: 24 })
+        )
+        const refusal = exceptionalOnSmoothedError(['CB HOTEL'], 1)
+        mockTagsService.attachTransactions.mockImplementation(
+          async (tagId: string) => {
+            if (tagId === 'tag-paris') throw refusal
+            return { attached: 1 }
+          }
+        )
+        const tools = await registerTools()
+
+        // The theme is listed first; the exceptional tag is still tried
+        // first, so the refusal comes before any write.
+        const result = await tools.get('set_transaction_tags')!({
+          transactionId: 'tx-1',
+          add: ['tag-gifts', 'tag-paris'],
+          remove: ['tag-lyon'],
+        })
+
+        expect(result.isError).toBe(true)
+        expect(result.content[0]?.text).toBe(
+          `Refusé par le serveur : ${refusal.message}`
+        )
+        expect(mockTagsService.attachTransactions).toHaveBeenCalledTimes(1)
+        expect(mockTagsService.detachTransaction).not.toHaveBeenCalled()
+      })
+
+      it('tries an exceptional tag before an ordinary one', async () => {
+        givenTransaction([], ['tag-gifts', 'tag-paris'])
+        const tools = await registerTools()
+
+        await tools.get('set_transaction_tags')!({
+          transactionId: 'tx-1',
+          add: ['tag-gifts', 'tag-paris'],
+        })
+
+        expect(
+          mockTagsService.attachTransactions.mock.calls.map(c => c[0])
+        ).toEqual(['tag-paris', 'tag-gifts'])
+      })
     })
   })
 })

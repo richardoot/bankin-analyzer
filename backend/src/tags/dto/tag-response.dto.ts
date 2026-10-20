@@ -1,3 +1,13 @@
+import { ApiProperty } from '@nestjs/swagger'
+import { TAG_EVENT_STATUSES, type TagEventStatus } from '../tag-status'
+
+/** The family a tag belongs to, as much as a card needs to name it. */
+export class TagFamilySummaryDto {
+  id!: string
+  name!: string
+  color!: string | null
+}
+
 export class TagResponseDto {
   /** Tag ID */
   id!: string
@@ -25,6 +35,20 @@ export class TagResponseDto {
 
   /** Total envelope allocated to this event, or null */
   budgetAmount!: number | null
+
+  /**
+   * Where the event window stands relative to today (Paris calendar day,
+   * bounds included). Null when the tag has no complete window.
+   */
+  @ApiProperty({ enum: TAG_EVENT_STATUSES, nullable: true })
+  status!: TagEventStatus | null
+
+  /** The family this tag is an edition of, or null */
+  familyId!: string | null
+
+  /** That family, named, or null */
+  @ApiProperty({ type: TagFamilySummaryDto, nullable: true })
+  family!: TagFamilySummaryDto | null
 
   /** Creation date */
   createdAt!: Date

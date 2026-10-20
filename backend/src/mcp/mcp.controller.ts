@@ -35,6 +35,9 @@ import { SettlementsService } from '../settlements/settlements.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
 import { SmoothingSuggestionsService } from '../transactions/smoothing-suggestions.service'
 import { suggestedAmortizationMonths } from '../transactions/smoothing-suggestions'
+import { TagsService } from '../tags/tags.service'
+import { TagFamiliesService } from '../tag-families/tag-families.service'
+import { TAG_EVENT_STATUSES, type TagEventStatus } from '../tags/tag-status'
 import type { ReimbursementResponseDto } from '../reimbursements/dto'
 import { LEDGER_EPSILON, round2 } from '../reimbursements/reimbursement-ledger'
 import {
@@ -270,6 +273,21 @@ const SMOOTHING_RULE =
   'deforme le plan, jamais exceptionnel. Une transaction est exceptionnelle ou lissee, jamais les deux. ' +
   'Un achat deja paye en plusieurs fois ou a credit ne se lisse pas : les echeances font deja le travail.'
 
+/**
+ * What a dated tag's candidates leave out, said wherever an agent reads them:
+ * the window finds what was paid during the event, not what was bought for it.
+ */
+const TAG_CANDIDATES_RULE =
+  'Le deplacement, l hebergement ou l inscription achetes des mois avant (train, avion, dossard) ne sont pas dans la fenetre : ' +
+  'les chercher par marchand avec get_transactions (search). Proposer a l utilisateur avant de rattacher.'
+
+/** A tag as a write on a transaction reports it, before and after. */
+interface TagOnTransaction {
+  id: string
+  name: string
+  isExceptional: boolean
+}
+
 /** The two guards a write may carry, checked against the row before anything is written. */
 interface FilingGuards {
   expectedCategoryName?: string | undefined
@@ -290,7 +308,9 @@ export class McpController {
     private readonly reimbursementsService: ReimbursementsService,
     private readonly settlementsService: SettlementsService,
     private readonly recurrencesService: RecurrencesService,
-    private readonly smoothingSuggestionsService: SmoothingSuggestionsService
+    private readonly smoothingSuggestionsService: SmoothingSuggestionsService,
+    private readonly tagsService: TagsService,
+    private readonly tagFamiliesService: TagFamiliesService
   ) {}
 
   private async loadFilingTree(userId: string): Promise<{
@@ -1049,7 +1069,7 @@ export class McpController {
         'Le lissage commence au mois de la transaction ; chaque tranche vaut le net (remboursements demandes deduits, ' +
         'part du compte joint) divise par le nombre de mois. Le mode Reel, la liste et les soldes ne bougent pas. ' +
         SMOOTHING_RULE +
-        ' Refuse un revenu, un transfert, et une transaction qui porte une etiquette exceptionnelle (la retirer d abord, dans l application). ' +
+        ' Refuse un revenu, un transfert, et une transaction qui porte une etiquette exceptionnelle (la retirer d abord, avec set_transaction_tags). ' +
         'Renvoie le lissage avant et apres ; pour annuler, rappeler l outil avec l ancienne valeur.',
       {
         transactionId: z.string().describe('La depense a lisser'),
@@ -1117,6 +1137,248 @@ export class McpController {
         })
     )
 
+    // ── Tool: get_tags ──
+    server.tool(
+      'get_tags',
+      'Recupere les etiquettes de l utilisateur : evenements dates (fenetre, status upcoming/ongoing/past), ' +
+        'episodes sans date et themes, chacune avec sa famille (et l enveloppe annuelle de la famille), ' +
+        'son nombre de transactions et ce qu elle a depense (depenses en valeur absolue, part du compte joint, ' +
+        'comptes exclus des statistiques ignores). Une etiquette exceptionnelle sort ses transactions de la vie courante. ' +
+        'Une etiquette ou une famille se cree dans l application, jamais par le MCP.',
+      {
+        status: z
+          .enum(TAG_EVENT_STATUSES as [TagEventStatus, ...TagEventStatus[]])
+          .optional()
+          .describe(
+            'Filtrer les evenements dates : upcoming (a venir), ongoing (en cours), past (passe)'
+          ),
+        familyId: z.string().optional().describe('Filtrer par famille'),
+        isExceptional: z
+          .boolean()
+          .optional()
+          .describe('true : les etiquettes exceptionnelles seulement'),
+      },
+      async params =>
+        answer(async () => {
+          const [tags, families, spent] = await Promise.all([
+            this.tagsService.findAllByUser(userId),
+            this.tagFamiliesService.findAllByUser(userId),
+            this.tagsService.spentByTag(userId),
+          ])
+          const familyById = new Map(families.map(f => [f.id, f]))
+          const selected = tags.filter(
+            t =>
+              (params.status === undefined || t.status === params.status) &&
+              (params.familyId === undefined ||
+                t.familyId === params.familyId) &&
+              (params.isExceptional === undefined ||
+                t.isExceptional === params.isExceptional)
+          )
+          return dataResponse({
+            tags: selected.map(t => {
+              const family = t.familyId ? familyById.get(t.familyId) : null
+              return {
+                id: t.id,
+                name: t.name,
+                color: t.color,
+                isExceptional: t.isExceptional,
+                eventStartDate: t.eventStartDate,
+                eventEndDate: t.eventEndDate,
+                status: t.status,
+                family: family
+                  ? {
+                      id: family.id,
+                      name: family.name,
+                      annualBudget: family.annualBudget,
+                    }
+                  : null,
+                transactionCount: t.transactionCount,
+                spent: spent.get(t.id) ?? 0,
+              }
+            }),
+            total: selected.length,
+          })
+        })
+    )
+
+    // ── Tool: get_tag_candidates ──
+    server.tool(
+      'get_tag_candidates',
+      'Pour une etiquette datee, liste les depenses qui pourraient lui appartenir et ne la portent pas encore : ' +
+        'datees dans sa fenetre elargie de 2 jours de chaque cote (bornes incluses), sur un compte compte dans les statistiques, ' +
+        'hors depenses de rythme engage (abonnement, loyer, ligne d une recurrence) ; rhythm vaut VARIABLE ou null (non classee). ' +
+        'Chaque ligne porte amortizationMonths : une depense lissee ne peut pas recevoir une etiquette exceptionnelle. ' +
+        'Lecture seule : proposer a l utilisateur, puis set_transaction_tags pour rattacher. ' +
+        TAG_CANDIDATES_RULE,
+      {
+        tagId: z.string().describe('L etiquette datee (voir get_tags)'),
+      },
+      async params =>
+        answer(async () => {
+          const result = await this.tagsService.findCandidates(
+            params.tagId,
+            userId
+          )
+          return dataResponse({
+            ...result,
+            total: result.candidates.length,
+            rule: TAG_CANDIDATES_RULE,
+          })
+        })
+    )
+
+    // ── Tool: set_transaction_tags ──
+    server.tool(
+      'set_transaction_tags',
+      'Ajoute et retire des etiquettes sur une transaction, par identifiant (voir get_tags). ' +
+        'Tout est verifie avant d ecrire : transaction et etiquettes de l utilisateur, garde-fou expectedAmount. ' +
+        'Ajouter une etiquette deja presente ou retirer une absente n est pas une erreur, la reponse le dit. ' +
+        'Refuse une etiquette exceptionnelle sur une depense lissee : une transaction est exceptionnelle ou lissee, jamais les deux. ' +
+        'Ne cree ni etiquette ni famille : une nouvelle edition se cree dans l application. ' +
+        'Renvoie les etiquettes avant et apres ; pour annuler, rappeler l outil en inversant add et remove.',
+      {
+        transactionId: z.string().describe('La transaction'),
+        add: z
+          .array(z.string())
+          .max(MAX_BATCH)
+          .optional()
+          .describe('Etiquettes a poser, par identifiant'),
+        remove: z
+          .array(z.string())
+          .max(MAX_BATCH)
+          .optional()
+          .describe('Etiquettes a retirer, par identifiant'),
+        expectedAmount: z
+          .number()
+          .optional()
+          .describe(
+            'Garde-fou : montant absolu de la transaction. Si la base dit autre chose, rien n est ecrit.'
+          ),
+      },
+      async params =>
+        answer(async () => {
+          const add = [...new Set(params.add ?? [])]
+          const remove = [...new Set(params.remove ?? [])]
+          if (add.length === 0 && remove.length === 0) {
+            return errorResponse(
+              "Rien à faire : add et remove sont vides. Rien n'a été écrit."
+            )
+          }
+          const both = add.filter(id => remove.includes(id))
+          if (both.length > 0) {
+            return errorResponse(
+              `Une même étiquette ne peut être ajoutée et retirée dans le même appel (${both.join(', ')}). Rien n'a été écrit.`
+            )
+          }
+
+          let tx: ReadTransaction
+          try {
+            tx = await this.transactionsService.findOne(
+              params.transactionId,
+              userId
+            )
+          } catch (error) {
+            if (error instanceof HttpException && error.getStatus() === 404) {
+              return errorResponse(
+                `Transaction ${params.transactionId} introuvable chez cet utilisateur. Rien n'a été écrit.`
+              )
+            }
+            throw error
+          }
+
+          const spentAmount = Math.abs(Number(tx.amount))
+          if (
+            params.expectedAmount !== undefined &&
+            Math.abs(Math.abs(params.expectedAmount) - spentAmount) >
+              LEDGER_EPSILON
+          ) {
+            return errorResponse(
+              `Garde-fou : la transaction est de ${round2(spentAmount)} €, pas de ${params.expectedAmount} €. Rien n'a été écrit.`
+            )
+          }
+
+          // Every tag is checked before the first write: a call is applied
+          // whole or not at all.
+          const tags = await this.tagsService.findAllByUser(userId)
+          const tagById = new Map(tags.map(t => [t.id, t]))
+          const unknown = [...add, ...remove].filter(id => !tagById.has(id))
+          if (unknown.length > 0) {
+            return errorResponse(
+              `Étiquette(s) introuvable(s) chez cet utilisateur : ${unknown.join(', ')}. Rien n'a été écrit.`
+            )
+          }
+
+          const onTransaction = (t: ReadTransaction): TagOnTransaction[] =>
+            (t.tags ?? []).map(({ tag }) => ({
+              id: tag.id,
+              name: tag.name,
+              isExceptional: tagById.get(tag.id)?.isExceptional ?? false,
+            }))
+          const before = onTransaction(tx)
+          const current = new Set(before.map(t => t.id))
+          const named = (ids: string[]): TagOnTransaction[] =>
+            ids.flatMap(id => {
+              const t = tagById.get(id)
+              return t
+                ? [{ id: t.id, name: t.name, isExceptional: t.isExceptional }]
+                : []
+            })
+
+          // Exceptional tags first: the service refuses one on a smoothed
+          // expense, and refusing on the very first write leaves nothing
+          // half-done.
+          const toAdd = named(add.filter(id => !current.has(id))).sort(
+            (a, b) => Number(b.isExceptional) - Number(a.isExceptional)
+          )
+          const toRemove = named(remove.filter(id => current.has(id)))
+          const alreadyPresent = named(add.filter(id => current.has(id)))
+          const alreadyAbsent = named(remove.filter(id => !current.has(id)))
+
+          if (toAdd.length === 0 && toRemove.length === 0) {
+            return dataResponse({
+              status: 'unchanged',
+              message:
+                'Les etiquettes demandees sont deja dans cet etat : rien n a ete ecrit.',
+              transaction: transactionHeader(tx),
+              alreadyPresent,
+              alreadyAbsent,
+              before,
+              after: before,
+            })
+          }
+
+          for (const tag of toAdd) {
+            await this.tagsService.attachTransactions(tag.id, userId, [tx.id])
+          }
+          for (const tag of toRemove) {
+            await this.tagsService.detachTransaction(tag.id, userId, tx.id)
+          }
+
+          const updated = (await this.transactionsService.findOne(
+            tx.id,
+            userId
+          )) as ReadTransaction
+          const after = onTransaction(updated)
+
+          this.logger.log(
+            `tags user=${userId} transaction=${tx.id} ` +
+              `added=${toAdd.map(t => t.id).join(',') || '-'} ` +
+              `removed=${toRemove.map(t => t.id).join(',') || '-'}`
+          )
+
+          return dataResponse({
+            status: 'updated',
+            transaction: transactionHeader(tx),
+            added: toAdd,
+            removed: toRemove,
+            alreadyPresent,
+            alreadyAbsent,
+            before,
+            after,
+          })
+        })
+    )
+
     // ── Tool: get_smoothing_suggestions ──
     server.tool(
       'get_smoothing_suggestions',
@@ -1126,7 +1388,7 @@ export class McpController {
         'un achat d equipement (High-tech, Maison et deco, Sport et equipement de loisir) ou un imprevu (Entretien et reparation...) ' +
         'propose le lissage sur une duree selon la sous-categorie, ou de le laisser a sa date, jamais l etiquette exceptionnelle ; ' +
         'ailleurs, « Episode ou achat a lisser ? ». Lecture seule : poser la question a l utilisateur, puis ' +
-        'set_transaction_amortization pour lisser ; une etiquette exceptionnelle se pose dans l application. ' +
+        'set_transaction_amortization pour lisser ; une etiquette exceptionnelle se pose avec set_transaction_tags. ' +
         SMOOTHING_RULE,
       {
         months: z

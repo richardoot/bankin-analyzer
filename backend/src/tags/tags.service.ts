@@ -1,9 +1,8 @@
+import { TagBaselineService, categorySurplus } from './tag-baseline.service'
+import { TagNettingService } from './tag-netting.service'
+import { TagFamiliesService } from '../tag-families/tag-families.service'
 import {
-  EFFECTIVE_RHYTHM,
-  recurringTransactionsJoin,
-} from '../recurrences/recurrence-rhythm.sql'
-import { RecurrencesService } from '../recurrences/recurrences.service'
-import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -16,22 +15,28 @@ import type {
   UpdateTagDto,
   TagResponseDto,
   TagAnalysisDto,
-  TagAnalysisBaselineDto,
   TagAnalysisCategoryDto,
   TagAnalysisMonthDto,
   TagBudgetSummaryDto,
+  TagBudgetSummaryItemDto,
 } from './dto'
-import {
-  countDaysInWindow,
-  daysBetweenInclusive,
-  toEventIntervals,
-} from '../common/exceptional-periods'
+import { calendarDayIn, tagEventStatus } from './tag-status'
 import {
   exceptionalOnSmoothedError,
   SMOOTHED_ROWS_NAMED,
 } from '../transactions/amortization'
+import {
+  EFFECTIVE_RHYTHM,
+  recurringTransactionsJoin,
+} from '../recurrences/recurrence-rhythm.sql'
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000
+/** What a tag response reads besides the row: its count and its family. */
+const TAG_INCLUDE = {
+  _count: { select: { transactions: true } },
+  family: { select: { id: true, name: true, color: true } },
+} as const
+
+type TagFamilySummary = { id: string; name: string; color: string | null }
 
 /** Raw row: per-category aggregation for one tag. */
 interface TagCategoryRow {
@@ -59,12 +64,6 @@ interface TagSummaryRow {
   last_date: Date | null
 }
 
-/** Raw row: everyday spending per category over the reference window. */
-interface BaselineCategoryRow {
-  category_id: string | null
-  total_amount: number
-}
-
 /** Raw row: one exceptional tag weighed against its envelope. */
 interface TagBudgetRow {
   id: string
@@ -74,7 +73,90 @@ interface TagBudgetRow {
   event_start_date: Date | null
   event_end_date: Date | null
   budget_amount: number | null
+  family_id?: string | null
   spent: number
+}
+
+/** Raw row: what a family's tags spent in a window, each transaction once. */
+interface FamilyBudgetRow {
+  family_id: string
+  spent: number
+}
+
+/** Raw row: what one tag's rows spent. */
+interface TagSpentRow {
+  tag_id: string
+  spent: number
+}
+
+/** Raw row: an expense in a dated tag's window that does not carry it yet. */
+interface TagCandidateRow {
+  id: string
+  date: Date
+  description: string
+  amount: number
+  account_id: string | null
+  category_id: string | null
+  category_name: string | null
+  category_key: string | null
+  subcategory_id: string | null
+  subcategory_name: string | null
+  subcategory_key: string | null
+  rhythm: string | null
+  amortization_months: number | null
+}
+
+/**
+ * Days added on each side of an event's window when looking for the rows it
+ * may have missed: a dinner the evening before, a card payment booked two
+ * days late.
+ */
+export const TAG_CANDIDATE_MARGIN_DAYS = 2
+
+/** An expense that may belong to a dated tag, for an agent to propose. */
+export interface TagCandidate {
+  id: string
+  date: string
+  label: string
+  amount: number
+  accountId: string | null
+  categoryId: string | null
+  category: string | null
+  categoryKey: string | null
+  subcategoryId: string | null
+  subcategory: string | null
+  subcategoryKey: string | null
+  /** VARIABLE, or null when neither the subcategory nor its category says. */
+  rhythm: string | null
+  amortizationMonths: number | null
+}
+
+export interface TagCandidates {
+  tag: {
+    id: string
+    name: string
+    isExceptional: boolean
+    eventStartDate: string
+    eventEndDate: string
+  }
+  /** The window searched: the event's, widened by the margin on each side. */
+  searchedFrom: string
+  searchedTo: string
+  candidates: TagCandidate[]
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Whole months between two days, both inclusive — the convention of a
+ * budget plan's `monthCount`, so the prorata matches the plan's reserve.
+ */
+export function windowMonthCount(start: Date, end: Date): number {
+  const months =
+    (end.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+    (end.getUTCMonth() - start.getUTCMonth()) +
+    1
+  return Math.max(1, months)
 }
 
 function round(n: number): number {
@@ -96,12 +178,24 @@ function parseEventDate(value: string | null | undefined): Date | null {
 export class TagsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly recurrences: RecurrencesService
+    private readonly baselines: TagBaselineService,
+    private readonly families: TagFamiliesService,
+    private readonly netting: TagNettingService
   ) {}
 
+  /**
+   * `today` is the Paris calendar day the status is read against; a list
+   * computes it once so every tag of the response agrees.
+   */
   private toResponse(
-    tag: Tag & { _count?: { transactions: number } }
+    tag: Tag & {
+      _count?: { transactions: number }
+      family?: TagFamilySummary | null
+    },
+    today: string = calendarDayIn(new Date())
   ): TagResponseDto {
+    const eventStartDate = toIsoDate(tag.eventStartDate)
+    const eventEndDate = toIsoDate(tag.eventEndDate)
     return {
       id: tag.id,
       name: tag.name,
@@ -109,9 +203,14 @@ export class TagsService {
       icon: tag.icon,
       transactionCount: tag._count?.transactions ?? 0,
       isExceptional: tag.isExceptional,
-      eventStartDate: toIsoDate(tag.eventStartDate),
-      eventEndDate: toIsoDate(tag.eventEndDate),
+      eventStartDate,
+      eventEndDate,
       budgetAmount: tag.budgetAmount === null ? null : Number(tag.budgetAmount),
+      status: tagEventStatus(eventStartDate, eventEndDate, today),
+      familyId: tag.familyId,
+      family: tag.family
+        ? { id: tag.family.id, name: tag.family.name, color: tag.family.color }
+        : null,
       createdAt: tag.createdAt,
       updatedAt: tag.updatedAt,
     }
@@ -120,10 +219,126 @@ export class TagsService {
   async findAllByUser(userId: string): Promise<TagResponseDto[]> {
     const tags = await this.prisma.tag.findMany({
       where: { userId },
-      include: { _count: { select: { transactions: true } } },
+      include: TAG_INCLUDE,
       orderBy: { name: 'asc' },
     })
-    return tags.map(t => this.toResponse(t))
+    const today = calendarDayIn(new Date())
+    return tags.map(t => this.toResponse(t, today))
+  }
+
+  /**
+   * What each of the user's tags has spent, by tag id: the expenses it
+   * carries, in absolute value, divided by their account's divisor (a joint
+   * account counts for the user's share), stats-excluded accounts ignored —
+   * the conventions of the tag's analysis (`totalExpenses`). One grouped
+   * query for every tag; a tag with no expense is absent from the map.
+   */
+  async spentByTag(userId: string): Promise<Map<string, number>> {
+    const net = await this.netting.forUser(userId)
+    const rows = await this.prisma.$queryRaw<TagSpentRow[]>(Prisma.sql`
+      WITH ${net.ctes}
+      SELECT
+        tt.tag_id,
+        SUM(${net.amount})::float AS spent
+      FROM app.transaction_tags tt
+      JOIN app.tags tg ON tg.id = tt.tag_id
+      JOIN app.transactions t ON t.id = tt.transaction_id
+      LEFT JOIN app.accounts a ON a.id = t.account_id
+      ${net.joins}
+      WHERE tg.user_id = ${userId}
+        AND t.user_id = ${userId}
+        AND t.type = 'EXPENSE'
+        AND COALESCE(a.is_excluded_from_stats, false) = false
+      GROUP BY tt.tag_id
+    `)
+    return new Map(rows.map(r => [r.tag_id, round(r.spent ?? 0)]))
+  }
+
+  /**
+   * The expenses that may belong to a dated tag and do not carry it yet:
+   * dated within its window widened by two days on each side (bounds
+   * included), on an account counted in the statistics, and variable — a
+   * line whose effective rhythm is committed (a subscription, the rent, a
+   * line of a proven recurrence) runs on its own whatever the event.
+   *
+   * What was bought months before (the train, the entry fee) is not in the
+   * window by construction; it is found by merchant, not here.
+   */
+  async findCandidates(tagId: string, userId: string): Promise<TagCandidates> {
+    const tag = await this.getOwned(tagId, userId)
+    if (!tag.eventStartDate || !tag.eventEndDate) {
+      throw new BadRequestException(
+        `L'étiquette « ${tag.name} » n'a pas de fenêtre (dates de début et de fin) : ses candidates ne se cherchent pas par date. Renseignez sa période dans l'application, ou cherchez les transactions par libellé.`
+      )
+    }
+    const from = new Date(
+      tag.eventStartDate.getTime() - TAG_CANDIDATE_MARGIN_DAYS * DAY_MS
+    )
+    // Exclusive upper bound: the whole last day counts, whatever the time
+    // a row carries.
+    const until = new Date(
+      tag.eventEndDate.getTime() + (TAG_CANDIDATE_MARGIN_DAYS + 1) * DAY_MS
+    )
+
+    const rows = await this.prisma.$queryRaw<TagCandidateRow[]>(Prisma.sql`
+      SELECT
+        t.id,
+        t.date,
+        t.description,
+        t.amount::float AS amount,
+        t.account_id,
+        c.id AS category_id,
+        c.name AS category_name,
+        c.catalog_key AS category_key,
+        sc.id AS subcategory_id,
+        sc.name AS subcategory_name,
+        sc.catalog_key AS subcategory_key,
+        ${EFFECTIVE_RHYTHM} AS rhythm,
+        t.amortization_months
+      FROM app.transactions t
+      LEFT JOIN app.categories c ON c.id = t.category_id
+      LEFT JOIN app.subcategories sc ON sc.id = t.subcategory_id
+      LEFT JOIN app.accounts a ON a.id = t.account_id
+      ${recurringTransactionsJoin(userId)}
+      WHERE t.user_id = ${userId}
+        AND t.type = 'EXPENSE'
+        AND t.date >= ${from}
+        AND t.date < ${until}
+        AND COALESCE(a.is_excluded_from_stats, false) = false
+        AND NOT EXISTS (
+          SELECT 1 FROM app.transaction_tags tt
+          WHERE tt.transaction_id = t.id AND tt.tag_id = ${tagId}
+        )
+        AND (${EFFECTIVE_RHYTHM}) IS DISTINCT FROM 'COMMITTED'
+      ORDER BY t.date ASC, t.id ASC
+    `)
+
+    return {
+      tag: {
+        id: tag.id,
+        name: tag.name,
+        isExceptional: tag.isExceptional,
+        eventStartDate: toIsoDate(tag.eventStartDate) as string,
+        eventEndDate: toIsoDate(tag.eventEndDate) as string,
+      },
+      searchedFrom: toIsoDate(from) as string,
+      searchedTo: toIsoDate(new Date(until.getTime() - DAY_MS)) as string,
+      candidates: rows.map(r => ({
+        id: r.id,
+        date: r.date.toISOString().slice(0, 10),
+        label: r.description,
+        amount: Number(r.amount),
+        accountId: r.account_id,
+        categoryId: r.category_id,
+        category: r.category_name,
+        categoryKey: r.category_key,
+        subcategoryId: r.subcategory_id,
+        subcategory: r.subcategory_name,
+        subcategoryKey: r.subcategory_key,
+        rhythm: r.rhythm,
+        amortizationMonths: r.amortization_months,
+      })),
+    }
   }
 
   /**
@@ -140,8 +355,10 @@ export class TagsService {
   ): Promise<TagBudgetSummaryDto> {
     const start = new Date(startDate)
     const end = new Date(endDate)
+    const net = await this.netting.forUser(userId)
 
     const rows = await this.prisma.$queryRaw<TagBudgetRow[]>(Prisma.sql`
+      WITH ${net.ctes}
       SELECT
         tg.id,
         tg.name,
@@ -150,11 +367,9 @@ export class TagsService {
         tg.event_start_date,
         tg.event_end_date,
         tg.budget_amount::float AS budget_amount,
+        tg.family_id,
         COALESCE(SUM(
-          CASE WHEN t.type = 'EXPENSE'
-            THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
-            ELSE -t.amount::numeric / COALESCE(a.divisor, 1)
-          END
+          CASE WHEN t.type = 'EXPENSE' THEN ${net.amount} ELSE -(${net.amount}) END
         ), 0)::float AS spent
       FROM app.tags tg
       LEFT JOIN app.transaction_tags tt ON tt.tag_id = tg.id
@@ -163,11 +378,14 @@ export class TagsService {
        AND t.date >= ${start}
        AND t.date <= ${end}
       LEFT JOIN app.accounts a ON a.id = t.account_id
+      ${net.joins}
       WHERE tg.user_id = ${userId}
         AND tg.is_exceptional = true
         AND COALESCE(a.is_excluded_from_stats, false) = false
+        AND ${net.visible}
       GROUP BY tg.id, tg.name, tg.color, tg.icon,
-               tg.event_start_date, tg.event_end_date, tg.budget_amount
+               tg.event_start_date, tg.event_end_date, tg.budget_amount,
+               tg.family_id
       HAVING
         (
           tg.event_start_date IS NOT NULL
@@ -179,7 +397,7 @@ export class TagsService {
       ORDER BY tg.event_start_date ASC NULLS LAST, tg.name ASC
     `)
 
-    const items = rows.map(r => ({
+    const toItem = (r: TagBudgetRow): TagBudgetSummaryItemDto => ({
       id: r.id,
       name: r.name,
       color: r.color,
@@ -188,12 +406,78 @@ export class TagsService {
       eventEndDate: toIsoDate(r.event_end_date),
       budgetAmount: r.budget_amount === null ? null : round(r.budget_amount),
       spent: round(r.spent ?? 0),
-    }))
+    })
+
+    // A family with an annual envelope is charged as a whole, prorated to
+    // the window, in place of its tags' envelopes. It is listed even with no
+    // tag in the window: "4 000 € a year" commits the reserve by itself.
+    const enveloped = await this.prisma.tagFamily.findMany({
+      where: { userId, annualBudget: { not: null } },
+      orderBy: { name: 'asc' },
+    })
+    const familySpent = new Map<string, number>()
+    if (enveloped.length > 0) {
+      const spentRows = await this.prisma.$queryRaw<FamilyBudgetRow[]>(
+        Prisma.sql`
+          WITH ${net.ctes},
+          family_tx AS (
+            SELECT DISTINCT tg.family_id, tt.transaction_id
+            FROM app.transaction_tags tt
+            JOIN app.tags tg ON tg.id = tt.tag_id
+            WHERE tg.user_id = ${userId}
+              AND tg.is_exceptional = true
+              AND tg.family_id IN (${Prisma.join(enveloped.map(f => f.id))})
+          )
+          SELECT
+            ft.family_id,
+            COALESCE(SUM(
+              CASE WHEN t.type = 'EXPENSE' THEN ${net.amount} ELSE -(${net.amount}) END
+            ), 0)::float AS spent
+          FROM family_tx ft
+          JOIN app.transactions t
+            ON t.id = ft.transaction_id
+           AND t.date >= ${start}
+           AND t.date <= ${end}
+          LEFT JOIN app.accounts a ON a.id = t.account_id
+          ${net.joins}
+          WHERE COALESCE(a.is_excluded_from_stats, false) = false
+            AND ${net.visible}
+          GROUP BY ft.family_id
+        `
+      )
+      for (const r of spentRows) familySpent.set(r.family_id, r.spent ?? 0)
+    }
+
+    const months = windowMonthCount(start, end)
+    const envelopedIds = new Set(enveloped.map(f => f.id))
+    const families = enveloped.map(f => {
+      const annualBudget = Number(f.annualBudget)
+      return {
+        id: f.id,
+        name: f.name,
+        color: f.color,
+        icon: f.icon,
+        annualBudget,
+        proratedBudget: round((annualBudget * months) / 12),
+        spent: round(familySpent.get(f.id) ?? 0),
+        items: rows.filter(r => r.family_id === f.id).map(toItem),
+      }
+    })
+    const items = rows
+      .filter(r => !r.family_id || !envelopedIds.has(r.family_id))
+      .map(toItem)
 
     return {
       items,
-      totalBudget: round(items.reduce((s, i) => s + (i.budgetAmount ?? 0), 0)),
-      totalSpent: round(items.reduce((s, i) => s + i.spent, 0)),
+      families,
+      totalBudget: round(
+        items.reduce((s, i) => s + (i.budgetAmount ?? 0), 0) +
+          families.reduce((s, f) => s + f.proratedBudget, 0)
+      ),
+      totalSpent: round(
+        items.reduce((s, i) => s + i.spent, 0) +
+          families.reduce((s, f) => s + f.spent, 0)
+      ),
     }
   }
 
@@ -209,7 +493,7 @@ export class TagsService {
   async findOne(id: string, userId: string): Promise<TagResponseDto> {
     const tag = await this.prisma.tag.findFirst({
       where: { id, userId },
-      include: { _count: { select: { transactions: true } } },
+      include: TAG_INCLUDE,
     })
     if (!tag) {
       throw new NotFoundException(`Tag with ID ${id} not found`)
@@ -218,6 +502,8 @@ export class TagsService {
   }
 
   async create(userId: string, dto: CreateTagDto): Promise<TagResponseDto> {
+    // Someone else's family is a 404, as it would be on its own route.
+    if (dto.familyId) await this.families.assertOwned(dto.familyId, userId)
     try {
       const tag = await this.prisma.tag.create({
         data: {
@@ -229,8 +515,9 @@ export class TagsService {
           eventStartDate: parseEventDate(dto.eventStartDate),
           eventEndDate: parseEventDate(dto.eventEndDate),
           budgetAmount: dto.budgetAmount ?? null,
+          familyId: dto.familyId ?? null,
         },
-        include: { _count: { select: { transactions: true } } },
+        include: TAG_INCLUDE,
       })
       return this.toResponse(tag)
     } catch (e) {
@@ -255,6 +542,7 @@ export class TagsService {
     if (dto.isExceptional === true && !current.isExceptional) {
       await this.assertNoneSmoothed({ tags: { some: { tagId: id } } }, userId)
     }
+    if (dto.familyId) await this.families.assertOwned(dto.familyId, userId)
     try {
       const tag = await this.prisma.tag.update({
         where: { id },
@@ -274,8 +562,9 @@ export class TagsService {
           ...(dto.budgetAmount !== undefined && {
             budgetAmount: dto.budgetAmount,
           }),
+          ...(dto.familyId !== undefined && { familyId: dto.familyId }),
         },
-        include: { _count: { select: { transactions: true } } },
+        include: TAG_INCLUDE,
       })
       return this.toResponse(tag)
     } catch (e) {
@@ -371,212 +660,83 @@ export class TagsService {
   }
 
   /**
-   * Everyday spending rate per category, projected onto the event's duration.
-   *
-   * The reference is the 12 months preceding the event (clamped to the user's
-   * actual history), stripped of every exceptional transaction and normalised
-   * over the days actually spent living an everyday life. Only the *variable*
-   * subcategories count: a trip suspends groceries and fuel, not rent or
-   * insurance, so committed spending is never part of what gets deducted. Returns null when the
-   * tag declares no period: such an event is *additive* (a party at home did
-   * not stop the user buying groceries), so no baseline should be deducted.
-   */
-  private async computeBaseline(
-    tag: Tag,
-    userId: string
-  ): Promise<{
-    baseline: TagAnalysisBaselineDto
-    ratePerCategory: Map<string | null, number>
-  } | null> {
-    if (!tag.eventStartDate || !tag.eventEndDate) return null
-
-    const eventDays = daysBetweenInclusive(tag.eventStartDate, tag.eventEndDate)
-    if (eventDays <= 0) return null
-
-    // The baseline leaves out what is committed, recurrences included.
-    await this.recurrences.refreshQuietly(userId)
-
-    // Reference window: the 12 months ending the day before the event starts.
-    const refEnd = new Date(tag.eventStartDate.getTime() - MS_PER_DAY)
-    let refStart = new Date(
-      Date.UTC(
-        refEnd.getUTCFullYear() - 1,
-        refEnd.getUTCMonth(),
-        refEnd.getUTCDate() + 1
-      )
-    )
-
-    // Clamp to the user's history: dividing four months of data by a full year
-    // would silently halve every baseline.
-    const firstTransaction = await this.prisma.transaction.findFirst({
-      where: { userId },
-      orderBy: { date: 'asc' },
-      select: { date: true },
-    })
-    if (!firstTransaction) return null
-    if (firstTransaction.date > refStart) refStart = firstTransaction.date
-    if (refEnd < refStart) return null
-
-    // Days of the window swallowed by other events, removed from the divisor.
-    const exceptionalTags = await this.prisma.tag.findMany({
-      where: {
-        userId,
-        isExceptional: true,
-        eventStartDate: { not: null, lte: refEnd },
-        eventEndDate: { not: null, gte: refStart },
-      },
-      select: { eventStartDate: true, eventEndDate: true },
-    })
-    const exceptionalDays = countDaysInWindow(
-      toEventIntervals(exceptionalTags),
-      refStart,
-      refEnd
-    )
-
-    const everydayDays =
-      daysBetweenInclusive(refStart, refEnd) - exceptionalDays
-    if (everydayDays <= 0) return null
-
-    // Everyday expenses per category. Transactions carrying an exceptional tag
-    // are excluded, and so are this tag's own — an event paid for in advance
-    // (a deposit booked months earlier) would otherwise inflate its own
-    // reference and hide the surplus it is meant to reveal.
-    const rows = await this.prisma.$queryRaw<BaselineCategoryRow[]>(Prisma.sql`
-      SELECT
-        c.id AS category_id,
-        SUM(ABS(t.amount::numeric) / COALESCE(a.divisor, 1))::float AS total_amount
-      FROM app.transactions t
-      LEFT JOIN app.categories c ON c.id = t.category_id
-      LEFT JOIN app.subcategories sc ON sc.id = t.subcategory_id
-      LEFT JOIN app.accounts a ON a.id = t.account_id
-      ${recurringTransactionsJoin(userId)}
-      WHERE t.user_id = ${userId}
-        AND t.type = 'EXPENSE'
-        AND t.date >= ${refStart}
-        AND t.date <= ${refEnd}
-        AND COALESCE(a.is_excluded_from_stats, false) = false
-        -- Only what the trip suspends. Rent, insurance, a subscription keep
-        -- running while the user is away, so they are never deducted from an
-        -- event's surplus. Unknown (legacy rows) counts as variable, which is
-        -- what every row used to be. A line of a detected recurrence is
-        -- committed whatever its subcategory says.
-        AND ${EFFECTIVE_RHYTHM} IS DISTINCT FROM 'COMMITTED'
-        -- A smoothed purchase is committed too: its slices keep falling
-        -- while the user is away, like rent, so a trip suspends none of it.
-        -- Left in, a phone bought in the reference year would inflate the
-        -- daily rate and hide the trip's surplus.
-        AND (t.amortization_months IS NULL OR t.amount >= 0)
-        AND NOT EXISTS (
-          SELECT 1
-          FROM app.transaction_tags tt2
-          JOIN app.tags tg2 ON tg2.id = tt2.tag_id
-          WHERE tt2.transaction_id = t.id
-            AND (tg2.is_exceptional = true OR tg2.id = ${tag.id})
-        )
-      GROUP BY c.id
-    `)
-
-    const ratePerCategory = new Map<string | null, number>()
-    for (const row of rows) {
-      ratePerCategory.set(
-        row.category_id,
-        (row.total_amount ?? 0) / everydayDays
-      )
-    }
-
-    return {
-      baseline: {
-        startDate: refStart.toISOString().slice(0, 10),
-        endDate: refEnd.toISOString().slice(0, 10),
-        everydayDays,
-        eventDays,
-      },
-      ratePerCategory,
-    }
-  }
-
-  /**
    * Aggregate every transaction carrying the tag: totals, per-category and
    * per-month breakdowns. Mirrors the dashboard conventions — expenses use
    * ABS, amounts are divided by the account divisor (joint accounts) and
    * stats-excluded accounts are ignored.
    */
   async getAnalysis(tagId: string, userId: string): Promise<TagAnalysisDto> {
-    const tag = await this.getOwned(tagId, userId)
+    // The family rides along: the page links to it.
+    const tag = await this.prisma.tag.findFirst({
+      where: { id: tagId, userId },
+      include: { family: TAG_INCLUDE.family },
+    })
+    if (!tag) throw new NotFoundException(`Tag with ID ${tagId} not found`)
 
+    // The dashboard's rule: reimbursements come off the expense they repay,
+    // and an income entirely drawn to repay one is not shown again.
+    const net = await this.netting.forUser(userId)
     const [categoryRows, monthRows, summaryRows] = await Promise.all([
       this.prisma.$queryRaw<TagCategoryRow[]>(Prisma.sql`
+        WITH ${net.ctes}
         SELECT
           c.id AS category_id,
           COALESCE(c.name, 'Autre') AS category_name,
           c.icon AS category_icon,
           t.type::text AS type,
           COUNT(*)::int AS transaction_count,
-          SUM(
-            CASE WHEN t.type = 'EXPENSE'
-              THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
-              ELSE t.amount::numeric / COALESCE(a.divisor, 1)
-            END
-          )::float AS total_amount
+          SUM(${net.amount})::float AS total_amount
         FROM app.transaction_tags tt
         JOIN app.transactions t ON t.id = tt.transaction_id
         LEFT JOIN app.categories c ON c.id = t.category_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${net.joins}
         WHERE tt.tag_id = ${tagId}
           AND t.user_id = ${userId}
           AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
+          AND ${net.visible}
         GROUP BY c.id, COALESCE(c.name, 'Autre'), c.icon, t.type
       `),
       this.prisma.$queryRaw<TagMonthRow[]>(Prisma.sql`
+        WITH ${net.ctes}
         SELECT
           TO_CHAR(t.date, 'YYYY-MM') AS month_key,
-          SUM(
-            CASE WHEN t.type = 'EXPENSE'
-              THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
-              ELSE 0 END
-          )::float AS expenses,
-          SUM(
-            CASE WHEN t.type = 'INCOME'
-              THEN t.amount::numeric / COALESCE(a.divisor, 1)
-              ELSE 0 END
-          )::float AS income
+          SUM(CASE WHEN t.type = 'EXPENSE' THEN ${net.amount} ELSE 0 END)::float AS expenses,
+          SUM(CASE WHEN t.type = 'INCOME' THEN ${net.amount} ELSE 0 END)::float AS income
         FROM app.transaction_tags tt
         JOIN app.transactions t ON t.id = tt.transaction_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${net.joins}
         WHERE tt.tag_id = ${tagId}
           AND t.user_id = ${userId}
           AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
+          AND ${net.visible}
         GROUP BY TO_CHAR(t.date, 'YYYY-MM')
         ORDER BY month_key ASC
       `),
       this.prisma.$queryRaw<TagSummaryRow[]>(Prisma.sql`
+        WITH ${net.ctes}
         SELECT
-          SUM(
-            CASE WHEN t.type = 'EXPENSE'
-              THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
-              ELSE 0 END
-          )::float AS total_expenses,
-          SUM(
-            CASE WHEN t.type = 'INCOME'
-              THEN t.amount::numeric / COALESCE(a.divisor, 1)
-              ELSE 0 END
-          )::float AS total_income,
+          SUM(CASE WHEN t.type = 'EXPENSE' THEN ${net.amount} ELSE 0 END)::float AS total_expenses,
+          SUM(CASE WHEN t.type = 'INCOME' THEN ${net.amount} ELSE 0 END)::float AS total_income,
           COUNT(*)::int AS transaction_count,
           MIN(t.date) AS first_date,
           MAX(t.date) AS last_date
         FROM app.transaction_tags tt
         JOIN app.transactions t ON t.id = tt.transaction_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${net.joins}
         WHERE tt.tag_id = ${tagId}
           AND t.user_id = ${userId}
           AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
+          AND ${net.visible}
       `),
     ])
 
-    const reference = await this.computeBaseline(tag, userId)
+    const reference = await this.baselines.computeBaseline(tag, userId)
 
     let totalSurplus: number | null = reference ? 0 : null
 
@@ -596,10 +756,13 @@ export class TagsService {
         }
 
         if (reference && type === 'EXPENSE') {
-          const rate = reference.ratePerCategory.get(r.category_id) ?? 0
-          const baselineAmount = round(rate * reference.baseline.eventDays)
+          const { baselineAmount, surplusAmount } = categorySurplus(
+            amount,
+            r.category_id,
+            reference
+          )
           dto.baselineAmount = baselineAmount
-          dto.surplusAmount = round(amount - baselineAmount)
+          dto.surplusAmount = surplusAmount
           totalSurplus = round((totalSurplus ?? 0) + dto.surplusAmount)
         }
 
@@ -628,6 +791,13 @@ export class TagsService {
         eventEndDate: toIsoDate(tag.eventEndDate),
         budgetAmount:
           tag.budgetAmount === null ? null : Number(tag.budgetAmount),
+        family: tag.family
+          ? {
+              id: tag.family.id,
+              name: tag.family.name,
+              color: tag.family.color,
+            }
+          : null,
       },
       totalExpenses,
       totalIncome,

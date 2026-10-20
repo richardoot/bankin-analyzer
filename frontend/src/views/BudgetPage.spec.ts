@@ -124,6 +124,7 @@ describe('BudgetPage', () => {
     vi.mocked(api.getTags).mockResolvedValue([])
     vi.mocked(api.getTagBudgetSummary).mockResolvedValue({
       items: [],
+      families: [],
       totalBudget: 0,
       totalSpent: 0,
     })
@@ -1248,6 +1249,9 @@ describe('BudgetPage', () => {
           eventStartDate: '2026-05-10',
           eventEndDate: '2026-05-14',
           budgetAmount: null,
+          status: 'past',
+          familyId: null,
+          family: null,
           createdAt: '2026-01-01T00:00:00Z',
           updatedAt: '2026-01-01T00:00:00Z',
         },
@@ -1262,6 +1266,9 @@ describe('BudgetPage', () => {
           eventStartDate: '2025-01-10',
           eventEndDate: '2025-01-12',
           budgetAmount: null,
+          status: 'past',
+          familyId: null,
+          family: null,
           createdAt: '2026-01-01T00:00:00Z',
           updatedAt: '2026-01-01T00:00:00Z',
         },
@@ -1330,6 +1337,7 @@ describe('BudgetPage', () => {
             spent: 1259,
           },
         ],
+        families: [],
         totalBudget: 1500,
         totalSpent: 1259,
       })
@@ -1368,6 +1376,7 @@ describe('BudgetPage', () => {
             spent: 450,
           },
         ],
+        families: [],
         totalBudget: 0,
         totalSpent: 450,
       })
@@ -1410,6 +1419,7 @@ describe('BudgetPage', () => {
             spent: 1259,
           },
         ],
+        families: [],
         totalBudget: 1500,
         totalSpent: 1259,
       })

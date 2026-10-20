@@ -119,59 +119,148 @@ const ACCOUNTS = [
 const PERSONS = ['Marie', 'Julien', 'Sophie', 'Thomas']
 
 /**
- * Every tag here is exceptional: it describes a one-off event, not the user's
- * recurring lifestyle, so it stays out of the dashboard's everyday averages.
+ * Families group the editions of a kind of event (a trip, a race) so the tag
+ * pages can compare them and an annual envelope can sit above them. A family
+ * is the user's own; the app never seeds one, the demo does to show the
+ * screens full.
+ */
+const FAMILIES = [
+  { name: 'Voyages', color: '#06b6d4', icon: '✈️', annualBudget: 4000 },
+  { name: 'Compétitions', color: '#84cc16', icon: '🏃', annualBudget: 600 },
+  { name: 'Fêtes', color: '#ec4899', icon: '🎉' },
+]
+
+/**
+ * Every tag is exceptional (a one-off event, kept out of the everyday
+ * averages) except the one theme at the end, which the tags page files apart.
  *
  * `period` marks the *absorbing* events — the ones during which everyday life
  * is suspended because the user is away. Those days leave the denominator of
  * the everyday averages, and the category baseline is deducted from the event's
  * surplus. Events without a period are additive (a party or works at home): the
  * everyday spending carried on in parallel, so nothing is substituted.
+ *
+ * A period is anchored on the generated month grid (`monthIdx`), on today
+ * (`fromNowDays`, so the demo always has an event under way and one to come),
+ * or on the December in range. `yearSuffix` appends the edition's year to the
+ * name, the way the user names « HYROX Paris 2025 »: that is what lets the
+ * « Nouvelle édition » button increment it. `key` is how the transaction specs
+ * below refer to a tag when two editions share a name.
  */
 const TAGS = [
   {
     name: 'Vacances Été',
+    family: 'Voyages',
     color: '#f59e0b',
     icon: '⛱️',
     period: { monthIdx: 2, fromDay: 8, toDay: 20 },
+    yearSuffix: true,
     // Comfortably under: 13 days away, the everyday baseline eats a big share
     // of the raw spend, so the real surplus is far below the envelope.
     budget: 2400,
   },
+  // An undated episode, outside any family: works at home.
   { name: 'Travaux Maison', color: '#f97316', icon: '🔨', budget: 2000 },
   {
     name: 'Vacances Italie',
+    family: 'Voyages',
     color: '#06b6d4',
     icon: '🏖️',
     period: { monthIdx: 6, fromDay: 10, toDay: 14 },
+    yearSuffix: true,
     budget: 1500,
   },
-  { name: 'Anniversaire Marie', color: '#ec4899', icon: '🎂', budget: 250 },
+  // Additive and undated, in a family: the family page lists it without days.
+  {
+    name: 'Anniversaire Marie',
+    family: 'Fêtes',
+    color: '#ec4899',
+    icon: '🎂',
+    budget: 250,
+  },
   {
     name: 'Week-end Ski',
+    family: 'Voyages',
     color: '#6366f1',
     icon: '⛷️',
     period: { monthIdx: 12, fromDay: 7, toDay: 8 },
-    // Deliberately too small — exercises the overrun path on the tag view
-    // and the "dépassement de réserve" line on the budget page.
+    yearSuffix: true,
+    // Deliberately too small — exercises the overrun path on the tag view.
     budget: 400,
   },
+  // The next edition, still to come: its deposit is paid this month, so the
+  // family page reads it in next year's column by event and in this year's
+  // by cash.
   {
-    name: 'Compétition Trail',
+    key: 'Week-end Ski (prochain)',
+    name: 'Week-end Ski',
+    family: 'Voyages',
+    color: '#6366f1',
+    icon: '⛷️',
+    period: { fromNowDays: [95, 96] },
+    yearSuffix: true,
+  },
+  // Two editions of the same race, a year apart: the comparison box.
+  {
+    key: 'Trail (N-1)',
+    name: 'Trail des Crêtes',
+    family: 'Compétitions',
+    color: '#84cc16',
+    icon: '🏃',
+    period: { monthIdx: 2, fromDay: 26, toDay: 27 },
+    yearSuffix: true,
+  },
+  {
+    name: 'Trail des Crêtes',
+    family: 'Compétitions',
     color: '#84cc16',
     icon: '🏃',
     period: { monthIdx: 14, fromDay: 19, toDay: 20 },
+    yearSuffix: true,
     budget: 300,
+  },
+  // The race's travel, a tag of its own in the same family: the lines it
+  // shares with the race count once in the family, the invariant to see.
+  {
+    name: 'Déplacement Trail',
+    family: 'Compétitions',
+    color: '#65a30d',
+    icon: '🚗',
+    yearIdx: 14,
+    yearSuffix: true,
+  },
+  // Under way today: the « En cours » badge.
+  {
+    name: 'Escapade Lisbonne',
+    family: 'Voyages',
+    color: '#0ea5e9',
+    icon: '🌊',
+    period: { fromNowDays: [-2, 3] },
+    yearSuffix: true,
   },
   // Additive: the shopping happened on top of an ordinary month, nothing is
   // substituted — and no envelope was ever decided, so the budget page shows
   // it as "sans enveloppe".
-  { name: 'Rentrée scolaire', color: '#0ea5e9', icon: '🎒' },
-  { name: 'Noël', color: '#22c55e', icon: '🎄', budget: 600 },
-  // Additive and undated: the car and the washing machine are filed under
-  // their purpose (Transport, Shopping) and this tag alone keeps them out of
-  // the everyday averages — there is no "exceptional" category any more.
-  { name: 'Gros achats', color: '#a855f7', icon: '💎' },
+  {
+    name: 'Rentrée scolaire',
+    color: '#0ea5e9',
+    icon: '🎒',
+    yearIdx: 16,
+    yearSuffix: true,
+  },
+  {
+    name: 'Noël',
+    family: 'Fêtes',
+    color: '#22c55e',
+    icon: '🎄',
+    period: { december: true, fromDay: 24, toDay: 25 },
+    yearSuffix: true,
+    budget: 600,
+  },
+  // A theme, not an event: the gifts of the year, whatever the occasion. Not
+  // exceptional, so it stays in the everyday averages and in the Thèmes
+  // section of the tags page.
+  { name: 'Cadeaux', color: '#a855f7', icon: '🎁', exceptional: false },
 ]
 
 const SUPERMARKETS = ['Carrefour', 'Leclerc', 'Monoprix', 'Lidl', 'Auchan']
@@ -302,6 +391,7 @@ async function wipeUserData(userId) {
     where: { transaction: { userId } },
   })
   await prisma.tag.deleteMany({ where: { userId } })
+  await prisma.tagFamily.deleteMany({ where: { userId } })
   await prisma.budgetPlanEntry.deleteMany({
     where: { budgetPlan: { userId } },
   })
@@ -412,27 +502,63 @@ async function main() {
   const maxDay = idx =>
     isCurrentMonth(idx) ? Math.min(now.getUTCDate(), 28) : 28
 
-  // ── Tags ─────────────────────────────────────────────────────────────────────
+  // ── Families and tags ──────────────────────────────────────────────────────
   // Created here rather than earlier because the absorbing events anchor their
-  // period on the generated month grid.
-  const tagByName = {}
-  for (const t of TAGS) {
-    const anchor = t.period ? months[t.period.monthIdx] : null
-    tagByName[t.name] = await prisma.tag.create({
+  // period on the generated month grid, or on today.
+  const familyByName = {}
+  for (const f of FAMILIES) {
+    familyByName[f.name] = await prisma.tagFamily.create({
       data: {
         userId,
-        name: t.name,
+        name: f.name,
+        color: f.color,
+        icon: f.icon,
+        annualBudget: f.annualBudget ?? null,
+      },
+    })
+  }
+
+  const dayFromNow = days =>
+    new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + days)
+    )
+  /** The window of a tag spec, resolved on the grid, on today or on December. */
+  function windowOf(period) {
+    if (!period) return null
+    if (period.fromNowDays) {
+      const [from, to] = period.fromNowDays
+      return { start: dayFromNow(from), end: dayFromNow(to) }
+    }
+    const anchor = period.december
+      ? months.find(mm => mm.m === 11)
+      : months[period.monthIdx]
+    if (!anchor) return null
+    return {
+      start: new Date(Date.UTC(anchor.y, anchor.m, period.fromDay)),
+      end: new Date(Date.UTC(anchor.y, anchor.m, period.toDay)),
+    }
+  }
+
+  const tagByName = {} // key (or name) -> tag row
+  for (const t of TAGS) {
+    const window = windowOf(t.period)
+    const editionYear = window
+      ? window.start.getUTCFullYear()
+      : t.yearIdx !== undefined
+        ? months[t.yearIdx].y
+        : null
+    const name =
+      t.yearSuffix && editionYear !== null ? `${t.name} ${editionYear}` : t.name
+    tagByName[t.key ?? t.name] = await prisma.tag.create({
+      data: {
+        userId,
+        name,
         color: t.color,
         icon: t.icon,
-        isExceptional: true,
-        eventStartDate:
-          anchor && t.period
-            ? new Date(Date.UTC(anchor.y, anchor.m, t.period.fromDay))
-            : null,
-        eventEndDate:
-          anchor && t.period
-            ? new Date(Date.UTC(anchor.y, anchor.m, t.period.toDay))
-            : null,
+        isExceptional: t.exceptional ?? true,
+        familyId: t.family ? familyByName[t.family].id : null,
+        eventStartDate: window?.start ?? null,
+        eventEndDate: window?.end ?? null,
         budgetAmount: t.budget ?? null,
       },
     })
@@ -703,7 +829,9 @@ async function main() {
     }
   }
 
-  // ── One-off purchases: filed by purpose, kept out of the averages by a tag ────
+  // ── Durable purchases: filed by purpose, smoothed over their months ─────────
+  // The everyday reading spreads them; the tag page never sees them, and the
+  // smoothing dialog refuses an exceptional tag on them.
   {
     const carMonth = months[4]
     specs.push({
@@ -714,8 +842,8 @@ async function main() {
       category: 'Transport',
       sub: 'Achat de véhicule',
       account: 'Compte Courant',
-      note: 'Renault Clio — achat exceptionnel',
-      tags: ['Gros achats'],
+      note: 'Renault Clio — lissée sur 5 ans',
+      amortizationMonths: 60,
     })
     const applMonth = months[9]
     specs.push({
@@ -726,7 +854,7 @@ async function main() {
       category: 'Shopping et soins',
       sub: 'Maison et déco',
       account: 'Compte Joint',
-      tags: ['Gros achats'],
+      amortizationMonths: 24,
     })
   }
 
@@ -912,7 +1040,8 @@ async function main() {
       category: 'Shopping et soins',
       sub: 'Maison et déco',
       account: 'Compte Courant',
-      tags: tag,
+      // The event and the theme, both: a gift of the year for a birthday.
+      tags: [...tag, 'Cadeaux'],
     })
     specs.push({
       date: dateUTC(y, m, 14),
@@ -928,7 +1057,9 @@ async function main() {
         { person: 'Thomas', amount: 52.5, status: 'PENDING' },
       ],
     })
-    // Income that settles Julien's completed reimbursement
+    // Income that settles Julien's completed reimbursement. Tagged with the
+    // event too, as a user would: the tag page must not count it as income,
+    // the hotel it repays being already netted.
     specs.push({
       date: dateUTC(y, m, 20),
       description: 'Virement Julien (part resto)',
@@ -937,6 +1068,7 @@ async function main() {
       category: 'Remboursements',
       sub: "Remboursement d'un proche",
       account: 'Compte Courant',
+      tags: tag,
       settlesReimb: true,
       settlePerson: 'Julien',
     })
@@ -981,7 +1113,7 @@ async function main() {
   // Compétition Trail (idx 14) — a short absorbing event inside the running plan
   {
     const { y, m } = months[14]
-    const tag = ['Compétition Trail']
+    const tag = ['Trail des Crêtes']
     specs.push({
       date: dateUTC(y, m, 12),
       description: 'Inscription trail des Crêtes',
@@ -1000,7 +1132,9 @@ async function main() {
       category: 'Logement',
       sub: 'Hébergement temporaire',
       account: 'Compte Courant',
-      tags: tag,
+      // The race and its travel: two tags of one family on one line, which
+      // the family counts once.
+      tags: [...tag, 'Déplacement Trail'],
     })
     specs.push({
       date: dateUTC(y, m, 19),
@@ -1010,7 +1144,7 @@ async function main() {
       category: 'Transport',
       sub: 'Carburant',
       account: 'Compte Courant',
-      tags: tag,
+      tags: [...tag, 'Déplacement Trail'],
     })
     specs.push({
       date: dateUTC(y, m, 20),
@@ -1074,7 +1208,7 @@ async function main() {
         category: 'Shopping et soins',
         sub: 'Maison et déco',
         account: 'Compte Courant',
-        tags: tag,
+        tags: [...tag, 'Cadeaux'],
       })
       specs.push({
         date: dateUTC(y, m, 23),
@@ -1099,10 +1233,124 @@ async function main() {
     }
   }
 
+  // Trail des Crêtes, the previous edition (idx 2, after the summer trip):
+  // cheaper, so the comparison names a most and a least expensive edition.
+  {
+    const { y, m } = months[2]
+    const tag = ['Trail (N-1)']
+    specs.push({
+      date: dateUTC(y, m, 5),
+      description: 'Inscription trail des Crêtes',
+      amount: -62,
+      type: 'EXPENSE',
+      category: 'Loisirs et culture',
+      sub: 'Sport et activités ponctuelles',
+      account: 'Compte Courant',
+      tags: tag,
+    })
+    specs.push({
+      date: dateUTC(y, m, 26),
+      description: 'Gîte veille de course',
+      amount: -98,
+      type: 'EXPENSE',
+      category: 'Logement',
+      sub: 'Hébergement temporaire',
+      account: 'Compte Courant',
+      tags: tag,
+    })
+    specs.push({
+      date: dateUTC(y, m, 27),
+      description: 'Repas post-course',
+      amount: -45,
+      type: 'EXPENSE',
+      category: 'Restaurants et bars',
+      sub: 'Restaurant',
+      account: 'Compte Courant',
+      tags: tag,
+    })
+  }
+
+  // Escapade Lisbonne — under way today. The flight was bought three weeks
+  // ago, outside the window: the candidates tool does not see it, the tag
+  // page does.
+  {
+    const tag = ['Escapade Lisbonne']
+    const at = (days, hour = 10) => {
+      const d = dayFromNow(days)
+      d.setUTCHours(hour)
+      return d
+    }
+    specs.push({
+      date: at(-21),
+      description: 'Billets TAP Lisbonne',
+      amount: -189,
+      type: 'EXPENSE',
+      category: 'Transport',
+      sub: 'Avion',
+      account: 'Compte Courant',
+      tags: tag,
+    })
+    specs.push({
+      date: at(-2),
+      description: 'Hôtel Alfama 5 nuits',
+      amount: -210,
+      type: 'EXPENSE',
+      category: 'Logement',
+      sub: 'Hébergement temporaire',
+      account: 'Compte Courant',
+      tags: tag,
+    })
+    specs.push({
+      date: at(-1),
+      description: 'Cervejaria Ramiro',
+      amount: -54,
+      type: 'EXPENSE',
+      category: 'Restaurants et bars',
+      sub: 'Restaurant',
+      account: 'Compte Courant',
+      tags: tag,
+    })
+    specs.push({
+      date: at(-1, 18),
+      description: 'Tram 28 + musée des azulejos',
+      amount: -32,
+      type: 'EXPENSE',
+      category: 'Loisirs et culture',
+      sub: 'Sorties et culture',
+      account: 'Compte Courant',
+      tags: tag,
+    })
+  }
+
+  // Week-end Ski, the next edition — paid for now, skied in three months.
+  {
+    const tag = ['Week-end Ski (prochain)']
+    specs.push({
+      date: dayFromNow(-5),
+      description: 'Acompte chalet Les Arcs',
+      amount: -250,
+      type: 'EXPENSE',
+      category: 'Logement',
+      sub: 'Hébergement temporaire',
+      account: 'Compte Joint',
+      tags: tag,
+    })
+    specs.push({
+      date: dayFromNow(-3),
+      description: 'Forfaits ski en prévente',
+      amount: -180,
+      type: 'EXPENSE',
+      category: 'Loisirs et culture',
+      sub: 'Sport et activités ponctuelles',
+      account: 'Compte Courant',
+      tags: tag,
+    })
+  }
+
   // ── Persist transactions ──────────────────────────────────────────────────────
   console.log(`💳 Creating ${specs.length} transactions…`)
-  const remReqData = [] // {reimbId?, txId, person, amount, status, received, categoryId}
-  const settlementSpecs = [] // {txId, person}
+  const remReqData = [] // {txId, person, amount, settled}
+  const settlementSpecs = [] // {txId, date, person}
   let hashCounter = 0
 
   for (const s of specs) {
@@ -1130,15 +1378,18 @@ async function main() {
         type: s.type,
         note: s.note ?? null,
         isPointed: s.pointed ?? false,
+        amortizationMonths: s.amortizationMonths ?? null,
       },
     })
 
     if (s.tags?.length) {
       await prisma.transactionTag.createMany({
-        data: s.tags.map(t => ({
-          transactionId: tx.id,
-          tagId: tagByName[t].id,
-        })),
+        data: s.tags.map(t => {
+          const tag = tagByName[t]
+          if (!tag)
+            throw new Error(`Unknown tag key « ${t} » on « ${s.description} »`)
+          return { transactionId: tx.id, tagId: tag.id }
+        }),
         skipDuplicates: true,
       })
     }
@@ -1148,42 +1399,48 @@ async function main() {
           txId: tx.id,
           person: rb.person,
           amount: rb.amount,
-          status: rb.status ?? 'PENDING',
-          received: rb.received ?? 0,
-          categoryId: categoryByName['Remboursements'].id,
+          // `settled` marks the debts the person's income below pays in full.
+          settled: rb.status === 'COMPLETED',
         })
       }
     }
     if (s.settlesReimb)
-      settlementSpecs.push({ txId: tx.id, person: s.settlePerson })
+      settlementSpecs.push({
+        txId: tx.id,
+        date: s.date,
+        person: s.settlePerson,
+      })
   }
 
   // ── Reimbursement requests ────────────────────────────────────────────────────
+  // A request hangs off the expense transaction, nothing else: its category is
+  // the transaction's own, and its status and what came back are read off the
+  // payment ledger, never stored.
   console.log(`🤝 Creating ${remReqData.length} reimbursement requests…`)
-  const reimbByPerson = {} // person -> [reimbRow]
+  const reimbByPerson = {} // person -> [{row, settled}]
   for (const rr of remReqData) {
     const row = await prisma.reimbursementRequest.create({
       data: {
         userId,
         transactionId: rr.txId,
         personId: personByName[rr.person].id,
-        categoryId: rr.categoryId,
         amount: rr.amount,
-        amountReceived: rr.received,
-        status: rr.status,
       },
     })
-    ;(reimbByPerson[rr.person] ??= []).push(row)
+    ;(reimbByPerson[rr.person] ??= []).push({ row, settled: rr.settled })
   }
 
-  // ── Settlements (income tx settling a person's completed reimbursements) ──────
+  // ── Settlements: an income transaction pays a person's debts ─────────────────
+  // Written the way the application writes them: a settlement, its lines, and
+  // one CASH payment per debt drawn from the income transaction. That ledger is
+  // what the dashboard, the budget and the tag pages deduct.
   console.log(`✅ Creating ${settlementSpecs.length} settlements…`)
   for (const ss of settlementSpecs) {
-    const completed = (reimbByPerson[ss.person] ?? []).filter(
-      r => r.status === 'COMPLETED'
+    const settled = (reimbByPerson[ss.person] ?? []).filter(r => r.settled)
+    if (settled.length === 0) continue
+    const amountUsed = r2(
+      settled.reduce((sum, r) => sum + Number(r.row.amount), 0)
     )
-    if (completed.length === 0) continue
-    const amountUsed = completed.reduce((sum, r) => sum + Number(r.amount), 0)
     const settlement = await prisma.settlement.create({
       data: {
         userId,
@@ -1193,12 +1450,23 @@ async function main() {
         note: 'Règlement automatique (seed)',
       },
     })
-    for (const r of completed) {
+    for (const { row } of settled) {
       await prisma.settlementReimbursement.create({
         data: {
           settlementId: settlement.id,
-          reimbursementId: r.id,
-          amountSettled: Number(r.amount),
+          reimbursementId: row.id,
+          amountSettled: Number(row.amount),
+        },
+      })
+      await prisma.reimbursementPayment.create({
+        data: {
+          userId,
+          reimbursementId: row.id,
+          incomeTransactionId: ss.txId,
+          amount: Number(row.amount),
+          kind: 'CASH',
+          settledAt: ss.date,
+          settlementId: settlement.id,
         },
       })
     }
@@ -1336,6 +1604,7 @@ async function main() {
     categories: await prisma.category.count({ where: { userId } }),
     subcategories: await prisma.subcategory.count({ where: { userId } }),
     transactions: await prisma.transaction.count({ where: { userId } }),
+    tagFamilies: await prisma.tagFamily.count({ where: { userId } }),
     tags: await prisma.tag.count({ where: { userId } }),
     taggedTx: await prisma.transactionTag.count({
       where: { transaction: { userId } },
@@ -1349,6 +1618,7 @@ async function main() {
     taggedEnvelopes: await prisma.tag.count({
       where: { userId, budgetAmount: { not: null } },
     }),
+    payments: await prisma.reimbursementPayment.count({ where: { userId } }),
   }
   console.log('\n✅ Seed complete:')
   for (const [k, v] of Object.entries(totals)) {

@@ -13,6 +13,8 @@ import { PersonsModule } from '../persons/persons.module'
 import { ReimbursementsModule } from '../reimbursements/reimbursements.module'
 import { SettlementsModule } from '../settlements/settlements.module'
 import { RecurrencesModule } from '../recurrences/recurrences.module'
+import { TagsModule } from '../tags/tags.module'
+import { TagFamiliesModule } from '../tag-families/tag-families.module'
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { RecurrencesModule } from '../recurrences/recurrences.module'
     ReimbursementsModule,
     SettlementsModule,
     RecurrencesModule,
+    TagsModule,
+    TagFamiliesModule,
   ],
   controllers: [McpController, WellKnownController],
   providers: [McpAuthGuard],

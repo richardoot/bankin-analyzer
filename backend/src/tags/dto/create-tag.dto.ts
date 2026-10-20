@@ -48,4 +48,10 @@ export class CreateTagDto {
   @IsNumber()
   @Min(0)
   budgetAmount?: number
+
+  /** The family this tag is an edition of (one of the user's) */
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  familyId?: string
 }

@@ -303,6 +303,31 @@ describe('api', () => {
     })
   })
 
+  describe('getTagFamilyAnalysis', () => {
+    it('asks for the year and the basis, and for neither by default', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+
+      await api.getTagFamilyAnalysis('fam-1', { year: 2026, basis: 'cash' })
+      await api.getTagFamilyAnalysis('fam-1', { year: null })
+
+      expect(mockFetch.mock.calls.map(([url]) => url)).toEqual([
+        'http://localhost:3000/tag-families/fam-1/analysis?year=2026&basis=cash',
+        'http://localhost:3000/tag-families/fam-1/analysis',
+      ])
+    })
+
+    it('says the family could not be read', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 404 })
+
+      await expect(api.getTagFamilyAnalysis('fam-x')).rejects.toThrow(
+        "Impossible de charger l'analyse de la famille"
+      )
+    })
+  })
+
   describe('getTransactions', () => {
     it('should fetch transactions list', async () => {
       const mockTransactions = {

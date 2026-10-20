@@ -67,6 +67,11 @@ export interface TransactionFilters {
   isPointed?: boolean
   account?: string
   tagId?: string
+  /**
+   * The rows carrying at least one tag of this family — each row once, however
+   * many of the family's tags it carries.
+   */
+  tagFamilyId?: string
   search?: string
   amountMin?: number
   amountMax?: number
@@ -148,6 +153,7 @@ export interface RawTransactionFilters {
   isPointed?: string | boolean
   account?: string
   tagId?: string
+  tagFamilyId?: string
   search?: string
   amountMin?: string | number
   amountMax?: string | number
@@ -291,6 +297,7 @@ export function parseTransactionFilters(
         : raw.isPointed === 'true'
   if (raw.account) filters.account = raw.account
   if (raw.tagId) filters.tagId = raw.tagId
+  if (raw.tagFamilyId) filters.tagFamilyId = raw.tagFamilyId
   if (raw.search && raw.search.trim()) filters.search = raw.search.trim()
   if (raw.needsBankReview !== undefined)
     filters.needsBankReview =
@@ -563,6 +570,16 @@ export function buildTransactionWhere(
   }
 
   if (filters?.amortized) and.push({ amortizationMonths: { not: null } })
+
+  // A family is the union of its tags: an EXISTS on the row, not a join, so
+  // a row carrying two tags of the same family comes back once. In AND, so it
+  // narrows a `tagId` filter instead of overwriting it; scoped to the user's
+  // own tags, so someone else's family matches nothing.
+  if (filters?.tagFamilyId) {
+    and.push({
+      tags: { some: { tag: { userId, familyId: filters.tagFamilyId } } },
+    })
+  }
 
   // Date window: each bound is optional and applied independently.
   const dateFilter: Prisma.DateTimeFilter = {}
