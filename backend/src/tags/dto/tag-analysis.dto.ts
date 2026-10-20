@@ -62,10 +62,16 @@ export class TagAnalysisDto {
     family: { id: string; name: string; color: string | null } | null
   }
 
-  /** Total expenses (absolute, joint-account-adjusted). */
+  /**
+   * Total expenses: absolute, net of reimbursements as the dashboard reads
+   * them, joint-account-adjusted.
+   */
   totalExpenses!: number
 
-  /** Total income (joint-account-adjusted). */
+  /**
+   * Total income, joint-account-adjusted, less the cash drawn to repay a
+   * debt — an income entirely drawn is not counted at all.
+   */
   totalIncome!: number
 
   /** income - expenses. */
@@ -114,7 +120,10 @@ export class TagBudgetSummaryItemDto {
   /** Envelope decided for the project as a whole, or null. */
   budgetAmount!: number | null
 
-  /** Expenses tagged with it inside the requested window, net of tagged income. */
+  /**
+   * Expenses tagged with it inside the requested window, net of
+   * reimbursements and of tagged income.
+   */
   spent!: number
 }
 

@@ -158,7 +158,7 @@ export class ExceptionalEventDto {
   color!: string | null
   icon!: string | null
 
-  /** Expenses tagged with this event inside the period */
+  /** Expenses tagged with this event inside the period, net as the totals are */
   amount!: number
 }
 

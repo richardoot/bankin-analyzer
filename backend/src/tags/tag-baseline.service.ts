@@ -4,6 +4,8 @@ import {
   recurringTransactionsJoin,
 } from '../recurrences/recurrence-rhythm.sql'
 import { RecurrencesService } from '../recurrences/recurrences.service'
+import { TagNettingService } from './tag-netting.service'
+import type { TagNetting } from './tag-netting.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { Prisma } from '../generated/prisma'
 import type { Tag } from '../generated/prisma'
@@ -60,7 +62,8 @@ export function categorySurplus(
 export class TagBaselineService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly recurrences: RecurrencesService
+    private readonly recurrences: RecurrencesService,
+    private readonly netting: TagNettingService
   ) {}
 
   /** Refresh the recurrence cache once before several `skipRefresh` calls. */
@@ -82,7 +85,7 @@ export class TagBaselineService {
   async computeBaseline(
     tag: BaselineTag,
     userId: string,
-    options: { skipRefresh?: boolean } = {}
+    options: { skipRefresh?: boolean; netting?: TagNetting } = {}
   ): Promise<TagBaseline | null> {
     if (!tag.eventStartDate || !tag.eventEndDate) return null
 
@@ -138,14 +141,19 @@ export class TagBaselineService {
     // are excluded, and so are this tag's own — an event paid for in advance
     // (a deposit booked months earlier) would otherwise inflate its own
     // reference and hide the surplus it is meant to reveal.
+    // Net of reimbursements, as the dashboard reads the same months: a
+    // reference built on gross figures would overstate what a trip suspends.
+    const net = options.netting ?? (await this.netting.forUser(userId))
     const rows = await this.prisma.$queryRaw<BaselineCategoryRow[]>(Prisma.sql`
+      WITH ${net.ctes}
       SELECT
         c.id AS category_id,
-        SUM(ABS(t.amount::numeric) / COALESCE(a.divisor, 1))::float AS total_amount
+        SUM(${net.amount})::float AS total_amount
       FROM app.transactions t
       LEFT JOIN app.categories c ON c.id = t.category_id
       LEFT JOIN app.subcategories sc ON sc.id = t.subcategory_id
       LEFT JOIN app.accounts a ON a.id = t.account_id
+      ${net.joins}
       ${recurringTransactionsJoin(userId)}
       WHERE t.user_id = ${userId}
         AND t.type = 'EXPENSE'

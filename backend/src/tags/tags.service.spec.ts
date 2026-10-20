@@ -10,6 +10,8 @@ import { TagsService, windowMonthCount } from './tags.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
 import { TagFamiliesService } from '../tag-families/tag-families.service'
 import { TagBaselineService } from './tag-baseline.service'
+import { TagNettingService } from './tag-netting.service'
+import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { Prisma } from '../generated/prisma'
 import type { Tag } from '../generated/prisma'
@@ -68,11 +70,18 @@ describe('TagsService', () => {
       providers: [
         TagsService,
         TagBaselineService,
+        TagNettingService,
         TagFamiliesService,
         { provide: PrismaService, useValue: mockPrismaService },
         {
           provide: RecurrencesService,
           useValue: { refreshQuietly: vi.fn() },
+        },
+        {
+          provide: FilterPreferencesService,
+          useValue: {
+            deductsPendingByDefault: vi.fn().mockResolvedValue(true),
+          },
         },
       ],
     }).compile()
@@ -529,6 +538,37 @@ describe('TagsService', () => {
       // No event period declared → no baseline / surplus.
       expect(result.baseline).toBeNull()
       expect(result.totalSurplus).toBeNull()
+    })
+
+    it('nets the reimbursements and leaves a drawn income out, as the dashboard does', async () => {
+      mockPrismaService.tag.findFirst.mockResolvedValue(mockTag)
+      mockPrismaService.$queryRaw.mockResolvedValue([])
+
+      await service.getAnalysis(mockTag.id, USER)
+
+      const sqls = mockPrismaService.$queryRaw.mock.calls.map(
+        ([sql]: [{ strings: string[] }]) => sql.strings.join('?')
+      )
+      expect(sqls).toHaveLength(3)
+      for (const sql of sqls) {
+        // The ledger, joined to every line.
+        expect(sql).toContain('expense_credit AS (')
+        expect(sql).toContain(
+          'LEFT JOIN expense_credit ec ON ec.transaction_id = t.id'
+        )
+        // Cash received comes off the expense, and so does a debt still owed
+        // when the user's preference says so (true above).
+        expect(sql).toContain(
+          'ABS(t.amount::numeric) - COALESCE(ec.received, 0)'
+        )
+        expect(sql).toContain(
+          'GREATEST(COALESCE(ec.claimed, 0) - COALESCE(ec.credited, 0), 0)'
+        )
+        // The income side: what was drawn to repay is not income again, and a
+        // transfer entirely drawn is not listed at all.
+        expect(sql).toContain('t.amount::numeric - COALESCE(ic.cash_drawn, 0)')
+        expect(sql).toContain("t.type IS DISTINCT FROM 'INCOME'")
+      }
     })
 
     it('builds the baseline from variable spending only, transfers aside', async () => {

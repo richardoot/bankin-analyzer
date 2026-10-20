@@ -1881,9 +1881,11 @@ describe('DashboardService', () => {
       expect(sql).toContain(
         'EXTRACT(YEAR FROM COALESCE(ft.event_start, t.date))::int ='
       )
-      expect(sql).toContain('ABS(t.amount::numeric) / COALESCE(a.divisor, 1)')
+      // Each family's spend and the year's real expenses are netted alike.
+      expect(sql).toContain('ABS(t.amount::numeric) - COALESCE(ec.received, 0)')
+      expect(sql).toContain('/ COALESCE(a.divisor, 1)')
+      expect(sql).toContain("t.type IS DISTINCT FROM 'INCOME'")
       expect(sql).toContain('COALESCE(a.is_excluded_from_stats, false) = false')
-      // The year's real expenses are netted as the period's totals are.
       expect(sql).toContain('expense_credit')
       expect(sql).toContain('LEFT JOIN expense_credit ec')
     })

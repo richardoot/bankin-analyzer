@@ -6,6 +6,8 @@ import {
   compareEditions,
 } from './tag-family-analysis.service'
 import { TagBaselineService } from '../tags/tag-baseline.service'
+import { TagNettingService } from '../tags/tag-netting.service'
+import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 import type { TagBaseline } from '../tags/tag-baseline.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { Prisma } from '../generated/prisma'
@@ -116,8 +118,15 @@ describe('TagFamilyAnalysisService', () => {
     const module = await Test.createTestingModule({
       providers: [
         TagFamilyAnalysisService,
+        TagNettingService,
         { provide: PrismaService, useValue: prisma },
         { provide: TagBaselineService, useValue: baselines },
+        {
+          provide: FilterPreferencesService,
+          useValue: {
+            deductsPendingByDefault: vi.fn().mockResolvedValue(true),
+          },
+        },
       ],
     }).compile()
     service = module.get(TagFamilyAnalysisService)
@@ -157,7 +166,11 @@ describe('TagFamilyAnalysisService', () => {
     expect(familySql).toContain('GROUP BY tt.transaction_id')
     for (const sql of [familySql, tagSql]) {
       expect(sql).toContain("t.type IN ('EXPENSE', 'INCOME')")
-      expect(sql).toContain('ABS(t.amount::numeric) / COALESCE(a.divisor, 1)')
+      // Net of reimbursements, a drawn income left out: the tag's own rule.
+      expect(sql).toContain('expense_credit AS (')
+      expect(sql).toContain('ABS(t.amount::numeric) - COALESCE(ec.received, 0)')
+      expect(sql).toContain('/ COALESCE(a.divisor, 1)')
+      expect(sql).toContain("t.type IS DISTINCT FROM 'INCOME'")
       expect(sql).toContain('COALESCE(a.is_excluded_from_stats, false) = false')
     }
   })
@@ -355,7 +368,9 @@ describe('TagFamilyAnalysisService', () => {
     expect(baselines.refreshRecurrences).toHaveBeenCalledTimes(1)
     expect(baselines.computeBaseline).toHaveBeenCalledTimes(2)
     for (const call of baselines.computeBaseline.mock.calls) {
-      expect(call[2]).toEqual({ skipRefresh: true })
+      expect(call[2]).toMatchObject({ skipRefresh: true })
+      // The same netting as the family itself, resolved once.
+      expect(call[2]).toHaveProperty('netting')
     }
   })
 

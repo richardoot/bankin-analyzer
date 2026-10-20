@@ -152,3 +152,20 @@ export const PENDING_CREDIT_SCALED = Prisma.sql`
     ELSE 0
   END
 `
+
+/**
+ * Keeps a row out of a listing or a count once the deduction has emptied it:
+ * an income entirely drawn to repay debts is the other side of expenses
+ * already netted, so showing it would count the money twice. A partially
+ * drawn income stays, for its remainder. Null-safe on `t` (a LEFT JOIN with
+ * no transaction keeps its row), and a no-op when nothing is deducted.
+ */
+export function visibleRowSql(options: {
+  deductReceived: boolean
+}): Prisma.Sql {
+  if (!options.deductReceived) return Prisma.sql`TRUE`
+  return Prisma.sql`(
+    t.type IS DISTINCT FROM 'INCOME'
+    OR (t.amount::numeric - ${INCOME_CASH_DRAWN}) > 0
+  )`
+}

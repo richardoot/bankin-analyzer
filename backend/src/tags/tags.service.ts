@@ -1,4 +1,5 @@
 import { TagBaselineService, categorySurplus } from './tag-baseline.service'
+import { TagNettingService } from './tag-netting.service'
 import { TagFamiliesService } from '../tag-families/tag-families.service'
 import {
   BadRequestException,
@@ -178,7 +179,8 @@ export class TagsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly baselines: TagBaselineService,
-    private readonly families: TagFamiliesService
+    private readonly families: TagFamiliesService,
+    private readonly netting: TagNettingService
   ) {}
 
   /**
@@ -232,14 +234,17 @@ export class TagsService {
    * query for every tag; a tag with no expense is absent from the map.
    */
   async spentByTag(userId: string): Promise<Map<string, number>> {
+    const net = await this.netting.forUser(userId)
     const rows = await this.prisma.$queryRaw<TagSpentRow[]>(Prisma.sql`
+      WITH ${net.ctes}
       SELECT
         tt.tag_id,
-        SUM(ABS(t.amount::numeric) / COALESCE(a.divisor, 1))::float AS spent
+        SUM(${net.amount})::float AS spent
       FROM app.transaction_tags tt
       JOIN app.tags tg ON tg.id = tt.tag_id
       JOIN app.transactions t ON t.id = tt.transaction_id
       LEFT JOIN app.accounts a ON a.id = t.account_id
+      ${net.joins}
       WHERE tg.user_id = ${userId}
         AND t.user_id = ${userId}
         AND t.type = 'EXPENSE'
@@ -350,8 +355,10 @@ export class TagsService {
   ): Promise<TagBudgetSummaryDto> {
     const start = new Date(startDate)
     const end = new Date(endDate)
+    const net = await this.netting.forUser(userId)
 
     const rows = await this.prisma.$queryRaw<TagBudgetRow[]>(Prisma.sql`
+      WITH ${net.ctes}
       SELECT
         tg.id,
         tg.name,
@@ -362,10 +369,7 @@ export class TagsService {
         tg.budget_amount::float AS budget_amount,
         tg.family_id,
         COALESCE(SUM(
-          CASE WHEN t.type = 'EXPENSE'
-            THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
-            ELSE -t.amount::numeric / COALESCE(a.divisor, 1)
-          END
+          CASE WHEN t.type = 'EXPENSE' THEN ${net.amount} ELSE -(${net.amount}) END
         ), 0)::float AS spent
       FROM app.tags tg
       LEFT JOIN app.transaction_tags tt ON tt.tag_id = tg.id
@@ -374,9 +378,11 @@ export class TagsService {
        AND t.date >= ${start}
        AND t.date <= ${end}
       LEFT JOIN app.accounts a ON a.id = t.account_id
+      ${net.joins}
       WHERE tg.user_id = ${userId}
         AND tg.is_exceptional = true
         AND COALESCE(a.is_excluded_from_stats, false) = false
+        AND ${net.visible}
       GROUP BY tg.id, tg.name, tg.color, tg.icon,
                tg.event_start_date, tg.event_end_date, tg.budget_amount,
                tg.family_id
@@ -413,7 +419,8 @@ export class TagsService {
     if (enveloped.length > 0) {
       const spentRows = await this.prisma.$queryRaw<FamilyBudgetRow[]>(
         Prisma.sql`
-          WITH family_tx AS (
+          WITH ${net.ctes},
+          family_tx AS (
             SELECT DISTINCT tg.family_id, tt.transaction_id
             FROM app.transaction_tags tt
             JOIN app.tags tg ON tg.id = tt.tag_id
@@ -424,10 +431,7 @@ export class TagsService {
           SELECT
             ft.family_id,
             COALESCE(SUM(
-              CASE WHEN t.type = 'EXPENSE'
-                THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
-                ELSE -t.amount::numeric / COALESCE(a.divisor, 1)
-              END
+              CASE WHEN t.type = 'EXPENSE' THEN ${net.amount} ELSE -(${net.amount}) END
             ), 0)::float AS spent
           FROM family_tx ft
           JOIN app.transactions t
@@ -435,7 +439,9 @@ export class TagsService {
            AND t.date >= ${start}
            AND t.date <= ${end}
           LEFT JOIN app.accounts a ON a.id = t.account_id
+          ${net.joins}
           WHERE COALESCE(a.is_excluded_from_stats, false) = false
+            AND ${net.visible}
           GROUP BY ft.family_id
         `
       )
@@ -667,75 +673,66 @@ export class TagsService {
     })
     if (!tag) throw new NotFoundException(`Tag with ID ${tagId} not found`)
 
+    // The dashboard's rule: reimbursements come off the expense they repay,
+    // and an income entirely drawn to repay one is not shown again.
+    const net = await this.netting.forUser(userId)
     const [categoryRows, monthRows, summaryRows] = await Promise.all([
       this.prisma.$queryRaw<TagCategoryRow[]>(Prisma.sql`
+        WITH ${net.ctes}
         SELECT
           c.id AS category_id,
           COALESCE(c.name, 'Autre') AS category_name,
           c.icon AS category_icon,
           t.type::text AS type,
           COUNT(*)::int AS transaction_count,
-          SUM(
-            CASE WHEN t.type = 'EXPENSE'
-              THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
-              ELSE t.amount::numeric / COALESCE(a.divisor, 1)
-            END
-          )::float AS total_amount
+          SUM(${net.amount})::float AS total_amount
         FROM app.transaction_tags tt
         JOIN app.transactions t ON t.id = tt.transaction_id
         LEFT JOIN app.categories c ON c.id = t.category_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${net.joins}
         WHERE tt.tag_id = ${tagId}
           AND t.user_id = ${userId}
           AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
+          AND ${net.visible}
         GROUP BY c.id, COALESCE(c.name, 'Autre'), c.icon, t.type
       `),
       this.prisma.$queryRaw<TagMonthRow[]>(Prisma.sql`
+        WITH ${net.ctes}
         SELECT
           TO_CHAR(t.date, 'YYYY-MM') AS month_key,
-          SUM(
-            CASE WHEN t.type = 'EXPENSE'
-              THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
-              ELSE 0 END
-          )::float AS expenses,
-          SUM(
-            CASE WHEN t.type = 'INCOME'
-              THEN t.amount::numeric / COALESCE(a.divisor, 1)
-              ELSE 0 END
-          )::float AS income
+          SUM(CASE WHEN t.type = 'EXPENSE' THEN ${net.amount} ELSE 0 END)::float AS expenses,
+          SUM(CASE WHEN t.type = 'INCOME' THEN ${net.amount} ELSE 0 END)::float AS income
         FROM app.transaction_tags tt
         JOIN app.transactions t ON t.id = tt.transaction_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${net.joins}
         WHERE tt.tag_id = ${tagId}
           AND t.user_id = ${userId}
           AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
+          AND ${net.visible}
         GROUP BY TO_CHAR(t.date, 'YYYY-MM')
         ORDER BY month_key ASC
       `),
       this.prisma.$queryRaw<TagSummaryRow[]>(Prisma.sql`
+        WITH ${net.ctes}
         SELECT
-          SUM(
-            CASE WHEN t.type = 'EXPENSE'
-              THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
-              ELSE 0 END
-          )::float AS total_expenses,
-          SUM(
-            CASE WHEN t.type = 'INCOME'
-              THEN t.amount::numeric / COALESCE(a.divisor, 1)
-              ELSE 0 END
-          )::float AS total_income,
+          SUM(CASE WHEN t.type = 'EXPENSE' THEN ${net.amount} ELSE 0 END)::float AS total_expenses,
+          SUM(CASE WHEN t.type = 'INCOME' THEN ${net.amount} ELSE 0 END)::float AS total_income,
           COUNT(*)::int AS transaction_count,
           MIN(t.date) AS first_date,
           MAX(t.date) AS last_date
         FROM app.transaction_tags tt
         JOIN app.transactions t ON t.id = tt.transaction_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${net.joins}
         WHERE tt.tag_id = ${tagId}
           AND t.user_id = ${userId}
           AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
+          AND ${net.visible}
       `),
     ])
 

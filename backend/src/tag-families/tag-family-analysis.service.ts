@@ -4,6 +4,7 @@ import { Prisma } from '../generated/prisma'
 import type { Tag } from '../generated/prisma'
 import { daysBetweenInclusive } from '../common/exceptional-periods'
 import { calendarDayIn, tagEventStatus } from '../tags/tag-status'
+import { TagNettingService } from '../tags/tag-netting.service'
 import {
   TagBaselineService,
   categorySurplus,
@@ -115,7 +116,8 @@ export function compareEditions(
 export class TagFamilyAnalysisService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly baselines: TagBaselineService
+    private readonly baselines: TagBaselineService,
+    private readonly netting: TagNettingService
   ) {}
 
   async getAnalysis(
@@ -139,12 +141,16 @@ export class TagFamilyAnalysisService {
         ? eventYearOf
         : Prisma.sql`EXTRACT(YEAR FROM t.date)::int`
 
+    // The tag's rule, so that a family reads as the sum of its tags:
+    // reimbursements netted, a fully drawn income left out.
+    const net = await this.netting.forUser(userId)
     const [tags, familyRows, tagRows] = await Promise.all([
       this.prisma.tag.findMany({ where: { familyId, userId } }),
       // Each transaction once: grouped by transaction first, whatever number
       // of the family's tags it carries.
       this.prisma.$queryRaw<FamilyRow[]>(Prisma.sql`
-        WITH ${familyTransactionsCte(userId, familyId)}
+        WITH ${net.ctes},
+        ${familyTransactionsCte(userId, familyId)}
         SELECT
           ${yearOf} AS year,
           ${eventYearOf} AS event_year,
@@ -153,25 +159,23 @@ export class TagFamilyAnalysisService {
           c.icon AS category_icon,
           t.type::text AS type,
           COUNT(*)::int AS transaction_count,
-          SUM(
-            CASE WHEN t.type = 'EXPENSE'
-              THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
-              ELSE t.amount::numeric / COALESCE(a.divisor, 1)
-            END
-          )::float AS total_amount
+          SUM(${net.amount})::float AS total_amount
         FROM family_tx ft
         JOIN app.transactions t ON t.id = ft.transaction_id
         LEFT JOIN app.categories c ON c.id = t.category_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${net.joins}
         WHERE t.user_id = ${userId}
           AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
+          AND ${net.visible}
         GROUP BY 1, 2, c.id, COALESCE(c.name, 'Autre'), c.icon, t.type
       `),
       // Per tag, not deduplicated: a line shared by two tags is in both.
       // The year of a tag's line is the tag's own start, which differs from
       // the family's only for a line carrying two dated editions.
       this.prisma.$queryRaw<TagRow[]>(Prisma.sql`
+        WITH ${net.ctes}
         SELECT
           tg.id AS tag_id,
           t.category_id AS category_id,
@@ -183,21 +187,18 @@ export class TagFamilyAnalysisService {
           ))::int AS event_year,
           EXTRACT(YEAR FROM t.date)::int AS cash_year,
           COUNT(*)::int AS transaction_count,
-          SUM(
-            CASE WHEN t.type = 'EXPENSE'
-              THEN ABS(t.amount::numeric) / COALESCE(a.divisor, 1)
-              ELSE t.amount::numeric / COALESCE(a.divisor, 1)
-            END
-          )::float AS total_amount
+          SUM(${net.amount})::float AS total_amount
         FROM app.tags tg
         JOIN app.transaction_tags tt ON tt.tag_id = tg.id
         JOIN app.transactions t ON t.id = tt.transaction_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${net.joins}
         WHERE tg.family_id = ${familyId}
           AND tg.user_id = ${userId}
           AND t.user_id = ${userId}
           AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
+          AND ${net.visible}
         GROUP BY tg.id, t.category_id, t.type, event_year, cash_year
       `),
     ])
@@ -317,6 +318,7 @@ export class TagFamilyAnalysisService {
               tag.id,
               await this.baselines.computeBaseline(tag, userId, {
                 skipRefresh: true,
+                netting: net,
               }),
             ] as const
         )

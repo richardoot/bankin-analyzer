@@ -14,6 +14,7 @@ import {
   REIMBURSEMENT_CREDIT_JOINS,
   netAmountSql,
   reimbursementCreditCtes,
+  visibleRowSql,
 } from '../reimbursements/reimbursement-credit.sql'
 import {
   AmortizedSlicesService,
@@ -387,17 +388,21 @@ export class DashboardService {
       `),
       // Query 3: exceptional events overlapping the period, so the dashboard
       // can name what the exceptional share is made of.
+      // Net as the share they explain: an event's figure is read off the
+      // same rule as the period's totals.
       this.prisma.$queryRaw<ExceptionalEventRow[]>(Prisma.sql`
+        WITH ${reimbursementCreditCtes(userId)}
         SELECT
           tg.id,
           tg.name,
           tg.color,
           tg.icon,
-          SUM(ABS(t.amount::numeric) / COALESCE(a.divisor, 1))::float AS amount
+          SUM(${netAmount})::float AS amount
         FROM app.tags tg
         JOIN app.transaction_tags tt ON tt.tag_id = tg.id
         JOIN app.transactions t ON t.id = tt.transaction_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${REIMBURSEMENT_CREDIT_JOINS}
         WHERE tg.user_id = ${userId}
           AND tg.is_exceptional = true
           AND t.type = 'EXPENSE'
@@ -436,7 +441,11 @@ export class DashboardService {
       }),
       // Query 6: the tag families over the current calendar year, whatever
       // the period — the card reads « the year so far ».
-      this.tagFamiliesOfYear(userId, netAmount),
+      this.tagFamiliesOfYear(
+        userId,
+        netAmount,
+        visibleRowSql({ deductReceived: shouldDeductReimbursements })
+      ),
     ])
 
     // Extract all categories from aggregated rows, keyed by category id.
@@ -1020,7 +1029,8 @@ export class DashboardService {
    */
   private async tagFamiliesOfYear(
     userId: string,
-    netAmount: Prisma.Sql
+    netAmount: Prisma.Sql,
+    visible: Prisma.Sql
   ): Promise<FamiliesOfYear> {
     const families = await this.prisma.tagFamily.findMany({
       where: { userId },
@@ -1046,13 +1056,15 @@ export class DashboardService {
           ft.family_id,
           ft.tag_ids,
           t.type,
-          ABS(t.amount::numeric) / COALESCE(a.divisor, 1) AS amount
+          ${netAmount} AS amount
         FROM family_tx ft
         JOIN app.transactions t ON t.id = ft.transaction_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${REIMBURSEMENT_CREDIT_JOINS}
         WHERE t.user_id = ${userId}
           AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
+          AND ${visible}
           AND ${FAMILY_EVENT_YEAR} = ${year}
       ),
       real_year AS (

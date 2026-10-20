@@ -700,4 +700,147 @@ describe('Tag families (e2e)', () => {
       expect(body.totalExpenses).toBe(1000)
     })
   })
+
+  // A tag reads like the dashboard: a reimbursement comes off the expense it
+  // repays, and the income it was drawn from is not shown as income again.
+  describe('netting, the dashboard rule', () => {
+    interface AnalysisBody {
+      totalExpenses: number
+      totalIncome: number
+      transactionCount: number
+      byCategory: { type: string; amount: number }[]
+    }
+
+    async function income(
+      tagIds: string[],
+      { date = '2026-12-10', amount = 150 } = {}
+    ): Promise<string> {
+      const row = await prisma.transaction.create({
+        data: {
+          userId,
+          accountId,
+          hash: `e2e-family-income-${(sequence += 1)}`,
+          date: new Date(date),
+          description: 'VIR ALICE',
+          amount,
+          type: 'INCOME',
+        },
+      })
+      for (const tagId of tagIds) {
+        await prisma.transactionTag.create({
+          data: { tagId, transactionId: row.id },
+        })
+      }
+      return row.id
+    }
+
+    async function post(
+      path: string,
+      body: Record<string, unknown>
+    ): Promise<{ id: string }> {
+      const response = await http().post(path).set(ctx.auth(owner)).send(body)
+      expect(response.status, `${path}: ${JSON.stringify(response.body)}`).toBe(
+        201
+      )
+      return response.body as { id: string }
+    }
+
+    /**
+     * Rome: a 300 € hotel half repaid in cash by Alice, through a 150 €
+     * transfer the user tagged with the trip too, and a 100 € dinner with
+     * 40 € still owed. Read with the default preference (a debt still owed
+     * is deducted): 150 + 60 = 210, no income, two lines.
+     */
+    async function rome(): Promise<{ familyId: string; tagId: string }> {
+      const family = (await createFamily('Voyages')).body as FamilyBody
+      const tag = (
+        await http().post('/tags').set(ctx.auth(owner)).send({
+          name: 'Rome 2026',
+          familyId: family.id,
+          isExceptional: true,
+          eventStartDate: '2026-12-05',
+          eventEndDate: '2026-12-09',
+        })
+      ).body as TagBody
+      const hotel = await expense([tag.id], {
+        date: '2026-12-05',
+        amount: -300,
+      })
+      const dinner = await expense([tag.id], {
+        date: '2026-12-06',
+        amount: -100,
+      })
+      const refund = await income([tag.id])
+      const alice = await post('/persons', { name: 'Alice' })
+      const hotelDebt = await post('/reimbursements', {
+        transactionId: hotel,
+        personId: alice.id,
+        amount: 150,
+      })
+      await post('/reimbursements', {
+        transactionId: dinner,
+        personId: alice.id,
+        amount: 40,
+      })
+      await post('/settlements', {
+        personId: alice.id,
+        incomeTransactionId: refund,
+        reimbursements: [{ reimbursementId: hotelDebt.id, amountSettled: 150 }],
+      })
+      return { familyId: family.id, tagId: tag.id }
+    }
+
+    it('nets a tag, and hides the income drawn to repay it', async () => {
+      const { tagId } = await rome()
+
+      const body = (
+        await http().get(`/tags/${tagId}/analysis`).set(ctx.auth(owner))
+      ).body as AnalysisBody
+
+      expect(body.totalExpenses).toBe(210)
+      expect(body.totalIncome).toBe(0)
+      expect(body.transactionCount).toBe(2)
+      expect(body.byCategory.map(c => c.type)).toEqual(['EXPENSE'])
+    })
+
+    it('reads the family, the budget and the dashboard with the same figure', async () => {
+      const { familyId, tagId } = await rome()
+
+      const family = (
+        await http()
+          .get(`/tag-families/${familyId}/analysis`)
+          .query({ year: '2026' })
+          .set(ctx.auth(owner))
+      ).body as AnalysisBody & { tags: { id: string; spent: number }[] }
+      expect(family.totalExpenses).toBe(210)
+      expect(family.totalIncome).toBe(0)
+      expect(family.transactionCount).toBe(2)
+      expect(family.tags.map(t => [t.id, t.spent])).toEqual([[tagId, 210]])
+
+      const summary = (
+        await http()
+          .get('/tags/budget-summary')
+          .query({ startDate: '2026-12-01', endDate: '2026-12-31' })
+          .set(ctx.auth(owner))
+      ).body as { items: { id: string; spent: number }[]; totalSpent: number }
+      expect(summary.items.map(i => [i.id, i.spent])).toEqual([[tagId, 210]])
+      expect(summary.totalSpent).toBe(210)
+
+      const dashboard = (
+        await http()
+          .post('/dashboard/summary')
+          .set(ctx.auth(owner))
+          .send({ startDate: '2026-12-01', endDate: '2026-12-31' })
+      ).body as {
+        exceptionalEvents: { id: string; amount: number }[]
+        tagFamiliesOfYear: { id: string; spent: number }[]
+      }
+      expect(dashboard.exceptionalEvents).toEqual([
+        expect.objectContaining({ id: tagId, amount: 210 }),
+      ])
+      expect(dashboard.tagFamiliesOfYear).toEqual([
+        expect.objectContaining({ id: familyId, spent: 210 }),
+      ])
+    })
+  })
 })
