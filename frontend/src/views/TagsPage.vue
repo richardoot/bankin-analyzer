@@ -526,25 +526,30 @@
                 :style="{ backgroundColor: family.color ?? '#9ca3af' }"
                 aria-hidden="true"
               ></span>
-              <RouterLink
-                :to="{ name: 'tag-family', params: { id: family.id } }"
-                class="min-w-0 flex-1 truncate text-sm text-gray-900 hover:text-primary-700 hover:underline dark:text-gray-100 dark:hover:text-primary-400"
-                :data-testid="`family-row-link-${family.id}`"
+              <!-- The name keeps the room: on a phone the figures drop
+                   under it rather than squeezing it to a letter. -->
+              <div
+                class="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-2"
               >
-                {{ family.name }}
-              </RouterLink>
-              <span
-                class="shrink-0 text-xs tabular-nums text-gray-500 dark:text-gray-400"
-              >
-                {{ tagCountOf(family.id) }} étiquette(s)
-              </span>
-              <span
-                v-if="family.annualBudget !== null"
-                class="shrink-0 text-xs tabular-nums text-gray-500 dark:text-gray-400"
-                :data-testid="`family-row-budget-${family.id}`"
-              >
-                {{ formatCompactCurrency(family.annualBudget) }} par an
-              </span>
+                <RouterLink
+                  :to="{ name: 'tag-family', params: { id: family.id } }"
+                  class="min-w-0 truncate text-sm text-gray-900 hover:text-primary-700 hover:underline dark:text-gray-100 dark:hover:text-primary-400"
+                  :data-testid="`family-row-link-${family.id}`"
+                >
+                  {{ family.name }}
+                </RouterLink>
+                <span
+                  class="flex flex-wrap gap-x-2 text-xs tabular-nums text-gray-500 dark:text-gray-400"
+                >
+                  <span>{{ tagCountOf(family.id) }} étiquette(s)</span>
+                  <span
+                    v-if="family.annualBudget !== null"
+                    :data-testid="`family-row-budget-${family.id}`"
+                  >
+                    {{ formatCompactCurrency(family.annualBudget) }} par an
+                  </span>
+                </span>
+              </div>
               <TransactionsLink
                 v-if="tagCountOf(family.id) > 0"
                 :to="transactionsLink({ tagFamilyId: family.id })"

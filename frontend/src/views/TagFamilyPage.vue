@@ -277,7 +277,9 @@
 
       <!-- Scope: a year, and how a year is read -->
       <div class="mb-6 flex flex-col gap-2">
+        <!-- Nothing to choose until a line gives the family a year. -->
         <SegmentedControl
+          v-if="yearOptions.length > 1"
           v-model="year"
           :options="yearOptions"
           label="Année"
