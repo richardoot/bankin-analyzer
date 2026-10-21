@@ -6,6 +6,7 @@ import { SupabaseGuard } from '../auth/guards/supabase.guard'
 import type { User } from '../generated/prisma'
 import { TrendsQueryDto } from './dto'
 import type { TrendsResponseDto } from './dto'
+import { TrendDigestService } from './trend-digest.service'
 import { TrendsController } from './trends.controller'
 import { TrendsService } from './trends.service'
 
@@ -33,12 +34,16 @@ describe('TrendsController', () => {
   }
 
   const trendsService = { getTrends: vi.fn() }
+  const digestService = { getDigest: vi.fn() }
 
   beforeEach(async () => {
     vi.clearAllMocks()
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TrendsController],
-      providers: [{ provide: TrendsService, useValue: trendsService }],
+      providers: [
+        { provide: TrendsService, useValue: trendsService },
+        { provide: TrendDigestService, useValue: digestService },
+      ],
     })
       .overrideGuard(SupabaseGuard)
       .useValue({ canActivate: () => true })
@@ -52,6 +57,47 @@ describe('TrendsController', () => {
 
     await expect(controller.getTrends(user, query)).resolves.toEqual(response)
     expect(trendsService.getTrends).toHaveBeenCalledWith('user-123', query)
+  })
+
+  describe('the written digest', () => {
+    const digest = {
+      month: '2026-09',
+      reading: 'everyday' as const,
+      window: 6,
+      text: 'Un paragraphe.',
+      model: 'claude-haiku-5-5',
+      generatedAt: '2026-10-01T09:00:00.000Z',
+    }
+
+    it('serves the remembered or freshly written paragraph of the current user', async () => {
+      digestService.getDigest.mockResolvedValue(digest)
+      const query = { month: '2026-09', window: 6 as const }
+
+      await expect(controller.getDigest(user, query)).resolves.toEqual({
+        digest,
+      })
+      expect(digestService.getDigest).toHaveBeenCalledWith('user-123', query)
+    })
+
+    it('answers { digest: null } rather than an error when there is none', async () => {
+      digestService.getDigest.mockResolvedValue(null)
+
+      await expect(controller.getDigest(user, {})).resolves.toEqual({
+        digest: null,
+      })
+    })
+
+    it('forces a new paragraph on « Régénérer »', async () => {
+      digestService.getDigest.mockResolvedValue(digest)
+      const query = { reading: 'real' as const }
+
+      await expect(controller.regenerateDigest(user, query)).resolves.toEqual({
+        digest,
+      })
+      expect(digestService.getDigest).toHaveBeenCalledWith('user-123', query, {
+        force: true,
+      })
+    })
   })
 
   describe('query validation', () => {

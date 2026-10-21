@@ -1,8 +1,13 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import type { Mock } from 'vitest'
 import request from 'supertest'
 import type { PrismaService } from '../src/prisma/prisma.service'
 import type { DashboardSummaryDto, MonthlyDataDto } from '../src/dashboard/dto'
-import type { TrendsResponseDto } from '../src/trends/dto'
+import type {
+  TrendDigestResponseDto,
+  TrendsResponseDto,
+} from '../src/trends/dto'
+import { AiSuggestionsService } from '../src/ai-suggestions/ai-suggestions.service'
 import { AmortizedSlicesService } from '../src/transactions/amortized-slices.service'
 import {
   addMonths,
@@ -338,6 +343,169 @@ describe('Trends (e2e)', () => {
       quietSentence: null,
       availableMonths: [],
     })
+  })
+
+  describe('the written digest', () => {
+    /**
+     * The model is never called from a test: the client is replaced on the
+     * app's own instance. By default it answers with the first trend's own
+     * sentence, so every number it writes is one it was given.
+     */
+    let writeDigest: Mock<AiSuggestionsService['writeDigest']>
+
+    const fenced = (prompt: string): { trends: { sentence: string }[] } =>
+      JSON.parse(
+        prompt.slice(
+          prompt.indexOf('<user_financial_data>\n') +
+            '<user_financial_data>\n'.length,
+          prompt.indexOf('\n</user_financial_data>')
+        )
+      ) as { trends: { sentence: string }[] }
+
+    beforeAll(() => {
+      writeDigest = vi.fn((_system: string, user: string) =>
+        Promise.resolve({
+          text: `Voici le mois. ${fenced(user).trends[0]?.sentence ?? ''}`,
+          model: 'claude-haiku-5-5',
+          inputTokens: 2400,
+          outputTokens: 350,
+        })
+      )
+      vi.spyOn(ctx.app.get(AiSuggestionsService), 'writeDigest')
+
+        .mockImplementation(writeDigest)
+    })
+
+    async function digest(
+      query: Record<string, string> = {},
+      identity = owner,
+      method: 'get' | 'regenerate' = 'get'
+    ): Promise<request.Response> {
+      const call =
+        method === 'get'
+          ? request(ctx.server).get('/trends/digest')
+          : request(ctx.server).post('/trends/digest/regenerate')
+      return call.query(query).set(ctx.auth(identity))
+    }
+
+    it('rejects an unauthenticated reading', async () => {
+      expect((await request(ctx.server).get('/trends/digest')).status).toBe(401)
+      expect(
+        (await request(ctx.server).post('/trends/digest/regenerate')).status
+      ).toBe(401)
+    })
+
+    it('writes the paragraph at the first opening, remembers it, and never asks twice', async () => {
+      writeDigest.mockClear()
+      const first = await digest()
+      expect(first.status).toBe(200)
+      const body = first.body as TrendDigestResponseDto
+      expect(body.digest).toMatchObject({
+        month: CLOSED,
+        reading: 'everyday',
+        window: 6,
+        model: 'claude-haiku-5-5',
+      })
+      expect(body.digest?.text).toMatch(/^Voici le mois\. /)
+
+      const row = await prisma.monthlyDigest.findUniqueOrThrow({
+        where: {
+          userId_month_reading_window: {
+            userId: ownerId,
+            month: CLOSED,
+            reading: 'everyday',
+            window: 6,
+          },
+        },
+      })
+      expect(row).toMatchObject({ inputTokens: 2400, outputTokens: 350 })
+      expect(row.insights).toMatchObject({ month: CLOSED, window: 6 })
+
+      const second = await digest()
+      expect(second.body).toEqual(body)
+      expect(writeDigest).toHaveBeenCalledTimes(1)
+    })
+
+    it('reads the same trends as the card: the paragraph cites the first one', async () => {
+      const list = (await trends()).body as TrendsResponseDto
+      const body = (await digest()).body as TrendDigestResponseDto
+      expect(body.digest?.text).toContain(list.insights[0]?.sentence ?? '—')
+    })
+
+    it('writes again on « Régénérer » and keeps the latest', async () => {
+      writeDigest.mockClear()
+      writeDigest.mockImplementationOnce((_system: string, user: string) =>
+        Promise.resolve({
+          text: `Nouveau bilan. ${fenced(user).trends[0]?.sentence ?? ''}`,
+          model: 'claude-haiku-5-5',
+          inputTokens: 2500,
+          outputTokens: 360,
+        })
+      )
+      const response = await digest({}, owner, 'regenerate')
+      expect(response.status).toBe(200)
+      expect((response.body as TrendDigestResponseDto).digest?.text).toMatch(
+        /^Nouveau bilan\. /
+      )
+      expect(writeDigest).toHaveBeenCalledTimes(1)
+
+      const again = (await digest()).body as TrendDigestResponseDto
+      expect(again.digest?.text).toMatch(/^Nouveau bilan\. /)
+      expect(await prisma.monthlyDigest.count()).toBe(1)
+    })
+
+    it('keeps one paragraph per window', async () => {
+      const response = await digest({ window: '3' })
+      expect((response.body as TrendDigestResponseDto).digest?.window).toBe(3)
+      expect(await prisma.monthlyDigest.count()).toBe(2)
+    })
+
+    it('answers { digest: null }, never an error, for a number the trends do not carry', async () => {
+      writeDigest.mockResolvedValueOnce({
+        text: 'Vous avez dépensé 98 765 € ce mois-ci.',
+        model: 'claude-haiku-5-5',
+        inputTokens: 2400,
+        outputTokens: 20,
+      })
+      const response = await digest({ window: '12' })
+      expect(response.status).toBe(200)
+      expect(response.body).toEqual({ digest: null })
+      expect(await prisma.monthlyDigest.count()).toBe(2)
+    })
+
+    it('answers { digest: null } when the model refuses', async () => {
+      writeDigest.mockRejectedValueOnce(new Error('stop_reason: refusal'))
+      const response = await digest({ reading: 'real' })
+      expect(response.status).toBe(200)
+      expect(response.body).toEqual({ digest: null })
+    })
+
+    it('answers { digest: null } without an API key, and never asks', async () => {
+      const key = process.env.ANTHROPIC_API_KEY
+      delete process.env.ANTHROPIC_API_KEY
+      writeDigest.mockClear()
+      try {
+        const response = await digest({ month: MONTHS[6] ?? CLOSED })
+        expect(response.body).toEqual({ digest: null })
+        expect(writeDigest).not.toHaveBeenCalled()
+      } finally {
+        process.env.ANTHROPIC_API_KEY = key
+      }
+    })
+
+    it('has nothing to tell on a history too short, and never asks', async () => {
+      writeDigest.mockClear()
+      const response = await digest({}, stranger)
+      expect(response.body).toEqual({ digest: null })
+      expect(writeDigest).not.toHaveBeenCalled()
+    })
+
+    it.each([[{ window: '4' }], [{ month: CURRENT }]])(
+      'refuses %j',
+      async query => {
+        expect((await digest(query)).status).toBe(400)
+      }
+    )
   })
 
   describe('the MCP tool', () => {
