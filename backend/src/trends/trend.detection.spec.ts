@@ -262,9 +262,17 @@ describe('detectTrends — invariants', () => {
 
 describe('detectTrends — the catalogue', () => {
   const september = detect(registry(ledger(SEPTEMBER_CHANGES)))
+  // The plan's September moves restaurants and deliveries together, which
+  // is one shift (trend 11): each move is read here on its own.
+  const restaurantsUp = detect(
+    registry(ledger({ ...SEPTEMBER_CHANGES, delivery: HABIT.delivery }))
+  )
+  const fewerDeliveries = detect(
+    registry(ledger({ ...SEPTEMBER_CHANGES, restaurant: HABIT.restaurant }))
+  )
 
   it('reads a sector up against its habit (trend 1)', () => {
-    expect(insightOf(september.insights, 'restaurant')).toMatchObject({
+    expect(insightOf(restaurantsUp.insights, 'restaurant')).toMatchObject({
       kind: 'amount',
       direction: 'up',
       tone: 'neutral',
@@ -278,7 +286,7 @@ describe('detectTrends — the catalogue', () => {
   })
 
   it('reads a variable habit taken less often, with its amount, as one line (trend 2)', () => {
-    const delivery = insightOf(september.insights, 'delivery')
+    const delivery = insightOf(fewerDeliveries.insights, 'delivery')
     expect(delivery).toMatchObject({
       kind: 'frequency',
       direction: 'down',
@@ -290,7 +298,7 @@ describe('detectTrends — the catalogue', () => {
         "Livraison de repas : vous avez réduit la fréquence, 3 achats en septembre contre 9 par mois d'habitude sur les 6 mois précédents, soit 45 € contre 135 €.",
     })
     expect(
-      september.insights.filter(i => i.unit.id === 'delivery')
+      fewerDeliveries.insights.filter(i => i.unit.id === 'delivery')
     ).toHaveLength(1)
   })
 
@@ -329,8 +337,8 @@ describe('detectTrends — the catalogue', () => {
     // Rent +10 €: under 30 €.
     expect(insightOf(september.insights, 'rent')).toBeUndefined()
     expect(insightOf(september.insights, 'housing')).toBeUndefined()
-    // Restaurants et bars: +86 € and −90 € cancel out.
-    expect(insightOf(september.insights, 'restaurants')).toBeUndefined()
+    // Restaurants et bars: +86 € and −90 € cancel out, and are one shift.
+    expect(insightOf(september.insights, 'restaurants')?.kind).toBe('shift')
   })
 
   it('never explains an amount that went up by fewer purchases', () => {
@@ -385,7 +393,7 @@ describe('detectTrends — the catalogue', () => {
   })
 
   it('carries both windows, the unit and a seven-month series', () => {
-    const restaurant = insightOf(september.insights, 'restaurant')
+    const restaurant = insightOf(restaurantsUp.insights, 'restaurant')
     expect(restaurant?.windows).toEqual({
       current: { start: '2026-09-01', end: '2026-09-30' },
       reference: { start: '2026-03-01', end: '2026-08-31' },
@@ -439,8 +447,7 @@ describe('detectTrends — selection', () => {
       .toMatchInlineSnapshot(`
         [
           "Supermarché : autant d'achats, mais 62 € en moyenne en septembre contre 48 € d'habitude sur les 6 mois précédents.",
-          "Livraison de repas : vous avez réduit la fréquence, 3 achats en septembre contre 9 par mois d'habitude sur les 6 mois précédents, soit 45 € contre 135 €.",
-          "Restaurant : 312 € en septembre, +38 % par rapport à l'habitude des 6 mois précédents (226 €).",
+          "Restaurants et bars en septembre : moins de livraison de repas (−6 achats), plus de restaurant (+86 €) que d'habitude sur les 6 mois précédents, un report plutôt qu'une économie.",
         ]
       `)
   })
@@ -807,7 +814,9 @@ describe('detectTrends — merchants (trends 6 to 8)', () => {
   })
 
   it('leaves a merchant that is its whole subcategory to the subcategory', () => {
-    const insights = detect(registry(ledger(SEPTEMBER_CHANGES))).insights
+    const insights = detect(
+      registry(ledger({ ...SEPTEMBER_CHANGES, restaurant: HABIT.restaurant }))
+    ).insights
 
     // Uber Eats is every delivery: the plan's sentence stays the subcategory's.
     expect(insightOf(insights, 'delivery')).toMatchObject({ kind: 'frequency' })
@@ -1094,6 +1103,334 @@ describe('detectTrends — merchants and charges together', () => {
     expect(
       detect(reg).insights.map(i => [i.kind, i.unit.type, i.score, i.sentence])
     ).toMatchSnapshot()
+  })
+})
+
+/** One line of `subId` a month, at `amounts[month]` (100 € otherwise). */
+function monthly(
+  subId: string,
+  amounts: Partial<Record<string, number>>,
+  otherwise = 100
+): TrendLine[] {
+  return MONTHS.flatMap(m =>
+    monthLines(m, { [subId]: [amounts[m] ?? otherwise] })
+  )
+}
+
+/** The long run's units only: what trends 11 to 14 say. */
+const longRun = (insights: TrendInsight[]): TrendInsight[] =>
+  insights.filter(i => ['shift', 'drift', 'record', 'yearAgo'].includes(i.kind))
+
+describe('detectTrends — a shift (trend 11)', () => {
+  it('reads fewer deliveries and more restaurants as one shift, as the plan does', () => {
+    const insights = detect(registry(ledger(SEPTEMBER_CHANGES))).insights
+    const shift = insightOf(insights, 'restaurants')
+
+    expect(shift).toMatchObject({
+      kind: 'shift',
+      unit: { type: 'category', id: 'restaurants', categoryId: 'restaurants' },
+      direction: 'down',
+      tone: 'neutral',
+      current: 357,
+      reference: 361,
+      // The larger of the two gaps: where its lines would have ranked.
+      score: 90,
+      parts: [
+        {
+          unit: { type: 'subcategory', id: 'delivery' },
+          kind: 'frequency',
+          direction: 'down',
+          delta: -6,
+          amountDelta: -90,
+        },
+        {
+          unit: { type: 'subcategory', id: 'restaurant' },
+          kind: 'amount',
+          direction: 'up',
+          delta: 86,
+          amountDelta: 86,
+        },
+      ],
+      sentence:
+        "Restaurants et bars en septembre : moins de livraison de repas (−6 achats), plus de restaurant (+86 €) que d'habitude sur les 6 mois précédents, un report plutôt qu'une économie.",
+    })
+    // One line for the two subcategories it links.
+    expect(insightOf(insights, 'delivery')).toBeUndefined()
+    expect(insightOf(insights, 'restaurant')).toBeUndefined()
+  })
+
+  it('reads the window chosen on the card', () => {
+    const shift = insightOf(
+      detect(registry(ledger(SEPTEMBER_CHANGES)), { window: 3 }).insights,
+      'restaurants'
+    )
+    expect(shift?.windows.reference).toEqual({
+      start: '2026-06-01',
+      end: '2026-08-31',
+    })
+    expect(shift?.sentence).toContain('sur les 3 mois précédents')
+  })
+
+  it('stays silent when both move the same way, or one gap outweighs the other', () => {
+    const sameWay = detect(
+      registry(
+        ledger({
+          ...HABIT,
+          restaurant: times(5, 62.4),
+          delivery: times(15, 15),
+        })
+      )
+    ).insights
+    expect(sameWay.some(i => i.kind === 'shift')).toBe(false)
+
+    // +300 € beside −90 €: a rise, not a shift.
+    const unbalanced = detect(
+      registry(
+        ledger({
+          ...SEPTEMBER_CHANGES,
+          grocery: HABIT.grocery,
+          restaurant: times(4, 131.5),
+        })
+      )
+    ).insights
+    expect(unbalanced.some(i => i.kind === 'shift')).toBe(false)
+    expect(insightOf(unbalanced, 'restaurant')).toBeDefined()
+    expect(insightOf(unbalanced, 'delivery')).toBeDefined()
+  })
+})
+
+describe('detectTrends — the long run (trends 12 to 14)', () => {
+  it('reads a steady rise over six months as a drift, the habit line it replaces, the record it sets', () => {
+    // Flights, one a month: 100 € until March, then 20 € more every month.
+    const lines = [
+      ...ledger(),
+      ...monthly('flights', {
+        '2026-04': 100,
+        '2026-05': 120,
+        '2026-06': 140,
+        '2026-07': 160,
+        '2026-08': 180,
+        [SEPTEMBER]: 200,
+      }),
+    ]
+    const insights = detect(registry(lines)).insights
+
+    expect(longRun(insights)).toEqual([
+      expect.objectContaining({
+        kind: 'drift',
+        unit: expect.objectContaining({ type: 'category', id: 'travel' }),
+        direction: 'up',
+        tone: 'neutral',
+        current: 200,
+        reference: 100,
+        delta: 100,
+        // 20 € a month on a 150 € mean.
+        deltaPct: 13.3,
+        score: 100,
+        record: 'high',
+        sentence:
+          'Voyages : en hausse régulière depuis 6 mois, +13 % par mois (200 € en septembre), le plus haut depuis un an.',
+        windows: {
+          current: { start: '2026-09-01', end: '2026-09-30' },
+          reference: { start: '2026-04-01', end: '2026-08-31' },
+        },
+      }),
+    ])
+    // The month against the habit says less than the slope: one line.
+    expect(insightOf(insights, 'flights')).toBeUndefined()
+  })
+
+  it('says « vous avez réduit » of a steady drop only on a pleasure and variable category', () => {
+    const lines = [
+      ...ledger(),
+      ...monthly(
+        'flights',
+        {
+          '2026-04': 200,
+          '2026-05': 180,
+          '2026-06': 160,
+          '2026-07': 140,
+          '2026-08': 120,
+          [SEPTEMBER]: 100,
+        },
+        200
+      ),
+    ]
+    expect(insightOf(detect(registry(lines)).insights, 'travel')).toMatchObject(
+      {
+        kind: 'drift',
+        direction: 'down',
+        tone: 'success',
+        sentence:
+          'Voyages : vous avez réduit régulièrement depuis 6 mois, −13 % par mois (100 € en septembre), le plus bas depuis un an.',
+      }
+    )
+  })
+
+  it('takes no step for a drift, nor a noisy series', () => {
+    // A subscription taken in July: a step, which a line fits well enough.
+    const step = [
+      ...ledger(),
+      ...monthly('flights', {
+        '2026-07': 200,
+        '2026-08': 200,
+        [SEPTEMBER]: 200,
+      }),
+    ]
+    expect(detect(registry(step)).insights.some(i => i.kind === 'drift')).toBe(
+      false
+    )
+
+    const noisy = [
+      ...ledger(),
+      ...monthly('flights', {
+        '2026-04': 100,
+        '2026-05': 190,
+        '2026-06': 90,
+        '2026-07': 200,
+        '2026-08': 110,
+        [SEPTEMBER]: 210,
+      }),
+    ]
+    expect(detect(registry(noisy)).insights.some(i => i.kind === 'drift')).toBe(
+      false
+    )
+  })
+
+  it('says a record alone when the habit of the window did not move', () => {
+    // Health at 200 € a month, then 70 € since June: on three months,
+    // September's 60 € is the habit; on a year, the lowest.
+    const health: Partial<Record<string, number>> = {
+      '2026-06': 70,
+      '2026-07': 70,
+      '2026-08': 70,
+      [SEPTEMBER]: 60,
+    }
+    const reg = registry(
+      MONTHS.flatMap(m =>
+        monthLines(m, { ...HABIT, pharmacy: [health[m] ?? 200] })
+      )
+    )
+    const insights = detect(reg, { window: 3 }).insights
+
+    expect(longRun(insights)).toEqual([
+      expect.objectContaining({
+        kind: 'record',
+        record: 'low',
+        direction: 'down',
+        tone: 'neutral',
+        current: 60,
+        reference: 200,
+        delta: -140,
+        score: 140,
+        sentence:
+          "Santé : 60 € en septembre, le plus bas depuis un an (200 € par mois d'habitude sur les 11 mois précédents).",
+        windows: {
+          current: { start: '2026-09-01', end: '2026-09-30' },
+          reference: { start: '2025-10-01', end: '2026-08-31' },
+        },
+      }),
+    ])
+  })
+
+  it('reads the same month a year before alone when the habit did not move', () => {
+    // A trip every September 2025, none since: the habit is quiet.
+    const lines = [...ledger(), ...monthly('flights', { '2025-09': 600 })]
+    const insights = detect(registry(lines)).insights
+
+    expect(longRun(insights)).toEqual([
+      expect.objectContaining({
+        kind: 'yearAgo',
+        unit: expect.objectContaining({ id: 'travel' }),
+        direction: 'down',
+        current: 100,
+        reference: 600,
+        delta: -500,
+        deltaPct: -83.3,
+        score: 500,
+        sentence:
+          'Voyages : 100 € en septembre, contre 600 € en septembre 2025 (−83 %).',
+        windows: {
+          current: { start: '2026-09-01', end: '2026-09-30' },
+          reference: { start: '2025-09-01', end: '2025-09-30' },
+        },
+      }),
+    ])
+  })
+
+  it('says in passing that a month off the habit was the same a year before: the season', () => {
+    const season = { ...HABIT, restaurant: times(4, 81.5), bar: times(4, 25) }
+    const lines = MONTHS.flatMap(m =>
+      monthLines(m, m === SEPTEMBER || m === '2025-09' ? season : HABIT)
+    )
+    const restaurants = insightOf(
+      detect(registry(lines)).insights,
+      'restaurants'
+    )
+
+    expect(restaurants).toMatchObject({ kind: 'amount', direction: 'up' })
+    expect(restaurants?.sentence).toBe(
+      "Restaurants et bars : 561 € en septembre, +55 % par rapport à l'habitude des 6 mois précédents (361 €), le plus haut depuis un an, comme en septembre 2025 (561 €)."
+    )
+    expect(longRun(detect(registry(lines)).insights)).toEqual([])
+  })
+
+  it('says nothing of the long run in a ledger that does not move, in either reading', () => {
+    for (const reading of ['everyday', 'real'] as const) {
+      expect(detect(registry(ledger()), { reading }).insights).toEqual([])
+    }
+  })
+
+  it('leaves an exceptional line out of every horizon in the everyday reading', () => {
+    const lines = [
+      ...ledger(),
+      ...monthLines(
+        SEPTEMBER,
+        { flights: [1200] },
+        { flights: { exceptional: true } }
+      ),
+    ]
+    expect(longRun(detect(registry(lines)).insights)).toEqual([])
+    // Read « Tout », the trip is counted: the habit says it (trend 1), and a
+    // category never flown before sets no record and no year-on-year line.
+    const real = detect(registry(lines), { reading: 'real' }).insights
+    expect(insightOf(real, 'flights')).toMatchObject({ kind: 'amount' })
+    expect(longRun(real)).toEqual([])
+  })
+
+  it('says which long comparisons the history is still too short for', () => {
+    const lines = MONTHS.slice(-9).flatMap(m => monthLines(m, HABIT))
+    const result = detect(registry(lines, [], '2026-01-01'))
+
+    expect(result.completeMonths).toBe(8)
+    expect(result.horizons).toEqual([
+      {
+        kind: 'record',
+        months: 12,
+        missing: 3,
+        sentence:
+          'Les records sur un an demandent 12 mois complets : il en manque 3.',
+      },
+      {
+        kind: 'yearAgo',
+        months: 13,
+        missing: 4,
+        sentence:
+          "La comparaison avec l'an dernier demande 13 mois complets : il en manque 4.",
+      },
+    ])
+    expect(detect(registry(ledger())).horizons).toEqual([])
+  })
+
+  it('never reads a record or a year before the history covers it', () => {
+    // Nine months: September's trip would be a record over twelve.
+    const lines = MONTHS.slice(-9).flatMap(m =>
+      monthLines(m, m === SEPTEMBER ? { ...HABIT, flights: [900] } : HABIT)
+    )
+    const insights = detect(registry(lines, [], '2026-01-01')).insights
+    expect(
+      insights.some(i => i.kind === 'record' || i.kind === 'yearAgo')
+    ).toBe(false)
   })
 })
 

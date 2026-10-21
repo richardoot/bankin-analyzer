@@ -45,6 +45,17 @@
  *    category when it explains 70 % of the category's gap, the category its
  *    subcategories otherwise; a merchant and its unit the same way. Merchants
  *    and recurrences are units of their own, outside the sum of a month.
+ * 8. The long run (the catalogue's 11 to 14). A shift: two subcategories of
+ *    one category moving opposite ways, each past its thresholds, told as
+ *    one line in place of both (and of their category). Then, on each
+ *    category and on its own horizon, never the card's window: a drift over
+ *    six months (a linear fit, the month read the last), a record over
+ *    twelve, the same month a year before. One line per category: a drift
+ *    takes the place of a habit amount pointing its way, a record enriches
+ *    the line it agrees with, the year before speaks only when it says what
+ *    the habit does not. They read the same aggregates as the habits, so a
+ *    month still adds up from its units: they add no unit of their own.
+ *    `horizons` says which of them the history is still too short for.
  *
  * ## What it refuses to do
  *
@@ -131,6 +142,32 @@ export const TREND_RULES = {
   recurringShare: 0.8,
   /** How far back the card's month selector goes, in closed months. */
   selectableMonths: 24,
+  /**
+   * Trend 11: two subcategories of one category moving in opposite ways,
+   * each past its own thresholds, are one shift when the smaller gap is at
+   * least `minBalance` of the larger — beyond, one side is the story.
+   */
+  shift: { minBalance: 0.5 },
+  /**
+   * Trend 12: a category's slope over its own horizon of `months` months,
+   * the month read the last of them. Silent under `minR2`, or when the
+   * fitted change over the horizon is under `minChange` of the horizon's
+   * mean (or under trend 1's euros), or when one month-to-month move makes
+   * more than `maxStep` of that change: a step (a subscription stopped in
+   * the middle) fits a line well enough, and is no drift.
+   */
+  drift: { months: 6, minR2: 0.6, minChange: 0.2, maxStep: 0.5 },
+  /**
+   * Trend 13: the month read the highest or the lowest of `months` months
+   * (itself included), at least `minGap` from the median of the months
+   * before it (and trend 1's euros).
+   */
+  record: { months: 12, minGap: 0.25 },
+  /**
+   * Trend 14: the same month a year before, on trend 1's thresholds;
+   * `months` complete months, the month read included.
+   */
+  yearAgo: { months: 13 },
 } as const
 
 export type TrendWindow = (typeof TREND_RULES.windows)[number]
@@ -148,6 +185,10 @@ export type TrendKind =
   | 'lostHabit'
   | 'subscription'
   | 'price'
+  | 'shift'
+  | 'drift'
+  | 'record'
+  | 'yearAgo'
 export type TrendUnitType =
   | 'category'
   | 'subcategory'
@@ -287,6 +328,29 @@ export interface TrendUnit {
   search?: string
 }
 
+/** One of the two subcategories a shift (trend 11) links. */
+export interface TrendPart {
+  unit: TrendUnit
+  /** The trend the subcategory had on its own: what the gap is measured in. */
+  kind: TrendKind
+  direction: TrendDirection
+  /** The gap in that measure: lines for a frequency, euros otherwise. */
+  delta: number
+  /** The gap of its amount, in euros, whatever the kind. */
+  amountDelta: number
+}
+
+/** A long comparison the history is still too short for. */
+export interface TrendHorizon {
+  kind: 'drift' | 'record' | 'yearAgo'
+  /** Complete months it reads, the month read included. */
+  months: number
+  /** How many of them are still missing. */
+  missing: number
+  /** « La comparaison avec l'an dernier demande 13 mois complets : il en manque 2. » */
+  sentence: string
+}
+
 export interface TrendPeriod {
   /** `YYYY-MM-DD`, both included. */
   start: string
@@ -319,6 +383,13 @@ export interface TrendInsight {
   series: number[]
   /** The gap in euros, what the card sorts by. */
   score: number
+  /** A shift (11): the subcategory that went down, then the one that went up. */
+  parts?: TrendPart[]
+  /**
+   * The month read is the highest or the lowest of twelve (13): on a
+   * record, and on the category's line a record enriches.
+   */
+  record?: 'high' | 'low'
 }
 
 /** Shaped as `TrendsResponseDto` (lot 1). */
@@ -344,6 +415,11 @@ export interface TrendsResult {
    * history before them, at most `selectableMonths`.
    */
   availableMonths: string[]
+  /**
+   * The long comparisons (12 to 14) the history cannot make yet for this
+   * month, each with what it lacks; empty once it can.
+   */
+  horizons: TrendHorizon[]
   /** Lot 5. */
   digest: null
 }
@@ -749,6 +825,8 @@ interface Candidate extends TrendInsight {
     coversSubcategory: number
     coversCategory: number
   }
+  /** A shift only: the two subcategory trends it stands for. */
+  replaces?: Candidate[]
 }
 
 /**
@@ -857,12 +935,18 @@ export function detectTrends(
     insights: lead,
     quietSentence: null,
     availableMonths: availableMonths(registry.historyStart, closed),
+    horizons: horizonsOf(completeMonths),
     digest: null,
   }
   if (completeMonths < TREND_RULES.minHistoryMonths) return silent
 
+  // The longest horizon (the same month a year before) reads twelve back.
   const span = monthsBetween(
-    [referenceMonths[0] ?? month, seriesMonths[0] ?? month].sort()[0] ?? month,
+    [
+      referenceMonths[0] ?? month,
+      seriesMonths[0] ?? month,
+      addMonths(month, -(TREND_RULES.yearAgo.months - 1)),
+    ].sort()[0] ?? month,
     month
   )
   const aggregates = aggregateMonths(registry, reading, span)
@@ -899,6 +983,8 @@ export function detectTrends(
   candidates.push(...charges.insights)
 
   const unitOf = (key: string): UnitMonth | undefined => current.units.get(key)
+  /** The categories whose amount moved against the habit (trend 1). */
+  const habitMoved = new Set<string>()
   const keys = new Set<string>()
   for (const m of [month, ...referenceMonths]) {
     for (const key of at(m).units.keys()) keys.add(key)
@@ -938,6 +1024,7 @@ export function detectTrends(
     const refAmount = reference(refAmounts)
     const amountDelta = cur.amount - refAmount
     const amountPass = passesAmount(amountDelta, refAmount)
+    if (!isSub && amountPass) habitMoved.add(id)
 
     const base = {
       unit,
@@ -1155,7 +1242,35 @@ export function detectTrends(
     })
   }
 
-  const habits = select(candidates)
+  // Trend 11: two subcategories of a category moving in opposite ways.
+  candidates.push(
+    ...shiftInsights(candidates, {
+      categories,
+      ctx,
+      windows,
+      current,
+      referenceMonths,
+      seriesMonths,
+      reference,
+      at,
+    })
+  )
+
+  // Trends 12 to 14 on categories, on their own horizons.
+  const long = longInsights({
+    registry,
+    month,
+    monthName,
+    completeMonths,
+    seriesMonths,
+    keys: [
+      ...new Set([...aggregates.values()].flatMap(a => [...a.units.keys()])),
+    ],
+    categories,
+    at,
+  })
+  const habits = mergeLong(select(candidates), long, habitMoved)
+  habits.sort(byScore)
   return {
     ...silent,
     insights: [...lead, ...habits],
@@ -1828,12 +1943,34 @@ function select(candidates: Candidate[]): TrendInsight[] {
     parent.amountDelta !== 0 &&
     child.amountDelta / parent.amountDelta >= TREND_RULES.subcategoryExplains
 
-  const categoryInsights = new Map(
-    candidates.filter(c => c.unit.type === 'category').map(c => [c.unit.id, c])
-  )
   const dropped = new Set<Candidate>()
+  // A shift (11) speaks for its two subcategories and for their category.
+  // Its other subcategories give way too, as they do to a category line
+  // they do not explain.
+  for (const shift of candidates.filter(c => c.kind === 'shift')) {
+    for (const part of shift.replaces ?? []) dropped.add(part)
+    for (const c of candidates) {
+      if (c === shift) continue
+      if (
+        (c.unit.type === 'category' && c.unit.id === shift.unit.id) ||
+        c.parentCategoryId === shift.unit.id
+      ) {
+        dropped.add(c)
+      }
+    }
+  }
+
+  const categoryInsights = new Map(
+    candidates
+      .filter(
+        c => c.unit.type === 'category' && c.kind !== 'shift' && !dropped.has(c)
+      )
+      .map(c => [c.unit.id, c])
+  )
   for (const [categoryId, category] of categoryInsights) {
-    const children = candidates.filter(c => c.parentCategoryId === categoryId)
+    const children = candidates.filter(
+      c => c.parentCategoryId === categoryId && !dropped.has(c)
+    )
     if (children.length === 0) continue
     if (children.some(child => explains(child, category))) dropped.add(category)
     else for (const child of children) dropped.add(child)
@@ -1855,6 +1992,11 @@ function select(candidates: Candidate[]): TrendInsight[] {
     const sub = standing('subcategory', of.subcategoryId)
     const parent = sub ?? standing('category', of.categoryId)
     if (!parent) continue
+    // A shift already says where the money went inside its category.
+    if (parent.kind === 'shift') {
+      dropped.add(merchant)
+      continue
+    }
     const covers = sub ? of.coversSubcategory : of.coversCategory
     if (covers >= TREND_RULES.merchant.coversUnit) {
       dropped.add(merchant)
@@ -1876,15 +2018,516 @@ function select(candidates: Candidate[]): TrendInsight[] {
 
   return candidates
     .filter(c => !dropped.has(c))
-    .sort(
-      (a, b) =>
-        b.score - a.score ||
-        a.unit.name.localeCompare(b.unit.name, 'fr') ||
-        a.kind.localeCompare(b.kind) ||
-        a.unit.id.localeCompare(b.unit.id)
-    )
+    .sort(byScore)
     .map(
-      ({ parentCategoryId: _p, amountDelta: _a, merchantOf: _m, ...insight }) =>
-        insight
+      ({
+        parentCategoryId: _p,
+        amountDelta: _a,
+        merchantOf: _m,
+        replaces: _r,
+        ...insight
+      }) => insight
     )
+}
+
+/** The gap in euros first, ties broken by name for a stable card. */
+function byScore(a: TrendInsight, b: TrendInsight): number {
+  return (
+    b.score - a.score ||
+    a.unit.name.localeCompare(b.unit.name, 'fr') ||
+    a.kind.localeCompare(b.kind) ||
+    a.unit.id.localeCompare(b.unit.id)
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* The long run (trends 11 to 15)                                      */
+/* ------------------------------------------------------------------ */
+
+/** « de juillet », « d'avril »; « de high-tech »: an h is never elided. */
+function ofWord(text: string): string {
+  return /^[aeiouyéèêâîôû]/i.test(text) ? `d'${text}` : `de ${text}`
+}
+
+/** « Livraison de repas » → « livraison de repas »; an acronym stays. */
+function inSentence(name: string): string {
+  if (/^.[A-Z]/.test(name)) return name
+  return name.charAt(0).toLowerCase() + name.slice(1)
+}
+
+function signedEuros(value: number): string {
+  return value >= 0 ? `+${formatEuros(value)}` : formatEuros(value)
+}
+
+/** A sentence with one more clause before its full stop. */
+function withClause(sentence: string, clause: string): string {
+  return sentence.endsWith('.')
+    ? `${sentence.slice(0, -1)}, ${clause}.`
+    : `${sentence}, ${clause}`
+}
+
+/** Ordinary least squares on 0, 1, 2…: the slope a month and how well it fits. */
+export function linearFit(values: number[]): {
+  slope: number
+  intercept: number
+  r2: number
+} {
+  const n = values.length
+  if (n < 2) return { slope: 0, intercept: values[0] ?? 0, r2: 0 }
+  const xMean = (n - 1) / 2
+  const yMean = mean(values)
+  let sxx = 0
+  let sxy = 0
+  let syy = 0
+  values.forEach((y, x) => {
+    sxx += (x - xMean) ** 2
+    sxy += (x - xMean) * (y - yMean)
+    syy += (y - yMean) ** 2
+  })
+  const slope = sxy / sxx
+  return {
+    slope,
+    intercept: yMean - slope * xMean,
+    r2: syy === 0 ? 0 : (sxy * sxy) / (sxx * syy),
+  }
+}
+
+/**
+ * The long comparisons the history cannot make yet: each needs that many
+ * complete months, the month read included (a closed month is complete).
+ */
+export function horizonsOf(completeMonths: number): TrendHorizon[] {
+  const have = completeMonths + 1
+  const all: Array<[TrendHorizon['kind'], number, string]> = [
+    [
+      'drift',
+      TREND_RULES.drift.months,
+      `La dérive sur ${TREND_RULES.drift.months} mois demande ${TREND_RULES.drift.months} mois complets`,
+    ],
+    [
+      'record',
+      TREND_RULES.record.months,
+      `Les records sur un an demandent ${TREND_RULES.record.months} mois complets`,
+    ],
+    [
+      'yearAgo',
+      TREND_RULES.yearAgo.months,
+      `La comparaison avec l'an dernier demande ${TREND_RULES.yearAgo.months} mois complets`,
+    ],
+  ]
+  return all
+    .filter(([, months]) => months > have)
+    .map(([kind, months, text]) => ({
+      kind,
+      months,
+      missing: months - have,
+      sentence: `${text} : il en manque ${months - have}.`,
+    }))
+}
+
+/**
+ * Trend 11: in one category, a subcategory down and another up, each past
+ * its own thresholds against the card's window — fewer deliveries, more
+ * supermarket. The two gaps must weigh alike (the smaller at least half the
+ * larger): a 300 € rise beside a 40 € drop is a rise, not a shift. One line
+ * for the category, in place of its two subcategories and of its own; the
+ * strongest pair when several qualify. Neutral: moving money is no merit.
+ * Scored by the larger of the two gaps, where its lines would have ranked.
+ */
+function shiftInsights(
+  candidates: Candidate[],
+  input: {
+    categories: Map<string, TrendCategory>
+    ctx: SentenceContext
+    windows: TrendInsight['windows']
+    current: MonthAggregate
+    referenceMonths: string[]
+    seriesMonths: string[]
+    reference: (values: number[]) => number
+    at: (month: string) => MonthAggregate
+  }
+): Candidate[] {
+  const byCategory = new Map<string, Candidate[]>()
+  for (const c of candidates) {
+    if (c.unit.type !== 'subcategory' || !c.parentCategoryId) continue
+    if (c.amountDelta === 0) continue
+    byCategory.set(c.parentCategoryId, [
+      ...(byCategory.get(c.parentCategoryId) ?? []),
+      c,
+    ])
+  }
+
+  const shifts: Candidate[] = []
+  for (const categoryId of [...byCategory.keys()].sort()) {
+    const subs = byCategory.get(categoryId) ?? []
+    const strongest = (sign: 1 | -1): Candidate | undefined =>
+      subs
+        .filter(c => Math.sign(c.amountDelta) === sign)
+        .sort(
+          (a, b) =>
+            Math.abs(b.amountDelta) - Math.abs(a.amountDelta) ||
+            a.unit.id.localeCompare(b.unit.id)
+        )[0]
+    const down = strongest(-1)
+    const up = strongest(1)
+    if (!down || !up) continue
+    const smaller = Math.min(-down.amountDelta, up.amountDelta)
+    const larger = Math.max(-down.amountDelta, up.amountDelta)
+    if (smaller / larger < TREND_RULES.shift.minBalance) continue
+
+    const category = input.categories.get(categoryId)
+    const key = categoryKey(categoryId)
+    const cur = input.current.units.get(key)?.amount ?? 0
+    const ref = input.reference(
+      input.referenceMonths.map(m => input.at(m).units.get(key)?.amount ?? 0)
+    )
+    const delta = cur - ref
+    const parts: TrendPart[] = [down, up].map(c => ({
+      unit: c.unit,
+      kind: c.kind,
+      direction: c.amountDelta >= 0 ? 'up' : 'down',
+      delta: c.kind === 'frequency' ? c.delta : cents(c.amountDelta),
+      amountDelta: cents(c.amountDelta),
+    }))
+    const gap = (c: Candidate): string => {
+      if (c.kind === 'lostHabit') return 'plus aucun achat'
+      if (c.kind === 'frequency') {
+        const n = Math.abs(c.delta)
+        return `${c.delta < 0 ? MINUS : '+'}${formatCount(n)} achat${n >= 2 ? 's' : ''}`
+      }
+      return signedEuros(c.amountDelta)
+    }
+    const name = category?.name ?? 'Autre'
+    // The catalogue's « Autre » reads as what it is: the rest of the category.
+    const what = (c: Candidate): string =>
+      c.unit.name === `${name}, autre`
+        ? "d'autres dépenses"
+        : ofWord(inSentence(c.unit.name))
+    const sentence =
+      `${name} en ${input.ctx.monthName} : moins ${what(down)} (${gap(down)}), ` +
+      `plus ${what(up)} (${gap(up)}) que d'habitude ${input.ctx.windowOn}, ` +
+      `un report plutôt qu'une économie.`
+    shifts.push({
+      kind: 'shift',
+      unit: {
+        type: 'category',
+        id: categoryId,
+        categoryId,
+        name,
+        icon: category?.icon ?? null,
+      },
+      direction: delta >= 0 ? 'up' : 'down',
+      tone: 'neutral',
+      current: cents(cur),
+      reference: cents(ref),
+      delta: cents(delta),
+      deltaPct: ref > 0 ? tenths((delta / ref) * 100) : null,
+      sentence,
+      windows: input.windows,
+      series: input.seriesMonths.map(m =>
+        cents(input.at(m).units.get(key)?.amount ?? 0)
+      ),
+      score: cents(larger),
+      parts,
+      parentCategoryId: null,
+      amountDelta: delta,
+      replaces: [down, up],
+    })
+  }
+  return shifts
+}
+
+/** What trends 12 to 14 found on one category, before the card chooses. */
+interface LongOf {
+  categoryId: string
+  drift: TrendInsight | null
+  record: {
+    insight: TrendInsight
+    clause: string
+    which: 'high' | 'low'
+  } | null
+  yearAgo: { insight: TrendInsight | null; clause: string | null } | null
+}
+
+/**
+ * Trends 12 to 14 on every category, each on its own horizon, never the
+ * card's window: the slope of the last six months (the month read the last
+ * of them), the highest or lowest of twelve, the same month a year before.
+ * In the reading asked, like the habits; outside the sum of a month, like
+ * every trend — a category is still counted once, by its own units.
+ */
+function longInsights(input: {
+  registry: TrendRegistry
+  month: string
+  monthName: string
+  completeMonths: number
+  seriesMonths: string[]
+  keys: string[]
+  categories: Map<string, TrendCategory>
+  at: (month: string) => MonthAggregate
+}): LongOf[] {
+  const { month, monthName, completeMonths } = input
+  const rules = TREND_RULES
+  const result: LongOf[] = []
+  const lastDay = lastDayOf(month)
+  const current = { start: `${month}-01`, end: lastDay }
+
+  for (const key of [...input.keys].sort()) {
+    if (!key.startsWith('category:')) continue
+    const id = key.slice('category:'.length)
+    const category = input.categories.get(id)
+    if (!category) continue
+    const amountIn = (m: string): number =>
+      input.at(m).units.get(key)?.amount ?? 0
+    const unit: TrendUnit = {
+      type: 'category',
+      id,
+      categoryId: id,
+      name: category.name,
+      icon: category.icon,
+    }
+    const series = input.seriesMonths.map(m => cents(amountIn(m)))
+    const cur = amountIn(month)
+    const curText = cur === 0 ? 'rien' : formatEuros(cur)
+    const toneFor = (direction: TrendDirection): TrendTone =>
+      toneOf(direction, category.nature, category.rhythm)
+    const entry: LongOf = {
+      categoryId: id,
+      drift: null,
+      record: null,
+      yearAgo: null,
+    }
+
+    // Trend 12: a slow, steady slope no single month shows.
+    const n = rules.drift.months
+    if (completeMonths >= n - 1) {
+      const months = monthsBetween(addMonths(month, -(n - 1)), month)
+      const values = months.map(amountIn)
+      const average = mean(values)
+      const fit = linearFit(values)
+      const total = fit.slope * (n - 1)
+      const largestStep = Math.max(
+        0,
+        ...values
+          .slice(1)
+          .map((v, i) => (v - (values[i] ?? 0)) * Math.sign(total))
+      )
+      const steady = largestStep <= rules.drift.maxStep * Math.abs(total)
+      if (
+        average > 0 &&
+        total !== 0 &&
+        steady &&
+        fit.r2 >= rules.drift.minR2 &&
+        Math.abs(total) / average >= rules.drift.minChange &&
+        Math.abs(total) >= rules.amount.minEuros
+      ) {
+        const direction: TrendDirection = total >= 0 ? 'up' : 'down'
+        // A slope the recurrence lines make is a charge's: never a merit.
+        const recurring =
+          linearFit(
+            months.map(m => input.at(m).units.get(key)?.recurringAmount ?? 0)
+          ).slope *
+          (n - 1)
+        const tone =
+          recurring / total >= TREND_RULES.recurringShare
+            ? 'neutral'
+            : toneFor(direction)
+        const perMonth = (fit.slope / average) * 100
+        const lead =
+          tone === 'success'
+            ? 'vous avez réduit régulièrement'
+            : `en ${direction === 'up' ? 'hausse' : 'baisse'} régulière`
+        entry.drift = {
+          kind: 'drift',
+          unit,
+          direction,
+          tone,
+          current: cents(cur),
+          reference: cents(values[0] ?? 0),
+          delta: cents(total),
+          deltaPct: tenths(perMonth),
+          sentence: `${category.name} : ${lead} depuis ${n} mois, ${formatPct(perMonth)} par mois (${curText} en ${monthName}).`,
+          windows: {
+            current,
+            reference: {
+              start: `${months[0] ?? month}-01`,
+              end: lastDayOf(addMonths(month, -1)),
+            },
+          },
+          series,
+          score: cents(Math.abs(total)),
+        }
+      }
+    }
+
+    // Trend 13: the highest or the lowest month of a year.
+    const r = rules.record.months
+    if (completeMonths >= r - 1) {
+      const before = monthsBetween(
+        addMonths(month, -(r - 1)),
+        addMonths(month, -1)
+      )
+      const values = before.map(amountIn)
+      const med = median(values)
+      const high = cur > Math.max(...values)
+      const low = cur < Math.min(...values)
+      const gap = cur - med
+      if (
+        med > 0 &&
+        (high || low) &&
+        Math.abs(gap) / med >= rules.record.minGap &&
+        Math.abs(gap) >= rules.amount.minEuros
+      ) {
+        const direction: TrendDirection = high ? 'up' : 'down'
+        const clause = `le plus ${high ? 'haut' : 'bas'} depuis un an`
+        entry.record = {
+          clause,
+          which: high ? 'high' : 'low',
+          insight: {
+            kind: 'record',
+            unit,
+            direction,
+            tone: toneFor(direction),
+            current: cents(cur),
+            reference: cents(med),
+            delta: cents(gap),
+            deltaPct: tenths((gap / med) * 100),
+            sentence: `${category.name} : ${curText} en ${monthName}, ${clause} (${formatEuros(med)} par mois d'habitude sur les ${r - 1} mois précédents).`,
+            windows: {
+              current,
+              reference: {
+                start: `${before[0] ?? month}-01`,
+                end: lastDayOf(addMonths(month, -1)),
+              },
+            },
+            series,
+            score: cents(Math.abs(gap)),
+            record: high ? 'high' : 'low',
+          },
+        }
+      }
+    }
+
+    // Trend 14: the same month a year before, on trend 1's thresholds.
+    if (completeMonths >= rules.yearAgo.months - 1) {
+      const ago = addMonths(month, -(rules.yearAgo.months - 1))
+      const ref = amountIn(ago)
+      const delta = cur - ref
+      const agoName = monthIn(ago, month)
+      if (passesAmount(delta, ref)) {
+        const direction: TrendDirection = delta >= 0 ? 'up' : 'down'
+        const pct = ref > 0 ? ` (${formatPct((delta / ref) * 100)})` : ''
+        entry.yearAgo = {
+          clause: null,
+          insight: {
+            kind: 'yearAgo',
+            unit,
+            direction,
+            tone: toneFor(direction),
+            current: cents(cur),
+            reference: cents(ref),
+            delta: cents(delta),
+            deltaPct: ref > 0 ? tenths((delta / ref) * 100) : null,
+            sentence: `${category.name} : ${curText} en ${monthName}, contre ${ref === 0 ? 'rien' : formatEuros(ref)} en ${agoName}${pct}.`,
+            windows: {
+              current,
+              reference: { start: `${ago}-01`, end: lastDayOf(ago) },
+            },
+            series,
+            score: cents(Math.abs(delta)),
+          },
+        }
+      } else if (ref > 0) {
+        // The habit moved, last year did not: the season, said in passing.
+        entry.yearAgo = {
+          insight: null,
+          clause: `comme en ${agoName} (${formatEuros(ref)})`,
+        }
+      }
+    }
+
+    if (entry.drift || entry.record || entry.yearAgo) result.push(entry)
+  }
+  return result
+}
+
+/**
+ * One line per category, whatever its horizon. On the category's own line
+ * (what `select` kept):
+ *
+ * - a drift (12) takes the place of a habit amount (1) pointing the same
+ *   way — the habit itself moves, the slope says it better — and of the
+ *   same-direction amount lines of its subcategories; beside a shift or a
+ *   line pointing the other way it is silent;
+ * - a record (13) enriches the amount or drift line pointing its way
+ *   (« …, le plus haut depuis un an »); alone only when nothing else speaks
+ *   for the category or its subcategories;
+ * - the same month a year before (14) is said only when it says something
+ *   the habit does not: alone when the habit did not move but last year
+ *   differs, in passing (« comme en décembre 2025 ») when the habit moved
+ *   but last year was alike — the season, not a change.
+ */
+function mergeLong(
+  shown: TrendInsight[],
+  long: LongOf[],
+  habitMoved: Set<string>
+): TrendInsight[] {
+  const out = [...shown]
+  const lineOf = (categoryId: string): number =>
+    out.findIndex(i => i.unit.type === 'category' && i.unit.id === categoryId)
+  const subsOf = (categoryId: string): TrendInsight[] =>
+    out.filter(
+      i => i.unit.type === 'subcategory' && i.unit.categoryId === categoryId
+    )
+
+  for (const l of long) {
+    const id = l.categoryId
+    if (l.drift) {
+      const drift = l.drift
+      const index = lineOf(id)
+      const line = out[index]
+      if (line?.kind === 'amount' && line.direction === drift.direction) {
+        out[index] = drift
+      } else if (!line) {
+        for (const sub of subsOf(id)) {
+          if (sub.kind === 'amount' && sub.direction === drift.direction) {
+            out.splice(out.indexOf(sub), 1)
+          }
+        }
+        out.push(drift)
+      }
+    }
+    if (l.record) {
+      const index = lineOf(id)
+      const line = out[index]
+      const { insight, clause, which } = l.record
+      if (line) {
+        if (
+          (line.kind === 'amount' || line.kind === 'drift') &&
+          line.direction === insight.direction
+        ) {
+          out[index] = {
+            ...line,
+            sentence: withClause(line.sentence, clause),
+            record: which,
+          }
+        }
+      } else if (subsOf(id).length === 0) {
+        out.push(insight)
+      }
+    }
+    if (l.yearAgo) {
+      const index = lineOf(id)
+      const line = out[index]
+      const { insight, clause } = l.yearAgo
+      if (insight) {
+        if (!line && subsOf(id).length === 0 && !habitMoved.has(id)) {
+          out.push(insight)
+        }
+      } else if (clause && line?.kind === 'amount') {
+        out[index] = { ...line, sentence: withClause(line.sentence, clause) }
+      }
+    }
+  }
+  return out
 }

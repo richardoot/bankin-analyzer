@@ -6,7 +6,8 @@
 export class TrendUnitDto {
   /**
    * `category`, `subcategory`, `structure` (a share), `uncategorized` (lines
-   * to file), `merchant` (trends 6 to 8) or `recurrence` (trends 9 and 10)
+   * to file), `merchant` (trends 6 to 8) or `recurrence` (trends 9 and 10).
+   * A shift (11) is a `category`, its two subcategories in `parts`.
    */
   type!:
     | 'category'
@@ -35,6 +36,30 @@ export class TrendUnitDto {
   search?: string
 }
 
+/** One of the two subcategories a shift (trend 11) links, the one down first */
+export class TrendPartDto {
+  /** The subcategory */
+  unit!: TrendUnitDto
+  /** The trend it had on its own: `amount`, `frequency`, `basket` or `lostHabit` */
+  kind!: string
+  direction!: 'up' | 'down'
+  /** Its gap in that measure: lines for a frequency, euros otherwise */
+  delta!: number
+  /** Its amount's gap in euros, whatever the kind */
+  amountDelta!: number
+}
+
+/** A long comparison the history is still too short for */
+export class TrendHorizonDto {
+  kind!: 'drift' | 'record' | 'yearAgo'
+  /** Complete months it reads, the month read included: 6, 12 or 13 */
+  months!: number
+  /** How many are still missing */
+  missing!: number
+  /** « La comparaison avec l'an dernier demande 13 mois complets : il en manque 2. » */
+  sentence!: string
+}
+
 export class TrendPeriodDto {
   /** `YYYY-MM-DD`, included */
   start!: string
@@ -53,7 +78,8 @@ export class TrendInsightDto {
   /**
    * `amount` (1), `frequency` (2, and 6 on a merchant), `basket` (3),
    * `share` (4), `uncategorized` (5), `newHabit` (7), `lostHabit` (8),
-   * `subscription` (9: `up` appeared, `down` stopped), `price` (10)
+   * `subscription` (9: `up` appeared, `down` stopped), `price` (10),
+   * `shift` (11), `drift` (12), `record` (13), `yearAgo` (14)
    */
   kind!:
     | 'amount'
@@ -65,6 +91,10 @@ export class TrendInsightDto {
     | 'lostHabit'
     | 'subscription'
     | 'price'
+    | 'shift'
+    | 'drift'
+    | 'record'
+    | 'yearAgo'
   unit!: TrendUnitDto
   direction!: 'up' | 'down'
   /** `success` only for a drop on a pleasure and variable unit; never on a recurrence */
@@ -74,15 +104,23 @@ export class TrendInsightDto {
    * (frequency, lines to file; distinct days on a merchant), percent of the
    * total (share), days since it began (new habit), 0 (lost habit), the
    * monthly equivalent (subscription appeared; 0 once stopped), the price
-   * of a charge (price)
+   * of a charge (price); the category's euros for a shift, a drift, a
+   * record and the same month a year before
    */
   current!: number
-  /** The reference's measure; for the lines to file, every line of the month */
+  /**
+   * The reference's measure; for the lines to file, every line of the month;
+   * the first month of the six for a drift, the median of the eleven months
+   * before for a record, the same month a year before
+   */
   reference!: number
+  /** For a drift, the fitted change over its six months in euros */
   delta!: number
   /**
-   * Relative gap in percent; null on a share, on the lines to file, on a
-   * habit or a subscription that came or went, or on a zero reference
+   * Relative gap in percent; for a drift, the slope in percent of its
+   * six-month mean per month; null on a share, on the lines to file, on a
+   * habit or a subscription that came or went, or on a zero
+   * reference
    */
   deltaPct!: number | null
   /** The sentence the card shows, in French */
@@ -94,9 +132,17 @@ export class TrendInsightDto {
    * The gap in euros, what the list is sorted by: for a merchant's
    * frequency Δ days × reference basket; a new habit's month, a lost
    * habit's usual month; a subscription's monthly equivalent, a price's Δ
-   * monthly equivalent
+   * monthly equivalent; the larger of a shift's two gaps; a drift's fitted
+   * change over six months
    */
   score!: number
+  /** A shift (11): the subcategory that went down, then the one that went up */
+  parts?: TrendPartDto[]
+  /**
+   * The month read is the highest or lowest of twelve (13): on a record, and
+   * on the amount or drift line of the category a record enriches
+   */
+  record?: 'high' | 'low'
 }
 
 export class TrendsResponseDto {
@@ -113,6 +159,11 @@ export class TrendsResponseDto {
   quietSentence!: string | null
   /** The closed months the card can read, latest first */
   availableMonths!: string[]
+  /**
+   * The long comparisons (drift, record, same month a year before)
+   * this month's history cannot make yet; empty once it can
+   */
+  horizons!: TrendHorizonDto[]
   /** The written digest (lot 5); always null for now */
   digest!: null
 }
