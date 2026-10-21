@@ -1198,6 +1198,38 @@ describe('detectTrends — a shift (trend 11)', () => {
     expect(insightOf(unbalanced, 'restaurant')).toBeDefined()
     expect(insightOf(unbalanced, 'delivery')).toBeDefined()
   })
+
+  it("stays silent when a side's amount gap is under trend 1, or points against its own trend", () => {
+    // Deliveries: 5 a month at 8 €, then 2 at 10 € — 3 fewer, −20 €.
+    // Bars: 10 at 2 € and 4 at 20 € month about, then 4 at 15 €: 3 fewer
+    // against a median of 7, yet +10 € against a median of 50 €. Neither
+    // amount passes trend 1, and the bars' money rose while their trend
+    // fell: no shift, the two drops in frequency stand.
+    const lines = MONTHS.flatMap((m, i) =>
+      monthLines(
+        m,
+        m === SEPTEMBER
+          ? { delivery: times(2, 10), bar: times(4, 15) }
+          : {
+              delivery: times(5, 8),
+              bar: i % 2 === 0 ? times(10, 2) : times(4, 20),
+            }
+      )
+    )
+    const insights = detect(registry(lines)).insights
+
+    expect(insights.some(i => i.kind === 'shift')).toBe(false)
+    expect(insightOf(insights, 'delivery')).toMatchObject({
+      kind: 'frequency',
+      direction: 'down',
+      delta: -3,
+    })
+    expect(insightOf(insights, 'bar')).toMatchObject({
+      kind: 'frequency',
+      direction: 'down',
+      delta: -3,
+    })
+  })
 })
 
 describe('detectTrends — the long run (trends 12 to 14)', () => {

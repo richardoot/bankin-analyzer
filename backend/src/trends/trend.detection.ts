@@ -2197,7 +2197,8 @@ export function horizonsOf(completeMonths: number): TrendHorizon[] {
 
 /**
  * Trend 11: in one category, a subcategory down and another up, each past
- * its own thresholds against the card's window — fewer deliveries, more
+ * trend 1's amount thresholds against the card's window and its own trend
+ * pointing the same way as its amount — fewer deliveries, more
  * supermarket. The two gaps must weigh alike (the smaller at least half the
  * larger): a 300 € rise beside a 40 € drop is a rise, not a shift. One line
  * for the category, in place of its two subcategories and of its own; the
@@ -2221,6 +2222,15 @@ function shiftInsights(
   for (const c of candidates) {
     if (c.unit.type !== 'subcategory' || !c.parentCategoryId) continue
     if (c.amountDelta === 0) continue
+    // Each side past trend 1's amount thresholds, and its own trend pointing
+    // the way its money moved: two fewer outings that cost 12 € more are no
+    // half of a shift.
+    const key = subcategoryKey(c.unit.id)
+    const refAmount = input.reference(
+      input.referenceMonths.map(m => input.at(m).units.get(key)?.amount ?? 0)
+    )
+    if (!passesAmount(c.amountDelta, refAmount)) continue
+    if ((c.direction === 'up' ? 1 : -1) !== Math.sign(c.amountDelta)) continue
     byCategory.set(c.parentCategoryId, [
       ...(byCategory.get(c.parentCategoryId) ?? []),
       c,
