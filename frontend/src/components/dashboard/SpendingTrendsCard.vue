@@ -1,7 +1,13 @@
 <script setup lang="ts">
   import { computed, onMounted } from 'vue'
   import { RouterLink } from 'vue-router'
-  import type { TrendInsightDto, TrendReading, TrendWindow } from '@/lib/api'
+  import type {
+    TrendInsightDto,
+    TrendPartDto,
+    TrendPeriodDto,
+    TrendReading,
+    TrendWindow,
+  } from '@/lib/api'
   import { useSpendingTrends } from '@/composables/useSpendingTrends'
   import { TREND_WINDOWS } from '@/lib/trends'
   import { formatCurrency, formatMonth } from '@/lib/formatters'
@@ -23,7 +29,9 @@
    * period: the header says which month it reads and against what. Five
    * lines, « Voir tout » for the rest; each opens its transactions, in the
    * month and in the reference — a merchant by its label, a recurring
-   * charge by its series, with the recurrences screen beside it.
+   * charge by its series, with the recurrences screen beside it; a shift by
+   * its two subcategories, the savings by their transfers. The long
+   * comparisons the history cannot make yet are said in one quiet line.
    */
   const props = defineProps<{
     reading: TrendReading
@@ -41,6 +49,7 @@
     visibleInsights,
     hiddenCount,
     missingMonths,
+    horizonsLine,
     isWindowShortened,
     fetchTrends,
     setMonth,
@@ -112,6 +121,9 @@
     newHabit: () => 'Nouveau',
     lostHabit: () => 'Plus rien',
     subscription: insight => (insight.direction === 'up' ? 'Apparu' : 'Arrêté'),
+    shift: () => 'Report',
+    record: insight =>
+      insight.record === 'low' ? 'Plus bas depuis un an' : 'Record 12 mois',
   }
 
   const WORD_LABELS: Partial<
@@ -121,7 +133,16 @@
     lostHabit: () => 'Habitude abandonnée',
     subscription: insight =>
       insight.direction === 'up' ? 'Abonnement apparu' : 'Abonnement arrêté',
+    shift: () => 'Report entre deux sous-catégories',
+    record: insight =>
+      insight.record === 'low'
+        ? 'Le mois le plus bas depuis un an'
+        : 'Le mois le plus haut depuis un an',
   }
+
+  /** The year a comparison with last year reads: « 2025 ». */
+  const yearOf = (insight: TrendInsightDto): string =>
+    insight.windows.reference.start.slice(0, 4)
 
   /** The gap the badge shows: a percentage when there is one. */
   function badgeText(insight: TrendInsightDto): string {
@@ -131,8 +152,25 @@
     if (insight.kind === 'price') {
       return signed(insight.delta, formatCurrency(Math.abs(insight.delta)))
     }
-    if (insight.kind === 'share') {
+    if (insight.kind === 'share' || insight.kind === 'savings') {
       return signed(insight.delta, `${Math.round(Math.abs(insight.delta))} pts`)
+    }
+    // A slope, per month.
+    if (insight.kind === 'drift' && insight.deltaPct !== null) {
+      return signed(
+        insight.deltaPct,
+        `${Math.round(Math.abs(insight.deltaPct))} %/mois`
+      )
+    }
+    if (insight.kind === 'yearAgo') {
+      const gap =
+        insight.deltaPct !== null
+          ? signed(
+              insight.deltaPct,
+              `${Math.round(Math.abs(insight.deltaPct))} %`
+            )
+          : signed(insight.delta, `${Math.round(Math.abs(insight.delta))} €`)
+      return `${gap} vs ${yearOf(insight)}`
     }
     if (insight.deltaPct !== null) {
       return signed(
@@ -196,8 +234,15 @@
     const word = WORD_LABELS[insight.kind]
     if (word) return word(insight)
     const way = insight.direction === 'up' ? 'hausse' : 'baisse'
-    const what = insight.kind === 'price' ? 'Prix en' : 'En'
-    return `${what} ${way} : ${badgeText(insight)}`
+    const WHAT: Partial<Record<TrendInsightDto['kind'], string>> = {
+      price: 'Prix en',
+      drift: 'En',
+      savings: 'Épargne en',
+      yearAgo: `Par rapport à ${yearOf(insight)}, en`,
+    }
+    const what = WHAT[insight.kind] ?? 'En'
+    const regular = insight.kind === 'drift' ? ' régulière' : ''
+    return `${what} ${way}${regular} : ${badgeText(insight)}`
   }
 
   /**
@@ -210,6 +255,7 @@
     if (insight.unit.type === 'structure') return '📊'
     if (insight.unit.type === 'merchant') return '🏪'
     if (insight.unit.type === 'recurrence') return '🔁'
+    if (insight.unit.type === 'savings') return '💰'
     return '•'
   }
 
@@ -253,7 +299,31 @@
           recurrence: unit.id,
           recurrenceLabel: unit.name,
         }
+      // The transfers into a savings category: what the rate reads.
+      case 'savings':
+        return {
+          type: 'TRANSFER' as const,
+          gross: true,
+          categoryIds: unit.categoryIds?.length ? unit.categoryIds : undefined,
+        }
     }
+  }
+
+  /** The long run (11 to 15): lines that read a horizon of their own. */
+  const LONG_RUN = new Set<TrendInsightDto['kind']>([
+    'shift',
+    'drift',
+    'record',
+    'yearAgo',
+    'savings',
+  ])
+
+  /** « septembre 2026 », or « juillet 2026 – septembre 2026 » for several months. */
+  function periodLabel(period: TrendPeriodDto): string {
+    const options = { style: 'long', capitalize: false } as const
+    const start = formatMonth(period.start, options)
+    const end = formatMonth(period.end, options)
+    return start === end ? start : `${start} – ${end}`
   }
 
   function monthLink(insight: TrendInsightDto) {
@@ -261,16 +331,35 @@
       ...unitFilters(insight),
       from: insight.windows.current.start,
       to: insight.windows.current.end,
-      label: `${insight.unit.name} · ${formatMonth(insight.windows.current.start, { style: 'long', capitalize: false })}`,
+      label: LONG_RUN.has(insight.kind)
+        ? `${insight.unit.name} · ${periodLabel(insight.windows.current)}`
+        : `${insight.unit.name} · ${formatMonth(insight.windows.current.start, { style: 'long', capitalize: false })}`,
     })
   }
 
+  /** A shift opens each of its two subcategories in the month. */
+  function partLink(insight: TrendInsightDto, part: TrendPartDto) {
+    return transactionsLink({
+      ...unitFilters({ ...insight, unit: part.unit }),
+      from: insight.windows.current.start,
+      to: insight.windows.current.end,
+      label: `${part.unit.name} · ${periodLabel(insight.windows.current)}`,
+    })
+  }
+
+  /**
+   * The months the line compares with: the card's window for a habit, its
+   * own horizon for the long run (the five months before, eleven, the same
+   * month a year before, the quarter before).
+   */
   function referenceLink(insight: TrendInsightDto) {
     return transactionsLink({
       ...unitFilters(insight),
       from: insight.windows.reference.start,
       to: insight.windows.reference.end,
-      label: `${insight.unit.name} · ${data.value?.window ?? ''} mois de référence`,
+      label: LONG_RUN.has(insight.kind)
+        ? `${insight.unit.name} · ${periodLabel(insight.windows.reference)}`
+        : `${insight.unit.name} · ${data.value?.window ?? ''} mois de référence`,
     })
   }
 
@@ -422,7 +511,19 @@
               {{ insight.sentence }}
             </p>
             <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+              <template v-if="insight.parts?.length">
+                <TransactionsLink
+                  v-for="part in insight.parts"
+                  :key="part.unit.id"
+                  :to="partLink(insight, part)"
+                  :subject="`${part.unit.name} en ${monthName}`"
+                  data-testid="trend-part-link"
+                >
+                  {{ part.unit.name }}
+                </TransactionsLink>
+              </template>
               <TransactionsLink
+                v-else
                 :to="monthLink(insight)"
                 :subject="`${insight.unit.name} en ${monthName}`"
                 data-testid="trend-month-link"
@@ -481,6 +582,15 @@
         data-testid="trends-quiet"
       >
         {{ data.quietSentence }}
+      </p>
+
+      <!-- What the history is still too short to compare: said, not an error. -->
+      <p
+        v-if="horizonsLine"
+        class="mt-3 text-xs text-gray-500 dark:text-gray-400"
+        data-testid="trends-horizons"
+      >
+        {{ horizonsLine }}
       </p>
 
       <button

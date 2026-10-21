@@ -233,6 +233,135 @@ const netflix: TrendInsightDto = {
   score: 2.5,
 }
 
+const shift: TrendInsightDto = {
+  kind: 'shift',
+  unit: {
+    type: 'category',
+    id: 'cat-dining',
+    categoryId: 'cat-dining',
+    name: 'Restaurants et bars',
+    icon: '🍽️',
+  },
+  direction: 'down',
+  tone: 'neutral',
+  current: 357,
+  reference: 361,
+  delta: -4,
+  deltaPct: -1.1,
+  sentence:
+    "Restaurants et bars en septembre : moins de livraison de repas (−6 achats), plus de restaurant (+86 €) que d'habitude sur les 6 mois précédents, un report plutôt qu'une économie.",
+  windows,
+  series: [361, 361, 361, 361, 361, 361, 357],
+  score: 90,
+  parts: [
+    {
+      unit: { ...delivery.unit },
+      kind: 'frequency',
+      direction: 'down',
+      delta: -6,
+      amountDelta: -90,
+    },
+    {
+      unit: { ...restaurant.unit },
+      kind: 'amount',
+      direction: 'up',
+      delta: 86,
+      amountDelta: 86,
+    },
+  ],
+}
+
+const drift: TrendInsightDto = {
+  kind: 'drift',
+  unit: {
+    type: 'category',
+    id: 'cat-food',
+    categoryId: 'cat-food',
+    name: 'Alimentation',
+    icon: '🛒',
+  },
+  direction: 'up',
+  tone: 'neutral',
+  current: 520,
+  reference: 420,
+  delta: 100,
+  deltaPct: 4.2,
+  sentence:
+    'Alimentation : en hausse régulière depuis 6 mois, +4 % par mois (520 € en septembre).',
+  windows: {
+    current: { start: '2026-09-01', end: '2026-09-30' },
+    reference: { start: '2026-04-01', end: '2026-08-31' },
+  },
+  series: [400, 420, 440, 460, 480, 500, 520],
+  score: 100,
+}
+
+const lowest: TrendInsightDto = {
+  ...drift,
+  kind: 'record',
+  unit: { ...drift.unit, id: 'cat-transport', name: 'Transport' },
+  direction: 'down',
+  record: 'low',
+  current: 45,
+  reference: 120,
+  delta: -75,
+  deltaPct: -62.5,
+  sentence:
+    "Transport : 45 € en septembre, le plus bas depuis un an (120 € par mois d'habitude sur les 11 mois précédents).",
+  windows: {
+    current: { start: '2026-09-01', end: '2026-09-30' },
+    reference: { start: '2025-10-01', end: '2026-08-31' },
+  },
+  score: 75,
+}
+
+const yearAgo: TrendInsightDto = {
+  ...drift,
+  kind: 'yearAgo',
+  unit: { ...drift.unit, id: 'cat-gifts', name: 'Cadeaux' },
+  current: 210,
+  reference: 180,
+  delta: 30,
+  deltaPct: 16.7,
+  sentence:
+    'Cadeaux : 210 € en septembre, contre 180 € en septembre 2025 (+17 %).',
+  windows: {
+    current: { start: '2026-09-01', end: '2026-09-30' },
+    reference: { start: '2025-09-01', end: '2025-09-30' },
+  },
+  score: 30,
+}
+
+const savings: TrendInsightDto = {
+  kind: 'savings',
+  unit: {
+    type: 'savings',
+    id: 'savings',
+    categoryId: null,
+    name: 'Épargne',
+    icon: null,
+    categoryIds: ['cat-livret', 'cat-pea'],
+  },
+  direction: 'up',
+  tone: 'neutral',
+  current: 18,
+  reference: 12,
+  delta: 6,
+  deltaPct: null,
+  sentence:
+    "Épargne : 18 % du revenu de juillet à septembre, contre 12 % d'avril à juin ; reste à vivre 1 450 € par mois, contre 1 620 €.",
+  windows: {
+    current: { start: '2026-07-01', end: '2026-09-30' },
+    reference: { start: '2026-04-01', end: '2026-06-30' },
+  },
+  series: [12, 12, 12, 12, 18, 18, 18],
+  score: 180,
+  remainingToLive: { current: 1450, reference: 1620 },
+}
+
+/** The long run: lot 3's rows. */
+const LOT_3 = [shift, drift, lowest, yearAgo, savings]
+
 /** Merchants and charges: lot 2's rows. */
 const LOT_2 = [picard, sushi, uberEats, gym, piano, netflix]
 
@@ -247,6 +376,7 @@ function response(
     insights: [toFile, delivery, restaurant, groceries, pleasureShare],
     quietSentence: null,
     availableMonths: ['2026-09', '2026-08', '2026-07'],
+    horizons: [],
     digest: null,
     ...overrides,
   }
@@ -613,6 +743,174 @@ describe('SpendingTrendsCard', () => {
       )
       expect(row.find('[data-testid="trend-recurrences-link"]').text()).toBe(
         'Les récurrences'
+      )
+    })
+  })
+
+  describe('the long run (lot 3)', () => {
+    beforeEach(() => {
+      getSpendingTrends.mockResolvedValue(response({ insights: LOT_3 }))
+    })
+
+    it('badges a shift, a slope, a record, last year and savings in their own terms', async () => {
+      const wrapper = await mountCard()
+
+      const badges = wrapper.findAll('[data-testid="trend-badge"]')
+      expect(badges.map(b => b.text().replace(/\s+/g, ' '))).toEqual([
+        'Report',
+        '↑ +4 %/mois',
+        'Plus bas depuis un an',
+        '↑ +17 % vs 2025',
+        '↑ +6 pts',
+      ])
+      expect(badges.map(b => b.attributes('aria-label'))).toEqual([
+        'Report entre deux sous-catégories',
+        'En hausse régulière : +4 %/mois',
+        'Le mois le plus bas depuis un an',
+        'Par rapport à 2025, en hausse : +17 % vs 2025',
+        'Épargne en hausse : +6 pts',
+      ])
+    })
+
+    it('opens a shift by its two subcategories in the month, and its category on the reference', async () => {
+      const wrapper = await mountCard()
+      const row = wrapper.find('[data-testid="trend-shift"]')
+
+      expect(
+        row.findAll('[data-testid="trend-part-link"]').map(l => l.text())
+      ).toEqual(['Fast-food et livraison', 'Restaurant'])
+      expect(row.find('[data-testid="trend-month-link"]').exists()).toBe(false)
+      const base = {
+        type: 'EXPENSE',
+        exceptional: 'exclude',
+        gross: true,
+      }
+      expect(linksOf(wrapper, 'shift')).toEqual([
+        {
+          ...base,
+          categoryId: 'cat-dining',
+          subcategoryId: 'sub-delivery',
+          from: '2026-09-01',
+          to: '2026-09-30',
+          label: 'Fast-food et livraison · septembre 2026',
+        },
+        {
+          ...base,
+          categoryId: 'cat-dining',
+          subcategoryId: 'sub-restaurant',
+          from: '2026-09-01',
+          to: '2026-09-30',
+          label: 'Restaurant · septembre 2026',
+        },
+        {
+          ...base,
+          categoryId: 'cat-dining',
+          from: '2026-03-01',
+          to: '2026-08-31',
+          label: 'Restaurants et bars · mars 2026 – août 2026',
+        },
+      ])
+    })
+
+    it('opens the long horizons on their own months, never the window of the card', async () => {
+      const wrapper = await mountCard()
+
+      expect(linksOf(wrapper, 'drift')[1]).toMatchObject({
+        categoryId: 'cat-food',
+        from: '2026-04-01',
+        to: '2026-08-31',
+        label: 'Alimentation · avril 2026 – août 2026',
+      })
+      expect(linksOf(wrapper, 'yearAgo')[1]).toMatchObject({
+        categoryId: 'cat-gifts',
+        from: '2025-09-01',
+        to: '2025-09-30',
+        label: 'Cadeaux · septembre 2025',
+      })
+    })
+
+    it('opens the savings by their transfers, over the quarter and the one before', async () => {
+      const wrapper = await mountCard()
+
+      expect(linksOf(wrapper, 'savings')).toEqual([
+        {
+          type: 'TRANSFER',
+          categoryIds: ['cat-livret', 'cat-pea'],
+          from: '2026-07-01',
+          to: '2026-09-30',
+          gross: true,
+          label: 'Épargne · juillet 2026 – septembre 2026',
+        },
+        {
+          type: 'TRANSFER',
+          categoryIds: ['cat-livret', 'cat-pea'],
+          from: '2026-04-01',
+          to: '2026-06-30',
+          gross: true,
+          label: 'Épargne · avril 2026 – juin 2026',
+        },
+      ])
+      expect(wrapper.find('[data-testid="trend-savings"] span').text()).toBe(
+        '💰'
+      )
+    })
+
+    it('says quietly which long comparisons the history is still too short for', async () => {
+      getSpendingTrends.mockResolvedValue(
+        response({
+          completeMonths: 8,
+          horizons: [
+            {
+              kind: 'record',
+              months: 12,
+              missing: 3,
+              sentence:
+                'Les records sur un an demandent 12 mois complets : il en manque 3.',
+            },
+            {
+              kind: 'yearAgo',
+              months: 13,
+              missing: 4,
+              sentence:
+                "La comparaison avec l'an dernier demande 13 mois complets : il en manque 4.",
+            },
+          ],
+        })
+      )
+      const wrapper = await mountCard()
+
+      const line = wrapper.find('[data-testid="trends-horizons"]')
+      expect(line.text()).toBe(
+        "Les records sur un an demandent 12 mois complets : il en manque 3. La comparaison avec l'an dernier demande 13 mois complets : il en manque 4."
+      )
+      expect(line.attributes('role')).toBeUndefined()
+      expect(line.classes()).toContain('text-xs')
+    })
+
+    it('says nothing of the long run while the habits still wait for their months', async () => {
+      getSpendingTrends.mockResolvedValue(
+        response({
+          completeMonths: 1,
+          window: 1,
+          insights: [],
+          horizons: [
+            {
+              kind: 'drift',
+              months: 6,
+              missing: 4,
+              sentence:
+                'La dérive sur 6 mois demande 6 mois complets : il en manque 4.',
+            },
+          ],
+        })
+      )
+      const wrapper = await mountCard()
+
+      expect(
+        wrapper.find('[data-testid="trends-short-history"]').exists()
+      ).toBe(true)
+      expect(wrapper.find('[data-testid="trends-horizons"]').exists()).toBe(
+        false
       )
     })
   })

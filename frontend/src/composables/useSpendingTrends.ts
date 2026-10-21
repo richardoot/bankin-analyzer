@@ -113,6 +113,17 @@ export function useSpendingTrends(inputs: SpendingTrendsInputs) {
     return Math.max(0, TRENDS_MIN_HISTORY - data.value.completeMonths)
   })
 
+  /**
+   * The long comparisons (drift, savings, records, last year) the history
+   * cannot make yet, in one line; null once it can, or while the habits
+   * themselves are still waiting — the card says that first.
+   */
+  const horizonsLine = computed<string | null>(() => {
+    const horizons = data.value?.horizons ?? []
+    if (missingMonths.value > 0 || horizons.length === 0) return null
+    return horizons.map(h => h.sentence).join(' ')
+  })
+
   /** The window asked for, longer than the history: the header says so. */
   const isWindowShortened = computed(
     () =>
@@ -132,6 +143,7 @@ export function useSpendingTrends(inputs: SpendingTrendsInputs) {
     visibleInsights,
     hiddenCount,
     missingMonths,
+    horizonsLine,
     isWindowShortened,
     fetchTrends,
     setMonth,

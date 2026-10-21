@@ -27,6 +27,7 @@ vi.mock('@/lib/api', () => ({
       quietSentence:
         "Rien de notable en décembre : la vie courante est dans l'habitude.",
       availableMonths: ['2023-12'],
+      horizons: [],
       digest: null,
     }),
     getTransactions: vi.fn(),

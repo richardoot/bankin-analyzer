@@ -1605,7 +1605,8 @@ export type TrendReading = 'everyday' | 'real'
 /**
  * 1 `amount`, 2 and 6 `frequency` (6 on a merchant), 3 `basket`, 4 `share`,
  * 5 `uncategorized`, 7 `newHabit`, 8 `lostHabit`, 9 `subscription` (`up`
- * appeared, `down` stopped), 10 `price`.
+ * appeared, `down` stopped), 10 `price`, 11 `shift`, 12 `drift`, 13
+ * `record`, 14 `yearAgo`, 15 `savings`.
  */
 export type TrendKind =
   | 'amount'
@@ -1617,6 +1618,11 @@ export type TrendKind =
   | 'lostHabit'
   | 'subscription'
   | 'price'
+  | 'shift'
+  | 'drift'
+  | 'record'
+  | 'yearAgo'
+  | 'savings'
 
 export interface TrendUnitDto {
   type:
@@ -1626,6 +1632,7 @@ export interface TrendUnitDto {
     | 'uncategorized'
     | 'merchant'
     | 'recurrence'
+    | 'savings'
   /**
    * Category or subcategory id; `pleasure` / `committed` for a share; a
    * merchant's key; a recurrence's `<amountBucket>:<merchantKey>`, the
@@ -1638,6 +1645,27 @@ export interface TrendUnitDto {
   icon: string | null
   /** A merchant only: the word the Transactions page searches it by */
   search?: string
+  /** Savings only: the transfer categories its link opens */
+  categoryIds?: string[]
+}
+
+/** One of the two subcategories a shift (11) links, the one down first */
+export interface TrendPartDto {
+  unit: TrendUnitDto
+  kind: string
+  direction: 'up' | 'down'
+  /** Lines for a frequency, euros otherwise */
+  delta: number
+  amountDelta: number
+}
+
+/** A long comparison the history is still too short for */
+export interface TrendHorizonDto {
+  kind: 'drift' | 'record' | 'yearAgo' | 'savings'
+  /** Complete months it reads, the month read included */
+  months: number
+  missing: number
+  sentence: string
 }
 
 export interface TrendPeriodDto {
@@ -1655,13 +1683,22 @@ export interface TrendInsightDto {
   current: number
   reference: number
   delta: number
-  /** null on a share (points), on the lines to file, or a zero reference */
+  /**
+   * null on a share or savings (points), on the lines to file, or a zero
+   * reference; for a drift, percent per month
+   */
   deltaPct: number | null
   sentence: string
   windows: { current: TrendPeriodDto; reference: TrendPeriodDto }
   /** Seven months, oldest first, the month read last */
   series: number[]
   score: number
+  /** A shift: the subcategory down, then the one up */
+  parts?: TrendPartDto[]
+  /** The highest or lowest of twelve months: a record, or the line it enriches */
+  record?: 'high' | 'low'
+  /** Savings: what is left to live on per month, the quarter and the one before */
+  remainingToLive?: { current: number; reference: number }
 }
 
 export interface TrendsResponseDto {
@@ -1675,6 +1712,8 @@ export interface TrendsResponseDto {
   quietSentence: string | null
   /** The closed months the card can read, latest first */
   availableMonths: string[]
+  /** The long comparisons the history cannot make yet; empty once it can */
+  horizons: TrendHorizonDto[]
   digest: null
 }
 

@@ -31,7 +31,7 @@ describe('Demo seed (e2e)', () => {
     await database.close()
   }, 30_000)
 
-  it('gives the trends card at least three trends of different kinds, a merchant and a subscription among them', async () => {
+  it('gives the trends card at least three trends of different kinds, a merchant, a subscription, a drift and the savings among them', async () => {
     const user = await database.prisma.user.create({
       data: { supabaseId: 'demo-seed', email: 'demo@e2e.invalid' },
     })
@@ -57,7 +57,7 @@ describe('Demo seed (e2e)', () => {
     expect(result.completeMonths).toBeGreaterThanOrEqual(6)
     expect(result.insights.length).toBeGreaterThanOrEqual(3)
     // What the seed plants in that month, whatever else moves: lot 1's
-    // three, and lot 2's subscription and new shop.
+    // three, lot 2's subscription and new shop, lot 3's drift and savings.
     expect([...kinds]).toEqual(
       expect.arrayContaining([
         'uncategorized',
@@ -65,8 +65,23 @@ describe('Demo seed (e2e)', () => {
         'basket',
         'subscription',
         'newHabit',
+        'drift',
+        'savings',
       ])
     )
+    expect(result.insights.find(i => i.kind === 'drift')).toMatchObject({
+      unit: { type: 'category', name: 'Famille et amis' },
+      direction: 'up',
+    })
+    expect(result.insights.find(i => i.kind === 'drift')?.sentence).toMatch(
+      /^Famille et amis : en hausse régulière depuis 6 mois, \+\d+ % par mois \(59 € en /
+    )
+    expect(result.insights.find(i => i.kind === 'savings')).toMatchObject({
+      direction: 'up',
+      unit: { type: 'savings' },
+    })
+    // The history covers every horizon: nothing said missing.
+    expect(result.horizons).toEqual([])
     expect(
       result.insights.find(i => i.kind === 'subscription')?.sentence
     ).toMatch(/^Nouvel abonnement : Disney Plus, 8,99 € par mois depuis /)

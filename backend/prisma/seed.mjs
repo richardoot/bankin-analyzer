@@ -921,6 +921,40 @@ async function main() {
     }
   }
 
+  // ── What changes, lot 3: a slow drift, and a quarter that saves more ─────
+  // A puppy's food, a little dearer every month over the six months up to
+  // the last closed one, one line a month: no single month moves the habit
+  // enough, the slope does (trend 12). And since the quarter that ends with
+  // that month, another 400 € a month to the Livret A: the savings rate of
+  // the quarter rises against the one before (trend 15).
+  {
+    const closed = months.length - 2
+    const food = [24, 31, 38, 45, 52, 59]
+    food.forEach((amount, k) => {
+      const { y, m } = months[closed - (food.length - 1) + k]
+      specs.push({
+        date: dateUTC(y, m, 16, 17),
+        description: 'Animalerie Croquettes Chiot',
+        amount: -amount,
+        type: 'EXPENSE',
+        category: 'Famille et amis',
+        sub: 'Animaux',
+        account: 'Compte Courant',
+      })
+    })
+    for (let idx = closed - 2; idx <= closed; idx++) {
+      const { y, m } = months[idx]
+      specs.push({
+        date: dateUTC(y, m, 5),
+        description: 'Virement Livret A complément',
+        amount: -400,
+        type: 'TRANSFER',
+        category: 'Épargne de précaution',
+        account: 'Compte Courant',
+      })
+    }
+  }
+
   // ── Durable purchases: filed by purpose, smoothed over their months ─────────
   // The everyday reading spreads them; the tag page never sees them, and the
   // smoothing dialog refuses an exceptional tag on them.

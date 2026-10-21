@@ -43,6 +43,7 @@ function response(
     insights: [insight('restaurants')],
     quietSentence: null,
     availableMonths: ['2026-09', '2026-08'],
+    horizons: [],
     digest: null,
     ...overrides,
   }
@@ -194,5 +195,44 @@ describe('useSpendingTrends', () => {
     await trends.fetchTrends()
     expect(trends.missingMonths.value).toBe(0)
     expect(trends.isWindowShortened.value).toBe(true)
+  })
+
+  it('says in one line which long comparisons wait for more history, once the habits can speak', async () => {
+    const { trends } = setup()
+    const horizons = [
+      {
+        kind: 'record' as const,
+        months: 12,
+        missing: 2,
+        sentence:
+          'Les records sur un an demandent 12 mois complets : il en manque 2.',
+      },
+      {
+        kind: 'yearAgo' as const,
+        months: 13,
+        missing: 3,
+        sentence:
+          "La comparaison avec l'an dernier demande 13 mois complets : il en manque 3.",
+      },
+    ]
+
+    getSpendingTrends.mockResolvedValueOnce(
+      response({ completeMonths: 9, horizons })
+    )
+    await trends.fetchTrends()
+    expect(trends.horizonsLine.value).toBe(
+      "Les records sur un an demandent 12 mois complets : il en manque 2. La comparaison avec l'an dernier demande 13 mois complets : il en manque 3."
+    )
+
+    // Under three months the card says that first, and only that.
+    getSpendingTrends.mockResolvedValueOnce(
+      response({ completeMonths: 1, window: 1, horizons })
+    )
+    await trends.fetchTrends()
+    expect(trends.horizonsLine.value).toBeNull()
+
+    getSpendingTrends.mockResolvedValueOnce(response())
+    await trends.fetchTrends()
+    expect(trends.horizonsLine.value).toBeNull()
   })
 })
