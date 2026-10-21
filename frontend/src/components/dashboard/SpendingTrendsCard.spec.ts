@@ -380,6 +380,8 @@ function response(
     completeMonths: 12,
     insights: [toFile, delivery, restaurant, groceries, pleasureShare],
     quietSentence: null,
+    headline:
+      'Septembre : vous avez réduit vos achats en fast-food et livraison, et plus de dépenses en restaurant.',
     availableMonths: ['2026-09', '2026-08', '2026-07'],
     horizons: [],
     digest: null,
@@ -388,9 +390,11 @@ function response(
 }
 
 async function mountCard(
-  props: Partial<InstanceType<typeof SpendingTrendsCard>['$props']> = {}
+  props: Partial<InstanceType<typeof SpendingTrendsCard>['$props']> = {},
+  attach = false
 ) {
   const wrapper = mount(SpendingTrendsCard, {
+    ...(attach ? { attachTo: document.body } : {}),
     props: {
       reading: 'everyday',
       deductReimbursements: true,
@@ -405,22 +409,65 @@ async function mountCard(
 
 type Wrapper = Awaited<ReturnType<typeof mountCard>>
 
-/** The filters a row's links open, read back the way the page reads them. */
-function linksOf(wrapper: Wrapper, kind: string): TransactionsLinkFilters[] {
-  const row = wrapper.find(`[data-testid="trend-${kind}"]`)
-  const links: Array<{ props: (key: 'to') => unknown }> =
-    row.findAllComponents(RouterLinkStub)
-  return links.map(link => {
-    const to = link.props('to') as { query: Record<string, string> }
-    return parseTransactionsQuery(to.query)
-  })
+/** The filters a link opens, read back the way the page reads them. */
+function filtersOf(link: { props: (key: 'to') => unknown }) {
+  const to = link.props('to') as { query: Record<string, string> }
+  return parseTransactionsQuery(to.query)
 }
+
+/**
+ * The filters a tile's links open, its details unfolded: the month's
+ * transactions in the footer, then the second links — a phone's copy of
+ * the month's link left out.
+ */
+async function linksOf(
+  wrapper: Wrapper,
+  kind: string
+): Promise<TransactionsLinkFilters[]> {
+  const tile = wrapper.find(`[data-testid="trend-${kind}"]`)
+  const toggle = tile.find('[data-testid="trend-details-toggle"]')
+  if (toggle.attributes('aria-expanded') === 'false') {
+    await toggle.trigger('click')
+  }
+  const links: Array<{
+    props: (key: 'to') => unknown
+    attributes: (key: string) => string | undefined
+  }> = tile.findAllComponents(RouterLinkStub)
+  return links
+    .filter(
+      link =>
+        !['trend-month-link-compact', 'trend-recurrences-link'].includes(
+          link.attributes('data-testid') ?? ''
+        )
+    )
+    .map(filtersOf)
+}
+
+const texts = (wrapper: Wrapper, selector: string): string[] =>
+  wrapper.findAll(selector).map(el => el.text().replace(/\s+/g, ' ').trim())
+
+const tabKeys = (wrapper: Wrapper): string[] =>
+  wrapper
+    .findAll('[role="tab"]')
+    .map(tab =>
+      (tab.attributes('id') ?? '').replace('spending-trends-tab-', '')
+    )
+
+const selectedTab = (wrapper: Wrapper): string | undefined =>
+  wrapper
+    .findAll('[role="tab"]')
+    .find(tab => tab.attributes('aria-selected') === 'true')
+    ?.attributes('id')
+
+const tiles = (wrapper: Wrapper): string[] =>
+  wrapper
+    .findAll('[data-testid="trends-list"] article')
+    .map(tile => tile.attributes('data-testid') ?? '')
 
 describe('SpendingTrendsCard', () => {
   beforeEach(() => {
     getSpendingTrends.mockReset()
     getSpendingTrends.mockResolvedValue(response())
-    // No paragraph unless a test writes one: the list is the card.
     resetTrendDigestSession()
     getTrendDigest.mockReset()
     getTrendDigest.mockResolvedValue(null)
@@ -432,185 +479,375 @@ describe('SpendingTrendsCard', () => {
     const wrapper = await mountCard()
 
     expect(wrapper.find('[data-testid="trends-heading"]').text()).toBe(
-      'Septembre 2026, vie courante, par rapport aux 6 mois précédents'
+      'Septembre 2026, vie courante · par rapport aux 6 mois précédents'
     )
-    // The period above does not move it: the card says so.
-    expect(wrapper.text()).toContain(
+    // The period above does not move it: the card says so, in small.
+    const scope = wrapper.find('[data-testid="trends-scope"]')
+    expect(scope.text()).toBe(
       'Un mois clos, quelle que soit la période choisie plus haut'
     )
+    expect(scope.classes()).toContain('text-xs')
   })
 
-  it('shows each trend as its sentence, with a signed badge coloured by direction and tone', async () => {
-    const wrapper = await mountCard()
-
-    expect(
-      wrapper.findAll('[data-testid="trend-sentence"]').map(s => s.text())
-    ).toEqual(
-      [toFile, delivery, restaurant, groceries, pleasureShare].map(
-        i => i.sentence
+  describe('the tabs', () => {
+    it('opens on « L’essentiel », then one tab per group with its count', async () => {
+      getSpendingTrends.mockResolvedValue(
+        response({
+          insights: [toFile, delivery, restaurant, gym, picard, pleasureShare],
+        })
       )
-    )
-    const badges = wrapper.findAll('[data-testid="trend-badge"]')
-    expect(badges.map(b => b.text().replace(/\s+/g, ' '))).toEqual([
-      '12 à classer',
-      '↓ −67 %',
-      '↑ +38 %',
-      '↓ −23 %',
-      '↑ +5 pts',
-    ])
-    expect(badges.map(b => b.classes().find(c => c.startsWith('bg-')))).toEqual(
-      ['bg-amber-50', 'bg-emerald-50', 'bg-sky-50', 'bg-gray-100', 'bg-sky-50']
-    )
-    expect(badges[2]?.attributes('aria-label')).toBe('En hausse : +38 %')
+      const wrapper = await mountCard()
+
+      expect(wrapper.find('[role="tablist"]').exists()).toBe(true)
+      expect(tabKeys(wrapper)).toEqual([
+        'essential',
+        'charges',
+        'categories',
+        'merchants',
+        'overview',
+      ])
+      expect(texts(wrapper, '[role="tab"]')).toEqual([
+        "L'essentiel 5",
+        'Abonnements 1',
+        'Catégories 2',
+        'Enseignes 1',
+        "Vue d'ensemble 1",
+      ])
+      expect(selectedTab(wrapper)).toBe('spending-trends-tab-essential')
+      const panel = wrapper.find('[role="tabpanel"]')
+      expect(panel.attributes('aria-labelledby')).toBe(
+        'spending-trends-tab-essential'
+      )
+      for (const tab of wrapper.findAll('[role="tab"]')) {
+        expect(tab.attributes('aria-controls')).toBe(panel.attributes('id'))
+      }
+      // One tab stop: the selected one.
+      expect(
+        wrapper.findAll('[role="tab"]').map(t => t.attributes('tabindex'))
+      ).toEqual(['0', '-1', '-1', '-1', '-1'])
+    })
+
+    it('shows a group’s every trend when its tab is picked', async () => {
+      getSpendingTrends.mockResolvedValue(
+        response({ insights: [toFile, ...LOT_2, restaurant] })
+      )
+      const wrapper = await mountCard()
+
+      await wrapper.find('[data-testid="trends-tab-charges"]').trigger('click')
+
+      expect(selectedTab(wrapper)).toBe('spending-trends-tab-charges')
+      expect(tiles(wrapper)).toEqual([
+        'trend-subscription',
+        'trend-subscription',
+        'trend-price',
+      ])
+      // The headline is « L'essentiel »'s alone.
+      expect(wrapper.find('[data-testid="trends-headline"]').exists()).toBe(
+        false
+      )
+    })
+
+    it('moves along the tabs with the arrows, Home and End, the focus following', async () => {
+      getSpendingTrends.mockResolvedValue(
+        response({ insights: [delivery, gym, picard, pleasureShare] })
+      )
+      const wrapper = await mountCard({}, true)
+      const tab = (key: string) =>
+        wrapper.find(`[data-testid="trends-tab-${key}"]`)
+
+      await tab('essential').trigger('keydown', { key: 'ArrowRight' })
+      await flushPromises()
+      expect(selectedTab(wrapper)).toBe('spending-trends-tab-charges')
+      expect(document.activeElement?.id).toBe('spending-trends-tab-charges')
+
+      await tab('charges').trigger('keydown', { key: 'End' })
+      await flushPromises()
+      expect(selectedTab(wrapper)).toBe('spending-trends-tab-overview')
+
+      await tab('overview').trigger('keydown', { key: 'ArrowRight' })
+      await flushPromises()
+      expect(selectedTab(wrapper)).toBe('spending-trends-tab-essential')
+
+      await tab('essential').trigger('keydown', { key: 'ArrowLeft' })
+      await flushPromises()
+      expect(selectedTab(wrapper)).toBe('spending-trends-tab-overview')
+
+      await tab('overview').trigger('keydown', { key: 'Home' })
+      await flushPromises()
+      expect(selectedTab(wrapper)).toBe('spending-trends-tab-essential')
+      expect(document.activeElement?.id).toBe('spending-trends-tab-essential')
+    })
+
+    it('starts again on « L’essentiel » at the next opening', async () => {
+      const first = await mountCard()
+      await first.find('[data-testid="trends-tab-categories"]').trigger('click')
+      first.unmount()
+
+      const second = await mountCard()
+      expect(selectedTab(second)).toBe('spending-trends-tab-essential')
+    })
   })
 
-  it('opens the month and the reference of a subcategory, in the reading of the dashboard', async () => {
-    const wrapper = await mountCard()
+  describe('« L’essentiel »', () => {
+    it('tells the two largest gaps in a sentence above the tiles', async () => {
+      const wrapper = await mountCard()
 
-    expect(linksOf(wrapper, 'amount')).toEqual([
-      {
-        type: 'EXPENSE',
-        categoryId: 'cat-dining',
-        subcategoryId: 'sub-restaurant',
-        from: '2026-09-01',
-        to: '2026-09-30',
-        exceptional: 'exclude',
-        gross: true,
-        label: 'Restaurant · septembre 2026',
-      },
-      {
-        type: 'EXPENSE',
-        categoryId: 'cat-dining',
-        subcategoryId: 'sub-restaurant',
-        from: '2026-03-01',
-        to: '2026-08-31',
-        exceptional: 'exclude',
-        gross: true,
-        label: 'Restaurant · 6 mois de référence',
-      },
-    ])
+      const headline = wrapper.find('[data-testid="trends-headline"]')
+      expect(headline.text()).toBe(
+        'Septembre : vous avez réduit vos achats en fast-food et livraison, et plus de dépenses en restaurant.'
+      )
+      expect(headline.classes()).toEqual(
+        expect.arrayContaining(['font-semibold', 'sm:text-xl'])
+      )
+    })
+
+    it('shows the five largest gaps of every kind, the lines to file left out', async () => {
+      getSpendingTrends.mockResolvedValue(
+        response({
+          insights: [toFile, savings, delivery, gym, restaurant, picard, drift],
+        })
+      )
+      const wrapper = await mountCard()
+
+      expect(tiles(wrapper)).toEqual([
+        'trend-savings',
+        'trend-frequency',
+        'trend-subscription',
+        'trend-amount',
+        'trend-frequency',
+      ])
+    })
+
+    it('ends on the other trends, and opens the busiest group from there', async () => {
+      getSpendingTrends.mockResolvedValue(
+        response({
+          insights: [toFile, delivery, restaurant, gym, piano, netflix, picard],
+        })
+      )
+      const wrapper = await mountCard()
+
+      const more = wrapper.find('[data-testid="trends-more"]')
+      expect(more.text().replace(/\s+/g, ' ')).toBe(
+        '1 autre tendance ce mois-ci Voir par groupe'
+      )
+      await more.find('button').trigger('click')
+      await flushPromises()
+
+      // Three charges against two categories and one merchant.
+      expect(selectedTab(wrapper)).toBe('spending-trends-tab-charges')
+      expect(wrapper.find('[data-testid="trends-more"]').exists()).toBe(false)
+    })
+
+    it('has no « other trends » tile when the five say it all', async () => {
+      const wrapper = await mountCard()
+      expect(wrapper.find('[data-testid="trends-more"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="trends-toggle"]').exists()).toBe(false)
+    })
+
+    it('falls back on the quiet sentence when the server sends no headline', async () => {
+      getSpendingTrends.mockResolvedValue(
+        response({ headline: null, quietSentence: 'Rien de notable.' })
+      )
+      const wrapper = await mountCard()
+      expect(wrapper.find('[data-testid="trends-headline"]').text()).toBe(
+        'Rien de notable.'
+      )
+    })
   })
 
-  it('opens a category, and a share by its nature', async () => {
-    getSpendingTrends.mockResolvedValue(response({ reading: 'real' }))
-    const wrapper = await mountCard({ reading: 'real' })
+  describe('a tile', () => {
+    it('shows the unit, the measure, the month large and the habit beside it', async () => {
+      getSpendingTrends.mockResolvedValue(
+        response({
+          insights: [
+            {
+              ...delivery,
+              tone: 'neutral',
+              direction: 'up',
+              current: 8,
+              reference: 3.5,
+            },
+          ],
+        })
+      )
+      const wrapper = await mountCard({
+        categoryNames: { 'cat-dining': 'Restaurants et bars' },
+      })
+      const tile = wrapper.find('[data-testid="trend-frequency"]')
 
-    expect(linksOf(wrapper, 'basket').map(f => f.categoryId)).toEqual([
-      'cat-food',
-      'cat-food',
-    ])
-    // « Tout »: nothing is left out.
-    expect(linksOf(wrapper, 'basket').map(f => f.exceptional)).toEqual([
-      undefined,
-      undefined,
-    ])
-    expect(linksOf(wrapper, 'share').map(f => f.nature)).toEqual([
-      'PLEASURE',
-      'PLEASURE',
-    ])
+      expect(tile.find('[data-testid="trend-title"]').text()).toBe(
+        'Fast-food et livraison'
+      )
+      expect(tile.find('[data-testid="trend-subtitle"]').text()).toBe(
+        'Restaurants et bars · plus souvent'
+      )
+      expect(
+        tile.find('[data-testid="trend-figure"]').text().replace(/\s+/g, ' ')
+      ).toBe('8 achats')
+      expect(tile.find('[data-testid="trend-usual"]').text()).toBe(
+        "d'habitude 3,5 par mois"
+      )
+      expect(tile.find('[data-testid="trend-month-link"]').text()).toBe(
+        'Transactions'
+      )
+    })
+
+    it('badges each gap signed, coloured by direction and tone', async () => {
+      const wrapper = await mountCard()
+
+      const badges = wrapper.findAll('[data-testid="trend-badge"]')
+      expect(texts(wrapper, '[data-testid="trend-badge"]')).toEqual([
+        '↓ −67 %',
+        '↑ +38 %',
+        '↓ −23 %',
+        '↑ +5 pts',
+      ])
+      expect(
+        badges.map(b => b.classes().find(c => c.startsWith('bg-')))
+      ).toEqual(['bg-emerald-50', 'bg-sky-50', 'bg-gray-100', 'bg-sky-50'])
+      expect(badges[1]?.attributes('aria-label')).toBe('En hausse : +38 %')
+    })
+
+    it('keeps its full sentence as its description, and shows it with the second links on demand', async () => {
+      const wrapper = await mountCard()
+      const tile = wrapper.find('[data-testid="trend-amount"]')
+      const sentence = tile.find('[data-testid="trend-sentence"]')
+      const toggle = tile.find('[data-testid="trend-details-toggle"]')
+
+      expect(tile.attributes('aria-describedby')).toBe(
+        sentence.attributes('id')
+      )
+      expect(sentence.text()).toBe(restaurant.sentence)
+      const details = tile.find('[data-testid="trend-details"]')
+      expect(details.classes()).toContain('sr-only')
+      expect(toggle.attributes('aria-expanded')).toBe('false')
+      expect(toggle.attributes('aria-label')).toBe('Détails : Restaurant')
+      expect(toggle.attributes('aria-controls')).toBe(
+        tile.find('[data-testid="trend-details"]').attributes('id')
+      )
+      expect(tile.find('[data-testid="trend-reference-link"]').exists()).toBe(
+        false
+      )
+
+      await toggle.trigger('click')
+      expect(toggle.attributes('aria-expanded')).toBe('true')
+      expect(details.classes()).not.toContain('sr-only')
+      expect(tile.find('[data-testid="trend-reference-link"]').text()).toBe(
+        'La référence'
+      )
+    })
+
+    it('opens the month and the reference of a subcategory, in the reading of the dashboard', async () => {
+      const wrapper = await mountCard()
+
+      expect(await linksOf(wrapper, 'amount')).toEqual([
+        {
+          type: 'EXPENSE',
+          categoryId: 'cat-dining',
+          subcategoryId: 'sub-restaurant',
+          from: '2026-09-01',
+          to: '2026-09-30',
+          exceptional: 'exclude',
+          gross: true,
+          label: 'Restaurant · septembre 2026',
+        },
+        {
+          type: 'EXPENSE',
+          categoryId: 'cat-dining',
+          subcategoryId: 'sub-restaurant',
+          from: '2026-03-01',
+          to: '2026-08-31',
+          exceptional: 'exclude',
+          gross: true,
+          label: 'Restaurant · 6 mois de référence',
+        },
+      ])
+    })
+
+    it('opens a category, and a share by its nature', async () => {
+      getSpendingTrends.mockResolvedValue(response({ reading: 'real' }))
+      const wrapper = await mountCard({ reading: 'real' })
+
+      const basket = await linksOf(wrapper, 'basket')
+      expect(basket.map(f => f.categoryId)).toEqual(['cat-food', 'cat-food'])
+      // « Tout »: nothing is left out.
+      expect(basket.map(f => f.exceptional)).toEqual([undefined, undefined])
+      expect((await linksOf(wrapper, 'share')).map(f => f.nature)).toEqual([
+        'PLEASURE',
+        'PLEASURE',
+      ])
+    })
+
+    it('folds into one row on a phone: the figure under the name, the badge beside it, no sparkline', async () => {
+      const wrapper = await mountCard()
+      const tile = wrapper.find('[data-testid="trend-amount"]')
+
+      const compact = tile.find('[data-testid="trend-compact"]')
+      expect(compact.classes()).toContain('sm:hidden')
+      expect(compact.text().replace(/\s+/g, ' ')).toBe(
+        "312 € · d'habitude 226 €"
+      )
+      const badge = tile.find('[data-testid="trend-badge-compact"]')
+      expect(badge.classes()).toContain('sm:hidden')
+      expect(badge.text().replace(/\s+/g, ' ')).toBe('↑ +38 %')
+      // The figures, the sparkline and the footer are a tablet's.
+      for (const id of ['trend-figures', 'trend-footer']) {
+        expect(tile.find(`[data-testid="${id}"]`).classes()).toEqual(
+          expect.arrayContaining(['hidden', 'sm:flex'])
+        )
+      }
+      expect(tile.find('[data-testid="trend-sparkline"] svg').exists()).toBe(
+        true
+      )
+      expect(tile.find('[data-testid="trend-subtitle"]').classes()).toEqual(
+        expect.arrayContaining(['hidden', 'sm:block'])
+      )
+    })
   })
 
-  it('opens the lines to file of the month, events included, with no reference', async () => {
-    const wrapper = await mountCard()
+  describe('the lines to file', () => {
+    it('are an amber alert beside the tabs, and a band under them on a phone or a tablet, never a tile', async () => {
+      const wrapper = await mountCard()
 
-    expect(linksOf(wrapper, 'uncategorized')).toEqual([
-      {
+      const alert = wrapper.find('[data-testid="trends-to-file"]')
+      expect(alert.text()).toContain('12 dépenses à classer')
+      expect(alert.classes()).toEqual(
+        expect.arrayContaining(['hidden', 'lg:inline-flex', 'text-amber-700'])
+      )
+      const band = wrapper.find('[data-testid="trends-to-file-compact"]')
+      expect(band.classes()).toEqual(
+        expect.arrayContaining(['lg:hidden', 'bg-amber-50'])
+      )
+      expect(wrapper.find('[data-testid="trend-uncategorized"]').exists()).toBe(
+        false
+      )
+    })
+
+    it('open the month’s lines to file, events included', async () => {
+      const wrapper = await mountCard()
+      const link = wrapper
+        .findAllComponents(RouterLinkStub)
+        .find(l => l.attributes('data-testid') === 'trends-to-file')
+
+      expect(link && filtersOf(link)).toEqual({
         type: 'EXPENSE',
         categoryId: 'none',
         from: '2026-09-01',
         to: '2026-09-30',
         gross: true,
         label: 'À classer · septembre 2026',
-      },
-    ])
-  })
-
-  it('shows five lines, and the rest on the spot', async () => {
-    getSpendingTrends.mockResolvedValue(
-      response({
-        insights: [
-          toFile,
-          delivery,
-          restaurant,
-          groceries,
-          pleasureShare,
-          { ...restaurant, unit: { ...restaurant.unit, id: 'sub-bar' } },
-          { ...restaurant, unit: { ...restaurant.unit, id: 'sub-cafe' } },
-        ],
       })
-    )
-    const wrapper = await mountCard()
-    const toggle = wrapper.find('[data-testid="trends-toggle"]')
-
-    expect(wrapper.findAll('[data-testid="trend-sentence"]')).toHaveLength(5)
-    expect(toggle.text()).toBe('Voir tout (7)')
-    expect(toggle.attributes('aria-expanded')).toBe('false')
-
-    await toggle.trigger('click')
-    expect(wrapper.findAll('[data-testid="trend-sentence"]')).toHaveLength(7)
-    expect(toggle.text()).toBe('Réduire')
-  })
-
-  it('files the lines under a title per group, the lines to file above them', async () => {
-    getSpendingTrends.mockResolvedValue(
-      response({
-        insights: [
-          toFile,
-          pleasureShare,
-          restaurant,
-          picard,
-          gym,
-          sushi,
-          delivery,
-        ],
-      })
-    )
-    const wrapper = await mountCard()
-    const layout = () =>
-      wrapper.findAll('[data-testid^="trends-group-"]').map(group => {
-        const title = group.find('[data-testid="trends-title-of-group"]')
-        return [
-          title.exists() ? title.text() : null,
-          group.findAll('li').map(li => li.attributes('data-testid') ?? ''),
-        ]
-      })
-
-    expect(layout()).toEqual([
-      [null, ['trend-uncategorized']],
-      ['Abonnements et charges', ['trend-subscription']],
-      ['Catégories', ['trend-amount']],
-      ['Enseignes', ['trend-frequency']],
-      ["Vue d'ensemble", ['trend-share']],
-    ])
-    expect(wrapper.find('[data-testid="trends-toggle"]').text()).toBe(
-      'Voir tout (7)'
-    )
-
-    // Each list is named by its title for a screen reader.
-    const categories = wrapper.find('[data-testid="trends-group-categories"]')
-    const heading = categories.find('h3')
-    expect(categories.find('ul').attributes('aria-labelledby')).toBe(
-      heading.attributes('id')
-    )
-
-    await wrapper.find('[data-testid="trends-toggle"]').trigger('click')
-    expect(layout()).toEqual([
-      [null, ['trend-uncategorized']],
-      ['Abonnements et charges', ['trend-subscription']],
-      ['Catégories', ['trend-amount', 'trend-frequency']],
-      ['Enseignes', ['trend-frequency', 'trend-newHabit']],
-      ["Vue d'ensemble", ['trend-share']],
-    ])
-  })
-
-  it('offers no « Voir tout » when everything fits', async () => {
-    const wrapper = await mountCard()
-    expect(wrapper.find('[data-testid="trends-toggle"]').exists()).toBe(false)
+    })
   })
 
   it('says how many months are missing on a short history, lines to file still shown', async () => {
     getSpendingTrends.mockResolvedValue(
-      response({ completeMonths: 1, window: 1, insights: [toFile] })
+      response({
+        completeMonths: 1,
+        window: 1,
+        insights: [toFile],
+        headline: null,
+      })
     )
     const wrapper = await mountCard()
 
@@ -620,15 +857,17 @@ describe('SpendingTrendsCard', () => {
     expect(wrapper.find('[data-testid="trends-heading"]').text()).toBe(
       'Septembre 2026, vie courante'
     )
-    expect(wrapper.find('[data-testid="trend-uncategorized"]').exists()).toBe(
-      true
+    expect(wrapper.find('[data-testid="trends-to-file"]').text()).toContain(
+      '12 dépenses à classer'
     )
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
   })
 
-  it('says nothing changed in the words of the calculation', async () => {
+  it('says nothing changed in the words of the calculation, with no tabs', async () => {
     getSpendingTrends.mockResolvedValue(
       response({
-        insights: [],
+        insights: [toFile],
+        headline: null,
         quietSentence:
           "Rien de notable en septembre : la vie courante est dans l'habitude.",
       })
@@ -638,7 +877,12 @@ describe('SpendingTrendsCard', () => {
     expect(wrapper.find('[data-testid="trends-quiet"]').text()).toBe(
       "Rien de notable en septembre : la vie courante est dans l'habitude."
     )
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="trends-list"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="trends-to-file"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="trends-digest-toggle"]').exists()).toBe(
+      false
+    )
   })
 
   it('says a window longer than the history was shortened', async () => {
@@ -656,15 +900,7 @@ describe('SpendingTrendsCard', () => {
 
   it('shows its shape while loading', async () => {
     getSpendingTrends.mockReturnValue(new Promise(() => {}))
-    const wrapper = mount(SpendingTrendsCard, {
-      props: {
-        reading: 'everyday',
-        deductReimbursements: true,
-        deductPendingReimbursements: true,
-      },
-      global: { stubs: { RouterLink: RouterLinkStub } },
-    })
-    await flushPromises()
+    const wrapper = await mountCard()
 
     expect(wrapper.find('[data-testid="trends-loading"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="trends-list"]').exists()).toBe(false)
@@ -730,36 +966,38 @@ describe('SpendingTrendsCard', () => {
 
     it('says what came or went in a word, and a price by its gap to the cent', async () => {
       const wrapper = await mountCard()
-      await wrapper.find('[data-testid="trends-toggle"]').trigger('click')
+      await wrapper.find('[data-testid="trends-tab-charges"]').trigger('click')
 
-      // The charges come first, under their own title.
       const badges = wrapper.findAll('[data-testid="trend-badge"]')
-      expect(badges.map(b => b.text().replace(/\s+/g, ' '))).toEqual([
+      expect(texts(wrapper, '[data-testid="trend-badge"]')).toEqual([
         'Apparu',
         'Arrêté',
         expect.stringMatching(/^↑ \+2,50\s€$/),
-        '↑ +200 %',
-        'Nouveau',
-        'Plus rien',
       ])
       expect(badges.map(b => b.attributes('aria-label'))).toEqual([
         'Abonnement apparu',
         'Abonnement arrêté',
         expect.stringMatching(/^Prix en hausse : \+2,50\s€$/),
-        'En hausse : +200 %',
-        'Nouvelle habitude',
-        'Habitude abandonnée',
       ])
       // A charge is never a reproach nor a success: blue up, grey down.
       expect(
-        badges.slice(0, 3).map(b => b.classes().find(c => c.startsWith('bg-')))
+        badges.map(b => b.classes().find(c => c.startsWith('bg-')))
       ).toEqual(['bg-sky-50', 'bg-gray-100', 'bg-sky-50'])
+
+      await wrapper
+        .find('[data-testid="trends-tab-merchants"]')
+        .trigger('click')
+      expect(texts(wrapper, '[data-testid="trend-badge"]')).toEqual([
+        '↑ +200 %',
+        'Nouveau',
+        'Plus rien',
+      ])
     })
 
     it('opens a merchant by the word of its labels, in the month and the reference', async () => {
       const wrapper = await mountCard()
 
-      expect(linksOf(wrapper, 'frequency')).toEqual([
+      expect(await linksOf(wrapper, 'frequency')).toEqual([
         {
           type: 'EXPENSE',
           q: 'picard',
@@ -780,18 +1018,19 @@ describe('SpendingTrendsCard', () => {
         },
       ])
       // A merchant without an icon of its own still shows a sign.
-      const icon = wrapper.find('[data-testid="trend-frequency"] span')
-      expect(icon.text()).toBe('🏪')
+      expect(
+        wrapper
+          .find('[data-testid="trend-frequency"] [data-testid="trend-icon"]')
+          .text()
+      ).toBe('🏪')
     })
 
     it('opens a recurring charge by its series, and the recurrences screen beside it', async () => {
       const wrapper = await mountCard()
-      const row = wrapper.find('[data-testid="trend-subscription"]')
-      const links = row.findAllComponents(RouterLinkStub)
+      const filters = await linksOf(wrapper, 'subscription')
+      const tile = wrapper.find('[data-testid="trend-subscription"]')
 
-      expect(links).toHaveLength(2)
-      const month = links[0]?.props('to') as { query: Record<string, string> }
-      expect(parseTransactionsQuery(month.query)).toEqual({
+      expect(filters[0]).toEqual({
         type: 'EXPENSE',
         recurrence: '30:basic fit',
         recurrenceLabel: 'Basic Fit',
@@ -800,13 +1039,20 @@ describe('SpendingTrendsCard', () => {
         gross: true,
         label: 'Basic Fit · juillet 2026',
       })
-      expect(links[1]?.props('to')).toBe('/recurrences')
-      expect(row.find('[data-testid="trend-reference-link"]').exists()).toBe(
+      expect(tile.find('[data-testid="trend-reference-link"]').exists()).toBe(
         false
       )
-      expect(row.find('[data-testid="trend-recurrences-link"]').text()).toBe(
-        'Les récurrences'
-      )
+      const recurrences = tile.find('[data-testid="trend-recurrences-link"]')
+      expect(recurrences.text()).toBe('Les récurrences')
+      const stubs: Array<{
+        props: (key: 'to') => unknown
+        attributes: (key: string) => string | undefined
+      }> = tile.findAllComponents(RouterLinkStub)
+      expect(
+        stubs
+          .find(l => l.attributes('data-testid') === 'trend-recurrences-link')
+          ?.props('to')
+      ).toBe('/recurrences')
     })
   })
 
@@ -819,7 +1065,7 @@ describe('SpendingTrendsCard', () => {
       const wrapper = await mountCard()
 
       const badges = wrapper.findAll('[data-testid="trend-badge"]')
-      expect(badges.map(b => b.text().replace(/\s+/g, ' '))).toEqual([
+      expect(texts(wrapper, '[data-testid="trend-badge"]')).toEqual([
         'Report',
         '↑ +4 %/mois',
         'Plus bas depuis un an',
@@ -835,20 +1081,18 @@ describe('SpendingTrendsCard', () => {
       ])
     })
 
-    it('opens a shift by its two subcategories in the month, and its category on the reference', async () => {
+    it('opens a shift’s category in the month, its two subcategories and its reference behind « Détails »', async () => {
       const wrapper = await mountCard()
-      const row = wrapper.find('[data-testid="trend-shift"]')
+      const base = { type: 'EXPENSE', exceptional: 'exclude', gross: true }
 
-      expect(
-        row.findAll('[data-testid="trend-part-link"]').map(l => l.text())
-      ).toEqual(['Fast-food et livraison', 'Restaurant'])
-      expect(row.find('[data-testid="trend-month-link"]').exists()).toBe(false)
-      const base = {
-        type: 'EXPENSE',
-        exceptional: 'exclude',
-        gross: true,
-      }
-      expect(linksOf(wrapper, 'shift')).toEqual([
+      expect(await linksOf(wrapper, 'shift')).toEqual([
+        {
+          ...base,
+          categoryId: 'cat-dining',
+          from: '2026-09-01',
+          to: '2026-09-30',
+          label: 'Restaurants et bars · septembre 2026',
+        },
         {
           ...base,
           categoryId: 'cat-dining',
@@ -873,18 +1117,24 @@ describe('SpendingTrendsCard', () => {
           label: 'Restaurants et bars · mars 2026 – août 2026',
         },
       ])
+      expect(
+        texts(
+          wrapper.find('[data-testid="trend-shift"]') as unknown as Wrapper,
+          '[data-testid="trend-part-link"]'
+        )
+      ).toEqual(['Fast-food et livraison', 'Restaurant'])
     })
 
     it('opens the long horizons on their own months, never the window of the card', async () => {
       const wrapper = await mountCard()
 
-      expect(linksOf(wrapper, 'drift')[1]).toMatchObject({
+      expect((await linksOf(wrapper, 'drift'))[1]).toMatchObject({
         categoryId: 'cat-food',
         from: '2026-04-01',
         to: '2026-08-31',
         label: 'Alimentation · avril 2026 – août 2026',
       })
-      expect(linksOf(wrapper, 'yearAgo')[1]).toMatchObject({
+      expect((await linksOf(wrapper, 'yearAgo'))[1]).toMatchObject({
         categoryId: 'cat-gifts',
         from: '2025-09-01',
         to: '2025-09-30',
@@ -895,7 +1145,7 @@ describe('SpendingTrendsCard', () => {
     it('opens the savings by their transfers, over the quarter and the one before', async () => {
       const wrapper = await mountCard()
 
-      expect(linksOf(wrapper, 'savings')).toEqual([
+      expect(await linksOf(wrapper, 'savings')).toEqual([
         {
           type: 'TRANSFER',
           categoryIds: ['cat-livret', 'cat-pea'],
@@ -913,8 +1163,10 @@ describe('SpendingTrendsCard', () => {
           label: 'Épargne · avril 2026 – juin 2026',
         },
       ])
-      expect(wrapper.find('[data-testid="trend-savings"] span').text()).toBe(
-        '💰'
+      const tile = wrapper.find('[data-testid="trend-savings"]')
+      expect(tile.find('[data-testid="trend-icon"]').text()).toBe('💰')
+      expect(tile.find('[data-testid="trend-month-link"]').text()).toBe(
+        'Virements'
       )
     })
 
@@ -956,6 +1208,7 @@ describe('SpendingTrendsCard', () => {
           completeMonths: 1,
           window: 1,
           insights: [],
+          headline: null,
           horizons: [
             {
               kind: 'drift',
@@ -978,22 +1231,6 @@ describe('SpendingTrendsCard', () => {
     })
   })
 
-  it('lets the sparkline go on a phone, never the sentence or the badge', async () => {
-    const wrapper = await mountCard()
-    const row = wrapper.find('[data-testid="trend-amount"]')
-
-    const spark = row.find('[data-testid="trend-sparkline"]')
-    expect(spark.classes()).toEqual(
-      expect.arrayContaining(['hidden', 'sm:block'])
-    )
-    expect(spark.find('svg').exists()).toBe(true)
-    for (const id of ['trend-sentence', 'trend-badge']) {
-      expect(row.find(`[data-testid="${id}"]`).classes()).not.toContain(
-        'hidden'
-      )
-    }
-  })
-
   describe('the written paragraph (lot 5)', () => {
     const paragraph = {
       month: '2026-09',
@@ -1004,89 +1241,23 @@ describe('SpendingTrendsCard', () => {
       generatedAt: '2026-10-01T09:00:00.000Z',
     }
 
-    it('asks for it after the list, with the list’s month and the window asked', async () => {
-      const order: string[] = []
-      getSpendingTrends.mockImplementation(() => {
-        order.push('trends')
-        return Promise.resolve(response())
-      })
-      getTrendDigest.mockImplementation(() => {
-        order.push('digest')
-        return Promise.resolve(paragraph)
-      })
-
-      await mountCard({ deductPendingReimbursements: false })
-
-      expect(order).toEqual(['trends', 'digest'])
-      expect(getTrendDigest).toHaveBeenCalledWith({
-        month: '2026-09',
-        reading: 'everyday',
-        window: 6,
-        deductReimbursements: true,
-        deductPendingReimbursements: false,
-      })
-    })
-
-    it('shows the paragraph under the list, with its mention, model and date', async () => {
+    it('shows the paragraph under the tiles, with its mention, model and date', async () => {
       getTrendDigest.mockResolvedValue(paragraph)
       const wrapper = await mountCard()
 
       const block = wrapper.find('[data-testid="trends-digest"]')
-      expect(block.exists()).toBe(true)
       expect(block.find('[data-testid="trends-digest-text"]').text()).toBe(
         paragraph.text
       )
       expect(
         block.find('[data-testid="trends-digest-mention"]').text()
-      ).toMatch(
-        /^Rédigé par l'IA à partir des tendances ci-dessus · Claude Haiku 5\.5 · le 1 octobre 2026$/
-      )
-      // Under the list, never above it.
-      const html = wrapper.html()
-      expect(html.indexOf('data-testid="trends-list"')).toBeLessThan(
-        html.indexOf('data-testid="trends-digest"')
-      )
-      // Not hidden on a phone.
-      expect(block.classes()).not.toContain('hidden')
+      ).toMatch(/Claude Haiku 5\.5 · le 1 octobre 2026$/)
     })
 
     it('changes nothing in the card without a paragraph', async () => {
       const wrapper = await mountCard()
-
       expect(wrapper.find('[data-testid="trends-digest"]').exists()).toBe(false)
-      expect(wrapper.findAll('[data-testid="trend-sentence"]')).toHaveLength(5)
-    })
-
-    it('stays quiet when the paragraph fails to load', async () => {
-      getTrendDigest.mockRejectedValue(new Error('500'))
-      const wrapper = await mountCard()
-
-      expect(wrapper.find('[data-testid="trends-digest"]').exists()).toBe(false)
-      expect(wrapper.find('[data-testid="trends-error"]').exists()).toBe(false)
-    })
-
-    it('writes it again on « Régénérer », the button disabled meanwhile', async () => {
-      getTrendDigest.mockResolvedValue(paragraph)
-      let finish: (value: typeof paragraph) => void = () => undefined
-      regenerateTrendDigest.mockReturnValue(
-        new Promise(resolve => {
-          finish = resolve
-        })
-      )
-      const wrapper = await mountCard()
-      const button = wrapper.find('[data-testid="trends-digest-regenerate"]')
-      expect(button.text()).toBe('Régénérer')
-
-      await button.trigger('click')
-      expect(button.attributes('disabled')).toBeDefined()
-      expect(button.text()).toBe('Rédaction…')
-
-      finish({ ...paragraph, text: 'Autrement dit, septembre.' })
-      await flushPromises()
-      expect(wrapper.find('[data-testid="trends-digest-text"]').text()).toBe(
-        'Autrement dit, septembre.'
-      )
-      expect(button.attributes('disabled')).toBeUndefined()
+      expect(tiles(wrapper)).toHaveLength(4)
     })
   })
 })

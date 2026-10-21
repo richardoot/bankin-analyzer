@@ -105,6 +105,7 @@ function response(
     completeMonths: 12,
     insights: [insight('restaurants')],
     quietSentence: null,
+    headline: null,
     availableMonths: ['2026-09', '2026-08'],
     horizons: [],
     digest: null,
@@ -176,10 +177,9 @@ describe('useSpendingTrends', () => {
     )
   })
 
-  it('reads another closed month when one is picked, folded again', async () => {
+  it('reads another closed month when one is picked', async () => {
     const { trends } = setup()
     await trends.fetchTrends()
-    trends.toggleExpanded()
 
     trends.setMonth('2026-08')
     await flushPromises()
@@ -187,7 +187,6 @@ describe('useSpendingTrends', () => {
     expect(getSpendingTrends).toHaveBeenLastCalledWith(
       expect.objectContaining({ month: '2026-08' })
     )
-    expect(trends.expanded.value).toBe(false)
   })
 
   it('keeps the latest answer when two cross', async () => {
@@ -225,24 +224,34 @@ describe('useSpendingTrends', () => {
     expect(trends.data.value?.month).toBe('2026-09')
   })
 
-  it('shows five lines, then all of them on demand', async () => {
+  it("keeps the five largest gaps for « L'essentiel », the lines to file apart", async () => {
     getSpendingTrends.mockResolvedValue(
       response({
-        insights: ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map(insight),
+        insights: [
+          as('none', 'uncategorized', 'uncategorized'),
+          ...['a', 'b', 'c', 'd', 'e', 'f', 'g'].map(insight),
+        ],
       })
     )
     const { trends } = setup()
     await trends.fetchTrends()
 
-    expect(trends.visibleInsights.value).toHaveLength(TRENDS_SHOWN)
-    expect(trends.hiddenCount.value).toBe(2)
-
-    trends.toggleExpanded()
-    await nextTick()
-    expect(trends.visibleInsights.value).toHaveLength(7)
+    expect(trends.toFile.value?.unit.id).toBe('none')
+    expect(trends.habits.value).toHaveLength(7)
+    expect(trends.essentials.value.map(i => i.unit.id)).toEqual([
+      'a',
+      'b',
+      'c',
+      'd',
+      'e',
+    ])
+    expect(TRENDS_SHOWN).toBe(5)
+    expect(trends.otherCount.value).toBe(2)
+    expect(trends.activeTab.value).toBe('essential')
+    expect(trends.activeInsights.value).toEqual(trends.essentials.value)
   })
 
-  it('files the lines it shows under their groups, folded and unfolded', async () => {
+  it('files every line under its group, and shows the tab picked', async () => {
     const lines: TrendInsightDto[] = [
       as('a', 'share', 'structure'),
       as('b', 'amount', 'category'),
@@ -251,35 +260,53 @@ describe('useSpendingTrends', () => {
       as('e', 'basket', 'subcategory'),
       as('f', 'savings', 'savings'),
       as('g', 'price', 'recurrence'),
+      as('h', 'drift', 'category'),
     ]
     getSpendingTrends.mockResolvedValue(response({ insights: lines }))
     const { trends } = setup()
     await trends.fetchTrends()
 
-    const folded = trends.visibleGroups.value.groups.map(g => [
-      g.key,
-      g.insights.map(i => i.unit.id),
+    expect(
+      trends.groups.value.map(g => [
+        g.key,
+        g.tab,
+        g.insights.map(i => i.unit.id),
+      ])
+    ).toEqual([
+      ['charges', 'Abonnements', ['c', 'g']],
+      ['categories', 'Catégories', ['b', 'e', 'h']],
+      ['merchants', 'Enseignes', ['d']],
+      ['overview', "Vue d'ensemble", ['a', 'f']],
     ])
-    expect(folded).toEqual([
-      ['charges', ['c']],
-      ['categories', ['b', 'e']],
-      ['merchants', ['d']],
-      ['overview', ['a']],
-    ])
-    expect(trends.hiddenCount.value).toBe(2)
+    // The most lines, the first in order on a tie.
+    expect(trends.busiestGroup.value).toBe('categories')
 
-    trends.toggleExpanded()
+    trends.setTab('charges')
     await nextTick()
-    const unfolded = trends.visibleGroups.value.groups.map(g => [
-      g.key,
-      g.insights.map(i => i.unit.id),
-    ])
-    expect(unfolded).toEqual([
-      ['charges', ['c', 'g']],
-      ['categories', ['b', 'e']],
-      ['merchants', ['d']],
-      ['overview', ['a', 'f']],
-    ])
+    expect(trends.activeTab.value).toBe('charges')
+    expect(trends.activeInsights.value.map(i => i.unit.id)).toEqual(['c', 'g'])
+  })
+
+  it("falls back on « L'essentiel » when the group picked has no line left", async () => {
+    getSpendingTrends.mockResolvedValueOnce(
+      response({
+        insights: [
+          as('c', 'subscription', 'recurrence'),
+          as('b', 'amount', 'category'),
+        ],
+      })
+    )
+    const { trends } = setup()
+    await trends.fetchTrends()
+    trends.setTab('charges')
+
+    getSpendingTrends.mockResolvedValueOnce(
+      response({ insights: [as('b', 'amount', 'category')] })
+    )
+    await trends.fetchTrends()
+
+    expect(trends.activeTab.value).toBe('essential')
+    expect(trends.busiestGroup.value).toBe('categories')
   })
 
   it('counts the months still missing, and tells a shortened window', async () => {

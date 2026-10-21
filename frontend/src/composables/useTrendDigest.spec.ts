@@ -47,6 +47,7 @@ function trends(overrides: Partial<TrendsResponseDto> = {}): TrendsResponseDto {
     completeMonths: 12,
     insights: [insight],
     quietSentence: null,
+    headline: null,
     availableMonths: ['2026-09'],
     horizons: [],
     digest: null,

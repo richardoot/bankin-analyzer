@@ -180,6 +180,11 @@
 
   type LinkType = 'EXPENSE' | 'INCOME'
 
+  /** The expense categories' names by id: a trend tile names a subcategory's parent. */
+  const expenseCategoryNames = computed<Record<string, string>>(() =>
+    Object.fromEntries(allExpenseCategories.value.map(c => [c.id, c.name]))
+  )
+
   function categoriesOf(type: LinkType): { id: string; name: string }[] {
     return type === 'EXPENSE'
       ? allExpenseCategories.value
@@ -597,6 +602,7 @@
           :reading="breakdownMode"
           :deduct-reimbursements="deductReimbursements"
           :deduct-pending-reimbursements="deductPendingReimbursements"
+          :category-names="expenseCategoryNames"
         />
 
         <SpendingStructureCard

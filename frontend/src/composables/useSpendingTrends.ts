@@ -9,7 +9,7 @@ import {
 import { useFiltersStore } from '@/stores/filters'
 import { TREND_GROUPS, trendGroupOf, type TrendGroupKey } from '@/lib/trends'
 
-/** What the card shows before « Voir tout ». */
+/** What « L'essentiel » shows: the five largest gaps, every kind together. */
 export const TRENDS_SHOWN = 5
 /** Under this many complete months, the habit trends are silent. */
 export const TRENDS_MIN_HISTORY = 3
@@ -17,8 +17,13 @@ export const TRENDS_MIN_HISTORY = 3
 export interface TrendGroup {
   key: TrendGroupKey
   title: string
+  /** The group's tab: « Abonnements », « Catégories »… */
+  tab: string
   insights: TrendInsightDto[]
 }
+
+/** The card's tabs: the five largest gaps, then one per group. */
+export type TrendTab = 'essential' | TrendGroupKey
 
 export interface GroupedTrendInsights {
   /** The lines to file: a warning, above the groups and in none. */
@@ -47,9 +52,9 @@ export function groupTrendInsights(
     lines.push(insight)
     byGroup.set(key, lines)
   }
-  const groups = TREND_GROUPS.flatMap(({ key, title }) => {
+  const groups = TREND_GROUPS.flatMap(({ key, title, tab }) => {
     const lines = byGroup.get(key)
-    return lines ? [{ key, title, insights: lines }] : []
+    return lines ? [{ key, title, tab, insights: lines }] : []
   })
   return { toFile, groups }
 }
@@ -81,7 +86,8 @@ export function useSpendingTrends(inputs: SpendingTrendsInputs) {
   /** The month picked on the card; null reads the last closed month. */
   const month = ref<string | null>(null)
   const referenceWindow = computed<TrendWindow>(() => filtersStore.trendsWindow)
-  const expanded = ref(false)
+  /** The tab picked; never remembered past the session. */
+  const tab = ref<TrendTab>('essential')
 
   // A later answer always wins: switching the window twice quickly must not
   // leave the first answer on screen.
@@ -128,7 +134,6 @@ export function useSpendingTrends(inputs: SpendingTrendsInputs) {
   )
 
   function setMonth(value: string): void {
-    expanded.value = false
     month.value = value
   }
 
@@ -136,21 +141,53 @@ export function useSpendingTrends(inputs: SpendingTrendsInputs) {
     filtersStore.setTrendsWindow(value)
   }
 
-  function toggleExpanded(): void {
-    expanded.value = !expanded.value
-  }
-
   const insights = computed<TrendInsightDto[]>(() => data.value?.insights ?? [])
-  const visibleInsights = computed(() =>
-    expanded.value ? insights.value : insights.value.slice(0, TRENDS_SHOWN)
+  /** Every line, filed: the lines to file apart, each group with all of its lines. */
+  const grouped = computed(() => groupTrendInsights(insights.value))
+  /** The lines to file: one alert beside the tabs, never a tile. */
+  const toFile = computed<TrendInsightDto | null>(
+    () => grouped.value.toFile[0] ?? null
   )
-  /** The same lines, filed under their group; folded or not. */
-  const visibleGroups = computed(() =>
-    groupTrendInsights(visibleInsights.value)
+  /** The trends themselves, in score order, the lines to file left out. */
+  const habits = computed(() =>
+    insights.value.filter(insight => insight.kind !== 'uncategorized')
   )
-  const hiddenCount = computed(() =>
-    Math.max(0, insights.value.length - TRENDS_SHOWN)
+  /** « L'essentiel »: the five largest gaps, whatever their group. */
+  const essentials = computed(() => habits.value.slice(0, TRENDS_SHOWN))
+  /** How many trends « L'essentiel » leaves to the groups. */
+  const otherCount = computed(() =>
+    Math.max(0, habits.value.length - TRENDS_SHOWN)
   )
+  const groups = computed(() => grouped.value.groups)
+  /** The group with the most lines, the first in order on a tie. */
+  const busiestGroup = computed<TrendGroupKey | null>(() => {
+    let best: TrendGroup | null = null
+    for (const group of groups.value) {
+      if (!best || group.insights.length > best.insights.length) best = group
+    }
+    return best?.key ?? null
+  })
+  /**
+   * The tab shown: the one picked while its group still has a line, « L'essentiel »
+   * otherwise — another month may leave a group empty.
+   */
+  const activeTab = computed<TrendTab>(() =>
+    tab.value === 'essential' ||
+    groups.value.some(group => group.key === tab.value)
+      ? tab.value
+      : 'essential'
+  )
+  /** The tiles of the tab shown. */
+  const activeInsights = computed<TrendInsightDto[]>(() =>
+    activeTab.value === 'essential'
+      ? essentials.value
+      : (groups.value.find(group => group.key === activeTab.value)?.insights ??
+        [])
+  )
+
+  function setTab(value: TrendTab): void {
+    tab.value = value
+  }
 
   /** Months of history still missing before the habit trends can speak. */
   const missingMonths = computed(() => {
@@ -183,17 +220,21 @@ export function useSpendingTrends(inputs: SpendingTrendsInputs) {
     error,
     month,
     referenceWindow,
-    expanded,
     insights,
-    visibleInsights,
-    visibleGroups,
-    hiddenCount,
+    toFile,
+    habits,
+    essentials,
+    otherCount,
+    groups,
+    busiestGroup,
+    activeTab,
+    activeInsights,
     missingMonths,
     horizonsLine,
     isWindowShortened,
     fetchTrends,
     setMonth,
     setWindow,
-    toggleExpanded,
+    setTab,
   }
 }

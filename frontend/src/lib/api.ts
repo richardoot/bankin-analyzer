@@ -1710,6 +1710,12 @@ export interface TrendsResponseDto {
   completeMonths: number
   insights: TrendInsightDto[]
   quietSentence: string | null
+  /**
+   * The two largest gaps in words, without a figure: « Septembre : plus
+   * d'achats en restaurant, et vous avez mis plus de côté. »; null when no
+   * habit moved
+   */
+  headline: string | null
   /** The closed months the card can read, latest first */
   availableMonths: string[]
   /** The long comparisons the history cannot make yet; empty once it can */
