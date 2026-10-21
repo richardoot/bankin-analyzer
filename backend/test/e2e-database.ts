@@ -214,6 +214,11 @@ export interface E2eDatabase {
    * in PrismaService's place without noticing.
    */
   prisma: PrismaClient & { poolStats: PrismaService['poolStats'] }
+  /**
+   * Where the server listens, for a process of its own to connect to — the
+   * demo seed, which builds its own client.
+   */
+  connectionString: string
   /** Raw SQL, for seeding a schema the generated client no longer knows. */
   query: (sql: string, values?: unknown[]) => Promise<void>
   /** Apply the migrations `stopBefore` held back. */
@@ -266,6 +271,7 @@ export async function createE2eDatabase(
 
   return {
     prisma,
+    connectionString: server.database.connectionString,
     query: async (sql, values): Promise<void> => {
       await pool.query(sql, values)
     },

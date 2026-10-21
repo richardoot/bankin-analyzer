@@ -475,7 +475,7 @@ async function main() {
    * @property {string} description
    * @property {number} amount
    * @property {'EXPENSE'|'INCOME'|'TRANSFER'} type
-   * @property {string} category
+   * @property {string | null} category  // null: a line still to file
    * @property {string} [sub]
    * @property {string} account
    * @property {string} [note]
@@ -824,6 +824,60 @@ async function main() {
         type: 'EXPENSE',
         category: 'Santé',
         sub: rand() < 0.5 ? 'Pharmacie' : 'Médecin et spécialistes',
+        account: 'Compte Courant',
+      })
+    }
+  }
+
+  // ── What changes: the last closed month breaks a few habits ───────────────
+  // The dashboard's « Ce qui change » reads the last closed month against the
+  // six before it. A demo where every month looks alike would only ever say
+  // « Rien de notable ». So that month, readably: the same supermarket visits
+  // at a dearer basket (trend 3), restaurants twice as often (trend 2), and a
+  // handful of card payments nobody has filed yet (trend 5).
+  {
+    const { y, m } = months[months.length - 2]
+    const inMonth = spec =>
+      spec.date.getUTCFullYear() === y && spec.date.getUTCMonth() === m
+    for (const spec of specs) {
+      if (inMonth(spec) && spec.sub === 'Supermarché') {
+        spec.amount = r2(spec.amount * 1.6)
+      }
+    }
+    const outings = [
+      { day: 4, name: 'Sushi Bar', amount: -38.5 },
+      { day: 9, name: 'Pizzeria Roma', amount: -52 },
+      { day: 13, name: 'Burger House', amount: -27.9 },
+      { day: 19, name: 'Chez Marcel', amount: -61.2 },
+      { day: 24, name: 'Le Bistrot du Coin', amount: -44 },
+    ]
+    for (const outing of outings) {
+      specs.push({
+        date: dateUTC(y, m, outing.day, 20),
+        description: outing.name,
+        amount: outing.amount,
+        type: 'EXPENSE',
+        category: 'Restaurants et bars',
+        sub: 'Restaurant',
+        account: 'Compte Courant',
+      })
+    }
+    const unfiled = [
+      { day: 3, description: 'CB PAYPAL *EBAY', amount: -23.9 },
+      { day: 7, description: 'CB SUMUP *MARCHE BIO', amount: -18.4 },
+      { day: 11, description: 'CB VINTED', amount: -15 },
+      { day: 14, description: 'CB AMAZON MKTPLACE', amount: -42.99 },
+      { day: 17, description: 'PRLV SEPA ASSO QUARTIER', amount: -20 },
+      { day: 22, description: 'CB SQ *LA PETITE FABRIQUE', amount: -31.5 },
+      { day: 26, description: 'CB IZ *KIOSQUE', amount: -6.8 },
+    ]
+    for (const line of unfiled) {
+      specs.push({
+        date: dateUTC(y, m, line.day, 13),
+        description: line.description,
+        amount: line.amount,
+        type: 'EXPENSE',
+        category: null,
         account: 'Compte Courant',
       })
     }
@@ -1355,7 +1409,7 @@ async function main() {
 
   for (const s of specs) {
     const account = accountByName[s.account]
-    const category = categoryByName[s.category]
+    const category = s.category ? categoryByName[s.category] : null
     const sub = s.sub ? subByKey[`${s.category}/${s.sub}`] : null
     const iso = s.date.toISOString()
     const hash = createHash('sha256')
@@ -1368,7 +1422,7 @@ async function main() {
       data: {
         userId,
         accountId: account.id,
-        categoryId: category.id,
+        categoryId: category?.id ?? null,
         subcategoryId: sub?.id ?? null,
         subcategory: sub?.name ?? null,
         hash,
