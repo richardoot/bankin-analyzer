@@ -1301,96 +1301,103 @@
           :current-month="currentYearMonth()"
         />
 
-        <!-- Column-count CSS variable drives both header & row grids so
-               the table adapts to which columns are visible. -->
+        <!-- One grid for the whole table: the header and every row are
+             subgrids of it, so each `auto` track is sized over all the rows
+             and a column falls on one vertical. Below `sm` the rows keep
+             their own three-column grid. -->
         <div
-          class="hidden sm:grid gap-x-6 px-4 pb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-slate-700"
-          :style="{
-            '--row-grid': rowGridTemplate,
-            gridTemplateColumns: 'var(--row-grid)',
-          }"
+          data-testid="budget-table"
+          class="sm:grid sm:gap-x-6 sm:[grid-template-columns:var(--row-grid)]"
+          :style="{ '--row-grid': rowGridTemplate }"
         >
-          <span>Catégorie</span>
-          <span
-            v-if="showHistoricalColumn"
-            class="text-right text-indigo-600 dark:text-indigo-400"
+          <div
+            data-testid="budget-table-header"
+            class="hidden sm:grid sm:col-span-full sm:grid-cols-subgrid px-4 pb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-slate-700"
           >
-            Historique
+            <span>Catégorie</span>
             <span
-              class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
+              v-if="showHistoricalColumn"
+              class="text-right text-indigo-600 dark:text-indigo-400"
             >
-              {{ comparisonRange?.label }}
+              Historique
+              <span
+                class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
+              >
+                {{ comparisonRange?.label }}
+              </span>
             </span>
-          </span>
-          <span class="text-right text-primary-700 dark:text-primary-400">
-            Budget
+            <span class="text-right text-primary-700 dark:text-primary-400">
+              Budget
+              <span
+                class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
+              >
+                /mois
+              </span>
+            </span>
             <span
-              class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
+              v-if="showActualColumn"
+              class="text-right text-red-600 dark:text-red-400"
             >
-              /mois
+              {{ selectedMonth ? 'Réel' : 'Réel à date' }}
+              <span
+                class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
+              >
+                {{ actualPeriodLabel }}
+              </span>
             </span>
-          </span>
-          <span
-            v-if="showActualColumn"
-            class="text-right text-red-600 dark:text-red-400"
+            <span class="text-right w-24">Tendance</span>
+          </div>
+
+          <!-- Empty list -->
+          <div
+            v-if="sortedCategories.length === 0"
+            class="sm:col-span-full py-12 text-center text-sm text-gray-500 dark:text-gray-400"
           >
-            {{ selectedMonth ? 'Réel' : 'Réel à date' }}
-            <span
-              class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
-            >
-              {{ actualPeriodLabel }}
-            </span>
-          </span>
-          <span class="text-right w-24">Tendance</span>
-        </div>
+            Aucune catégorie de dépense sur cette période.
+          </div>
 
-        <!-- Empty list -->
-        <div
-          v-if="sortedCategories.length === 0"
-          class="py-12 text-center text-sm text-gray-500 dark:text-gray-400"
-        >
-          Aucune catégorie de dépense sur cette période.
-        </div>
-
-        <!-- Category rows -->
-        <div v-else class="divide-y divide-gray-100 dark:divide-slate-700">
-          <BudgetCategoryRow
-            v-for="cat in sortedCategories"
-            :key="cat.categoryId"
-            :category="cat"
-            :row-grid="rowGridTemplate"
-            :expanded="isCategoryExpanded(cat.categoryId)"
-            :editing="isEditing"
-            :show-historical="showHistoricalColumn"
-            :show-actual="showActualColumn"
-            :historical-average="getHistoricalAverage(cat)"
-            :actual-average="getPlanActualAverage(cat)"
-            :exceptional-average="getExceptionalAverage(cat)"
-            :budget="getBudgetForCategory(cat.categoryId)"
-            :saved-budget="getSavedBudget(cat.categoryId)"
-            :dirty="isCategoryDirty(cat.categoryId)"
-            :prorated-budget="getProratedBudget(cat.categoryId)"
-            :row-status="getRowStatus(cat)"
-            :margin-vs-historical="getMarginVsHistorical(cat)"
-            :remaining-vs-actual="getRemainingVsActual(cat)"
-            :sparkline="comparison.seriesFor(cat) ?? []"
-            :chart-data="categoryChartData(cat)"
-            :breakdown-mode="breakdownMode"
-            :historical-window="historicalWindow"
-            :actual-window="actualWindow"
-            :month-keys="statistics?.monthLabels ?? []"
-            :breakdown-window="breakdownWindow"
-            :amortized-average="
-              breakdownMode === 'everyday'
-                ? comparison.planActualAmortizedAverage(cat)
-                : 0
-            "
-            :smoothed-purchases="smoothedPurchasesOf(cat)"
-            @select-month="ym => openCategoryMonth(cat, ym)"
-            @toggle-expand="toggleCategoryExpanded(cat.categoryId)"
-            @update-budget="value => updateBudgetInput(cat.categoryId, value)"
-            @apply-budget="amount => setBudgetValue(cat.categoryId, amount)"
-          />
+          <!-- Category rows -->
+          <div
+            v-else
+            class="divide-y divide-gray-100 sm:col-span-full sm:grid sm:grid-cols-subgrid dark:divide-slate-700"
+          >
+            <BudgetCategoryRow
+              v-for="cat in sortedCategories"
+              :key="cat.categoryId"
+              :category="cat"
+              :expanded="isCategoryExpanded(cat.categoryId)"
+              :editing="isEditing"
+              :show-historical="showHistoricalColumn"
+              :show-actual="showActualColumn"
+              :historical-average="getHistoricalAverage(cat)"
+              :actual-average="getPlanActualAverage(cat)"
+              :exceptional-average="getExceptionalAverage(cat)"
+              :budget="getBudgetForCategory(cat.categoryId)"
+              :saved-budget="getSavedBudget(cat.categoryId)"
+              :dirty="isCategoryDirty(cat.categoryId)"
+              :prorated-budget="getProratedBudget(cat.categoryId)"
+              :row-status="getRowStatus(cat)"
+              :margin-vs-historical="getMarginVsHistorical(cat)"
+              :remaining-vs-actual="getRemainingVsActual(cat)"
+              :sparkline="comparison.seriesFor(cat) ?? []"
+              :chart-data="categoryChartData(cat)"
+              :breakdown-mode="breakdownMode"
+              :historical-window="historicalWindow"
+              :actual-window="actualWindow"
+              :month-keys="statistics?.monthLabels ?? []"
+              :breakdown-window="breakdownWindow"
+              :amortized-average="
+                breakdownMode === 'everyday'
+                  ? comparison.planActualAmortizedAverage(cat)
+                  : 0
+              "
+              :smoothed-purchases="smoothedPurchasesOf(cat)"
+              @select-month="ym => openCategoryMonth(cat, ym)"
+              @toggle-expand="toggleCategoryExpanded(cat.categoryId)"
+              @update-budget="value => updateBudgetInput(cat.categoryId, value)"
+              @apply-budget="amount => setBudgetValue(cat.categoryId, amount)"
+            />
+          </div>
         </div>
       </BaseCard>
 

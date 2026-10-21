@@ -29,7 +29,6 @@
    */
   const props = defineProps<{
     category: CategoryAverageDto
-    rowGrid: string
     expanded: boolean
     editing: boolean
     showHistorical: boolean
@@ -178,11 +177,15 @@
 </script>
 
 <template>
-  <div :data-testid="`budget-row-${category.categoryName}`">
+  <!-- A subgrid of the page's table from `sm`: the columns are the
+       table's, sized over every row. -->
+  <div
+    :data-testid="`budget-row-${category.categoryName}`"
+    class="sm:col-span-full sm:grid sm:grid-cols-subgrid"
+  >
     <!-- Row -->
     <div
-      class="grid grid-cols-3 sm:[grid-template-columns:var(--row-grid)] sm:gap-x-6 gap-x-3 gap-y-2 sm:gap-y-0 items-center py-3 sm:py-4 px-4 hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors"
-      :style="{ '--row-grid': rowGrid }"
+      class="col-span-full grid grid-cols-3 sm:grid-cols-subgrid sm:gap-x-6 gap-x-3 gap-y-2 sm:gap-y-0 items-center py-3 sm:py-4 px-4 hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors"
     >
       <!-- Name + chevron + status badge -->
       <button
@@ -399,7 +402,7 @@
     <!-- Drill-down panel -->
     <div
       v-if="expanded"
-      class="bg-gray-50 dark:bg-slate-800/40 px-4 py-5 border-t border-gray-100 dark:border-slate-700 space-y-5"
+      class="col-span-full min-w-0 bg-gray-50 dark:bg-slate-800/40 px-4 py-5 border-t border-gray-100 dark:border-slate-700 space-y-5"
     >
       <!-- Margin / remaining quick summary -->
       <div

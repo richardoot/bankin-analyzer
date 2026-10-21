@@ -234,6 +234,41 @@ describe('BudgetPage', () => {
       ).toBe(true)
     })
 
+    it('lays the header and every row on the one grid of the table', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      // The table owns the template; the header and the rows are subgrids
+      // of it, so every `auto` column is sized over all the rows at once.
+      const table = wrapper.get('[data-testid="budget-table"]')
+      const template = (table.element as HTMLElement).style.getPropertyValue(
+        '--row-grid'
+      )
+      expect(template).toBe('1fr auto auto auto')
+      expect(table.classes()).toContain(
+        'sm:[grid-template-columns:var(--row-grid)]'
+      )
+      const tracks = template.split(' ').length
+
+      const header = wrapper.get('[data-testid="budget-table-header"]')
+      expect(header.classes()).toEqual(
+        expect.arrayContaining(['sm:col-span-full', 'sm:grid-cols-subgrid'])
+      )
+      expect(header.element.children).toHaveLength(tracks)
+
+      for (const name of ['Alimentation', 'Transport']) {
+        const row = wrapper.get(`[data-testid="budget-row-${name}"]`)
+        expect(row.classes()).toContain('sm:grid-cols-subgrid')
+        const line = row.element.firstElementChild as HTMLElement
+        expect(line.classList).toContain('col-span-full')
+        expect(line.classList).toContain('sm:grid-cols-subgrid')
+        expect(line.children).toHaveLength(tracks)
+        // No row carries a template of its own any more.
+        expect(row.html()).not.toContain('grid-template-columns')
+        expect(row.html()).not.toContain('--row-grid')
+      }
+    })
+
     it('shows the envelope as text until the user asks to edit', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
