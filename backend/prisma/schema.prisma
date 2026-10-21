@@ -40,6 +40,7 @@ model User {
   subscriptions         Subscription[]
   subscriptionLinks     SubscriptionLink[]
   recurrenceState       RecurrenceState?
+  monthlyDigests        MonthlyDigest[]
 
   @@map("users")
   @@schema("app")
@@ -1223,5 +1224,38 @@ model RecurrenceState {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("recurrence_states")
+  @@schema("app")
+}
+
+/// The paragraph Claude writes under « Ce qui change » from a closed month's
+/// trends (agent-os/product/spending-trends.md, lot 5). Written once, at the
+/// first opening, and again only on « Régénérer ».
+///
+/// Keyed on the window too, not only the month and the reading: the habit
+/// trends move with the window, and the paragraph must cite the list the
+/// card shows.
+model MonthlyDigest {
+  id      String @id @default(uuid())
+  userId  String @map("user_id")
+  /// `YYYY-MM`, a closed month.
+  month   String
+  /// `everyday` or `real`.
+  reading String
+  /// Complete months of reference asked for: 3, 6 or 12.
+  window  Int
+
+  /// The trends the model read, as it read them.
+  insights     Json
+  text         String
+  model        String
+  /// The bill of the call that wrote it; null when the client did not say.
+  inputTokens  Int?     @map("input_tokens")
+  outputTokens Int?     @map("output_tokens")
+  generatedAt  DateTime @default(now()) @map("generated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month, reading, window])
+  @@map("monthly_digests")
   @@schema("app")
 }
