@@ -27,7 +27,7 @@
    * habit, the gap, the month's transactions; its full sentence and second
    * links behind « Détails ». The lines to file are an alert beside the
    * tabs, not a trend. The paragraph Claude writes is folded behind « Lire
-   * le résumé du mois ».
+   * le résumé du mois », and asked only when unfolded.
    */
   const props = defineProps<{
     reading: TrendReading
@@ -66,10 +66,14 @@
     void fetchTrends()
   })
 
-  // The written paragraph (lot 5): asked once the list is here, never before.
+  // The written paragraph (lot 5): folded, and asked at its first unfolding.
   const {
     digest,
+    isLoading: isDigestLoading,
     isRegenerating,
+    isOpen: isDigestOpen,
+    hasAnswered: hasDigestAnswered,
+    toggle: toggleDigest,
     regenerate: regenerateDigest,
   } = useTrendDigest({
     trends: data,
@@ -454,6 +458,26 @@
       <div
         class="mt-4 flex flex-col gap-2 border-t border-gray-200 pt-3 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700"
       >
+        <button
+          v-if="showTabs"
+          type="button"
+          class="inline-flex min-h-[44px] items-center gap-2 self-start rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 sm:min-h-9 dark:text-gray-300 dark:hover:text-gray-100"
+          :aria-expanded="isDigestOpen"
+          aria-controls="spending-trends-digest"
+          data-testid="trends-digest-toggle"
+          @click="toggleDigest()"
+        >
+          <span
+            aria-hidden="true"
+            class="text-xs transition-transform"
+            :class="isDigestOpen ? 'rotate-90' : ''"
+            >▸</span
+          >
+          Lire le résumé du mois
+          <span class="text-xs font-normal text-gray-400 dark:text-gray-500"
+            >rédigé par l'IA</span
+          >
+        </button>
         <p
           class="text-xs text-gray-400 sm:ml-auto sm:text-right dark:text-gray-500"
           data-testid="trends-scope"
@@ -462,9 +486,21 @@
         </p>
       </div>
 
-      <!-- Under the tiles, the month told in a few sentences. -->
-      <div v-if="showTabs" class="mt-3" data-testid="trends-digest-region">
-        <figure v-if="digest" data-testid="trends-digest">
+      <!-- Unfolded in place: the month told in a few sentences. -->
+      <div
+        v-if="showTabs && isDigestOpen"
+        id="spending-trends-digest"
+        class="mt-3"
+        data-testid="trends-digest-region"
+      >
+        <div
+          v-if="isDigestLoading"
+          aria-busy="true"
+          data-testid="trends-digest-loading"
+        >
+          <SkeletonBlock :lines="2" />
+        </div>
+        <figure v-else-if="digest" data-testid="trends-digest">
           <blockquote
             class="text-sm leading-relaxed text-gray-800 dark:text-gray-200"
             data-testid="trends-digest-text"
@@ -491,6 +527,14 @@
             </button>
           </figcaption>
         </figure>
+        <p
+          v-else-if="hasDigestAnswered"
+          class="text-sm text-gray-500 dark:text-gray-400"
+          role="status"
+          data-testid="trends-digest-empty"
+        >
+          Le résumé n'est pas disponible pour le moment.
+        </p>
       </div>
     </div>
   </BaseCard>

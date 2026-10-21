@@ -87,14 +87,17 @@ describe('useTrendDigest', () => {
     getTrendDigest.mockResolvedValue(digest())
   })
 
-  it('waits for the list: nothing is asked before it', async () => {
-    const { list, digest: paragraph } = setup()
-    await flushPromises()
-    expect(getTrendDigest).not.toHaveBeenCalled()
-
+  it('asks nothing on loading, only at the first unfolding', async () => {
+    const { list, digest: paragraph, open, isOpen } = setup()
     list.value = trends()
     await flushPromises()
+    expect(getTrendDigest).not.toHaveBeenCalled()
+    expect(isOpen.value).toBe(false)
 
+    open()
+    await flushPromises()
+
+    expect(isOpen.value).toBe(true)
     expect(getTrendDigest).toHaveBeenCalledWith({
       month: '2026-09',
       reading: 'everyday',
@@ -105,11 +108,23 @@ describe('useTrendDigest', () => {
     expect(paragraph.value?.text).toBe('Septembre en quelques phrases.')
   })
 
+  it('asks once per list, however often it is folded and unfolded', async () => {
+    const { toggle, isOpen } = setup(trends())
+    toggle()
+    await flushPromises()
+    toggle()
+    expect(isOpen.value).toBe(false)
+    toggle()
+    await flushPromises()
+
+    expect(getTrendDigest).toHaveBeenCalledTimes(1)
+  })
+
   it('asks with the window asked for, not the one the history shortened', async () => {
-    const { list, window } = setup()
+    const { window, open } = setup(trends({ window: 7 }))
     window.value = 12
     // Seven months of history: the list reads 7, the paragraph is keyed 12.
-    list.value = trends({ window: 7 })
+    open()
     await flushPromises()
     expect(getTrendDigest).toHaveBeenLastCalledWith(
       expect.objectContaining({ window: 12 })
@@ -117,37 +132,45 @@ describe('useTrendDigest', () => {
   })
 
   it('asks nothing when the list has nothing to tell', async () => {
-    setup(trends({ insights: [], quietSentence: 'Rien de notable.' }))
+    const { open, hasAnswered } = setup(
+      trends({ insights: [], quietSentence: 'Rien de notable.' })
+    )
+    open()
     await flushPromises()
     expect(getTrendDigest).not.toHaveBeenCalled()
+    expect(hasAnswered.value).toBe(true)
   })
 
   it('reads a failure as no paragraph, quietly', async () => {
     getTrendDigest.mockRejectedValue(new Error('500'))
-    const { digest: paragraph, isLoading } = setup(trends())
+    const { digest: paragraph, isLoading, hasAnswered, open } = setup(trends())
+    open()
+    expect(isLoading.value).toBe(true)
     await flushPromises()
     expect(paragraph.value).toBeNull()
     expect(isLoading.value).toBe(false)
+    expect(hasAnswered.value).toBe(true)
   })
 
   it('does not ask again in the session for a month that had none', async () => {
     getTrendDigest.mockResolvedValue(null)
-    setup(trends())
+    setup(trends()).open()
     await flushPromises()
-    setup(trends())
+    setup(trends()).open()
     await flushPromises()
     expect(getTrendDigest).toHaveBeenCalledTimes(1)
 
     // Another window is another paragraph.
-    const other = setup()
+    const other = setup(trends())
     other.window.value = 3
-    other.list.value = trends()
+    other.open()
     await flushPromises()
     expect(getTrendDigest).toHaveBeenCalledTimes(2)
   })
 
-  it('drops the paragraph of another month the moment the list changes', async () => {
-    const { list, digest: paragraph } = setup(trends())
+  it('folds and drops the paragraph the moment the list changes, its pending answer too', async () => {
+    const { list, digest: paragraph, open, isOpen } = setup(trends())
+    open()
     await flushPromises()
     expect(paragraph.value).not.toBeNull()
 
@@ -160,14 +183,26 @@ describe('useTrendDigest', () => {
     list.value = trends({ month: '2026-08' })
     await flushPromises()
     expect(paragraph.value).toBeNull()
+    expect(isOpen.value).toBe(false)
+    expect(getTrendDigest).toHaveBeenCalledTimes(1)
 
+    open()
+    list.value = trends({ month: '2026-07' })
+    await flushPromises()
     resolve(digest({ month: '2026-08', text: 'Août.' }))
     await flushPromises()
-    expect(paragraph.value?.text).toBe('Août.')
+    // August's answer came after July's list: it is not shown.
+    expect(paragraph.value).toBeNull()
   })
 
   it('writes again on « Régénérer », busy while it does', async () => {
-    const { regenerate, digest: paragraph, isRegenerating } = setup(trends())
+    const {
+      regenerate,
+      digest: paragraph,
+      isRegenerating,
+      open,
+    } = setup(trends())
+    open()
     await flushPromises()
     regenerateTrendDigest.mockResolvedValue(digest({ text: 'Autrement dit.' }))
 
@@ -183,7 +218,8 @@ describe('useTrendDigest', () => {
   })
 
   it('keeps the paragraph when « Régénérer » fails', async () => {
-    const { regenerate, digest: paragraph } = setup(trends())
+    const { regenerate, digest: paragraph, open } = setup(trends())
+    open()
     await flushPromises()
     regenerateTrendDigest.mockRejectedValue(new Error('429'))
 

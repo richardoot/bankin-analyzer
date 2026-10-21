@@ -1241,9 +1241,51 @@ describe('SpendingTrendsCard', () => {
       generatedAt: '2026-10-01T09:00:00.000Z',
     }
 
-    it('shows the paragraph under the tiles, with its mention, model and date', async () => {
+    it('is folded behind a button, and never asked on loading', async () => {
       getTrendDigest.mockResolvedValue(paragraph)
       const wrapper = await mountCard()
+
+      const toggle = wrapper.find('[data-testid="trends-digest-toggle"]')
+      expect(toggle.text().replace(/\s+/g, ' ')).toBe(
+        "▸ Lire le résumé du mois rédigé par l'IA"
+      )
+      expect(toggle.attributes('aria-expanded')).toBe('false')
+      expect(getTrendDigest).not.toHaveBeenCalled()
+      expect(wrapper.find('[data-testid="trends-digest"]').exists()).toBe(false)
+    })
+
+    it('asks for it at the first unfolding, with the list’s month and the window asked', async () => {
+      getTrendDigest.mockResolvedValue(paragraph)
+      const wrapper = await mountCard({ deductPendingReimbursements: false })
+
+      const toggle = wrapper.find('[data-testid="trends-digest-toggle"]')
+      await toggle.trigger('click')
+      await flushPromises()
+
+      expect(toggle.attributes('aria-expanded')).toBe('true')
+      expect(toggle.attributes('aria-controls')).toBe('spending-trends-digest')
+      expect(getTrendDigest).toHaveBeenCalledWith({
+        month: '2026-09',
+        reading: 'everyday',
+        window: 6,
+        deductReimbursements: true,
+        deductPendingReimbursements: false,
+      })
+
+      // Folded and unfolded again: no second call.
+      await toggle.trigger('click')
+      await toggle.trigger('click')
+      await flushPromises()
+      expect(getTrendDigest).toHaveBeenCalledTimes(1)
+    })
+
+    it('shows the paragraph in place, with its mention, model and date', async () => {
+      getTrendDigest.mockResolvedValue(paragraph)
+      const wrapper = await mountCard()
+      await wrapper
+        .find('[data-testid="trends-digest-toggle"]')
+        .trigger('click')
+      await flushPromises()
 
       const block = wrapper.find('[data-testid="trends-digest"]')
       expect(block.find('[data-testid="trends-digest-text"]').text()).toBe(
@@ -1251,13 +1293,87 @@ describe('SpendingTrendsCard', () => {
       )
       expect(
         block.find('[data-testid="trends-digest-mention"]').text()
-      ).toMatch(/Claude Haiku 5\.5 · le 1 octobre 2026$/)
+      ).toMatch(
+        /^Rédigé par l'IA à partir des tendances ci-dessus · Claude Haiku 5\.5 · le 1 octobre 2026$/
+      )
+      expect(wrapper.find('#spending-trends-digest').exists()).toBe(true)
     })
 
-    it('changes nothing in the card without a paragraph', async () => {
+    it('shows its shape while it is written', async () => {
+      getTrendDigest.mockReturnValue(new Promise(() => {}))
       const wrapper = await mountCard()
+      await wrapper
+        .find('[data-testid="trends-digest-toggle"]')
+        .trigger('click')
+
+      expect(
+        wrapper.find('[data-testid="trends-digest-loading"]').exists()
+      ).toBe(true)
+    })
+
+    it('says quietly when there is none, the trends untouched', async () => {
+      getTrendDigest.mockRejectedValue(new Error('500'))
+      const wrapper = await mountCard()
+      await wrapper
+        .find('[data-testid="trends-digest-toggle"]')
+        .trigger('click')
+      await flushPromises()
+
       expect(wrapper.find('[data-testid="trends-digest"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="trends-digest-empty"]').text()).toBe(
+        "Le résumé n'est pas disponible pour le moment."
+      )
+      expect(wrapper.find('[data-testid="trends-error"]').exists()).toBe(false)
       expect(tiles(wrapper)).toHaveLength(4)
+    })
+
+    it('writes it again on « Régénérer », the button disabled meanwhile', async () => {
+      getTrendDigest.mockResolvedValue(paragraph)
+      let finish: (value: typeof paragraph) => void = () => undefined
+      regenerateTrendDigest.mockReturnValue(
+        new Promise(resolve => {
+          finish = resolve
+        })
+      )
+      const wrapper = await mountCard()
+      await wrapper
+        .find('[data-testid="trends-digest-toggle"]')
+        .trigger('click')
+      await flushPromises()
+      const button = wrapper.find('[data-testid="trends-digest-regenerate"]')
+      expect(button.text()).toBe('Régénérer')
+
+      await button.trigger('click')
+      expect(button.attributes('disabled')).toBeDefined()
+      expect(button.text()).toBe('Rédaction…')
+
+      finish({ ...paragraph, text: 'Autrement dit, septembre.' })
+      await flushPromises()
+      expect(wrapper.find('[data-testid="trends-digest-text"]').text()).toBe(
+        'Autrement dit, septembre.'
+      )
+      expect(button.attributes('disabled')).toBeUndefined()
+    })
+
+    it('folds again on another month', async () => {
+      getTrendDigest.mockResolvedValue(paragraph)
+      const wrapper = await mountCard()
+      await wrapper
+        .find('[data-testid="trends-digest-toggle"]')
+        .trigger('click')
+      await flushPromises()
+
+      getSpendingTrends.mockResolvedValue(response({ month: '2026-08' }))
+      await wrapper.find('[data-testid="trends-month"]').setValue('2026-08')
+      await flushPromises()
+
+      expect(
+        wrapper
+          .find('[data-testid="trends-digest-toggle"]')
+          .attributes('aria-expanded')
+      ).toBe('false')
+      expect(wrapper.find('[data-testid="trends-digest"]').exists()).toBe(false)
+      expect(getTrendDigest).toHaveBeenCalledTimes(1)
     })
   })
 })

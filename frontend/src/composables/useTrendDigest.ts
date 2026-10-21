@@ -42,15 +42,22 @@ export function modelName(model: string): string {
  * The paragraph Claude wrote under « Ce qui change »
  * (agent-os/product/spending-trends.md, lot 5).
  *
- * Asked once the list is on screen, never before, and fire-and-forget: a
+ * Folded behind « Lire le résumé du mois »: asked the first time it is
+ * unfolded for a list, never on loading — most openings of the dashboard
+ * never read it, and each paragraph not asked is a call not made. A new
+ * list (another month, window, reading or switch) folds it again. A
  * failure, a refusal or a paragraph the server rejected all read as no
- * paragraph, and the card stays as it was. The server remembers what it
- * wrote; this remembers, for the session, what it could not.
+ * paragraph. The server remembers what it wrote; this remembers, for the
+ * session, what it could not.
  */
 export function useTrendDigest(inputs: TrendDigestInputs) {
   const digest = ref<TrendDigestDto | null>(null)
   const isLoading = ref(false)
   const isRegenerating = ref(false)
+  /** Unfolded on the card. */
+  const isOpen = ref(false)
+  /** Asked for the list on screen, whatever came back. */
+  const hasAnswered = ref(false)
 
   // A later answer always wins: a month picked twice quickly must not leave
   // the first month's paragraph under the second month's list.
@@ -84,8 +91,10 @@ export function useTrendDigest(inputs: TrendDigestInputs) {
     const request = ++sequence
     const query = currentQuery()
     digest.value = null
+    hasAnswered.value = false
     if (!query || failedThisSession.has(keyOf(query))) {
       isLoading.value = false
+      hasAnswered.value = true
       return
     }
     isLoading.value = true
@@ -94,6 +103,22 @@ export function useTrendDigest(inputs: TrendDigestInputs) {
     if (result === null) failedThisSession.add(keyOf(query))
     digest.value = result
     isLoading.value = false
+    hasAnswered.value = true
+  }
+
+  /** Unfolds the paragraph, asking for it the first time for this list. */
+  function open(): void {
+    isOpen.value = true
+    if (!hasAnswered.value && !isLoading.value) void fetchDigest()
+  }
+
+  function close(): void {
+    isOpen.value = false
+  }
+
+  function toggle(): void {
+    if (isOpen.value) close()
+    else open()
   }
 
   /**
@@ -116,14 +141,29 @@ export function useTrendDigest(inputs: TrendDigestInputs) {
   }
 
   // A new list — another month, window, reading or switch — is a new
-  // paragraph. Watching the list itself waits for it.
+  // paragraph, folded until it is asked for: the answer pending for the
+  // last list is dropped.
   watch(
     () => toValue(inputs.trends),
     () => {
-      void fetchDigest()
-    },
-    { immediate: true }
+      sequence += 1
+      digest.value = null
+      isLoading.value = false
+      hasAnswered.value = false
+      isOpen.value = false
+    }
   )
 
-  return { digest, isLoading, isRegenerating, fetchDigest, regenerate }
+  return {
+    digest,
+    isLoading,
+    isRegenerating,
+    isOpen,
+    hasAnswered,
+    fetchDigest,
+    regenerate,
+    open,
+    close,
+    toggle,
+  }
 }
