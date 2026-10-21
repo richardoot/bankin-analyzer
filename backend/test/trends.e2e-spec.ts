@@ -292,6 +292,9 @@ describe('Trends (e2e)', () => {
     expect(restaurant?.series).toHaveLength(7)
     // The restaurant is one merchant, all of it: the subcategory speaks.
     expect(body.insights.some(i => i.unit.type === 'merchant')).toBe(false)
+    // The headline tells the largest gaps in words, the lines to file aside.
+    expect(body.headline).toMatch(/^[A-ZÉ][a-zéû]+ : .+\.$/)
+    expect(body.headline).not.toMatch(/\d/)
   })
 
   it('reads a subscription that appeared out of the recurrence cache it refreshed first', async () => {
@@ -341,6 +344,7 @@ describe('Trends (e2e)', () => {
       completeMonths: 0,
       insights: [],
       quietSentence: null,
+      headline: null,
       availableMonths: [],
     })
   })

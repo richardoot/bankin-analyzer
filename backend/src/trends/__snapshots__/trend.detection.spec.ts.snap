@@ -57,6 +57,7 @@ exports[`detectTrends — selection > returns the whole response, shaped for the
   ],
   "completeMonths": 12,
   "digest": null,
+  "headline": "Septembre : un panier plus élevé en supermarché, et un report de livraison de repas vers restaurant.",
   "horizons": [],
   "insights": [
     {

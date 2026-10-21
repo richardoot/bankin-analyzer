@@ -42,6 +42,7 @@ function trends(overrides: Partial<TrendsResult> = {}): TrendsResult {
     completeMonths: 12,
     insights: [restaurants],
     quietSentence: null,
+    headline: null,
     availableMonths: ['2026-09'],
     horizons: [],
     digest: null,

@@ -447,6 +447,12 @@ export interface TrendsResult {
    */
   quietSentence: string | null
   /**
+   * « Septembre : plus d'achats en restaurant, et vous avez mis plus de
+   * côté. » — the two largest gaps of the list in words, without a figure
+   * (the figures are on the card's tiles); null when no habit moved.
+   */
+  headline: string | null
+  /**
    * The closed months the card can read, latest first: those with enough
    * history before them, at most `selectableMonths`.
    */
@@ -970,6 +976,7 @@ export function detectTrends(
     completeMonths,
     insights: lead,
     quietSentence: null,
+    headline: null,
     availableMonths: availableMonths(registry.historyStart, closed),
     horizons: horizonsOf(completeMonths),
     digest: null,
@@ -1327,7 +1334,120 @@ export function detectTrends(
     ...silent,
     insights: [...lead, ...habits],
     quietSentence: habits.length === 0 ? quietSentence(ctx) : null,
+    headline: headlineOf(habits, monthName),
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* The headline                                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A unit as a headline names it: a category in lower case (« en
+ * restaurant »), a merchant or a series as it is written (« chez Picard »).
+ */
+function headlineName(unit: TrendUnit): string {
+  return unit.type === 'merchant' || unit.type === 'recurrence'
+    ? unit.name
+    : inSentence(unit.name)
+}
+
+/**
+ * One short clause per trend, without a figure. The tone is the sentence's:
+ * « vous avez réduit » only on a drop the detection called a success (a
+ * pleasure and variable unit); a rise is said, never reproached.
+ */
+function headlineClause(insight: TrendInsight): string {
+  const name = headlineName(insight.unit)
+  const up = insight.direction === 'up'
+  const success = insight.tone === 'success'
+  const isMerchant = insight.unit.type === 'merchant'
+  switch (insight.kind) {
+    case 'amount':
+      if (up) return `plus de dépenses en ${name}`
+      return success
+        ? `vous avez réduit vos dépenses en ${name}`
+        : `moins de dépenses en ${name}`
+    case 'frequency':
+      if (isMerchant) {
+        if (up) return `plus souvent chez ${name}`
+        return success
+          ? `vous avez réduit vos passages chez ${name}`
+          : `moins souvent chez ${name}`
+      }
+      if (up) return `plus d'achats en ${name}`
+      return success
+        ? `vous avez réduit vos achats en ${name}`
+        : `moins d'achats en ${name}`
+    case 'basket':
+      if (up) return `un panier plus élevé en ${name}`
+      return success
+        ? `vous avez réduit le panier moyen en ${name}`
+        : `un panier plus léger en ${name}`
+    case 'share': {
+      const what =
+        insight.unit.id === 'pleasure' ? 'la part plaisir' : 'la part engagée'
+      if (up) return `${what} en hausse`
+      return success ? `vous avez réduit ${what}` : `${what} en baisse`
+    }
+    case 'subscription':
+      return up
+        ? `un nouvel abonnement (${name})`
+        : `un abonnement en moins (${name})`
+    case 'price':
+      return up ? `${name} plus cher` : `${name} moins cher`
+    case 'newHabit':
+      return isMerchant
+        ? `une nouvelle habitude chez ${name}`
+        : `une nouvelle habitude en ${name}`
+    case 'lostHabit':
+      return isMerchant ? `plus rien chez ${name}` : `plus rien en ${name}`
+    case 'shift': {
+      const [from, to] = insight.parts ?? []
+      return from && to
+        ? `un report de ${headlineName(from.unit)} vers ${headlineName(to.unit)}`
+        : `un report en ${name}`
+    }
+    case 'drift':
+      if (up) return `une hausse régulière en ${name}`
+      return success
+        ? `vous avez réduit peu à peu vos dépenses en ${name}`
+        : `une baisse régulière en ${name}`
+    case 'record':
+      if (insight.record !== 'low') return `un record sur un an en ${name}`
+      return success
+        ? `vous avez réduit vos dépenses en ${name} au plus bas de l'année`
+        : `le mois le plus bas de l'année en ${name}`
+    case 'yearAgo':
+      if (up) return `plus qu'il y a un an en ${name}`
+      return success
+        ? `vous avez réduit vos dépenses en ${name} sur un an`
+        : `moins qu'il y a un an en ${name}`
+    case 'savings':
+      return up ? 'vous avez mis plus de côté' : 'une épargne en baisse'
+    case 'uncategorized':
+      return 'des dépenses à classer'
+  }
+}
+
+/**
+ * « Septembre : plus d'achats en restaurant, et vous avez mis plus de
+ * côté. » The list's two largest gaps after selection — the list is sorted
+ * by them — the lines to file left out; one clause for a single trend, null
+ * for none (the card says its quiet sentence instead). No figure: the
+ * card's tiles carry them.
+ */
+export function headlineOf(
+  insights: readonly TrendInsight[],
+  monthName: string
+): string | null {
+  const clauses = insights
+    .filter(insight => insight.kind !== 'uncategorized')
+    .slice(0, 2)
+    .map(headlineClause)
+  if (clauses.length === 0) return null
+  const month = monthName.charAt(0).toUpperCase() + monthName.slice(1)
+  return `${month} : ${clauses.join(', et ')}.`
 }
 
 /* ------------------------------------------------------------------ */

@@ -29,6 +29,7 @@ describe('TrendsController', () => {
     insights: [],
     quietSentence:
       "Rien de notable en septembre : la vie courante est dans l'habitude.",
+    headline: null,
     availableMonths: ['2026-09'],
     digest: null,
   }

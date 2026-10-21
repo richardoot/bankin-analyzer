@@ -168,6 +168,12 @@ export class TrendsResponseDto {
   insights!: TrendInsightDto[]
   /** « Rien de notable en septembre : … » when no habit moved; null otherwise */
   quietSentence!: string | null
+  /**
+   * The list's two largest gaps in words, without a figure: « Septembre :
+   * plus d'achats en restaurant, et vous avez mis plus de côté. »; null
+   * when no habit moved
+   */
+  headline!: string | null
   /** The closed months the card can read, latest first */
   availableMonths!: string[]
   /**

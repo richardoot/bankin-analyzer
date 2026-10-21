@@ -48,6 +48,7 @@ function result(insights: TrendInsight[]): TrendsResult {
     completeMonths: 12,
     insights,
     quietSentence: null,
+    headline: null,
     availableMonths: ['2026-09'],
     horizons: [],
     digest: null,

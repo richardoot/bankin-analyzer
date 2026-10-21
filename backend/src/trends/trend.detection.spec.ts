@@ -6,6 +6,7 @@ import {
   completeMonthsBefore,
   detectTrends,
   formatEuros,
+  headlineOf,
   lastClosedMonth,
   median,
   type TrendInsight,
@@ -451,6 +452,21 @@ describe('detectTrends — selection', () => {
           "Restaurants et bars en septembre : moins de livraison de repas (−6 achats), plus de restaurant (+86 €) que d'habitude sur les 6 mois précédents, un report plutôt qu'une économie.",
         ]
       `)
+  })
+
+  it('heads the card with its two largest gaps, in words and without a figure', () => {
+    const result = detect(registry(ledger(SEPTEMBER_CHANGES)))
+    expect(result.headline).toBe(
+      'Septembre : un panier plus élevé en supermarché, et un report de livraison de repas vers restaurant.'
+    )
+    expect(result.headline).not.toMatch(/\d/)
+  })
+
+  it('has no headline when no habit moved, even beside lines to file', () => {
+    expect(detect(registry(ledger())).headline).toBeNull()
+    expect(
+      detect(registry([...ledger(), ...unfiled(SEPTEMBER, 6)])).headline
+    ).toBeNull()
   })
 
   it('returns the whole response, shaped for the card', () => {
@@ -1589,5 +1605,195 @@ describe('helpers', () => {
   it('knows every subcategory of the fixtures by its category', () => {
     const ids = new Set(CATEGORIES.map(c => c.id))
     expect(SUBCATEGORIES.every(s => ids.has(s.categoryId))).toBe(true)
+  })
+})
+
+describe('headlineOf — the sentence above the tiles', () => {
+  const insight = (
+    kind: TrendInsight['kind'],
+    overrides: Partial<TrendInsight> = {}
+  ): TrendInsight => ({
+    kind,
+    unit: {
+      type: 'subcategory',
+      id: 'sub',
+      categoryId: 'cat',
+      name: 'Restaurant',
+      icon: null,
+    },
+    direction: 'up',
+    tone: 'neutral',
+    current: 2,
+    reference: 1,
+    delta: 1,
+    deltaPct: 100,
+    sentence: '',
+    windows: {
+      current: { start: '2026-09-01', end: '2026-09-30' },
+      reference: { start: '2026-03-01', end: '2026-08-31' },
+    },
+    series: [],
+    score: 1,
+    ...overrides,
+  })
+  const merchant = {
+    type: 'merchant' as const,
+    id: 'picard',
+    categoryId: 'cat',
+    name: 'Picard',
+    icon: null,
+  }
+  const one = (i: TrendInsight): string | null => headlineOf([i], 'septembre')
+
+  it.each([
+    [insight('amount'), 'Septembre : plus de dépenses en restaurant.'],
+    [
+      insight('amount', { direction: 'down', tone: 'success' }),
+      'Septembre : vous avez réduit vos dépenses en restaurant.',
+    ],
+    [
+      insight('amount', { direction: 'down' }),
+      'Septembre : moins de dépenses en restaurant.',
+    ],
+    [insight('frequency'), "Septembre : plus d'achats en restaurant."],
+    [
+      insight('frequency', { direction: 'down', tone: 'success' }),
+      'Septembre : vous avez réduit vos achats en restaurant.',
+    ],
+    [
+      insight('frequency', { unit: merchant }),
+      'Septembre : plus souvent chez Picard.',
+    ],
+    [
+      insight('frequency', { unit: merchant, direction: 'down' }),
+      'Septembre : moins souvent chez Picard.',
+    ],
+    [insight('basket'), 'Septembre : un panier plus élevé en restaurant.'],
+    [
+      insight('basket', { direction: 'down' }),
+      'Septembre : un panier plus léger en restaurant.',
+    ],
+    [
+      insight('share', {
+        unit: { ...merchant, type: 'structure', id: 'pleasure' },
+      }),
+      'Septembre : la part plaisir en hausse.',
+    ],
+    [
+      insight('share', {
+        unit: { ...merchant, type: 'structure', id: 'committed' },
+        direction: 'down',
+      }),
+      'Septembre : la part engagée en baisse.',
+    ],
+    [
+      insight('subscription', {
+        unit: { ...merchant, type: 'recurrence', name: 'Disney Plus' },
+      }),
+      'Septembre : un nouvel abonnement (Disney Plus).',
+    ],
+    [
+      insight('subscription', {
+        unit: { ...merchant, type: 'recurrence', name: 'Netflix' },
+        direction: 'down',
+      }),
+      'Septembre : un abonnement en moins (Netflix).',
+    ],
+    [
+      insight('price', {
+        unit: { ...merchant, type: 'recurrence', name: 'Orange' },
+      }),
+      'Septembre : Orange plus cher.',
+    ],
+    [
+      insight('newHabit', { unit: merchant }),
+      'Septembre : une nouvelle habitude chez Picard.',
+    ],
+    [
+      insight('lostHabit', { direction: 'down' }),
+      'Septembre : plus rien en restaurant.',
+    ],
+    [
+      insight('shift', {
+        unit: { ...merchant, type: 'category', name: 'Restaurants et bars' },
+        parts: [
+          {
+            unit: { ...merchant, type: 'subcategory', name: 'Livraison' },
+            kind: 'frequency',
+            direction: 'down',
+            delta: -6,
+            amountDelta: -90,
+          },
+          {
+            unit: { ...merchant, type: 'subcategory', name: 'Restaurant' },
+            kind: 'amount',
+            direction: 'up',
+            delta: 86,
+            amountDelta: 86,
+          },
+        ],
+      }),
+      'Septembre : un report de livraison vers restaurant.',
+    ],
+    [insight('drift'), 'Septembre : une hausse régulière en restaurant.'],
+    [
+      insight('record', { record: 'high' }),
+      'Septembre : un record sur un an en restaurant.',
+    ],
+    [
+      insight('record', { record: 'low', direction: 'down' }),
+      "Septembre : le mois le plus bas de l'année en restaurant.",
+    ],
+    [insight('yearAgo'), "Septembre : plus qu'il y a un an en restaurant."],
+    [
+      insight('savings', { unit: { ...merchant, type: 'savings' } }),
+      'Septembre : vous avez mis plus de côté.',
+    ],
+    [
+      insight('savings', {
+        unit: { ...merchant, type: 'savings' },
+        direction: 'down',
+      }),
+      'Septembre : une épargne en baisse.',
+    ],
+  ])('says %j in a clause', (input, expected) => {
+    expect(one(input)).toBe(expected)
+    expect(one(input)).not.toMatch(/\d/)
+  })
+
+  it('never says « vous avez réduit » on a drop the detection did not call a success', () => {
+    for (const kind of [
+      'amount',
+      'frequency',
+      'basket',
+      'drift',
+      'record',
+      'yearAgo',
+    ] as const) {
+      expect(
+        one(insight(kind, { direction: 'down', record: 'low' }))
+      ).not.toContain('réduit')
+    }
+  })
+
+  it('joins the two largest gaps with « , et », and leaves the lines to file out', () => {
+    expect(
+      headlineOf(
+        [
+          insight('uncategorized', { direction: 'up' }),
+          insight('frequency', { unit: merchant }),
+          insight('savings', { unit: { ...merchant, type: 'savings' } }),
+          insight('amount'),
+        ],
+        'septembre'
+      )
+    ).toBe(
+      'Septembre : plus souvent chez Picard, et vous avez mis plus de côté.'
+    )
+  })
+
+  it('is null without a trend to tell', () => {
+    expect(headlineOf([], 'septembre')).toBeNull()
+    expect(headlineOf([insight('uncategorized')], 'septembre')).toBeNull()
   })
 })

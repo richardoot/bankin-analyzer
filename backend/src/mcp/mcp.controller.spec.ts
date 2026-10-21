@@ -518,6 +518,7 @@ describe('McpController', () => {
         score: 200 - i,
       })),
       quietSentence: null,
+      headline: 'Septembre : plus de dépenses en sous-catégorie 0.',
       availableMonths: ['2026-09', '2026-08'],
       horizons: [
         {
@@ -579,6 +580,7 @@ describe('McpController', () => {
       const data = parseData(result)
       expect(data).toEqual(trends)
       expect(data.insights).toHaveLength(7)
+      expect(data.headline).toBe(trends.headline)
     })
 
     it("answers a month not closed yet with isError, in the service's words", async () => {
