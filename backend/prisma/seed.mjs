@@ -925,8 +925,12 @@ async function main() {
   // A puppy's food, a little dearer every month over the six months up to
   // the last closed one, one line a month: no single month moves the habit
   // enough, the slope does (trend 12). And since the quarter that ends with
-  // that month, another 400 € a month to the Livret A: the savings rate of
-  // the quarter rises against the one before (trend 15).
+  // that month, a freelance mission paying 2 000 € a month: the quarter
+  // keeps more of its income than the one before, so its savings rate —
+  // income less expenses — rises (trend 15), by more than the half-yearly
+  // bonus can take back when it falls in the quarter before. Another 400 € a
+  // month to the Livret A too: a transfer, which says where some of it went
+  // and moves no rate.
   {
     const closed = months.length - 2
     const food = [24, 31, 38, 45, 52, 59]
@@ -944,6 +948,15 @@ async function main() {
     })
     for (let idx = closed - 2; idx <= closed; idx++) {
       const { y, m } = months[idx]
+      specs.push({
+        date: dateUTC(y, m, 5),
+        description: 'Mission freelance',
+        amount: 2000,
+        type: 'INCOME',
+        category: "Revenus d'activité",
+        sub: 'Revenus indépendant',
+        account: 'Compte Courant',
+      })
       specs.push({
         date: dateUTC(y, m, 5),
         description: 'Virement Livret A complément',

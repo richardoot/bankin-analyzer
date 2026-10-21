@@ -76,10 +76,16 @@ describe('Demo seed (e2e)', () => {
     expect(result.insights.find(i => i.kind === 'drift')?.sentence).toMatch(
       /^Famille et amis : en hausse régulière depuis 6 mois, \+\d+ % par mois \(59 € en /
     )
-    expect(result.insights.find(i => i.kind === 'savings')).toMatchObject({
+    // The freelance mission of the last quarter: income less expenses rises
+    // by more than the 3-point threshold, whatever the Livret A transfers.
+    const savings = result.insights.find(i => i.kind === 'savings')
+    expect(savings).toMatchObject({
       direction: 'up',
       unit: { type: 'savings' },
     })
+    expect(
+      (savings?.current ?? 0) - (savings?.reference ?? 0)
+    ).toBeGreaterThanOrEqual(3)
     // The history covers every horizon: nothing said missing.
     expect(result.horizons).toEqual([])
     expect(
