@@ -1,5 +1,46 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`detectTrends — merchants beside the habits > reads lot 2 alongside the habits 1`] = `
+[
+  [
+    "share",
+    "structure",
+    132.72,
+    "La part plaisir de la vie courante passe à 23 % en septembre, contre 31 % d'habitude sur les 6 mois précédents.",
+  ],
+  [
+    "lostHabit",
+    "subcategory",
+    120,
+    "Téléphone : vous avez arrêté, plus aucun achat en septembre, contre 3 par mois d'habitude sur les 6 mois précédents (120 €).",
+  ],
+  [
+    "basket",
+    "subcategory",
+    112,
+    "Supermarché : autant d'achats, mais 62 € en moyenne en septembre contre 48 € d'habitude sur les 6 mois précédents.",
+  ],
+  [
+    "frequency",
+    "subcategory",
+    90,
+    "Livraison de repas : vous avez réduit la fréquence, 3 achats en septembre contre 9 par mois d'habitude sur les 6 mois précédents, soit 45 € contre 135 €.",
+  ],
+  [
+    "amount",
+    "subcategory",
+    86,
+    "Restaurant : 312 € en septembre, +38 % par rapport à l'habitude des 6 mois précédents (226 €).",
+  ],
+  [
+    "newHabit",
+    "merchant",
+    30,
+    "Pharmacie du Port : nouveau, 4 achats depuis août (60 €), aucun sur les 6 mois précédents.",
+  ],
+]
+`;
+
 exports[`detectTrends — selection > returns the whole response, shaped for the card 1`] = `
 {
   "availableMonths": [

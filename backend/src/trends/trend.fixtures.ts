@@ -83,6 +83,20 @@ export const SUBCATEGORIES: TrendSubcategory[] = [
 
 const subById = new Map(SUBCATEGORIES.map(s => [s.id, s]))
 
+/** The one merchant each subcategory's lines go to, unless a flag says otherwise. */
+export const MERCHANTS: Record<string, string> = {
+  grocery: 'CB CARREFOUR MARKET',
+  restaurant: 'CB LE BISTROT',
+  delivery: 'CB UBER EATS',
+  bar: 'CB LE COMPTOIR',
+  rent: 'VIR LOYER BEGON',
+  pharmacy: 'CB PHARMACIE CENTRALE',
+  streaming: 'PRLV NETFLIX',
+  lessons: 'CB SIMPLY PIANO',
+  phone: 'CB APPLE STORE',
+  flights: 'CB AIR FRANCE',
+}
+
 /** What a month spends, subcategory by subcategory: one amount per line. */
 export type MonthPlan = Partial<Record<string, number[]>>
 
@@ -90,6 +104,8 @@ export type MonthPlan = Partial<Record<string, number[]>>
 export interface LineFlags {
   recurring?: boolean
   exceptional?: boolean
+  /** The bank label, in place of the subcategory's merchant. */
+  description?: string
 }
 
 let lineCount = 0
@@ -117,6 +133,7 @@ export function monthLines(
         rhythm: flag.recurring ? 'COMMITTED' : sub.rhythm,
         isRecurring: flag.recurring ?? false,
         isExceptional: flag.exceptional ?? false,
+        description: flag.description ?? MERCHANTS[subId] ?? subId,
       })
     })
   }

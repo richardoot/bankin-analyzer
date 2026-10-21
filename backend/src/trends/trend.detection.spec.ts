@@ -214,6 +214,7 @@ describe('detectTrends — invariants', () => {
         rhythm: null,
         isRecurring: false,
         isExceptional: false,
+        description: 'CB QUELQUE PART',
       },
     ]
     const phone = monthLines('2026-03', { phone: [600] })
@@ -460,6 +461,7 @@ function unfiled(month: string, n: number, amount = 20): TrendLine[] {
     rhythm: null,
     isRecurring: false,
     isExceptional: false,
+    description: `CB INCONNU ${i + 1}`,
   }))
 }
 
@@ -592,6 +594,296 @@ describe('detectTrends — what the card says around the list', () => {
       TREND_RULES.selectableMonths
     )
     expect(detect(registry(ledger())).availableMonths[0]).toBe(SEPTEMBER)
+  })
+})
+
+/** Lines of `subId` at another merchant, `perMonth[month]` of them at `amount`. */
+function at(
+  description: string,
+  subId: string,
+  perMonth: Partial<Record<string, number>>,
+  amount: number,
+  flags: { recurring?: boolean } = {}
+): TrendLine[] {
+  return Object.entries(perMonth).flatMap(([month, n]) =>
+    monthLines(
+      month,
+      { [subId]: times(n ?? 0, amount) },
+      { [subId]: { description, recurring: flags.recurring ?? false } }
+    )
+  )
+}
+
+/** The same count every month of the history, `september` in the last. */
+function everyMonth(n: number, september = n): Record<string, number> {
+  return Object.fromEntries(
+    MONTHS.map(m => [m, m === SEPTEMBER ? september : n])
+  )
+}
+
+const merchantInsight = (
+  insights: TrendInsight[],
+  name: string
+): TrendInsight | undefined =>
+  insights.find(i => i.unit.type === 'merchant' && i.unit.name === name)
+
+describe('detectTrends — merchants (trends 6 to 8)', () => {
+  it('reads a merchant visited more often, in distinct days, scored by its reference basket (trend 6)', () => {
+    const lines = [
+      ...ledger(),
+      ...at('CB PICARD SURGELES', 'grocery', everyMonth(2, 6), 30),
+    ]
+    const insights = detect(registry(lines)).insights
+    const picard = merchantInsight(insights, 'Picard Surgeles')
+
+    expect(picard).toMatchObject({
+      kind: 'frequency',
+      unit: {
+        type: 'merchant',
+        id: 'picard surgeles',
+        categoryId: 'food',
+        icon: 'icon-food',
+        // The brand, the first word of its name.
+        search: 'picard',
+      },
+      direction: 'up',
+      tone: 'neutral',
+      current: 6,
+      reference: 2,
+      score: 120,
+    })
+    expect(picard?.sentence).toBe(
+      "Picard Surgeles : 6 achats en septembre, contre 2 par mois d'habitude sur les 6 mois précédents, soit 180 € contre 60 €."
+    )
+    // Picard explains the supermarket's whole gap: it speaks for it.
+    expect(insightOf(insights, 'grocery')).toBeUndefined()
+  })
+
+  it('counts two lines at a merchant the same day as one visit', () => {
+    const sameDay = (month: string, n: number): TrendLine[] =>
+      at('CB AMAZON', 'phone', { [month]: n }, 25).map(line => ({
+        ...line,
+        date: `${month}-10`,
+      }))
+    const lines = [
+      ...ledger(),
+      ...MONTHS.flatMap(m =>
+        m === SEPTEMBER
+          ? sameDay(m, 6)
+          : at('CB AMAZON', 'phone', { [m]: 2 }, 25)
+      ),
+    ]
+    const insights = detect(registry(lines)).insights
+
+    // Six lines, one day: fewer visits, not more.
+    expect(merchantInsight(insights, 'Amazon')).toBeUndefined()
+  })
+
+  it('reads a merchant new over the last two months as a new habit (trend 7)', () => {
+    const lines = [
+      ...ledger(),
+      ...at('CB PICARD', 'grocery', { '2026-08': 2, [SEPTEMBER]: 2 }, 30),
+    ]
+    const picard = merchantInsight(detect(registry(lines)).insights, 'Picard')
+
+    expect(picard).toMatchObject({
+      kind: 'newHabit',
+      direction: 'up',
+      tone: 'neutral',
+      current: 4,
+      reference: 0,
+      deltaPct: null,
+      // The new habit's month.
+      score: 60,
+      windows: {
+        current: { start: '2026-08-01', end: '2026-09-30' },
+        reference: { start: '2026-02-01', end: '2026-07-31' },
+      },
+    })
+    expect(picard?.sentence).toBe(
+      'Picard : nouveau, 4 achats depuis août (120 €), aucun sur les 6 mois précédents.'
+    )
+  })
+
+  it('stays silent on a merchant seen in the six months before, or visited under three days', () => {
+    const seen = [
+      ...ledger(),
+      ...at(
+        'CB PICARD',
+        'grocery',
+        { '2026-04': 1, '2026-08': 2, [SEPTEMBER]: 2 },
+        30
+      ),
+    ]
+    const few = [
+      ...ledger(),
+      ...at('CB PICARD', 'grocery', { '2026-08': 1, [SEPTEMBER]: 1 }, 30),
+    ]
+    const gone = [
+      ...ledger(),
+      ...at('CB PICARD', 'grocery', { '2026-07': 2, '2026-08': 2 }, 30),
+    ]
+
+    for (const lines of [seen, few, gone]) {
+      expect(
+        detect(registry(lines)).insights.some(i => i.kind === 'newHabit')
+      ).toBe(false)
+    }
+  })
+
+  it('reads a merchant gone this month after five months of six as a lost habit (trend 8)', () => {
+    const lines = [
+      ...ledger(),
+      ...at('CB PICARD', 'grocery', everyMonth(2, 0), 30),
+    ]
+    const picard = merchantInsight(detect(registry(lines)).insights, 'Picard')
+
+    expect(picard).toMatchObject({
+      kind: 'lostHabit',
+      direction: 'down',
+      // Groceries are essential: gone, never « réduit ».
+      tone: 'neutral',
+      current: 0,
+      reference: 2,
+      score: 60,
+    })
+    expect(picard?.sentence).toBe(
+      "Picard : plus aucun achat en septembre, contre 2 par mois d'habitude sur les 6 mois précédents (60 €)."
+    )
+  })
+
+  it('reads a variable subcategory gone for two months as a lost habit, in place of its amount', () => {
+    const lines = MONTHS.flatMap(m =>
+      monthLines(m, m >= '2026-08' ? { ...HABIT, delivery: [] } : HABIT)
+    )
+    const insights = detect(registry(lines)).insights
+    const delivery = insightOf(insights, 'delivery')
+
+    expect(delivery).toMatchObject({
+      kind: 'lostHabit',
+      unit: { type: 'subcategory' },
+      tone: 'success',
+      windows: { current: { start: '2026-08-01', end: '2026-09-30' } },
+    })
+    expect(delivery?.sentence).toBe(
+      "Livraison de repas : vous avez arrêté, plus aucun achat depuis août, contre 9 par mois d'habitude sur les 6 mois précédents (135 €)."
+    )
+    // One line for the unit; Uber Eats, which is the whole of it, keeps quiet.
+    expect(insights.filter(i => i.unit.id === 'delivery')).toHaveLength(1)
+    expect(merchantInsight(insights, 'Uber Eats')).toBeUndefined()
+  })
+
+  it('stays silent on a habit present in only four of the six months', () => {
+    const lines = [
+      ...ledger(),
+      ...at(
+        'CB PICARD',
+        'grocery',
+        { '2026-03': 2, '2026-04': 2, '2026-06': 2, '2026-08': 2 },
+        30
+      ),
+    ]
+    expect(
+      detect(registry(lines)).insights.some(i => i.kind === 'lostHabit')
+    ).toBe(false)
+  })
+
+  it('reads no merchant trend on a merchant whose every line belongs to a recurrence', () => {
+    const lines = [
+      ...ledger(),
+      // Every move a habit could make, all on recurrence lines.
+      ...at('CB PICARD', 'grocery', everyMonth(2, 8), 30, { recurring: true }),
+      ...at('CB DECATHLON', 'lessons', { '2026-08': 3, [SEPTEMBER]: 3 }, 30, {
+        recurring: true,
+      }),
+      ...at('CB LIDL', 'grocery', everyMonth(3, 0), 30, { recurring: true }),
+    ]
+    const insights = detect(registry(lines)).insights
+
+    expect(insights.filter(i => i.unit.type === 'merchant')).toEqual([])
+  })
+
+  it('leaves a merchant that is its whole subcategory to the subcategory', () => {
+    const insights = detect(registry(ledger(SEPTEMBER_CHANGES))).insights
+
+    // Uber Eats is every delivery: the plan's sentence stays the subcategory's.
+    expect(insightOf(insights, 'delivery')).toMatchObject({ kind: 'frequency' })
+    expect(insights.some(i => i.unit.type === 'merchant')).toBe(false)
+  })
+
+  it('keeps a subcategory read as a basket, whatever its merchants did', () => {
+    // Dearer visits at the supermarket, half of them now at Picard: Picard
+    // is new and carries the gap, the basket still says what happened.
+    const lines = [
+      ...ledger({ ...HABIT, grocery: times(4, 70) }),
+      ...at('CB PICARD', 'grocery', { [SEPTEMBER]: 4 }, 70),
+    ]
+    const insights = detect(registry(lines)).insights
+
+    expect(insightOf(insights, 'grocery')).toMatchObject({ kind: 'basket' })
+    expect(merchantInsight(insights, 'Picard')).toBeUndefined()
+    // The same Picard beside an amount trend speaks for it.
+    const amount = [
+      ...ledger(),
+      ...at('CB PICARD', 'grocery', { [SEPTEMBER]: 4 }, 30),
+    ]
+    expect(
+      merchantInsight(detect(registry(amount)).insights, 'Picard')
+    ).toMatchObject({ kind: 'newHabit' })
+  })
+
+  it('keeps the subcategory when the merchant explains too little of its gap', () => {
+    const lines = [
+      ...ledger({ ...HABIT, grocery: times(8, 80) }),
+      ...at('CB PICARD', 'grocery', everyMonth(2, 6), 10),
+    ]
+    const insights = detect(registry(lines)).insights
+
+    expect(insightOf(insights, 'grocery')).toBeDefined()
+    expect(merchantInsight(insights, 'Picard')).toBeUndefined()
+  })
+})
+
+describe('detectTrends — merchants beside the habits', () => {
+  const lines = [
+    ...ledger(SEPTEMBER_CHANGES),
+    ...at(
+      'CB PHARMACIE DU PORT',
+      'pharmacy',
+      { '2026-08': 2, [SEPTEMBER]: 2 },
+      15
+    ),
+    ...at('CB FNAC', 'phone', everyMonth(3, 0), 40),
+  ]
+  const reg = registry(lines)
+
+  it('keeps every month adding up from its category units: merchants are outside the sum', () => {
+    // Trends 6 to 8 read units of their own, which no month adds up:
+    // the categories and the lines to file still make the whole total.
+    for (const reading of ['everyday', 'real'] as const) {
+      for (const aggregate of aggregateMonths(reg, reading, MONTHS).values()) {
+        const units = [...aggregate.units]
+          .filter(([key]) => key.startsWith('category:'))
+          .reduce((sum, [, unit]) => sum + unit.amount, 0)
+        expect(units + aggregate.uncategorized).toBeCloseTo(aggregate.total, 9)
+        expect(
+          [...aggregate.units.keys()].every(
+            key => key.startsWith('category:') || key.startsWith('subcategory:')
+          )
+        ).toBe(true)
+      }
+    }
+  })
+
+  it('gives the same list for the same ledger, whatever its order', () => {
+    const shuffled = registry([...lines].reverse())
+    expect(detect(shuffled)).toEqual(detect(reg))
+  })
+
+  it('reads lot 2 alongside the habits', () => {
+    expect(
+      detect(reg).insights.map(i => [i.kind, i.unit.type, i.score, i.sentence])
+    ).toMatchSnapshot()
   })
 })
 

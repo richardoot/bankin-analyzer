@@ -266,12 +266,16 @@ interface Segment {
   cluster: Line[]
 }
 
-interface Merchant {
+/** One merchant's lines, under every spelling folded into it. */
+export interface MerchantGroup<T> {
+  /** The most common spelling, which names the merchant. */
   key: string
   /** Every key folded into this merchant, for matching decisions. */
   keys: Set<string>
-  lines: Line[]
+  lines: T[]
 }
+
+type Merchant = MerchantGroup<Line>
 
 interface Chain {
   merchant: Merchant
@@ -332,10 +336,13 @@ function addStep(time: number, period: RecurrencePeriod): Date {
  * torres", "begon boilley patrice richard" — meets through the bare "begon
  * patrice", but "amazon prime" and "amazon payments" stay apart although
  * "amazon" alone resembles both. The merchant is named after its most
- * common spelling.
+ * common spelling. The spending trends group their merchants with it too,
+ * so « the same merchant » never means two things.
  */
-function groupByMerchant(lines: Array<Line & { key: string }>): Merchant[] {
-  const byKey = new Map<string, Line[]>()
+export function groupByMerchant<T extends { key: string }>(
+  lines: T[]
+): Array<MerchantGroup<T>> {
+  const byKey = new Map<string, T[]>()
   for (const line of lines) {
     const bucket = byKey.get(line.key) ?? []
     bucket.push(line)
@@ -345,7 +352,7 @@ function groupByMerchant(lines: Array<Line & { key: string }>): Merchant[] {
     ([a, left], [b, right]) => right.length - left.length || a.localeCompare(b)
   )
 
-  let merchants: Merchant[] = []
+  let merchants: Array<MerchantGroup<T>> = []
   for (const [key, keyLines] of spellings) {
     // Against each merchant's main spelling: a bare "amazon" absorbed by
     // one merchant must not then pull "amazon prime" in after it.
@@ -368,7 +375,10 @@ function groupByMerchant(lines: Array<Line & { key: string }>): Merchant[] {
 }
 
 /** Whether two merchants have spellings with two words in common. */
-function shareTwoWords(left: Merchant, right: Merchant): boolean {
+function shareTwoWords(
+  left: MerchantGroup<unknown>,
+  right: MerchantGroup<unknown>
+): boolean {
   for (const a of left.keys) {
     const words = new Set(a.split(' '))
     for (const b of right.keys) {

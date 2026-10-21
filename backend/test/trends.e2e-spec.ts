@@ -97,6 +97,8 @@ describe('Trends (e2e)', () => {
         subcategory?: { id: string; categoryId: string } | null
         type?: 'EXPENSE' | 'INCOME'
         amortizationMonths?: number
+        /** The bank label: what a merchant is read from. */
+        label?: string
       } = {}
     ): Promise<string> => {
       sequence += 1
@@ -109,7 +111,7 @@ describe('Trends (e2e)', () => {
           subcategoryId: target?.id ?? null,
           hash: `${userId}-trend-${sequence}`,
           date: new Date(`${month}-${String(day).padStart(2, '0')}T10:00:00Z`),
-          description: `Ligne ${sequence}`,
+          description: options.label ?? `Ligne ${sequence}`,
           amount: options.type === 'INCOME' ? amount : -amount,
           type: options.type ?? 'EXPENSE',
           amortizationMonths: options.amortizationMonths ?? null,
@@ -120,9 +122,12 @@ describe('Trends (e2e)', () => {
 
     for (const [index, month] of MONTHS.entries()) {
       const isRead = month === CLOSED
-      await line(month, 1, 900, { subcategory: rent })
+      await line(month, 1, 900, { subcategory: rent, label: 'VIR LOYER' })
       for (let i = 0; i < 3; i++) {
-        await line(month, 3 + i, 40 + index + i, { subcategory: supermarket })
+        await line(month, 3 + i, 40 + index + i, {
+          subcategory: supermarket,
+          label: 'CB CARREFOUR MARKET',
+        })
       }
       // The habit: two restaurants a month on the joint account; six in the
       // month read.
@@ -130,6 +135,7 @@ describe('Trends (e2e)', () => {
         await line(month, 10 + i, 60, {
           accountId: joint.id,
           subcategory: restaurant,
+          label: 'CB LE BISTROT',
         })
       }
       // Lines filed nowhere: one a month, six in the month read.
@@ -228,6 +234,8 @@ describe('Trends (e2e)', () => {
       reference: 2,
     })
     expect(restaurant?.series).toHaveLength(7)
+    // The restaurant is one merchant, all of it: the subcategory speaks.
+    expect(body.insights.some(i => i.unit.type === 'merchant')).toBe(false)
   })
 
   it('takes the window and the reading from the query', async () => {

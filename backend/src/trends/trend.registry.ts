@@ -52,6 +52,7 @@ interface LineRow {
   rhythm: string | null
   is_recurring: boolean
   is_exceptional: boolean
+  description: string
 }
 
 interface CategoryRow {
@@ -112,7 +113,8 @@ export async function readTrendRegistry(
       COALESCE(sc.nature, c.default_nature)::text AS nature,
       ${EFFECTIVE_RHYTHM} AS rhythm,
       ${IS_RECURRING} AS is_recurring,
-      (et.transaction_id IS NOT NULL) AS is_exceptional
+      (et.transaction_id IS NOT NULL) AS is_exceptional,
+      t.description
     FROM app.transactions t
     LEFT JOIN app.categories c ON c.id = t.category_id
     LEFT JOIN app.subcategories sc ON sc.id = t.subcategory_id
@@ -167,6 +169,7 @@ export async function readTrendRegistry(
       rhythm: asRhythm(row.rhythm),
       isRecurring: row.is_recurring,
       isExceptional: row.is_exceptional,
+      description: row.description,
     })),
     smoothed: smoothed.map(p => ({
       transactionId: p.transaction_id,

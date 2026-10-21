@@ -36,6 +36,7 @@ function lineRows(): unknown[] {
       rhythm: 'VARIABLE',
       is_recurring: false,
       is_exceptional: false,
+      description: 'CB LE BISTROT',
     })
   }
   rows.push({
@@ -48,6 +49,7 @@ function lineRows(): unknown[] {
     rhythm: 'VARIABLE',
     is_recurring: false,
     is_exceptional: false,
+    description: 'CB LE BISTROT',
   })
   return rows
 }

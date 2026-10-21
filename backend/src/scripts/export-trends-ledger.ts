@@ -1,6 +1,7 @@
 /**
- * Dry run of the spending trends (lot 0 of agent-os/product/spending-trends.md),
- * and the anonymised ledgers their snapshot test replays.
+ * Dry run of the spending trends (lots 0 and 2 of
+ * agent-os/product/spending-trends.md), and the anonymised ledgers their
+ * snapshot test replays.
  *
  * ## What it prints
  *
@@ -8,8 +9,9 @@
  * each reference window (3, 6 and 12 months) in the everyday reading: every
  * trend that passes its thresholds, the five the card would show, and the
  * same detection on a mean instead of a median, to confirm the choice on real
- * data. It also checks each month's total against the dashboard's
- * `getSummary`, the golden master lot 1 will pin down.
+ * data; and apart, every trend of lot 2 (merchants). It also
+ * checks each month's total against the dashboard's `getSummary`, the
+ * golden master lot 1 pins down.
  *
  * ## What it writes
  *
@@ -84,9 +86,7 @@ export function parseArgs(argv: string[]): ScriptOptions {
 export interface TrendLedger {
   /** `YYYY-MM-DD`: the moment of reading the replay pins. */
   readAt: string
-  registry: TrendRegistry & {
-    lines: Array<TrendRegistry['lines'][number] & { description: string }>
-  }
+  registry: TrendRegistry
 }
 
 /** What a trend says, names aside: what anonymisation must not change. */
@@ -146,12 +146,14 @@ function brief(i: TrendInsight): Record<string, unknown> {
   }
 }
 
+const isLot2 = (i: TrendInsight): boolean =>
+  i.unit.type === 'merchant' || i.kind === 'lostHabit'
+
 const identity = (i: TrendInsight): string =>
   `${i.kind}|${i.unit.type}|${i.unit.id}`
 
 function anonymize(
   registry: TrendRegistry,
-  descriptions: Map<string, string>,
   catalogIds: Set<string>,
   readAt: string
 ): TrendLedger {
@@ -188,7 +190,7 @@ function anonymize(
       lines: registry.lines.map(line => ({
         ...line,
         id: renumber(line.id, 't'),
-        description: anonymizeLabel(descriptions.get(line.id) ?? '', pseudonym),
+        description: anonymizeLabel(line.description, pseudonym),
         categoryId: maybe(line.categoryId, 'cat'),
         subcategoryId: maybe(line.subcategoryId, 'sub'),
       })),
@@ -273,6 +275,8 @@ export async function main(
           count: result.insights.length,
           shown: result.insights.slice(0, TREND_RULES.shown).map(brief),
           rest: result.insights.slice(TREND_RULES.shown).map(brief),
+          // Lot 2: merchants (6 to 8), shown or not.
+          lot2: result.insights.filter(isLot2).map(brief),
         }
         medianVsMean[window] = {
           median: medIds.size,
@@ -343,14 +347,6 @@ export async function main(
     })
 
     if (options.ledgers && !user.email.endsWith('.local')) {
-      const descriptions = new Map(
-        (
-          await prisma.transaction.findMany({
-            where: { id: { in: registry.lines.map(l => l.id) } },
-            select: { id: true, description: true },
-          })
-        ).map(t => [t.id, t.description])
-      )
       const catalog = new Set([
         ...(
           await prisma.category.findMany({
@@ -365,7 +361,7 @@ export async function main(
           })
         ).map(s => s.id),
       ])
-      const ledger = anonymize(registry, descriptions, catalog, readAt)
+      const ledger = anonymize(registry, catalog, readAt)
       const replayNow = new Date(`${readAt}T12:00:00.000Z`)
       const before = replayAll(registry, replayNow).flatMap(r =>
         shape(r.insights)

@@ -31,9 +31,16 @@
  * 4. An amount trend and its decomposition (Δamount = Δfrequency × reference
  *    basket + frequency × Δbasket) are one line: the dominant term chooses
  *    the sentence.
- * 5. Selection: scored by the gap in euros, a subcategory replaces its
+ * 5. Merchants (the catalogue's 6 to 8), grouped by `merchantKey` and
+ *    `groupByMerchant` as the recurrences group them: visited more or less
+ *    often (distinct days, against the habit), new over the last two months,
+ *    gone this month after five of the six before. A variable subcategory
+ *    gone the same way says it too. The lines of a recurrence never make a
+ *    habit, nor do committed, exceptional or smoothed ones.
+ * 6. Selection: scored by the gap in euros, a subcategory replaces its
  *    category when it explains 70 % of the category's gap, the category its
- *    subcategories otherwise.
+ *    subcategories otherwise; a merchant and its unit the same way. Merchants
+ *    are units of their own, outside the sum of a month.
  *
  * ## What it refuses to do
  *
@@ -45,6 +52,9 @@
  * of reading.
  */
 
+import { merchantKey } from '../ai-suggestions/merchant-memory'
+import { groupByMerchant } from '../recurrences/recurrence.detection'
+import { serviceName } from '../recurrences/recurrence.naming'
 import { calendarDayIn } from '../tags/tag-status'
 
 /** Every threshold in one place, tuned on the dry run, not on screen. */
@@ -75,6 +85,29 @@ export const TREND_RULES = {
   subcategoryExplains: 0.7,
   /** Trend 5: silent under 5 lines and under 10 % of the month's lines. */
   uncategorized: { minLines: 5, minShare: 0.1 },
+  /**
+   * Trend 6: a merchant's distinct days, on trend 2's thresholds, and at
+   * least `minLines` on one side. A merchant making `coversUnit` of its
+   * subcategory (or category) is that unit: the unit speaks, not it.
+   */
+  merchant: { minLines: 3, coversUnit: 0.9 },
+  /**
+   * Trend 7: at least `minLines` days at the merchant over the last
+   * `recentMonths` (the month read included, with a line in it), none in the
+   * `unseenMonths` before, of which `minUnseenMonths` at least inside the
+   * history.
+   */
+  newHabit: {
+    recentMonths: 2,
+    minLines: 3,
+    unseenMonths: 6,
+    minUnseenMonths: 3,
+  },
+  /**
+   * Trend 8: a line in at least `minPresentMonths` of the
+   * `referenceMonths` before the month read, none in it.
+   */
+  lostHabit: { referenceMonths: 6, minPresentMonths: 5 },
   /** How far back the card's month selector goes, in closed months. */
   selectableMonths: 24,
 } as const
@@ -85,9 +118,15 @@ export type TrendReference = 'median' | 'mean'
 export type TrendNature = 'ESSENTIAL' | 'PLEASURE'
 export type TrendRhythm = 'COMMITTED' | 'VARIABLE'
 export type TrendKind =
-  'amount' | 'frequency' | 'basket' | 'share' | 'uncategorized'
+  | 'amount'
+  | 'frequency'
+  | 'basket'
+  | 'share'
+  | 'uncategorized'
+  | 'newHabit'
+  | 'lostHabit'
 export type TrendUnitType =
-  'category' | 'subcategory' | 'structure' | 'uncategorized'
+  'category' | 'subcategory' | 'structure' | 'uncategorized' | 'merchant'
 export type TrendDirection = 'up' | 'down'
 export type TrendTone = 'neutral' | 'success'
 
@@ -111,6 +150,8 @@ export interface TrendLine {
   isRecurring: boolean
   /** The line carries an exceptional tag. */
   isExceptional: boolean
+  /** The bank label: what a merchant is read from (`merchantKey`). */
+  description: string
 }
 
 /** A smoothed purchase, with its slices over the span. */
@@ -173,6 +214,11 @@ export interface TrendUnit {
   categoryId: string | null
   name: string
   icon: string | null
+  /**
+   * A merchant only: a word of its labels, for the Transactions page's text
+   * search — the page has no merchant filter.
+   */
+  search?: string
 }
 
 export interface TrendPeriod {
@@ -607,6 +653,16 @@ interface Candidate extends TrendInsight {
   parentCategoryId: string | null
   /** The unit's amount gap, whatever the kind: what « explains » compares. */
   amountDelta: number
+  /**
+   * A merchant only: the subcategory and category its lines are mostly
+   * filed in, and how much of each unit's spending it makes.
+   */
+  merchantOf?: {
+    subcategoryId: string | null
+    categoryId: string | null
+    coversSubcategory: number
+    coversCategory: number
+  }
 }
 
 /**
@@ -738,6 +794,13 @@ export function detectTrends(
   const categories = new Map(registry.categories.map(c => [c.id, c]))
   const subcategories = new Map(registry.subcategories.map(s => [s.id, s]))
   const candidates: Candidate[] = []
+  const iconOf = (
+    categoryId: string | null,
+    subcategoryId: string | null
+  ): string | null =>
+    (subcategoryId ? subcategories.get(subcategoryId)?.icon : null) ??
+    (categoryId ? categories.get(categoryId)?.icon : null) ??
+    null
 
   const unitOf = (key: string): UnitMonth | undefined => current.units.get(key)
   const keys = new Set<string>()
@@ -781,6 +844,9 @@ export function detectTrends(
       parentCategoryId,
       amountDelta,
     }
+    const pushAmount = (): void => {
+      candidates.push(amountInsight())
+    }
     const amountInsight = (): Candidate => {
       const direction: TrendDirection = amountDelta >= 0 ? 'up' : 'down'
       const tone = toneOf(direction, nature, rhythm)
@@ -803,7 +869,24 @@ export function detectTrends(
     // Frequency and basket: a variable subcategory only, on the lines a
     // person decides — no recurrence line, no slice.
     if (!isSub || rhythm !== 'VARIABLE') {
-      if (amountPass) candidates.push(amountInsight())
+      if (amountPass) pushAmount()
+      continue
+    }
+
+    // Trend 8: a variable habit with no line this month says it in one
+    // line, in place of its amount or its frequency.
+    const lost = lostHabitInsight({
+      unit,
+      nature,
+      month,
+      completeMonths,
+      monthsBack: m => at(m).units.get(key)?.count ?? 0,
+      amountOf: m => at(m).units.get(key)?.amount ?? 0,
+      seriesMonths,
+      monthName,
+    })
+    if (lost) {
+      candidates.push({ ...lost, parentCategoryId, amountDelta })
       continue
     }
 
@@ -844,7 +927,7 @@ export function detectTrends(
     else if (basketPass) kind = 'basket'
 
     if (kind === null) {
-      if (amountPass) candidates.push(amountInsight())
+      if (amountPass) pushAmount()
       continue
     }
 
@@ -905,6 +988,24 @@ export function detectTrends(
     }
   }
 
+  // Trends 6 to 8 on merchants, the lines of a recurrence left out.
+  candidates.push(
+    ...merchantInsights(registry, {
+      month,
+      reading,
+      window,
+      referenceMonths,
+      seriesMonths,
+      completeMonths,
+      monthName,
+      ctx,
+      reference,
+      windows,
+      unitAmount: (m, unitKey) => at(m).units.get(unitKey)?.amount ?? 0,
+      iconOf,
+    })
+  )
+
   // Trend 4: the pleasure and committed shares of the month's total.
   for (const axis of ['pleasure', 'committed'] as const) {
     const shareOf = (m: MonthAggregate): number | null =>
@@ -949,6 +1050,389 @@ export function detectTrends(
     insights: [...lead, ...habits],
     quietSentence: habits.length === 0 ? quietSentence(ctx) : null,
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Habits that come and go (trends 7 and 8)                            */
+/* ------------------------------------------------------------------ */
+
+/** « juillet », or « décembre 2025 » when the year is not the month read's. */
+function monthIn(month: string, read: string): string {
+  const name = MONTH_NAMES[Number(month.slice(5, 7)) - 1] ?? month
+  return month.slice(0, 4) === read.slice(0, 4)
+    ? name
+    : `${name} ${month.slice(0, 4)}`
+}
+
+/**
+ * Trend 8: a habit with no line in the month read, though at least 5 of the
+ * 6 months before it had one. Its own horizon, not the card's window: an
+ * abandoned habit is read against the half-year it was a habit in. Says how
+ * long it has been gone — twice at most, after which the habit is no longer
+ * one.
+ */
+function lostHabitInsight(input: {
+  unit: TrendUnit
+  nature: TrendNature | null
+  month: string
+  completeMonths: number
+  /** Lines (days, for a merchant) in a month. */
+  monthsBack: (month: string) => number
+  amountOf: (month: string) => number
+  seriesMonths: string[]
+  monthName: string
+}): TrendInsight | null {
+  const rule = TREND_RULES.lostHabit
+  const { month, unit } = input
+  if (input.completeMonths < rule.referenceMonths) return null
+  if (input.monthsBack(month) > 0) return null
+  const before = monthsBetween(
+    addMonths(month, -rule.referenceMonths),
+    addMonths(month, -1)
+  )
+  const present = before.filter(m => input.monthsBack(m) > 0).length
+  if (present < rule.minPresentMonths) return null
+
+  let gone = 1
+  while (
+    gone < rule.referenceMonths &&
+    input.monthsBack(addMonths(month, -gone)) === 0
+  ) {
+    gone++
+  }
+  const since = addMonths(month, -(gone - 1))
+  const habitCount = median(before.map(input.monthsBack))
+  const habitAmount = median(before.map(input.amountOf))
+  const tone = toneOf('down', input.nature, 'VARIABLE')
+  const when =
+    gone === 1 ? `en ${input.monthName}` : `depuis ${monthIn(since, month)}`
+  const lead = tone === 'success' ? 'vous avez arrêté, plus' : 'plus'
+  return {
+    kind: 'lostHabit',
+    unit,
+    direction: 'down',
+    tone,
+    current: 0,
+    reference: tenths(habitCount),
+    delta: tenths(-habitCount),
+    deltaPct: null,
+    sentence: `${unit.name} : ${lead} aucun achat ${when}, contre ${formatCount(habitCount)} par mois d'habitude sur les ${rule.referenceMonths} mois précédents (${formatEuros(habitAmount)}).`,
+    windows: {
+      current: { start: `${since}-01`, end: lastDayOf(month) },
+      reference: {
+        start: `${before[0] ?? month}-01`,
+        end: lastDayOf(addMonths(month, -1)),
+      },
+    },
+    series: input.seriesMonths.map(input.monthsBack),
+    // What the habit used to cost in a month.
+    score: cents(habitAmount),
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Merchants (trends 6 to 8)                                           */
+/* ------------------------------------------------------------------ */
+
+interface MerchantLine {
+  id: string
+  date: string
+  amount: number
+  key: string
+  description: string
+  categoryId: string
+  subcategoryId: string | null
+  nature: TrendNature | null
+}
+
+/**
+ * The lines a merchant habit reads: filed, variable, not a recurrence line
+ * (a subscription is not a habit, `EFFECTIVE_RHYTHM` already makes it
+ * committed), and in the everyday reading neither exceptional nor smoothed
+ * — a smoothed purchase counts by its slices, and a slice is not a visit.
+ */
+function merchantLines(
+  registry: TrendRegistry,
+  reading: TrendReading
+): MerchantLine[] {
+  const everyday = reading === 'everyday'
+  const smoothed = new Set(
+    everyday ? registry.smoothed.map(p => p.transactionId) : []
+  )
+  const lines: MerchantLine[] = []
+  for (const line of registry.lines) {
+    if (!line.categoryId || line.isRecurring) continue
+    if (line.rhythm !== 'VARIABLE') continue
+    if (everyday && (line.isExceptional || smoothed.has(line.id))) continue
+    const key = merchantKey(line.description)
+    if (key === '') continue
+    lines.push({
+      id: line.id,
+      date: line.date,
+      amount: line.amount,
+      key,
+      description: line.description,
+      categoryId: line.categoryId,
+      subcategoryId: line.subcategoryId,
+      nature: line.nature,
+    })
+  }
+  return lines.sort(
+    (a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)
+  )
+}
+
+/** The key with the most weight, ties broken by key: a merchant's filing. */
+function heaviest<K extends string | null>(weights: Map<K, number>): K | null {
+  let best: K | null = null
+  let bestWeight = -Infinity
+  for (const [key, weight] of [...weights].sort(([a], [b]) =>
+    String(a).localeCompare(String(b))
+  )) {
+    if (weight > bestWeight) {
+      best = key
+      bestWeight = weight
+    }
+  }
+  return best
+}
+
+/**
+ * The word the Transactions page searches a merchant by: the first word of
+ * its name (the brand) when every spelling has it, else the longest word
+ * they all share, else its main spelling's longest. The page matches the
+ * label, so the link may show a namesake: a way in, not a proof.
+ */
+function searchWord(name: string, key: string, keys: Set<string>): string {
+  const words = key.split(' ').filter(w => w !== '')
+  const shared = words.filter(word =>
+    [...keys].every(other => other.split(' ').includes(word))
+  )
+  const brand = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)[0]
+  if (brand && shared.includes(brand)) return brand
+  const pool = shared.length > 0 ? shared : words
+  return (
+    [...pool].sort((a, b) => b.length - a.length || a.localeCompare(b))[0] ??
+    key
+  )
+}
+
+interface MerchantContext {
+  month: string
+  reading: TrendReading
+  window: number
+  referenceMonths: string[]
+  seriesMonths: string[]
+  completeMonths: number
+  monthName: string
+  ctx: SentenceContext
+  reference: (values: number[]) => number
+  windows: TrendInsight['windows']
+  /** A category or subcategory unit's amount in a month, slices included. */
+  unitAmount: (month: string, unitKey: string) => number
+  iconOf: (
+    categoryId: string | null,
+    subcategoryId: string | null
+  ) => string | null
+}
+
+/**
+ * Trends 6 to 8 on merchants — `merchantKey`, then `groupByMerchant` as the
+ * recurrences fold them. One line per merchant at most: gone (8) before new
+ * (7) before more or less often (6). Frequency counts distinct days: two
+ * Amazon lines the same day are one order.
+ */
+function merchantInsights(
+  registry: TrendRegistry,
+  input: MerchantContext
+): Candidate[] {
+  const { month, referenceMonths, seriesMonths } = input
+  const lines = merchantLines(registry, input.reading)
+  const firstObservable = registry.historyStart
+    ? firstCompleteMonth(registry.historyStart)
+    : month
+  const coverMonths = [...referenceMonths, month]
+  const candidates: Candidate[] = []
+
+  for (const group of groupByMerchant(lines)) {
+    const byMonth = new Map<string, { days: Set<string>; amount: number }>()
+    const bySub = new Map<string | null, number>()
+    const byCategory = new Map<string, number>()
+    const byNature = new Map<TrendNature | null, number>()
+    for (const line of group.lines) {
+      const m = line.date.slice(0, 7)
+      const entry = byMonth.get(m) ?? { days: new Set(), amount: 0 }
+      entry.days.add(line.date)
+      entry.amount += line.amount
+      byMonth.set(m, entry)
+      const weight = Math.abs(line.amount)
+      bySub.set(
+        line.subcategoryId,
+        (bySub.get(line.subcategoryId) ?? 0) + weight
+      )
+      byCategory.set(
+        line.categoryId,
+        (byCategory.get(line.categoryId) ?? 0) + weight
+      )
+      byNature.set(line.nature, (byNature.get(line.nature) ?? 0) + weight)
+    }
+    const daysIn = (m: string): number => byMonth.get(m)?.days.size ?? 0
+    const amountIn = (m: string): number => byMonth.get(m)?.amount ?? 0
+
+    const categoryId = heaviest(byCategory)
+    const subcategoryId = heaviest(bySub)
+    const nature = heaviest(byNature)
+    const labels: string[] = []
+    for (const line of [...group.lines].reverse()) {
+      if (!labels.includes(line.description)) labels.push(line.description)
+    }
+    const name = serviceName(labels) || group.key
+    const unit: TrendUnit = {
+      type: 'merchant',
+      id: group.key,
+      categoryId,
+      name,
+      icon: input.iconOf(categoryId, subcategoryId),
+      search: searchWord(name, group.key, group.keys),
+    }
+
+    // What the merchant makes of its units, over the month and the window.
+    const merchantTotal = coverMonths.reduce((sum, m) => sum + amountIn(m), 0)
+    const covers = (unitKey: string | null): number => {
+      if (!unitKey) return 0
+      const total = coverMonths.reduce(
+        (sum, m) => sum + input.unitAmount(m, unitKey),
+        0
+      )
+      return total > 0 ? Math.min(1, merchantTotal / total) : 0
+    }
+    const refAmount = input.reference(referenceMonths.map(amountIn))
+    const base = {
+      parentCategoryId: null,
+      amountDelta: amountIn(month) - refAmount,
+      merchantOf: {
+        subcategoryId,
+        categoryId,
+        coversSubcategory: covers(
+          subcategoryId ? subcategoryKey(subcategoryId) : null
+        ),
+        coversCategory: covers(categoryId ? categoryKey(categoryId) : null),
+      },
+    }
+
+    // Trend 8.
+    const lost = lostHabitInsight({
+      unit,
+      nature,
+      month,
+      completeMonths: input.completeMonths,
+      monthsBack: daysIn,
+      amountOf: amountIn,
+      seriesMonths,
+      monthName: input.monthName,
+    })
+    if (lost) {
+      candidates.push({ ...lost, ...base })
+      continue
+    }
+
+    // Trend 7: new over the last two months, never seen in the six before.
+    const rule = TREND_RULES.newHabit
+    const recent = monthsBetween(
+      addMonths(month, -(rule.recentMonths - 1)),
+      month
+    )
+    const unseen = monthsBetween(
+      addMonths(recent[0] ?? month, -rule.unseenMonths),
+      addMonths(recent[0] ?? month, -1)
+    )
+    const recentDays = recent.reduce((sum, m) => sum + daysIn(m), 0)
+    if (
+      daysIn(month) > 0 &&
+      recentDays >= rule.minLines &&
+      unseen.every(m => daysIn(m) === 0) &&
+      unseen.filter(m => m >= firstObservable).length >= rule.minUnseenMonths
+    ) {
+      const since = recent.find(m => daysIn(m) > 0) ?? month
+      const recentAmount = recent.reduce((sum, m) => sum + amountIn(m), 0)
+      const when =
+        since === month
+          ? `en ${input.monthName}`
+          : `depuis ${monthIn(since, month)}`
+      candidates.push({
+        ...base,
+        kind: 'newHabit',
+        unit,
+        direction: 'up',
+        tone: 'neutral',
+        current: recentDays,
+        reference: 0,
+        delta: recentDays,
+        deltaPct: null,
+        sentence: `${unit.name} : nouveau, ${achats(recentDays)} ${when} (${formatEuros(recentAmount)}), aucun sur les ${rule.unseenMonths} mois précédents.`,
+        windows: {
+          current: { start: `${since}-01`, end: lastDayOf(month) },
+          reference: {
+            start: `${unseen[0] ?? month}-01`,
+            end: lastDayOf(unseen[unseen.length - 1] ?? month),
+          },
+        },
+        series: seriesMonths.map(daysIn),
+        // What the new habit cost in the month read.
+        score: cents(Math.abs(amountIn(month))),
+      })
+      continue
+    }
+
+    // Trend 6: more or less often than the habit, in distinct days.
+    const current = daysIn(month)
+    const refDays = input.reference(referenceMonths.map(daysIn))
+    if (Math.max(current, refDays) < TREND_RULES.merchant.minLines) continue
+    if (!passesFrequency(current, refDays)) continue
+    const refBaskets = referenceMonths.flatMap(m =>
+      daysIn(m) > 0 ? [amountIn(m) / daysIn(m)] : []
+    )
+    const basket =
+      refBaskets.length > 0
+        ? input.reference(refBaskets)
+        : current > 0
+          ? amountIn(month) / current
+          : 0
+    const delta = current - refDays
+    const direction: TrendDirection = delta >= 0 ? 'up' : 'down'
+    const tone = toneOf(direction, nature, 'VARIABLE')
+    candidates.push({
+      ...base,
+      kind: 'frequency',
+      unit,
+      direction,
+      tone,
+      current,
+      reference: tenths(refDays),
+      delta: tenths(delta),
+      deltaPct: refDays > 0 ? tenths((delta / refDays) * 100) : null,
+      sentence: frequencySentence(
+        unit.name,
+        current,
+        refDays,
+        tone,
+        input.ctx,
+        {
+          current: amountIn(month),
+          reference: refAmount,
+        }
+      ),
+      windows: input.windows,
+      series: seriesMonths.map(daysIn),
+      // Δ days × the reference basket: what the change of rhythm weighs.
+      score: cents(Math.abs(delta * basket)),
+    })
+  }
+  return candidates
 }
 
 /** What the card says when no habit moved. */
@@ -1023,10 +1507,23 @@ function uncategorizedInsight(
 
 /**
  * A subcategory and its category never show together: the subcategory when
- * it explains 70 % of the category's gap, the category otherwise. Then the
- * gap in euros orders the list, ties broken by name for a stable card.
+ * it explains 70 % of the category's gap, the category otherwise.
+ *
+ * A merchant and its unit — its subcategory if that one speaks, else its
+ * category — the same way: the merchant when it explains 70 % of the unit's
+ * gap, the unit otherwise. Except a merchant that is the unit (90 % of its
+ * spending over the month and the window): the unit says the same thing,
+ * under the catalogue's name, and stays. And a unit read as a basket (3)
+ * stays too: what each visit costs is not explained by where they went.
+ *
+ * Then the gap in euros orders the list, ties broken by name for a stable
+ * card.
  */
 function select(candidates: Candidate[]): TrendInsight[] {
+  const explains = (child: Candidate, parent: Candidate): boolean =>
+    parent.amountDelta !== 0 &&
+    child.amountDelta / parent.amountDelta >= TREND_RULES.subcategoryExplains
+
   const categoryInsights = new Map(
     candidates.filter(c => c.unit.type === 'category').map(c => [c.unit.id, c])
   )
@@ -1034,14 +1531,43 @@ function select(candidates: Candidate[]): TrendInsight[] {
   for (const [categoryId, category] of categoryInsights) {
     const children = candidates.filter(c => c.parentCategoryId === categoryId)
     if (children.length === 0) continue
-    const explains = children.some(
-      child =>
-        category.amountDelta !== 0 &&
-        child.amountDelta / category.amountDelta >=
-          TREND_RULES.subcategoryExplains
-    )
-    if (explains) dropped.add(category)
+    if (children.some(child => explains(child, category))) dropped.add(category)
     else for (const child of children) dropped.add(child)
+  }
+
+  const standing = (
+    type: TrendUnitType,
+    id: string | null
+  ): Candidate | undefined =>
+    id === null
+      ? undefined
+      : candidates.find(
+          c => c.unit.type === type && c.unit.id === id && !dropped.has(c)
+        )
+  const merchantsOf = new Map<Candidate, Candidate[]>()
+  for (const merchant of candidates) {
+    const of = merchant.merchantOf
+    if (!of) continue
+    const sub = standing('subcategory', of.subcategoryId)
+    const parent = sub ?? standing('category', of.categoryId)
+    if (!parent) continue
+    const covers = sub ? of.coversSubcategory : of.coversCategory
+    if (covers >= TREND_RULES.merchant.coversUnit) {
+      dropped.add(merchant)
+      continue
+    }
+    merchantsOf.set(parent, [...(merchantsOf.get(parent) ?? []), merchant])
+  }
+  for (const [parent, merchants] of merchantsOf) {
+    // A dearer visit everywhere is not explained by where the visits went.
+    if (
+      parent.kind !== 'basket' &&
+      merchants.some(merchant => explains(merchant, parent))
+    ) {
+      dropped.add(parent)
+    } else {
+      for (const merchant of merchants) dropped.add(merchant)
+    }
   }
 
   return candidates
@@ -1053,5 +1579,8 @@ function select(candidates: Candidate[]): TrendInsight[] {
         a.kind.localeCompare(b.kind) ||
         a.unit.id.localeCompare(b.unit.id)
     )
-    .map(({ parentCategoryId: _p, amountDelta: _a, ...insight }) => insight)
+    .map(
+      ({ parentCategoryId: _p, amountDelta: _a, merchantOf: _m, ...insight }) =>
+        insight
+    )
 }
