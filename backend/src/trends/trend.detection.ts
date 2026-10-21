@@ -2596,6 +2596,12 @@ function mergeLong(
   return out
 }
 
+/** « 18 % », « −5 % » when more came back from savings than went in. */
+function rateText(rate: number): string {
+  const rounded = Math.round(Math.abs(rate))
+  return `${rate < 0 && rounded > 0 ? MINUS : ''}${rounded} %`
+}
+
 /**
  * Trend 15: the share of the income set aside, the last three months against
  * the three before, with what is left to live on — the dashboard's
@@ -2667,8 +2673,8 @@ function savingsInsight(input: {
     delta: tenths(delta),
     deltaPct: null,
     sentence:
-      `Épargne : ${Math.round(cur.rate)} % du revenu ${fromTo(quarter, month)}, ` +
-      `contre ${Math.round(prev.rate)} % ${fromTo(previous, month)} ; ` +
+      `Épargne : ${rateText(cur.rate)} du revenu ${fromTo(quarter, month)}, ` +
+      `contre ${rateText(prev.rate)} ${fromTo(previous, month)} ; ` +
       `reste à vivre ${formatEuros(cur.remaining)} par mois, contre ${formatEuros(prev.remaining)}.`,
     windows: {
       current: { start: `${quarter[0] ?? month}-01`, end: lastDayOf(month) },

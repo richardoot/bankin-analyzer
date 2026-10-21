@@ -1480,6 +1480,19 @@ describe('detectTrends — savings (trend 15)', () => {
     ])
   })
 
+  it('says a quarter that took more out of savings than it put in', () => {
+    const insight = detect(withFlows(flows(3000, 300, -150))).insights[0]
+
+    expect(insight).toMatchObject({
+      kind: 'savings',
+      direction: 'down',
+      current: -5,
+    })
+    expect(insight?.sentence).toMatch(
+      /^Épargne : −5 % du revenu de juillet à septembre, contre 10 % d'avril à juin ;/
+    )
+  })
+
   it('never follows the card window: a quarter is three months whatever the window', () => {
     for (const window of TREND_RULES.windows) {
       expect(
