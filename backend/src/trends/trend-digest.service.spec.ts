@@ -50,7 +50,7 @@ function trends(overrides: Partial<TrendsResult> = {}): TrendsResult {
   }
 }
 
-const totals = { everyday: 1834.5, real: 2240, income: 3200, savings: 576 }
+const totals = { everyday: 1834.5, real: 2240, income: 3200, savings: 960 }
 
 const VERIFIED =
   'En septembre, les restaurants et bars montent à 312 €, soit 38 % de plus que les 226 € habituels. Le reste de votre vie courante est dans l’habitude.'

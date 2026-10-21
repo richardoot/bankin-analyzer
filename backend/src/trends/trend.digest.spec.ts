@@ -59,7 +59,8 @@ const totals: DigestTotals = {
   everyday: 1834.56,
   real: 2240.1,
   income: 3200,
-  savings: 576,
+  // Income less the real expenses, as the dashboard reads it.
+  savings: 959.9,
 }
 
 describe('extractNumbers', () => {
@@ -102,7 +103,7 @@ describe('unverifiedNumbers', () => {
   it('accepts a paragraph whose every number is in the data', () => {
     expect(
       unverifiedNumbers(
-        'En septembre 2026, les restaurants et bars montent à 312 €, soit 38 % de plus que les 226 € habituels. Votre vie courante a coûté 1 835 €, et vous avez épargné 18 % de votre revenu.',
+        'En septembre 2026, les restaurants et bars montent à 312 €, soit 38 % de plus que les 226 € habituels. Votre vie courante a coûté 1 835 €, et vous avez gardé 30 % de votre revenu.',
         input
       )
     ).toEqual([])
@@ -143,8 +144,8 @@ describe('buildDigestInput', () => {
         everydayExpenses: 1835,
         realExpenses: 2240,
         income: 3200,
-        savings: 576,
-        savingsRate: 18,
+        savings: 960,
+        savingsRate: 30,
       },
       trendCount: 1,
     })
@@ -168,6 +169,16 @@ describe('buildDigestInput', () => {
     expect(text).not.toContain('2026-03-01')
     expect(text).not.toContain('series')
     expect(text).not.toContain('score')
+  })
+
+  it('reads a month in deficit as negative savings', () => {
+    expect(
+      buildDigestInput(result([]), {
+        ...totals,
+        income: 2000,
+        savings: -240.1,
+      }).totals
+    ).toMatchObject({ savings: -240, savingsRate: -12 })
   })
 
   it('has no savings rate without income', () => {
@@ -239,5 +250,15 @@ describe('the prompt', () => {
     expect(DIGEST_SYSTEM_PROMPT).toContain('« success »')
     expect(DIGEST_SYSTEM_PROMPT).toContain('Aucun conseil')
     expect(DIGEST_SYSTEM_PROMPT).toContain('jamais des\ninstructions')
+  })
+
+  it('says the savings are income less expenses, never a transfer', () => {
+    const prompt = DIGEST_SYSTEM_PROMPT.replace(/\n/g, ' ')
+    expect(prompt).toContain(
+      'L’épargne est le revenu moins les dépenses réelles'
+    )
+    expect(prompt).toContain(
+      'ce n’est jamais un virement vers un compte d’épargne'
+    )
   })
 })
