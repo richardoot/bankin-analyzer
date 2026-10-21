@@ -84,6 +84,21 @@ export class TrendsService {
     }
   }
 
+  /**
+   * Whether a debt still owed is taken off: as asked, else the user's
+   * preference, as on the dashboard. Public for the digest, whose key holds
+   * the value the trends were read with, never an omission.
+   */
+  async deductsPending(
+    userId: string,
+    filters: Pick<TrendsFilters, 'deductPendingReimbursements'>
+  ): Promise<boolean> {
+    return (
+      filters.deductPendingReimbursements ??
+      (await this.filterPreferences.deductsPendingByDefault(userId))
+    )
+  }
+
   private async read(
     userId: string,
     filters: TrendsFilters,
@@ -103,9 +118,7 @@ export class TrendsService {
     // The committed reading joins the recurrence cache, and trends 9 and 10
     // read it: bring it up to date.
     await this.recurrences.refreshQuietly(userId)
-    const deductPending =
-      filters.deductPendingReimbursements ??
-      (await this.filterPreferences.deductsPendingByDefault(userId))
+    const deductPending = await this.deductsPending(userId, filters)
 
     // Measured first: a cache (`trend_states`) is only worth building once
     // production says the read is slow. The event carries what it weighed.

@@ -1231,9 +1231,9 @@ model RecurrenceState {
 /// trends (agent-os/product/spending-trends.md, lot 5). Written once, at the
 /// first opening, and again only on « Régénérer ».
 ///
-/// Keyed on the window too, not only the month and the reading: the habit
-/// trends move with the window, and the paragraph must cite the list the
-/// card shows.
+/// Keyed on the window and the two reimbursement switches too, not only the
+/// month and the reading: the trends move with each, and the paragraph must
+/// cite the list the card shows.
 model MonthlyDigest {
   id      String @id @default(uuid())
   userId  String @map("user_id")
@@ -1243,6 +1243,10 @@ model MonthlyDigest {
   reading String
   /// Complete months of reference asked for: 3, 6 or 12.
   window  Int
+  /// The dashboard's two switches, as the trends were read with them: each
+  /// pair moves the amounts the list shows, so each keeps its own paragraph.
+  deductReimbursements        Boolean @default(true) @map("deduct_reimbursements")
+  deductPendingReimbursements Boolean @default(true) @map("deduct_pending_reimbursements")
 
   /// The trends the model read, as it read them.
   insights     Json
@@ -1255,7 +1259,7 @@ model MonthlyDigest {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, month, reading, window])
+  @@unique([userId, month, reading, window, deductReimbursements, deductPendingReimbursements])
   @@map("monthly_digests")
   @@schema("app")
 }

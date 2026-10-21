@@ -68,11 +68,27 @@ export class TrendDigestService {
     const month = filters.month ?? lastClosedMonth(now)
     const reading: TrendReading = filters.reading ?? 'everyday'
     const window: TrendWindow = filters.window ?? TREND_RULES.defaultWindow
-    const key = { userId, month, reading, window }
+    // The switches change the amounts the list shows: each pair keeps its
+    // own paragraph, keyed on the values the trends are read with.
+    const deductReimbursements = filters.deductReimbursements !== false
+    const deductPendingReimbursements = await this.trends.deductsPending(
+      userId,
+      filters
+    )
+    const key = {
+      userId,
+      month,
+      reading,
+      window,
+      deductReimbursements,
+      deductPendingReimbursements,
+    }
+    const where = {
+      userId_month_reading_window_deductReimbursements_deductPendingReimbursements:
+        key,
+    }
 
-    const stored = await this.prisma.monthlyDigest.findUnique({
-      where: { userId_month_reading_window: key },
-    })
+    const stored = await this.prisma.monthlyDigest.findUnique({ where })
     if (stored && !options.force) return toDto(stored)
 
     const skip = (
@@ -98,7 +114,14 @@ export class TrendDigestService {
 
     const { trends, totals } = await this.trends.getTrendsAndTotals(
       userId,
-      { ...filters, month, reading, window },
+      {
+        ...filters,
+        month,
+        reading,
+        window,
+        deductReimbursements,
+        deductPendingReimbursements,
+      },
       now
     )
     if (trends.completeMonths < MIN_HISTORY) return skip('short_history')
@@ -141,7 +164,7 @@ export class TrendDigestService {
       generatedAt: now,
     }
     const saved = await this.prisma.monthlyDigest.upsert({
-      where: { userId_month_reading_window: key },
+      where,
       create: { ...key, ...data },
       update: data,
     })

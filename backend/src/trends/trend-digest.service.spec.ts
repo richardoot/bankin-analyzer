@@ -63,6 +63,8 @@ function storedRow(
     month: '2026-09',
     reading: 'everyday',
     window: 6,
+    deductReimbursements: true,
+    deductPendingReimbursements: true,
     insights: {},
     text: 'Paragraphe déjà écrit.',
     model: 'claude-haiku-5-5',
@@ -78,7 +80,14 @@ describe('TrendDigestService', () => {
   const prisma = {
     monthlyDigest: { findUnique: vi.fn(), upsert: vi.fn() },
   }
-  const trendsService = { getTrendsAndTotals: vi.fn() }
+  const trendsService = {
+    getTrendsAndTotals: vi.fn(),
+    // Omitted, the pending switch follows the preference: on here.
+    deductsPending: vi.fn(
+      (_userId: string, f: { deductPendingReimbursements?: boolean }) =>
+        Promise.resolve(f.deductPendingReimbursements ?? true)
+    ),
+  }
   const ai = { writeDigest: vi.fn() }
   let logged: unknown[]
 
@@ -146,12 +155,15 @@ describe('TrendDigestService', () => {
     })
     expect(prisma.monthlyDigest.findUnique).toHaveBeenCalledWith({
       where: {
-        userId_month_reading_window: {
-          userId: 'user-1',
-          month: '2026-09',
-          reading: 'everyday',
-          window: 6,
-        },
+        userId_month_reading_window_deductReimbursements_deductPendingReimbursements:
+          {
+            userId: 'user-1',
+            month: '2026-09',
+            reading: 'everyday',
+            window: 6,
+            deductReimbursements: true,
+            deductPendingReimbursements: true,
+          },
       },
     })
     expect(trendsService.getTrendsAndTotals).not.toHaveBeenCalled()
@@ -163,7 +175,45 @@ describe('TrendDigestService', () => {
 
     expect(trendsService.getTrendsAndTotals).toHaveBeenCalledWith(
       'user-1',
-      { month: '2026-09', reading: 'everyday', window: 6 },
+      {
+        month: '2026-09',
+        reading: 'everyday',
+        window: 6,
+        deductReimbursements: true,
+        deductPendingReimbursements: true,
+      },
+      now
+    )
+  })
+
+  it('keys the paragraph on the switches as the trends read them, the preference standing in for an omission', async () => {
+    trendsService.deductsPending.mockResolvedValueOnce(false)
+
+    await service.getDigest(
+      'user-1',
+      { month: '2026-09', deductReimbursements: false },
+      { now }
+    )
+
+    expect(trendsService.deductsPending).toHaveBeenCalledWith('user-1', {
+      month: '2026-09',
+      deductReimbursements: false,
+    })
+    expect(prisma.monthlyDigest.findUnique).toHaveBeenCalledWith({
+      where: {
+        userId_month_reading_window_deductReimbursements_deductPendingReimbursements:
+          expect.objectContaining({
+            deductReimbursements: false,
+            deductPendingReimbursements: false,
+          }),
+      },
+    })
+    expect(trendsService.getTrendsAndTotals).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        deductReimbursements: false,
+        deductPendingReimbursements: false,
+      }),
       now
     )
   })
@@ -185,6 +235,7 @@ describe('TrendDigestService', () => {
         reading: 'everyday',
         window: 3,
         deductReimbursements: false,
+        deductPendingReimbursements: true,
       },
       now
     )
@@ -198,12 +249,15 @@ describe('TrendDigestService', () => {
       create: Record<string, unknown>
     }
     expect(upsert.where).toEqual({
-      userId_month_reading_window: {
-        userId: 'user-1',
-        month: '2026-09',
-        reading: 'everyday',
-        window: 3,
-      },
+      userId_month_reading_window_deductReimbursements_deductPendingReimbursements:
+        {
+          userId: 'user-1',
+          month: '2026-09',
+          reading: 'everyday',
+          window: 3,
+          deductReimbursements: false,
+          deductPendingReimbursements: true,
+        },
     })
     expect(upsert.create).toMatchObject({
       text: VERIFIED,

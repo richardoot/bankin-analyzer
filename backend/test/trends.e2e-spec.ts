@@ -410,12 +410,15 @@ describe('Trends (e2e)', () => {
 
       const row = await prisma.monthlyDigest.findUniqueOrThrow({
         where: {
-          userId_month_reading_window: {
-            userId: ownerId,
-            month: CLOSED,
-            reading: 'everyday',
-            window: 6,
-          },
+          userId_month_reading_window_deductReimbursements_deductPendingReimbursements:
+            {
+              userId: ownerId,
+              month: CLOSED,
+              reading: 'everyday',
+              window: 6,
+              deductReimbursements: true,
+              deductPendingReimbursements: true,
+            },
         },
       })
       expect(row).toMatchObject({ inputTokens: 2400, outputTokens: 350 })
@@ -498,6 +501,52 @@ describe('Trends (e2e)', () => {
       const response = await digest({}, stranger)
       expect(response.body).toEqual({ digest: null })
       expect(writeDigest).not.toHaveBeenCalled()
+    })
+
+    it('keeps one paragraph per pair of reimbursement switches, keyed on the values the trends were read with', async () => {
+      const before = await prisma.monthlyDigest.count()
+      writeDigest.mockClear()
+      writeDigest.mockImplementationOnce((_system: string, user: string) =>
+        Promise.resolve({
+          text: `Sans les remboursements. ${fenced(user).trends[0]?.sentence ?? ''}`,
+          model: 'claude-haiku-5-5',
+          inputTokens: 2400,
+          outputTokens: 350,
+        })
+      )
+      const off = (await digest({ deductReimbursements: 'false' }))
+        .body as TrendDigestResponseDto
+      expect(off.digest?.text).toMatch(/^Sans les remboursements\. /)
+      expect(writeDigest).toHaveBeenCalledTimes(1)
+      expect(await prisma.monthlyDigest.count()).toBe(before + 1)
+      const row = await prisma.monthlyDigest.findUniqueOrThrow({
+        where: {
+          userId_month_reading_window_deductReimbursements_deductPendingReimbursements:
+            {
+              userId: ownerId,
+              month: CLOSED,
+              reading: 'everyday',
+              window: 6,
+              deductReimbursements: false,
+              // Omitted, the preference applies: on, with none saved.
+              deductPendingReimbursements: true,
+            },
+        },
+      })
+      expect(row.text).toBe(off.digest?.text)
+
+      // Back on: the paragraph written with the switches on, not this one.
+      const on = (await digest()).body as TrendDigestResponseDto
+      expect(on.digest?.text).toMatch(/^Nouveau bilan\. /)
+      // Asked explicitly with the preference's own value: the same row.
+      const explicit = (
+        await digest({
+          deductReimbursements: 'true',
+          deductPendingReimbursements: 'true',
+        })
+      ).body as TrendDigestResponseDto
+      expect(explicit.digest?.text).toBe(on.digest?.text)
+      expect(writeDigest).toHaveBeenCalledTimes(1)
     })
 
     it.each([[{ window: '4' }], [{ month: CURRENT }]])(
