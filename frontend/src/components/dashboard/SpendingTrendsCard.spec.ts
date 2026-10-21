@@ -127,6 +127,115 @@ const toFile: TrendInsightDto = {
   score: 340,
 }
 
+const picard: TrendInsightDto = {
+  kind: 'frequency',
+  unit: {
+    type: 'merchant',
+    id: 'picard surgeles',
+    categoryId: 'cat-food',
+    name: 'Picard',
+    icon: null,
+    search: 'picard',
+  },
+  direction: 'up',
+  tone: 'neutral',
+  current: 6,
+  reference: 2,
+  delta: 4,
+  deltaPct: 200,
+  sentence:
+    "Picard : 6 achats en septembre, contre 2 par mois d'habitude sur les 6 mois précédents, soit 180 € contre 60 €.",
+  windows,
+  series: [2, 2, 2, 2, 2, 2, 6],
+  score: 120,
+}
+
+const sushi: TrendInsightDto = {
+  ...picard,
+  kind: 'newHabit',
+  unit: { ...picard.unit, id: 'sushi bar', name: 'Sushi Bar', icon: '🍽️' },
+  current: 4,
+  reference: 0,
+  delta: 4,
+  deltaPct: null,
+  sentence:
+    'Sushi Bar : nouveau, 4 achats depuis août (136 €), aucun sur les 6 mois précédents.',
+  windows: {
+    current: { start: '2026-08-01', end: '2026-09-30' },
+    reference: { start: '2026-02-01', end: '2026-07-31' },
+  },
+}
+
+const uberEats: TrendInsightDto = {
+  ...picard,
+  kind: 'lostHabit',
+  unit: { ...picard.unit, id: 'uber eats', name: 'Uber Eats' },
+  direction: 'down',
+  tone: 'success',
+  current: 0,
+  reference: 4,
+  delta: -4,
+  deltaPct: null,
+  sentence:
+    "Uber Eats : vous avez arrêté, plus aucun achat en septembre, contre 4 par mois d'habitude sur les 6 mois précédents (86 €).",
+}
+
+const gym: TrendInsightDto = {
+  kind: 'subscription',
+  unit: {
+    type: 'recurrence',
+    id: '30:basic fit',
+    categoryId: 'cat-leisure',
+    name: 'Basic Fit',
+    icon: '🏋️',
+  },
+  direction: 'up',
+  tone: 'neutral',
+  current: 32.49,
+  reference: 0,
+  delta: 32.49,
+  deltaPct: null,
+  sentence:
+    'Nouvel abonnement : Basic Fit, 29,99 € toutes les 4 semaines depuis juillet.',
+  windows: {
+    current: { start: '2026-07-01', end: '2026-09-30' },
+    reference: { start: '2026-04-01', end: '2026-06-30' },
+  },
+  series: [0, 0, 0, 0, 30, 30, 30],
+  score: 32.49,
+}
+
+const piano: TrendInsightDto = {
+  ...gym,
+  unit: {
+    ...gym.unit,
+    id: '150:simply piano',
+    name: 'Simply Piano',
+    icon: null,
+  },
+  direction: 'down',
+  current: 0,
+  reference: 150,
+  delta: -150,
+  sentence:
+    'Abonnement arrêté : Simply Piano, 150,00 € par mois, dernier prélèvement en juin.',
+}
+
+const netflix: TrendInsightDto = {
+  ...gym,
+  kind: 'price',
+  unit: { ...gym.unit, id: '16:netflix', name: 'Netflix' },
+  current: 15.99,
+  reference: 13.49,
+  delta: 2.5,
+  deltaPct: 18.5,
+  sentence: 'Netflix : 15,99 € par mois depuis juillet, contre 13,49 €.',
+  score: 2.5,
+}
+
+/** Merchants and charges: lot 2's rows. */
+const LOT_2 = [picard, sushi, uberEats, gym, piano, netflix]
+
 function response(
   overrides: Partial<TrendsResponseDto> = {}
 ): TrendsResponseDto {
@@ -420,6 +529,92 @@ describe('SpendingTrendsCard', () => {
     expect(getSpendingTrends).toHaveBeenLastCalledWith(
       expect.objectContaining({ reading: 'real', deductReimbursements: false })
     )
+  })
+
+  describe('merchants and recurring charges', () => {
+    beforeEach(() => {
+      getSpendingTrends.mockResolvedValue(response({ insights: LOT_2 }))
+    })
+
+    it('says what came or went in a word, and a price by its gap to the cent', async () => {
+      const wrapper = await mountCard()
+      await wrapper.find('[data-testid="trends-toggle"]').trigger('click')
+
+      const badges = wrapper.findAll('[data-testid="trend-badge"]')
+      expect(badges.map(b => b.text().replace(/\s+/g, ' '))).toEqual([
+        '↑ +200 %',
+        'Nouveau',
+        'Plus rien',
+        'Apparu',
+        'Arrêté',
+        expect.stringMatching(/^↑ \+2,50\s€$/),
+      ])
+      expect(badges.map(b => b.attributes('aria-label'))).toEqual([
+        'En hausse : +200 %',
+        'Nouvelle habitude',
+        'Habitude abandonnée',
+        'Abonnement apparu',
+        'Abonnement arrêté',
+        expect.stringMatching(/^Prix en hausse : \+2,50\s€$/),
+      ])
+      // A charge is never a reproach nor a success: blue up, grey down.
+      expect(
+        badges.slice(3).map(b => b.classes().find(c => c.startsWith('bg-')))
+      ).toEqual(['bg-sky-50', 'bg-gray-100', 'bg-sky-50'])
+    })
+
+    it('opens a merchant by the word of its labels, in the month and the reference', async () => {
+      const wrapper = await mountCard()
+
+      expect(linksOf(wrapper, 'frequency')).toEqual([
+        {
+          type: 'EXPENSE',
+          q: 'picard',
+          from: '2026-09-01',
+          to: '2026-09-30',
+          exceptional: 'exclude',
+          gross: true,
+          label: 'Picard · septembre 2026',
+        },
+        {
+          type: 'EXPENSE',
+          q: 'picard',
+          from: '2026-03-01',
+          to: '2026-08-31',
+          exceptional: 'exclude',
+          gross: true,
+          label: 'Picard · 6 mois de référence',
+        },
+      ])
+      // A merchant without an icon of its own still shows a sign.
+      const icon = wrapper.find('[data-testid="trend-frequency"] span')
+      expect(icon.text()).toBe('🏪')
+    })
+
+    it('opens a recurring charge by its series, and the recurrences screen beside it', async () => {
+      const wrapper = await mountCard()
+      const row = wrapper.find('[data-testid="trend-subscription"]')
+      const links = row.findAllComponents(RouterLinkStub)
+
+      expect(links).toHaveLength(2)
+      const month = links[0]?.props('to') as { query: Record<string, string> }
+      expect(parseTransactionsQuery(month.query)).toEqual({
+        type: 'EXPENSE',
+        recurrence: '30:basic fit',
+        recurrenceLabel: 'Basic Fit',
+        from: '2026-07-01',
+        to: '2026-09-30',
+        gross: true,
+        label: 'Basic Fit · juillet 2026',
+      })
+      expect(links[1]?.props('to')).toBe('/recurrences')
+      expect(row.find('[data-testid="trend-reference-link"]').exists()).toBe(
+        false
+      )
+      expect(row.find('[data-testid="trend-recurrences-link"]').text()).toBe(
+        'Les récurrences'
+      )
+    })
   })
 
   it('lets the sparkline go on a phone, never the sentence or the badge', async () => {

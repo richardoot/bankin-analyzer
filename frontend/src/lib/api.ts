@@ -1602,17 +1602,42 @@ export interface UndoRunOutcomeDto {
 /** « Ce qui change »: what moves in a closed month, against the habit. */
 export type TrendWindow = 3 | 6 | 12
 export type TrendReading = 'everyday' | 'real'
+/**
+ * 1 `amount`, 2 and 6 `frequency` (6 on a merchant), 3 `basket`, 4 `share`,
+ * 5 `uncategorized`, 7 `newHabit`, 8 `lostHabit`, 9 `subscription` (`up`
+ * appeared, `down` stopped), 10 `price`.
+ */
 export type TrendKind =
-  'amount' | 'frequency' | 'basket' | 'share' | 'uncategorized'
+  | 'amount'
+  | 'frequency'
+  | 'basket'
+  | 'share'
+  | 'uncategorized'
+  | 'newHabit'
+  | 'lostHabit'
+  | 'subscription'
+  | 'price'
 
 export interface TrendUnitDto {
-  type: 'category' | 'subcategory' | 'structure' | 'uncategorized'
-  /** Category or subcategory id; `pleasure` / `committed` for a share */
+  type:
+    | 'category'
+    | 'subcategory'
+    | 'structure'
+    | 'uncategorized'
+    | 'merchant'
+    | 'recurrence'
+  /**
+   * Category or subcategory id; `pleasure` / `committed` for a share; a
+   * merchant's key; a recurrence's `<amountBucket>:<merchantKey>`, the
+   * Transactions page's `recurrence` filter
+   */
   id: string
   /** The category a link opens: itself, or a subcategory's parent */
   categoryId: string | null
   name: string
   icon: string | null
+  /** A merchant only: the word the Transactions page searches it by */
+  search?: string
 }
 
 export interface TrendPeriodDto {

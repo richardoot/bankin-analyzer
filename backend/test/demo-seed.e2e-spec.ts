@@ -31,7 +31,7 @@ describe('Demo seed (e2e)', () => {
     await database.close()
   }, 30_000)
 
-  it('gives the trends card at least three trends of different kinds', async () => {
+  it('gives the trends card at least three trends of different kinds, a merchant and a subscription among them', async () => {
     const user = await database.prisma.user.create({
       data: { supabaseId: 'demo-seed', email: 'demo@e2e.invalid' },
     })
@@ -56,10 +56,23 @@ describe('Demo seed (e2e)', () => {
     const kinds = new Set(result.insights.map(i => i.kind))
     expect(result.completeMonths).toBeGreaterThanOrEqual(6)
     expect(result.insights.length).toBeGreaterThanOrEqual(3)
-    // The three the seed plants in that month, whatever else moves.
+    // What the seed plants in that month, whatever else moves: lot 1's
+    // three, and lot 2's subscription and new shop.
     expect([...kinds]).toEqual(
-      expect.arrayContaining(['uncategorized', 'frequency', 'basket'])
+      expect.arrayContaining([
+        'uncategorized',
+        'frequency',
+        'basket',
+        'subscription',
+        'newHabit',
+      ])
     )
+    expect(
+      result.insights.find(i => i.kind === 'subscription')?.sentence
+    ).toMatch(/^Nouvel abonnement : Disney Plus, 8,99 € par mois depuis /)
+    expect(result.insights.find(i => i.kind === 'newHabit')).toMatchObject({
+      unit: { type: 'merchant', name: 'Primeur du Marche' },
+    })
     expect(result.insights[0]?.sentence).toMatch(
       /^7 dépenses d(e |')\S+ sont à classer/
     )

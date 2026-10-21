@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { computed, onMounted } from 'vue'
+  import { RouterLink } from 'vue-router'
   import type { TrendInsightDto, TrendReading, TrendWindow } from '@/lib/api'
   import { useSpendingTrends } from '@/composables/useSpendingTrends'
   import { TREND_WINDOWS } from '@/lib/trends'
@@ -21,7 +22,8 @@
    * Follows the dashboard's reading and reimbursement switches, never its
    * period: the header says which month it reads and against what. Five
    * lines, « Voir tout » for the rest; each opens its transactions, in the
-   * month and in the reference.
+   * month and in the reference — a merchant by its label, a recurring
+   * charge by its series, with the recurrences screen beside it.
    */
   const props = defineProps<{
     reading: TrendReading
@@ -100,9 +102,35 @@
     return `${value < 0 ? MINUS : '+'}${text}`
   }
 
+  /**
+   * What came or went has no percentage: a word says it. A price says its
+   * gap to the cent, as its sentence does.
+   */
+  const WORD_BADGES: Partial<
+    Record<TrendInsightDto['kind'], (insight: TrendInsightDto) => string>
+  > = {
+    newHabit: () => 'Nouveau',
+    lostHabit: () => 'Plus rien',
+    subscription: insight => (insight.direction === 'up' ? 'Apparu' : 'Arrêté'),
+  }
+
+  const WORD_LABELS: Partial<
+    Record<TrendInsightDto['kind'], (insight: TrendInsightDto) => string>
+  > = {
+    newHabit: () => 'Nouvelle habitude',
+    lostHabit: () => 'Habitude abandonnée',
+    subscription: insight =>
+      insight.direction === 'up' ? 'Abonnement apparu' : 'Abonnement arrêté',
+  }
+
   /** The gap the badge shows: a percentage when there is one. */
   function badgeText(insight: TrendInsightDto): string {
+    const word = WORD_BADGES[insight.kind]
+    if (word) return word(insight)
     if (insight.kind === 'uncategorized') return `${insight.current} à classer`
+    if (insight.kind === 'price') {
+      return signed(insight.delta, formatCurrency(Math.abs(insight.delta)))
+    }
     if (insight.kind === 'share') {
       return signed(insight.delta, `${Math.round(Math.abs(insight.delta))} pts`)
     }
@@ -157,18 +185,31 @@
     todo: '',
   }
 
+  /** A word badge says it all: no arrow beside it. */
+  const arrowOf = (insight: TrendInsightDto): string =>
+    WORD_BADGES[insight.kind] ? '' : ARROWS[hueOf(insight)]
+
   function badgeLabel(insight: TrendInsightDto): string {
     if (insight.kind === 'uncategorized') {
       return `${insight.current} dépenses à classer`
     }
-    const way = insight.direction === 'up' ? 'En hausse' : 'En baisse'
-    return `${way} : ${badgeText(insight)}`
+    const word = WORD_LABELS[insight.kind]
+    if (word) return word(insight)
+    const way = insight.direction === 'up' ? 'hausse' : 'baisse'
+    const what = insight.kind === 'price' ? 'Prix en' : 'En'
+    return `${what} ${way} : ${badgeText(insight)}`
   }
 
-  /** The unit's own icon, or a sign for what has none. */
+  /**
+   * The unit's own icon — a merchant's or a series' is the one of the
+   * category it is filed in, as on the recurrences screen — or a sign for
+   * what has none.
+   */
   function fallbackIcon(insight: TrendInsightDto): string {
     if (insight.unit.type === 'uncategorized') return '🏷️'
     if (insight.unit.type === 'structure') return '📊'
+    if (insight.unit.type === 'merchant') return '🏪'
+    if (insight.unit.type === 'recurrence') return '🔁'
     return '•'
   }
 
@@ -201,6 +242,17 @@
           : { ...base, rhythm: 'COMMITTED' as const }
       case 'uncategorized':
         return { ...base, categoryId: NO_CATEGORY }
+      // The page has no merchant filter: its labels, by the word they share.
+      case 'merchant':
+        return { ...base, q: unit.search ?? unit.name }
+      // The series' own lines, whatever their filing or the reading.
+      case 'recurrence':
+        return {
+          type: 'EXPENSE' as const,
+          gross: true,
+          recurrence: unit.id,
+          recurrenceLabel: unit.name,
+        }
     }
   }
 
@@ -222,8 +274,12 @@
     })
   }
 
+  /**
+   * The months before, as a second link. A series is read on the
+   * recurrences screen instead: its months before are its own history.
+   */
   const hasReference = (insight: TrendInsightDto): boolean =>
-    insight.kind !== 'uncategorized'
+    insight.kind !== 'uncategorized' && insight.unit.type !== 'recurrence'
 
   const showSkeleton = computed(() => !data.value && isLoading.value)
 </script>
@@ -381,6 +437,15 @@
               >
                 La référence
               </TransactionsLink>
+              <RouterLink
+                v-if="insight.unit.type === 'recurrence'"
+                to="/recurrences"
+                class="text-xs font-medium text-primary-700 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-primary-400"
+                :aria-label="`Voir ${insight.unit.name} dans les récurrences`"
+                data-testid="trend-recurrences-link"
+              >
+                Les récurrences
+              </RouterLink>
             </div>
           </div>
 
@@ -400,8 +465,8 @@
               :aria-label="badgeLabel(insight)"
               data-testid="trend-badge"
             >
-              <span v-if="ARROWS[hueOf(insight)]" aria-hidden="true">{{
-                ARROWS[hueOf(insight)]
+              <span v-if="arrowOf(insight)" aria-hidden="true">{{
+                arrowOf(insight)
               }}</span>
               {{ badgeText(insight) }}
             </span>

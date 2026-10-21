@@ -883,6 +883,44 @@ async function main() {
     }
   }
 
+  // ── What changes, lot 2: a subscription and a shop that are new ──────────
+  // A streaming plan taken three months ago — charged since, on the 3rd —
+  // reads as an appeared subscription (trend 9); a market greengrocer first
+  // visited the month before the last closed one, as a new habit (trend 7).
+  {
+    const closed = months.length - 2
+    for (let idx = closed - 2; idx < months.length; idx++) {
+      if (isCurrentMonth(idx) && now.getUTCDate() < 3) continue
+      const { y, m } = months[idx]
+      specs.push({
+        date: dateUTC(y, m, 3, 7),
+        description: 'PRLV SEPA DISNEY PLUS',
+        amount: -8.99,
+        type: 'EXPENSE',
+        category: 'Loisirs et culture',
+        sub: 'Streaming, musique et médias',
+        account: 'Compte Courant',
+      })
+    }
+    for (const idx of [closed - 1, closed]) {
+      const { y, m } = months[idx]
+      for (const [day, amount] of [
+        [6, -12.4],
+        [20, -11.8],
+      ]) {
+        specs.push({
+          date: dateUTC(y, m, day, 9),
+          description: 'CB PRIMEUR DU MARCHE',
+          amount,
+          type: 'EXPENSE',
+          category: 'Alimentation',
+          sub: 'Commerces de bouche et marché',
+          account: 'Compte Courant',
+        })
+      }
+    }
+  }
+
   // ── Durable purchases: filed by purpose, smoothed over their months ─────────
   // The everyday reading spreads them; the tag page never sees them, and the
   // smoothing dialog refuses an exceptional tag on them.
