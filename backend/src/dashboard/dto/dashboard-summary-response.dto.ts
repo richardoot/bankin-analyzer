@@ -298,6 +298,10 @@ export class DashboardSummaryDto {
    * cover, net of withdrawals. The leg on a savings account excluded from
    * the stats is not counted, which is what keeps one transfer from counting
    * twice while the two legs are not yet matched.
+   *
+   * Informational: where some of the money went, not what was saved. No
+   * rate reads it — a transfer moved in one lump would read a month at
+   * 122 %. The savings are `savings`.
    */
   savingsTransfers!: number
 
@@ -310,12 +314,22 @@ export class DashboardSummaryDto {
    */
   pendingReceivables!: number
 
-  /** `savingsTransfers / totalIncome`, null when there is no income. */
+  /**
+   * What the period kept: the income less every expense (exceptional ones
+   * too), net of reimbursements as the filters ask, joint divisor and
+   * stats-excluded accounts applied — the months' `income − netExpenses`,
+   * summed unrounded and rounded once to the cent, so it can sit a cent or
+   * two from `totalIncome − totalExpenses`, whose categories are each
+   * rounded. Negative on a period in deficit.
+   */
+  savings!: number
+
+  /** `savings / totalIncome`, null when there is no income. Negative in deficit. */
   savingsRate!: number | null
 
   /**
-   * What the period leaves free once the committed everyday spending and the
-   * savings are taken out of the income. Null without income.
+   * What the period leaves once the committed everyday spending is paid:
+   * `totalIncome − everydaySpendingStructure.committed`. Null without income.
    */
   remainingToLive!: number | null
 }

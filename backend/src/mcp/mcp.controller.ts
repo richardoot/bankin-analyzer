@@ -1483,9 +1483,11 @@ export class McpController {
     server.tool(
       'get_dashboard_summary',
       'Recupere le resume du dashboard avec depenses et revenus par mois et par categorie. ' +
-        'Les transferts sont exclus des depenses et des revenus ; ceux vers l epargne sont lus a part ' +
-        '(savingsTransfers). Contient aussi la structure des depenses (nature, rythme) et ce qui reste du ' +
-        '(pendingReceivables).',
+        'Les transferts sont exclus des depenses et des revenus. L epargne (savings) est revenus moins ' +
+        'depenses reelles de la periode, negative en cas de deficit ; savingsRate en est la part des revenus ; ' +
+        'remainingToLive est revenus moins depenses engagees de la vie courante. Les virements vers l epargne ' +
+        'sont lus a part (savingsTransfers), pour information seulement : ils ne portent aucun taux. ' +
+        'Contient aussi la structure des depenses (nature, rythme) et ce qui reste du (pendingReceivables).',
       {
         startDate: z
           .string()

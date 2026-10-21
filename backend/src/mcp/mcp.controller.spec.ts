@@ -485,6 +485,17 @@ describe('McpController', () => {
       expect(text).toMatch(/\n<\/user_financial_data>$/)
       expect(text).toContain('"month": "2026-01"')
     })
+
+    it('tells the model savings are income less expenses, not the transfers', async () => {
+      await registerTools()
+
+      const { description } = registeredSpecs.get('get_dashboard_summary')!
+
+      expect(description).toContain(
+        'L epargne (savings) est revenus moins depenses reelles'
+      )
+      expect(description).toContain('ils ne portent aucun taux')
+    })
   })
 
   describe('get_spending_trends tool', () => {

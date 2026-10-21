@@ -1261,20 +1261,27 @@ describe('DashboardService', () => {
         recurring: 0,
         total: 1250,
       })
-      // No transfer: nothing saved, and the free money is income less the
-      // committed everyday spending.
+      // Saved: the income less every expense, the holiday included. The
+      // free money is income less the committed everyday spending alone.
       expect(result.savingsTransfers).toBe(0)
-      expect(result.savingsRate).toBe(0)
+      expect(result.savings).toBe(1450)
+      expect(result.savingsRate).toBe(0.4833)
       expect(result.remainingToLive).toBe(2000)
     })
 
-    it('counts a transfer into savings as saved and nowhere else', async () => {
+    it('reads a transfer into savings apart, without moving the savings', async () => {
       mockPrismaService.$queryRaw
         .mockResolvedValueOnce([
           createRow({
             category_name: 'Salaire',
             type: 'INCOME',
             total_amount: 2000,
+          }),
+          createRow({
+            category_name: 'Logement',
+            total_amount: 500,
+            nature: 'ESSENTIAL',
+            rhythm: 'COMMITTED',
           }),
           createRow({
             category_name: 'Épargne de précaution',
@@ -1310,12 +1317,34 @@ describe('DashboardService', () => {
       const result = await service.getSummary(mockUserId, {})
 
       expect(result.totalIncome).toBe(2000)
-      expect(result.totalExpenses).toBe(0)
+      expect(result.totalExpenses).toBe(500)
       expect(result.incomeByCategory.map(c => c.category)).toEqual(['Salaire'])
       expect(optionNames(result.allIncomeCategories)).toEqual(['Salaire'])
+      // Where some of the money went, for information only.
       expect(result.savingsTransfers).toBe(350)
-      expect(result.savingsRate).toBe(0.175)
-      expect(result.remainingToLive).toBe(1650)
+      // What the month kept: the transfers change none of it.
+      expect(result.savings).toBe(1500)
+      expect(result.savingsRate).toBe(0.75)
+      expect(result.remainingToLive).toBe(1500)
+    })
+
+    it('reads a month in deficit as negative savings', async () => {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce([
+          createRow({
+            category_name: 'Salaire',
+            type: 'INCOME',
+            total_amount: 1000,
+          }),
+          createRow({ category_name: 'Voyage', total_amount: 1250.5 }),
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.savings).toBe(-250.5)
+      expect(result.savingsRate).toBe(-0.2505)
     })
 
     it('reports no rate and no free money without income', async () => {
@@ -1326,6 +1355,7 @@ describe('DashboardService', () => {
 
       const result = await service.getSummary(mockUserId, {})
 
+      expect(result.savings).toBe(-100)
       expect(result.savingsRate).toBeNull()
       expect(result.remainingToLive).toBeNull()
     })

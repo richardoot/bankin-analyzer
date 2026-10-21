@@ -1,3 +1,4 @@
+import { roundCents } from '../common/money'
 import {
   EFFECTIVE_RHYTHM,
   IS_RECURRING,
@@ -228,8 +229,9 @@ interface FamiliesOfYear {
 }
 
 /**
- * The transfer categories whose rows mean money set aside. Read by the
- * spending trends too (trend 15), so the two count the same savings.
+ * The transfer categories whose rows mean money set aside: what
+ * `savingsTransfers` adds up. Informational only — the savings of a period,
+ * and its rate, are what the income leaves once the expenses are paid.
  */
 export const SAVINGS_CATALOG_KEYS = new Set([
   'emergency-savings',
@@ -478,6 +480,11 @@ export class DashboardService {
     const everydayStructure = emptyStructure()
     // Money leaving the everyday accounts towards savings, net of withdrawals.
     let savingsTransfers = 0
+    // The period's income and real net expenses, unrounded: what it kept is
+    // their difference, rounded once — the months' `income − netExpenses`,
+    // not the sum of categories each rounded to the cent.
+    let periodIncome = 0
+    let periodExpenses = 0
 
     // Build aggregation data structures
     const monthlyMap = new Map<
@@ -537,9 +544,11 @@ export class DashboardService {
       const pending = shouldDeductPending ? row.pending_credit : 0
 
       // Neither expense nor income. What it says is where money went to
-      // sleep: a transfer into a savings category is counted as saved, a
-      // transfer back out (positive) as un-saved. Everything else — internal
-      // moves, joint-account top-ups, corrections — is neutral by nature.
+      // sleep: a transfer into a savings category is read as money sent
+      // there, a transfer back out (positive) as money brought back — for
+      // information, the savings themselves are income less expenses.
+      // Everything else — internal moves, joint-account top-ups,
+      // corrections — is neutral by nature.
       if (row.type === 'TRANSFER') {
         if (SAVINGS_CATALOG_KEYS.has(row.category_catalog_key ?? '')) {
           savingsTransfers -= amount
@@ -560,12 +569,14 @@ export class DashboardService {
 
       if (row.type === 'EXPENSE') {
         monthData.expenses += amount
+        periodExpenses += amount
         monthData.reimbursements += received + pending
         if (row.is_exceptional) monthData.exceptionalExpenses += amount
         addToStructure(structure, row, amount)
         if (!row.is_exceptional) addToStructure(everydayStructure, row, amount)
       } else {
         monthData.income += amount
+        periodIncome += amount
       }
       monthlyMap.set(row.month_key, monthData)
 
@@ -974,7 +985,13 @@ export class DashboardService {
       })
     )
 
-    const roundedSavings = Math.round(savingsTransfers * 100) / 100
+    const roundedSavingsTransfers = Math.round(savingsTransfers * 100) / 100
+    // What the period kept: the income less every expense, exceptional ones
+    // included, net as the months read them (`income − netExpenses`, which
+    // the trends' golden master pins). Negative on a month in deficit. A
+    // transfer to a savings account is where some of it went, not what was
+    // saved: lumps of it would read a quarter at 122 %.
+    const savings = roundCents(periodIncome - periodExpenses)
     const pendingReceivables =
       Math.round((receivableRows[0]?.pending ?? 0) * 100) / 100
     const everydayCommitted =
@@ -994,17 +1011,16 @@ export class DashboardService {
       realExpensesOfYear: familiesOfYear.realExpenses,
       spendingStructure: roundStructure(structure),
       everydaySpendingStructure: roundStructure(everydayStructure),
-      savingsTransfers: roundedSavings,
+      savingsTransfers: roundedSavingsTransfers,
       pendingReceivables,
+      savings,
       savingsRate:
         totalIncome > 0
-          ? Math.round((roundedSavings / totalIncome) * 10000) / 10000
+          ? Math.round((savings / totalIncome) * 10000) / 10000
           : null,
       remainingToLive:
         totalIncome > 0
-          ? Math.round(
-              (totalIncome - everydayCommitted - roundedSavings) * 100
-            ) / 100
+          ? Math.round((totalIncome - everydayCommitted) * 100) / 100
           : null,
     }
 

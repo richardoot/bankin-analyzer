@@ -834,7 +834,8 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — nothing de
   "periodMonths": 2,
   "realExpensesOfYear": null,
   "remainingToLive": 3600,
-  "savingsRate": 0,
+  "savings": 700,
+  "savingsRate": 0.1944,
   "savingsTransfers": 0,
   "spendingStructure": {
     "committed": 0,
@@ -1070,7 +1071,8 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — received a
   "periodMonths": 2,
   "realExpensesOfYear": null,
   "remainingToLive": 3000,
-  "savingsRate": 0,
+  "savings": 875,
+  "savingsRate": 0.2917,
   "savingsTransfers": 0,
   "spendingStructure": {
     "committed": 0,
@@ -1304,7 +1306,8 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — received d
   "periodMonths": 2,
   "realExpensesOfYear": null,
   "remainingToLive": 3000,
-  "savingsRate": 0,
+  "savings": 700,
+  "savingsRate": 0.2333,
   "savingsTransfers": 0,
   "spendingStructure": {
     "committed": 0,
@@ -1540,7 +1543,8 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — the defaul
   "periodMonths": 2,
   "realExpensesOfYear": null,
   "remainingToLive": 3000,
-  "savingsRate": 0,
+  "savings": 875,
+  "savingsRate": 0.2917,
   "savingsTransfers": 0,
   "spendingStructure": {
     "committed": 0,
