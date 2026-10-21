@@ -62,7 +62,8 @@ export class TrendsService {
     const window = filters.window ?? TREND_RULES.defaultWindow
     const reading = filters.reading ?? 'everyday'
 
-    // The committed reading joins the recurrence cache: bring it up to date.
+    // The committed reading joins the recurrence cache, and trends 9 and 10
+    // read it: bring it up to date.
     await this.recurrences.refreshQuietly(userId)
     const deductPending =
       filters.deductPendingReimbursements ??
@@ -85,9 +86,14 @@ export class TrendsService {
             deductPending,
           }
         )
+        // Trends 9 and 10 read the series the refresh above just rebuilt.
+        const recurrences = await this.recurrences.readCache(userId)
         return {
           lines: registry.lines.length,
-          trends: detectTrends(registry, { now, month, window, reading }),
+          trends: detectTrends(
+            { ...registry, recurrences },
+            { now, month, window, reading }
+          ),
         }
       }
     )

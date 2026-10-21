@@ -24,6 +24,63 @@ import type {
   SubscriptionSummaryDto,
 } from './dto'
 
+/**
+ * A series as the cache holds it, with every charge it is made of: what the
+ * spending trends read to say a subscription appeared, stopped or changed
+ * price. Dates are calendar days (`YYYY-MM-DD`), bucketed like the
+ * dashboard's months.
+ */
+export interface CachedRecurrence {
+  id: string
+  merchantKey: string
+  amountBucket: number
+  /** The user's name for it, else the one read from its labels. */
+  name: string
+  status: 'ACTIVE' | 'STOPPED' | 'CANDIDATE'
+  period: 'WEEKLY' | 'FOUR_WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
+  /** The user's share of the latest charge. */
+  amount: number
+  monthlyEquivalent: number
+  firstDate: string
+  lastDate: string
+  nextExpected: string
+  categoryId: string | null
+  subcategoryId: string | null
+  /** Oldest first. */
+  charges: Array<{
+    transactionId: string
+    date: string
+    /** What the bank charged, positive: what a price is read on. */
+    amount: number
+    /** The user's share of it, the account's divisor applied. */
+    share: number
+  }>
+}
+
+interface CachedRecurrenceRow {
+  id: string
+  merchant_key: string
+  amount_bucket: number
+  name: string
+  status: CachedRecurrence['status']
+  period: CachedRecurrence['period']
+  amount: number
+  monthly_equivalent: number
+  first_date: string
+  last_date: string
+  next_expected: string
+  category_id: string | null
+  subcategory_id: string | null
+}
+
+interface CachedChargeRow {
+  recurrence_id: string
+  transaction_id: string
+  date: string
+  amount: number
+  share: number
+}
+
 function roundCents(value: number): number {
   return Math.round(value * 100) / 100
 }
@@ -73,6 +130,74 @@ export class RecurrencesService {
         error instanceof Error ? error.stack : String(error)
       )
     }
+  }
+
+  /**
+   * The cache as it stands, every series with its charges, without
+   * refreshing it: the caller decides (the trends refresh first, a dry run
+   * on a read-only connection cannot).
+   */
+  async readCache(userId: string): Promise<CachedRecurrence[]> {
+    const rows = await this.prisma.$queryRaw<CachedRecurrenceRow[]>(Prisma.sql`
+      SELECT
+        r.id,
+        r.merchant_key,
+        r.amount_bucket,
+        COALESCE(NULLIF(r.name, ''), r.label) AS name,
+        r.status::text AS status,
+        r.period::text AS period,
+        r.amount::float AS amount,
+        r.monthly_equivalent::float AS monthly_equivalent,
+        TO_CHAR(r.first_date, 'YYYY-MM-DD') AS first_date,
+        TO_CHAR(r.last_date, 'YYYY-MM-DD') AS last_date,
+        TO_CHAR(r.next_expected, 'YYYY-MM-DD') AS next_expected,
+        r.category_id,
+        r.subcategory_id
+      FROM app.recurrences r
+      WHERE r.user_id = ${userId}
+      ORDER BY r.merchant_key, r.amount_bucket
+    `)
+    const charges = await this.prisma.$queryRaw<CachedChargeRow[]>(Prisma.sql`
+      SELECT
+        rt.recurrence_id,
+        t.id AS transaction_id,
+        TO_CHAR(t.date, 'YYYY-MM-DD') AS date,
+        ABS(t.amount)::float AS amount,
+        (ABS(t.amount) / COALESCE(NULLIF(a.divisor, 0), 1))::float AS share
+      FROM app.recurrence_transactions rt
+      JOIN app.recurrences r ON r.id = rt.recurrence_id
+      JOIN app.transactions t ON t.id = rt.transaction_id
+      LEFT JOIN app.accounts a ON a.id = t.account_id
+      WHERE r.user_id = ${userId}
+      ORDER BY t.date, t.id
+    `)
+    const byRecurrence = new Map<string, CachedRecurrence['charges']>()
+    for (const charge of charges) {
+      const list = byRecurrence.get(charge.recurrence_id) ?? []
+      list.push({
+        transactionId: charge.transaction_id,
+        date: charge.date,
+        amount: Number(charge.amount),
+        share: roundCents(Number(charge.share)),
+      })
+      byRecurrence.set(charge.recurrence_id, list)
+    }
+    return rows.map(row => ({
+      id: row.id,
+      merchantKey: row.merchant_key,
+      amountBucket: Number(row.amount_bucket),
+      name: row.name,
+      status: row.status,
+      period: row.period,
+      amount: Number(row.amount),
+      monthlyEquivalent: Number(row.monthly_equivalent),
+      firstDate: row.first_date,
+      lastDate: row.last_date,
+      nextExpected: row.next_expected,
+      categoryId: row.category_id,
+      subcategoryId: row.subcategory_id,
+      charges: byRecurrence.get(row.id) ?? [],
+    }))
   }
 
   async list(userId: string): Promise<RecurrenceListDto> {

@@ -37,16 +37,20 @@
  *    gone this month after five of the six before. A variable subcategory
  *    gone the same way says it too. The lines of a recurrence never make a
  *    habit, nor do committed, exceptional or smoothed ones.
- * 6. Selection: scored by the gap in euros, a subcategory replaces its
+ * 6. Recurrences (the catalogue's 9 and 10), read from the recurrence cache
+ *    the caller passes: a series that appeared or stopped over the last three
+ *    months, or changed price. An amount trend whose gap is 80 % recurrence
+ *    lines gives way to them; without one, it stays neutral.
+ * 7. Selection: scored by the gap in euros, a subcategory replaces its
  *    category when it explains 70 % of the category's gap, the category its
  *    subcategories otherwise; a merchant and its unit the same way. Merchants
- *    are units of their own, outside the sum of a month.
+ *    and recurrences are units of their own, outside the sum of a month.
  *
  * ## What it refuses to do
  *
  * Compare the current month (two thirds of a month is always « en baisse »),
  * judge a rise, or call a drop a success anywhere but on a pleasure and
- * variable unit.
+ * variable unit — never on a recurring charge, which is undergone.
  *
  * Pure: no database, no clock. The caller passes the registry and the moment
  * of reading.
@@ -108,6 +112,23 @@ export const TREND_RULES = {
    * `referenceMonths` before the month read, none in it.
    */
   lostHabit: { referenceMonths: 6, minPresentMonths: 5 },
+  /**
+   * Trends 9 and 10: what a recurrence did over the last `months` months
+   * (the month read included) — appeared, stopped, changed price.
+   */
+  recurrence: { months: 3 },
+  /**
+   * Trend 10: the previous price held for at least this many charges in a
+   * row. A bill that differs every month (electricity) has no price to
+   * change.
+   */
+  price: { stableCharges: 2 },
+  /**
+   * An amount trend (1) whose gap comes this much from recurrence lines is
+   * a charge, not a behaviour: it gives way to the recurrence's 9 or 10, and
+   * without one it is never told as « vous avez réduit ».
+   */
+  recurringShare: 0.8,
   /** How far back the card's month selector goes, in closed months. */
   selectableMonths: 24,
 } as const
@@ -125,8 +146,15 @@ export type TrendKind =
   | 'uncategorized'
   | 'newHabit'
   | 'lostHabit'
+  | 'subscription'
+  | 'price'
 export type TrendUnitType =
-  'category' | 'subcategory' | 'structure' | 'uncategorized' | 'merchant'
+  | 'category'
+  | 'subcategory'
+  | 'structure'
+  | 'uncategorized'
+  | 'merchant'
+  | 'recurrence'
 export type TrendDirection = 'up' | 'down'
 export type TrendTone = 'neutral' | 'success'
 
@@ -152,6 +180,39 @@ export interface TrendLine {
   isExceptional: boolean
   /** The bank label: what a merchant is read from (`merchantKey`). */
   description: string
+}
+
+export type TrendRecurrencePeriod =
+  'WEEKLY' | 'FOUR_WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
+
+/**
+ * A series of the recurrence cache (`RecurrencesService.readCache`), with
+ * its charges: what trends 9 and 10 read.
+ */
+export interface TrendRecurrence {
+  id: string
+  merchantKey: string
+  amountBucket: number
+  /** The service's name: the user's, else the one read from its labels. */
+  name: string
+  status: 'ACTIVE' | 'STOPPED' | 'CANDIDATE'
+  period: TrendRecurrencePeriod
+  /** The user's share of the latest charge. */
+  amount: number
+  monthlyEquivalent: number
+  /** `YYYY-MM-DD`. */
+  firstDate: string
+  lastDate: string
+  nextExpected: string
+  categoryId: string | null
+  subcategoryId: string | null
+  /** Oldest first: `amount` as the bank charged it, `share` the user's part. */
+  charges: Array<{
+    transactionId: string
+    date: string
+    amount: number
+    share: number
+  }>
 }
 
 /** A smoothed purchase, with its slices over the span. */
@@ -191,6 +252,11 @@ export interface TrendRegistry {
   subcategories: TrendSubcategory[]
   /** `YYYY-MM-DD` of the user's first transaction, null without any. */
   historyStart: string | null
+  /**
+   * The recurrence cache, for trends 9 and 10. Read apart from the ledger
+   * (`RecurrencesService.readCache`); none, and the two are silent.
+   */
+  recurrences?: TrendRecurrence[]
 }
 
 export interface DetectTrendsOptions {
@@ -386,6 +452,8 @@ export interface UnitMonth {
   count: number
   /** What those lines cost, for the basket. */
   countedAmount: number
+  /** What the recurrence lines cost: how much of a gap is a charge's. */
+  recurringAmount: number
 }
 
 /** One month, read the way the dashboard reads it. */
@@ -420,14 +488,21 @@ function addToUnit(
   month: MonthAggregate,
   key: string,
   amount: number,
-  counted: boolean
+  counted: boolean,
+  recurring: boolean
 ): void {
-  const unit = month.units.get(key) ?? { amount: 0, count: 0, countedAmount: 0 }
+  const unit = month.units.get(key) ?? {
+    amount: 0,
+    count: 0,
+    countedAmount: 0,
+    recurringAmount: 0,
+  }
   unit.amount += amount
   if (counted) {
     unit.count += 1
     unit.countedAmount += amount
   }
+  if (recurring) unit.recurringAmount += amount
   month.units.set(key, unit)
 }
 
@@ -441,6 +516,8 @@ function addEntry(
     rhythm: TrendRhythm | null
     /** Feeds a frequency and a basket. */
     counted: boolean
+    /** A line of a recurrence. */
+    recurring: boolean
   }
 ): void {
   month.total += entry.amount
@@ -450,13 +527,20 @@ function addEntry(
     month.uncategorized += entry.amount
     return
   }
-  addToUnit(month, categoryKey(entry.categoryId), entry.amount, entry.counted)
+  addToUnit(
+    month,
+    categoryKey(entry.categoryId),
+    entry.amount,
+    entry.counted,
+    entry.recurring
+  )
   if (entry.subcategoryId) {
     addToUnit(
       month,
       subcategoryKey(entry.subcategoryId),
       entry.amount,
-      entry.counted
+      entry.counted,
+      entry.recurring
     )
   }
 }
@@ -492,6 +576,7 @@ export function aggregateMonths(
       nature: line.nature,
       rhythm: line.rhythm,
       counted: !line.isRecurring,
+      recurring: line.isRecurring,
     })
   }
 
@@ -508,6 +593,7 @@ export function aggregateMonths(
           rhythm: SLICE_RHYTHM,
           // A slice is not a visit to the shop.
           counted: false,
+          recurring: false,
         })
       }
     }
@@ -802,6 +888,16 @@ export function detectTrends(
     (categoryId ? categories.get(categoryId)?.icon : null) ??
     null
 
+  // Trends 9 and 10 first: an amount trend a charge explains gives way to
+  // them, so which units they cover must be known before the units are read.
+  const charges = recurrenceInsights(registry, {
+    month,
+    seriesMonths,
+    historyStart: registry.historyStart,
+    iconOf,
+  })
+  candidates.push(...charges.insights)
+
   const unitOf = (key: string): UnitMonth | undefined => current.units.get(key)
   const keys = new Set<string>()
   for (const m of [month, ...referenceMonths]) {
@@ -830,7 +926,12 @@ export function detectTrends(
     const rhythm = (isSub ? sub?.rhythm : category?.rhythm) ?? null
     const parentCategoryId = isSub ? (sub?.categoryId ?? null) : null
 
-    const cur = unitOf(key) ?? { amount: 0, count: 0, countedAmount: 0 }
+    const cur = unitOf(key) ?? {
+      amount: 0,
+      count: 0,
+      countedAmount: 0,
+      recurringAmount: 0,
+    }
     const refAmounts = referenceMonths.map(
       m => at(m).units.get(key)?.amount ?? 0
     )
@@ -844,12 +945,22 @@ export function detectTrends(
       parentCategoryId,
       amountDelta,
     }
+    // How much of the gap the recurrence lines make: past 80 %, a charge
+    // moved, not a habit — trend 9 or 10 says it, or a neutral sentence.
+    const refRecurring = reference(
+      referenceMonths.map(m => at(m).units.get(key)?.recurringAmount ?? 0)
+    )
+    const recurringDelta = cur.recurringAmount - refRecurring
+    const chargeDriven =
+      amountDelta !== 0 &&
+      recurringDelta / amountDelta >= TREND_RULES.recurringShare
+    const givesWay = chargeDriven && charges.covered.has(key)
     const pushAmount = (): void => {
-      candidates.push(amountInsight())
+      if (!givesWay) candidates.push(amountInsight())
     }
     const amountInsight = (): Candidate => {
       const direction: TrendDirection = amountDelta >= 0 ? 'up' : 'down'
-      const tone = toneOf(direction, nature, rhythm)
+      const tone = chargeDriven ? 'neutral' : toneOf(direction, nature, rhythm)
       return {
         ...base,
         kind: 'amount',
@@ -1433,6 +1544,199 @@ function merchantInsights(
     })
   }
   return candidates
+}
+
+/* ------------------------------------------------------------------ */
+/* Recurrences (trends 9 and 10)                                       */
+/* ------------------------------------------------------------------ */
+
+const PERIOD_TEXT: Record<TrendRecurrencePeriod, string> = {
+  WEEKLY: 'par semaine',
+  FOUR_WEEKLY: 'toutes les 4 semaines',
+  MONTHLY: 'par mois',
+  QUARTERLY: 'par trimestre',
+  YEARLY: 'par an',
+}
+
+/** A price to the cent: « 44,99 € », « 1 240,00 € ». */
+export function formatPrice(value: number): string {
+  const [whole, decimals] = Math.abs(value).toFixed(2).split('.')
+  const grouped = (whole ?? '0').replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+  return `${value < 0 ? MINUS : ''}${grouped},${decimals ?? '00'} €`
+}
+
+type Charge = TrendRecurrence['charges'][number]
+
+/** Consecutive charges at the same price to the cent, oldest first. */
+function priceRuns(charges: Charge[]): Charge[][] {
+  const runs: Charge[][] = []
+  for (const charge of charges) {
+    const run = runs[runs.length - 1]
+    const last = run?.[run.length - 1]
+    if (run && last && Math.abs(last.amount - charge.amount) < 0.005) {
+      run.push(charge)
+    } else {
+      runs.push([charge])
+    }
+  }
+  return runs
+}
+
+/**
+ * Trends 9 and 10: the recurrence cache over the last three months. A
+ * series appeared (its first charge in them, with history before to prove
+ * it new), stopped (the charge it was due in them never came) or changed
+ * price (a price held for two charges, then another). One line per series,
+ * in that order; never a reproach — a dearer charge is undergone, not
+ * decided. Scored by what the series weighs in a month (Δ monthly
+ * equivalent for a price), on the same scale as an amount trend's gap.
+ *
+ * `covered` is every category and subcategory unit a line here speaks for:
+ * an amount trend there that a charge explains gives way.
+ */
+function recurrenceInsights(
+  registry: TrendRegistry,
+  input: {
+    month: string
+    seriesMonths: string[]
+    historyStart: string | null
+    iconOf: (
+      categoryId: string | null,
+      subcategoryId: string | null
+    ) => string | null
+  }
+): { insights: Candidate[]; covered: Set<string> } {
+  const { month, seriesMonths } = input
+  const recent = monthsBetween(
+    addMonths(month, -(TREND_RULES.recurrence.months - 1)),
+    month
+  )
+  const first = recent[0] ?? month
+  const firstObservable = input.historyStart
+    ? firstCompleteMonth(input.historyStart)
+    : month
+  const end = lastDayOf(month)
+  const insights: Candidate[] = []
+  const covered = new Set<string>()
+
+  const recurrences = [...(registry.recurrences ?? [])].sort(
+    (a, b) =>
+      a.merchantKey.localeCompare(b.merchantKey) ||
+      a.amountBucket - b.amountBucket
+  )
+  for (const r of recurrences) {
+    if (r.status === 'CANDIDATE') continue
+    const upTo = r.charges.filter(c => c.date <= end)
+    const latest = upTo[upTo.length - 1]
+    if (!latest) continue
+    const perMonth = r.amount > 0 ? r.monthlyEquivalent / r.amount : 1
+    const monthly = latest.share * perMonth
+    const period = PERIOD_TEXT[r.period]
+    const series = seriesMonths.map(m =>
+      cents(
+        r.charges
+          .filter(c => c.date.startsWith(m))
+          .reduce((sum, c) => sum + c.share, 0)
+      )
+    )
+    const unit: TrendUnit = {
+      type: 'recurrence',
+      // The Transactions page's `recurrence` filter, as the list builds it.
+      id: `${r.amountBucket}:${r.merchantKey}`,
+      categoryId: r.categoryId,
+      name: r.name,
+      icon: input.iconOf(r.categoryId, r.subcategoryId),
+    }
+    const base = {
+      unit,
+      tone: 'neutral' as const,
+      series,
+      parentCategoryId: null,
+      amountDelta: 0,
+    }
+    const firstMonth = r.firstDate.slice(0, 7)
+    const lastMonth = latest.date.slice(0, 7)
+    const recentWindows = {
+      current: { start: `${first}-01`, end },
+      reference: {
+        start: `${addMonths(first, -recent.length)}-01`,
+        end: lastDayOf(addMonths(first, -1)),
+      },
+    }
+
+    let insight: Candidate | null = null
+    if (
+      r.status === 'STOPPED' &&
+      recent.includes(r.nextExpected.slice(0, 7)) &&
+      r.lastDate <= end
+    ) {
+      insight = {
+        ...base,
+        kind: 'subscription',
+        direction: 'down',
+        current: 0,
+        reference: cents(monthly),
+        delta: cents(-monthly),
+        deltaPct: null,
+        sentence: `Abonnement arrêté : ${r.name}, ${formatPrice(latest.share)} ${period}, dernier prélèvement en ${monthIn(lastMonth, month)}.`,
+        windows: recentWindows,
+        score: cents(monthly),
+      }
+    } else if (recent.includes(firstMonth) && firstMonth > firstObservable) {
+      insight = {
+        ...base,
+        kind: 'subscription',
+        direction: 'up',
+        current: cents(monthly),
+        reference: 0,
+        delta: cents(monthly),
+        deltaPct: null,
+        sentence: `Nouvel abonnement : ${r.name}, ${formatPrice(latest.share)} ${period} depuis ${monthIn(firstMonth, month)}.`,
+        windows: recentWindows,
+        score: cents(monthly),
+      }
+    } else if (r.status === 'ACTIVE') {
+      const runs = priceRuns(upTo)
+      const now = runs[runs.length - 1]
+      const before = runs[runs.length - 2]
+      const since = now?.[0]
+      const was = before?.[before.length - 1]
+      if (
+        now &&
+        before &&
+        since &&
+        was &&
+        before.length >= TREND_RULES.price.stableCharges &&
+        recent.includes(since.date.slice(0, 7))
+      ) {
+        const delta = latest.share - was.share
+        insight = {
+          ...base,
+          kind: 'price',
+          direction: delta >= 0 ? 'up' : 'down',
+          current: cents(latest.share),
+          reference: cents(was.share),
+          delta: cents(delta),
+          deltaPct: was.share > 0 ? tenths((delta / was.share) * 100) : null,
+          sentence: `${r.name} : ${formatPrice(latest.share)} ${period} depuis ${monthIn(since.date.slice(0, 7), month)}, contre ${formatPrice(was.share)}.`,
+          windows: {
+            current: { start: `${since.date.slice(0, 7)}-01`, end },
+            reference: {
+              start: `${(before[0]?.date ?? was.date).slice(0, 7)}-01`,
+              end: lastDayOf(was.date.slice(0, 7)),
+            },
+          },
+          // What the new price changes in a month.
+          score: cents(Math.abs(delta) * perMonth),
+        }
+      }
+    }
+    if (!insight) continue
+    insights.push(insight)
+    if (r.categoryId) covered.add(categoryKey(r.categoryId))
+    if (r.subcategoryId) covered.add(subcategoryKey(r.subcategoryId))
+  }
+  return { insights, covered }
 }
 
 /** What the card says when no habit moved. */

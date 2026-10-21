@@ -3,7 +3,10 @@ import { Test } from '@nestjs/testing'
 import { BadRequestException } from '@nestjs/common'
 import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 import { PrismaService } from '../prisma/prisma.service'
-import { RecurrencesService } from '../recurrences/recurrences.service'
+import {
+  RecurrencesService,
+  type CachedRecurrence,
+} from '../recurrences/recurrences.service'
 import { AmortizedSlicesService } from '../transactions/amortized-slices.service'
 import { TrendsService } from './trends.service'
 
@@ -63,6 +66,10 @@ describe('TrendsService', () => {
       calls.push('refresh')
       return Promise.resolve()
     }),
+    readCache: vi.fn((): Promise<CachedRecurrence[]> => {
+      calls.push('recurrences')
+      return Promise.resolve([])
+    }),
   }
   const filterPreferences = { deductsPendingByDefault: vi.fn() }
   const amortizedSlices = { read: vi.fn() }
@@ -110,11 +117,45 @@ describe('TrendsService', () => {
     service = module.get(TrendsService)
   })
 
-  it('brings the recurrences up to date before reading the registry', async () => {
+  it('brings the recurrences up to date before reading the registry and the series', async () => {
     await service.getTrends('user-1', {}, now)
 
-    expect(calls).toEqual(['refresh', 'lines'])
+    expect(calls).toEqual(['refresh', 'lines', 'recurrences'])
     expect(recurrences.refreshQuietly).toHaveBeenCalledWith('user-1')
+    expect(recurrences.readCache).toHaveBeenCalledWith('user-1')
+  })
+
+  it('reads a subscription that appeared out of the recurrence cache (trend 9)', async () => {
+    const charge = (date: string): CachedRecurrence['charges'][number] => ({
+      transactionId: `gym-${date}`,
+      date,
+      amount: 29.99,
+      share: 29.99,
+    })
+    recurrences.readCache.mockResolvedValueOnce([
+      {
+        id: 'rec-1',
+        merchantKey: 'basic fit',
+        amountBucket: 30,
+        name: 'Basic Fit',
+        status: 'ACTIVE',
+        period: 'MONTHLY',
+        amount: 29.99,
+        monthlyEquivalent: 29.99,
+        firstDate: '2026-07-03',
+        lastDate: '2026-09-03',
+        nextExpected: '2026-10-03',
+        categoryId: 'restaurants',
+        subcategoryId: null,
+        charges: ['2026-07-03', '2026-08-03', '2026-09-03'].map(charge),
+      },
+    ])
+
+    const result = await service.getTrends('user-1', {}, now)
+
+    expect(result.insights.map(i => i.sentence)).toContain(
+      'Nouvel abonnement : Basic Fit, 29,99 € par mois depuis juillet.'
+    )
   })
 
   it('reads the last closed month against its habit, in the everyday reading', async () => {

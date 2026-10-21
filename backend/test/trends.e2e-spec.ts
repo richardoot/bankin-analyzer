@@ -189,6 +189,14 @@ describe('Trends (e2e)', () => {
         settledAt: new Date(),
       },
     })
+    // A subscription that appeared over the last three closed months: its
+    // lines are a recurrence's, trend 9 reads it out of the cache.
+    for (const month of MONTHS.slice(-3)) {
+      await line(month, 3, 29.99, {
+        subcategory: tech,
+        label: 'PRLV BASIC FIT',
+      })
+    }
     // The month under way: never read.
     await line(CURRENT, 2, 2000, { subcategory: restaurant })
   }
@@ -236,6 +244,21 @@ describe('Trends (e2e)', () => {
     expect(restaurant?.series).toHaveLength(7)
     // The restaurant is one merchant, all of it: the subcategory speaks.
     expect(body.insights.some(i => i.unit.type === 'merchant')).toBe(false)
+  })
+
+  it('reads a subscription that appeared out of the recurrence cache it refreshed first', async () => {
+    const body = (await trends()).body as TrendsResponseDto
+    const gym = body.insights.find(i => i.kind === 'subscription')
+
+    expect(gym).toMatchObject({
+      unit: { type: 'recurrence', id: '30:basic fit', name: 'Basic Fit' },
+      direction: 'up',
+      tone: 'neutral',
+      deltaPct: null,
+    })
+    expect(gym?.sentence).toMatch(
+      /^Nouvel abonnement : Basic Fit, 29,99 € par mois depuis \S+/
+    )
   })
 
   it('takes the window and the reading from the query', async () => {

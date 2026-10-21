@@ -8,6 +8,8 @@ import type {
   TrendCategory,
   TrendLine,
   TrendNature,
+  TrendRecurrence,
+  TrendRecurrencePeriod,
   TrendRegistry,
   TrendRhythm,
   TrendSmoothedPurchase,
@@ -157,7 +159,8 @@ export const HABIT: MonthPlan = {
 export function registry(
   lines: TrendLine[],
   smoothed: TrendSmoothedPurchase[] = [],
-  historyStart: string | null = HISTORY_START
+  historyStart: string | null = HISTORY_START,
+  recurrences: TrendRecurrence[] = []
 ): TrendRegistry {
   return {
     lines,
@@ -165,7 +168,80 @@ export function registry(
     categories: CATEGORIES,
     subcategories: SUBCATEGORIES,
     historyStart,
+    recurrences,
   }
+}
+
+const PER_MONTH: Record<TrendRecurrencePeriod, number> = {
+  WEEKLY: 52 / 12,
+  FOUR_WEEKLY: 13 / 12,
+  MONTHLY: 1,
+  QUARTERLY: 1 / 3,
+  YEARLY: 1 / 12,
+}
+
+/**
+ * A series of the recurrence cache, built from its charges (`date`, price)
+ * the way detection writes it: latest amount, first and last dates, the
+ * next one a period after the last. Divisor 1: the share is the price.
+ */
+export function recurrence(input: {
+  name: string
+  merchantKey: string
+  subcategoryId: string
+  status?: TrendRecurrence['status']
+  period?: TrendRecurrencePeriod
+  charges: Array<[date: string, amount: number]>
+  nextExpected?: string
+}): TrendRecurrence {
+  const sub = subById.get(input.subcategoryId)
+  if (!sub) throw new Error(`Unknown subcategory ${input.subcategoryId}`)
+  const period = input.period ?? 'MONTHLY'
+  const charges = input.charges.map(([date, amount]) => ({
+    transactionId: `${input.merchantKey}-${date}`,
+    date,
+    amount,
+    share: amount,
+  }))
+  const first = charges[0]
+  const last = charges[charges.length - 1]
+  if (!first || !last) throw new Error('A series has charges')
+  const next = new Date(`${last.date}T00:00:00.000Z`)
+  next.setUTCMonth(next.getUTCMonth() + 1)
+  return {
+    id: `rec-${input.merchantKey}`,
+    merchantKey: input.merchantKey,
+    amountBucket: Math.round(last.amount),
+    name: input.name,
+    status: input.status ?? 'ACTIVE',
+    period,
+    amount: last.amount,
+    monthlyEquivalent: Math.round(last.amount * PER_MONTH[period] * 100) / 100,
+    firstDate: first.date,
+    lastDate: last.date,
+    nextExpected: input.nextExpected ?? next.toISOString().slice(0, 10),
+    categoryId: sub.categoryId,
+    subcategoryId: sub.id,
+    charges,
+  }
+}
+
+/** The lines of a series, as the ledger holds them: recurring, committed. */
+export function recurrenceLines(series: TrendRecurrence): TrendLine[] {
+  const sub = subById.get(series.subcategoryId ?? '')
+  if (!sub) throw new Error(`Unknown subcategory ${series.subcategoryId}`)
+  return series.charges.map(charge => ({
+    id: charge.transactionId,
+    date: charge.date,
+    amount: charge.share,
+    categoryId: sub.categoryId,
+    subcategoryId: sub.id,
+    nature: sub.nature,
+    rhythm: 'COMMITTED',
+    isRecurring: true,
+    isExceptional: false,
+    description: `PRLV ${series.merchantKey.toUpperCase()}`,
+  }))
 }
 
 /** Every month of the history spends the habit; `september` replaces the last. */

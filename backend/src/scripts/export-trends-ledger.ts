@@ -9,7 +9,7 @@
  * each reference window (3, 6 and 12 months) in the everyday reading: every
  * trend that passes its thresholds, the five the card would show, and the
  * same detection on a mean instead of a median, to confirm the choice on real
- * data; and apart, every trend of lot 2 (merchants). It also
+ * data; and apart, every trend of lot 2 (merchants, recurrences). It also
  * checks each month's total against the dashboard's `getSummary`, the
  * golden master lot 1 pins down.
  *
@@ -18,7 +18,8 @@
  * With `--ledgers <dir>`: one anonymised ledger per real user (the demo
  * account is skipped), for `src/trends/trend.ledgers.spec.ts`. Dates and net
  * amounts are kept; labels go through the recurrence export's keyed
- * pseudonyms, the names of categories and subcategories the user made up
+ * pseudonyms, and so do the recurrence cache's merchant keys and service
+ * names; the names of categories and subcategories the user made up
  * too; ids are renumbered. The replay of the anonymised ledger must find the
  * same trends as the real one, or nothing is written.
  *
@@ -41,7 +42,7 @@ import { DashboardService } from '../dashboard/dashboard.service'
 import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 import { PrismaClient } from '../generated/prisma'
 import type { PrismaService } from '../prisma/prisma.service'
-import type { RecurrencesService } from '../recurrences/recurrences.service'
+import { RecurrencesService } from '../recurrences/recurrences.service'
 import { AmortizedSlicesService } from '../transactions/amortized-slices.service'
 import {
   TREND_RULES,
@@ -82,7 +83,7 @@ export function parseArgs(argv: string[]): ScriptOptions {
   return options
 }
 
-/** The anonymised ledger the snapshot test replays. */
+/** The anonymised ledger the snapshot test replays, recurrences included. */
 export interface TrendLedger {
   /** `YYYY-MM-DD`: the moment of reading the replay pins. */
   readAt: string
@@ -147,7 +148,9 @@ function brief(i: TrendInsight): Record<string, unknown> {
 }
 
 const isLot2 = (i: TrendInsight): boolean =>
-  i.unit.type === 'merchant' || i.kind === 'lostHabit'
+  i.unit.type === 'merchant' ||
+  i.unit.type === 'recurrence' ||
+  i.kind === 'lostHabit'
 
 const identity = (i: TrendInsight): string =>
   `${i.kind}|${i.unit.type}|${i.unit.id}`
@@ -194,6 +197,20 @@ function anonymize(
         categoryId: maybe(line.categoryId, 'cat'),
         subcategoryId: maybe(line.subcategoryId, 'sub'),
       })),
+      // The same pseudonyms as the labels: a merchant key stays the words
+      // of its labels, a service's name the words it was read from.
+      recurrences: (registry.recurrences ?? []).map(r => ({
+        ...r,
+        id: renumber(r.id, 'rec'),
+        merchantKey: anonymizeLabel(r.merchantKey, pseudonym),
+        name: anonymizeLabel(r.name, pseudonym),
+        categoryId: maybe(r.categoryId, 'cat'),
+        subcategoryId: maybe(r.subcategoryId, 'sub'),
+        charges: r.charges.map(c => ({
+          ...c,
+          transactionId: renumber(c.transactionId, 't'),
+        })),
+      })),
       smoothed: registry.smoothed.map(p => ({
         ...p,
         transactionId: renumber(p.transactionId, 't'),
@@ -215,10 +232,12 @@ export async function main(
   const prismaService = prisma as unknown as PrismaService
   const amortizedSlices = new AmortizedSlicesService(prismaService)
   const filterPreferences = new FilterPreferencesService(prismaService)
-  // Read-only: the dashboard reads the recurrence cache as it stands.
+  // Read-only: the dashboard and the trends read the recurrence cache as it
+  // stands — a refresh writes.
   const recurrences = {
     refreshQuietly: () => Promise.resolve(),
   } as unknown as RecurrencesService
+  const recurrenceCache = new RecurrencesService(prismaService)
   const dashboard = new DashboardService(
     prismaService,
     filterPreferences,
@@ -246,13 +265,16 @@ export async function main(
     const deductPending = await filterPreferences.deductsPendingByDefault(
       user.id
     )
-    const registry = await readTrendRegistry(prisma, amortizedSlices, {
-      userId: user.id,
-      firstMonth,
-      lastMonth,
-      deductReceived: true,
-      deductPending,
-    })
+    const registry: TrendRegistry = {
+      ...(await readTrendRegistry(prisma, amortizedSlices, {
+        userId: user.id,
+        firstMonth,
+        lastMonth,
+        deductReceived: true,
+        deductPending,
+      })),
+      recurrences: await recurrenceCache.readCache(user.id),
+    }
     log(
       `${user.email}: ${registry.lines.length} expense lines ${firstMonth}..${lastMonth}, ` +
         `history from ${registry.historyStart ?? '—'}`
@@ -275,7 +297,7 @@ export async function main(
           count: result.insights.length,
           shown: result.insights.slice(0, TREND_RULES.shown).map(brief),
           rest: result.insights.slice(TREND_RULES.shown).map(brief),
-          // Lot 2: merchants (6 to 8), shown or not.
+          // Lot 2: merchants (6 to 8) and recurrences (9, 10), shown or not.
           lot2: result.insights.filter(isLot2).map(brief),
         }
         medianVsMean[window] = {

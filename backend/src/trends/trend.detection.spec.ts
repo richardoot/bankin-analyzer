@@ -11,6 +11,7 @@ import {
   type TrendInsight,
   type TrendLine,
   type TrendReading,
+  type TrendRecurrence,
   type TrendRegistry,
   type TrendWindow,
   type TrendsResult,
@@ -25,6 +26,8 @@ import {
   CATEGORIES,
   ledger,
   monthLines,
+  recurrence,
+  recurrenceLines,
   registry,
   times,
 } from './trend.fixtures'
@@ -844,9 +847,214 @@ describe('detectTrends — merchants (trends 6 to 8)', () => {
   })
 })
 
-describe('detectTrends — merchants beside the habits', () => {
+describe('detectTrends — recurrences (trends 9 and 10)', () => {
+  const monthly = (
+    from: string,
+    to: string,
+    amount: number,
+    day = '03'
+  ): Array<[string, number]> => {
+    const charges: Array<[string, number]> = []
+    for (const m of MONTHS) {
+      if (m >= from && m <= to) charges.push([`${m}-${day}`, amount])
+    }
+    return charges
+  }
+
+  it('reads a subscription that appeared in the last three months (trend 9)', () => {
+    const gym = recurrence({
+      name: 'Basic Fit',
+      merchantKey: 'basic fit',
+      subcategoryId: 'lessons',
+      period: 'FOUR_WEEKLY',
+      charges: [
+        ['2026-07-03', 29.99],
+        ['2026-07-31', 29.99],
+        ['2026-08-28', 29.99],
+        ['2026-09-25', 29.99],
+      ],
+    })
+    const reg = registry(
+      [...ledger(), ...recurrenceLines(gym)],
+      [],
+      undefined,
+      [gym]
+    )
+    const insight = detect(reg).insights.find(i => i.kind === 'subscription')
+
+    expect(insight).toMatchObject({
+      unit: {
+        type: 'recurrence',
+        id: '30:basic fit',
+        categoryId: 'leisure',
+        name: 'Basic Fit',
+        icon: 'icon-leisure',
+      },
+      direction: 'up',
+      tone: 'neutral',
+      current: 32.49,
+      reference: 0,
+      deltaPct: null,
+      score: 32.49,
+      sentence:
+        'Nouvel abonnement : Basic Fit, 29,99 € toutes les 4 semaines depuis juillet.',
+    })
+  })
+
+  it('reads a subscription whose due charge never came as stopped, and an amount it explains gives way', () => {
+    const piano = recurrence({
+      name: 'Simply Piano',
+      merchantKey: 'simply piano',
+      subcategoryId: 'lessons',
+      status: 'STOPPED',
+      charges: monthly('2025-09', '2026-06', 150),
+    })
+    const lines = [...ledger(), ...recurrenceLines(piano)]
+    const insights = detect(registry(lines, [], undefined, [piano])).insights
+
+    expect(insights.find(i => i.kind === 'subscription')).toMatchObject({
+      direction: 'down',
+      tone: 'neutral',
+      current: 0,
+      reference: 150,
+      score: 150,
+      sentence:
+        'Abonnement arrêté : Simply Piano, 150,00 € par mois, dernier prélèvement en juin.',
+    })
+    // « Cours : vous avez réduit, rien contre 150 € » was the charge: gone.
+    expect(insightOf(insights, 'lessons')).toBeUndefined()
+    expect(insightOf(insights, 'leisure')).toBeUndefined()
+  })
+
+  it('never says « vous avez réduit » of an amount a charge explains, even without its recurrence', () => {
+    const piano = recurrence({
+      name: 'Simply Piano',
+      merchantKey: 'simply piano',
+      subcategoryId: 'lessons',
+      status: 'STOPPED',
+      charges: monthly('2025-09', '2026-06', 150),
+    })
+    const lines = [...ledger(), ...recurrenceLines(piano)]
+    // The cache unread: the amount trend stays, in a neutral sentence.
+    const insights = detect(registry(lines)).insights
+    const lessons = insights.find(
+      i => i.unit.id === 'lessons' || i.unit.id === 'leisure'
+    )
+
+    expect(lessons).toMatchObject({ kind: 'amount', tone: 'neutral' })
+    expect(lessons?.sentence).not.toMatch(/vous avez réduit/)
+  })
+
+  it('stays silent on a series begun before the three months, and on a candidate', () => {
+    const old = recurrence({
+      name: 'Netflix',
+      merchantKey: 'netflix',
+      subcategoryId: 'streaming',
+      charges: monthly('2026-05', '2026-09', 13.49),
+    })
+    const candidate = recurrence({
+      name: 'Hevy',
+      merchantKey: 'hevy',
+      subcategoryId: 'lessons',
+      status: 'CANDIDATE',
+      charges: monthly('2026-08', '2026-09', 9.99),
+    })
+
+    for (const series of [old, candidate]) {
+      expect(
+        detect(registry(ledger(), [], undefined, [series])).insights
+      ).toEqual([])
+    }
+  })
+
+  it('reads a new price after a price held for two charges (trend 10)', () => {
+    const netflix = recurrence({
+      name: 'Netflix',
+      merchantKey: 'netflix',
+      subcategoryId: 'streaming',
+      charges: [
+        ...monthly('2025-09', '2026-06', 13.49),
+        ...monthly('2026-07', '2026-09', 15.99),
+      ],
+    })
+    const insight = detect(
+      registry(ledger(), [], undefined, [netflix])
+    ).insights.find(i => i.kind === 'price')
+
+    expect(insight).toMatchObject({
+      direction: 'up',
+      // A dearer charge is undergone: never a reproach.
+      tone: 'neutral',
+      current: 15.99,
+      reference: 13.49,
+      delta: 2.5,
+      deltaPct: 18.5,
+      // Δ price × charges per month.
+      score: 2.5,
+      sentence: 'Netflix : 15,99 € par mois depuis juillet, contre 13,49 €.',
+      windows: {
+        current: { start: '2026-07-01', end: '2026-09-30' },
+        reference: { start: '2025-09-01', end: '2026-06-30' },
+      },
+    })
+  })
+
+  it('stays silent on an unchanged price, a bill that moves every month, or a change older than three months', () => {
+    const series = (charges: Array<[string, number]>): TrendRecurrence =>
+      recurrence({
+        name: 'EDF',
+        merchantKey: 'edf',
+        subcategoryId: 'rent',
+        charges,
+      })
+    const unchanged = series(monthly('2025-09', '2026-09', 39.99))
+    const moving = series(
+      MONTHS.map((m, i) => [`${m}-08`, 50 + i] as [string, number])
+    )
+    const older = series([
+      ...monthly('2025-09', '2026-04', 39.99),
+      ...monthly('2026-05', '2026-09', 44.99),
+    ])
+
+    for (const s of [unchanged, moving, older]) {
+      expect(detect(registry(ledger(), [], undefined, [s])).insights).toEqual(
+        []
+      )
+    }
+  })
+
+  it('reads a past month with the charges it had then', () => {
+    const netflix = recurrence({
+      name: 'Netflix',
+      merchantKey: 'netflix',
+      subcategoryId: 'streaming',
+      charges: [
+        ...monthly('2025-09', '2026-06', 13.49),
+        ...monthly('2026-07', '2026-09', 15.99),
+      ],
+    })
+    // In June the new price had not come yet.
+    expect(
+      detect(registry(ledger(), [], undefined, [netflix]), { month: '2026-06' })
+        .insights
+    ).toEqual([])
+  })
+})
+
+describe('detectTrends — merchants and charges together', () => {
+  const gym = recurrence({
+    name: 'Basic Fit',
+    merchantKey: 'basic fit',
+    subcategoryId: 'lessons',
+    charges: [
+      ['2026-07-03', 29.99],
+      ['2026-08-03', 29.99],
+      ['2026-09-03', 29.99],
+    ],
+  })
   const lines = [
     ...ledger(SEPTEMBER_CHANGES),
+    ...recurrenceLines(gym),
     ...at(
       'CB PHARMACIE DU PORT',
       'pharmacy',
@@ -855,10 +1063,10 @@ describe('detectTrends — merchants beside the habits', () => {
     ),
     ...at('CB FNAC', 'phone', everyMonth(3, 0), 40),
   ]
-  const reg = registry(lines)
+  const reg = registry(lines, [], undefined, [gym])
 
-  it('keeps every month adding up from its category units: merchants are outside the sum', () => {
-    // Trends 6 to 8 read units of their own, which no month adds up:
+  it('keeps every month adding up from its category units: merchants and recurrences are outside the sum', () => {
+    // Trends 6 to 10 read units of their own, which no month adds up:
     // the categories and the lines to file still make the whole total.
     for (const reading of ['everyday', 'real'] as const) {
       for (const aggregate of aggregateMonths(reg, reading, MONTHS).values()) {
@@ -875,8 +1083,10 @@ describe('detectTrends — merchants beside the habits', () => {
     }
   })
 
-  it('gives the same list for the same ledger, whatever its order', () => {
-    const shuffled = registry([...lines].reverse())
+  it('gives the same list for the same ledger and cache, whatever their order', () => {
+    const shuffled = registry([...lines].reverse(), [], undefined, [
+      { ...gym, charges: [...gym.charges] },
+    ])
     expect(detect(shuffled)).toEqual(detect(reg))
   })
 
