@@ -1736,6 +1736,12 @@ export interface TrendDigestDto {
   model: string
   /** ISO 8601 */
   generatedAt: string
+  /**
+   * Written from figures that have changed since (a line reclassified, a
+   * reimbursement settled) and not rewritten yet: the last paragraph of the
+   * same view, shown rather than nothing. « Régénérer » writes it again.
+   */
+  stale: boolean
 }
 
 export interface TrendsQuery {

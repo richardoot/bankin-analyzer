@@ -1234,6 +1234,7 @@ describe('SpendingTrendsCard', () => {
       text: 'En septembre, les restaurants montent à 312 €.',
       model: 'claude-haiku-5-5',
       generatedAt: '2026-10-01T09:00:00.000Z',
+      stale: false,
     }
 
     it('is folded behind a button, and never asked on loading', async () => {
@@ -1292,6 +1293,25 @@ describe('SpendingTrendsCard', () => {
         /^Rédigé par l'IA à partir des tendances ci-dessus · Claude Haiku 5\.5 · le 1 octobre 2026$/
       )
       expect(wrapper.find('#spending-trends-digest').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="trends-digest-stale"]').exists()).toBe(
+        false
+      )
+    })
+
+    it('says when the paragraph was written from figures that have changed since', async () => {
+      getTrendDigest.mockResolvedValue({ ...paragraph, stale: true })
+      const wrapper = await mountCard()
+      await wrapper
+        .find('[data-testid="trends-digest-toggle"]')
+        .trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="trends-digest-stale"]').text()).toBe(
+        'figures qui ont changé depuis'
+      )
+      expect(
+        wrapper.find('[data-testid="trends-digest-regenerate"]').text()
+      ).toBe('Régénérer')
     })
 
     it('shows its shape while it is written', async () => {

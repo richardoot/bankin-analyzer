@@ -63,6 +63,7 @@ function digest(overrides: Partial<TrendDigestDto> = {}): TrendDigestDto {
     text: 'Septembre en quelques phrases.',
     model: 'claude-haiku-5-5',
     generatedAt: '2026-10-01T09:00:00.000Z',
+    stale: false,
     ...overrides,
   }
 }
@@ -226,6 +227,22 @@ describe('useTrendDigest', () => {
     await regenerate()
 
     expect(paragraph.value?.text).toBe('Septembre en quelques phrases.')
+  })
+
+  it('shows a stale paragraph the server hands back as such', async () => {
+    const { regenerate, digest: paragraph, open } = setup(trends())
+    open()
+    await flushPromises()
+    regenerateTrendDigest.mockResolvedValue(
+      digest({ text: 'Septembre d’avant.', stale: true })
+    )
+
+    await regenerate()
+
+    expect(paragraph.value).toMatchObject({
+      text: 'Septembre d’avant.',
+      stale: true,
+    })
   })
 
   it('names the model', () => {

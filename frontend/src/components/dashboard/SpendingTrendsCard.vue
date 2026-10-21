@@ -515,6 +515,13 @@
               {{ modelName(digest.model) }} · le
               {{ formatDate(digest.generatedAt, 'long') }}
             </span>
+            <span
+              v-if="digest.stale"
+              class="text-amber-700 dark:text-amber-400"
+              data-testid="trends-digest-stale"
+            >
+              figures qui ont changé depuis
+            </span>
             <button
               type="button"
               class="min-h-[44px] font-medium text-primary-700 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-wait disabled:opacity-60 sm:min-h-0 dark:text-primary-400"

@@ -10,7 +10,7 @@ import {
 export interface TrendDigestInputs {
   /** The list as the card shows it: the digest waits for it. */
   trends: MaybeRefOrGetter<TrendsResponseDto | null>
-  /** The window asked for, the paragraph's key — not the shortened one. */
+  /** The window asked for — not the shortened one. */
   window: MaybeRefOrGetter<TrendWindow>
   deductReimbursements: MaybeRefOrGetter<boolean>
   deductPendingReimbursements: MaybeRefOrGetter<boolean>
@@ -47,8 +47,10 @@ export function modelName(model: string): string {
  * never read it, and each paragraph not asked is a call not made. A new
  * list (another month, window, reading or switch) folds it again. A
  * failure, a refusal or a paragraph the server rejected all read as no
- * paragraph. The server remembers what it wrote; this remembers, for the
- * session, what it could not.
+ * paragraph. The server remembers what it wrote, under a fingerprint of
+ * the figures it read, and hands back the last paragraph of the view marked
+ * `stale` when the figures moved and it could not write a new one; this
+ * remembers, for the session, what it could not write at all.
  */
 export function useTrendDigest(inputs: TrendDigestInputs) {
   const digest = ref<TrendDigestDto | null>(null)
@@ -123,7 +125,8 @@ export function useTrendDigest(inputs: TrendDigestInputs) {
 
   /**
    * « Régénérer »: written again whatever the server remembers. A failure
-   * leaves the paragraph on screen as it was (the server keeps it too).
+   * leaves the paragraph on screen as it was (the server keeps it too, and
+   * may hand back a stale one, `stale: true`, which is shown as such).
    */
   async function regenerate(): Promise<void> {
     const query = currentQuery()
