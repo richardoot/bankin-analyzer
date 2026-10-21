@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing'
-import { InternalServerErrorException } from '@nestjs/common'
+import { InternalServerErrorException, Logger } from '@nestjs/common'
 import { AiSuggestionsService } from './ai-suggestions.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { MerchantMemoryService } from './merchant-memory.service'
@@ -300,6 +300,70 @@ describe('AiSuggestionsService', () => {
 
       expect(assignments).toEqual([])
       expect(mockInvoke).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('writeDigest', () => {
+    async function buildService(): Promise<AiSuggestionsService> {
+      const module = await Test.createTestingModule({
+        providers: [
+          AiSuggestionsService,
+          { provide: PrismaService, useValue: mockPrismaService },
+          { provide: MerchantMemoryService, useValue: mockMerchantMemory },
+        ],
+      }).compile()
+      return module.get(AiSuggestionsService)
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('sends the two messages as given and hands back the text, the model and the tokens', async () => {
+      mockInvoke.mockResolvedValue({ text: '  Un paragraphe.  ' })
+      const service = await buildService()
+
+      const written = await service.writeDigest('consigne', 'données')
+
+      expect(mockInvoke).toHaveBeenCalledWith([
+        { role: 'system', content: 'consigne' },
+        { role: 'user', content: 'données' },
+      ])
+      expect(written).toEqual({
+        text: 'Un paragraphe.',
+        model: 'claude-haiku-5-5',
+        inputTokens: 10,
+        outputTokens: 5,
+      })
+    })
+
+    it('records an ai_call event for the digest usage, with its tokens and never the text', async () => {
+      const lines: unknown[] = []
+      vi.spyOn(Logger.prototype, 'log').mockImplementation((m: unknown) => {
+        lines.push(m)
+      })
+      mockInvoke.mockResolvedValue({ text: 'Secret 312 €.' })
+      const service = await buildService()
+
+      await service.writeDigest('consigne', 'données')
+
+      const event = lines.find(
+        (m): m is string => typeof m === 'string' && m.startsWith('ai_call')
+      )
+      expect(event).toContain('purpose=digest')
+      expect(event).toContain('model=claude-haiku-5-5')
+      expect(event).toContain('inputTokens=10')
+      expect(event).toContain('outputTokens=5')
+      expect(event).not.toContain('Secret')
+    })
+
+    it('throws when the model refuses, for the caller to decide', async () => {
+      mockInvoke.mockRejectedValue(new Error('stop_reason: refusal'))
+      const service = await buildService()
+
+      await expect(service.writeDigest('consigne', 'données')).rejects.toThrow(
+        'refusal'
+      )
     })
   })
 })

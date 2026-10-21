@@ -12,12 +12,15 @@ import { AmortizedSlicesService } from '../transactions/amortized-slices.service
 import {
   TREND_RULES,
   addMonths,
+  aggregateMonths,
   detectTrends,
   lastClosedMonth,
   type TrendReading,
+  type TrendRegistry,
   type TrendWindow,
   type TrendsResult,
 } from './trend.detection'
+import type { DigestTotals } from './trend.digest'
 import { readTrendRegistry } from './trend.registry'
 
 export interface TrendsFilters {
@@ -51,6 +54,41 @@ export class TrendsService {
     filters: TrendsFilters = {},
     now: Date = new Date()
   ): Promise<TrendsResult> {
+    return (await this.read(userId, filters, now)).trends
+  }
+
+  /**
+   * The trends, and the month's totals the written digest reads beside
+   * them (lot 5): the everyday and the real expenses, the income and the
+   * savings, out of the very registry the trends were read from — so the
+   * paragraph and the list can never disagree about a month.
+   */
+  async getTrendsAndTotals(
+    userId: string,
+    filters: TrendsFilters = {},
+    now: Date = new Date()
+  ): Promise<{ trends: TrendsResult; totals: DigestTotals }> {
+    const { trends, registry } = await this.read(userId, filters, now)
+    const month = trends.month
+    const totalOf = (reading: TrendReading): number =>
+      aggregateMonths(registry, reading, [month]).get(month)?.total ?? 0
+    const flow = (registry.flows ?? []).find(f => f.month === month)
+    return {
+      trends,
+      totals: {
+        everyday: totalOf('everyday'),
+        real: totalOf('real'),
+        income: flow?.income ?? 0,
+        savings: flow?.savings ?? 0,
+      },
+    }
+  }
+
+  private async read(
+    userId: string,
+    filters: TrendsFilters,
+    now: Date
+  ): Promise<{ trends: TrendsResult; registry: TrendRegistry }> {
     const closed = lastClosedMonth(now)
     const month = filters.month ?? closed
     // Two thirds of a month always read as a drop: only a closed one.
@@ -89,6 +127,7 @@ export class TrendsService {
         // Trends 9 and 10 read the series the refresh above just rebuilt.
         const recurrences = await this.recurrences.readCache(userId)
         return {
+          registry,
           lines: registry.lines.length,
           trends: detectTrends(
             { ...registry, recurrences },
@@ -106,6 +145,6 @@ export class TrendsService {
       insights: result.trends.insights.length,
       durationMs,
     })
-    return result.trends
+    return { trends: result.trends, registry: result.registry }
   }
 }

@@ -456,7 +456,7 @@ export interface TrendsResult {
    * month, each with what it lacks; empty once it can.
    */
   horizons: TrendHorizon[]
-  /** Lot 5. */
+  /** Always null: the written digest (lot 5) is `GET /trends/digest`. */
   digest: null
 }
 
@@ -1333,6 +1333,12 @@ export function detectTrends(
 /* ------------------------------------------------------------------ */
 /* Habits that come and go (trends 7 and 8)                            */
 /* ------------------------------------------------------------------ */
+
+/** « septembre 2026 »: the month and its year, for the written digest. */
+export function monthLabel(month: string): string {
+  const name = MONTH_NAMES[Number(month.slice(5, 7)) - 1] ?? month
+  return `${name} ${month.slice(0, 4)}`
+}
 
 /** « juillet », or « décembre 2025 » when the year is not the month read's. */
 function monthIn(month: string, read: string): string {

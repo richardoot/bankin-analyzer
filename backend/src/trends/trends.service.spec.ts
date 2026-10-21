@@ -279,4 +279,39 @@ describe('TrendsService', () => {
     })
     expect(result.availableMonths[0]).toBe('2026-09')
   })
+
+  it('hands the digest the month totals out of the registry the trends read', async () => {
+    const rows = lineRows()
+    rows.push({
+      ...(rows.at(-1) as Record<string, unknown>),
+      id: 'trip',
+      amount: 400,
+      is_exceptional: true,
+    })
+    prisma.$queryRaw.mockReset()
+    prisma.$queryRaw
+      .mockResolvedValueOnce(rows)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ start: '2025-09-01' }])
+      .mockResolvedValueOnce([
+        { month: '2026-08', income: 2900, savings: 100 },
+        { month: '2026-09', income: 3200, savings: 576 },
+      ])
+
+    const { trends, totals } = await service.getTrendsAndTotals(
+      'user-1',
+      {},
+      now
+    )
+
+    expect(trends.month).toBe('2026-09')
+    // The exceptional line is out of the everyday reading, in the real one.
+    expect(totals).toEqual({
+      everyday: 312,
+      real: 712,
+      income: 3200,
+      savings: 576,
+    })
+  })
 })

@@ -68,6 +68,27 @@ const CategorizationSchema = z.object({
   ),
 })
 
+/**
+ * Schéma Zod de la sortie structurée du LLM (narration des tendances) : un
+ * seul champ, le paragraphe. Ce que le paragraphe a le droit de dire est
+ * vérifié par l'appelant (`trends/trend.digest.ts`), pas ici.
+ */
+const DigestSchema = z.object({
+  text: z
+    .string()
+    .describe(
+      'The paragraph, three to five sentences in French, every number copied from the data'
+    ),
+})
+
+/** What a written text cost, for the row that remembers it. */
+export interface WrittenText {
+  text: string
+  model: string
+  inputTokens: number | null
+  outputTokens: number | null
+}
+
 /** How many transactions go in one prompt. */
 const CATEGORIZATION_BATCH_SIZE = 40
 
@@ -80,7 +101,8 @@ const CATEGORIZATION_BATCH_SIZE = 40
  * qu'avant. Même texte, 30 % de jetons en plus ; la facture reste divisée
  * par sept.
  */
-const MODEL = 'claude-haiku-5-5'
+export const AI_MODEL = 'claude-haiku-5-5'
+const MODEL = AI_MODEL
 
 @Injectable()
 export class AiSuggestionsService {
@@ -126,6 +148,20 @@ export class AiSuggestionsService {
     messages: { role: 'system' | 'user'; content: string }[],
     fields: { batch: number; counted: (parsed: T) => number }
   ): Promise<T> {
+    return (await this.askMeasured(purpose, schema, messages, fields)).parsed
+  }
+
+  /** `ask`, with the tokens handed back too: the digest remembers its bill. */
+  private async askMeasured<T extends Record<string, unknown>>(
+    purpose: string,
+    schema: z.ZodType<T>,
+    messages: { role: 'system' | 'user'; content: string }[],
+    fields: { batch: number; counted: (parsed: T) => number }
+  ): Promise<{
+    parsed: T
+    inputTokens: number | null
+    outputTokens: number | null
+  }> {
     const structuredLlm = this.llm.withStructuredOutput<T>(schema, {
       includeRaw: true,
     })
@@ -148,7 +184,40 @@ export class AiSuggestionsService {
       outputTokens: usage?.output_tokens ?? null,
       durationMs,
     })
-    return result.parsed
+    return {
+      parsed: result.parsed,
+      inputTokens: usage?.input_tokens ?? null,
+      outputTokens: usage?.output_tokens ?? null,
+    }
+  }
+
+  /**
+   * The `digest` usage (agent-os/product/spending-trends.md, lot 5): a
+   * paragraph written from the trends of a closed month. The caller builds
+   * both messages — the instructions, and the trends fenced in
+   * `<user_financial_data>` — and checks every number of the answer against
+   * what it sent; this only asks, measures and hands the tokens back.
+   *
+   * Throws on any failure, a refusal (`stop_reason: refusal`, which brings
+   * no tool call back) included: the caller decides what a missing
+   * paragraph means.
+   */
+  async writeDigest(
+    systemPrompt: string,
+    userPrompt: string
+  ): Promise<WrittenText> {
+    const { parsed, inputTokens, outputTokens } = await this.askMeasured<
+      z.infer<typeof DigestSchema>
+    >(
+      'digest',
+      DigestSchema,
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      { batch: 1, counted: answer => (answer.text.trim() === '' ? 0 : 1) }
+    )
+    return { text: parsed.text.trim(), model: MODEL, inputTokens, outputTokens }
   }
 
   /**

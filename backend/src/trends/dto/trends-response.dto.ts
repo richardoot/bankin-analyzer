@@ -175,6 +175,33 @@ export class TrendsResponseDto {
    * this month's history cannot make yet; empty once it can
    */
   horizons!: TrendHorizonDto[]
-  /** The written digest (lot 5); always null for now */
+  /**
+   * Always null here: the written digest (lot 5) has its own request,
+   * `GET /trends/digest`, so the list never waits for the model
+   */
   digest!: null
+}
+
+/** The paragraph Claude wrote from a closed month's trends (lot 5) */
+export class MonthlyDigestDto {
+  /** `YYYY-MM` */
+  month!: string
+  reading!: 'everyday' | 'real'
+  /** The window asked for: 3, 6 or 12 */
+  window!: number
+  /** Three to five sentences in French, every number one of the trends' */
+  text!: string
+  /** The model that wrote it, e.g. `claude-haiku-5-5` */
+  model!: string
+  /** ISO 8601 */
+  generatedAt!: string
+}
+
+export class TrendDigestResponseDto {
+  /**
+   * Null when there is no paragraph to show: no history yet, nothing
+   * moved, or the model failed, refused or wrote a number the trends do
+   * not carry. Never an error: the card shows the list alone.
+   */
+  digest!: MonthlyDigestDto | null
 }
