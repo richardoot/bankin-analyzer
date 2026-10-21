@@ -235,12 +235,19 @@ export function useBudgetComparison({
       : completePlanIndices.value
   )
 
-  /** Plan months the user may isolate: elapsed ones plus the running one. */
-  const selectableMonths = computed<string[]>(() =>
+  /**
+   * The `YYYY-MM` behind `startedPlanIndices`, in the same order: the plan
+   * months that have begun, the running one included. What a row's
+   * month-by-month chart draws, one column per month.
+   */
+  const startedPlanMonths = computed<string[]>(() =>
     startedPlanIndices.value
       .map(i => monthLabels.value[i] ?? '')
       .filter(Boolean)
   )
+
+  /** Plan months the user may isolate: elapsed ones plus the running one. */
+  const selectableMonths = startedPlanMonths
 
   /**
    * How far into the isolated month we are, when it is the running one. Null
@@ -483,6 +490,8 @@ export function useBudgetComparison({
     planIndices,
     comparisonIndices,
     completePlanIndices,
+    startedPlanIndices,
+    startedPlanMonths,
     selectedMonthIndex,
     actualIndices,
     selectableMonths,

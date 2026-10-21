@@ -436,6 +436,29 @@ describe('useBudgetComparison', () => {
       ])
     })
 
+    it('exposes the started plan months beside their indices', () => {
+      const category = cat('a', 'A', [10, 100, 200, 50, 0])
+      const api = useBudgetComparison({
+        plan: ref(makePlan('2026-04-01', '2026-07-31')),
+        comparison: ref(null),
+        // March sits before the plan, July after today: neither has begun
+        // as a plan month.
+        statistics: ref(
+          makeStats(
+            ['2026-03', '2026-04', '2026-05', '2026-06', '2026-07'],
+            [category]
+          )
+        ),
+        now: fakeNow,
+      })
+      expect(api.startedPlanIndices.value).toEqual([1, 2, 3])
+      expect(api.startedPlanMonths.value).toEqual([
+        '2026-04',
+        '2026-05',
+        '2026-06',
+      ])
+    })
+
     it('averages the complete months when nothing is isolated', () => {
       const { api, category } = setup(null)
       expect(api.planActualAverage(category)).toBe(150)
