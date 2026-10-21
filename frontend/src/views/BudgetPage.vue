@@ -238,19 +238,58 @@
     () => comparison.actualIndices.value.length > 0
   )
 
+  /** Whether the plan has begun: the rows then draw its months. */
+  const showMonthsColumn = computed(
+    () => comparison.startedPlanIndices.value.length > 0
+  )
+
   /**
    * Grid template for the category list — adapts to which columns are
-   * visible. Always: name (1fr) + budget + sparkline. Optional: historical,
-   * actual.
+   * visible. Tracking: name (1fr), [historical], the figure (the actual
+   * over its envelope, or the envelope alone), [plan months], link.
+   * Editing: name, [historical], the envelope field, [actual], [plan
+   * months], link.
    */
   const rowGridTemplate = computed(() => {
     const cols = ['1fr']
     if (showHistoricalColumn.value) cols.push('auto')
-    cols.push('auto') // budget
-    if (showActualColumn.value) cols.push('auto')
-    cols.push('auto') // sparkline
+    cols.push('auto') // the figure, or the envelope field
+    if (isEditing.value && showActualColumn.value) cols.push('auto')
+    if (showMonthsColumn.value) cols.push('auto') // plan months
+    cols.push('auto') // link
     return cols.join(' ')
   })
+
+  /**
+   * The started plan months and a category's spending in each, both read
+   * off `startedPlanIndices` so the two lists stay aligned.
+   */
+  const rowPlanMonths = computed(() =>
+    comparison.startedPlanIndices.value.map(
+      i => comparison.monthLabels.value[i] ?? ''
+    )
+  )
+
+  function rowPlanMonthValues(cat: CategoryAverageDto): number[] {
+    const series = comparison.seriesFor(cat)
+    return comparison.startedPlanIndices.value.map(i => series?.[i] ?? 0)
+  }
+
+  /** « juin → octobre », the months the rows' charts draw. */
+  const planMonthsSpan = computed(() => {
+    const months = rowPlanMonths.value
+    const first = months[0]
+    const last = months[months.length - 1]
+    if (!first || !last) return ''
+    const name = (ym: string) =>
+      formatMonth(ym, { style: 'long', year: false, capitalize: false })
+    return first === last ? name(first) : `${name(first)} → ${name(last)}`
+  })
+
+  /** The isolated month, when the page reads one — the charts band it. */
+  const rowSelectedMonth = computed(() =>
+    comparison.selectedMonthIndex.value !== null ? selectedMonth.value : null
+  )
 
   /** Effective date range to fetch — envelops plan + comparison. */
   const referenceDateRange = computed<{
@@ -1315,10 +1354,7 @@
             class="hidden sm:grid sm:col-span-full sm:grid-cols-subgrid px-4 pb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-slate-700"
           >
             <span>Catégorie</span>
-            <span
-              v-if="showHistoricalColumn"
-              class="text-right text-indigo-600 dark:text-indigo-400"
-            >
+            <span v-if="showHistoricalColumn" class="text-right">
               Historique
               <span
                 class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
@@ -1326,18 +1362,15 @@
                 {{ comparisonRange?.label }}
               </span>
             </span>
-            <span class="text-right text-primary-700 dark:text-primary-400">
-              Budget
+            <span v-if="isEditing || !showActualColumn" class="text-right">
+              Enveloppe
               <span
                 class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
               >
                 /mois
               </span>
             </span>
-            <span
-              v-if="showActualColumn"
-              class="text-right text-red-600 dark:text-red-400"
-            >
+            <span v-if="showActualColumn" class="text-right">
               {{ selectedMonth ? 'Réel' : 'Réel à date' }}
               <span
                 class="block text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
@@ -1345,7 +1378,22 @@
                 {{ actualPeriodLabel }}
               </span>
             </span>
-            <span class="text-right w-24">Tendance</span>
+            <span v-if="showMonthsColumn">
+              Mois du plan
+              <span
+                data-testid="budget-months-header"
+                class="block whitespace-nowrap text-[10px] font-normal normal-case tracking-normal text-gray-500 dark:text-gray-400"
+              >
+                {{ planMonthsSpan }} ·
+                <span
+                  class="inline-block w-3 border-t border-dashed border-current align-middle"
+                  aria-hidden="true"
+                />
+                <span class="sr-only">pointillé :</span>
+                enveloppe
+              </span>
+            </span>
+            <span aria-hidden="true" />
           </div>
 
           <!-- Empty list -->
@@ -1379,7 +1427,10 @@
               :row-status="getRowStatus(cat)"
               :margin-vs-historical="getMarginVsHistorical(cat)"
               :remaining-vs-actual="getRemainingVsActual(cat)"
-              :sparkline="comparison.seriesFor(cat) ?? []"
+              :plan-months="rowPlanMonths"
+              :plan-month-values="rowPlanMonthValues(cat)"
+              :running-month="currentYearMonth()"
+              :selected-month="rowSelectedMonth"
               :chart-data="categoryChartData(cat)"
               :breakdown-mode="breakdownMode"
               :historical-window="historicalWindow"

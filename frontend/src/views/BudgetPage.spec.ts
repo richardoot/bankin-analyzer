@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import BudgetPage from './BudgetPage.vue'
+import MonthsVsBudgetChart from '@/components/budget/MonthsVsBudgetChart.vue'
 import {
   isTabBarSuppressed,
   resetMobileNavigation,
@@ -241,9 +242,11 @@ describe('BudgetPage', () => {
       // The table owns the template; the header and the rows are subgrids
       // of it, so every `auto` column is sized over all the rows at once.
       const table = wrapper.get('[data-testid="budget-table"]')
-      const template = (table.element as HTMLElement).style.getPropertyValue(
-        '--row-grid'
-      )
+      const gridOf = () =>
+        (table.element as HTMLElement).style.getPropertyValue('--row-grid')
+      // Tracking: name, the actual over its envelope, the plan's months,
+      // the link. No column of its own for the envelope any more.
+      const template = gridOf()
       expect(template).toBe('1fr auto auto auto')
       expect(table.classes()).toContain(
         'sm:[grid-template-columns:var(--row-grid)]'
@@ -267,6 +270,20 @@ describe('BudgetPage', () => {
         expect(row.html()).not.toContain('grid-template-columns')
         expect(row.html()).not.toContain('--row-grid')
       }
+      const headerText = (i: number) =>
+        header.element.children[i]?.textContent?.replace(/\s+/g, ' ').trim()
+      expect(headerText(1)).toMatch(/^Réel à date/)
+      expect(headerText(2)).toMatch(/^Mois du plan/)
+
+      // Editing brings the envelope field back beside the actual.
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      expect(gridOf()).toBe('1fr auto auto auto auto')
+      expect(header.element.children).toHaveLength(5)
+      expect(headerText(1)).toMatch(/^Enveloppe/)
+      expect(headerText(2)).toMatch(/^Réel à date/)
+      const line = wrapper.get('[data-testid="budget-row-Alimentation"]')
+        .element.firstElementChild as HTMLElement
+      expect(line.children).toHaveLength(5)
     })
 
     it('shows the envelope as text until the user asks to edit', async () => {
@@ -276,9 +293,14 @@ describe('BudgetPage', () => {
       expect(
         wrapper.find('[data-testid="budget-input-Alimentation"]').exists()
       ).toBe(false)
+      // The envelope is the reference under the actual, in whole euros.
       expect(
         wrapper.find('[data-testid="budget-value-Alimentation"]').text()
-      ).toContain('250')
+      ).toMatch(/^sur 250\s€$/)
+      // No envelope says so rather than a dash.
+      expect(
+        wrapper.find('[data-testid="budget-value-Transport"]').text()
+      ).toBe('sans enveloppe')
       expect(
         wrapper.find('[data-testid="budget-quick-actions"]').exists()
       ).toBe(false)
@@ -940,6 +962,84 @@ describe('BudgetPage', () => {
     const foodRow = (w: ReturnType<typeof mount>) =>
       w.find('[data-testid="budget-row-Alimentation"]')
 
+    const foodChart = (w: ReturnType<typeof mount>) =>
+      foodRow(w).findComponent(MonthsVsBudgetChart)
+
+    it('draws the started plan months against the envelope', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      // The actual is the figure, the envelope its reference.
+      expect(foodRow(wrapper).text()).toMatch(/350/)
+      expect(
+        wrapper.get('[data-testid="budget-value-Alimentation"]').text()
+      ).toMatch(/^sur 300\s€$/)
+
+      expect(foodChart(wrapper).props()).toMatchObject({
+        months: ['2026-06', '2026-07', '2026-08'],
+        values: [500, 200, 200],
+        budget: 300,
+        runningMonth: '2026-08',
+        selectedMonth: undefined,
+      })
+      expect(
+        wrapper.get('[data-testid="budget-months-header"]').text()
+      ).toContain('juin → août')
+      wrapper.unmount()
+    })
+
+    it('moves the dashed line with the draft while editing', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      await wrapper
+        .get('[data-testid="budget-input-Alimentation"]')
+        .setValue('450')
+      expect(foodChart(wrapper).props('budget')).toBe(450)
+      wrapper.unmount()
+    })
+
+    it('bands the isolated month and keeps its share to date', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      await wrapper
+        .find('[data-testid="budget-month-2026-08"]')
+        .trigger('click')
+      expect(foodChart(wrapper).props('selectedMonth')).toBe('2026-08')
+      expect(
+        wrapper.get('[data-testid="budget-value-Alimentation"]').text()
+      ).toMatch(/^sur 300\s€$/)
+      expect(
+        wrapper.find('[data-testid="budget-prorata-Alimentation"]').text()
+      ).toContain('à ce jour')
+      wrapper.unmount()
+    })
+
+    it('shows the envelope alone, and no chart, before the plan begins', async () => {
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue({
+        ...planJunDec,
+        startDate: '2026-09-01',
+      })
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(foodChart(wrapper).exists()).toBe(false)
+      expect(
+        wrapper.get('[data-testid="budget-value-Alimentation"]').text()
+      ).toMatch(/300,00\s€/)
+      expect(
+        wrapper.find('[data-testid="budget-actual-link-Alimentation"]').exists()
+      ).toBe(false)
+      const table = wrapper.get('[data-testid="budget-table"]')
+      expect(
+        (table.element as HTMLElement).style.getPropertyValue('--row-grid')
+      ).toBe('1fr auto auto')
+      expect(table.text()).not.toContain('Mois du plan')
+      wrapper.unmount()
+    })
+
     it('offers every started plan month, and only those', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
@@ -1234,9 +1334,15 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
-    it('keeps the exceptional share visible in both modes', async () => {
+    it('keeps the exceptional share in the drill-down, in both modes', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
+
+      // The row says one figure; the events' share waits a click away.
+      expect(
+        wrapper.find('[data-testid="budget-exceptional-Alimentation"]').exists()
+      ).toBe(false)
+      await foodRow(wrapper).get('button').trigger('click')
 
       const chip = wrapper.get(
         '[data-testid="budget-exceptional-Alimentation"]'
@@ -1252,6 +1358,10 @@ describe('BudgetPage', () => {
       ).toContain('dont')
 
       // Never on a category no event touched.
+      await wrapper
+        .get('[data-testid="budget-row-Transport"]')
+        .get('button')
+        .trigger('click')
       expect(
         wrapper.find('[data-testid="budget-exceptional-Transport"]').exists()
       ).toBe(false)
@@ -1565,6 +1675,87 @@ describe('BudgetPage', () => {
       )
     })
 
+    it('keeps the historical figure in its column and its link in the drill-down', async () => {
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...sampleStatistics,
+        periodMonths: 6,
+        monthLabels: [
+          '2026-03',
+          '2026-04',
+          '2026-05',
+          '2026-06',
+          '2026-07',
+          '2026-08',
+        ],
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            categoryIcon: '🍽️',
+            totalAmount: 1500,
+            transactionCount: 20,
+            averagePerMonth: 250,
+            monthlyAmounts: [100, 100, 100, 500, 200, 200],
+          },
+        ],
+      })
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      wrapper
+        .findComponent({ name: 'ComparisonSelector' })
+        .vm.$emit('update:range', {
+          startDate: '2026-03-01',
+          endDate: '2026-05-31',
+          startMonth: '2026-03',
+          endMonth: '2026-05',
+          label: 'Mars–Mai 2026',
+          source: 'custom',
+        })
+      await flushPromises()
+
+      const row = wrapper.get('[data-testid="budget-row-Alimentation"]')
+      // Historique · figure · months · link.
+      expect(
+        (
+          wrapper.get('[data-testid="budget-table"]').element as HTMLElement
+        ).style.getPropertyValue('--row-grid')
+      ).toBe('1fr auto auto auto auto')
+      expect(row.text()).toMatch(/100,00/)
+      // The row's one link is the figure's, the plan so far.
+      expect(
+        JSON.parse(
+          wrapper
+            .get('[data-testid="budget-actual-link-Alimentation"]')
+            .attributes('data-to') ?? '{}'
+        ).query.label
+      ).toBe('Alimentation · plan')
+      expect(
+        wrapper
+          .find('[data-testid="budget-historical-link-Alimentation"]')
+          .exists()
+      ).toBe(false)
+
+      await row.get('button').trigger('click')
+      const historical = JSON.parse(
+        wrapper
+          .get('[data-testid="budget-historical-link-Alimentation"]')
+          .attributes('data-to') ?? '{}'
+      )
+      expect(historical.query).toMatchObject({
+        from: '2026-03-01',
+        to: '2026-05-31',
+        label: 'Alimentation · Mars–Mai 2026',
+      })
+
+      // Editing, the historical figure can be taken as the envelope.
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      expect(
+        wrapper
+          .find('[data-testid="budget-take-historical-Alimentation"]')
+          .exists()
+      ).toBe(true)
+    })
+
     it('links each subcategory line to its rows over the statistics window, « none » included', async () => {
       vi.mocked(api.getBudgetStatistics).mockResolvedValue({
         ...sampleStatistics,
@@ -1652,6 +1843,10 @@ describe('BudgetPage', () => {
         .findComponent({ name: 'BudgetTableControls' })
         .vm.$emit('set-mode', 'real')
       await flushPromises()
+      await wrapper
+        .get('[data-testid="budget-row-Alimentation"]')
+        .get('button')
+        .trigger('click')
 
       const actual = JSON.parse(
         wrapper
@@ -1882,6 +2077,15 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
+      // The slices are said in the drill-down, not on the row.
+      expect(
+        wrapper.find('[data-testid="budget-amortized-Maison"]').exists()
+      ).toBe(false)
+      await wrapper
+        .get('[data-testid="budget-row-Maison"]')
+        .get('button')
+        .trigger('click')
+
       // The fridge's May is not « hors X € d'événements ».
       expect(
         wrapper.find('[data-testid="budget-exceptional-Maison"]').exists()
@@ -1890,6 +2094,11 @@ describe('BudgetPage', () => {
         wrapper.get('[data-testid="budget-amortized-Maison"]').text()
         // May's slice over the two complete months.
       ).toMatch(/dont 16,67\s€ lissés/)
+      // With the purchase behind the slices.
+      expect(
+        linkOf(wrapper.get('[data-testid="budget-amortized-row-link-Maison"]'))
+          .query
+      ).toMatchObject({ ids: 'tx-fridge' })
       // The mode is offered, and says the totals are no longer the cash.
       expect(
         wrapper.get('[data-testid="budget-everyday-amortized-note"]').text()
