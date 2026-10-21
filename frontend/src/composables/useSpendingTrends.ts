@@ -7,11 +7,52 @@ import {
   type TrendsResponseDto,
 } from '@/lib/api'
 import { useFiltersStore } from '@/stores/filters'
+import { TREND_GROUPS, trendGroupOf, type TrendGroupKey } from '@/lib/trends'
 
 /** What the card shows before « Voir tout ». */
 export const TRENDS_SHOWN = 5
 /** Under this many complete months, the habit trends are silent. */
 export const TRENDS_MIN_HISTORY = 3
+
+export interface TrendGroup {
+  key: TrendGroupKey
+  title: string
+  insights: TrendInsightDto[]
+}
+
+export interface GroupedTrendInsights {
+  /** The lines to file: a warning, above the groups and in none. */
+  toFile: TrendInsightDto[]
+  /** The groups that have a line, in their order, the score kept inside. */
+  groups: TrendGroup[]
+}
+
+/**
+ * Files the lines the card shows under their group (`trendGroupOf`): the
+ * same lines in the same score order, only sorted under a title. A group
+ * with no line is left out.
+ */
+export function groupTrendInsights(
+  insights: readonly TrendInsightDto[]
+): GroupedTrendInsights {
+  const toFile: TrendInsightDto[] = []
+  const byGroup = new Map<TrendGroupKey, TrendInsightDto[]>()
+  for (const insight of insights) {
+    const key = trendGroupOf(insight)
+    if (key === null) {
+      toFile.push(insight)
+      continue
+    }
+    const lines = byGroup.get(key) ?? []
+    lines.push(insight)
+    byGroup.set(key, lines)
+  }
+  const groups = TREND_GROUPS.flatMap(({ key, title }) => {
+    const lines = byGroup.get(key)
+    return lines ? [{ key, title, insights: lines }] : []
+  })
+  return { toFile, groups }
+}
 
 export interface SpendingTrendsInputs {
   /** The dashboard's reading, « Vie courante » or « Tout ». */
@@ -103,6 +144,10 @@ export function useSpendingTrends(inputs: SpendingTrendsInputs) {
   const visibleInsights = computed(() =>
     expanded.value ? insights.value : insights.value.slice(0, TRENDS_SHOWN)
   )
+  /** The same lines, filed under their group; folded or not. */
+  const visibleGroups = computed(() =>
+    groupTrendInsights(visibleInsights.value)
+  )
   const hiddenCount = computed(() =>
     Math.max(0, insights.value.length - TRENDS_SHOWN)
   )
@@ -141,6 +186,7 @@ export function useSpendingTrends(inputs: SpendingTrendsInputs) {
     expanded,
     insights,
     visibleInsights,
+    visibleGroups,
     hiddenCount,
     missingMonths,
     horizonsLine,

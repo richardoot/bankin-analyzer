@@ -48,6 +48,7 @@
     expanded,
     insights,
     visibleInsights,
+    visibleGroups,
     hiddenCount,
     missingMonths,
     horizonsLine,
@@ -384,6 +385,19 @@
   const hasReference = (insight: TrendInsightDto): boolean =>
     insight.kind !== 'uncategorized' && insight.unit.type !== 'recurrence'
 
+  /**
+   * The lines as the card lays them out: the lines to file first, untitled
+   * — a warning, not a trend — then each group under its title.
+   */
+  const sections = computed(() => {
+    const { toFile, groups } = visibleGroups.value
+    const head =
+      toFile.length > 0
+        ? [{ key: 'toFile', title: null, insights: toFile }]
+        : []
+    return [...head, ...groups]
+  })
+
   const showSkeleton = computed(() => !data.value && isLoading.value)
 </script>
 
@@ -493,101 +507,123 @@
         apparaîtront.
       </p>
 
-      <ul
+      <div
         v-if="visibleInsights.length > 0"
         id="spending-trends-list"
-        class="divide-y divide-gray-100 dark:divide-slate-800"
+        class="space-y-4"
         data-testid="trends-list"
       >
-        <li
-          v-for="insight in visibleInsights"
-          :key="`${insight.kind}-${insight.unit.type}-${insight.unit.id}`"
-          class="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
-          :data-testid="`trend-${insight.kind}`"
+        <!-- Each group under a quiet title, the score kept inside it. -->
+        <div
+          v-for="section in sections"
+          :key="section.key"
+          :data-testid="`trends-group-${section.key}`"
         >
-          <span
-            class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-base dark:bg-slate-800"
-            aria-hidden="true"
+          <h3
+            v-if="section.title"
+            :id="`spending-trends-group-${section.key}`"
+            class="mb-2 text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400"
+            data-testid="trends-title-of-group"
           >
-            <CategoryIcon
-              v-if="insight.unit.icon"
-              :icon="insight.unit.icon"
-              :name="insight.unit.name"
-            />
-            <template v-else>{{ fallbackIcon(insight) }}</template>
-          </span>
-
-          <div class="min-w-0 flex-1">
-            <p
-              class="text-sm text-gray-900 dark:text-gray-100"
-              data-testid="trend-sentence"
+            {{ section.title }}
+          </h3>
+          <ul
+            class="divide-y divide-gray-100 dark:divide-slate-800"
+            :aria-labelledby="
+              section.title ? `spending-trends-group-${section.key}` : undefined
+            "
+          >
+            <li
+              v-for="insight in section.insights"
+              :key="`${insight.kind}-${insight.unit.type}-${insight.unit.id}`"
+              class="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
+              :data-testid="`trend-${insight.kind}`"
             >
-              {{ insight.sentence }}
-            </p>
-            <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-              <template v-if="insight.parts?.length">
-                <TransactionsLink
-                  v-for="part in insight.parts"
-                  :key="part.unit.id"
-                  :to="partLink(insight, part)"
-                  :subject="`${part.unit.name} en ${monthName}`"
-                  data-testid="trend-part-link"
+              <span
+                class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-base dark:bg-slate-800"
+                aria-hidden="true"
+              >
+                <CategoryIcon
+                  v-if="insight.unit.icon"
+                  :icon="insight.unit.icon"
+                  :name="insight.unit.name"
+                />
+                <template v-else>{{ fallbackIcon(insight) }}</template>
+              </span>
+
+              <div class="min-w-0 flex-1">
+                <p
+                  class="text-sm text-gray-900 dark:text-gray-100"
+                  data-testid="trend-sentence"
                 >
-                  {{ part.unit.name }}
-                </TransactionsLink>
-              </template>
-              <TransactionsLink
-                v-else
-                :to="monthLink(insight)"
-                :subject="`${insight.unit.name} en ${monthName}`"
-                data-testid="trend-month-link"
-              >
-                Voir les transactions
-              </TransactionsLink>
-              <TransactionsLink
-                v-if="hasReference(insight)"
-                :to="referenceLink(insight)"
-                :subject="`${insight.unit.name} sur la référence`"
-                data-testid="trend-reference-link"
-              >
-                La référence
-              </TransactionsLink>
-              <RouterLink
-                v-if="insight.unit.type === 'recurrence'"
-                to="/recurrences"
-                class="text-xs font-medium text-primary-700 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-primary-400"
-                :aria-label="`Voir ${insight.unit.name} dans les récurrences`"
-                data-testid="trend-recurrences-link"
-              >
-                Les récurrences
-              </RouterLink>
-            </div>
-          </div>
+                  {{ insight.sentence }}
+                </p>
+                <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <template v-if="insight.parts?.length">
+                    <TransactionsLink
+                      v-for="part in insight.parts"
+                      :key="part.unit.id"
+                      :to="partLink(insight, part)"
+                      :subject="`${part.unit.name} en ${monthName}`"
+                      data-testid="trend-part-link"
+                    >
+                      {{ part.unit.name }}
+                    </TransactionsLink>
+                  </template>
+                  <TransactionsLink
+                    v-else
+                    :to="monthLink(insight)"
+                    :subject="`${insight.unit.name} en ${monthName}`"
+                    data-testid="trend-month-link"
+                  >
+                    Voir les transactions
+                  </TransactionsLink>
+                  <TransactionsLink
+                    v-if="hasReference(insight)"
+                    :to="referenceLink(insight)"
+                    :subject="`${insight.unit.name} sur la référence`"
+                    data-testid="trend-reference-link"
+                  >
+                    La référence
+                  </TransactionsLink>
+                  <RouterLink
+                    v-if="insight.unit.type === 'recurrence'"
+                    to="/recurrences"
+                    class="text-xs font-medium text-primary-700 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-primary-400"
+                    :aria-label="`Voir ${insight.unit.name} dans les récurrences`"
+                    data-testid="trend-recurrences-link"
+                  >
+                    Les récurrences
+                  </RouterLink>
+                </div>
+              </div>
 
-          <div class="flex shrink-0 items-center gap-3">
-            <!-- On a phone the sparkline gives way; sentence and badge stay. -->
-            <div class="hidden sm:block" data-testid="trend-sparkline">
-              <SparklineChart
-                :data="insight.series"
-                :width="72"
-                :height="24"
-                :color="SPARK_COLORS[hueOf(insight)]"
-              />
-            </div>
-            <span
-              class="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap tabular-nums"
-              :class="BADGE_CLASSES[hueOf(insight)]"
-              :aria-label="badgeLabel(insight)"
-              data-testid="trend-badge"
-            >
-              <span v-if="arrowOf(insight)" aria-hidden="true">{{
-                arrowOf(insight)
-              }}</span>
-              {{ badgeText(insight) }}
-            </span>
-          </div>
-        </li>
-      </ul>
+              <div class="flex shrink-0 items-center gap-3">
+                <!-- On a phone the sparkline gives way; sentence and badge stay. -->
+                <div class="hidden sm:block" data-testid="trend-sparkline">
+                  <SparklineChart
+                    :data="insight.series"
+                    :width="72"
+                    :height="24"
+                    :color="SPARK_COLORS[hueOf(insight)]"
+                  />
+                </div>
+                <span
+                  class="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap tabular-nums"
+                  :class="BADGE_CLASSES[hueOf(insight)]"
+                  :aria-label="badgeLabel(insight)"
+                  data-testid="trend-badge"
+                >
+                  <span v-if="arrowOf(insight)" aria-hidden="true">{{
+                    arrowOf(insight)
+                  }}</span>
+                  {{ badgeText(insight) }}
+                </span>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
 
       <p
         v-if="data.quietSentence"

@@ -551,6 +551,58 @@ describe('SpendingTrendsCard', () => {
     expect(toggle.text()).toBe('Réduire')
   })
 
+  it('files the lines under a title per group, the lines to file above them', async () => {
+    getSpendingTrends.mockResolvedValue(
+      response({
+        insights: [
+          toFile,
+          pleasureShare,
+          restaurant,
+          picard,
+          gym,
+          sushi,
+          delivery,
+        ],
+      })
+    )
+    const wrapper = await mountCard()
+    const layout = () =>
+      wrapper.findAll('[data-testid^="trends-group-"]').map(group => {
+        const title = group.find('[data-testid="trends-title-of-group"]')
+        return [
+          title.exists() ? title.text() : null,
+          group.findAll('li').map(li => li.attributes('data-testid') ?? ''),
+        ]
+      })
+
+    expect(layout()).toEqual([
+      [null, ['trend-uncategorized']],
+      ['Abonnements et charges', ['trend-subscription']],
+      ['Catégories', ['trend-amount']],
+      ['Enseignes', ['trend-frequency']],
+      ["Vue d'ensemble", ['trend-share']],
+    ])
+    expect(wrapper.find('[data-testid="trends-toggle"]').text()).toBe(
+      'Voir tout (7)'
+    )
+
+    // Each list is named by its title for a screen reader.
+    const categories = wrapper.find('[data-testid="trends-group-categories"]')
+    const heading = categories.find('h3')
+    expect(categories.find('ul').attributes('aria-labelledby')).toBe(
+      heading.attributes('id')
+    )
+
+    await wrapper.find('[data-testid="trends-toggle"]').trigger('click')
+    expect(layout()).toEqual([
+      [null, ['trend-uncategorized']],
+      ['Abonnements et charges', ['trend-subscription']],
+      ['Catégories', ['trend-amount', 'trend-frequency']],
+      ['Enseignes', ['trend-frequency', 'trend-newHabit']],
+      ["Vue d'ensemble", ['trend-share']],
+    ])
+  })
+
   it('offers no « Voir tout » when everything fits', async () => {
     const wrapper = await mountCard()
     expect(wrapper.find('[data-testid="trends-toggle"]').exists()).toBe(false)
@@ -680,26 +732,27 @@ describe('SpendingTrendsCard', () => {
       const wrapper = await mountCard()
       await wrapper.find('[data-testid="trends-toggle"]').trigger('click')
 
+      // The charges come first, under their own title.
       const badges = wrapper.findAll('[data-testid="trend-badge"]')
       expect(badges.map(b => b.text().replace(/\s+/g, ' '))).toEqual([
-        '↑ +200 %',
-        'Nouveau',
-        'Plus rien',
         'Apparu',
         'Arrêté',
         expect.stringMatching(/^↑ \+2,50\s€$/),
+        '↑ +200 %',
+        'Nouveau',
+        'Plus rien',
       ])
       expect(badges.map(b => b.attributes('aria-label'))).toEqual([
-        'En hausse : +200 %',
-        'Nouvelle habitude',
-        'Habitude abandonnée',
         'Abonnement apparu',
         'Abonnement arrêté',
         expect.stringMatching(/^Prix en hausse : \+2,50\s€$/),
+        'En hausse : +200 %',
+        'Nouvelle habitude',
+        'Habitude abandonnée',
       ])
       // A charge is never a reproach nor a success: blue up, grey down.
       expect(
-        badges.slice(3).map(b => b.classes().find(c => c.startsWith('bg-')))
+        badges.slice(0, 3).map(b => b.classes().find(c => c.startsWith('bg-')))
       ).toEqual(['bg-sky-50', 'bg-gray-100', 'bg-sky-50'])
     })
 

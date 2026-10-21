@@ -3,7 +3,11 @@ import { nextTick, ref } from 'vue'
 import { flushPromises } from '@vue/test-utils'
 import type { TrendInsightDto, TrendsResponseDto } from '@/lib/api'
 import { useFiltersStore } from '@/stores/filters'
-import { TRENDS_SHOWN, useSpendingTrends } from './useSpendingTrends'
+import {
+  TRENDS_SHOWN,
+  groupTrendInsights,
+  useSpendingTrends,
+} from './useSpendingTrends'
 
 const { getSpendingTrends } = vi.hoisted(() => ({
   getSpendingTrends: vi.fn(),
@@ -31,6 +35,65 @@ function insight(id: string): TrendInsightDto {
     score: 86,
   }
 }
+
+function as(
+  id: string,
+  kind: TrendInsightDto['kind'],
+  type: TrendInsightDto['unit']['type']
+): TrendInsightDto {
+  const base = insight(id)
+  return { ...base, kind, unit: { ...base.unit, type } }
+}
+
+describe('groupTrendInsights', () => {
+  const ids = (lines: TrendInsightDto[]) => lines.map(l => l.unit.id)
+
+  it('lays the groups in their order, the score kept inside each', () => {
+    const { toFile, groups } = groupTrendInsights([
+      as('share', 'share', 'structure'),
+      as('bars', 'amount', 'subcategory'),
+      as('netflix', 'subscription', 'recurrence'),
+      as('cafe', 'frequency', 'merchant'),
+      as('food', 'drift', 'category'),
+      as('rent', 'price', 'recurrence'),
+    ])
+    expect(toFile).toEqual([])
+    expect(groups.map(g => g.title)).toEqual([
+      'Abonnements et charges',
+      'Catégories',
+      'Enseignes',
+      "Vue d'ensemble",
+    ])
+    expect(groups.map(g => ids(g.insights))).toEqual([
+      ['netflix', 'rent'],
+      ['bars', 'food'],
+      ['cafe'],
+      ['share'],
+    ])
+  })
+
+  it('leaves out a group with no line', () => {
+    const { groups } = groupTrendInsights([
+      as('bars', 'amount', 'subcategory'),
+      as('gym', 'lostHabit', 'subcategory'),
+    ])
+    expect(groups.map(g => g.key)).toEqual(['categories'])
+    expect(groups.flatMap(g => ids(g.insights))).toEqual(['bars', 'gym'])
+  })
+
+  it('keeps the lines to file apart, in no group', () => {
+    const { toFile, groups } = groupTrendInsights([
+      as('bars', 'amount', 'subcategory'),
+      as('none', 'uncategorized', 'uncategorized'),
+    ])
+    expect(ids(toFile)).toEqual(['none'])
+    expect(groups.flatMap(g => ids(g.insights))).toEqual(['bars'])
+  })
+
+  it('has nothing to file from nothing', () => {
+    expect(groupTrendInsights([])).toEqual({ toFile: [], groups: [] })
+  })
+})
 
 function response(
   overrides: Partial<TrendsResponseDto> = {}
@@ -177,6 +240,46 @@ describe('useSpendingTrends', () => {
     trends.toggleExpanded()
     await nextTick()
     expect(trends.visibleInsights.value).toHaveLength(7)
+  })
+
+  it('files the lines it shows under their groups, folded and unfolded', async () => {
+    const lines: TrendInsightDto[] = [
+      as('a', 'share', 'structure'),
+      as('b', 'amount', 'category'),
+      as('c', 'subscription', 'recurrence'),
+      as('d', 'newHabit', 'merchant'),
+      as('e', 'basket', 'subcategory'),
+      as('f', 'savings', 'savings'),
+      as('g', 'price', 'recurrence'),
+    ]
+    getSpendingTrends.mockResolvedValue(response({ insights: lines }))
+    const { trends } = setup()
+    await trends.fetchTrends()
+
+    const folded = trends.visibleGroups.value.groups.map(g => [
+      g.key,
+      g.insights.map(i => i.unit.id),
+    ])
+    expect(folded).toEqual([
+      ['charges', ['c']],
+      ['categories', ['b', 'e']],
+      ['merchants', ['d']],
+      ['overview', ['a']],
+    ])
+    expect(trends.hiddenCount.value).toBe(2)
+
+    trends.toggleExpanded()
+    await nextTick()
+    const unfolded = trends.visibleGroups.value.groups.map(g => [
+      g.key,
+      g.insights.map(i => i.unit.id),
+    ])
+    expect(unfolded).toEqual([
+      ['charges', ['c', 'g']],
+      ['categories', ['b', 'e']],
+      ['merchants', ['d']],
+      ['overview', ['a', 'f']],
+    ])
   })
 
   it('counts the months still missing, and tells a shortened window', async () => {
