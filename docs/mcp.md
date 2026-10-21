@@ -24,6 +24,7 @@ que le modèle les lise comme des données et non comme des instructions.
 | `get_dashboard_summary`     | Dépenses et revenus par mois et par catégorie, structure des dépenses (dont la part récurrente), épargne, ce qui reste dû. Les transferts sont hors des dépenses et des revenus.                                                                                                                                                                                                                                      |
 | `get_smoothing_suggestions` | Les dépenses récentes (`months`, 6 par défaut, 24 au plus) qui dépassent largement l'habitude de leur sous-catégorie, pas encore tranchées, chacune avec une question et deux réponses. Voir « Lissage » plus bas.                                                                                                                                                                                                    |
 | `get_recurrences`           | Charges récurrentes détectées ou suivies (abonnements, loyer, assurances) : `name` (nom du service), `label` (libellé bancaire), catégorie, `period`, `amount`, `monthlyEquivalent`, `occurrences`, `totalPaid`, `firstDate`, `lastDate`, `nextExpected`, `status` (`ACTIVE`, `STOPPED`, `CANDIDATE`, filtrable), et le `monthlyTotal` des actives.                                                                   |
+| `get_spending_trends`       | Ce qui change dans les dépenses, la liste de la carte « Ce qui change » : un mois clos (`month`, défaut le dernier) contre la médiane des `window` mois complets précédents (3, 6 par défaut, 12), en lecture `everyday` (défaut) ou `real`. Rend `insights` en entier, `quietSentence`, `horizons`, `completeMonths`, `availableMonths`. Voir « Tendances » plus bas.                                                |
 | `get_tags`                  | Les étiquettes : `id`, `name`, `color`, `isExceptional`, `eventStartDate`, `eventEndDate`, `status` (`upcoming`, `ongoing`, `past`, null sans fenêtre), `family` (`id`, `name`, `annualBudget`, ou null), `transactionCount`, `spent` (dépenses nettes des remboursements, comme le tableau de bord, part du compte joint, comptes exclus des statistiques ignorés). Filtres : `status`, `familyId`, `isExceptional`. |
 | `get_tag_candidates`        | Pour une étiquette datée (`tagId`), les dépenses qui pourraient lui appartenir et ne la portent pas encore. Voir « Étiquettes et familles » plus bas.                                                                                                                                                                                                                                                                 |
 
@@ -210,6 +211,41 @@ La règle d'usage :
    `expectedAmount`.
 4. Une nouvelle édition se crée dans l'application (« Nouvelle édition » sur la carte de
    l'édition passée), jamais par le MCP.
+
+## Tendances
+
+`get_spending_trends` rend **la même réponse que l'écran** : il appelle `TrendsService.getTrends`
+comme `GET /trends`, avec les mêmes défauts (dernier mois clos, 6 mois de référence, vie
+courante) et les remboursements comme le tableau de bord : reçus déduits, en attente selon la
+préférence de l'utilisateur. Le calcul est déterministe, sans modèle
+(`agent-os/product/spending-trends.md`).
+
+| Champ                                       | Sens                                                                                                                                                                                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `insights`                                  | La liste complète des tendances qui passent leurs seuils, triée comme l'écran : les lignes à classer d'abord, puis par `score` (l'écart en euros). La carte n'en montre que les cinq premières et déplie le reste sur « Voir tout ». |
+| `kind`                                      | `amount`, `frequency`, `basket`, `share`, `uncategorized`, `newHabit`, `lostHabit`, `subscription`, `price`, `shift`, `drift`, `record`, `yearAgo`, `savings`.                                                                       |
+| `unit`                                      | Ce qui bouge : `type` (`category`, `subcategory`, `structure`, `uncategorized`, `merchant`, `recurrence`, `savings`), `id`, `categoryId`, `name`, et `search` pour un marchand.                                                      |
+| `current`, `reference`, `delta`, `deltaPct` | La mesure du mois, celle de la référence, l'écart et l'écart relatif (null quand il n'a pas de sens). L'unité dépend de `kind` (euros, lignes, points).                                                                              |
+| `sentence`                                  | La phrase de l'écran, en français.                                                                                                                                                                                                   |
+| `windows`                                   | `current` (le mois lu) et `reference` (la fenêtre de référence), en dates incluses.                                                                                                                                                  |
+| `quietSentence`                             | « Rien de notable en septembre : … » quand l'historique suffit et qu'aucune habitude n'a bougé ; null sinon.                                                                                                                         |
+| `completeMonths`                            | Les mois complets d'historique avant le mois lu ; il en faut trois pour les tendances d'habitude.                                                                                                                                    |
+| `horizons`                                  | Les comparaisons longues (pente, record, même mois l'an dernier, épargne) que l'historique ne permet pas encore, chacune avec sa phrase et ce qui manque.                                                                            |
+
+La règle d'usage :
+
+1. Les tendances sont **la source de tout chiffre** sur ce qui change : la conversation les cite,
+   elle n'en calcule pas d'autres et n'en invente aucun. Une liste vide s'explique par
+   `quietSentence`, `completeMonths` ou `horizons`, pas par une supposition.
+2. Pour creuser une tendance, `get_transactions` sur `windows.current` puis
+   `windows.reference` (`startDate`, `endDate`), avec `unit.categoryId` (`categoryId`),
+   l'`unit.id` d'une sous-catégorie (`subcategoryId`, avec sa catégorie) ou l'`unit.search` d'un
+   marchand (`search`).
+3. Un mois non clos est refusé (« Refusé par le serveur : Le mois … n'est pas encore clos ») ;
+   une fenêtre autre que 3, 6 ou 12, un mois mal formé ou une lecture inconnue sont refusés par le
+   schéma.
+
+Aucune écriture : une tendance ne se corrige pas, le registre oui (reclasser, lisser, étiqueter).
 
 ## Garde-fous et erreurs
 
