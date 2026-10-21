@@ -26,6 +26,38 @@ describe('useFiltersStore', () => {
     updateFilterPreferences.mockReset()
   })
 
+  describe('the window of « Ce qui change »', () => {
+    it('reads six months by default', () => {
+      expect(useFiltersStore().trendsWindow).toBe(6)
+    })
+
+    it('is kept with the period, in this browser only', () => {
+      const store = useFiltersStore()
+
+      store.setTrendsWindow(12)
+
+      expect(store.trendsWindow).toBe(12)
+      const saved = JSON.parse(
+        vi.mocked(localStorage.setItem).mock.calls.at(-1)?.[1] ?? '{}'
+      )
+      expect(saved.trendsWindow).toBe(12)
+      expect(updateFilterPreferences).not.toHaveBeenCalled()
+    })
+
+    it('comes back from storage, and ignores a window it does not offer', () => {
+      vi.mocked(localStorage.getItem).mockReturnValue(
+        JSON.stringify({ timePeriod: 'all', trendsWindow: 3 })
+      )
+      expect(useFiltersStore().trendsWindow).toBe(3)
+
+      setActivePinia(createPinia())
+      vi.mocked(localStorage.getItem).mockReturnValue(
+        JSON.stringify({ timePeriod: 'all', trendsWindow: 5 })
+      )
+      expect(useFiltersStore().trendsWindow).toBe(6)
+    })
+  })
+
   describe('a debt still owed', () => {
     it('is taken off the spending until the user says otherwise', () => {
       const store = useFiltersStore()
@@ -84,6 +116,7 @@ describe('useFiltersStore', () => {
         timePeriod: '1y',
         customStartDate: null,
         customEndDate: null,
+        trendsWindow: 6,
         deductPendingReimbursements: true,
       })
     )

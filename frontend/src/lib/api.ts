@@ -1599,6 +1599,68 @@ export interface UndoRunOutcomeDto {
   blocked: number
 }
 
+/** « Ce qui change »: what moves in a closed month, against the habit. */
+export type TrendWindow = 3 | 6 | 12
+export type TrendReading = 'everyday' | 'real'
+export type TrendKind =
+  'amount' | 'frequency' | 'basket' | 'share' | 'uncategorized'
+
+export interface TrendUnitDto {
+  type: 'category' | 'subcategory' | 'structure' | 'uncategorized'
+  /** Category or subcategory id; `pleasure` / `committed` for a share */
+  id: string
+  /** The category a link opens: itself, or a subcategory's parent */
+  categoryId: string | null
+  name: string
+  icon: string | null
+}
+
+export interface TrendPeriodDto {
+  /** `YYYY-MM-DD`, both included */
+  start: string
+  end: string
+}
+
+export interface TrendInsightDto {
+  kind: TrendKind
+  unit: TrendUnitDto
+  direction: 'up' | 'down'
+  /** `success` only for a drop on a pleasure and variable unit */
+  tone: 'neutral' | 'success'
+  current: number
+  reference: number
+  delta: number
+  /** null on a share (points), on the lines to file, or a zero reference */
+  deltaPct: number | null
+  sentence: string
+  windows: { current: TrendPeriodDto; reference: TrendPeriodDto }
+  /** Seven months, oldest first, the month read last */
+  series: number[]
+  score: number
+}
+
+export interface TrendsResponseDto {
+  /** `YYYY-MM` */
+  month: string
+  reading: TrendReading
+  /** The window read, shortened to the history when it must be */
+  window: number
+  completeMonths: number
+  insights: TrendInsightDto[]
+  quietSentence: string | null
+  /** The closed months the card can read, latest first */
+  availableMonths: string[]
+  digest: null
+}
+
+export interface TrendsQuery {
+  month?: string | undefined
+  window?: TrendWindow | undefined
+  reading?: TrendReading | undefined
+  deductReimbursements?: boolean | undefined
+  deductPendingReimbursements?: boolean | undefined
+}
+
 export const api = {
   // ── Bank sync ─────────────────────────────────────────────────────────────
 
@@ -2402,6 +2464,34 @@ export const api = {
     }
 
     return response.json() as Promise<DashboardSummaryDto>
+  },
+
+  /**
+   * « Ce qui change »: its own request, never part of the summary, so the
+   * dashboard's figures never wait for it.
+   */
+  async getSpendingTrends(query: TrendsQuery = {}): Promise<TrendsResponseDto> {
+    const params = new URLSearchParams()
+    if (query.month) params.set('month', query.month)
+    if (query.window) params.set('window', String(query.window))
+    if (query.reading) params.set('reading', query.reading)
+    if (query.deductReimbursements !== undefined)
+      params.set('deductReimbursements', String(query.deductReimbursements))
+    if (query.deductPendingReimbursements !== undefined)
+      params.set(
+        'deductPendingReimbursements',
+        String(query.deductPendingReimbursements)
+      )
+    const search = params.toString()
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/trends${search ? `?${search}` : ''}`
+    )
+
+    if (!response.ok) {
+      throw new Error('Impossible de charger les tendances')
+    }
+
+    return response.json() as Promise<TrendsResponseDto>
   },
 
   // Persons API

@@ -18,6 +18,17 @@ vi.mock('@/lib/api', () => ({
   UNCATEGORIZED_CATEGORY_ID: '__uncategorized__',
   api: {
     getDashboardSummary: vi.fn(),
+    getSpendingTrends: vi.fn().mockResolvedValue({
+      month: '2023-12',
+      reading: 'everyday',
+      window: 6,
+      completeMonths: 12,
+      insights: [],
+      quietSentence:
+        "Rien de notable en décembre : la vie courante est dans l'habitude.",
+      availableMonths: ['2023-12'],
+      digest: null,
+    }),
     getTransactions: vi.fn(),
     getAccounts: vi.fn().mockResolvedValue([]),
     getLegacyCategories: vi
@@ -41,6 +52,8 @@ vi.mock('@/stores/filters', () => ({
       return filtersState.timePeriod
     },
     setTimePeriod: filtersState.setTimePeriod,
+    trendsWindow: 6,
+    setTrendsWindow: vi.fn(),
     getDateRangeFromPeriod: vi.fn(() => ({ startDate: null, endDate: null })),
   }),
 }))
@@ -831,6 +844,78 @@ describe('DashboardPage', () => {
       })
 
       expect(card.exists()).toBe(false)
+    })
+  })
+
+  describe('Ce qui change', () => {
+    const structure = {
+      essential: 800,
+      pleasure: 45.5,
+      unknownNature: 0,
+      committed: 800,
+      variable: 45.5,
+      unknownRhythm: 0,
+      recurring: 0,
+      total: 845.5,
+    }
+
+    it('sits after the three indicators and before the structure', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue({
+        ...mockSummary,
+        spendingStructure: structure,
+        everydaySpendingStructure: structure,
+      })
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      const order = [
+        'kpi-card-savings',
+        'spending-trends',
+        'spending-structure',
+        'dashboard-expenses-section',
+      ].map(id => wrapper.find(`[data-testid="${id}"]`).element)
+      for (let i = 1; i < order.length; i++) {
+        const before = order[i - 1] as Node
+        expect(
+          before.compareDocumentPosition(order[i] as Node) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy()
+      }
+      expect(wrapper.find('[data-testid="trends-quiet"]').text()).toContain(
+        'Rien de notable en décembre'
+      )
+    })
+
+    it('asks once the summary is there, with the reading and the switches, never the period', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      expect(api.getSpendingTrends).toHaveBeenCalledTimes(1)
+      expect(api.getSpendingTrends).toHaveBeenCalledWith({
+        month: undefined,
+        window: 6,
+        reading: 'everyday',
+        deductReimbursements: true,
+        deductPendingReimbursements: false,
+      })
+    })
+
+    it('leaves the dashboard standing when the trends fail', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getSpendingTrends).mockRejectedValueOnce(
+        new Error('Impossible de charger les tendances')
+      )
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="trends-error"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="dashboard-error"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.find('[data-testid="kpi-card-expenses"]').exists()).toBe(
+        true
+      )
     })
   })
 })

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { api } from '@/lib/api'
+import { api, type TrendWindow } from '@/lib/api'
+import { DEFAULT_TREND_WINDOW, isTrendWindow } from '@/lib/trends'
 
 // v3: hidden categories are gone. Older payloads are dropped on read rather
 // than parsed: all they would still give is the period, one click to redo.
@@ -18,6 +19,9 @@ export const useFiltersStore = defineStore('filters', () => {
   // Custom range — only used when timePeriod === 'custom'
   const customStartDate = ref<string | null>(null)
   const customEndDate = ref<string | null>(null)
+  // The reference of « Ce qui change »: the habit of the 3, 6 or 12 months
+  // before the month read. A way of looking, kept with the period.
+  const trendsWindow = ref<TrendWindow>(DEFAULT_TREND_WINDOW)
 
   // === GLOBAL SETTINGS (synced to DB) ===
   // Whether a debt still owed is taken off the spending it hangs off, on the
@@ -41,6 +45,9 @@ export const useFiltersStore = defineStore('filters', () => {
         }
         customStartDate.value = data.customStartDate ?? null
         customEndDate.value = data.customEndDate ?? null
+        if (isTrendWindow(data.trendsWindow)) {
+          trendsWindow.value = data.trendsWindow
+        }
         // Global settings (cached)
         if (typeof data.deductPendingReimbursements === 'boolean') {
           deductPendingReimbursements.value = data.deductPendingReimbursements
@@ -60,6 +67,7 @@ export const useFiltersStore = defineStore('filters', () => {
         timePeriod: timePeriod.value,
         customStartDate: customStartDate.value,
         customEndDate: customEndDate.value,
+        trendsWindow: trendsWindow.value,
         // Global settings (cached)
         deductPendingReimbursements: deductPendingReimbursements.value,
       })
@@ -142,6 +150,12 @@ export const useFiltersStore = defineStore('filters', () => {
     saveToStorage()
   }
 
+  function setTrendsWindow(window: TrendWindow) {
+    if (!isTrendWindow(window)) return
+    trendsWindow.value = window
+    saveToStorage()
+  }
+
   function getDateRangeFromPeriod(period: TimePeriod): {
     startDate: string | null
     endDate: string | null
@@ -192,6 +206,9 @@ export const useFiltersStore = defineStore('filters', () => {
     setTimePeriod,
     setCustomDateRange,
     getDateRangeFromPeriod,
+    // « Ce qui change »
+    trendsWindow,
+    setTrendsWindow,
     // Sync functions
     isSyncing,
     lastSyncError,

@@ -11,6 +11,7 @@
   import LegacyMigrationBanner from '@/components/settings/LegacyMigrationBanner.vue'
   import SpendingStructureCard from '@/components/dashboard/SpendingStructureCard.vue'
   import TagFamiliesOfYearCard from '@/components/dashboard/TagFamiliesOfYearCard.vue'
+  import SpendingTrendsCard from '@/components/dashboard/SpendingTrendsCard.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
   import { useDashboardData } from '@/composables/useDashboardData'
@@ -587,6 +588,16 @@
             </div>
           </BaseCard>
         </div>
+
+        <!-- What changes: after the totals, before their detail. Its own
+             request, sent once the summary is on screen; it follows the
+             reading and the reimbursement switches, never the period. -->
+        <SpendingTrendsCard
+          class="mb-8"
+          :reading="breakdownMode"
+          :deduct-reimbursements="deductReimbursements"
+          :deduct-pending-reimbursements="deductPendingReimbursements"
+        />
 
         <SpendingStructureCard
           v-if="spendingStructure && everydaySpendingStructure"

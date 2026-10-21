@@ -328,6 +328,37 @@ describe('api', () => {
     })
   })
 
+  describe('getSpendingTrends', () => {
+    it('sends only the filters given, booleans included when false', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+
+      await api.getSpendingTrends()
+      await api.getSpendingTrends({
+        month: '2026-09',
+        window: 12,
+        reading: 'real',
+        deductReimbursements: false,
+        deductPendingReimbursements: true,
+      })
+
+      expect(mockFetch.mock.calls.map(([url]) => url)).toEqual([
+        'http://localhost:3000/trends',
+        'http://localhost:3000/trends?month=2026-09&window=12&reading=real&deductReimbursements=false&deductPendingReimbursements=true',
+      ])
+    })
+
+    it('says the trends could not be read', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 500 })
+
+      await expect(api.getSpendingTrends()).rejects.toThrow(
+        'Impossible de charger les tendances'
+      )
+    })
+  })
+
   describe('getTransactions', () => {
     it('should fetch transactions list', async () => {
       const mockTransactions = {
