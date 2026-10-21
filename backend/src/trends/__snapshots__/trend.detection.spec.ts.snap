@@ -2,6 +2,18 @@
 
 exports[`detectTrends — selection > returns the whole response, shaped for the card 1`] = `
 {
+  "availableMonths": [
+    "2026-09",
+    "2026-08",
+    "2026-07",
+    "2026-06",
+    "2026-05",
+    "2026-04",
+    "2026-03",
+    "2026-02",
+    "2026-01",
+    "2025-12",
+  ],
   "completeMonths": 12,
   "digest": null,
   "insights": [
@@ -25,6 +37,7 @@ exports[`detectTrends — selection > returns the whole response, shaped for the
       ],
       "tone": "neutral",
       "unit": {
+        "categoryId": "food",
         "icon": "icon-food",
         "id": "grocery",
         "name": "Supermarché",
@@ -61,6 +74,7 @@ exports[`detectTrends — selection > returns the whole response, shaped for the
       ],
       "tone": "success",
       "unit": {
+        "categoryId": "restaurants",
         "icon": "icon-restaurants",
         "id": "delivery",
         "name": "Livraison de repas",
@@ -97,6 +111,7 @@ exports[`detectTrends — selection > returns the whole response, shaped for the
       ],
       "tone": "neutral",
       "unit": {
+        "categoryId": "restaurants",
         "icon": "icon-restaurants",
         "id": "restaurant",
         "name": "Restaurant",
@@ -115,6 +130,7 @@ exports[`detectTrends — selection > returns the whole response, shaped for the
     },
   ],
   "month": "2026-09",
+  "quietSentence": null,
   "reading": "everyday",
   "window": 3,
 }

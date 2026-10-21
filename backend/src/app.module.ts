@@ -24,6 +24,7 @@ import { TagsModule } from './tags/tags.module'
 import { TagFamiliesModule } from './tag-families/tag-families.module'
 import { RecurrencesModule } from './recurrences/recurrences.module'
 import { BankSyncModule } from './bank-sync/bank-sync.module'
+import { TrendsModule } from './trends/trends.module'
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { BankSyncModule } from './bank-sync/bank-sync.module'
     TagFamiliesModule,
     RecurrencesModule,
     BankSyncModule,
+    TrendsModule,
     McpModule,
   ],
   providers: [

@@ -1,5 +1,6 @@
 import type { TestingModule } from '@nestjs/testing'
 import { Test } from '@nestjs/testing'
+import { BadRequestException } from '@nestjs/common'
 import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
@@ -162,5 +163,30 @@ describe('TrendsService', () => {
       now
     )
     expect(filterPreferences.deductsPendingByDefault).not.toHaveBeenCalled()
+  })
+
+  it('refuses a month not closed yet, before reading anything', async () => {
+    await expect(
+      service.getTrends('user-1', { month: '2026-10' }, now)
+    ).rejects.toBeInstanceOf(BadRequestException)
+    expect(recurrences.refreshQuietly).not.toHaveBeenCalled()
+    expect(prisma.$queryRaw).not.toHaveBeenCalled()
+  })
+
+  it('reads an older closed month on its own window and reading', async () => {
+    const result = await service.getTrends(
+      'user-1',
+      { month: '2026-08', window: 3, reading: 'real' },
+      now
+    )
+
+    expect(result).toMatchObject({
+      month: '2026-08',
+      window: 3,
+      reading: 'real',
+      quietSentence:
+        "Rien de notable en août : les dépenses sont dans l'habitude.",
+    })
+    expect(result.availableMonths[0]).toBe('2026-09')
   })
 })

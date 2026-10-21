@@ -25,6 +25,9 @@
  *    committed shares. A committed subcategory, a recurrence line or a
  *    smoothing slice never feeds a frequency or a basket: a charge that moves
  *    at constant frequency is a price, not a behaviour.
+ *    And the catalogue's 5, which reads no habit: the month's lines still to
+ *    file, which every other trend leaves unread. It comes first, since it
+ *    says how much the others can be trusted.
  * 4. An amount trend and its decomposition (Δamount = Δfrequency × reference
  *    basket + frequency × Δbasket) are one line: the dominant term chooses
  *    the sentence.
@@ -70,6 +73,10 @@ export const TREND_RULES = {
   share: { minPoints: 5 },
   /** A subcategory replaces its category when it explains this much of its gap. */
   subcategoryExplains: 0.7,
+  /** Trend 5: silent under 5 lines and under 10 % of the month's lines. */
+  uncategorized: { minLines: 5, minShare: 0.1 },
+  /** How far back the card's month selector goes, in closed months. */
+  selectableMonths: 24,
 } as const
 
 export type TrendWindow = (typeof TREND_RULES.windows)[number]
@@ -77,8 +84,10 @@ export type TrendReading = 'everyday' | 'real'
 export type TrendReference = 'median' | 'mean'
 export type TrendNature = 'ESSENTIAL' | 'PLEASURE'
 export type TrendRhythm = 'COMMITTED' | 'VARIABLE'
-export type TrendKind = 'amount' | 'frequency' | 'basket' | 'share'
-export type TrendUnitType = 'category' | 'subcategory' | 'structure'
+export type TrendKind =
+  'amount' | 'frequency' | 'basket' | 'share' | 'uncategorized'
+export type TrendUnitType =
+  'category' | 'subcategory' | 'structure' | 'uncategorized'
 export type TrendDirection = 'up' | 'down'
 export type TrendTone = 'neutral' | 'success'
 
@@ -157,6 +166,11 @@ export interface DetectTrendsOptions {
 export interface TrendUnit {
   type: TrendUnitType
   id: string
+  /**
+   * The category a link opens the unit in: the category itself, or a
+   * subcategory's parent. Null for a share and for the lines to file.
+   */
+  categoryId: string | null
   name: string
   icon: string | null
 }
@@ -175,12 +189,17 @@ export interface TrendInsight {
   tone: TrendTone
   /**
    * The measure of the month read and its reference: euros for an amount or
-   * a basket, lines for a frequency, percent of the total for a share.
+   * a basket, lines for a frequency, percent of the total for a share. Lines
+   * to file (trend 5) read the lines still to file against every line of the
+   * month.
    */
   current: number
   reference: number
   delta: number
-  /** Relative gap in percent; null on a share (the delta is in points) or a zero reference. */
+  /**
+   * Relative gap in percent; null on a share (the delta is in points), on
+   * lines to file (no habit to compare with) or on a zero reference.
+   */
   deltaPct: number | null
   sentence: string
   windows: { current: TrendPeriod; reference: TrendPeriod }
@@ -198,8 +217,21 @@ export interface TrendsResult {
   window: number
   /** Complete months of history before the month read. */
   completeMonths: number
-  /** Every trend that passes its thresholds, best first; the card shows 5. */
+  /**
+   * Every trend that passes its thresholds, best first; the card shows 5.
+   * Lines to file (trend 5) always come first.
+   */
   insights: TrendInsight[]
+  /**
+   * « Rien de notable en septembre : … » when the history is long enough
+   * and no habit moved; null otherwise.
+   */
+  quietSentence: string | null
+  /**
+   * The closed months the card can read, latest first: those with enough
+   * history before them, at most `selectableMonths`.
+   */
+  availableMonths: string[]
   /** Lot 5. */
   digest: null
 }
@@ -249,6 +281,11 @@ function monthsBetween(first: string, last: string): string[] {
   return months
 }
 
+/** « de septembre », « d'août ». */
+function ofMonth(name: string): string {
+  return /^[aeiouéâ]/i.test(name) ? `d'${name}` : `de ${name}`
+}
+
 /** The first month the history covers whole. */
 function firstCompleteMonth(historyStart: string): string {
   const day = Number(historyStart.slice(8, 10))
@@ -265,6 +302,30 @@ export function completeMonthsBefore(
   const first = firstCompleteMonth(historyStart)
   if (first >= month) return 0
   return monthsBetween(first, addMonths(month, -1)).length
+}
+
+/**
+ * The closed months worth reading, latest first: each has at least
+ * `minHistoryMonths` complete months before it.
+ */
+export function availableMonths(
+  historyStart: string | null,
+  closed: string
+): string[] {
+  if (!historyStart) return []
+  const first = addMonths(
+    firstCompleteMonth(historyStart),
+    TREND_RULES.minHistoryMonths
+  )
+  const months: string[] = []
+  for (
+    let m = closed;
+    m >= first && months.length < TREND_RULES.selectableMonths;
+    m = addMonths(m, -1)
+  ) {
+    months.push(m)
+  }
+  return months
 }
 
 /* ------------------------------------------------------------------ */
@@ -618,15 +679,6 @@ export function detectTrends(
   }
   const completeMonths = completeMonthsBefore(registry.historyStart, month)
   const window = Math.min(requested, completeMonths)
-  const silent: TrendsResult = {
-    month,
-    reading,
-    window,
-    completeMonths,
-    insights: [],
-    digest: null,
-  }
-  if (completeMonths < TREND_RULES.minHistoryMonths) return silent
 
   const referenceMonths = monthsBetween(
     addMonths(month, -window),
@@ -636,6 +688,37 @@ export function detectTrends(
     addMonths(month, -(TREND_RULES.seriesMonths - 1)),
     month
   )
+  const windows = {
+    current: { start: `${month}-01`, end: lastDayOf(month) },
+    reference: {
+      start: `${referenceMonths[0] ?? month}-01`,
+      end: lastDayOf(referenceMonths[referenceMonths.length - 1] ?? month),
+    },
+  }
+  const monthIndex = Number(month.slice(5, 7)) - 1
+  const monthName = MONTH_NAMES[monthIndex] ?? month
+
+  // Trend 5 reads no habit: it speaks even on a short history.
+  const toFile = uncategorizedInsight(
+    registry.lines,
+    month,
+    monthName,
+    seriesMonths,
+    windows
+  )
+  const lead: TrendInsight[] = toFile ? [toFile] : []
+  const silent: TrendsResult = {
+    month,
+    reading,
+    window,
+    completeMonths,
+    insights: lead,
+    quietSentence: null,
+    availableMonths: availableMonths(registry.historyStart, closed),
+    digest: null,
+  }
+  if (completeMonths < TREND_RULES.minHistoryMonths) return silent
+
   const span = monthsBetween(
     [referenceMonths[0] ?? month, seriesMonths[0] ?? month].sort()[0] ?? month,
     month
@@ -645,16 +728,8 @@ export function detectTrends(
   const current = at(month)
   const reference = options.reference === 'mean' ? mean : median
 
-  const windows = {
-    current: { start: `${month}-01`, end: lastDayOf(month) },
-    reference: {
-      start: `${referenceMonths[0] ?? month}-01`,
-      end: lastDayOf(referenceMonths[referenceMonths.length - 1] ?? month),
-    },
-  }
-  const monthIndex = Number(month.slice(5, 7)) - 1
   const ctx: SentenceContext = {
-    monthName: MONTH_NAMES[monthIndex] ?? month,
+    monthName,
     windowOf: `des ${window} mois précédents`,
     windowOn: `sur les ${window} mois précédents`,
     reading,
@@ -684,6 +759,7 @@ export function detectTrends(
     const unit: TrendUnit = {
       type: isSub ? 'subcategory' : 'category',
       id,
+      categoryId: isSub ? (sub?.categoryId ?? null) : id,
       name,
       icon: (isSub ? (sub?.icon ?? category?.icon) : category?.icon) ?? null,
     }
@@ -847,6 +923,7 @@ export function detectTrends(
       unit: {
         type: 'structure',
         id: axis,
+        categoryId: null,
         name: axis === 'pleasure' ? 'Part plaisir' : 'Part engagée',
         icon: null,
       },
@@ -866,7 +943,82 @@ export function detectTrends(
     })
   }
 
-  return { ...silent, insights: select(candidates) }
+  const habits = select(candidates)
+  return {
+    ...silent,
+    insights: [...lead, ...habits],
+    quietSentence: habits.length === 0 ? quietSentence(ctx) : null,
+  }
+}
+
+/** What the card says when no habit moved. */
+function quietSentence(ctx: SentenceContext): string {
+  const what =
+    ctx.reading === 'everyday'
+      ? "la vie courante est dans l'habitude"
+      : "les dépenses sont dans l'habitude"
+  return `Rien de notable en ${ctx.monthName} : ${what}.`
+}
+
+/**
+ * Trend 5: the month's expense lines filed in no category. Every other trend
+ * leaves them out, so a month with many of them reads emptier than it was.
+ * Counted whatever the reading — a line to file is to file, event or not —
+ * and silent under 5 lines and 10 % of the month's lines.
+ */
+function uncategorizedInsight(
+  lines: TrendLine[],
+  month: string,
+  monthName: string,
+  seriesMonths: string[],
+  windows: TrendInsight['windows']
+): TrendInsight | null {
+  const counts = new Map<string, { all: number; toFile: number }>()
+  let amount = 0
+  for (const line of lines) {
+    const key = line.date.slice(0, 7)
+    const count = counts.get(key) ?? { all: 0, toFile: 0 }
+    count.all += 1
+    if (!line.categoryId) {
+      count.toFile += 1
+      if (key === month) amount += line.amount
+    }
+    counts.set(key, count)
+  }
+  const current = counts.get(month) ?? { all: 0, toFile: 0 }
+  const rule = TREND_RULES.uncategorized
+  if (current.toFile === 0) return null
+  if (
+    current.toFile < rule.minLines &&
+    current.toFile / current.all < rule.minShare
+  ) {
+    return null
+  }
+  const n = current.toFile
+  const sentence =
+    n === 1
+      ? `1 dépense ${ofMonth(monthName)} est à classer : les tendances ne la lisent pas.`
+      : `${n} dépenses ${ofMonth(monthName)} sont à classer : les tendances ne les lisent pas.`
+  return {
+    kind: 'uncategorized',
+    unit: {
+      type: 'uncategorized',
+      id: 'uncategorized',
+      categoryId: null,
+      name: 'À classer',
+      icon: null,
+    },
+    direction: 'up',
+    tone: 'neutral',
+    current: n,
+    reference: current.all,
+    delta: n,
+    deltaPct: null,
+    sentence,
+    windows,
+    series: seriesMonths.map(m => counts.get(m)?.toFile ?? 0),
+    score: cents(Math.abs(amount)),
+  }
 }
 
 /**

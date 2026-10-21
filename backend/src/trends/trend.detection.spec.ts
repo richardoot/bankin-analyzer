@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   TREND_RULES,
   aggregateMonths,
+  availableMonths,
   completeMonthsBefore,
   detectTrends,
   formatEuros,
@@ -388,6 +389,8 @@ describe('detectTrends — the catalogue', () => {
     expect(restaurant?.unit).toEqual({
       type: 'subcategory',
       id: 'restaurant',
+      // A link opens a subcategory inside its category.
+      categoryId: 'restaurants',
       name: 'Restaurant',
       icon: 'icon-restaurants',
     })
@@ -442,6 +445,153 @@ describe('detectTrends — selection', () => {
     expect(
       detect(registry(ledger(SEPTEMBER_CHANGES)), { window: 3 })
     ).toMatchSnapshot()
+  })
+})
+
+/** `n` expense lines of `month` filed in no category. */
+function unfiled(month: string, n: number, amount = 20): TrendLine[] {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `unfiled-${month}-${i + 1}`,
+    date: `${month}-${String(3 + i).padStart(2, '0')}`,
+    amount,
+    categoryId: null,
+    subcategoryId: null,
+    nature: null,
+    rhythm: null,
+    isRecurring: false,
+    isExceptional: false,
+  }))
+}
+
+describe('detectTrends — lines to file (trend 5)', () => {
+  it('says how many lines of the month are still to file, first of the list', () => {
+    const result = detect(
+      // A euro each: in the total, too little to move a share.
+      registry([...ledger(SEPTEMBER_CHANGES), ...unfiled(SEPTEMBER, 12, 1)])
+    )
+
+    expect(result.insights[0]).toMatchObject({
+      kind: 'uncategorized',
+      unit: {
+        type: 'uncategorized',
+        id: 'uncategorized',
+        categoryId: null,
+        icon: null,
+      },
+      direction: 'up',
+      tone: 'neutral',
+      current: 12,
+      delta: 12,
+      deltaPct: null,
+      score: 12,
+      sentence:
+        '12 dépenses de septembre sont à classer : les tendances ne les lisent pas.',
+      windows: { current: { start: '2026-09-01', end: '2026-09-30' } },
+    })
+    // Every line of the month, the 12 included.
+    expect(result.insights[0]?.reference).toBe(
+      ledger(SEPTEMBER_CHANGES).filter(l => l.date.startsWith(SEPTEMBER))
+        .length + 12
+    )
+    // The habit trends follow, unchanged: an unfiled line is in no unit.
+    expect(result.insights.slice(1).map(i => i.unit.id)).toEqual(
+      detect(registry(ledger(SEPTEMBER_CHANGES))).insights.map(i => i.unit.id)
+    )
+  })
+
+  it('stays silent under 5 lines and under 10 % of the month', () => {
+    // 2 lines out of 28: neither 5 lines nor 10 %.
+    const quiet = detect(registry([...ledger(), ...unfiled(SEPTEMBER, 2)]))
+    expect(quiet.insights).toEqual([])
+
+    // 5 lines speak, whatever their share.
+    const five = detect(registry([...ledger(), ...unfiled(SEPTEMBER, 5)]))
+    expect(five.insights.map(i => i.kind)).toEqual(['uncategorized'])
+
+    // 1 line out of 4 is a quarter of the month: it speaks, in the singular.
+    const small = [
+      ...MONTHS.flatMap(m => monthLines(m, { rent: [650], pharmacy: [20] })),
+      ...monthLines(SEPTEMBER, { grocery: [48] }),
+      ...unfiled(SEPTEMBER, 1),
+    ]
+    expect(sentences(detect(registry(small)).insights)).toContain(
+      '1 dépense de septembre est à classer : les tendances ne la lisent pas.'
+    )
+  })
+
+  it("elides the month's name when it starts with a vowel", () => {
+    const august = detect(registry([...ledger(), ...unfiled('2026-08', 6)]), {
+      month: '2026-08',
+    })
+    expect(august.insights[0]?.sentence).toBe(
+      "6 dépenses d'août sont à classer : les tendances ne les lisent pas."
+    )
+  })
+
+  it('counts the lines to file in both readings, exceptional ones included', () => {
+    const lines = [
+      ...ledger(),
+      ...unfiled(SEPTEMBER, 6).map(l => ({ ...l, isExceptional: true })),
+    ]
+    for (const reading of ['everyday', 'real'] as const) {
+      expect(detect(registry(lines), { reading }).insights[0]?.current).toBe(6)
+    }
+  })
+
+  it('speaks even before the habit trends can, on a short history', () => {
+    const lines = [
+      ...MONTHS.slice(-2).flatMap(m => monthLines(m, HABIT)),
+      ...unfiled(SEPTEMBER, 7),
+    ]
+    const result = detect(registry(lines, [], '2026-08-01'))
+
+    expect(result.completeMonths).toBe(1)
+    expect(result.insights.map(i => i.kind)).toEqual(['uncategorized'])
+    expect(result.quietSentence).toBeNull()
+  })
+
+  it('draws the lines to file over the seven months of the sparkline', () => {
+    const result = detect(
+      registry([
+        ...ledger(),
+        ...unfiled('2026-08', 2),
+        ...unfiled(SEPTEMBER, 8),
+      ])
+    )
+    expect(result.insights[0]?.series).toEqual([0, 0, 0, 0, 0, 2, 8])
+  })
+})
+
+describe('detectTrends — what the card says around the list', () => {
+  it('says nothing changed when no habit moved, in the reading asked', () => {
+    expect(detect(registry(ledger())).quietSentence).toBe(
+      "Rien de notable en septembre : la vie courante est dans l'habitude."
+    )
+    expect(detect(registry(ledger()), { reading: 'real' }).quietSentence).toBe(
+      "Rien de notable en septembre : les dépenses sont dans l'habitude."
+    )
+  })
+
+  it('keeps the quiet sentence beside lines to file, and drops it beside a habit', () => {
+    expect(
+      detect(registry([...ledger(), ...unfiled(SEPTEMBER, 6)])).quietSentence
+    ).not.toBeNull()
+    expect(detect(registry(ledger(SEPTEMBER_CHANGES))).quietSentence).toBeNull()
+  })
+
+  it('offers the closed months with three complete months before them, latest first', () => {
+    expect(availableMonths('2026-05-03', '2026-09')).toEqual([
+      '2026-09',
+      '2026-08',
+    ])
+    // A history begun mid-May counts from June.
+    expect(availableMonths('2026-05-20', '2026-09')).toEqual(['2026-09'])
+    expect(availableMonths('2026-07-01', '2026-09')).toEqual([])
+    expect(availableMonths(null, '2026-09')).toEqual([])
+    expect(availableMonths('2015-01-01', '2026-09')).toHaveLength(
+      TREND_RULES.selectableMonths
+    )
+    expect(detect(registry(ledger())).availableMonths[0]).toBe(SEPTEMBER)
   })
 })
 
