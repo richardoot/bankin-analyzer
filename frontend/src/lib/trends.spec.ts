@@ -455,7 +455,7 @@ describe('tileOf', () => {
         figureUnit: 'du revenu',
         usual: 'contre 3 % · reste à vivre 2 152 €/mois',
         compact: '13 % du revenu · contre 3 %',
-        linkLabel: 'Virements',
+        linkLabel: 'Transactions',
       },
     ],
   ])('lays out %s', (_, insight, expected) => {
@@ -480,8 +480,21 @@ describe('tileOf', () => {
     ).toBe('Structure des dépenses')
   })
 
-  it('links the month as « Transactions », the savings as « Virements »', () => {
+  it('links the month as « Transactions », the savings quarter too', () => {
     expect(tileOf(trend('amount')).linkLabel).toBe('Transactions')
+    expect(
+      tileOf(
+        trend('savings', {
+          unit: {
+            type: 'savings',
+            id: 'savings',
+            categoryId: null,
+            name: 'Épargne',
+            icon: null,
+          },
+        })
+      ).linkLabel
+    ).toBe('Transactions')
   })
 })
 

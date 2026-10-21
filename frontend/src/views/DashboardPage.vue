@@ -57,6 +57,7 @@
     incomeCategoriesDetailed,
     spendingStructure,
     everydaySpendingStructure,
+    savings,
     savingsTransfers,
     pendingReceivables,
     savingsRate,
@@ -610,6 +611,7 @@
           class="mb-8"
           :actual="spendingStructure"
           :everyday="everydaySpendingStructure"
+          :savings="savings"
           :savings-transfers="savingsTransfers"
           :pending-receivables="pendingReceivables"
           :savings-rate="savingsRate"

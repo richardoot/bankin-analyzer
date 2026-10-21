@@ -253,6 +253,22 @@ describe('useDashboardData', () => {
       expect(totalIncome.value).toBe(5000)
     })
 
+    it('reads the savings as income less expenses, the server first', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue({
+        ...mockSummary,
+        savings: 4034.5,
+      })
+      const fromServer = useDashboardData()
+      await fromServer.fetchData()
+      expect(fromServer.savings.value).toBe(4034.5)
+
+      // An older server without the field: the same definition, locally.
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      const local = useDashboardData()
+      await local.fetchData()
+      expect(local.savings.value).toBe(4034.5)
+    })
+
     it('should compute expensesByCategory from summary', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 

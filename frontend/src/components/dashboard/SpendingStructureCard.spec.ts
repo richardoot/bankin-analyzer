@@ -34,6 +34,7 @@ function mountCard(
     props: {
       actual,
       everyday,
+      savings: 450,
       savingsTransfers: 300,
       pendingReceivables: 0,
       savingsRate: 0.15,
@@ -150,14 +151,36 @@ describe('SpendingStructureCard', () => {
     expect(nature.text()).toContain('33 %')
   })
 
-  it('reads the savings: amount, share of income, free money', () => {
+  it('reads the savings: income less expenses, its share of income, free money', () => {
     const wrapper = mountCard()
 
     const savings = wrapper.find('[data-testid="savings-reading"]').text()
-    expect(savings).toContain('300')
+    expect(savings).toContain('450')
     expect(savings).toContain('15 %')
+    expect(savings).toContain('Revenus moins dépenses')
     expect(savings).toContain('900')
     expect(savings).toContain('800')
+    expect(savings).toContain("Revenus moins l'engagé de la vie courante")
+  })
+
+  it('names the transfers towards savings apart, as a side note', () => {
+    const transfers = mountCard().find('[data-testid="savings-transfers"]')
+    expect(transfers.text()).toContain('300')
+    expect(transfers.text()).toContain("virés vers l'épargne")
+
+    expect(
+      mountCard({ savingsTransfers: 0 })
+        .find('[data-testid="savings-transfers"]')
+        .exists()
+    ).toBe(false)
+  })
+
+  it('shows a month in deficit as negative savings', () => {
+    const wrapper = mountCard({ savings: -250, savingsRate: -0.08 })
+
+    const savings = wrapper.find('[data-testid="savings-reading"]').text()
+    expect(savings).toMatch(/-\s?250|−\s?250/)
+    expect(savings).toContain('-8 %')
   })
 
   it('shows what is still owed as a stock, not per month', () => {
@@ -173,9 +196,9 @@ describe('SpendingStructureCard', () => {
   it('divides by the months of the period', () => {
     const wrapper = mountCard({ periodMonths: 3 })
 
-    expect(wrapper.find('[data-testid="savings-reading"]').text()).toContain(
-      '100'
-    )
+    const savings = wrapper.find('[data-testid="savings-reading"]').text()
+    expect(savings).toContain('150')
+    expect(savings).toContain('100')
   })
 
   it('names what is still waiting for the migration', () => {

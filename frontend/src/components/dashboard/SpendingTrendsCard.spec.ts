@@ -345,7 +345,6 @@ const savings: TrendInsightDto = {
     categoryId: null,
     name: 'Épargne',
     icon: null,
-    categoryIds: ['cat-livret', 'cat-pea'],
   },
   direction: 'up',
   tone: 'neutral',
@@ -1142,21 +1141,17 @@ describe('SpendingTrendsCard', () => {
       })
     })
 
-    it('opens the savings by their transfers, over the quarter and the one before', async () => {
+    it('opens every transaction of the quarter and of the one before: savings are income less expenses', async () => {
       const wrapper = await mountCard()
 
       expect(await linksOf(wrapper, 'savings')).toEqual([
         {
-          type: 'TRANSFER',
-          categoryIds: ['cat-livret', 'cat-pea'],
           from: '2026-07-01',
           to: '2026-09-30',
           gross: true,
           label: 'Épargne · juillet 2026 – septembre 2026',
         },
         {
-          type: 'TRANSFER',
-          categoryIds: ['cat-livret', 'cat-pea'],
           from: '2026-04-01',
           to: '2026-06-30',
           gross: true,
@@ -1166,7 +1161,7 @@ describe('SpendingTrendsCard', () => {
       const tile = wrapper.find('[data-testid="trend-savings"]')
       expect(tile.find('[data-testid="trend-icon"]').text()).toBe('💰')
       expect(tile.find('[data-testid="trend-month-link"]').text()).toBe(
-        'Virements'
+        'Transactions'
       )
     })
 

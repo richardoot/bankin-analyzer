@@ -235,7 +235,7 @@ export interface TrendTile {
   usual: string
   /** One line for a phone: « 8 achats · d'habitude 3,5 ». */
   compact: string
-  /** The month's link: « Transactions », or « Virements » for savings. */
+  /** The month's link: « Transactions », the quarter's for savings. */
   linkLabel: string
 }
 
@@ -472,16 +472,13 @@ export function tileOf(
       const rest = insight.remainingToLive
         ? ` · reste à vivre ${tileEuros(insight.remainingToLive.current)}/mois`
         : ''
-      return {
-        ...tile(
-          `${quarterOf(insight)} · par trimestre`,
-          `${Math.round(insight.current)} %`,
-          'du revenu',
-          `contre ${Math.round(insight.reference)} %${rest}`,
-          `${Math.round(insight.current)} % du revenu · contre ${Math.round(insight.reference)} %`
-        ),
-        linkLabel: 'Virements',
-      }
+      return tile(
+        `${quarterOf(insight)} · par trimestre`,
+        `${Math.round(insight.current)} %`,
+        'du revenu',
+        `contre ${Math.round(insight.reference)} %${rest}`,
+        `${Math.round(insight.current)} % du revenu · contre ${Math.round(insight.reference)} %`
+      )
     }
   }
 }
@@ -532,13 +529,10 @@ function unitFilters(
         recurrence: unit.id,
         recurrenceLabel: unit.name,
       }
-    // The transfers into a savings category: what the rate reads.
+    // Income less every expense: no set of categories, every transaction
+    // of the quarter.
     case 'savings':
-      return {
-        type: 'TRANSFER' as const,
-        gross: true,
-        categoryIds: unit.categoryIds?.length ? unit.categoryIds : undefined,
-      }
+      return { gross: true }
   }
 }
 

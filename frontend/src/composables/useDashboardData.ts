@@ -131,6 +131,13 @@ export function useDashboardData() {
   const everydaySpendingStructure = computed(
     () => summaryData.value?.everydaySpendingStructure ?? null
   )
+  // What the period kept: income less every expense, the server's figure.
+  const savings = computed(
+    () =>
+      summaryData.value?.savings ??
+      Math.round((totalIncome.value - totalExpenses.value) * 100) / 100
+  )
+  // Where some of it went: informational, it carries no rate.
   const savingsTransfers = computed(
     () => summaryData.value?.savingsTransfers ?? 0
   )
@@ -473,6 +480,7 @@ export function useDashboardData() {
     deductPendingReimbursements,
     spendingStructure,
     everydaySpendingStructure,
+    savings,
     savingsTransfers,
     pendingReceivables,
     savingsRate,

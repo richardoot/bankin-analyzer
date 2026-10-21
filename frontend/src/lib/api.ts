@@ -1161,11 +1161,13 @@ export interface DashboardSummaryDto {
   spendingStructure?: SpendingStructureDto
   /** The lifestyle: the same, without the exceptional share. */
   everydaySpendingStructure?: SpendingStructureDto
-  /** Money that left the everyday accounts towards savings, net of withdrawals. */
+  /** What the period kept: `totalIncome − totalExpenses`, negative in deficit. */
+  savings?: number
+  /** Money that left the everyday accounts towards savings, net of withdrawals: informational, no rate reads it. */
   savingsTransfers?: number
-  /** `savingsTransfers / totalIncome`, null without income. */
+  /** `savings / totalIncome`, null without income. */
   savingsRate?: number | null
-  /** Income minus committed everyday spending minus savings: what the month leaves free. */
+  /** Income minus committed everyday spending: what the period leaves once it is paid. */
   remainingToLive?: number | null
   /** What is still owed to the user across every open debt, a stock in full euros. */
   pendingReceivables?: number
@@ -1645,8 +1647,6 @@ export interface TrendUnitDto {
   icon: string | null
   /** A merchant only: the word the Transactions page searches it by */
   search?: string
-  /** Savings only: the transfer categories its link opens */
-  categoryIds?: string[]
 }
 
 /** One of the two subcategories a shift (11) links, the one down first */
@@ -1697,7 +1697,7 @@ export interface TrendInsightDto {
   parts?: TrendPartDto[]
   /** The highest or lowest of twelve months: a record, or the line it enriches */
   record?: 'high' | 'low'
-  /** Savings: what is left to live on per month, the quarter and the one before */
+  /** Savings: income less the everyday committed spending per month, the quarter and the one before */
   remainingToLive?: { current: number; reference: number }
 }
 

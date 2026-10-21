@@ -6,11 +6,13 @@
    * lifestyle once the exceptional share is set aside — because both are
    * true and they answer different questions.
    *
-   * Below, what the framework calls the savings reading: what left the
-   * everyday accounts towards savings, its share of the income, and what
-   * the period left free once the committed spending and the savings were
-   * out. And what is still owed to the user: money advanced to someone
-   * leaves the expenses without leaving sight.
+   * Below, what the framework calls the savings reading: what the period
+   * kept — the income less every expense, negative in deficit — and its
+   * share of the income, the transfers towards savings as a side note (they
+   * say where some of it went, not what was saved), and what the period
+   * leaves once the committed everyday spending is paid. And what is still
+   * owed to the user: money advanced to someone leaves the expenses without
+   * leaving sight.
    *
    * Under the rhythm, the share of the committed spending made of charges
    * that come back on their own — subscriptions, rent, insurance — with a
@@ -32,10 +34,15 @@
   const props = defineProps<{
     actual: SpendingStructureDto
     everyday: SpendingStructureDto
+    /** Income less every expense over the period; negative in deficit. */
+    savings: number
+    /** What left towards the savings categories: informational only. */
     savingsTransfers: number
     /** What is still owed across every open debt; a stock, not per month. */
     pendingReceivables: number
+    /** `savings` over the income, null without income. */
     savingsRate: number | null
+    /** Income less the committed everyday spending, null without income. */
     remainingToLive: number | null
     periodMonths: number
     /** Which of the two structures is read. */
@@ -275,13 +282,23 @@
       <div>
         <dt class="text-xs text-gray-500 dark:text-gray-400">Mis de côté</dt>
         <dd class="font-semibold text-gray-900 dark:text-gray-100">
-          {{ perMonth(savingsTransfers) }} / mois
+          {{ perMonth(savings) }} / mois
           <span
             v-if="savingsRate !== null"
             class="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400"
           >
             soit {{ percent(savingsRate) }} des revenus
           </span>
+        </dd>
+        <dd class="text-xs text-gray-500 dark:text-gray-400">
+          Revenus moins dépenses
+        </dd>
+        <dd
+          v-if="savingsTransfers !== 0"
+          class="text-xs text-gray-500 dark:text-gray-400"
+          data-testid="savings-transfers"
+        >
+          {{ perMonth(savingsTransfers) }} / mois virés vers l'épargne
         </dd>
       </div>
       <div>
@@ -322,6 +339,9 @@
             {{ perMonth(remainingToLive) }} / mois
           </template>
           <template v-else>—</template>
+        </dd>
+        <dd class="text-xs text-gray-500 dark:text-gray-400">
+          Revenus moins l'engagé de la vie courante
         </dd>
       </div>
     </dl>
