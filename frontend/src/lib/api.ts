@@ -1714,7 +1714,22 @@ export interface TrendsResponseDto {
   availableMonths: string[]
   /** The long comparisons the history cannot make yet; empty once it can */
   horizons: TrendHorizonDto[]
+  /** Always null here: the paragraph has its own request, `getTrendDigest` */
   digest: null
+}
+
+/** The paragraph Claude wrote from a closed month's trends */
+export interface TrendDigestDto {
+  /** `YYYY-MM` */
+  month: string
+  reading: TrendReading
+  window: number
+  /** Three to five sentences, every number one of the trends' */
+  text: string
+  /** e.g. `claude-haiku-5-5` */
+  model: string
+  /** ISO 8601 */
+  generatedAt: string
 }
 
 export interface TrendsQuery {
@@ -1723,6 +1738,23 @@ export interface TrendsQuery {
   reading?: TrendReading | undefined
   deductReimbursements?: boolean | undefined
   deductPendingReimbursements?: boolean | undefined
+}
+
+/** The trends' filters as a query string, `?…` or nothing. */
+function trendsSearch(query: TrendsQuery): string {
+  const params = new URLSearchParams()
+  if (query.month) params.set('month', query.month)
+  if (query.window) params.set('window', String(query.window))
+  if (query.reading) params.set('reading', query.reading)
+  if (query.deductReimbursements !== undefined)
+    params.set('deductReimbursements', String(query.deductReimbursements))
+  if (query.deductPendingReimbursements !== undefined)
+    params.set(
+      'deductPendingReimbursements',
+      String(query.deductPendingReimbursements)
+    )
+  const search = params.toString()
+  return search ? `?${search}` : ''
 }
 
 export const api = {
@@ -2535,20 +2567,8 @@ export const api = {
    * dashboard's figures never wait for it.
    */
   async getSpendingTrends(query: TrendsQuery = {}): Promise<TrendsResponseDto> {
-    const params = new URLSearchParams()
-    if (query.month) params.set('month', query.month)
-    if (query.window) params.set('window', String(query.window))
-    if (query.reading) params.set('reading', query.reading)
-    if (query.deductReimbursements !== undefined)
-      params.set('deductReimbursements', String(query.deductReimbursements))
-    if (query.deductPendingReimbursements !== undefined)
-      params.set(
-        'deductPendingReimbursements',
-        String(query.deductPendingReimbursements)
-      )
-    const search = params.toString()
     const response = await fetchWithAuth(
-      `${API_BASE_URL}/trends${search ? `?${search}` : ''}`
+      `${API_BASE_URL}/trends${trendsSearch(query)}`
     )
 
     if (!response.ok) {
@@ -2556,6 +2576,40 @@ export const api = {
     }
 
     return response.json() as Promise<TrendsResponseDto>
+  },
+
+  /**
+   * The paragraph under « Ce qui change »: the remembered one, else written
+   * now. Asked after the list, never before; null when there is none.
+   */
+  async getTrendDigest(
+    query: TrendsQuery = {}
+  ): Promise<TrendDigestDto | null> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/trends/digest${trendsSearch(query)}`
+    )
+
+    if (!response.ok) {
+      throw new Error('Impossible de charger le bilan rédigé')
+    }
+
+    return ((await response.json()) as { digest: TrendDigestDto | null }).digest
+  },
+
+  /** « Régénérer »: the paragraph written again; null when it failed. */
+  async regenerateTrendDigest(
+    query: TrendsQuery = {}
+  ): Promise<TrendDigestDto | null> {
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/trends/digest/regenerate${trendsSearch(query)}`,
+      { method: 'POST' }
+    )
+
+    if (!response.ok) {
+      throw new Error('Impossible de régénérer le bilan rédigé')
+    }
+
+    return ((await response.json()) as { digest: TrendDigestDto | null }).digest
   },
 
   // Persons API

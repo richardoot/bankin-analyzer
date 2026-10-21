@@ -9,8 +9,9 @@
     TrendWindow,
   } from '@/lib/api'
   import { useSpendingTrends } from '@/composables/useSpendingTrends'
+  import { modelName, useTrendDigest } from '@/composables/useTrendDigest'
   import { TREND_WINDOWS } from '@/lib/trends'
-  import { formatCurrency, formatMonth } from '@/lib/formatters'
+  import { formatCurrency, formatDate, formatMonth } from '@/lib/formatters'
   import { NO_CATEGORY, transactionsLink } from '@/lib/transactionsLink'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import BaseField from '@/components/ui/BaseField.vue'
@@ -63,6 +64,19 @@
 
   onMounted(() => {
     void fetchTrends()
+  })
+
+  // The written paragraph (lot 5): asked once the list is here, never
+  // before; its absence changes nothing above it.
+  const {
+    digest,
+    isRegenerating,
+    regenerate: regenerateDigest,
+  } = useTrendDigest({
+    trends: data,
+    window: referenceWindow,
+    deductReimbursements: () => props.deductReimbursements,
+    deductPendingReimbursements: () => props.deductPendingReimbursements,
   })
 
   const windowOptions = TREND_WINDOWS.map(value => ({
@@ -604,6 +618,39 @@
       >
         {{ expanded ? 'Réduire' : `Voir tout (${insights.length})` }}
       </button>
+
+      <!-- Under the list, the month told in a few sentences; on a phone too. -->
+      <figure
+        v-if="digest"
+        class="mt-4 border-t border-gray-100 pt-4 dark:border-slate-800"
+        data-testid="trends-digest"
+      >
+        <blockquote
+          class="text-sm leading-relaxed text-gray-800 dark:text-gray-200"
+          data-testid="trends-digest-text"
+        >
+          {{ digest.text }}
+        </blockquote>
+        <figcaption
+          class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400"
+        >
+          <span data-testid="trends-digest-mention">
+            Rédigé par l'IA à partir des tendances ci-dessus ·
+            {{ modelName(digest.model) }} · le
+            {{ formatDate(digest.generatedAt, 'long') }}
+          </span>
+          <button
+            type="button"
+            class="min-h-[44px] font-medium text-primary-700 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:cursor-wait disabled:opacity-60 sm:min-h-0 dark:text-primary-400"
+            :disabled="isRegenerating"
+            :aria-busy="isRegenerating"
+            data-testid="trends-digest-regenerate"
+            @click="regenerateDigest()"
+          >
+            {{ isRegenerating ? 'Rédaction…' : 'Régénérer' }}
+          </button>
+        </figcaption>
+      </figure>
     </div>
   </BaseCard>
 </template>

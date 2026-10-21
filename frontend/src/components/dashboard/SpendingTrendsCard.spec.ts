@@ -10,15 +10,20 @@ import {
   parseTransactionsQuery,
   type TransactionsLinkFilters,
 } from '@/lib/transactionsLink'
+import { resetTrendDigestSession } from '@/composables/useTrendDigest'
 import SpendingTrendsCard from './SpendingTrendsCard.vue'
 
 enableAutoUnmount(afterEach)
 
-const { getSpendingTrends } = vi.hoisted(() => ({
-  getSpendingTrends: vi.fn(),
-}))
+const { getSpendingTrends, getTrendDigest, regenerateTrendDigest } = vi.hoisted(
+  () => ({
+    getSpendingTrends: vi.fn(),
+    getTrendDigest: vi.fn(),
+    regenerateTrendDigest: vi.fn(),
+  })
+)
 vi.mock('@/lib/api', () => ({
-  api: { getSpendingTrends },
+  api: { getSpendingTrends, getTrendDigest, regenerateTrendDigest },
 }))
 
 const windows = {
@@ -415,6 +420,11 @@ describe('SpendingTrendsCard', () => {
   beforeEach(() => {
     getSpendingTrends.mockReset()
     getSpendingTrends.mockResolvedValue(response())
+    // No paragraph unless a test writes one: the list is the card.
+    resetTrendDigestSession()
+    getTrendDigest.mockReset()
+    getTrendDigest.mockResolvedValue(null)
+    regenerateTrendDigest.mockReset()
     vi.mocked(localStorage.getItem).mockReturnValue(null)
   })
 
@@ -929,5 +939,101 @@ describe('SpendingTrendsCard', () => {
         'hidden'
       )
     }
+  })
+
+  describe('the written paragraph (lot 5)', () => {
+    const paragraph = {
+      month: '2026-09',
+      reading: 'everyday' as const,
+      window: 6,
+      text: 'En septembre, les restaurants montent à 312 €.',
+      model: 'claude-haiku-5-5',
+      generatedAt: '2026-10-01T09:00:00.000Z',
+    }
+
+    it('asks for it after the list, with the list’s month and the window asked', async () => {
+      const order: string[] = []
+      getSpendingTrends.mockImplementation(() => {
+        order.push('trends')
+        return Promise.resolve(response())
+      })
+      getTrendDigest.mockImplementation(() => {
+        order.push('digest')
+        return Promise.resolve(paragraph)
+      })
+
+      await mountCard({ deductPendingReimbursements: false })
+
+      expect(order).toEqual(['trends', 'digest'])
+      expect(getTrendDigest).toHaveBeenCalledWith({
+        month: '2026-09',
+        reading: 'everyday',
+        window: 6,
+        deductReimbursements: true,
+        deductPendingReimbursements: false,
+      })
+    })
+
+    it('shows the paragraph under the list, with its mention, model and date', async () => {
+      getTrendDigest.mockResolvedValue(paragraph)
+      const wrapper = await mountCard()
+
+      const block = wrapper.find('[data-testid="trends-digest"]')
+      expect(block.exists()).toBe(true)
+      expect(block.find('[data-testid="trends-digest-text"]').text()).toBe(
+        paragraph.text
+      )
+      expect(
+        block.find('[data-testid="trends-digest-mention"]').text()
+      ).toMatch(
+        /^Rédigé par l'IA à partir des tendances ci-dessus · Claude Haiku 5\.5 · le 1 octobre 2026$/
+      )
+      // Under the list, never above it.
+      const html = wrapper.html()
+      expect(html.indexOf('data-testid="trends-list"')).toBeLessThan(
+        html.indexOf('data-testid="trends-digest"')
+      )
+      // Not hidden on a phone.
+      expect(block.classes()).not.toContain('hidden')
+    })
+
+    it('changes nothing in the card without a paragraph', async () => {
+      const wrapper = await mountCard()
+
+      expect(wrapper.find('[data-testid="trends-digest"]').exists()).toBe(false)
+      expect(wrapper.findAll('[data-testid="trend-sentence"]')).toHaveLength(5)
+    })
+
+    it('stays quiet when the paragraph fails to load', async () => {
+      getTrendDigest.mockRejectedValue(new Error('500'))
+      const wrapper = await mountCard()
+
+      expect(wrapper.find('[data-testid="trends-digest"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="trends-error"]').exists()).toBe(false)
+    })
+
+    it('writes it again on « Régénérer », the button disabled meanwhile', async () => {
+      getTrendDigest.mockResolvedValue(paragraph)
+      let finish: (value: typeof paragraph) => void = () => undefined
+      regenerateTrendDigest.mockReturnValue(
+        new Promise(resolve => {
+          finish = resolve
+        })
+      )
+      const wrapper = await mountCard()
+      const button = wrapper.find('[data-testid="trends-digest-regenerate"]')
+      expect(button.text()).toBe('Régénérer')
+
+      await button.trigger('click')
+      expect(button.attributes('disabled')).toBeDefined()
+      expect(button.text()).toBe('Rédaction…')
+
+      finish({ ...paragraph, text: 'Autrement dit, septembre.' })
+      await flushPromises()
+      expect(wrapper.find('[data-testid="trends-digest-text"]').text()).toBe(
+        'Autrement dit, septembre.'
+      )
+      expect(button.attributes('disabled')).toBeUndefined()
+    })
   })
 })
