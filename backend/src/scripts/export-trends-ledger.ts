@@ -1,5 +1,5 @@
 /**
- * Dry run of the spending trends (lots 0 and 2 of
+ * Dry run of the spending trends (lots 0, 2 and 3 of
  * agent-os/product/spending-trends.md), and the anonymised ledgers their
  * snapshot test replays.
  *
@@ -9,9 +9,12 @@
  * each reference window (3, 6 and 12 months) in the everyday reading: every
  * trend that passes its thresholds, the five the card would show, and the
  * same detection on a mean instead of a median, to confirm the choice on real
- * data; and apart, every trend of lot 2 (merchants, recurrences). It also
- * checks each month's total against the dashboard's `getSummary`, the
- * golden master lot 1 pins down.
+ * data; and apart, every trend of lot 2 (merchants, recurrences) and of lot
+ * 3 (shift, drift, record, same month a year before, savings), with the
+ * long comparisons the history is still too short for. It also checks each
+ * month's total against the dashboard's `getSummary`, the golden master lot
+ * 1 pins down, and each month's income and the period's savings transfers,
+ * which trend 15 reads.
  *
  * ## What it writes
  *
@@ -20,7 +23,8 @@
  * amounts are kept; labels go through the recurrence export's keyed
  * pseudonyms, and so do the recurrence cache's merchant keys and service
  * names; the names of categories and subcategories the user made up
- * too; ids are renumbered. The replay of the anonymised ledger must find the
+ * too; ids are renumbered; income and savings by month (trend 15) are kept
+ * as they are, figures without a label. The replay of the anonymised ledger must find the
  * same trends as the real one, or nothing is written.
  *
  * Read-only: the connection is opened with `default_transaction_read_only`,
@@ -152,6 +156,14 @@ const isLot2 = (i: TrendInsight): boolean =>
   i.unit.type === 'recurrence' ||
   i.kind === 'lostHabit'
 
+const LOT_3 = new Set(['shift', 'drift', 'record', 'yearAgo', 'savings'])
+
+/** Lot 3's own lines, and the habit lines a record or a season enriched. */
+const isLot3 = (i: TrendInsight): boolean =>
+  LOT_3.has(i.kind) ||
+  i.record !== undefined ||
+  i.sentence.includes(', comme en ')
+
 const identity = (i: TrendInsight): string =>
   `${i.kind}|${i.unit.type}|${i.unit.id}`
 
@@ -217,6 +229,10 @@ function anonymize(
         categoryId: maybe(p.categoryId, 'cat'),
         subcategoryId: maybe(p.subcategoryId, 'sub'),
       })),
+      flows: registry.flows ?? [],
+      savingsCategoryIds: (registry.savingsCategoryIds ?? []).map(id =>
+        renumber(id, 'cat')
+      ),
     },
   }
 }
@@ -299,6 +315,9 @@ export async function main(
           rest: result.insights.slice(TREND_RULES.shown).map(brief),
           // Lot 2: merchants (6 to 8) and recurrences (9, 10), shown or not.
           lot2: result.insights.filter(isLot2).map(brief),
+          // Lot 3: 11 to 15, and the lines a record or a season enriched.
+          lot3: result.insights.filter(isLot3).map(brief),
+          horizons: result.horizons.map(h => h.sentence),
         }
         medianVsMean[window] = {
           median: medIds.size,
@@ -358,6 +377,31 @@ export async function main(
     log(
       `  golden master: ${span.length - disagreements.length}/${span.length} months agree with getSummary`
     )
+    // Trend 15 reads income and savings apart: the same golden master.
+    const flows = new Map((registry.flows ?? []).map(f => [f.month, f]))
+    const incomeMaster = span.map(month => {
+      const trends = round(flows.get(month)?.income ?? 0)
+      const dashboard =
+        summary.monthlyData.find(m => m.month === month)?.income ?? 0
+      return {
+        month,
+        trends,
+        dashboard,
+        agrees: Math.abs(trends - dashboard) < 0.011,
+      }
+    })
+    const saved = round(
+      span.reduce((sum, m) => sum + (flows.get(m)?.savings ?? 0), 0)
+    )
+    const savingsMaster = {
+      trends: saved,
+      dashboard: summary.savingsTransfers,
+      agrees: Math.abs(saved - summary.savingsTransfers) < 0.011,
+    }
+    log(
+      `  income: ${incomeMaster.filter(i => i.agrees).length}/${span.length} months agree; ` +
+        `savings ${saved} against ${summary.savingsTransfers}`
+    )
 
     report.push({
       email: user.email,
@@ -366,6 +410,8 @@ export async function main(
       deductPending,
       months: perMonth,
       goldenMaster,
+      incomeMaster,
+      savingsMaster,
     })
 
     if (options.ledgers && !user.email.endsWith('.local')) {

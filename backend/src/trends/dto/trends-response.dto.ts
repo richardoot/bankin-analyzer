@@ -6,8 +6,9 @@
 export class TrendUnitDto {
   /**
    * `category`, `subcategory`, `structure` (a share), `uncategorized` (lines
-   * to file), `merchant` (trends 6 to 8) or `recurrence` (trends 9 and 10).
-   * A shift (11) is a `category`, its two subcategories in `parts`.
+   * to file), `merchant` (trends 6 to 8), `recurrence` (trends 9 and 10) or
+   * `savings` (trend 15). A shift (11) is a `category`, its two
+   * subcategories in `parts`.
    */
   type!:
     | 'category'
@@ -16,10 +17,12 @@ export class TrendUnitDto {
     | 'uncategorized'
     | 'merchant'
     | 'recurrence'
+    | 'savings'
   /**
    * The category or subcategory id; `pleasure` or `committed` for a share;
    * `uncategorized`; a merchant's main `merchantKey`; a recurrence's
-   * `<amountBucket>:<merchantKey>`, the Transactions page's `recurrence` filter
+   * `<amountBucket>:<merchantKey>`, the Transactions page's `recurrence` filter;
+   * `savings`
    */
   id!: string
   /**
@@ -34,6 +37,8 @@ export class TrendUnitDto {
   icon!: string | null
   /** A merchant only: the word the Transactions page's text search finds it by */
   search?: string
+  /** Savings only: the transfer categories (emergency, project, investment) its link opens */
+  categoryIds?: string[]
 }
 
 /** One of the two subcategories a shift (trend 11) links, the one down first */
@@ -51,8 +56,8 @@ export class TrendPartDto {
 
 /** A long comparison the history is still too short for */
 export class TrendHorizonDto {
-  kind!: 'drift' | 'record' | 'yearAgo'
-  /** Complete months it reads, the month read included: 6, 12 or 13 */
+  kind!: 'drift' | 'record' | 'yearAgo' | 'savings'
+  /** Complete months it reads, the month read included: 6, 12, 13 or 6 */
   months!: number
   /** How many are still missing */
   missing!: number
@@ -79,7 +84,7 @@ export class TrendInsightDto {
    * `amount` (1), `frequency` (2, and 6 on a merchant), `basket` (3),
    * `share` (4), `uncategorized` (5), `newHabit` (7), `lostHabit` (8),
    * `subscription` (9: `up` appeared, `down` stopped), `price` (10),
-   * `shift` (11), `drift` (12), `record` (13), `yearAgo` (14)
+   * `shift` (11), `drift` (12), `record` (13), `yearAgo` (14), `savings` (15)
    */
   kind!:
     | 'amount'
@@ -95,6 +100,7 @@ export class TrendInsightDto {
     | 'drift'
     | 'record'
     | 'yearAgo'
+    | 'savings'
   unit!: TrendUnitDto
   direction!: 'up' | 'down'
   /** `success` only for a drop on a pleasure and variable unit; never on a recurrence */
@@ -105,21 +111,23 @@ export class TrendInsightDto {
    * total (share), days since it began (new habit), 0 (lost habit), the
    * monthly equivalent (subscription appeared; 0 once stopped), the price
    * of a charge (price); the category's euros for a shift, a drift, a
-   * record and the same month a year before
+   * record and the same month a year before; the savings rate in percent of
+   * the income over the last three months (savings)
    */
   current!: number
   /**
    * The reference's measure; for the lines to file, every line of the month;
    * the first month of the six for a drift, the median of the eleven months
-   * before for a record, the same month a year before
+   * before for a record, the same month a year before, the rate of the
+   * three months before for savings
    */
   reference!: number
-  /** For a drift, the fitted change over its six months in euros */
+  /** For a drift, the fitted change over its six months in euros; points for savings */
   delta!: number
   /**
    * Relative gap in percent; for a drift, the slope in percent of its
    * six-month mean per month; null on a share, on the lines to file, on a
-   * habit or a subscription that came or went, or on a zero
+   * habit or a subscription that came or went, on savings, or on a zero
    * reference
    */
   deltaPct!: number | null
@@ -133,7 +141,8 @@ export class TrendInsightDto {
    * frequency Δ days × reference basket; a new habit's month, a lost
    * habit's usual month; a subscription's monthly equivalent, a price's Δ
    * monthly equivalent; the larger of a shift's two gaps; a drift's fitted
-   * change over six months
+   * change over six months; Δ points × the quarter's monthly income for
+   * savings
    */
   score!: number
   /** A shift (11): the subcategory that went down, then the one that went up */
@@ -143,6 +152,8 @@ export class TrendInsightDto {
    * on the amount or drift line of the category a record enriches
    */
   record?: 'high' | 'low'
+  /** Savings (15): what is left to live on per month, the quarter and the one before */
+  remainingToLive?: { current: number; reference: number }
 }
 
 export class TrendsResponseDto {
@@ -160,7 +171,7 @@ export class TrendsResponseDto {
   /** The closed months the card can read, latest first */
   availableMonths!: string[]
   /**
-   * The long comparisons (drift, record, same month a year before)
+   * The long comparisons (drift, savings, record, same month a year before)
    * this month's history cannot make yet; empty once it can
    */
   horizons!: TrendHorizonDto[]

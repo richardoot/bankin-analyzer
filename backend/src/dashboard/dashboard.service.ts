@@ -227,8 +227,11 @@ interface FamiliesOfYear {
   realExpenses: number | null
 }
 
-/** The transfer categories whose rows mean money set aside. */
-const SAVINGS_CATALOG_KEYS = new Set([
+/**
+ * The transfer categories whose rows mean money set aside. Read by the
+ * spending trends too (trend 15), so the two count the same savings.
+ */
+export const SAVINGS_CATALOG_KEYS = new Set([
   'emergency-savings',
   'project-savings',
   'investment',

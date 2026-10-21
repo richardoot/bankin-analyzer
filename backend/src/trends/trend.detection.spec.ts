@@ -24,6 +24,7 @@ import {
   SEPTEMBER_CHANGES,
   SUBCATEGORIES,
   CATEGORIES,
+  flows,
   ledger,
   monthLines,
   recurrence,
@@ -1431,6 +1432,99 @@ describe('detectTrends — the long run (trends 12 to 14)', () => {
     expect(
       insights.some(i => i.kind === 'record' || i.kind === 'yearAgo')
     ).toBe(false)
+  })
+})
+
+describe('detectTrends — savings (trend 15)', () => {
+  const withFlows = (
+    f: ReturnType<typeof flows>,
+    historyStart?: string
+  ): TrendRegistry => ({
+    ...registry(ledger(), [], historyStart),
+    flows: f,
+    savingsCategoryIds: ['savings-b', 'savings-a'],
+  })
+
+  it('reads the share of the income set aside, quarter against quarter, with what is left to live on', () => {
+    const insights = detect(withFlows(flows(3000, 300, 540))).insights
+
+    expect(insights).toEqual([
+      expect.objectContaining({
+        kind: 'savings',
+        unit: {
+          type: 'savings',
+          id: 'savings',
+          categoryId: null,
+          name: 'Épargne',
+          icon: null,
+          categoryIds: ['savings-a', 'savings-b'],
+        },
+        direction: 'up',
+        tone: 'neutral',
+        current: 18,
+        reference: 10,
+        delta: 8,
+        deltaPct: null,
+        // Rent and streaming are the everyday committed spending: 663,49 €.
+        remainingToLive: { current: 1796.51, reference: 2036.51 },
+        // 8 points of a 3 000 € month.
+        score: 240,
+        sentence:
+          "Épargne : 18 % du revenu de juillet à septembre, contre 10 % d'avril à juin ; reste à vivre 1 797 € par mois, contre 2 037 €.",
+        windows: {
+          current: { start: '2026-07-01', end: '2026-09-30' },
+          reference: { start: '2026-04-01', end: '2026-06-30' },
+        },
+        series: [10, 10, 10, 10, 18, 18, 18],
+      }),
+    ])
+  })
+
+  it('never follows the card window: a quarter is three months whatever the window', () => {
+    for (const window of TREND_RULES.windows) {
+      expect(
+        detect(withFlows(flows(3000, 300, 540)), { window }).insights[0]
+          ?.windows
+      ).toEqual({
+        current: { start: '2026-07-01', end: '2026-09-30' },
+        reference: { start: '2026-04-01', end: '2026-06-30' },
+      })
+    }
+  })
+
+  it('stays silent under 3 points, without income, or when nothing moves', () => {
+    // 12 % against 10 %.
+    expect(detect(withFlows(flows(3000, 300, 360))).insights).toEqual([])
+    expect(detect(withFlows(flows(0, 300, 540))).insights).toEqual([])
+    expect(detect(withFlows(flows(3000, 300))).insights).toEqual([])
+    // Without the flows read, there is nothing to say.
+    expect(detect(registry(ledger())).insights).toEqual([])
+  })
+
+  it('waits for six complete months, and says so', () => {
+    // From May: four complete months before September.
+    const result = detect(withFlows(flows(3000, 300, 540), '2026-05-01'))
+
+    expect(result.insights.some(i => i.kind === 'savings')).toBe(false)
+    expect(result.horizons.map(h => [h.kind, h.missing])).toEqual([
+      ['drift', 1],
+      ['savings', 1],
+      ['record', 7],
+      ['yearAgo', 8],
+    ])
+    expect(result.horizons[1]?.sentence).toBe(
+      "L'épargne d'un trimestre sur l'autre demande 6 mois complets : il en manque 1."
+    )
+  })
+
+  it('leaves the sum of a month to its expense units', () => {
+    const reg = withFlows(flows(3000, 300, 540))
+    for (const aggregate of aggregateMonths(reg, 'everyday', MONTHS).values()) {
+      const units = [...aggregate.units]
+        .filter(([key]) => key.startsWith('category:'))
+        .reduce((sum, [, unit]) => sum + unit.amount, 0)
+      expect(units + aggregate.uncategorized).toBeCloseTo(aggregate.total, 9)
+    }
   })
 })
 

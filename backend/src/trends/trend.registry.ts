@@ -4,12 +4,15 @@
  * reimbursements through `netAmountSql`, divided by the account's divisor,
  * stats-excluded accounts out, exceptional lines and recurrence lines marked
  * the way the dashboard's aggregation marks them, smoothed purchases read by
- * `AmortizedSlicesService`.
+ * `AmortizedSlicesService`. And, for trend 15, each month's income and
+ * savings transfers as the dashboard's `totalIncome` and `savingsTransfers`
+ * add them up.
  *
  * Shared by `TrendsService` and the dry-run script, so the two can never
  * disagree about what a trend reads. Reads only.
  */
 
+import { SAVINGS_CATALOG_KEYS } from '../dashboard/dashboard.service'
 import { Prisma } from '../generated/prisma'
 import type { PrismaClient } from '../generated/prisma'
 import {
@@ -25,6 +28,7 @@ import {
 import type { AmortizedSlicesService } from '../transactions/amortized-slices.service'
 import type {
   TrendCategory,
+  TrendFlow,
   TrendLine,
   TrendNature,
   TrendRegistry,
@@ -65,6 +69,12 @@ interface CategoryRow {
 
 interface SubcategoryRow extends CategoryRow {
   category_id: string
+}
+
+interface FlowRow {
+  month: string
+  income: number
+  savings: number
 }
 
 const asNature = (v: string | null): TrendNature | null =>
@@ -129,8 +139,10 @@ export async function readTrendRegistry(
       AND ${IN_STATS}
     ORDER BY t.date, t.id
   `)
-  const categories = await prisma.$queryRaw<CategoryRow[]>(Prisma.sql`
-    SELECT id, name, icon, default_nature::text AS nature, default_rhythm::text AS rhythm
+  const categories = await prisma.$queryRaw<
+    Array<CategoryRow & { catalog_key?: string | null }>
+  >(Prisma.sql`
+    SELECT id, name, icon, default_nature::text AS nature, default_rhythm::text AS rhythm, catalog_key
     FROM app.categories
     WHERE user_id = ${userId}
     ORDER BY id
@@ -148,6 +160,28 @@ export async function readTrendRegistry(
       WHERE t.user_id = ${userId}
     `
   )
+  // Trend 15, as the dashboard sums them: every income row net, and the
+  // transfers filed in a savings category, out as saved, back in as unsaved.
+  const savingsKeys = Prisma.join([...SAVINGS_CATALOG_KEYS])
+  const flows = await prisma.$queryRaw<FlowRow[]>(Prisma.sql`
+    WITH ${reimbursementCreditCtes(userId)}
+    SELECT
+      TO_CHAR(t.date, 'YYYY-MM') AS month,
+      COALESCE(SUM(CASE WHEN t.type = 'INCOME' THEN ${netAmount} END), 0)::float AS income,
+      COALESCE(SUM(CASE WHEN t.type = 'TRANSFER' AND c.catalog_key IN (${savingsKeys})
+        THEN -(${netAmount}) END), 0)::float AS savings
+    FROM app.transactions t
+    LEFT JOIN app.categories c ON c.id = t.category_id
+    LEFT JOIN app.accounts a ON a.id = t.account_id
+    ${REIMBURSEMENT_CREDIT_JOINS}
+    WHERE t.user_id = ${userId}
+      AND t.type IN ('INCOME', 'TRANSFER')
+      AND t.date >= ${start}
+      AND t.date < ${endExclusive}
+      AND ${IN_STATS}
+    GROUP BY TO_CHAR(t.date, 'YYYY-MM')
+    ORDER BY month
+  `)
   const smoothed = await amortizedSlices.read({
     userId,
     netAmount,
@@ -194,5 +228,14 @@ export async function readTrendRegistry(
       rhythm: asRhythm(s.rhythm),
     })),
     historyStart: history[0]?.start ?? null,
+    // A mocked reader may have nothing to say: no flow, no trend 15.
+    flows: (flows ?? []).map((f): TrendFlow => ({
+      month: f.month,
+      income: f.income,
+      savings: f.savings,
+    })),
+    savingsCategoryIds: categories
+      .filter(c => SAVINGS_CATALOG_KEYS.has(c.catalog_key ?? ''))
+      .map(c => c.id),
   }
 }

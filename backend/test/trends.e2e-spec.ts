@@ -199,6 +199,49 @@ describe('Trends (e2e)', () => {
     }
     // The month under way: never read.
     await line(CURRENT, 2, 2000, { subcategory: restaurant })
+
+    // Trend 15: a salary every month, 200 € to the Livret A, and since the
+    // quarter read another 800 € a month from the joint account (its half
+    // counts). One withdrawal back, and an income the statistics never see.
+    const category = async (catalogKey: string): Promise<string> =>
+      (
+        await prisma.category.findUniqueOrThrow({
+          where: { userId_catalogKey: { userId, catalogKey } },
+        })
+      ).id
+    const salary = await category('work-income')
+    const livret = await category('emergency-savings')
+    const row = async (
+      month: string,
+      day: number,
+      amount: number,
+      type: 'INCOME' | 'TRANSFER',
+      categoryId: string,
+      accountId = courant.id
+    ): Promise<void> => {
+      sequence += 1
+      await prisma.transaction.create({
+        data: {
+          userId,
+          accountId,
+          categoryId,
+          hash: `${userId}-trend-${sequence}`,
+          date: new Date(`${month}-${String(day).padStart(2, '0')}T10:00:00Z`),
+          description: `Flux ${sequence}`,
+          amount,
+          type,
+        },
+      })
+    }
+    for (const [index, month] of MONTHS.entries()) {
+      await row(month, 2, 3000, 'INCOME', salary)
+      await row(month, 4, -200, 'TRANSFER', livret)
+      if (index >= MONTHS.length - 3) {
+        await row(month, 5, -800, 'TRANSFER', livret, joint.id)
+      }
+      await row(month, 6, 1000, 'INCOME', salary, hidden.id)
+    }
+    await row(MONTHS[2] ?? CLOSED, 20, 100, 'TRANSFER', livret)
   }
 
   async function trends(
@@ -361,6 +404,79 @@ describe('Trends (e2e)', () => {
         })
         expect(compared.map(c => c.trends)).toEqual(
           compared.map(c => c.dashboard)
+        )
+      }
+    )
+
+    it.each([
+      [true, true],
+      [true, false],
+      [false, true],
+      [false, false],
+    ])(
+      'reads income and savings as the dashboard does (received %s, pending %s)',
+      async (deductReceived, deductPending) => {
+        const summaryOf = async (
+          startDate: string
+        ): Promise<DashboardSummaryDto> => {
+          const response = await request(ctx.server)
+            .post('/dashboard/summary')
+            .set(ctx.auth(owner))
+            .send({
+              startDate,
+              endDate: `${CLOSED}-28`,
+              deductReimbursements: deductReceived,
+              deductPendingReimbursements: deductPending,
+            })
+          expect(response.status).toBe(201)
+          return response.body as DashboardSummaryDto
+        }
+        const all = await summaryOf(`${MONTHS[0]}-01`)
+        const registry = await readTrendRegistry(
+          prisma,
+          ctx.app.get(AmortizedSlicesService),
+          {
+            userId: ownerId,
+            firstMonth: MONTHS[0] ?? CLOSED,
+            lastMonth: CLOSED,
+            deductReceived,
+            deductPending,
+          }
+        )
+        const flows = new Map((registry.flows ?? []).map(f => [f.month, f]))
+        expect(
+          MONTHS.map(m => Math.round((flows.get(m)?.income ?? 0) * 100) / 100)
+        ).toEqual(
+          MONTHS.map(m => all.monthlyData.find(d => d.month === m)?.income ?? 0)
+        )
+        const saved = [...flows.values()].reduce((sum, f) => sum + f.savings, 0)
+        expect(Math.round(saved * 100) / 100).toBe(all.savingsTransfers)
+
+        // The quarter read, against the dashboard over the same months.
+        const quarter = await summaryOf(`${MONTHS[5]}-01`)
+        const body = (
+          await trends({
+            deductReimbursements: String(deductReceived),
+            deductPendingReimbursements: String(deductPending),
+          })
+        ).body as TrendsResponseDto
+        const savings = body.insights.find(i => i.kind === 'savings')
+        expect(savings).toMatchObject({
+          // Emergency, project and investment: the dashboard's three.
+          unit: {
+            type: 'savings',
+            categoryIds: [
+              expect.any(String),
+              expect.any(String),
+              expect.any(String),
+            ],
+          },
+          direction: 'up',
+          current: Math.round((quarter.savingsRate ?? 0) * 1000) / 10,
+        })
+        expect((savings?.remainingToLive?.current ?? 0) * 3).toBeCloseTo(
+          quarter.remainingToLive ?? 0,
+          1
         )
       }
     )

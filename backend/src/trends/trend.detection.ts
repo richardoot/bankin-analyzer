@@ -56,6 +56,11 @@
  *    the habit does not. They read the same aggregates as the habits, so a
  *    month still adds up from its units: they add no unit of their own.
  *    `horizons` says which of them the history is still too short for.
+ * 9. Savings (the catalogue's 15): the share of the income set aside and
+ *    what is left to live on, the last three months against the three
+ *    before, from the income and savings transfers the caller reads apart
+ *    (`flows`), with the dashboard's conventions. Outside the expenses, so
+ *    outside the sum of a month too.
  *
  * ## What it refuses to do
  *
@@ -168,6 +173,11 @@ export const TREND_RULES = {
    * `months` complete months, the month read included.
    */
   yearAgo: { months: 13 },
+  /**
+   * Trend 15: the savings rate of the last `quarterMonths` months against
+   * the `quarterMonths` before, silent under `minPoints` points.
+   */
+  savings: { quarterMonths: 3, minPoints: 3 },
 } as const
 
 export type TrendWindow = (typeof TREND_RULES.windows)[number]
@@ -189,6 +199,7 @@ export type TrendKind =
   | 'drift'
   | 'record'
   | 'yearAgo'
+  | 'savings'
 export type TrendUnitType =
   | 'category'
   | 'subcategory'
@@ -196,6 +207,7 @@ export type TrendUnitType =
   | 'uncategorized'
   | 'merchant'
   | 'recurrence'
+  | 'savings'
 export type TrendDirection = 'up' | 'down'
 export type TrendTone = 'neutral' | 'success'
 
@@ -284,6 +296,19 @@ export interface TrendSubcategory {
   rhythm: TrendRhythm | null
 }
 
+/**
+ * One month's income and savings, as the dashboard reads them: the income
+ * rows net (`netAmountSql`), the transfers into a savings category net of
+ * the ones back out, both divided, stats-excluded accounts out.
+ */
+export interface TrendFlow {
+  /** `YYYY-MM`. */
+  month: string
+  income: number
+  /** Positive when money went to sleep. */
+  savings: number
+}
+
 /** Everything detection reads: the lines and what names them. */
 export interface TrendRegistry {
   lines: TrendLine[]
@@ -298,6 +323,13 @@ export interface TrendRegistry {
    * (`RecurrencesService.readCache`); none, and the two are silent.
    */
   recurrences?: TrendRecurrence[]
+  /**
+   * Income and savings by month, for trend 15; none, and it is silent.
+   * Read apart from the expense lines, like the dashboard's totals.
+   */
+  flows?: TrendFlow[]
+  /** The categories a savings transfer is filed in: what trend 15 opens. */
+  savingsCategoryIds?: string[]
 }
 
 export interface DetectTrendsOptions {
@@ -326,6 +358,8 @@ export interface TrendUnit {
    * search — the page has no merchant filter.
    */
   search?: string
+  /** Savings only: the transfer categories its link opens. */
+  categoryIds?: string[]
 }
 
 /** One of the two subcategories a shift (trend 11) links. */
@@ -342,7 +376,7 @@ export interface TrendPart {
 
 /** A long comparison the history is still too short for. */
 export interface TrendHorizon {
-  kind: 'drift' | 'record' | 'yearAgo'
+  kind: 'drift' | 'record' | 'yearAgo' | 'savings'
   /** Complete months it reads, the month read included. */
   months: number
   /** How many of them are still missing. */
@@ -390,6 +424,8 @@ export interface TrendInsight {
    * record, and on the category's line a record enriches.
    */
   record?: 'high' | 'low'
+  /** Savings (15): what is left to live on per month, the quarter and the one before. */
+  remainingToLive?: { current: number; reference: number }
 }
 
 /** Shaped as `TrendsResponseDto` (lot 1). */
@@ -416,7 +452,7 @@ export interface TrendsResult {
    */
   availableMonths: string[]
   /**
-   * The long comparisons (12 to 14) the history cannot make yet for this
+   * The long comparisons (12 to 15) the history cannot make yet for this
    * month, each with what it lacks; empty once it can.
    */
   horizons: TrendHorizon[]
@@ -1256,7 +1292,7 @@ export function detectTrends(
     })
   )
 
-  // Trends 12 to 14 on categories, on their own horizons.
+  // Trends 12 to 14 on categories, on their own horizons, then 15.
   const long = longInsights({
     registry,
     month,
@@ -1270,6 +1306,22 @@ export function detectTrends(
     at,
   })
   const habits = mergeLong(select(candidates), long, habitMoved)
+  const savings = savingsInsight({
+    registry,
+    month,
+    completeMonths,
+    seriesMonths,
+    reading,
+    everydayAt:
+      reading === 'everyday'
+        ? at
+        : (() => {
+            const everyday = aggregateMonths(registry, 'everyday', span)
+            return (m: string): MonthAggregate =>
+              everyday.get(m) ?? emptyMonth()
+          })(),
+  })
+  if (savings) habits.push(savings)
   habits.sort(byScore)
   return {
     ...silent,
@@ -2059,6 +2111,13 @@ function signedEuros(value: number): string {
   return value >= 0 ? `+${formatEuros(value)}` : formatEuros(value)
 }
 
+/** « de juillet à septembre », « d'avril à juin », « de novembre 2025 à janvier ». */
+function fromTo(months: string[], read: string): string {
+  const first = months[0] ?? read
+  const last = months[months.length - 1] ?? read
+  return `${ofWord(monthIn(first, read))} à ${monthIn(last, read)}`
+}
+
 /** A sentence with one more clause before its full stop. */
 function withClause(sentence: string, clause: string): string {
   return sentence.endsWith('.')
@@ -2103,6 +2162,11 @@ export function horizonsOf(completeMonths: number): TrendHorizon[] {
       'drift',
       TREND_RULES.drift.months,
       `La dérive sur ${TREND_RULES.drift.months} mois demande ${TREND_RULES.drift.months} mois complets`,
+    ],
+    [
+      'savings',
+      TREND_RULES.savings.quarterMonths * 2,
+      `L'épargne d'un trimestre sur l'autre demande ${TREND_RULES.savings.quarterMonths * 2} mois complets`,
     ],
     [
       'record',
@@ -2530,4 +2594,94 @@ function mergeLong(
     }
   }
   return out
+}
+
+/**
+ * Trend 15: the share of the income set aside, the last three months against
+ * the three before, with what is left to live on — the dashboard's
+ * `savingsRate` and `remainingToLive` (income less the everyday committed
+ * spending and the savings), read on two quarters. Silent under 3 points,
+ * without income on either side, or without six complete months. Neutral:
+ * saving more is a choice, not a score. Scored by what the shift of the
+ * rate weighs in a month of the quarter's income.
+ */
+function savingsInsight(input: {
+  registry: TrendRegistry
+  month: string
+  completeMonths: number
+  seriesMonths: string[]
+  reading: TrendReading
+  /** The everyday reading of a month, whatever the card reads: as the dashboard. */
+  everydayAt: (month: string) => MonthAggregate
+}): TrendInsight | null {
+  const { registry, month } = input
+  const q = TREND_RULES.savings.quarterMonths
+  if (!registry.flows || input.completeMonths < 2 * q - 1) return null
+  const flows = new Map(registry.flows.map(f => [f.month, f]))
+  const quarter = monthsBetween(addMonths(month, -(q - 1)), month)
+  const previous = monthsBetween(
+    addMonths(month, -(2 * q - 1)),
+    addMonths(month, -q)
+  )
+  const read = (
+    months: string[]
+  ): { income: number; rate: number | null; remaining: number } => {
+    let income = 0
+    let savings = 0
+    let committed = 0
+    for (const m of months) {
+      income += flows.get(m)?.income ?? 0
+      savings += flows.get(m)?.savings ?? 0
+      committed += input.everydayAt(m).committed
+    }
+    return {
+      income,
+      rate: income > 0 ? (savings / income) * 100 : null,
+      remaining: (income - committed - savings) / months.length,
+    }
+  }
+  const cur = read(quarter)
+  const prev = read(previous)
+  if (cur.rate === null || prev.rate === null) return null
+  const delta = cur.rate - prev.rate
+  if (Math.abs(delta) < TREND_RULES.savings.minPoints) return null
+
+  const rateOf = (m: string): number => {
+    const f = flows.get(m)
+    return f && f.income > 0 ? tenths((f.savings / f.income) * 100) : 0
+  }
+  return {
+    kind: 'savings',
+    unit: {
+      type: 'savings',
+      id: 'savings',
+      categoryId: null,
+      name: 'Épargne',
+      icon: null,
+      categoryIds: [...(registry.savingsCategoryIds ?? [])].sort(),
+    },
+    direction: delta >= 0 ? 'up' : 'down',
+    tone: 'neutral',
+    current: tenths(cur.rate),
+    reference: tenths(prev.rate),
+    delta: tenths(delta),
+    deltaPct: null,
+    sentence:
+      `Épargne : ${Math.round(cur.rate)} % du revenu ${fromTo(quarter, month)}, ` +
+      `contre ${Math.round(prev.rate)} % ${fromTo(previous, month)} ; ` +
+      `reste à vivre ${formatEuros(cur.remaining)} par mois, contre ${formatEuros(prev.remaining)}.`,
+    windows: {
+      current: { start: `${quarter[0] ?? month}-01`, end: lastDayOf(month) },
+      reference: {
+        start: `${previous[0] ?? month}-01`,
+        end: lastDayOf(previous[previous.length - 1] ?? month),
+      },
+    },
+    series: input.seriesMonths.map(rateOf),
+    score: cents((Math.abs(delta) / 100) * (cur.income / q)),
+    remainingToLive: {
+      current: cents(cur.remaining),
+      reference: cents(prev.remaining),
+    },
+  }
 }

@@ -6,6 +6,7 @@
 
 import type {
   TrendCategory,
+  TrendFlow,
   TrendLine,
   TrendNature,
   TrendRecurrence,
@@ -267,4 +268,21 @@ export const SEPTEMBER_CHANGES: MonthPlan = {
   restaurant: times(5, 62.4),
   delivery: times(3, 15),
   rent: [660],
+}
+
+/**
+ * Income and savings for every month of the history: `income` a month,
+ * `savings` set aside, `september` in place of the last three months.
+ */
+export function flows(
+  income: number,
+  savings: number,
+  lastQuarter: number = savings
+): TrendFlow[] {
+  const quarter = MONTHS.slice(-3)
+  return MONTHS.map(month => ({
+    month,
+    income,
+    savings: quarter.includes(month) ? lastQuarter : savings,
+  }))
 }

@@ -102,6 +102,7 @@ describe('TrendsService', () => {
         },
       ])
       .mockResolvedValueOnce([{ start: '2025-09-01' }])
+      .mockResolvedValueOnce([])
     filterPreferences.deductsPendingByDefault.mockResolvedValue(true)
     amortizedSlices.read.mockResolvedValue([])
 
@@ -158,6 +159,51 @@ describe('TrendsService', () => {
     )
   })
 
+  it('reads the income and the savings transfers apart, for the savings quarter (trend 15)', async () => {
+    const months = lineRows().map(r => (r as { date: string }).date.slice(0, 7))
+    prisma.$queryRaw.mockReset()
+    prisma.$queryRaw
+      .mockResolvedValueOnce(lineRows())
+      .mockResolvedValueOnce([
+        {
+          id: 'savings',
+          name: 'Épargne de précaution',
+          icon: null,
+          nature: null,
+          rhythm: null,
+          catalog_key: 'emergency-savings',
+        },
+        {
+          id: 'restaurants',
+          name: 'Restaurants et bars',
+          icon: 'utensils',
+          nature: 'PLEASURE',
+          rhythm: 'VARIABLE',
+          catalog_key: 'dining',
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ start: '2025-09-01' }])
+      .mockResolvedValueOnce(
+        months.map(month => ({
+          month,
+          income: 3000,
+          savings: month >= '2026-07' ? 540 : 300,
+        }))
+      )
+
+    const result = await service.getTrends('user-1', {}, now)
+
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(5)
+    expect(result.insights.find(i => i.kind === 'savings')).toMatchObject({
+      unit: { type: 'savings', categoryIds: ['savings'] },
+      current: 18,
+      reference: 10,
+      sentence:
+        "Épargne : 18 % du revenu de juillet à septembre, contre 10 % d'avril à juin ; reste à vivre 2 460 € par mois, contre 2 700 €.",
+    })
+  })
+
   it('reads the last closed month against its habit, in the everyday reading', async () => {
     const result = await service.getTrends('user-1', {}, now)
 
@@ -200,6 +246,7 @@ describe('TrendsService', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ start: '2025-09-01' }])
+      .mockResolvedValueOnce([])
     await service.getTrends(
       'user-1',
       { deductPendingReimbursements: false },
