@@ -1,0 +1,121 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`detectTrends — selection > returns the whole response, shaped for the card 1`] = `
+{
+  "completeMonths": 12,
+  "digest": null,
+  "insights": [
+    {
+      "current": 62,
+      "delta": 14,
+      "deltaPct": 29.2,
+      "direction": "up",
+      "kind": "basket",
+      "reference": 48,
+      "score": 112,
+      "sentence": "Supermarché : autant d'achats, mais 62 € en moyenne en septembre contre 48 € d'habitude sur les 3 mois précédents.",
+      "series": [
+        48,
+        48,
+        48,
+        48,
+        48,
+        48,
+        62,
+      ],
+      "tone": "neutral",
+      "unit": {
+        "icon": "icon-food",
+        "id": "grocery",
+        "name": "Supermarché",
+        "type": "subcategory",
+      },
+      "windows": {
+        "current": {
+          "end": "2026-09-30",
+          "start": "2026-09-01",
+        },
+        "reference": {
+          "end": "2026-08-31",
+          "start": "2026-06-01",
+        },
+      },
+    },
+    {
+      "current": 3,
+      "delta": -6,
+      "deltaPct": -66.7,
+      "direction": "down",
+      "kind": "frequency",
+      "reference": 9,
+      "score": 90,
+      "sentence": "Livraison de repas : vous avez réduit la fréquence, 3 achats en septembre contre 9 par mois d'habitude sur les 3 mois précédents, soit 45 € contre 135 €.",
+      "series": [
+        9,
+        9,
+        9,
+        9,
+        9,
+        9,
+        3,
+      ],
+      "tone": "success",
+      "unit": {
+        "icon": "icon-restaurants",
+        "id": "delivery",
+        "name": "Livraison de repas",
+        "type": "subcategory",
+      },
+      "windows": {
+        "current": {
+          "end": "2026-09-30",
+          "start": "2026-09-01",
+        },
+        "reference": {
+          "end": "2026-08-31",
+          "start": "2026-06-01",
+        },
+      },
+    },
+    {
+      "current": 312,
+      "delta": 86,
+      "deltaPct": 38.1,
+      "direction": "up",
+      "kind": "amount",
+      "reference": 226,
+      "score": 86,
+      "sentence": "Restaurant : 312 € en septembre, +38 % par rapport à l'habitude des 3 mois précédents (226 €).",
+      "series": [
+        226,
+        226,
+        226,
+        226,
+        226,
+        226,
+        312,
+      ],
+      "tone": "neutral",
+      "unit": {
+        "icon": "icon-restaurants",
+        "id": "restaurant",
+        "name": "Restaurant",
+        "type": "subcategory",
+      },
+      "windows": {
+        "current": {
+          "end": "2026-09-30",
+          "start": "2026-09-01",
+        },
+        "reference": {
+          "end": "2026-08-31",
+          "start": "2026-06-01",
+        },
+      },
+    },
+  ],
+  "month": "2026-09",
+  "reading": "everyday",
+  "window": 3,
+}
+`;
