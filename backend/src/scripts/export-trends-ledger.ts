@@ -13,8 +13,8 @@
  * 3 (shift, drift, record, same month a year before, savings), with the
  * long comparisons the history is still too short for. It also checks each
  * month's total against the dashboard's `getSummary`, the golden master lot
- * 1 pins down, and each month's income and the period's savings transfers,
- * which trend 15 reads.
+ * 1 pins down, and each month's income and the period's savings (income less
+ * real expenses), which trend 15 reads.
  *
  * ## What it writes
  *
@@ -23,7 +23,7 @@
  * amounts are kept; labels go through the recurrence export's keyed
  * pseudonyms, and so do the recurrence cache's merchant keys and service
  * names; the names of categories and subcategories the user made up
- * too; ids are renumbered; income and savings by month (trend 15) are kept
+ * too; ids are renumbered; income by month (trend 15) is kept
  * as they are, figures without a label. The replay of the anonymised ledger must find the
  * same trends as the real one, or nothing is written.
  *
@@ -42,6 +42,7 @@ import { mkdirSync, writeFileSync } from 'fs'
 import path from 'path'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
+import { roundCents } from '../common/money'
 import { DashboardService } from '../dashboard/dashboard.service'
 import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 import { PrismaClient } from '../generated/prisma'
@@ -229,10 +230,10 @@ function anonymize(
         categoryId: maybe(p.categoryId, 'cat'),
         subcategoryId: maybe(p.subcategoryId, 'sub'),
       })),
-      flows: registry.flows ?? [],
-      savingsCategoryIds: (registry.savingsCategoryIds ?? []).map(id =>
-        renumber(id, 'cat')
-      ),
+      flows: (registry.flows ?? []).map(({ month, income }) => ({
+        month,
+        income,
+      })),
     },
   }
 }
@@ -377,7 +378,8 @@ export async function main(
     log(
       `  golden master: ${span.length - disagreements.length}/${span.length} months agree with getSummary`
     )
-    // Trend 15 reads income and savings apart: the same golden master.
+    // Trend 15 reads the income apart, and the savings as income less real
+    // expenses: the same golden master, against the dashboard's `savings`.
     const flows = new Map((registry.flows ?? []).map(f => [f.month, f]))
     const incomeMaster = span.map(month => {
       const trends = round(flows.get(month)?.income ?? 0)
@@ -390,17 +392,21 @@ export async function main(
         agrees: Math.abs(trends - dashboard) < 0.011,
       }
     })
-    const saved = round(
-      span.reduce((sum, m) => sum + (flows.get(m)?.savings ?? 0), 0)
+    const saved = roundCents(
+      span.reduce(
+        (sum, m) =>
+          sum + (flows.get(m)?.income ?? 0) - (real.get(m)?.total ?? 0),
+        0
+      )
     )
     const savingsMaster = {
       trends: saved,
-      dashboard: summary.savingsTransfers,
-      agrees: Math.abs(saved - summary.savingsTransfers) < 0.011,
+      dashboard: summary.savings,
+      agrees: Math.abs(saved - summary.savings) < 0.011,
     }
     log(
       `  income: ${incomeMaster.filter(i => i.agrees).length}/${span.length} months agree; ` +
-        `savings ${saved} against ${summary.savingsTransfers}`
+        `savings ${saved} against ${summary.savings}`
     )
 
     report.push({

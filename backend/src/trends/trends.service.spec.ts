@@ -159,27 +159,18 @@ describe('TrendsService', () => {
     )
   })
 
-  it('reads the income and the savings transfers apart, for the savings quarter (trend 15)', async () => {
+  it('reads the income apart and the savings as what the expenses left, for the savings quarter (trend 15)', async () => {
     const months = lineRows().map(r => (r as { date: string }).date.slice(0, 7))
     prisma.$queryRaw.mockReset()
     prisma.$queryRaw
       .mockResolvedValueOnce(lineRows())
       .mockResolvedValueOnce([
         {
-          id: 'savings',
-          name: 'Épargne de précaution',
-          icon: null,
-          nature: null,
-          rhythm: null,
-          catalog_key: 'emergency-savings',
-        },
-        {
           id: 'restaurants',
           name: 'Restaurants et bars',
           icon: 'utensils',
           nature: 'PLEASURE',
           rhythm: 'VARIABLE',
-          catalog_key: 'dining',
         },
       ])
       .mockResolvedValueOnce([])
@@ -187,20 +178,27 @@ describe('TrendsService', () => {
       .mockResolvedValueOnce(
         months.map(month => ({
           month,
-          income: 3000,
-          savings: month >= '2026-07' ? 540 : 300,
+          income: month >= '2026-07' ? 1500 : 1000,
         }))
       )
 
     const result = await service.getTrends('user-1', {}, now)
 
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(5)
+    // Only the income rows: a transfer, to savings or not, moves no rate.
+    const [flowQuery] = prisma.$queryRaw.mock.calls[4] as [
+      { strings: string[] },
+    ]
+    const sql = flowQuery.strings.join('')
+    expect(sql).toContain("t.type = 'INCOME'")
+    expect(sql).not.toContain('TRANSFER')
+    // (4 500 − 764) / 4 500 against (3 000 − 678) / 3 000.
     expect(result.insights.find(i => i.kind === 'savings')).toMatchObject({
-      unit: { type: 'savings', categoryIds: ['savings'] },
-      current: 18,
-      reference: 10,
+      unit: { type: 'savings', id: 'savings' },
+      current: 83,
+      reference: 77.4,
       sentence:
-        "Épargne : 18 % du revenu de juillet à septembre, contre 10 % d'avril à juin ; reste à vivre 2 460 € par mois, contre 2 700 €.",
+        "Épargne : 83 % du revenu de juillet à septembre, contre 77 % d'avril à juin ; reste à vivre 1 500 € par mois, contre 1 000 €.",
     })
   })
 
@@ -295,8 +293,8 @@ describe('TrendsService', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ start: '2025-09-01' }])
       .mockResolvedValueOnce([
-        { month: '2026-08', income: 2900, savings: 100 },
-        { month: '2026-09', income: 3200, savings: 576 },
+        { month: '2026-08', income: 2900 },
+        { month: '2026-09', income: 3200 },
       ])
 
     const { trends, totals } = await service.getTrendsAndTotals(
@@ -306,12 +304,13 @@ describe('TrendsService', () => {
     )
 
     expect(trends.month).toBe('2026-09')
-    // The exceptional line is out of the everyday reading, in the real one.
+    // The exceptional line is out of the everyday reading, in the real one;
+    // the savings are the income less the real expenses, as the dashboard.
     expect(totals).toEqual({
       everyday: 312,
       real: 712,
       income: 3200,
-      savings: 576,
+      savings: 2488,
     })
   })
 })

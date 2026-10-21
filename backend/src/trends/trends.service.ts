@@ -5,6 +5,7 @@
  */
 import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import { recordEvent, timed } from '../common/metrics'
+import { roundCents } from '../common/money'
 import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
@@ -61,7 +62,9 @@ export class TrendsService {
    * The trends, and the month's totals the written digest reads beside
    * them (lot 5): the everyday and the real expenses, the income and the
    * savings, out of the very registry the trends were read from — so the
-   * paragraph and the list can never disagree about a month.
+   * paragraph and the list can never disagree about a month. The savings
+   * are the dashboard's: income less real expenses, unrounded, rounded once
+   * with `roundCents`, so the two agree to the cent even on a half-cent.
    */
   async getTrendsAndTotals(
     userId: string,
@@ -72,14 +75,16 @@ export class TrendsService {
     const month = trends.month
     const totalOf = (reading: TrendReading): number =>
       aggregateMonths(registry, reading, [month]).get(month)?.total ?? 0
-    const flow = (registry.flows ?? []).find(f => f.month === month)
+    const income =
+      (registry.flows ?? []).find(f => f.month === month)?.income ?? 0
+    const real = totalOf('real')
     return {
       trends,
       totals: {
         everyday: totalOf('everyday'),
-        real: totalOf('real'),
-        income: flow?.income ?? 0,
-        savings: flow?.savings ?? 0,
+        real,
+        income,
+        savings: roundCents(income - real),
       },
     }
   }

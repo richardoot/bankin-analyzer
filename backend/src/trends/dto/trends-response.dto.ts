@@ -22,7 +22,8 @@ export class TrendUnitDto {
    * The category or subcategory id; `pleasure` or `committed` for a share;
    * `uncategorized`; a merchant's main `merchantKey`; a recurrence's
    * `<amountBucket>:<merchantKey>`, the Transactions page's `recurrence` filter;
-   * `savings`
+   * `savings` — income less every expense, no set of categories: its link
+   * opens every transaction of the quarter
    */
   id!: string
   /**
@@ -37,8 +38,6 @@ export class TrendUnitDto {
   icon!: string | null
   /** A merchant only: the word the Transactions page's text search finds it by */
   search?: string
-  /** Savings only: the transfer categories (emergency, project, investment) its link opens */
-  categoryIds?: string[]
 }
 
 /** One of the two subcategories a shift (trend 11) links, the one down first */
@@ -111,8 +110,9 @@ export class TrendInsightDto {
    * total (share), days since it began (new habit), 0 (lost habit), the
    * monthly equivalent (subscription appeared; 0 once stopped), the price
    * of a charge (price); the category's euros for a shift, a drift, a
-   * record and the same month a year before; the savings rate in percent of
-   * the income over the last three months (savings)
+   * record and the same month a year before; the savings rate over the last
+   * three months, (income − real expenses) / income in percent, negative in
+   * deficit (savings)
    */
   current!: number
   /**
@@ -134,7 +134,10 @@ export class TrendInsightDto {
   /** The sentence the card shows, in French */
   sentence!: string
   windows!: TrendWindowsDto
-  /** The measure over the 6 months before and the month read, oldest first */
+  /**
+   * The measure over the 6 months before and the month read, oldest first;
+   * for savings each month's own rate, 0 without income
+   */
   series!: number[]
   /**
    * The gap in euros, what the list is sorted by: for a merchant's
@@ -152,7 +155,10 @@ export class TrendInsightDto {
    * on the amount or drift line of the category a record enriches
    */
   record?: 'high' | 'low'
-  /** Savings (15): what is left to live on per month, the quarter and the one before */
+  /**
+   * Savings (15): what is left to live on per month — income less the
+   * everyday committed spending — the quarter and the one before
+   */
   remainingToLive?: { current: number; reference: number }
 }
 

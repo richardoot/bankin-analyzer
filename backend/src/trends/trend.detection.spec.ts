@@ -1486,15 +1486,16 @@ describe('detectTrends — the long run (trends 12 to 14)', () => {
 describe('detectTrends — savings (trend 15)', () => {
   const withFlows = (
     f: ReturnType<typeof flows>,
-    historyStart?: string
+    historyStart?: string,
+    lines: TrendLine[] = ledger()
   ): TrendRegistry => ({
-    ...registry(ledger(), [], historyStart),
+    ...registry(lines, [], historyStart),
     flows: f,
-    savingsCategoryIds: ['savings-b', 'savings-a'],
   })
 
-  it('reads the share of the income set aside, quarter against quarter, with what is left to live on', () => {
-    const insights = detect(withFlows(flows(3000, 300, 540))).insights
+  it('reads the share of the income the expenses left, quarter against quarter, with what is left to live on', () => {
+    // The habit spends 1 468,49 € a month: 2 000 € leave 26,6 %, 2 500 € 41,3 %.
+    const insights = detect(withFlows(flows(2000, 2500))).insights
 
     expect(insights).toEqual([
       expect.objectContaining({
@@ -1505,47 +1506,77 @@ describe('detectTrends — savings (trend 15)', () => {
           categoryId: null,
           name: 'Épargne',
           icon: null,
-          categoryIds: ['savings-a', 'savings-b'],
         },
         direction: 'up',
         tone: 'neutral',
-        current: 18,
-        reference: 10,
-        delta: 8,
+        current: 41.3,
+        reference: 26.6,
+        delta: 14.7,
         deltaPct: null,
         // Rent and streaming are the everyday committed spending: 663,49 €.
-        remainingToLive: { current: 1796.51, reference: 2036.51 },
-        // 8 points of a 3 000 € month.
-        score: 240,
+        remainingToLive: { current: 1836.51, reference: 1336.51 },
+        // 14,7 points of a 2 500 € month.
+        score: 367.12,
         sentence:
-          "Épargne : 18 % du revenu de juillet à septembre, contre 10 % d'avril à juin ; reste à vivre 1 797 € par mois, contre 2 037 €.",
+          "Épargne : 41 % du revenu de juillet à septembre, contre 27 % d'avril à juin ; reste à vivre 1 837 € par mois, contre 1 337 €.",
         windows: {
           current: { start: '2026-07-01', end: '2026-09-30' },
           reference: { start: '2026-04-01', end: '2026-06-30' },
         },
-        series: [10, 10, 10, 10, 18, 18, 18],
+        series: [26.6, 26.6, 26.6, 26.6, 41.3, 41.3, 41.3],
       }),
     ])
   })
 
-  it('says a quarter that took more out of savings than it put in', () => {
-    const insight = detect(withFlows(flows(3000, 300, -150))).insights[0]
+  it('says a quarter that spent more than it earned', () => {
+    const insight = detect(withFlows(flows(2000, 1300))).insights[0]
 
     expect(insight).toMatchObject({
       kind: 'savings',
       direction: 'down',
-      current: -5,
+      current: -13,
     })
     expect(insight?.sentence).toMatch(
-      /^Épargne : −5 % du revenu de juillet à septembre, contre 10 % d'avril à juin ;/
+      /^Épargne : −13 % du revenu de juillet à septembre, contre 27 % d'avril à juin ;/
     )
+  })
+
+  it('counts every expense, the exceptional ones too, whatever the card reads', () => {
+    // A 900 € holiday in August: out of the everyday card, never out of
+    // what the quarter kept.
+    const trip: TrendLine = {
+      id: 'trip',
+      date: '2026-08-12',
+      amount: 900,
+      categoryId: 'travel',
+      subcategoryId: null,
+      nature: 'PLEASURE',
+      rhythm: 'VARIABLE',
+      isRecurring: false,
+      isExceptional: true,
+      description: 'HOTEL',
+    }
+    for (const reading of ['everyday', 'real'] as const) {
+      const insight = detect(
+        withFlows(flows(2000), undefined, [...ledger(), trip]),
+        { reading }
+      ).insights.find(i => i.kind === 'savings')
+
+      // (6 000 − 3 × 1 468,49 − 900) / 6 000 against 26,6 %.
+      expect(insight).toMatchObject({
+        direction: 'down',
+        current: 11.6,
+        reference: 26.6,
+        // The holiday is not committed: what is left to live on holds.
+        remainingToLive: { current: 1336.51, reference: 1336.51 },
+      })
+    }
   })
 
   it('never follows the card window: a quarter is three months whatever the window', () => {
     for (const window of TREND_RULES.windows) {
       expect(
-        detect(withFlows(flows(3000, 300, 540)), { window }).insights[0]
-          ?.windows
+        detect(withFlows(flows(2000, 2500)), { window }).insights[0]?.windows
       ).toEqual({
         current: { start: '2026-07-01', end: '2026-09-30' },
         reference: { start: '2026-04-01', end: '2026-06-30' },
@@ -1554,17 +1585,18 @@ describe('detectTrends — savings (trend 15)', () => {
   })
 
   it('stays silent under 3 points, without income, or when nothing moves', () => {
-    // 12 % against 10 %.
-    expect(detect(withFlows(flows(3000, 300, 360))).insights).toEqual([])
-    expect(detect(withFlows(flows(0, 300, 540))).insights).toEqual([])
-    expect(detect(withFlows(flows(3000, 300))).insights).toEqual([])
+    // 28,4 % against 26,6 %.
+    expect(detect(withFlows(flows(2000, 2050))).insights).toEqual([])
+    expect(detect(withFlows(flows(0))).insights).toEqual([])
+    expect(detect(withFlows(flows(0, 2500))).insights).toEqual([])
+    expect(detect(withFlows(flows(2000))).insights).toEqual([])
     // Without the flows read, there is nothing to say.
     expect(detect(registry(ledger())).insights).toEqual([])
   })
 
   it('waits for six complete months, and says so', () => {
     // From May: four complete months before September.
-    const result = detect(withFlows(flows(3000, 300, 540), '2026-05-01'))
+    const result = detect(withFlows(flows(2000, 2500), '2026-05-01'))
 
     expect(result.insights.some(i => i.kind === 'savings')).toBe(false)
     expect(result.horizons.map(h => [h.kind, h.missing])).toEqual([
@@ -1579,7 +1611,7 @@ describe('detectTrends — savings (trend 15)', () => {
   })
 
   it('leaves the sum of a month to its expense units', () => {
-    const reg = withFlows(flows(3000, 300, 540))
+    const reg = withFlows(flows(2000, 2500))
     for (const aggregate of aggregateMonths(reg, 'everyday', MONTHS).values()) {
       const units = [...aggregate.units]
         .filter(([key]) => key.startsWith('category:'))

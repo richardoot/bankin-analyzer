@@ -271,18 +271,17 @@ export const SEPTEMBER_CHANGES: MonthPlan = {
 }
 
 /**
- * Income and savings for every month of the history: `income` a month,
- * `savings` set aside, `september` in place of the last three months.
+ * Income for every month of the history: `income` a month, `lastQuarter`
+ * in place of the last three months. What a month saves is that less its
+ * real expenses — 1 468,49 € a month of the habit.
  */
 export function flows(
   income: number,
-  savings: number,
-  lastQuarter: number = savings
+  lastQuarter: number = income
 ): TrendFlow[] {
   const quarter = MONTHS.slice(-3)
   return MONTHS.map(month => ({
     month,
-    income,
-    savings: quarter.includes(month) ? lastQuarter : savings,
+    income: quarter.includes(month) ? lastQuarter : income,
   }))
 }

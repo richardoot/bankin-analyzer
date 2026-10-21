@@ -56,11 +56,12 @@
  *    the habit does not. They read the same aggregates as the habits, so a
  *    month still adds up from its units: they add no unit of their own.
  *    `horizons` says which of them the history is still too short for.
- * 9. Savings (the catalogue's 15): the share of the income set aside and
- *    what is left to live on, the last three months against the three
- *    before, from the income and savings transfers the caller reads apart
- *    (`flows`), with the dashboard's conventions. Outside the expenses, so
- *    outside the sum of a month too.
+ * 9. Savings (the catalogue's 15): the share of the income the expenses
+ *    left — income less the real expenses — and what is left to live on,
+ *    the last three months against the three before, from the income the
+ *    caller reads apart (`flows`) and the real reading of the months, with
+ *    the dashboard's conventions. Outside the expenses, so outside the sum
+ *    of a month too.
  *
  * ## What it refuses to do
  *
@@ -174,8 +175,9 @@ export const TREND_RULES = {
    */
   yearAgo: { months: 13 },
   /**
-   * Trend 15: the savings rate of the last `quarterMonths` months against
-   * the `quarterMonths` before, silent under `minPoints` points.
+   * Trend 15: the savings rate — income less the real expenses, over the
+   * income — of the last `quarterMonths` months against the `quarterMonths`
+   * before, silent under `minPoints` points.
    */
   savings: { quarterMonths: 3, minPoints: 3 },
 } as const
@@ -297,16 +299,14 @@ export interface TrendSubcategory {
 }
 
 /**
- * One month's income and savings, as the dashboard reads them: the income
- * rows net (`netAmountSql`), the transfers into a savings category net of
- * the ones back out, both divided, stats-excluded accounts out.
+ * One month's income, as the dashboard reads it: the income rows net
+ * (`netAmountSql`), divided, stats-excluded accounts out. What the month
+ * saved is this less its real expenses, read off the lines.
  */
 export interface TrendFlow {
   /** `YYYY-MM`. */
   month: string
   income: number
-  /** Positive when money went to sleep. */
-  savings: number
 }
 
 /** Everything detection reads: the lines and what names them. */
@@ -324,12 +324,10 @@ export interface TrendRegistry {
    */
   recurrences?: TrendRecurrence[]
   /**
-   * Income and savings by month, for trend 15; none, and it is silent.
-   * Read apart from the expense lines, like the dashboard's totals.
+   * Income by month, for trend 15; none, and it is silent. Read apart from
+   * the expense lines, like the dashboard's totals.
    */
   flows?: TrendFlow[]
-  /** The categories a savings transfer is filed in: what trend 15 opens. */
-  savingsCategoryIds?: string[]
 }
 
 export interface DetectTrendsOptions {
@@ -358,8 +356,6 @@ export interface TrendUnit {
    * search — the page has no merchant filter.
    */
   search?: string
-  /** Savings only: the transfer categories its link opens. */
-  categoryIds?: string[]
 }
 
 /** One of the two subcategories a shift (trend 11) links. */
@@ -1313,20 +1309,21 @@ export function detectTrends(
     at,
   })
   const habits = mergeLong(select(candidates), long, habitMoved)
+  // Trend 15 reads both readings whatever the card reads, as the
+  // dashboard does: the committed spending of the everyday one, every
+  // expense of the real one.
+  const readingAt = (r: TrendReading): ((m: string) => MonthAggregate) => {
+    if (r === reading) return at
+    const other = aggregateMonths(registry, r, span)
+    return m => other.get(m) ?? emptyMonth()
+  }
   const savings = savingsInsight({
     registry,
     month,
     completeMonths,
     seriesMonths,
-    reading,
-    everydayAt:
-      reading === 'everyday'
-        ? at
-        : (() => {
-            const everyday = aggregateMonths(registry, 'everyday', span)
-            return (m: string): MonthAggregate =>
-              everyday.get(m) ?? emptyMonth()
-          })(),
+    everydayAt: readingAt('everyday'),
+    realAt: readingAt('real'),
   })
   if (savings) habits.push(savings)
   habits.sort(byScore)
@@ -2732,34 +2729,38 @@ function mergeLong(
   return out
 }
 
-/** « 18 % », « −5 % » when more came back from savings than went in. */
+/** « 18 % », « −5 % » for a quarter that spent more than it earned. */
 function rateText(rate: number): string {
   const rounded = Math.round(Math.abs(rate))
   return `${rate < 0 && rounded > 0 ? MINUS : ''}${rounded} %`
 }
 
 /**
- * Trend 15: the share of the income set aside, the last three months against
- * the three before, with what is left to live on — the dashboard's
- * `savingsRate` and `remainingToLive` (income less the everyday committed
- * spending and the savings), read on two quarters. Silent under 3 points,
- * without income on either side, or without six complete months. Neutral:
- * saving more is a choice, not a score. Scored by what the shift of the
- * rate weighs in a month of the quarter's income.
+ * Trend 15: the share of the income the expenses left — income less every
+ * expense, exceptional ones included, the real reading — the last three
+ * months against the three before, with what is left to live on (income
+ * less the everyday committed spending): the dashboard's `savingsRate` and
+ * `remainingToLive`, read on two quarters. A transfer to a savings account
+ * moves neither. Silent under 3 points, without income on either side, or
+ * without six complete months. Neutral: saving more is a choice, not a
+ * score. Scored by what the shift of the rate weighs in a month of the
+ * quarter's income.
  */
 function savingsInsight(input: {
   registry: TrendRegistry
   month: string
   completeMonths: number
   seriesMonths: string[]
-  reading: TrendReading
   /** The everyday reading of a month, whatever the card reads: as the dashboard. */
   everydayAt: (month: string) => MonthAggregate
+  /** The real reading of a month: every expense, at its date. */
+  realAt: (month: string) => MonthAggregate
 }): TrendInsight | null {
   const { registry, month } = input
   const q = TREND_RULES.savings.quarterMonths
   if (!registry.flows || input.completeMonths < 2 * q - 1) return null
-  const flows = new Map(registry.flows.map(f => [f.month, f]))
+  const incomes = new Map(registry.flows.map(f => [f.month, f.income]))
+  const incomeOf = (m: string): number => incomes.get(m) ?? 0
   const quarter = monthsBetween(addMonths(month, -(q - 1)), month)
   const previous = monthsBetween(
     addMonths(month, -(2 * q - 1)),
@@ -2769,17 +2770,17 @@ function savingsInsight(input: {
     months: string[]
   ): { income: number; rate: number | null; remaining: number } => {
     let income = 0
-    let savings = 0
+    let saved = 0
     let committed = 0
     for (const m of months) {
-      income += flows.get(m)?.income ?? 0
-      savings += flows.get(m)?.savings ?? 0
+      income += incomeOf(m)
+      saved += incomeOf(m) - input.realAt(m).total
       committed += input.everydayAt(m).committed
     }
     return {
       income,
-      rate: income > 0 ? (savings / income) * 100 : null,
-      remaining: (income - committed - savings) / months.length,
+      rate: income > 0 ? (saved / income) * 100 : null,
+      remaining: (income - committed) / months.length,
     }
   }
   const cur = read(quarter)
@@ -2789,8 +2790,10 @@ function savingsInsight(input: {
   if (Math.abs(delta) < TREND_RULES.savings.minPoints) return null
 
   const rateOf = (m: string): number => {
-    const f = flows.get(m)
-    return f && f.income > 0 ? tenths((f.savings / f.income) * 100) : 0
+    const income = incomeOf(m)
+    return income > 0
+      ? tenths(((income - input.realAt(m).total) / income) * 100)
+      : 0
   }
   return {
     kind: 'savings',
@@ -2800,7 +2803,6 @@ function savingsInsight(input: {
       categoryId: null,
       name: 'Épargne',
       icon: null,
-      categoryIds: [...(registry.savingsCategoryIds ?? [])].sort(),
     },
     direction: delta >= 0 ? 'up' : 'down',
     tone: 'neutral',

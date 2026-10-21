@@ -16,6 +16,8 @@ import {
   type TrendReading,
 } from '../src/trends/trend.detection'
 import { readTrendRegistry } from '../src/trends/trend.registry'
+import { roundCents } from '../src/common/money'
+import { TrendsService } from '../src/trends/trends.service'
 import { createE2eApp, e2eIdentity } from './e2e-app'
 import type { E2eContext } from './e2e-app'
 
@@ -205,9 +207,11 @@ describe('Trends (e2e)', () => {
     // The month under way: never read.
     await line(CURRENT, 2, 2000, { subcategory: restaurant })
 
-    // Trend 15: a salary every month, 200 € to the Livret A, and since the
-    // quarter read another 800 € a month from the joint account (its half
-    // counts). One withdrawal back, and an income the statistics never see.
+    // Trend 15: a salary every month, and since the quarter read a 1 600 €
+    // bonus a month on the joint account (its half counts). 200 € a month
+    // to the Livret A, 800 more from the joint account over the quarter, and
+    // one withdrawal back: transfers, which move no rate. And an income the
+    // statistics never see.
     const category = async (catalogKey: string): Promise<string> =>
       (
         await prisma.category.findUniqueOrThrow({
@@ -242,6 +246,7 @@ describe('Trends (e2e)', () => {
       await row(month, 2, 3000, 'INCOME', salary)
       await row(month, 4, -200, 'TRANSFER', livret)
       if (index >= MONTHS.length - 3) {
+        await row(month, 3, 1600, 'INCOME', salary, joint.id)
         await row(month, 5, -800, 'TRANSFER', livret, joint.id)
       }
       await row(month, 6, 1000, 'INCOME', salary, hidden.id)
@@ -752,8 +757,29 @@ describe('Trends (e2e)', () => {
         ).toEqual(
           MONTHS.map(m => all.monthlyData.find(d => d.month === m)?.income ?? 0)
         )
-        const saved = [...flows.values()].reduce((sum, f) => sum + f.savings, 0)
-        expect(Math.round(saved * 100) / 100).toBe(all.savingsTransfers)
+        // What the period kept: income less real expenses, never the
+        // transfers to the Livret A.
+        const cents = (v: number): number => Math.round(v * 100) / 100
+        const real = aggregateMonths(registry, 'real', MONTHS)
+        const income = [...flows.values()].reduce((sum, f) => sum + f.income, 0)
+        const spent = [...real.values()].reduce((sum, a) => sum + a.total, 0)
+        expect(roundCents(income - spent)).toBe(all.savings)
+        expect(all.savingsRate).toBe(
+          Math.round((all.savings / all.totalIncome) * 10000) / 10000
+        )
+        expect(all.savingsTransfers).toBeGreaterThan(0)
+
+        // The digest's totals for the month read: the dashboard's own.
+        const month = await summaryOf(`${CLOSED}-01`)
+        const { totals } = await ctx.app
+          .get(TrendsService)
+          .getTrendsAndTotals(ownerId, {
+            deductReimbursements: deductReceived,
+            deductPendingReimbursements: deductPending,
+          })
+        expect(totals.savings).toBe(month.savings)
+        expect(cents(totals.income)).toBe(month.totalIncome)
+        expect(cents(totals.real)).toBe(month.totalExpenses)
 
         // The quarter read, against the dashboard over the same months.
         const quarter = await summaryOf(`${MONTHS[5]}-01`)
@@ -765,15 +791,7 @@ describe('Trends (e2e)', () => {
         ).body as TrendsResponseDto
         const savings = body.insights.find(i => i.kind === 'savings')
         expect(savings).toMatchObject({
-          // Emergency, project and investment: the dashboard's three.
-          unit: {
-            type: 'savings',
-            categoryIds: [
-              expect.any(String),
-              expect.any(String),
-              expect.any(String),
-            ],
-          },
+          unit: { type: 'savings', id: 'savings' },
           direction: 'up',
           current: Math.round((quarter.savingsRate ?? 0) * 1000) / 10,
         })
