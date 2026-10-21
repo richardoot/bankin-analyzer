@@ -37,6 +37,7 @@ import { SmoothingSuggestionsService } from '../transactions/smoothing-suggestio
 import { suggestedAmortizationMonths } from '../transactions/smoothing-suggestions'
 import { TagsService } from '../tags/tags.service'
 import { TagFamiliesService } from '../tag-families/tag-families.service'
+import { TrendsService, type TrendsFilters } from '../trends/trends.service'
 import { TAG_EVENT_STATUSES, type TagEventStatus } from '../tags/tag-status'
 import type { ReimbursementResponseDto } from '../reimbursements/dto'
 import { LEDGER_EPSILON, round2 } from '../reimbursements/reimbursement-ledger'
@@ -310,7 +311,8 @@ export class McpController {
     private readonly recurrencesService: RecurrencesService,
     private readonly smoothingSuggestionsService: SmoothingSuggestionsService,
     private readonly tagsService: TagsService,
-    private readonly tagFamiliesService: TagFamiliesService
+    private readonly tagFamiliesService: TagFamiliesService,
+    private readonly trendsService: TrendsService
   ) {}
 
   private async loadFilingTree(userId: string): Promise<{
@@ -1512,6 +1514,57 @@ export class McpController {
           ],
         }
       }
+    )
+
+    // ── Tool: get_spending_trends ──
+    server.tool(
+      'get_spending_trends',
+      'Recupere ce qui change dans les depenses, la liste de la carte « Ce qui change » du tableau de bord, ' +
+        'calculee sans modele : un mois clos compare a la mediane des N mois complets qui le precedent (window), ' +
+        'en lecture vie courante par defaut (etiquettes exceptionnelles hors calcul, achats lisses comptes par tranches). ' +
+        'Rend la liste complete (insights), triee comme l ecran : les lignes a classer d abord, puis par score (l ecart en euros) ; ' +
+        'la carte n en montre que les 5 premieres. Chaque tendance porte kind (amount, frequency, basket, share, uncategorized, ' +
+        'newHabit, lostHabit, subscription, price, shift, drift, record, yearAgo, savings), unit, direction, current, reference, ' +
+        'delta, deltaPct, la phrase de l ecran (sentence) et la serie des 7 derniers mois. ' +
+        'Une liste vide s explique : quietSentence dit qu aucune habitude n a bouge, completeMonths qu il manque de l historique ' +
+        '(3 mois complets au moins), horizons quelles comparaisons longues (pente, record, an dernier, epargne) l historique ne permet pas encore. ' +
+        'Pour creuser une tendance : get_transactions sur windows.current (le mois lu) puis windows.reference (la fenetre de reference), ' +
+        'avec unit.categoryId (categoryId), unit.id d une sous-categorie (subcategoryId) ou unit.search d un marchand (search). ' +
+        'Ces chiffres sont la source : ne pas en calculer d autres ni en inventer. Remboursements deduits selon les preferences de l utilisateur, comme l ecran.',
+      {
+        month: z
+          .string()
+          .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'month doit etre au format YYYY-MM')
+          .optional()
+          .describe(
+            'Mois lu, YYYY-MM, un mois clos seulement (defaut : le dernier mois clos ; availableMonths liste ceux que la carte propose)'
+          ),
+        reading: z
+          .enum(['everyday', 'real'])
+          .optional()
+          .describe(
+            'everyday (defaut) : vie courante, comme la bascule « Vie courante » du tableau de bord ; real : tout a sa date'
+          ),
+        window: z
+          .union([z.literal(3), z.literal(6), z.literal(12)])
+          .optional()
+          .describe(
+            'Mois complets de reference avant le mois lu : 3, 6 (defaut) ou 12 ; raccourci a l historique s il est plus court'
+          ),
+      },
+      async params =>
+        answer(async () => {
+          // The reimbursement switches are left to the service, as the
+          // dashboard summary does: received ones deducted, pending ones by
+          // the user's own preference.
+          const filters: TrendsFilters = {}
+          if (params.month) filters.month = params.month
+          if (params.reading) filters.reading = params.reading
+          if (params.window) filters.window = params.window
+          return dataResponse(
+            await this.trendsService.getTrends(userId, filters)
+          )
+        })
     )
 
     return server

@@ -15,6 +15,7 @@ import { SettlementsModule } from '../settlements/settlements.module'
 import { RecurrencesModule } from '../recurrences/recurrences.module'
 import { TagsModule } from '../tags/tags.module'
 import { TagFamiliesModule } from '../tag-families/tag-families.module'
+import { TrendsModule } from '../trends/trends.module'
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { TagFamiliesModule } from '../tag-families/tag-families.module'
     RecurrencesModule,
     TagsModule,
     TagFamiliesModule,
+    TrendsModule,
   ],
   controllers: [McpController, WellKnownController],
   providers: [McpAuthGuard],

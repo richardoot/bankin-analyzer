@@ -15,8 +15,10 @@ import { RecurrencesService } from '../recurrences/recurrences.service'
 import { SmoothingSuggestionsService } from '../transactions/smoothing-suggestions.service'
 import { TagsService } from '../tags/tags.service'
 import { TagFamiliesService } from '../tag-families/tag-families.service'
+import { TrendsService } from '../trends/trends.service'
 import { exceptionalOnSmoothedError } from '../transactions/amortization'
 import { NotFoundException, BadRequestException } from '@nestjs/common'
+import { z } from 'zod'
 
 /* ──────────────────────────────────────────────────────────────
  * MCP SDK mocks
@@ -33,16 +35,22 @@ type ToolHandler = (params: Record<string, unknown>) => Promise<{
 }>
 
 const registeredTools = new Map<string, ToolHandler>()
+/** What the model reads before it calls a tool: its description and input shape. */
+const registeredSpecs = new Map<
+  string,
+  { description: string; schema: Record<string, unknown> }
+>()
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
   McpServer: class {
     tool(
       name: string,
-      _description: string,
-      _schema: unknown,
+      description: string,
+      schema: Record<string, unknown>,
       handler: ToolHandler
     ): void {
       registeredTools.set(name, handler)
+      registeredSpecs.set(name, { description, schema })
     }
     async connect(): Promise<void> {
       /* no-op */
@@ -121,6 +129,10 @@ const mockTagFamiliesService = {
   findAllByUser: vi.fn(),
 }
 
+const mockTrendsService = {
+  getTrends: vi.fn(),
+}
+
 /** The JSON inside a <user_financial_data> answer. */
 const parseData = (result: { content: Array<{ text: string }> }): any =>
   JSON.parse(
@@ -143,6 +155,7 @@ describe('McpController', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     registeredTools.clear()
+    registeredSpecs.clear()
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [McpController],
@@ -165,6 +178,7 @@ describe('McpController', () => {
         },
         { provide: TagsService, useValue: mockTagsService },
         { provide: TagFamiliesService, useValue: mockTagFamiliesService },
+        { provide: TrendsService, useValue: mockTrendsService },
       ],
     })
       .overrideGuard(McpAuthGuard)
@@ -200,6 +214,7 @@ describe('McpController', () => {
         'get_recurrences',
         'get_reimbursements',
         'get_smoothing_suggestions',
+        'get_spending_trends',
         'get_tag_candidates',
         'get_tags',
         'get_transaction',
@@ -469,6 +484,158 @@ describe('McpController', () => {
       expect(text).toMatch(/^<user_financial_data>\n/)
       expect(text).toMatch(/\n<\/user_financial_data>$/)
       expect(text).toContain('"month": "2026-01"')
+    })
+  })
+
+  describe('get_spending_trends tool', () => {
+    /** The answer the screen gets, as the service returns it. */
+    const trends = {
+      month: '2026-09',
+      reading: 'everyday',
+      window: 6,
+      completeMonths: 7,
+      insights: Array.from({ length: 7 }, (_, i) => ({
+        kind: 'amount',
+        unit: {
+          type: 'subcategory',
+          id: `sub-${i}`,
+          categoryId: 'cat-food',
+          name: `Sous-catégorie ${i}`,
+          icon: null,
+        },
+        direction: 'up',
+        tone: 'neutral',
+        current: 300 - i,
+        reference: 100,
+        delta: 200 - i,
+        deltaPct: 200,
+        sentence: `Phrase ${i}`,
+        windows: {
+          current: { start: '2026-09-01', end: '2026-09-30' },
+          reference: { start: '2026-03-01', end: '2026-08-31' },
+        },
+        series: [100, 100, 100, 100, 100, 100, 300 - i],
+        score: 200 - i,
+      })),
+      quietSentence: null,
+      availableMonths: ['2026-09', '2026-08'],
+      horizons: [
+        {
+          kind: 'yearAgo',
+          months: 13,
+          missing: 6,
+          sentence:
+            "La comparaison avec l'an dernier demande 13 mois complets : il en manque 6.",
+        },
+      ],
+      digest: null,
+    }
+
+    /** The tool's input, parsed the way the MCP SDK parses it. */
+    const parseInput = (input: unknown): ReturnType<z.ZodType['safeParse']> =>
+      z
+        .object(
+          registeredSpecs.get('get_spending_trends')!.schema as z.ZodRawShape
+        )
+        .safeParse(input)
+
+    it('leaves every default and the reimbursement preferences to the service, as the dashboard summary does', async () => {
+      mockTrendsService.getTrends.mockResolvedValue(trends)
+      const tools = await registerTools()
+
+      await tools.get('get_spending_trends')!({})
+
+      // No month, window, reading nor deduction switch: the service reads the
+      // last closed month over 6 months, everyday, and the user's preference.
+      expect(mockTrendsService.getTrends).toHaveBeenCalledWith(mockUser.id, {})
+    })
+
+    it('forwards the month, the reading and the window', async () => {
+      mockTrendsService.getTrends.mockResolvedValue(trends)
+      const tools = await registerTools()
+
+      await tools.get('get_spending_trends')!({
+        month: '2026-07',
+        reading: 'real',
+        window: 12,
+      })
+
+      expect(mockTrendsService.getTrends).toHaveBeenCalledWith(mockUser.id, {
+        month: '2026-07',
+        reading: 'real',
+        window: 12,
+      })
+    })
+
+    it('renders the whole list, not the five of the card, fenced as data', async () => {
+      mockTrendsService.getTrends.mockResolvedValue(trends)
+      const tools = await registerTools()
+
+      const result = await tools.get('get_spending_trends')!({})
+
+      expect(result.isError).toBeUndefined()
+      expect(result.content[0].text).toMatch(/^<user_financial_data>\n/)
+      expect(result.content[0].text).toMatch(/\n<\/user_financial_data>$/)
+      const data = parseData(result)
+      expect(data).toEqual(trends)
+      expect(data.insights).toHaveLength(7)
+    })
+
+    it("answers a month not closed yet with isError, in the service's words", async () => {
+      mockTrendsService.getTrends.mockRejectedValue(
+        new BadRequestException(
+          "Le mois 2026-10 n'est pas encore clos : le dernier mois clos est 2026-09."
+        )
+      )
+      const tools = await registerTools()
+
+      const result = await tools.get('get_spending_trends')!({
+        month: '2026-10',
+      })
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toBe(
+        "Refusé par le serveur : Le mois 2026-10 n'est pas encore clos : le dernier mois clos est 2026-09."
+      )
+    })
+
+    it('accepts the three windows, the two readings and a YYYY-MM month', async () => {
+      await registerTools()
+
+      expect(parseInput({}).success).toBe(true)
+      for (const window of [3, 6, 12]) {
+        expect(parseInput({ window }).success).toBe(true)
+      }
+      expect(
+        parseInput({ month: '2026-09', reading: 'everyday' }).success
+      ).toBe(true)
+      expect(parseInput({ reading: 'real' }).success).toBe(true)
+    })
+
+    it.each([
+      [{ window: 4 }],
+      [{ window: '6' }],
+      [{ month: '2026-13' }],
+      [{ month: '2026-9' }],
+      [{ reading: 'tout' }],
+    ])('refuses %j before the service is called', async input => {
+      await registerTools()
+
+      expect(parseInput(input).success).toBe(false)
+    })
+
+    it('tells the model what a trend is, that the list is whole, why it may be empty, and where to dig', async () => {
+      await registerTools()
+      const { description } = registeredSpecs.get('get_spending_trends')!
+
+      expect(description).toContain('mediane des N mois complets')
+      expect(description).toContain('vie courante')
+      expect(description).toContain('liste complete')
+      expect(description).toContain('quietSentence')
+      expect(description).toContain('horizons')
+      expect(description).toContain('get_transactions')
+      expect(description).toContain('windows.reference')
+      expect(description).toContain('ni en inventer')
     })
   })
 

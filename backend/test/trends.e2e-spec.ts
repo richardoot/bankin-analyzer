@@ -340,6 +340,88 @@ describe('Trends (e2e)', () => {
     })
   })
 
+  describe('the MCP tool', () => {
+    let rpcId = 0
+    /** One tools/call, as an MCP client sends it; the SSE frame is unwrapped. */
+    async function callTool(
+      args: Record<string, unknown>
+    ): Promise<{ isError: boolean; text: string; data: unknown }> {
+      rpcId += 1
+      const res = await request(ctx.server)
+        .post('/mcp')
+        .set(ctx.auth(owner))
+        .set('Accept', 'application/json, text/event-stream')
+        .set('Content-Type', 'application/json')
+        .send({
+          jsonrpc: '2.0',
+          id: rpcId,
+          method: 'tools/call',
+          params: { name: 'get_spending_trends', arguments: args },
+        })
+      expect(res.status).toBe(200)
+      const frame = res.text.includes('data: ')
+        ? res.text
+            .split('\n')
+            .filter(line => line.startsWith('data: '))
+            .map(line => line.slice('data: '.length))
+            .join('')
+        : res.text
+      const message = JSON.parse(frame) as {
+        result: { content: Array<{ text: string }>; isError?: boolean }
+      }
+      const text = message.result.content[0]?.text ?? ''
+      const fenced =
+        /^<user_financial_data>\n([\s\S]*)\n<\/user_financial_data>$/.exec(text)
+      return {
+        isError: message.result.isError === true,
+        text,
+        data: fenced ? JSON.parse(fenced[1] as string) : null,
+      }
+    }
+
+    it('reads the very list the screen reads, with the same defaults', async () => {
+      const [tool, screen] = await Promise.all([callTool({}), trends()])
+
+      expect(tool.isError).toBe(false)
+      expect(tool.data).toEqual(screen.body)
+      expect((tool.data as TrendsResponseDto).insights.length).toBeGreaterThan(
+        5
+      )
+    })
+
+    it('takes the month, the window and the reading as the screen does', async () => {
+      const month = MONTHS[6] ?? CLOSED
+      const [tool, screen] = await Promise.all([
+        callTool({ month, window: 3, reading: 'real' }),
+        trends({ month, window: '3', reading: 'real' }),
+      ])
+
+      expect(tool.data).toEqual(screen.body)
+      expect(tool.data).toMatchObject({ month, window: 3, reading: 'real' })
+    })
+
+    it("refuses a month not closed yet with the service's words", async () => {
+      const answer = await callTool({ month: CURRENT })
+
+      expect(answer.isError).toBe(true)
+      expect(answer.text).toBe(
+        `Refusé par le serveur : Le mois ${CURRENT} n'est pas encore clos : le dernier mois clos est ${CLOSED}.`
+      )
+    })
+
+    it.each([[{ window: 4 }], [{ month: '2026-13' }], [{ reading: 'tout' }]])(
+      'refuses %j at the schema',
+      async args => {
+        const answer = await callTool(args)
+
+        expect(answer.isError).toBe(true)
+        expect(answer.text).toMatch(
+          /Invalid arguments for tool get_spending_trends/
+        )
+      }
+    )
+  })
+
   describe('golden master against the dashboard', () => {
     const cases: Array<{
       reading: TrendReading
