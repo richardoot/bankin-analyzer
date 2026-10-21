@@ -53,7 +53,7 @@ export class TrendsController {
   @Get('digest')
   @ApiOperation({
     summary:
-      'The paragraph Claude wrote from the trends of a closed month: the remembered one, else written now and remembered',
+      'The paragraph Claude wrote from the trends of a closed month: the one remembered for these very figures, else written now and remembered (or the last one of the view, marked stale, when it cannot be)',
   })
   @ApiResponse({ status: 200, type: TrendDigestResponseDto })
   @ApiResponse({

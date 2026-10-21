@@ -194,12 +194,16 @@ export class TrendsResponseDto {
   digest!: null
 }
 
-/** The paragraph Claude wrote from a closed month's trends (lot 5) */
+/**
+ * The paragraph Claude wrote from a closed month's trends (lot 5),
+ * remembered under a fingerprint of the figures it read
+ */
 export class MonthlyDigestDto {
   /** `YYYY-MM` */
   month!: string
+  /** The view it was written for */
   reading!: 'everyday' | 'real'
-  /** The window asked for: 3, 6 or 12 */
+  /** The window it was written for: 3, 6 or 12 */
   window!: number
   /** Three to five sentences in French, every number one of the trends' */
   text!: string
@@ -207,13 +211,22 @@ export class MonthlyDigestDto {
   model!: string
   /** ISO 8601 */
   generatedAt!: string
+  /**
+   * True when the paragraph was written from figures that have changed
+   * since (a line reclassified, a reimbursement settled) and a new one could
+   * not be written: the last paragraph of the same view, shown rather than
+   * nothing. False when it reads the figures the list shows now
+   */
+  stale!: boolean
 }
 
 export class TrendDigestResponseDto {
   /**
    * Null when there is no paragraph to show: no history yet, nothing
    * moved, or the model failed, refused or wrote a number the trends do
-   * not carry. Never an error: the card shows the list alone.
+   * not carry with no earlier paragraph of the same view to fall back on
+   * (that one comes back with `stale: true`). Never an error: the card
+   * shows the list alone.
    */
   digest!: MonthlyDigestDto | null
 }

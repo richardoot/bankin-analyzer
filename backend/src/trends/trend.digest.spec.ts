@@ -3,6 +3,7 @@ import {
   DIGEST_SYSTEM_PROMPT,
   buildDigestInput,
   collectNumbers,
+  digestInputHash,
   digestUserPrompt,
   extractNumbers,
   unverifiedNumbers,
@@ -260,5 +261,37 @@ describe('the prompt', () => {
     expect(prompt).toContain(
       'ce n’est jamais un virement vers un compte d’épargne'
     )
+  })
+})
+
+describe('digestInputHash', () => {
+  it('gives the same fingerprint to the same input, built twice', () => {
+    const first = buildDigestInput(result([insight()]), totals)
+    const second = buildDigestInput(result([insight()]), totals)
+    expect(digestInputHash(first)).toBe(digestInputHash(second))
+    expect(digestInputHash(first)).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('gives another fingerprint when one figure moves', () => {
+    const before = buildDigestInput(result([insight()]), totals)
+    const reclassified = buildDigestInput(
+      result([insight({ current: 298.4 })]),
+      totals
+    )
+    const otherIncome = buildDigestInput(result([insight()]), {
+      ...totals,
+      income: 3300,
+    })
+    expect(digestInputHash(reclassified)).not.toBe(digestInputHash(before))
+    expect(digestInputHash(otherIncome)).not.toBe(digestInputHash(before))
+  })
+
+  it('ignores what the model does not read: the series and the score', () => {
+    const before = buildDigestInput(result([insight()]), totals)
+    const resorted = buildDigestInput(
+      result([insight({ series: [1, 2, 3, 4, 5, 6, 312.4], score: 999 })]),
+      totals
+    )
+    expect(digestInputHash(resorted)).toBe(digestInputHash(before))
   })
 })

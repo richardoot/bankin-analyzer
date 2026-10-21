@@ -8,6 +8,7 @@
  * paragraph must be one of the numbers it was given — else the paragraph is
  * thrown away and the card shows the list alone.
  */
+import { createHash } from 'node:crypto'
 import { monthLabel, type TrendsResult } from './trend.detection'
 
 /** The month's totals the trends do not carry, read the dashboard's way. */
@@ -134,6 +135,19 @@ export function buildDigestInput(
     quietSentence: trends.quietSentence,
     horizons: trends.horizons.map(h => h.sentence),
   }
+}
+
+/**
+ * The fingerprint of what the model reads: the SHA-256, in hex, of the
+ * input as `JSON.stringify` writes it. `buildDigestInput` builds the object
+ * in a fixed key order, so the same figures always give the same text and
+ * the same hash; one figure that moves (a line reclassified, a switch that
+ * changes an amount) gives another. The remembered paragraph is keyed on it
+ * (user, month, hash): a paragraph is served only for the very input it was
+ * written from.
+ */
+export function digestInputHash(input: DigestInput): string {
+  return createHash('sha256').update(JSON.stringify(input)).digest('hex')
 }
 
 /**

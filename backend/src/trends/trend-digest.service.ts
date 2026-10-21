@@ -1,12 +1,18 @@
 /**
  * The paragraph under « Ce qui change » (agent-os/product/spending-trends.md,
  * lot 5): written by Claude from the trends of a closed month, checked
- * number by number, then remembered in `monthly_digests`.
+ * number by number, then remembered in `monthly_digests` under a
+ * fingerprint of what the model read (user, month, `input_hash`).
+ *
+ * The fingerprint is the key, not the view: two views that read the same
+ * figures share one paragraph, and a line reclassified after the paragraph
+ * was written moves a figure, hence the hash, and asks for a new one.
  *
  * Optional by design. Whatever goes wrong — no API key, the model down or
  * refusing, a number the data does not carry — the answer is no paragraph,
- * never an error: the card shows the list alone, as it did before lot 5.
- * The reason goes to the log, as a `trend_digest` event.
+ * never an error: the card shows the list alone, as it did before lot 5;
+ * or the last paragraph of the same view, marked `stale`, when there is
+ * one. The reason goes to the log, as a `trend_digest` event.
  */
 import { Injectable, Logger } from '@nestjs/common'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
@@ -17,6 +23,7 @@ import type { MonthlyDigestDto } from './dto'
 import {
   DIGEST_SYSTEM_PROMPT,
   buildDigestInput,
+  digestInputHash,
   digestUserPrompt,
   unverifiedNumbers,
 } from './trend.digest'
@@ -51,11 +58,24 @@ export class TrendDigestService {
   ) {}
 
   /**
-   * The month's paragraph: the remembered one when there is one (no call to
-   * the model), else written, checked, remembered and returned. With
-   * `force` (« Régénérer »), written again whatever is remembered — and when
-   * that fails, the remembered paragraph stays: a failed regeneration never
-   * takes away a paragraph that was fine.
+   * The month's paragraph. The trends and totals are read first (cheap),
+   * the model's input built and hashed, then looked up on (user, month,
+   * hash): a hit is handed back without a call to the model. A miss is
+   * written, checked and remembered under the hash, and the other
+   * paragraphs of the same view (same reading, window and switches) are
+   * dropped, so a month never piles up stale paragraphs.
+   *
+   * With `force` (« Régénérer »), written again even on a hit, and the row
+   * of the current hash rewritten.
+   *
+   * When no paragraph can be written for the current figures — no API key,
+   * the model failing or refusing, a number it may not write, an empty
+   * answer — the one of the current hash stays when there is one (a failed
+   * regeneration never takes away a paragraph that was fine), else the
+   * latest of the same view comes back marked `stale`: written from
+   * figures that have changed since. A history too short or a month where
+   * nothing moved answer nothing: the list says it, and an older paragraph
+   * would contradict it.
    *
    * A month not closed yet is refused as `GET /trends` refuses it.
    */
@@ -68,14 +88,15 @@ export class TrendDigestService {
     const month = filters.month ?? lastClosedMonth(now)
     const reading: TrendReading = filters.reading ?? 'everyday'
     const window: TrendWindow = filters.window ?? TREND_RULES.defaultWindow
-    // The switches change the amounts the list shows: each pair keeps its
-    // own paragraph, keyed on the values the trends are read with.
+    // The view the paragraph is asked for, with the switches as the trends
+    // are read with them (the preference standing in for an omission):
+    // information on the row, and the scope of the stale ones to drop.
     const deductReimbursements = filters.deductReimbursements !== false
     const deductPendingReimbursements = await this.trends.deductsPending(
       userId,
       filters
     )
-    const key = {
+    const view = {
       userId,
       month,
       reading,
@@ -83,34 +104,6 @@ export class TrendDigestService {
       deductReimbursements,
       deductPendingReimbursements,
     }
-    const where = {
-      userId_month_reading_window_deductReimbursements_deductPendingReimbursements:
-        key,
-    }
-
-    const stored = await this.prisma.monthlyDigest.findUnique({ where })
-    if (stored && !options.force) return toDto(stored)
-
-    const skip = (
-      reason: DigestSkipReason,
-      extra: Record<string, number | null> = {}
-    ): MonthlyDigestDto | null => {
-      recordEvent(this.logger, 'trend_digest', {
-        userId,
-        month,
-        reading,
-        window,
-        outcome: 'skipped',
-        reason,
-        kept: stored !== null,
-        ...extra,
-      })
-      return stored ? toDto(stored) : null
-    }
-
-    // The application does not boot without it today (AiSuggestionsService
-    // refuses to); checked anyway, so a paragraph never costs a crash.
-    if (!process.env.ANTHROPIC_API_KEY) return skip('no_api_key')
 
     const { trends, totals } = await this.trends.getTrendsAndTotals(
       userId,
@@ -124,11 +117,51 @@ export class TrendDigestService {
       },
       now
     )
+    const input = buildDigestInput(trends, totals)
+    const inputHash = digestInputHash(input)
+    const where = { userId_month_inputHash: { userId, month, inputHash } }
+
+    const current = await this.prisma.monthlyDigest.findUnique({ where })
+    if (current && !options.force) return toDto(current, false)
+
+    const skip = async (
+      reason: DigestSkipReason,
+      extra: Record<string, number | null> = {}
+    ): Promise<MonthlyDigestDto | null> => {
+      // The figures said there is nothing to tell: no older paragraph.
+      const fallsBack =
+        reason !== 'short_history' && reason !== 'nothing_to_say'
+      const previous =
+        current ??
+        (fallsBack
+          ? await this.prisma.monthlyDigest.findFirst({
+              where: { ...view, inputHash: { not: inputHash } },
+              orderBy: { generatedAt: 'desc' },
+            })
+          : null)
+      const stale = current === null && previous !== null
+      recordEvent(this.logger, 'trend_digest', {
+        userId,
+        month,
+        reading,
+        window,
+        outcome: 'skipped',
+        reason,
+        kept: previous !== null,
+        stale,
+        ...extra,
+      })
+      return previous ? toDto(previous, stale) : null
+    }
+
+    // The application does not boot without it today (AiSuggestionsService
+    // refuses to); checked anyway, so a paragraph never costs a crash.
+    if (!process.env.ANTHROPIC_API_KEY) return skip('no_api_key')
+
     if (trends.completeMonths < MIN_HISTORY) return skip('short_history')
     // « Rien de notable » already says it in one sentence.
     if (trends.insights.length === 0) return skip('nothing_to_say')
 
-    const input = buildDigestInput(trends, totals)
     let written: Awaited<ReturnType<AiSuggestionsService['writeDigest']>>
     try {
       written = await this.ai.writeDigest(
@@ -156,6 +189,7 @@ export class TrendDigestService {
     }
 
     const data = {
+      ...view,
       insights: input as unknown as object,
       text: written.text,
       model: written.model,
@@ -165,24 +199,29 @@ export class TrendDigestService {
     }
     const saved = await this.prisma.monthlyDigest.upsert({
       where,
-      create: { ...key, ...data },
+      create: { ...data, inputHash },
       update: data,
+    })
+    // The paragraphs this view held for figures it no longer shows.
+    const { count: replaced } = await this.prisma.monthlyDigest.deleteMany({
+      where: { ...view, inputHash: { not: inputHash } },
     })
     recordEvent(this.logger, 'trend_digest', {
       userId,
       month,
       reading,
       window,
-      outcome: stored ? 'regenerated' : 'generated',
+      outcome: current ? 'regenerated' : 'generated',
+      replaced,
       insights: trends.insights.length,
       inputTokens: written.inputTokens,
       outputTokens: written.outputTokens,
     })
-    return toDto(saved)
+    return toDto(saved, false)
   }
 }
 
-function toDto(row: MonthlyDigest): MonthlyDigestDto {
+function toDto(row: MonthlyDigest, stale: boolean): MonthlyDigestDto {
   return {
     month: row.month,
     reading: row.reading === 'real' ? 'real' : 'everyday',
@@ -190,5 +229,6 @@ function toDto(row: MonthlyDigest): MonthlyDigestDto {
     text: row.text,
     model: row.model,
     generatedAt: row.generatedAt.toISOString(),
+    stale,
   }
 }

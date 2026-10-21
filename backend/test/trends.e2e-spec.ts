@@ -416,20 +416,20 @@ describe('Trends (e2e)', () => {
         model: 'claude-haiku-5-5',
       })
       expect(body.digest?.text).toMatch(/^Voici le mois\. /)
+      expect(body.digest?.stale).toBe(false)
 
-      const row = await prisma.monthlyDigest.findUniqueOrThrow({
+      const row = await prisma.monthlyDigest.findFirstOrThrow({
         where: {
-          userId_month_reading_window_deductReimbursements_deductPendingReimbursements:
-            {
-              userId: ownerId,
-              month: CLOSED,
-              reading: 'everyday',
-              window: 6,
-              deductReimbursements: true,
-              deductPendingReimbursements: true,
-            },
+          userId: ownerId,
+          month: CLOSED,
+          reading: 'everyday',
+          window: 6,
+          deductReimbursements: true,
+          deductPendingReimbursements: true,
         },
       })
+      // Keyed on the fingerprint of what the model read.
+      expect(row.inputHash).toMatch(/^[0-9a-f]{64}$/)
       expect(row).toMatchObject({ inputTokens: 2400, outputTokens: 350 })
       expect(row.insights).toMatchObject({ month: CLOSED, window: 6 })
 
@@ -512,7 +512,7 @@ describe('Trends (e2e)', () => {
       expect(writeDigest).not.toHaveBeenCalled()
     })
 
-    it('keeps one paragraph per pair of reimbursement switches, keyed on the values the trends were read with', async () => {
+    it('keeps one paragraph per pair of reimbursement switches, as each reads other figures', async () => {
       const before = await prisma.monthlyDigest.count()
       writeDigest.mockClear()
       writeDigest.mockImplementationOnce((_system: string, user: string) =>
@@ -528,18 +528,15 @@ describe('Trends (e2e)', () => {
       expect(off.digest?.text).toMatch(/^Sans les remboursements\. /)
       expect(writeDigest).toHaveBeenCalledTimes(1)
       expect(await prisma.monthlyDigest.count()).toBe(before + 1)
-      const row = await prisma.monthlyDigest.findUniqueOrThrow({
+      const row = await prisma.monthlyDigest.findFirstOrThrow({
         where: {
-          userId_month_reading_window_deductReimbursements_deductPendingReimbursements:
-            {
-              userId: ownerId,
-              month: CLOSED,
-              reading: 'everyday',
-              window: 6,
-              deductReimbursements: false,
-              // Omitted, the preference applies: on, with none saved.
-              deductPendingReimbursements: true,
-            },
+          userId: ownerId,
+          month: CLOSED,
+          reading: 'everyday',
+          window: 6,
+          deductReimbursements: false,
+          // Omitted, the preference applies: on, with none saved.
+          deductPendingReimbursements: true,
         },
       })
       expect(row.text).toBe(off.digest?.text)
@@ -556,6 +553,76 @@ describe('Trends (e2e)', () => {
       ).body as TrendDigestResponseDto
       expect(explicit.digest?.text).toBe(on.digest?.text)
       expect(writeDigest).toHaveBeenCalledTimes(1)
+    })
+
+    it('writes anew when a line of the month moves, the old paragraph shown stale until then', async () => {
+      const view = {
+        userId: ownerId,
+        month: CLOSED,
+        reading: 'everyday',
+        window: 6,
+        deductReimbursements: true,
+        deductPendingReimbursements: true,
+      }
+      const before = await prisma.monthlyDigest.findFirstOrThrow({
+        where: view,
+      })
+      const courant = await prisma.account.findFirstOrThrow({
+        where: { userId: ownerId, name: 'Compte courant' },
+      })
+      const restaurant = await prisma.subcategory.findUniqueOrThrow({
+        where: {
+          userId_catalogKey: {
+            userId: ownerId,
+            catalogKey: 'dining.restaurant',
+          },
+        },
+      })
+      // A line filed into the month after its paragraph was written.
+      const added = await prisma.transaction.create({
+        data: {
+          userId: ownerId,
+          accountId: courant.id,
+          categoryId: restaurant.categoryId,
+          subcategoryId: restaurant.id,
+          hash: `${ownerId}-trend-late`,
+          date: new Date(`${CLOSED}-20T10:00:00Z`),
+          description: 'CB BRASSERIE',
+          amount: -57,
+          type: 'EXPENSE',
+        },
+      })
+      try {
+        // The model down: the last paragraph of the view, marked stale.
+        writeDigest.mockClear()
+        writeDigest.mockRejectedValueOnce(new Error('overloaded'))
+        const stale = (await digest()).body as TrendDigestResponseDto
+        expect(stale.digest?.text).toBe(before.text)
+        expect(stale.digest?.stale).toBe(true)
+        expect(writeDigest).toHaveBeenCalledTimes(1)
+
+        // The model back: a paragraph of the new figures replaces it.
+        writeDigest.mockImplementationOnce((_system: string, user: string) =>
+          Promise.resolve({
+            text: `Après la brasserie. ${fenced(user).trends[0]?.sentence ?? ''}`,
+            model: 'claude-haiku-5-5',
+            inputTokens: 2400,
+            outputTokens: 350,
+          })
+        )
+        const fresh = (await digest()).body as TrendDigestResponseDto
+        expect(fresh.digest?.text).toMatch(/^Après la brasserie\. /)
+        expect(fresh.digest?.stale).toBe(false)
+        const rows = await prisma.monthlyDigest.findMany({ where: view })
+        expect(rows).toHaveLength(1)
+        expect(rows[0]?.inputHash).not.toBe(before.inputHash)
+
+        // Remembered: no second call for the same figures.
+        expect((await digest()).body).toEqual(fresh)
+        expect(writeDigest).toHaveBeenCalledTimes(2)
+      } finally {
+        await prisma.transaction.delete({ where: { id: added.id } })
+      }
     })
 
     it.each([[{ window: '4' }], [{ month: CURRENT }]])(

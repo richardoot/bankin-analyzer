@@ -1239,12 +1239,17 @@ model MonthlyDigest {
   userId  String @map("user_id")
   /// `YYYY-MM`, a closed month.
   month   String
-  /// `everyday` or `real`.
+  /// SHA-256 (hex) of the input the model read (`digestInputHash`): the
+  /// paragraph is served only for the very figures it was written from.
+  inputHash String @map("input_hash")
+
+  /// The view the paragraph was last written for, as information (the key
+  /// is the hash): `everyday` or `real`, the window asked for (3, 6 or 12)
+  /// and the dashboard's two switches as the trends were read with them.
+  /// The service drops the other paragraphs of the same view when it
+  /// writes a new one.
   reading String
-  /// Complete months of reference asked for: 3, 6 or 12.
   window  Int
-  /// The dashboard's two switches, as the trends were read with them: each
-  /// pair moves the amounts the list shows, so each keeps its own paragraph.
   deductReimbursements        Boolean @default(true) @map("deduct_reimbursements")
   deductPendingReimbursements Boolean @default(true) @map("deduct_pending_reimbursements")
 
@@ -1259,7 +1264,7 @@ model MonthlyDigest {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, month, reading, window, deductReimbursements, deductPendingReimbursements])
+  @@unique([userId, month, inputHash])
   @@map("monthly_digests")
   @@schema("app")
 }

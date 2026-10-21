@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common'
 import { AiSuggestionsService } from '../ai-suggestions/ai-suggestions.service'
 import { PrismaService } from '../prisma/prisma.service'
 import type { TrendInsight, TrendsResult } from './trend.detection'
+import { buildDigestInput, digestInputHash } from './trend.digest'
 import { TrendDigestService } from './trend-digest.service'
 import { TrendsService } from './trends.service'
 
@@ -52,6 +53,9 @@ function trends(overrides: Partial<TrendsResult> = {}): TrendsResult {
 
 const totals = { everyday: 1834.5, real: 2240, income: 3200, savings: 960 }
 
+/** The fingerprint of what the model reads for the default trends. */
+const HASH = digestInputHash(buildDigestInput(trends(), totals))
+
 const VERIFIED =
   'En septembre, les restaurants et bars montent à 312 €, soit 38 % de plus que les 226 € habituels. Le reste de votre vie courante est dans l’habitude.'
 
@@ -66,6 +70,7 @@ function storedRow(
     window: 6,
     deductReimbursements: true,
     deductPendingReimbursements: true,
+    inputHash: HASH,
     insights: {},
     text: 'Paragraphe déjà écrit.',
     model: 'claude-haiku-5-5',
@@ -79,7 +84,12 @@ function storedRow(
 describe('TrendDigestService', () => {
   let service: TrendDigestService
   const prisma = {
-    monthlyDigest: { findUnique: vi.fn(), upsert: vi.fn() },
+    monthlyDigest: {
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      upsert: vi.fn(),
+      deleteMany: vi.fn(),
+    },
   }
   const trendsService = {
     getTrendsAndTotals: vi.fn(),
@@ -96,6 +106,8 @@ describe('TrendDigestService', () => {
     vi.clearAllMocks()
     process.env.ANTHROPIC_API_KEY = 'test-api-key'
     prisma.monthlyDigest.findUnique.mockResolvedValue(null)
+    prisma.monthlyDigest.findFirst.mockResolvedValue(null)
+    prisma.monthlyDigest.deleteMany.mockResolvedValue({ count: 0 })
     prisma.monthlyDigest.upsert.mockImplementation(
       ({ create }: { create: Record<string, unknown> }) =>
         Promise.resolve(storedRow({ ...create }))
@@ -137,7 +149,7 @@ describe('TrendDigestService', () => {
       (m): m is string => typeof m === 'string' && m.startsWith('trend_digest')
     )
 
-  it('hands back the remembered paragraph without asking the model', async () => {
+  it('hands back the paragraph of the same figures without asking the model', async () => {
     prisma.monthlyDigest.findUnique.mockResolvedValue(storedRow())
 
     const digest = await service.getDigest(
@@ -153,22 +165,36 @@ describe('TrendDigestService', () => {
       text: 'Paragraphe déjà écrit.',
       model: 'claude-haiku-5-5',
       generatedAt: '2026-10-01T09:00:00.000Z',
+      stale: false,
     })
+    // Looked up on the fingerprint of what the model would read.
     expect(prisma.monthlyDigest.findUnique).toHaveBeenCalledWith({
       where: {
-        userId_month_reading_window_deductReimbursements_deductPendingReimbursements:
-          {
-            userId: 'user-1',
-            month: '2026-09',
-            reading: 'everyday',
-            window: 6,
-            deductReimbursements: true,
-            deductPendingReimbursements: true,
-          },
+        userId_month_inputHash: {
+          userId: 'user-1',
+          month: '2026-09',
+          inputHash: HASH,
+        },
       },
     })
-    expect(trendsService.getTrendsAndTotals).not.toHaveBeenCalled()
+    expect(trendsService.getTrendsAndTotals).toHaveBeenCalledTimes(1)
     expect(ai.writeDigest).not.toHaveBeenCalled()
+    expect(prisma.monthlyDigest.upsert).not.toHaveBeenCalled()
+  })
+
+  it('looks up another fingerprint when a figure of the month moved', async () => {
+    trendsService.getTrendsAndTotals.mockResolvedValue({
+      trends: trends({ insights: [{ ...restaurants, current: 298 }] }),
+      totals,
+    })
+
+    await service.getDigest('user-1', { month: '2026-09' }, { now })
+
+    const [{ where }] = prisma.monthlyDigest.findUnique.mock.calls[0] as [
+      { where: { userId_month_inputHash: { inputHash: string } } },
+    ]
+    expect(where.userId_month_inputHash.inputHash).toMatch(/^[0-9a-f]{64}$/)
+    expect(where.userId_month_inputHash.inputHash).not.toBe(HASH)
   })
 
   it('reads the last closed month, six months, everyday, when nothing is asked', async () => {
@@ -187,7 +213,7 @@ describe('TrendDigestService', () => {
     )
   })
 
-  it('keys the paragraph on the switches as the trends read them, the preference standing in for an omission', async () => {
+  it('reads the trends with the switches as asked, the preference standing in for an omission', async () => {
     trendsService.deductsPending.mockResolvedValueOnce(false)
 
     await service.getDigest(
@@ -199,15 +225,6 @@ describe('TrendDigestService', () => {
     expect(trendsService.deductsPending).toHaveBeenCalledWith('user-1', {
       month: '2026-09',
       deductReimbursements: false,
-    })
-    expect(prisma.monthlyDigest.findUnique).toHaveBeenCalledWith({
-      where: {
-        userId_month_reading_window_deductReimbursements_deductPendingReimbursements:
-          expect.objectContaining({
-            deductReimbursements: false,
-            deductPendingReimbursements: false,
-          }),
-      },
     })
     expect(trendsService.getTrendsAndTotals).toHaveBeenCalledWith(
       'user-1',
@@ -250,17 +267,21 @@ describe('TrendDigestService', () => {
       create: Record<string, unknown>
     }
     expect(upsert.where).toEqual({
-      userId_month_reading_window_deductReimbursements_deductPendingReimbursements:
-        {
-          userId: 'user-1',
-          month: '2026-09',
-          reading: 'everyday',
-          window: 3,
-          deductReimbursements: false,
-          deductPendingReimbursements: true,
-        },
+      userId_month_inputHash: {
+        userId: 'user-1',
+        month: '2026-09',
+        inputHash: HASH,
+      },
     })
     expect(upsert.create).toMatchObject({
+      // The view it was written for, as information.
+      userId: 'user-1',
+      month: '2026-09',
+      reading: 'everyday',
+      window: 3,
+      deductReimbursements: false,
+      deductPendingReimbursements: true,
+      inputHash: HASH,
       text: VERIFIED,
       model: 'claude-haiku-5-5',
       inputTokens: 2510,
@@ -272,10 +293,32 @@ describe('TrendDigestService', () => {
       month: '2026-09',
       trends: [{ unit: 'Restaurants et bars', current: 312 }],
     })
+    expect(digest?.stale).toBe(false)
+    // The paragraphs this view held for other figures go.
+    expect(prisma.monthlyDigest.deleteMany).toHaveBeenCalledWith({
+      where: {
+        userId: 'user-1',
+        month: '2026-09',
+        reading: 'everyday',
+        window: 3,
+        deductReimbursements: false,
+        deductPendingReimbursements: true,
+        inputHash: { not: HASH },
+      },
+    })
     expect(digestEvents()).toEqual([
       expect.stringContaining('outcome=generated'),
     ])
     expect(digestEvents()[0]).toContain('inputTokens=2510')
+  })
+
+  it('counts the stale paragraphs a new one replaces', async () => {
+    prisma.monthlyDigest.deleteMany.mockResolvedValue({ count: 1 })
+
+    await service.getDigest('user-1', {}, { now })
+
+    expect(digestEvents()[0]).toContain('outcome=generated')
+    expect(digestEvents()[0]).toContain('replaced=1')
   })
 
   it('answers nothing without an API key, and never asks', async () => {
@@ -364,7 +407,100 @@ describe('TrendDigestService', () => {
     const digest = await service.getDigest('user-1', {}, { now, force: true })
 
     expect(digest?.text).toBe('Paragraphe déjà écrit.')
+    // Still the paragraph of these very figures.
+    expect(digest?.stale).toBe(false)
     expect(prisma.monthlyDigest.upsert).not.toHaveBeenCalled()
+    expect(prisma.monthlyDigest.findFirst).not.toHaveBeenCalled()
     expect(digestEvents()[0]).toContain('kept=true')
+    expect(digestEvents()[0]).toContain('stale=false')
+  })
+
+  describe('when the figures moved and no new paragraph can be written', () => {
+    const older = (): Record<string, unknown> =>
+      storedRow({ inputHash: 'f'.repeat(64), text: 'Paragraphe d’avant.' })
+
+    it.each([
+      [
+        'model_failed',
+        (): void => {
+          ai.writeDigest.mockRejectedValue(new Error('overloaded'))
+        },
+      ],
+      [
+        'unverified',
+        (): void => {
+          ai.writeDigest.mockResolvedValue({
+            text: 'Vous avez dépensé 4 074 €.',
+            model: 'claude-haiku-5-5',
+            inputTokens: 1,
+            outputTokens: 1,
+          })
+        },
+      ],
+      [
+        'empty',
+        (): void => {
+          ai.writeDigest.mockResolvedValue({
+            text: '',
+            model: 'claude-haiku-5-5',
+            inputTokens: 1,
+            outputTokens: 1,
+          })
+        },
+      ],
+      [
+        'no_api_key',
+        (): void => {
+          delete process.env.ANTHROPIC_API_KEY
+        },
+      ],
+    ])(
+      'hands back the last paragraph of the same view, marked stale (%s)',
+      async (reason, arrange) => {
+        prisma.monthlyDigest.findFirst.mockResolvedValue(older())
+        arrange()
+
+        const digest = await service.getDigest(
+          'user-1',
+          { month: '2026-09' },
+          { now }
+        )
+
+        expect(digest).toMatchObject({
+          text: 'Paragraphe d’avant.',
+          stale: true,
+        })
+        expect(prisma.monthlyDigest.findFirst).toHaveBeenCalledWith({
+          where: {
+            userId: 'user-1',
+            month: '2026-09',
+            reading: 'everyday',
+            window: 6,
+            deductReimbursements: true,
+            deductPendingReimbursements: true,
+            inputHash: { not: HASH },
+          },
+          orderBy: { generatedAt: 'desc' },
+        })
+        expect(prisma.monthlyDigest.upsert).not.toHaveBeenCalled()
+        expect(prisma.monthlyDigest.deleteMany).not.toHaveBeenCalled()
+        const [event] = digestEvents()
+        expect(event).toContain(`reason=${reason}`)
+        expect(event).toContain('kept=true')
+        expect(event).toContain('stale=true')
+      }
+    )
+
+    it('answers nothing when nothing moves any more: the list says it', async () => {
+      prisma.monthlyDigest.findFirst.mockResolvedValue(older())
+      trendsService.getTrendsAndTotals.mockResolvedValue({
+        trends: trends({ insights: [], quietSentence: 'Rien de notable.' }),
+        totals,
+      })
+
+      await expect(service.getDigest('user-1', {}, { now })).resolves.toBeNull()
+      expect(prisma.monthlyDigest.findFirst).not.toHaveBeenCalled()
+      expect(digestEvents()[0]).toContain('kept=false')
+    })
   })
 })
