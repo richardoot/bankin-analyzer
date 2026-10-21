@@ -71,16 +71,125 @@ describe('CategoryBreakdownList', () => {
     expect(wrapper.findAll('[data-testid^="category-row-"]')).toHaveLength(2)
   })
 
-  it('shows the share of total as a percentage', () => {
+  /** formatCurrency uses narrow no-break spaces; normalise before matching. */
+  const norm = (text: string) => text.replace(/[\s\u202f\u00a0]+/g, ' ')
+
+  /** The `width` a bar part carries, as a number of %. */
+  const widthOf = (style: string | undefined) =>
+    Number(/width:\s*([\d.]+)%/.exec(style ?? '')?.[1])
+
+  it('names the share of total on the bar, not in the row text', () => {
     const wrapper = mount(CategoryBreakdownList, {
       global: { plugins: [router] },
       props: { categories, monthLabels, total: 900 },
     })
 
-    // Alimentation: 600/900 = 66.7%
-    expect(wrapper.text()).toContain('66.7%')
-    // Transport: 300/900 = 33.3%
-    expect(wrapper.text()).toContain('33.3%')
+    // Alimentation: 600/900 = 66,7 %; Transport: 300/900 = 33,3 %.
+    const food = wrapper.get('[data-testid="category-share-Alimentation"]')
+    expect(food.attributes('role')).toBe('img')
+    expect(norm(food.attributes('aria-label') ?? '')).toBe(
+      '66,7 % des dépenses'
+    )
+    expect(food.attributes('title')).toBe(food.attributes('aria-label'))
+    expect(
+      norm(
+        wrapper
+          .get('[data-testid="category-share-Transport"]')
+          .attributes('aria-label') ?? ''
+      )
+    ).toContain('33,3 %')
+    // Written nowhere in the rows.
+    expect(norm(wrapper.text())).not.toMatch(/66[.,]7/)
+  })
+
+  it('measures every bar against the largest category', () => {
+    const wrapper = mount(CategoryBreakdownList, {
+      global: { plugins: [router] },
+      props: { categories, monthLabels, total: 900 },
+    })
+
+    const fill = (name: string) =>
+      widthOf(
+        wrapper
+          .get(`[data-testid="category-share-fill-${name}"]`)
+          .attributes('style')
+      )
+    expect(fill('Alimentation')).toBe(100)
+    expect(fill('Transport')).toBe(50)
+  })
+
+  it('fills the bar with the donut hue, gray without colors', () => {
+    const colored = mount(CategoryBreakdownList, {
+      global: { plugins: [router] },
+      props: {
+        categories,
+        monthLabels,
+        total: 900,
+        colors: new Map([['Alimentation', '#f97316']]),
+      },
+    })
+    expect(
+      colored
+        .get('[data-testid="category-share-fill-Alimentation"]')
+        .attributes('style')
+    ).toContain('background-color: #f97316')
+
+    const plain = mount(CategoryBreakdownList, {
+      global: { plugins: [router] },
+      props: { categories, monthLabels, total: 900 },
+    })
+    // The « Autres » gray-400.
+    expect(
+      plain
+        .get('[data-testid="category-share-fill-Alimentation"]')
+        .attributes('style')
+    ).toContain('background-color: #9ca3af')
+  })
+
+  it('heads the columns once, and draws the trend from zero against the average', () => {
+    const wrapper = mount(CategoryBreakdownList, {
+      global: { plugins: [router] },
+      props: { categories, monthLabels, total: 900 },
+    })
+
+    const header = norm(
+      wrapper.get('[data-testid="category-table-header"]').text()
+    )
+    expect(header).toContain('Catégorie')
+    expect(header).toContain('Part des dépenses')
+    expect(header).toContain('Tendance · 3 mois')
+    expect(header).toContain('Moyenne par mois')
+
+    const sparkline = wrapper.findAllComponents({ name: 'SparklineChart' })[0]
+    expect(sparkline?.props('baseline')).toBe('zero')
+    expect(sparkline?.props('reference')).toBe(200)
+    expect(sparkline?.props('width')).toBe(130)
+    expect(norm(String(sparkline?.props('label')))).toContain(
+      'Alimentation sur 3 mois'
+    )
+    // A neutral line, not the red of an overrun.
+    expect(sparkline?.props('color')).toBe('#6b7280')
+  })
+
+  it('shows the amount alone, with no trend column, over a single month', () => {
+    const wrapper = mount(CategoryBreakdownList, {
+      global: { plugins: [router] },
+      props: {
+        categories: [
+          { categoryId: 'cat-1', category: 'Alimentation', amount: 120 },
+        ],
+        monthLabels: ['2024-01'],
+        total: 120,
+      },
+    })
+
+    const header = wrapper.get('[data-testid="category-table-header"]').text()
+    expect(header).not.toContain('Tendance')
+    expect(header).toContain('Montant')
+    const figure = norm(
+      wrapper.get('[data-testid="category-average-Alimentation"]').text()
+    )
+    expect(figure).toBe('120,00 €')
   })
 
   it('does not show drill-down content until a row is clicked', () => {
@@ -133,9 +242,6 @@ describe('CategoryBreakdownList', () => {
     expect(wrapper.text()).toContain('Aucune catégorie')
   })
   describe('everyday vs real mode', () => {
-    /** formatCurrency uses narrow no-break spaces; normalise before matching. */
-    const norm = (text: string) => text.replace(/[\s\u202f\u00a0]+/g, ' ')
-
     const mixed: CategoryDataDto[] = [
       {
         categoryId: 'cat-travel',
@@ -163,113 +269,117 @@ describe('CategoryBreakdownList', () => {
       },
     ]
 
-    it('shows the real average by default', () => {
-      const wrapper = mount(CategoryBreakdownList, {
+    const mountIn = (mode: 'real' | 'everyday') =>
+      mount(CategoryBreakdownList, {
         global: { plugins: [router] },
-        props: { categories: mixed, monthLabels, total: 3400 },
+        props: {
+          categories: mixed,
+          monthLabels,
+          total: mode === 'real' ? 3400 : 2800,
+          mode,
+        },
       })
 
-      const travelRow = wrapper.get('[data-testid="category-row-Voyages"]')
-      expect(norm(travelRow.text())).toContain('333,33 € /mois')
-      expect(norm(travelRow.text())).toContain('Total : 1 000,00 €')
-      expect(norm(travelRow.text())).toContain('dont 600,00 € exceptionnel')
+    const figureOf = (
+      wrapper: ReturnType<typeof mountIn>,
+      name: string
+    ): string =>
+      norm(wrapper.get(`[data-testid="category-average-${name}"]`).text())
+
+    it('shows the real average by default, and only the average', () => {
+      const wrapper = mountIn('real')
+
+      expect(figureOf(wrapper, 'Voyages')).toBe('333,33 € /mois')
+      // The total and the events wait for the expanded line.
+      expect(norm(wrapper.text())).not.toContain('Total')
+      expect(norm(wrapper.text())).not.toContain('Événements')
     })
 
     it('shows the everyday average in everyday mode', () => {
-      const wrapper = mount(CategoryBreakdownList, {
-        global: { plugins: [router] },
-        props: {
-          categories: mixed,
-          monthLabels,
-          total: 2800,
-          mode: 'everyday',
-        },
-      })
-
-      const travelRow = wrapper.get('[data-testid="category-row-Voyages"]')
-      expect(norm(travelRow.text())).toContain('133,33 € /mois')
-      expect(norm(travelRow.text())).toContain('Total : 400,00 €')
-      expect(norm(travelRow.text())).toContain('hors 600,00 € exceptionnel')
+      expect(figureOf(mountIn('everyday'), 'Voyages')).toBe('133,33 € /mois')
     })
 
-    it('leaves the amounts of an event-free category unchanged between modes', () => {
+    it('leaves the figure of an event-free category unchanged between modes', () => {
       // The regression the user hit: switching mode moved every category.
-      // Only the share-of-total may differ, since the total itself changes.
-      const amountsOf = (text: string) => norm(text).replace(/\d+\.\d%/, '')
-
-      const real = mount(CategoryBreakdownList, {
-        global: { plugins: [router] },
-        props: { categories: mixed, monthLabels, total: 3400 },
-      })
-        .get('[data-testid="category-row-Logement"]')
-        .text()
-
-      const everyday = mount(CategoryBreakdownList, {
-        global: { plugins: [router] },
-        props: {
-          categories: mixed,
-          monthLabels,
-          total: 2800,
-          mode: 'everyday',
-        },
-      })
-        .get('[data-testid="category-row-Logement"]')
-        .text()
-
-      expect(amountsOf(everyday)).toBe(amountsOf(real))
-      expect(amountsOf(real)).toContain('800,00 € /mois')
-      expect(amountsOf(real)).toContain('Total : 2 400,00 €')
-    })
-
-    it('labels the exceptional share "dont" in real mode and "hors" in everyday mode', () => {
-      const real = mount(CategoryBreakdownList, {
-        global: { plugins: [router] },
-        props: { categories: mixed, monthLabels, total: 3400 },
-      })
-      expect(real.get('[data-testid="category-row-Voyages"]').text()).toContain(
-        'dont'
+      expect(figureOf(mountIn('everyday'), 'Logement')).toBe(
+        figureOf(mountIn('real'), 'Logement')
       )
-
-      const everyday = mount(CategoryBreakdownList, {
-        global: { plugins: [router] },
-        props: {
-          categories: mixed,
-          monthLabels,
-          total: 2800,
-          mode: 'everyday',
-        },
-      })
-      expect(
-        everyday.get('[data-testid="category-row-Voyages"]').text()
-      ).toContain('hors')
+      expect(figureOf(mountIn('real'), 'Logement')).toBe('800,00 € /mois')
     })
 
-    it('hides the exceptional line when the category carries none', () => {
-      const wrapper = mount(CategoryBreakdownList, {
-        global: { plugins: [router] },
-        props: { categories: mixed, monthLabels, total: 3400 },
-      })
+    it('states the total, the share and the events once the row is expanded', async () => {
+      const real = mountIn('real')
+      expect(real.find('[data-testid="category-facts-Voyages"]').exists()).toBe(
+        false
+      )
+      await real.get('[data-testid="category-row-Voyages"]').trigger('click')
+
+      const facts = norm(
+        real.get('[data-testid="category-facts-Voyages"]').text()
+      )
+      expect(facts).toContain('Total sur 3 mois : 1 000,00 €')
+      expect(facts).toContain('Part : 29,4 %')
+      expect(facts).toContain('Événements : 600,00 € (inclus)')
+
+      const everyday = mountIn('everyday')
+      await everyday
+        .get('[data-testid="category-row-Voyages"]')
+        .trigger('click')
+      const everydayFacts = norm(
+        everyday.get('[data-testid="category-facts-Voyages"]').text()
+      )
+      expect(everydayFacts).toContain('Total sur 3 mois : 400,00 €')
+      expect(everydayFacts).toContain(
+        'Événements : 600,00 € (exclus de la moyenne)'
+      )
+    })
+
+    it('leaves the events out of the facts when the category carries none', async () => {
+      const wrapper = mountIn('real')
+      await wrapper
+        .get('[data-testid="category-row-Logement"]')
+        .trigger('click')
 
       expect(
-        wrapper.get('[data-testid="category-row-Logement"]').text()
-      ).not.toContain('exceptionnel')
+        wrapper.get('[data-testid="category-facts-Logement"]').text()
+      ).not.toContain('Événements')
+    })
+
+    it('hatches the share the events carry, in the real reading only', () => {
+      const real = mountIn('real')
+      const events = real.get('[data-testid="category-share-events-Voyages"]')
+      // 600 of the 1 000 the bar stands for.
+      expect(widthOf(events.attributes('style'))).toBe(60)
+      expect(events.attributes('style')).toContain('repeating-linear-gradient')
+      expect(
+        norm(
+          real
+            .get('[data-testid="category-share-Voyages"]')
+            .attributes('aria-label') ?? ''
+        )
+      ).toContain('dont 600,00 € d’événements exceptionnels')
+      expect(
+        real.find('[data-testid="category-share-events-Logement"]').exists()
+      ).toBe(false)
+
+      // In « Vie courante » the events are out of the figure, so out of
+      // the bar.
+      expect(
+        mountIn('everyday')
+          .find('[data-testid="category-share-events-Voyages"]')
+          .exists()
+      ).toBe(false)
     })
 
     it('computes the share against the total of the active mode', () => {
-      // 400 everyday out of a 2800 everyday total = 14.3 %, not 1000/3400.
-      const wrapper = mount(CategoryBreakdownList, {
-        global: { plugins: [router] },
-        props: {
-          categories: mixed,
-          monthLabels,
-          total: 2800,
-          mode: 'everyday',
-        },
-      })
-
+      // 400 everyday out of a 2800 everyday total = 14,3 %, not 1000/3400.
       expect(
-        wrapper.get('[data-testid="category-row-Voyages"]').text()
-      ).toContain('14.3%')
+        norm(
+          mountIn('everyday')
+            .get('[data-testid="category-share-Voyages"]')
+            .attributes('aria-label') ?? ''
+        )
+      ).toBe('14,3 % des dépenses')
     })
 
     it('falls back to the real figures when the everyday ones are absent', () => {
@@ -294,8 +404,10 @@ describe('CategoryBreakdownList', () => {
       })
 
       expect(
-        norm(wrapper.get('[data-testid="category-row-Alimentation"]').text())
-      ).toContain('200,00 € /mois')
+        norm(
+          wrapper.get('[data-testid="category-average-Alimentation"]').text()
+        )
+      ).toBe('200,00 € /mois')
     })
   })
 

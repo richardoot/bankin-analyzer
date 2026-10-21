@@ -14,13 +14,15 @@
   import { formatCurrency, formatMonth } from '@/lib/formatters'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
   import SectionLabel from '@/components/ui/SectionLabel.vue'
+  import { useChartTheme } from '@/composables/useChartTheme'
+  import { othersColor } from '@/lib/chartPalette'
 
   const props = withDefaults(
     defineProps<{
       categories: CategoryDataDto[]
       monthLabels: string[]
       total: number
-      /** Color for sparklines + drill-down chart */
+      /** Color of the drill-down chart; the row's trend line is neutral. */
       color?: string
       /**
        * 'everyday' strips the share carried by exceptional events (holidays,
@@ -29,7 +31,8 @@
       mode?: 'real' | 'everyday'
       /**
        * The hue each category takes in the donut beside the list, by name:
-       * drawn as a dot before the name so the two can be read together.
+       * a dot before the name and the fill of its share bar, so the two can
+       * be read together. Without it the bars are the « Autres » gray.
        */
       colors?: Map<string, string> | undefined
       /**
@@ -202,6 +205,111 @@
     return (displayedAmount(cat) / props.total) * 100
   }
 
+  const percentFormat = new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })
+
+  /** « 12,3 % », the way the expanded line and the bar's name say it. */
+  function percentLabel(cat: CategoryDataDto): string {
+    return `${percentFormat.format(getPercent(cat))}\u202f%`
+  }
+
+  /**
+   * The bars share one scale: the largest category of the list fills its
+   * track, every other one is measured against it.
+   */
+  const largestAmount = computed(() =>
+    Math.max(0, ...props.categories.map(cat => displayedAmount(cat)))
+  )
+
+  /** The bar's length, in % of its track. */
+  function barWidth(cat: CategoryDataDto): number {
+    if (largestAmount.value <= 0) return 0
+    return Math.min(100, (displayedAmount(cat) / largestAmount.value) * 100)
+  }
+
+  /**
+   * The share of the bar the events carry, in % of the bar. Only in the
+   * real reading: in « Vie courante » they are out of the figure, so out
+   * of the bar too — the expanded line still names them.
+   */
+  function eventsWidth(cat: CategoryDataDto): number {
+    if (isEveryday.value) return 0
+    const amount = displayedAmount(cat)
+    const events = cat.exceptionalAmount ?? 0
+    if (amount <= 0 || events <= 0) return 0
+    return Math.min(100, (events / amount) * 100)
+  }
+
+  const { isDark, labelColor, donutValueColor } = useChartTheme()
+
+  /** The donut's hue; the muted « Autres » gray when there is none. */
+  function barColor(cat: CategoryDataDto): string {
+    return props.colors?.get(cat.category) ?? othersColor(isDark.value)
+  }
+
+  /** Stripes over the bar's own hue, in the color of the card. */
+  const hatch = computed(() => {
+    const stripe = isDark.value
+      ? 'rgb(15 23 42 / 0.55)' // slate-900
+      : 'rgb(255 255 255 / 0.6)'
+    return `repeating-linear-gradient(-45deg, ${stripe} 0 2px, transparent 2px 4px)`
+  })
+
+  /** What a screen reader hears, and what the pointer shows, for a bar. */
+  function barLabel(cat: CategoryDataDto): string {
+    const share = `${percentLabel(cat)} des dépenses`
+    if (eventsWidth(cat) === 0 || !cat.exceptionalAmount) return share
+    return `${share}, dont ${formatCurrency(cat.exceptionalAmount)} d’événements exceptionnels`
+  }
+
+  const monthCount = computed(() => props.monthLabels.length)
+
+  /** A trend needs two months; a one-month period has no column for it. */
+  const showTrend = computed(() => monthCount.value >= 2)
+
+  /** « Moyenne par mois », or the plain amount over a single month. */
+  const hasAverages = computed(() =>
+    props.categories.some(cat => displayedAverage(cat) !== undefined)
+  )
+
+  /**
+   * One grid for the whole list: the header and every row are subgrids of
+   * it, so each `auto` track is sized over all the rows and a column falls
+   * on one vertical. Name · share · [trend] · figure · link.
+   */
+  const gridTemplate = computed(() =>
+    [
+      'minmax(0, 1fr)',
+      'minmax(4rem, 11rem)',
+      ...(showTrend.value ? ['auto'] : []),
+      'auto',
+      'auto',
+    ].join(' ')
+  )
+
+  /** The sparkline in words: its span, its ends, the dashed average. */
+  function sparklineLabel(cat: CategoryDataDto): string {
+    const data = getSparklineData(cat)
+    const first = data[0] ?? 0
+    const last = data.at(-1) ?? 0
+    const average = displayedAverage(cat)
+    const parts = [
+      `${cat.category} sur ${data.length} mois : de ${formatCurrency(first)} à ${formatCurrency(last)}`,
+      `au plus ${formatCurrency(Math.max(...data))}`,
+    ]
+    if (average !== undefined) {
+      parts.push(`moyenne ${formatCurrency(average)} par mois`)
+    }
+    return parts.join(', ')
+  }
+
+  /** « Total sur 3 mois », or « Total » over a single month. */
+  const totalLabel = computed(() =>
+    monthCount.value >= 2 ? `Total sur ${monthCount.value} mois` : 'Total'
+  )
+
   // Each category may not have monthlyAmounts (legacy/empty); guard.
   function getSparklineData(cat: CategoryDataDto): number[] {
     if (isEveryday.value && cat.everydayMonthlyAmounts) {
@@ -219,7 +327,7 @@
 </script>
 
 <template>
-  <div class="space-y-1.5" data-testid="category-breakdown-list">
+  <div data-testid="category-breakdown-list">
     <div
       v-if="categories.length === 0"
       class="py-8 text-center text-sm text-gray-500 dark:text-gray-400"
@@ -227,66 +335,126 @@
       Aucune catégorie à afficher
     </div>
 
+    <!-- One grid for the whole list from `sm`: the header and every row are
+         subgrids of it, so a column falls on one vertical. Below `sm` each
+         row keeps its own grid: name and figure, the bar under them. -->
     <div
-      v-for="cat in categories"
-      :key="rowKey(cat)"
-      class="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700"
+      v-else
+      data-testid="category-table"
+      class="sm:grid sm:gap-x-4 sm:[grid-template-columns:var(--row-grid)]"
+      :style="{ '--row-grid': gridTemplate }"
     >
-      <!-- Row: the toggle, then the link to its transactions beside it —
-           never inside it, a link in a button is two gestures in one.
-           No overflow-hidden on the card: it cut the keyboard focus ring
-           off; the row rounds its own corners instead. -->
-      <div class="flex items-center pr-2">
-        <button
-          type="button"
-          :data-testid="`category-row-${cat.category}`"
-          class="min-w-0 flex-1 px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
-          :class="isExpanded(rowKey(cat)) ? 'rounded-tl-lg' : 'rounded-l-lg'"
-          :aria-expanded="isExpanded(rowKey(cat))"
-          @click="toggleExpanded(rowKey(cat))"
-        >
-          <!-- Chevron -->
-          <IconChevronRight
-            class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
-            :class="{ 'rotate-90': isExpanded(rowKey(cat)) }"
+      <div
+        data-testid="category-table-header"
+        class="hidden sm:grid sm:col-span-full sm:grid-cols-subgrid items-end px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-slate-700"
+      >
+        <span>Catégorie</span>
+        <span>Part des dépenses</span>
+        <span v-if="showTrend" class="whitespace-nowrap">
+          Tendance · {{ monthCount }} mois ·
+          <span
+            class="inline-block w-3 border-t border-dashed border-current align-middle"
+            aria-hidden="true"
           />
+          <span class="sr-only">pointillé :</span>
+          moyenne
+        </span>
+        <span class="text-right">
+          {{ hasAverages ? 'Moyenne par mois' : 'Montant' }}
+        </span>
+        <span aria-hidden="true" />
+      </div>
 
-          <!-- Icon + name; the share sits beside the name on a desk and
-             wraps under it on a phone, where it used to be hidden outright. -->
-          <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2">
-            <span
-              v-if="colors?.get(cat.category)"
-              class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-              :style="{ backgroundColor: colors.get(cat.category) }"
-              :data-testid="`category-color-${cat.category}`"
-              aria-hidden="true"
-            />
-            <span v-if="cat.icon" class="text-lg shrink-0">{{ cat.icon }}</span>
-            <span
-              class="min-w-0 flex-1 truncate font-medium text-gray-900 dark:text-gray-100"
+      <div
+        class="divide-y divide-gray-100 sm:col-span-full sm:grid sm:grid-cols-subgrid dark:divide-slate-700"
+      >
+        <div
+          v-for="cat in categories"
+          :key="rowKey(cat)"
+          class="sm:col-span-full sm:grid sm:grid-cols-subgrid"
+        >
+          <!-- Row: the toggle on the name, then share, trend, figure, and
+               the link to its transactions — never inside the toggle, a
+               link in a button is two gestures in one. -->
+          <div
+            class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1.5 px-2 py-2.5 transition-colors hover:bg-gray-50 sm:col-span-full sm:grid-cols-subgrid sm:gap-x-4 sm:gap-y-0 dark:hover:bg-slate-800/60"
+          >
+            <button
+              type="button"
+              :data-testid="`category-row-${cat.category}`"
+              class="col-start-1 row-start-1 flex min-w-0 items-center gap-2 rounded py-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 sm:col-start-auto sm:row-start-auto"
+              :aria-expanded="isExpanded(rowKey(cat))"
+              @click="toggleExpanded(rowKey(cat))"
             >
-              {{ cat.category }}
-            </span>
-            <span
-              class="basis-full text-xs text-gray-500 tabular-nums sm:basis-auto dark:text-gray-400"
-            >
-              {{ getPercent(cat).toFixed(1) }}%
-            </span>
-          </div>
+              <IconChevronRight
+                class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
+                :class="{ 'rotate-90': isExpanded(rowKey(cat)) }"
+              />
+              <span
+                v-if="colors?.get(cat.category)"
+                class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                :style="{ backgroundColor: colors.get(cat.category) }"
+                :data-testid="`category-color-${cat.category}`"
+                aria-hidden="true"
+              />
+              <span v-if="cat.icon" class="text-lg shrink-0">{{
+                cat.icon
+              }}</span>
+              <span
+                class="min-w-0 truncate font-medium text-gray-900 dark:text-gray-100"
+              >
+                {{ cat.category }}
+              </span>
+            </button>
 
-          <!-- Sparkline -->
-          <div class="hidden sm:block shrink-0">
-            <SparklineChart
-              v-if="getSparklineData(cat).length >= 2"
-              :data="getSparklineData(cat)"
-              :color="props.color"
-            />
-          </div>
-
-          <!-- Amounts -->
-          <div class="shrink-0 text-right">
+            <!-- Share: one scale for the list, the donut's hue, the
+                 events hatched. The figure is in its name, not on screen. -->
             <div
-              class="font-semibold text-gray-900 dark:text-gray-100 tabular-nums"
+              :data-testid="`category-share-${cat.category}`"
+              role="img"
+              :aria-label="barLabel(cat)"
+              :title="barLabel(cat)"
+              class="col-span-3 row-start-2 h-2.5 overflow-hidden rounded-full bg-gray-100 sm:col-span-1 sm:row-start-auto dark:bg-slate-800"
+            >
+              <div
+                :data-testid="`category-share-fill-${cat.category}`"
+                class="flex h-full justify-end rounded-full"
+                :style="{
+                  width: `${barWidth(cat)}%`,
+                  backgroundColor: barColor(cat),
+                }"
+              >
+                <div
+                  v-if="eventsWidth(cat) > 0"
+                  :data-testid="`category-share-events-${cat.category}`"
+                  class="h-full"
+                  :style="{
+                    width: `${eventsWidth(cat)}%`,
+                    backgroundImage: hatch,
+                  }"
+                />
+              </div>
+            </div>
+
+            <!-- Trend: measured from zero, the dashed line is the figure. -->
+            <div v-if="showTrend" class="hidden sm:block">
+              <SparklineChart
+                v-if="getSparklineData(cat).length >= 2"
+                :data="getSparklineData(cat)"
+                :width="130"
+                baseline="zero"
+                :reference="displayedAverage(cat)"
+                :color="labelColor"
+                :end-color="donutValueColor"
+                :label="sparklineLabel(cat)"
+              />
+            </div>
+
+            <!-- The figure: the monthly average, or the amount over one
+                 month. -->
+            <div
+              :data-testid="`category-average-${cat.category}`"
+              class="col-start-2 row-start-1 whitespace-nowrap text-right font-semibold text-gray-900 tabular-nums sm:col-start-auto sm:row-start-auto dark:text-gray-100"
             >
               {{ formatCurrency(displayedAverage(cat) ?? displayedAmount(cat))
               }}<span
@@ -296,135 +464,149 @@
                 /mois</span
               >
             </div>
-            <div class="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-              Total : {{ formatCurrency(displayedAmount(cat)) }}
-            </div>
-            <div
-              v-if="cat.exceptionalAmount && cat.exceptionalAmount > 0"
-              class="text-xs text-amber-700 dark:text-amber-400 tabular-nums"
-              :title="
-                isEveryday
-                  ? 'Montant exclu de cette moyenne'
-                  : 'Part incluse dans cette moyenne'
-              "
-            >
-              {{ isEveryday ? 'hors' : 'dont' }}
-              {{ formatCurrency(cat.exceptionalAmount) }} exceptionnel
-            </div>
-          </div>
-        </button>
-        <TransactionsLink
-          :to="rowLink(cat)"
-          :subject="cat.category"
-          icon-only
-          :data-testid="`category-link-${cat.category}`"
-        />
-      </div>
 
-      <!-- Drill-down panel -->
-      <div
-        v-if="isExpanded(rowKey(cat))"
-        class="rounded-b-lg border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 px-4 py-4"
-      >
-        <!-- Subcategories table -->
-        <div v-if="subcategoryLines(cat).length > 0" class="mb-4">
-          <SectionLabel as="h4" class="mb-2"> Sous-catégories </SectionLabel>
-          <div class="space-y-1">
+            <TransactionsLink
+              :to="rowLink(cat)"
+              :subject="cat.category"
+              icon-only
+              class="col-start-3 row-start-1 sm:col-start-auto sm:row-start-auto"
+              :data-testid="`category-link-${cat.category}`"
+            />
+          </div>
+
+          <!-- Drill-down panel -->
+          <div
+            v-if="isExpanded(rowKey(cat))"
+            :data-testid="`category-panel-${cat.category}`"
+            class="col-span-full min-w-0 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 px-4 py-4"
+          >
+            <!-- The facts the row leaves out: the total, the share, and
+                 the events' part with the rows behind it. -->
             <div
-              v-for="sub in subcategoryLines(cat)"
-              :key="sub.subcategoryId ?? '(sans sous-catégorie)'"
-              class="flex items-center gap-3 py-1.5 pl-3 pr-1 rounded text-sm bg-white dark:bg-slate-900"
-              :data-testid="`subcategory-line-${cat.category}-${sub.subcategory || 'none'}`"
+              :data-testid="`category-facts-${cat.category}`"
+              class="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 tabular-nums dark:text-gray-400"
             >
-              <span
-                v-if="sub.icon"
-                class="text-base shrink-0 leading-none"
-                aria-hidden="true"
+              <span>
+                {{ totalLabel }} :
+                <strong
+                  class="font-semibold text-gray-900 dark:text-gray-100"
+                  >{{ formatCurrency(displayedAmount(cat)) }}</strong
+                >
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>
+                Part :
+                <strong
+                  class="font-semibold text-gray-900 dark:text-gray-100"
+                  >{{ percentLabel(cat) }}</strong
+                >
+              </span>
+              <template
+                v-if="cat.exceptionalAmount && cat.exceptionalAmount > 0"
               >
-                {{ sub.icon }}
-              </span>
-              <span class="flex-1 truncate text-gray-700 dark:text-gray-300">
-                {{ sub.subcategory || '(sans sous-catégorie)' }}
-              </span>
-              <span
-                class="hidden text-xs text-gray-500 tabular-nums shrink-0 sm:inline dark:text-gray-400"
-              >
-                {{ sub.transactionCount }} tx
-              </span>
-              <span
-                class="font-medium text-gray-900 dark:text-gray-100 tabular-nums shrink-0"
-              >
-                {{ formatCurrency(subcategoryAmount(sub)) }}
-              </span>
-              <span
-                class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0 hidden sm:inline"
-              >
-                {{ formatCurrency(subcategoryAverage(sub)) }}/mois
-              </span>
-              <TransactionsLink
-                :to="subcategoryLink(cat, sub)"
-                :subject="`${cat.category} · ${subcategoryName(sub)}`"
-                icon-only
-                class="-my-1"
-                :data-testid="`subcategory-link-${cat.category}-${sub.subcategory || 'none'}`"
+                <span aria-hidden="true">·</span>
+                <span>
+                  Événements :
+                  <strong
+                    class="font-semibold text-gray-900 dark:text-gray-100"
+                    >{{ formatCurrency(cat.exceptionalAmount) }}</strong
+                  >
+                  {{ isEveryday ? '(exclus de la moyenne)' : '(inclus)' }}
+                </span>
+                <TransactionsLink
+                  :to="exceptionalLink(cat)"
+                  :subject="`${cat.category} · événements exceptionnels`"
+                  :data-testid="`category-exceptional-link-${cat.category}`"
+                >
+                  Voir
+                </TransactionsLink>
+              </template>
+            </div>
+
+            <!-- Subcategories table -->
+            <div v-if="subcategoryLines(cat).length > 0" class="mb-4">
+              <SectionLabel as="h4" class="mb-2">
+                Sous-catégories
+              </SectionLabel>
+              <div class="space-y-1">
+                <div
+                  v-for="sub in subcategoryLines(cat)"
+                  :key="sub.subcategoryId ?? '(sans sous-catégorie)'"
+                  class="flex items-center gap-3 py-1.5 pl-3 pr-1 rounded text-sm bg-white dark:bg-slate-900"
+                  :data-testid="`subcategory-line-${cat.category}-${sub.subcategory || 'none'}`"
+                >
+                  <span
+                    v-if="sub.icon"
+                    class="text-base shrink-0 leading-none"
+                    aria-hidden="true"
+                  >
+                    {{ sub.icon }}
+                  </span>
+                  <span
+                    class="flex-1 truncate text-gray-700 dark:text-gray-300"
+                  >
+                    {{ sub.subcategory || '(sans sous-catégorie)' }}
+                  </span>
+                  <span
+                    class="hidden text-xs text-gray-500 tabular-nums shrink-0 sm:inline dark:text-gray-400"
+                  >
+                    {{ sub.transactionCount }} tx
+                  </span>
+                  <span
+                    class="font-medium text-gray-900 dark:text-gray-100 tabular-nums shrink-0"
+                  >
+                    {{ formatCurrency(subcategoryAmount(sub)) }}
+                  </span>
+                  <span
+                    class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0 hidden sm:inline"
+                  >
+                    {{ formatCurrency(subcategoryAverage(sub)) }}/mois
+                  </span>
+                  <TransactionsLink
+                    :to="subcategoryLink(cat, sub)"
+                    :subject="`${cat.category} · ${subcategoryName(sub)}`"
+                    icon-only
+                    class="-my-1"
+                    :data-testid="`subcategory-link-${cat.category}-${sub.subcategory || 'none'}`"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Monthly evolution chart -->
+            <div v-if="getSparklineData(cat).length >= 2">
+              <SectionLabel as="h4" class="mb-2">
+                Évolution mensuelle
+              </SectionLabel>
+              <!-- A bar opens its month; the link above is the keyboard way. -->
+              <MonthlyBarChart
+                :data="chartDataFor(cat)"
+                :title="cat.category"
+                :color="props.color"
+                :months="monthLabels"
+                @select-month="month => openMonth(cat, month)"
               />
             </div>
+
+            <!-- Reimbursement info -->
+            <div
+              v-if="cat.reimbursement || cat.pendingReimbursement"
+              class="mt-3 flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400"
+            >
+              <span v-if="cat.reimbursement">
+                Remboursements reçus déduits :
+                <strong class="text-gray-700 dark:text-gray-300">{{
+                  formatCurrency(cat.reimbursement)
+                }}</strong>
+              </span>
+              <span v-if="cat.pendingReimbursement">
+                En attente déduits :
+                <strong class="text-gray-700 dark:text-gray-300">{{
+                  formatCurrency(cat.pendingReimbursement)
+                }}</strong>
+              </span>
+            </div>
           </div>
-        </div>
-
-        <!-- Monthly evolution chart -->
-        <div v-if="getSparklineData(cat).length >= 2">
-          <SectionLabel as="h4" class="mb-2">
-            Évolution mensuelle
-          </SectionLabel>
-          <!-- A bar opens its month; the link above is the keyboard way. -->
-          <MonthlyBarChart
-            :data="chartDataFor(cat)"
-            :title="cat.category"
-            :color="props.color"
-            :months="monthLabels"
-            @select-month="month => openMonth(cat, month)"
-          />
-        </div>
-
-        <!-- The events' share, and the rows behind it. A line of its own:
-             the figure in the row sits inside the toggle, where a link
-             cannot go. -->
-        <div
-          v-if="cat.exceptionalAmount && cat.exceptionalAmount > 0"
-          class="mt-3 flex flex-wrap items-center gap-x-2 text-xs text-amber-700 dark:text-amber-400"
-        >
-          <span class="tabular-nums">
-            Événements exceptionnels :
-            {{ formatCurrency(cat.exceptionalAmount) }}
-            {{ isEveryday ? '(exclus de la moyenne)' : '(inclus)' }}
-          </span>
-          <TransactionsLink
-            :to="exceptionalLink(cat)"
-            :subject="`${cat.category} · événements exceptionnels`"
-            :data-testid="`category-exceptional-link-${cat.category}`"
-          >
-            Voir
-          </TransactionsLink>
-        </div>
-
-        <!-- Reimbursement info -->
-        <div
-          v-if="cat.reimbursement || cat.pendingReimbursement"
-          class="mt-3 flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400"
-        >
-          <span v-if="cat.reimbursement">
-            Remboursements reçus déduits :
-            <strong class="text-gray-700 dark:text-gray-300">{{
-              formatCurrency(cat.reimbursement)
-            }}</strong>
-          </span>
-          <span v-if="cat.pendingReimbursement">
-            En attente déduits :
-            <strong class="text-gray-700 dark:text-gray-300">{{
-              formatCurrency(cat.pendingReimbursement)
-            }}</strong>
-          </span>
         </div>
       </div>
     </div>
