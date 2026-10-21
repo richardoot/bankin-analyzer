@@ -247,6 +247,10 @@ La règle d'usage :
 
 Aucune écriture : une tendance ne se corrige pas, le registre oui (reclasser, lisser, étiqueter).
 
+`digest` vaut toujours `null` : le paragraphe rédigé par l'IA sous la carte a sa propre requête
+(`GET /trends/digest`) et n'est pas exposé par le MCP, la conversation rédige elle-même à partir
+de la liste.
+
 ## Garde-fous et erreurs
 
 - **Garde-fou optimiste.** L'agent dit ce qu'il croit voir (`expectedCategoryName`,
