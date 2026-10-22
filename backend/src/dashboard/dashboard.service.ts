@@ -895,6 +895,12 @@ export class DashboardService {
           net - (excMonthMap?.get(m) ?? 0) + (shift?.shiftByMonth.get(m) ?? 0)
         )
       })
+      // The events' own share per month, read straight from the event
+      // transactions: not monthlyAmounts minus everydayMonthlyAmounts, which
+      // the smoothed slices would skew.
+      dto.exceptionalMonthlyAmounts = breakdownMonthLabels.map(m =>
+        round(excMonthMap?.get(m) ?? 0)
+      )
       if (shift) {
         dto.amortizedAmount = round(shift.slices)
         dto.amortizedMonthlyAmounts = breakdownMonthLabels.map(m =>

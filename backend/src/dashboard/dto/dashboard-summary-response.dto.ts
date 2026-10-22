@@ -142,6 +142,14 @@ export class CategoryDataDto {
   everydayMonthlyAmounts?: number[]
 
   /**
+   * Per-month share carried by exceptional events, matching monthLabels
+   * indexes: the raw event transactions of each month, never derived from
+   * `everydayMonthlyAmounts` (smoothed slices would skew a subtraction). Sums
+   * to `exceptionalAmount`. Same presence rule as `exceptionalAmount`.
+   */
+  exceptionalMonthlyAmounts?: number[]
+
+  /**
    * Slices of smoothed purchases in `everydayAmount` — the « dont X €
    * lissés ». Only with the breakdown and when one touches the category.
    */

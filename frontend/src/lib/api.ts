@@ -1000,6 +1000,12 @@ export interface CategoryDataDto {
   /** Per-month everyday amounts, matching monthLabels */
   everydayMonthlyAmounts?: number[]
   /**
+   * Per-month share carried by exceptional events, matching monthLabels; sums
+   * to `exceptionalAmount`. Never rebuild it by subtraction: smoothed slices
+   * would skew it. Present whenever `exceptionalAmount` is.
+   */
+  exceptionalMonthlyAmounts?: number[]
+  /**
    * Slices of smoothed purchases in `everydayAmount` — the « dont X €
    * lissés ». Only when a smoothed purchase touches the category.
    */

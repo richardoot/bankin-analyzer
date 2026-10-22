@@ -682,6 +682,10 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — nothing de
         0,
       ],
       "exceptionalAmount": 1200,
+      "exceptionalMonthlyAmounts": [
+        1200,
+        0,
+      ],
       "icon": null,
       "monthlyAmounts": [
         1200,
@@ -710,6 +714,10 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — nothing de
         0,
       ],
       "exceptionalAmount": 0,
+      "exceptionalMonthlyAmounts": [
+        0,
+        0,
+      ],
       "icon": null,
       "monthlyAmounts": [
         1000,
@@ -745,6 +753,10 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — nothing de
         400,
       ],
       "exceptionalAmount": 0,
+      "exceptionalMonthlyAmounts": [
+        0,
+        0,
+      ],
       "icon": null,
       "monthlyAmounts": [
         300,
@@ -916,6 +928,10 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — received a
         0,
       ],
       "exceptionalAmount": 1200,
+      "exceptionalMonthlyAmounts": [
+        1200,
+        0,
+      ],
       "icon": null,
       "monthlyAmounts": [
         1200,
@@ -944,6 +960,10 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — received a
         400,
       ],
       "exceptionalAmount": 0,
+      "exceptionalMonthlyAmounts": [
+        0,
+        0,
+      ],
       "icon": null,
       "monthlyAmounts": [
         225,
@@ -973,6 +993,10 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — received a
         0,
       ],
       "exceptionalAmount": 0,
+      "exceptionalMonthlyAmounts": [
+        0,
+        0,
+      ],
       "icon": null,
       "monthlyAmounts": [
         300,
@@ -1153,6 +1177,10 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — received d
         0,
       ],
       "exceptionalAmount": 1200,
+      "exceptionalMonthlyAmounts": [
+        1200,
+        0,
+      ],
       "icon": null,
       "monthlyAmounts": [
         1200,
@@ -1181,6 +1209,10 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — received d
         400,
       ],
       "exceptionalAmount": 0,
+      "exceptionalMonthlyAmounts": [
+        0,
+        0,
+      ],
       "icon": null,
       "monthlyAmounts": [
         300,
@@ -1209,6 +1241,10 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — received d
         0,
       ],
       "exceptionalAmount": 0,
+      "exceptionalMonthlyAmounts": [
+        0,
+        0,
+      ],
       "icon": null,
       "monthlyAmounts": [
         400,
@@ -1388,6 +1424,10 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — the defaul
         0,
       ],
       "exceptionalAmount": 1200,
+      "exceptionalMonthlyAmounts": [
+        1200,
+        0,
+      ],
       "icon": null,
       "monthlyAmounts": [
         1200,
@@ -1416,6 +1456,10 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — the defaul
         400,
       ],
       "exceptionalAmount": 0,
+      "exceptionalMonthlyAmounts": [
+        0,
+        0,
+      ],
       "icon": null,
       "monthlyAmounts": [
         225,
@@ -1445,6 +1489,10 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — the defaul
         0,
       ],
       "exceptionalAmount": 0,
+      "exceptionalMonthlyAmounts": [
+        0,
+        0,
+      ],
       "icon": null,
       "monthlyAmounts": [
         300,

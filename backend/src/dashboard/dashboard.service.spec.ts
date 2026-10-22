@@ -1451,6 +1451,72 @@ describe('DashboardService', () => {
       expect(food?.everydayMonthlyAmounts).toEqual([400, 0])
     })
 
+    it('reports the events month by month, from the event transactions', async () => {
+      setupMocks([
+        createRow({
+          month_key: '2024-01',
+          category_id: 'cat-food',
+          category_name: 'Alimentation',
+          type: 'EXPENSE',
+          total_amount: 300,
+        }),
+        createRow({
+          month_key: '2024-02',
+          category_id: 'cat-food',
+          category_name: 'Alimentation',
+          type: 'EXPENSE',
+          total_amount: 250,
+        }),
+        createRow({
+          month_key: '2024-02',
+          category_id: 'cat-food',
+          category_name: 'Alimentation',
+          type: 'EXPENSE',
+          is_exceptional: true,
+          total_amount: 180.456,
+        }),
+        createRow({
+          month_key: '2024-03',
+          category_id: 'cat-food',
+          category_name: 'Alimentation',
+          type: 'EXPENSE',
+          total_amount: 320,
+        }),
+        createRow({
+          month_key: '2024-01',
+          category_id: 'cat-rent',
+          category_name: 'Logement',
+          type: 'EXPENSE',
+          total_amount: 800,
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2024-01-01',
+        endDate: '2024-03-31',
+        includeCategoryBreakdown: true,
+      })
+
+      const food = result.expensesByCategory.find(
+        c => c.category === 'Alimentation'
+      )
+      expect(food?.exceptionalAmount).toBe(180.46)
+      expect(food?.exceptionalMonthlyAmounts).toEqual([0, 180.46, 0])
+      const sum = (food?.exceptionalMonthlyAmounts ?? []).reduce(
+        (a, b) => a + b,
+        0
+      )
+      expect(sum).toBeCloseTo(food?.exceptionalAmount ?? NaN, 2)
+
+      // Same presence rule as exceptionalAmount: a category untouched by any
+      // event still carries the field, all months at zero.
+      const rent = result.expensesByCategory.find(
+        c => c.category === 'Logement'
+      )
+      expect(rent?.exceptionalAmount).toBe(0)
+      expect(rent?.exceptionalMonthlyAmounts).toEqual([0, 0, 0])
+    })
+
     it('reports the exceptional total and the monthly everyday split', async () => {
       setupMocks(
         [
@@ -1599,6 +1665,7 @@ describe('DashboardService', () => {
       expect(salary?.amount).toBe(2500)
       expect(salary?.everydayAmount).toBeUndefined()
       expect(salary?.exceptionalAmount).toBeUndefined()
+      expect(salary?.exceptionalMonthlyAmounts).toBeUndefined()
       expect(salary?.everydayAveragePerMonth).toBeUndefined()
     })
 
@@ -1609,6 +1676,10 @@ describe('DashboardService', () => {
 
       expect(result.expensesByCategory[0]?.amount).toBe(1000)
       expect(result.expensesByCategory[0]?.everydayAmount).toBeUndefined()
+      expect(result.expensesByCategory[0]?.exceptionalAmount).toBeUndefined()
+      expect(
+        result.expensesByCategory[0]?.exceptionalMonthlyAmounts
+      ).toBeUndefined()
       expect(result.periodMonths).toBeUndefined()
     })
 
@@ -1721,6 +1792,8 @@ describe('DashboardService', () => {
       expect(hightech?.amount).toBe(1300)
       expect(hightech?.everydayAmount).toBe(108.34)
       expect(hightech?.everydayMonthlyAmounts).toEqual([54.17, 54.17])
+      // No event here: monthly minus everyday would read the smoothing as one.
+      expect(hightech?.exceptionalMonthlyAmounts).toEqual([0, 0])
       expect(hightech?.amortizedAmount).toBe(108.34)
       expect(hightech?.amortizedMonthlyAmounts).toEqual([54.17, 54.17])
       expect(hightech?.subcategories?.[0]).toMatchObject({
