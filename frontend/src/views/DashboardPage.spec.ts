@@ -459,14 +459,19 @@ describe('DashboardPage', () => {
       ).toContain('dont vie courante')
     })
 
-    it('colors the list the way the donut is drawn', async () => {
+    it('draws the list in one blue, with no donut dot by the name', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
       const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
       await flushPromises()
 
-      const dot = wrapper.find('[data-testid="category-color-Logement"]')
-      expect(dot.exists()).toBe(true)
-      expect(dot.attributes('style')).toContain('background-color')
+      expect(
+        wrapper.find('[data-testid="category-color-Logement"]').exists()
+      ).toBe(false)
+      expect(
+        wrapper
+          .get('[data-testid="category-share-fill-Logement"]')
+          .attributes('style')
+      ).toContain('background-color: #60a5fa')
     })
 
     it('keeps the period bar in place: the migration banner sits below the filters', async () => {

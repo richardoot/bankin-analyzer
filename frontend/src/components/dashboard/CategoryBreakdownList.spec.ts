@@ -78,7 +78,7 @@ describe('CategoryBreakdownList', () => {
   const widthOf = (style: string | undefined) =>
     Number(/width:\s*([\d.]+)%/.exec(style ?? '')?.[1])
 
-  it('names the share of total on the bar, not in the row text', () => {
+  it('writes the share of total at the end of the bar, and in its name', () => {
     const wrapper = mount(CategoryBreakdownList, {
       global: { plugins: [router] },
       props: { categories, monthLabels, total: 900 },
@@ -98,11 +98,18 @@ describe('CategoryBreakdownList', () => {
           .attributes('aria-label') ?? ''
       )
     ).toContain('33,3 %')
-    // Written nowhere in the rows.
-    expect(norm(wrapper.text())).not.toMatch(/66[.,]7/)
+    // Written at the end of the bar, in the row's text.
+    expect(
+      norm(
+        wrapper.get('[data-testid="category-share-pct-Alimentation"]').text()
+      )
+    ).toBe('66,7 %')
+    expect(
+      norm(wrapper.get('[data-testid="category-share-pct-Transport"]').text())
+    ).toBe('33,3 %')
   })
 
-  it('measures every bar against the largest category', () => {
+  it('measures every bar against the total, the bars adding up to one track', () => {
     const wrapper = mount(CategoryBreakdownList, {
       global: { plugins: [router] },
       props: { categories, monthLabels, total: 900 },
@@ -114,36 +121,53 @@ describe('CategoryBreakdownList', () => {
           .get(`[data-testid="category-share-fill-${name}"]`)
           .attributes('style')
       )
-    expect(fill('Alimentation')).toBe(100)
-    expect(fill('Transport')).toBe(50)
+    // The largest category is its share, not a full track.
+    expect(fill('Alimentation')).toBeCloseTo(66.67, 1)
+    expect(fill('Transport')).toBeCloseTo(33.33, 1)
+    expect(fill('Alimentation') + fill('Transport')).toBeCloseTo(100, 1)
   })
 
-  it('fills the bar with the donut hue, gray without colors', () => {
-    const colored = mount(CategoryBreakdownList, {
+  it('keeps a sliver of bar for a tiny share, none for an empty one', () => {
+    const wrapper = mount(CategoryBreakdownList, {
       global: { plugins: [router] },
       props: {
-        categories,
+        categories: [
+          { categoryId: 'cat-1', category: 'Alimentation', amount: 999 },
+          { categoryId: 'cat-2', category: 'Timbres', amount: 1 },
+          { categoryId: 'cat-3', category: 'Vide', amount: 0 },
+        ],
         monthLabels,
-        total: 900,
-        colors: new Map([['Alimentation', '#f97316']]),
+        total: 1000,
       },
     })
-    expect(
-      colored
-        .get('[data-testid="category-share-fill-Alimentation"]')
+    const style = (name: string) =>
+      wrapper
+        .get(`[data-testid="category-share-fill-${name}"]`)
         .attributes('style')
-    ).toContain('background-color: #f97316')
+    expect(widthOf(style('Timbres'))).toBeCloseTo(0.1, 5)
+    expect(style('Timbres')).toContain('min-width: 3px')
+    expect(style('Vide')).not.toContain('min-width')
+  })
 
-    const plain = mount(CategoryBreakdownList, {
+  it('draws every bar in the one blue, with no color dot by the name', () => {
+    const wrapper = mount(CategoryBreakdownList, {
       global: { plugins: [router] },
       props: { categories, monthLabels, total: 900 },
     })
-    // The « Autres » gray-400.
+    for (const name of ['Alimentation', 'Transport']) {
+      expect(
+        wrapper
+          .get(`[data-testid="category-share-fill-${name}"]`)
+          .attributes('style')
+      ).toContain('background-color: #60a5fa')
+    }
+    expect(wrapper.find('[data-testid^="category-color-"]').exists()).toBe(
+      false
+    )
+    // The emoji stays: it names the category.
     expect(
-      plain
-        .get('[data-testid="category-share-fill-Alimentation"]')
-        .attributes('style')
-    ).toContain('background-color: #9ca3af')
+      wrapper.get('[data-testid="category-row-Alimentation"]').text()
+    ).toContain('🍽️')
   })
 
   it('heads the columns once, and draws the trend from zero against the average', () => {
@@ -156,7 +180,7 @@ describe('CategoryBreakdownList', () => {
       wrapper.get('[data-testid="category-table-header"]').text()
     )
     expect(header).toContain('Catégorie')
-    expect(header).toContain('Part des dépenses')
+    expect(header).toContain('Part des dépenses · sur 900 €')
     expect(header).toContain('Tendance · 3 mois')
     expect(header).toContain('Moyenne par mois')
 

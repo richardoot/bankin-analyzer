@@ -11,11 +11,14 @@
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
-  import { formatCurrency, formatMonth } from '@/lib/formatters'
+  import {
+    formatCompactCurrency,
+    formatCurrency,
+    formatMonth,
+  } from '@/lib/formatters'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
   import SectionLabel from '@/components/ui/SectionLabel.vue'
   import { useChartTheme } from '@/composables/useChartTheme'
-  import { othersColor } from '@/lib/chartPalette'
 
   const props = withDefaults(
     defineProps<{
@@ -30,12 +33,6 @@
        */
       mode?: 'real' | 'everyday'
       /**
-       * The hue each category takes in the donut beside the list, by name:
-       * a dot before the name and the fill of its share bar, so the two can
-       * be read together. Without it the bars are the « Autres » gray.
-       */
-      colors?: Map<string, string> | undefined
-      /**
        * The period the figures cover, for the links to the Transactions
        * page: a row opens its category over that window, a bar of the
        * drill-down chart opens its month.
@@ -46,7 +43,6 @@
     {
       color: '#ef4444',
       mode: 'real',
-      colors: undefined,
       window: undefined,
     }
   )
@@ -216,18 +212,23 @@
   }
 
   /**
-   * The bars share one scale: the largest category of the list fills its
-   * track, every other one is measured against it.
+   * The bar's length, in % of its track: the category's share of the
+   * period's total, so the bars of the list add up to one full track.
    */
-  const largestAmount = computed(() =>
-    Math.max(0, ...props.categories.map(cat => displayedAmount(cat)))
-  )
-
-  /** The bar's length, in % of its track. */
   function barWidth(cat: CategoryDataDto): number {
-    if (largestAmount.value <= 0) return 0
-    return Math.min(100, (displayedAmount(cat) / largestAmount.value) * 100)
+    return Math.min(100, Math.max(0, getPercent(cat)))
   }
+
+  /**
+   * A category with any spending keeps a sliver of bar, so a 0,1 % line
+   * still shows it exists.
+   */
+  function barMinWidth(cat: CategoryDataDto): string | undefined {
+    return displayedAmount(cat) > 0 ? '3px' : undefined
+  }
+
+  /** The period's total, in whole euros, for the column's header. */
+  const totalLabelShort = computed(() => formatCompactCurrency(props.total))
 
   /**
    * The share of the bar the events carry, in % of the bar. Only in the
@@ -244,12 +245,13 @@
 
   const { isDark, labelColor, donutValueColor } = useChartTheme()
 
-  /** The donut's hue; the muted « Autres » gray when there is none. */
-  function barColor(cat: CategoryDataDto): string {
-    return props.colors?.get(cat.category) ?? othersColor(isDark.value)
-  }
+  /**
+   * One hue for every bar: the length carries the amount, the emoji and
+   * the name carry the category. blue-400 reads on both themes.
+   */
+  const BAR_COLOR = '#60a5fa'
 
-  /** Stripes over the bar's own hue, in the color of the card. */
+  /** Stripes over the bar's blue, in the color of the card. */
   const hatch = computed(() => {
     const stripe = isDark.value
       ? 'rgb(15 23 42 / 0.55)' // slate-900
@@ -282,7 +284,7 @@
   const gridTemplate = computed(() =>
     [
       'minmax(0, 1fr)',
-      'minmax(4rem, 11rem)',
+      'minmax(6rem, 15rem)',
       ...(showTrend.value ? ['auto'] : []),
       'auto',
       'auto',
@@ -349,7 +351,11 @@
         class="hidden sm:grid sm:col-span-full sm:grid-cols-subgrid items-end px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-slate-700"
       >
         <span>Catégorie</span>
-        <span>Part des dépenses</span>
+        <span>
+          Part des dépenses<template v-if="total > 0">
+            · sur {{ totalLabelShort }}</template
+          >
+        </span>
         <span v-if="showTrend" class="whitespace-nowrap">
           Tendance · {{ monthCount }} mois ·
           <span
@@ -390,15 +396,6 @@
                 class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
                 :class="{ 'rotate-90': isExpanded(rowKey(cat)) }"
               />
-              <!-- The donut's dot: on a phone the bar under the name
-                   carries the hue, and the name needs the room. -->
-              <span
-                v-if="colors?.get(cat.category)"
-                class="hidden h-2.5 w-2.5 shrink-0 rounded-full sm:inline-block"
-                :style="{ backgroundColor: colors.get(cat.category) }"
-                :data-testid="`category-color-${cat.category}`"
-                aria-hidden="true"
-              />
               <span v-if="cat.icon" class="text-lg shrink-0">{{
                 cat.icon
               }}</span>
@@ -409,33 +406,47 @@
               </span>
             </button>
 
-            <!-- Share: one scale for the list, the donut's hue, the
-                 events hatched. The figure is in its name, not on screen. -->
+            <!-- Share: the bar is the category's part of the total, its
+                 figure written at the end, the events hatched. On a phone
+                 it takes the second line, the figure on the right. -->
             <div
-              :data-testid="`category-share-${cat.category}`"
-              role="img"
-              :aria-label="barLabel(cat)"
-              :title="barLabel(cat)"
-              class="col-span-3 row-start-2 h-2.5 overflow-hidden rounded-full bg-gray-100 sm:col-span-1 sm:row-start-auto dark:bg-slate-800"
+              class="col-span-3 row-start-2 flex min-w-0 items-center gap-2 sm:col-span-1 sm:row-start-auto"
             >
               <div
-                :data-testid="`category-share-fill-${cat.category}`"
-                class="flex h-full justify-end rounded-full"
-                :style="{
-                  width: `${barWidth(cat)}%`,
-                  backgroundColor: barColor(cat),
-                }"
+                :data-testid="`category-share-${cat.category}`"
+                role="img"
+                :aria-label="barLabel(cat)"
+                :title="barLabel(cat)"
+                class="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
               >
                 <div
-                  v-if="eventsWidth(cat) > 0"
-                  :data-testid="`category-share-events-${cat.category}`"
-                  class="h-full"
+                  :data-testid="`category-share-fill-${cat.category}`"
+                  class="flex h-full justify-end rounded-full"
                   :style="{
-                    width: `${eventsWidth(cat)}%`,
-                    backgroundImage: hatch,
+                    width: `${barWidth(cat)}%`,
+                    minWidth: barMinWidth(cat),
+                    backgroundColor: BAR_COLOR,
                   }"
-                />
+                >
+                  <div
+                    v-if="eventsWidth(cat) > 0"
+                    :data-testid="`category-share-events-${cat.category}`"
+                    class="h-full"
+                    :style="{
+                      width: `${eventsWidth(cat)}%`,
+                      backgroundImage: hatch,
+                    }"
+                  />
+                </div>
               </div>
+              <!-- The bar's label, already in its name: heard once. -->
+              <span
+                :data-testid="`category-share-pct-${cat.category}`"
+                class="w-[46px] shrink-0 text-right text-xs text-gray-500 tabular-nums dark:text-gray-400"
+                aria-hidden="true"
+              >
+                {{ percentLabel(cat) }}
+              </span>
             </div>
 
             <!-- Trend: measured from zero, the dashed line is the figure. -->

@@ -24,8 +24,6 @@
     transactionsLink,
   } from '@/lib/transactionsLink'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
-  import { assignCategoryColors } from '@/lib/chartPalette'
-  import { useChartTheme } from '@/composables/useChartTheme'
   import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
@@ -86,7 +84,6 @@
     hasLoaded,
   } = useDashboardData()
   const filtersStore = useFiltersStore()
-  const { isDark } = useChartTheme()
 
   // A first answer came back: later fetches are refreshes, shown over the
   // current figures, never by swapping the page — and its filters — for a
@@ -110,20 +107,8 @@
     filtersStore.setTimePeriod('all')
   }
 
-  /**
-   * The donut's colors, by category name, handed to the list under it so
-   * a slice and its row read as one. Same cap as the chart (its default
-   * topN of 7), same sort — the assignment is the chart's own.
-   */
+  /** How many slices the expenses donut draws before « Autres ». */
   const DONUT_TOP_N = 7
-  const categoryColors = computed(() =>
-    assignCategoryColors(
-      displayedExpensesByCategory.value.labels,
-      displayedExpensesByCategory.value.values,
-      DONUT_TOP_N,
-      isDark.value
-    )
-  )
 
   /**
    * Sum of the listed events, so the banner header matches the chips below it.
@@ -796,7 +781,6 @@
               :month-labels="monthLabels"
               :total="displayedTotalExpenses"
               :mode="breakdownMode"
-              :colors="categoryColors"
               :window="linkWindow"
               color="#ef4444"
             />
