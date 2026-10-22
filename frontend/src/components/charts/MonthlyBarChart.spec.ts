@@ -172,7 +172,15 @@ describe('MonthlyBarChart', () => {
       expect(options.plotOptions?.bar?.distributed).toBe(false)
       expect(options.colors).toEqual(['#ef4444', '#ef4444'])
       expect(options.fill?.type).toEqual(['solid', 'pattern'])
-      expect(options.legend?.show).toBe(true)
+      // Apex's legend stays hidden: the component draws its own, with a
+      // hatched marker for the overlay.
+      expect(options.legend?.show).toBe(false)
+      const legend = wrapper.find('[data-testid="chart-legend"]')
+      expect(legend.text()).toContain('Dépenses')
+      expect(legend.text()).toContain('événements')
+      expect(
+        wrapper.find('[data-testid="chart-legend-hatched"]').attributes('style')
+      ).toContain('repeating-linear-gradient')
       // Still a way to the month, whichever series is clicked.
       const select = options.chart?.events?.dataPointSelection as (
         e: unknown,
@@ -190,23 +198,27 @@ describe('MonthlyBarChart', () => {
           overlay: { values: [0, 300, 0], label: 'événements' },
         },
       })
-      const y = optionsOf(wrapper).tooltip?.y as {
-        formatter: (
-          v: number,
-          o: { seriesIndex: number; dataPointIndex: number }
-        ) => string
-        title: { formatter: (name: string) => string }
-      }
+      const custom = optionsOf(wrapper).tooltip?.custom as (o: {
+        dataPointIndex: number
+      }) => string
       const norm = (text: string) => text.replace(/[\s\u202f\u00a0]+/g, ' ')
 
-      expect(
-        norm(y.formatter(1200, { seriesIndex: 0, dataPointIndex: 1 }))
-      ).toBe('1 500,00 €')
-      expect(
-        norm(y.formatter(300, { seriesIndex: 1, dataPointIndex: 1 }))
-      ).toBe('300,00 €')
-      expect(y.title.formatter('événements')).toBe('dont événements')
-      expect(y.title.formatter('Dépenses')).toBe('Dépenses')
+      const withEvents = norm(custom({ dataPointIndex: 1 }))
+      expect(withEvents).toContain('Fév 2024')
+      expect(withEvents).toContain('Dépenses: </span>')
+      expect(withEvents).toContain('1 500,00 €')
+      expect(withEvents).toContain('dont événements: </span>')
+      expect(withEvents).toContain('300,00 €')
+
+      // A month without any overlay says nothing about it.
+      const without = norm(custom({ dataPointIndex: 0 }))
+      expect(without).toContain('1 500,00 €')
+      expect(without).not.toContain('dont')
+    })
+
+    it('does not draw the legend without an overlay', () => {
+      const wrapper = mount(MonthlyBarChart, { props: defaultProps })
+      expect(wrapper.find('[data-testid="chart-legend"]').exists()).toBe(false)
     })
   })
 })

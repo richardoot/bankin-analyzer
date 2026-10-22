@@ -175,9 +175,10 @@
    * With an overlay the bars stack two series, so they can no longer be
    * colored one by one (`distributed` colors by data point and turns the
    * legend into a list of months): one hue per series, the overlay hatched,
-   * a negative month still green through a color range, and the legend
-   * naming both series. The tooltip reads the month's whole stack: the
-   * total first, then « dont » the overlay's part.
+   * a negative month still green through a color range. The legend is the
+   * template's own, above the chart: Apex cannot hatch a legend marker. The
+   * tooltip is drawn by hand too, so a month without any overlay says
+   * nothing about it, rather than « dont événements : 0,00 € ».
    */
   const stackedOptions = computed<ApexOptions>(() => {
     const overlay = props.overlay
@@ -213,36 +214,55 @@
           strokeWidth: 2,
         },
       },
-      legend: {
-        show: true,
-        position: 'top',
-        horizontalAlign: 'left',
-        fontSize: '12px',
-        labels: { colors: labelColor.value },
-      },
+      legend: { show: false },
       tooltip: {
         theme: isDark.value ? 'dark' : 'light',
         shared: true,
         intersect: false,
-        y: {
-          formatter: (
-            value: number,
-            opts?: { seriesIndex: number; dataPointIndex: number }
-          ) => {
-            if (opts?.seriesIndex !== 0) return formatCurrency(value)
-            const extra = overlay.values[opts.dataPointIndex] ?? 0
-            return formatCurrency(value + extra)
-          },
-          title: {
-            formatter: (seriesName: string) =>
-              seriesName === overlay.label
-                ? `dont ${overlay.label}`
-                : seriesName,
-          },
-        },
+        custom: ({ dataPointIndex }: { dataPointIndex: number }) =>
+          stackTooltip(dataPointIndex, overlay),
       },
     }
   })
+
+  function escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+  }
+
+  /**
+   * The month's tooltip, in Apex's own markup so its theme applies: the
+   * whole stack under the series' name, then « dont » the overlay's part,
+   * only when that month carries one.
+   */
+  function stackTooltip(
+    index: number,
+    overlay: { values: number[]; label: string }
+  ): string {
+    const rest = props.data.values[index] ?? 0
+    const extra = overlay.values[index] ?? 0
+    const line = (label: string, value: number) =>
+      `<div class="apexcharts-tooltip-series-group apexcharts-active" style="display:flex">` +
+      `<div class="apexcharts-tooltip-text"><div class="apexcharts-tooltip-y-group">` +
+      `<span class="apexcharts-tooltip-text-y-label">${escapeHtml(label)}: </span>` +
+      `<span class="apexcharts-tooltip-text-y-value">${escapeHtml(formatCurrency(value))}</span>` +
+      `</div></div></div>`
+    const title = props.data.labels[index] ?? ''
+    return (
+      `<div class="apexcharts-tooltip-title">${escapeHtml(title)}</div>` +
+      line(props.title, rest + extra) +
+      (extra > 0 ? line(`dont ${overlay.label}`, extra) : '')
+    )
+  }
+
+  /** The legend's hatched marker: the hue's stripes, as Apex draws them. */
+  const hatchedMarker = computed(() => ({
+    backgroundImage: `repeating-linear-gradient(-45deg, ${props.color} 0 1.5px, transparent 1.5px 4px)`,
+    borderColor: props.color,
+  }))
 
   /**
    * Without `reference` nor `overlay` the options are exactly the plain
@@ -272,6 +292,31 @@
     class="w-full"
     :class="selectable ? '[&_.apexcharts-bar-area]:cursor-pointer' : ''"
   >
+    <!-- The legend, when the bars stack two series: Apex's own cannot
+         show a hatched marker. -->
+    <div
+      v-if="overlay"
+      data-testid="chart-legend"
+      class="mb-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400"
+    >
+      <span class="inline-flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          class="inline-block h-2.5 w-3 rounded-sm"
+          :style="{ backgroundColor: color }"
+        />
+        {{ title }}
+      </span>
+      <span class="inline-flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          data-testid="chart-legend-hatched"
+          class="inline-block h-2.5 w-3 rounded-sm border"
+          :style="hatchedMarker"
+        />
+        {{ overlay.label }}
+      </span>
+    </div>
     <VueApexCharts
       type="bar"
       :height="isMobile ? 220 : 300"
