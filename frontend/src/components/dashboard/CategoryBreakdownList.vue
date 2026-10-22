@@ -610,15 +610,17 @@
                 Sous-catégories · part de la catégorie
               </SectionLabel>
               <div
-                class="grid grid-cols-[minmax(0,1fr)_minmax(4rem,8rem)_auto_auto] gap-x-3 gap-y-1 sm:grid-cols-[minmax(0,1fr)_minmax(6rem,12rem)_auto_auto_auto_auto]"
+                class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-3 gap-y-1 sm:grid-cols-[minmax(0,1fr)_minmax(6rem,12rem)_auto_auto_auto_auto]"
               >
                 <div
                   v-for="sub in subcategoryLines(cat)"
                   :key="sub.subcategoryId ?? '(sans sous-catégorie)'"
-                  class="col-span-full grid grid-cols-subgrid items-center py-1.5 pl-3 pr-1 rounded text-sm bg-white dark:bg-slate-900"
+                  class="col-span-full grid grid-cols-subgrid items-center gap-y-1.5 py-1.5 pl-3 pr-1 rounded text-sm bg-white sm:gap-y-0 dark:bg-slate-900"
                   :data-testid="`subcategory-line-${cat.category}-${sub.subcategory || 'none'}`"
                 >
-                  <span class="flex min-w-0 items-center gap-3">
+                  <span
+                    class="col-start-1 row-start-1 flex min-w-0 items-center gap-3 sm:col-start-auto sm:row-start-auto"
+                  >
                     <span
                       v-if="sub.icon"
                       class="text-base shrink-0 leading-none"
@@ -630,7 +632,10 @@
                       {{ sub.subcategory || '(sans sous-catégorie)' }}
                     </span>
                   </span>
-                  <span class="flex min-w-0 items-center gap-2">
+                  <!-- On a phone the bar takes its own line under the name. -->
+                  <span
+                    class="col-span-full row-start-2 flex min-w-0 items-center gap-2 sm:col-span-1 sm:row-start-auto"
+                  >
                     <span
                       :data-testid="`subcategory-share-${cat.category}-${sub.subcategory || 'none'}`"
                       role="img"
@@ -662,7 +667,7 @@
                     {{ sub.transactionCount }} tx
                   </span>
                   <span
-                    class="text-right font-medium text-gray-900 dark:text-gray-100 tabular-nums"
+                    class="col-start-2 row-start-1 text-right font-medium text-gray-900 tabular-nums sm:col-start-auto sm:row-start-auto dark:text-gray-100"
                   >
                     {{ formatCurrency(subcategoryAmount(sub)) }}
                   </span>
@@ -675,7 +680,7 @@
                     :to="subcategoryLink(cat, sub)"
                     :subject="`${cat.category} · ${subcategoryName(sub)}`"
                     icon-only
-                    class="-my-1"
+                    class="-my-1 col-start-3 row-start-1 sm:col-start-auto sm:row-start-auto"
                     :data-testid="`subcategory-link-${cat.category}-${sub.subcategory || 'none'}`"
                   />
                 </div>
