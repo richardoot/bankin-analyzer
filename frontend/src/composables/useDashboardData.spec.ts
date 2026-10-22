@@ -101,35 +101,6 @@ describe('useDashboardData', () => {
     exceptionalEvents: [],
   }
 
-  const mockTransactions: TransactionDto[] = [
-    {
-      id: '1',
-      date: '2024-01-15T00:00:00.000Z',
-      description: 'Restaurant',
-      amount: -45.5,
-      type: 'EXPENSE',
-      accountId: 'Compte Courant',
-      account: 'Compte Courant',
-      categoryId: 'cat-Alimentation',
-      categoryName: 'Alimentation',
-      isPointed: false,
-      createdAt: '2024-01-15T00:00:00.000Z',
-    },
-    {
-      id: '2',
-      date: '2024-01-20T00:00:00.000Z',
-      description: 'Courses',
-      amount: -120.0,
-      type: 'EXPENSE',
-      accountId: 'Compte Courant',
-      account: 'Compte Courant',
-      categoryId: 'cat-Alimentation',
-      categoryName: 'Alimentation',
-      isPointed: false,
-      createdAt: '2024-01-20T00:00:00.000Z',
-    },
-  ]
-
   describe('fetchData', () => {
     it('should fetch dashboard summary and update state', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
@@ -311,106 +282,6 @@ describe('useDashboardData', () => {
       await fetchData()
 
       expect(allIncomeCategories.value.map(c => c.name)).toEqual(['Salaires'])
-    })
-  })
-
-  describe('drill-down functionality', () => {
-    it('should return overall expenses when no category is selected', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, filteredExpensesByMonth, selectedCategory } =
-        useDashboardData()
-      await fetchData()
-
-      expect(selectedCategory.value).toBeNull()
-      expect(filteredExpensesByMonth.value.labels).toEqual([
-        'Jan 2024',
-        'Fév 2024',
-      ])
-      expect(filteredExpensesByMonth.value.values).toEqual([165.5, 800])
-    })
-
-    it('shows the selected category monthly series', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
-        useDashboardData()
-      await fetchData()
-
-      setSelectedCategory('cat-Alimentation')
-
-      // Read straight from the summary rather than recomputed from raw
-      // transactions, so the chart cannot disagree with the breakdown beside it.
-      expect(filteredExpensesByMonth.value.labels).toEqual([
-        'Jan 2024',
-        'Fév 2024',
-      ])
-      expect(filteredExpensesByMonth.value.values).toEqual([165.5, 0])
-    })
-
-    it('does not fetch transactions to draw the drill-down', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, setSelectedCategory } = useDashboardData()
-      await fetchData()
-      setSelectedCategory('cat-Alimentation')
-
-      // Selecting a category used to trigger a full paginated walk of every
-      // transaction on the account.
-      expect(api.getTransactions).not.toHaveBeenCalled()
-    })
-
-    it('should show all months with zeros when no transactions match selected category', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: mockTransactions,
-        meta: {
-          total: 2,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, filteredExpensesByMonth, setSelectedCategory } =
-        useDashboardData()
-      await fetchData()
-
-      await setSelectedCategory('cat-Catégorie Inexistante')
-
-      // All months from period shown with zero values
-      expect(filteredExpensesByMonth.value.labels).toEqual([
-        'Jan 2024',
-        'Fév 2024',
-      ])
-      expect(filteredExpensesByMonth.value.values).toEqual([0, 0])
-    })
-
-    it('should clear selected category', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: mockTransactions,
-        meta: {
-          total: 2,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, selectedCategory, setSelectedCategory } =
-        useDashboardData()
-      await fetchData()
-
-      await setSelectedCategory('cat-Alimentation')
-      expect(selectedCategory.value).toBe('cat-Alimentation')
-
-      await setSelectedCategory(null)
-      expect(selectedCategory.value).toBeNull()
     })
   })
 
@@ -631,28 +502,19 @@ describe('useDashboardData', () => {
         setBreakdownMode,
         displayedAverageMonthlyExpenses,
         displayedTotalExpenses,
-        displayedExpensesByCategory,
         averageExceptionalMonthlyExpenses,
       } = useDashboardData()
       await fetchData()
 
       expect(breakdownMode.value).toBe('everyday')
-      // 1600 everyday over 2 months; the donut drops the empty slice.
+      // 1600 everyday over 2 months.
       expect(displayedAverageMonthlyExpenses.value).toBe(800)
       expect(displayedTotalExpenses.value).toBe(1600)
-      expect(displayedExpensesByCategory.value).toEqual({
-        labels: ['Logement'],
-        values: [1600],
-      })
       expect(averageExceptionalMonthlyExpenses.value).toBe(300)
 
       setBreakdownMode('real')
       expect(displayedAverageMonthlyExpenses.value).toBe(1100)
       expect(displayedTotalExpenses.value).toBe(2200)
-      expect(displayedExpensesByCategory.value).toEqual({
-        labels: ['Logement', 'Voyages'],
-        values: [1600, 600],
-      })
       expect(localStorage.setItem).toHaveBeenCalledWith(
         'dashboard-breakdown-mode',
         'real'

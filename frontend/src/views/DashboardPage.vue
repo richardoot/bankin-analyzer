@@ -43,7 +43,6 @@
     setBreakdownMode,
     displayedTotalExpenses,
     displayedAverageMonthlyExpenses,
-    displayedExpensesByCategory,
     pendingPreferenceSyncError,
     exceptionalEvents,
     hasExceptionalExpenses,
@@ -70,11 +69,9 @@
     monthLabels,
     allExpenseCategories,
     allIncomeCategories,
-    selectedCategory,
     selectedIncomeCategory,
-    filteredExpensesByMonth,
+    expensesByMonth,
     filteredIncomeByMonth,
-    setSelectedCategory,
     setSelectedIncomeCategory,
     deductReimbursements,
     deductPendingReimbursements,
@@ -106,9 +103,6 @@
   function showAllPeriods(): void {
     filtersStore.setTimePeriod('all')
   }
-
-  /** How many slices the expenses donut draws before « Autres ». */
-  const DONUT_TOP_N = 7
 
   /**
    * Sum of the listed events, so the banner header matches the chips below it.
@@ -153,11 +147,6 @@
     return found ? linkId(found.categoryId) : null
   }
 
-  const expenseSliceIds = computed(() =>
-    displayedExpensesByCategory.value.labels.map(label =>
-      idByName(expenseCategoriesDetailed.value, label)
-    )
-  )
   const incomeSliceIds = computed(() =>
     incomeByCategory.value.labels.map(label =>
       idByName(incomeCategoriesDetailed.value, label)
@@ -187,10 +176,17 @@
     INCOME: 'Revenus',
   }
 
+  /**
+   * The category the monthly chart's select holds. Only income has one: an
+   * expense category draws its months in its own row of the list.
+   */
+  function selectedOf(type: LinkType): string | null {
+    return type === 'INCOME' ? selectedIncomeCategory.value : null
+  }
+
   /** The whole period, narrowed to the category the chart's select holds. */
   function periodLink(type: LinkType) {
-    const selected =
-      type === 'EXPENSE' ? selectedCategory.value : selectedIncomeCategory.value
+    const selected = selectedOf(type)
     const name = nameOf(type, selected)
     return transactionsLink({
       type,
@@ -206,8 +202,7 @@
   const incomeLink = computed(() => periodLink('INCOME'))
 
   function openMonth(type: LinkType, month: string): void {
-    const selected =
-      type === 'EXPENSE' ? selectedCategory.value : selectedIncomeCategory.value
+    const selected = selectedOf(type)
     const name = nameOf(type, selected) ?? KIND_LABEL[type]
     void router.push(
       transactionsLink({
@@ -221,9 +216,8 @@
   }
 
   /**
-   * The donut of expenses reads « Vie courante » when the page does: its
-   * slices then leave the events out, and so do their links. Income has no
-   * events to leave out, the monthly bars always count everything.
+   * A slice of the income donut opens its category. Income has no events to
+   * leave out: the link counts everything, as the monthly bars do.
    */
   function openCategory(type: LinkType, id: string): void {
     void router.push(
@@ -231,10 +225,6 @@
         type,
         categoryId: id,
         ...linkWindow.value,
-        exceptional:
-          type === 'EXPENSE' && breakdownMode.value === 'everyday'
-            ? 'exclude'
-            : undefined,
         gross: true,
         label: nameOf(type, id),
       })
@@ -249,10 +239,6 @@
         type,
         categoryIds: ids,
         ...linkWindow.value,
-        exceptional:
-          type === 'EXPENSE' && breakdownMode.value === 'everyday'
-            ? 'exclude'
-            : undefined,
         gross: true,
         label: `${KIND_LABEL[type]} · Autres (${ids.length})`,
       })
@@ -622,99 +608,39 @@
           >
             Dépenses
           </h2>
-          <div
-            data-testid="dashboard-charts-section"
-            class="grid grid-cols-1 lg:grid-cols-2 gap-8"
-          >
-            <!-- Monthly expenses chart -->
-            <BaseCard>
-              <div
-                class="mb-4 flex flex-wrap items-center justify-between gap-2"
-              >
-                <h3
-                  class="text-lg font-semibold text-gray-900 dark:text-gray-100"
-                >
-                  Dépenses par mois
-                </h3>
-                <BaseField
-                  v-if="allExpenseCategories.length > 0"
-                  as="select"
-                  size="sm"
-                  label="Catégorie des dépenses par mois"
-                  label-hidden
-                  data-testid="expense-category-filter"
-                  class="max-w-full"
-                  :model-value="selectedCategory ?? ''"
-                  @update:model-value="
-                    setSelectedCategory($event ? String($event) : null)
-                  "
-                >
-                  <option value="">Toutes les catégories</option>
-                  <option
-                    v-for="cat in allExpenseCategories"
-                    :key="cat.id"
-                    :value="cat.id"
-                  >
-                    {{ cat.name }}
-                  </option>
-                </BaseField>
-              </div>
-              <div v-if="totalExpenses > 0" class="relative">
-                <!-- A bar opens its month; the link under the chart is the
-                     keyboard way to the same period. -->
-                <MonthlyBarChart
-                  :data="filteredExpensesByMonth"
-                  title="Dépenses"
-                  color="#ef4444"
-                  :months="monthKeys"
-                  @select-month="month => openMonth('EXPENSE', month)"
-                />
-                <div class="mt-2 flex justify-end">
-                  <TransactionsLink
-                    :to="expensesLink"
-                    subject="la période"
-                    data-testid="expenses-transactions-link"
-                  />
-                </div>
-              </div>
-              <div
-                v-else
-                class="py-12 text-center text-gray-500 dark:text-gray-400"
-              >
-                Aucune dépense enregistrée
-              </div>
-            </BaseCard>
-
-            <!-- Expenses pie chart -->
-            <BaseCard>
-              <h3
-                class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
-              >
-                Dépenses par catégorie
-              </h3>
-              <div
-                v-if="displayedExpensesByCategory.values.length > 0"
-                class="h-64 sm:h-80"
-              >
-                <!-- A slice opens its category; the list below is the
-                     keyboard way to the same rows. -->
-                <CategoryPieChart
-                  :data="displayedExpensesByCategory"
-                  :top-n="DONUT_TOP_N"
-                  title="Dépenses"
-                  :ids="expenseSliceIds"
-                  @select="id => openCategory('EXPENSE', id)"
-                  @select-others="ids => openCategories('EXPENSE', ids)"
+          <!-- Monthly expenses chart. No category select: each row of the
+               list below draws its own months. -->
+          <BaseCard data-testid="dashboard-charts-section">
+            <h3
+              class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4"
+            >
+              Dépenses par mois
+            </h3>
+            <div v-if="totalExpenses > 0" class="relative">
+              <!-- A bar opens its month; the link under the chart is the
+                   keyboard way to the same period. -->
+              <MonthlyBarChart
+                :data="expensesByMonth"
+                title="Dépenses"
+                color="#ef4444"
+                :months="monthKeys"
+                @select-month="month => openMonth('EXPENSE', month)"
+              />
+              <div class="mt-2 flex justify-end">
+                <TransactionsLink
+                  :to="expensesLink"
+                  subject="la période"
+                  data-testid="expenses-transactions-link"
                 />
               </div>
-              <div
-                v-else
-                class="py-12 text-center text-gray-500 dark:text-gray-400"
-              >
-                Aucune dépense enregistrée
-              </div>
-            </BaseCard>
-          </div>
+            </div>
+            <div
+              v-else
+              class="py-12 text-center text-gray-500 dark:text-gray-400"
+            >
+              Aucune dépense enregistrée
+            </div>
+          </BaseCard>
 
           <!-- Category breakdown list (drill-down) -->
           <BaseCard v-if="expenseCategoriesDetailed.length > 0" class="mt-6">

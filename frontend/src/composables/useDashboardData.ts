@@ -44,7 +44,7 @@ export function useDashboardData() {
   const accountsStore = useAccountsStore()
 
   /**
-   * One reading for the whole page — the expenses KPI, the donut, the
+   * One reading for the whole page — the expenses KPI, the
    * structure card and the category list follow it together. Persisted:
    * it is a way of looking at the figures, not a question of the moment.
    * Defaults to « Vie courante », as the budget does: a holiday must not
@@ -68,7 +68,6 @@ export function useDashboardData() {
 
   const isLoading = ref(false)
   const error = ref<string | null>(null)
-  const selectedCategory = ref<string | null>(null)
   const selectedIncomeCategory = ref<string | null>(null)
 
   // Reimbursement toggles. Received reimbursements are a reading of the
@@ -253,20 +252,6 @@ export function useDashboardData() {
     }
   })
 
-  /** The donut's data in the active reading; empty slices are left out. */
-  const displayedExpensesByCategory = computed<ChartData>(() => {
-    const data = (summaryData.value?.expensesByCategory ?? [])
-      .map(d => ({
-        label: d.category,
-        value: isEverydayMode.value ? (d.everydayAmount ?? d.amount) : d.amount,
-      }))
-      .filter(d => d.value > 0)
-    return {
-      labels: data.map(d => d.label),
-      values: data.map(d => d.value),
-    }
-  })
-
   const incomeByCategory = computed<ChartData>(() => {
     const data = summaryData.value?.incomeByCategory ?? []
     return {
@@ -331,25 +316,17 @@ export function useDashboardData() {
     }
   }
 
-  // Both drill-down charts read the series the server already computed.
+  // The income drill-down chart reads the series the server already computed.
+  // (The expenses chart lost its selector: each expanded category row draws
+  // its own monthly chart.)
   //
-  // They used to be recalculated here from every transaction of the account,
+  // Drill-down charts used to be recalculated here from every transaction of the account,
   // which meant the chart and the category breakdown right next to it applied
   // *different* rules: this one deducted a refund in the month it was received,
   // through the category association, while the server now nets it against the
   // expense it repays. Same screen, two answers. Reading the server's own
   // figures makes them agree by construction — and drops the full paginated
   // transaction fetch that existed only to feed this.
-  const filteredExpensesByMonth = computed<ChartData>(() => {
-    if (!selectedCategory.value) {
-      return expensesByMonth.value
-    }
-    return monthlySeriesOf(
-      expenseCategoriesDetailed.value,
-      selectedCategory.value
-    )
-  })
-
   const filteredIncomeByMonth = computed<ChartData>(() => {
     if (!selectedIncomeCategory.value) {
       return incomeByMonth.value
@@ -364,10 +341,6 @@ export function useDashboardData() {
   // carries its monthly series. What used to happen here was a full paginated
   // walk of every transaction on the account, on the first drill-down, purely
   // to redraw a chart the server had already computed.
-  function setSelectedCategory(category: string | null): void {
-    selectedCategory.value = category
-  }
-
   function setSelectedIncomeCategory(category: string | null): void {
     selectedIncomeCategory.value = category
   }
@@ -443,7 +416,6 @@ export function useDashboardData() {
     displayedTotalExpenses,
     displayedAverageMonthlyExpenses,
     averageExceptionalMonthlyExpenses,
-    displayedExpensesByCategory,
     pendingPreferenceSyncError,
     monthlyData,
     expensesByMonth,
@@ -470,11 +442,8 @@ export function useDashboardData() {
     monthLabels,
     allExpenseCategories,
     allIncomeCategories,
-    selectedCategory,
     selectedIncomeCategory,
-    filteredExpensesByMonth,
     filteredIncomeByMonth,
-    setSelectedCategory,
     setSelectedIncomeCategory,
     deductReimbursements,
     deductPendingReimbursements,

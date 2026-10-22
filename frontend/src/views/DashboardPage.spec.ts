@@ -328,8 +328,9 @@ describe('DashboardPage', () => {
 
     await flushPromises()
 
-    // 2 bar charts (expenses, income) + 2 pie charts (expenses by category, income by category)
-    expect(wrapper.findAll('.apexcharts-mock').length).toBe(4)
+    // 2 bar charts (expenses, income) + the income donut: the expenses
+    // shares live in the category list
+    expect(wrapper.findAll('.apexcharts-mock').length).toBe(3)
   })
 
   it('should display empty state when no transactions', async () => {
@@ -491,7 +492,7 @@ describe('DashboardPage', () => {
   })
 
   describe('pie charts', () => {
-    it('should display pie chart section titles', async () => {
+    it('keeps the income donut only: the list carries the expenses shares', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
       const wrapper = mount(DashboardPage, {
@@ -502,100 +503,37 @@ describe('DashboardPage', () => {
 
       await flushPromises()
 
-      expect(wrapper.text()).toContain('Dépenses par catégorie')
+      expect(wrapper.text()).not.toContain('Dépenses par catégorie')
       expect(wrapper.text()).toContain('Revenus par catégorie')
+      const donuts = wrapper.findAllComponents({ name: 'CategoryPieChart' })
+      expect(donuts).toHaveLength(1)
+      expect(donuts[0]?.props('title')).toBe('Revenus')
     })
   })
 
-  describe('category filter', () => {
-    it('should display category filter dropdown', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const wrapper = mount(DashboardPage, {
-        global: {
-          plugins: [router],
-        },
-      })
-
-      await flushPromises()
-
-      const select = wrapper.find('[data-testid="expense-category-filter"]')
-      expect(select.exists()).toBe(true)
-    })
-
-    it('names both category selects for assistive tech', async () => {
+  describe('expenses by month', () => {
+    it('has no category select: each row of the list draws its months', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
       const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
       await flushPromises()
 
-      const select = wrapper.get('[data-testid="expense-category-filter"]')
-      const label = wrapper.get(`label[for="${select.attributes('id')}"]`)
-      expect(label.text()).toBe('Catégorie des dépenses par mois')
-    })
-
-    it('should have "Toutes les catégories" as default option', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const wrapper = mount(DashboardPage, {
-        global: {
-          plugins: [router],
-        },
+      expect(
+        wrapper.find('[data-testid="expense-category-filter"]').exists()
+      ).toBe(false)
+      const [expensesBars] = wrapper.findAllComponents({
+        name: 'MonthlyBarChart',
       })
-
-      await flushPromises()
-
-      const select = wrapper.find('[data-testid="expense-category-filter"]')
-      expect(select.text()).toContain('Toutes les catégories')
-    })
-
-    it('should list available expense categories in dropdown', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const wrapper = mount(DashboardPage, {
-        global: {
-          plugins: [router],
-        },
+      expect(expensesBars?.props('title')).toBe('Dépenses')
+      // Every expense of each month, never one category's.
+      expect(expensesBars?.props('data')).toEqual({
+        labels: ['Jan 2024'],
+        values: [845.5],
       })
-
-      await flushPromises()
-
-      const select = wrapper.find('[data-testid="expense-category-filter"]')
-      expect(select.text()).toContain('Alimentation')
-      expect(select.text()).toContain('Logement')
-    })
-
-    it('should update chart when category is selected', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: [],
-        meta: {
-          total: 0,
-          page: 1,
-          limit: 100,
-          totalPages: 0,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const wrapper = mount(DashboardPage, {
-        global: {
-          plugins: [router],
-        },
-      })
-
-      await flushPromises()
-
-      const select = wrapper.find('[data-testid="expense-category-filter"]')
-      await select.setValue('Alimentation')
-
-      // The component should still render without errors
-      expect(wrapper.findAll('.apexcharts-mock').length).toBeGreaterThan(0)
     })
   })
 
   describe('income category filter', () => {
-    it('should display two category filter dropdowns', async () => {
+    it('should display the income category dropdown', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
       const wrapper = mount(DashboardPage, {
@@ -606,14 +544,20 @@ describe('DashboardPage', () => {
 
       await flushPromises()
 
-      const expenseSelect = wrapper.find(
-        '[data-testid="expense-category-filter"]'
-      )
       const incomeSelect = wrapper.find(
         '[data-testid="income-category-filter"]'
       )
-      expect(expenseSelect.exists()).toBe(true)
       expect(incomeSelect.exists()).toBe(true)
+    })
+
+    it('names the income category select for assistive tech', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      const select = wrapper.get('[data-testid="income-category-filter"]')
+      const label = wrapper.get(`label[for="${select.attributes('id')}"]`)
+      expect(label.text()).toBe('Catégorie des revenus par mois')
     })
 
     it('should list available income categories in second dropdown', async () => {
@@ -667,7 +611,7 @@ describe('DashboardPage', () => {
   })
 
   describe('links to the Transactions page', () => {
-    it('offers the period of each monthly chart, narrowed by the select, gross', async () => {
+    it('offers the period of each monthly chart, the income one narrowed by its select, gross', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
       const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
       await flushPromises()
@@ -680,24 +624,20 @@ describe('DashboardPage', () => {
         'Voir les transactions de la période'
       )
 
+      const income = wrapper.get('[data-testid="income-transactions-link"]')
+      expect(income.attributes('href')).toContain('type=INCOME')
       await wrapper
-        .find('[data-testid="expense-category-filter"]')
-        .setValue('cat-Logement')
-      expect(expenses.attributes('href')).toContain('category=cat-Logement')
-      expect(expenses.attributes('href')).toContain('Logement')
-
-      expect(
-        wrapper
-          .get('[data-testid="income-transactions-link"]')
-          .attributes('href')
-      ).toContain('type=INCOME')
+        .find('[data-testid="income-category-filter"]')
+        .setValue('cat-Salaires')
+      expect(income.attributes('href')).toContain('category=cat-Salaires')
+      expect(income.attributes('href')).toContain('Salaires')
     })
 
-    it('hands the donut the ids behind its labels, « sans catégorie » as a word', async () => {
+    it('hands the income donut the ids behind its labels, « sans catégorie » as a word', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue({
         ...mockSummary,
-        expensesByCategory: [
-          ...mockSummary.expensesByCategory,
+        incomeByCategory: [
+          ...mockSummary.incomeByCategory,
           {
             categoryId: '__uncategorized__',
             category: 'Non classé',
@@ -710,8 +650,7 @@ describe('DashboardPage', () => {
 
       const donuts = wrapper.findAllComponents({ name: 'CategoryPieChart' })
       expect(donuts.map(d => d.props('ids'))).toEqual([
-        ['cat-Logement', 'cat-Alimentation', 'none'],
-        ['cat-Salaires'],
+        ['cat-Salaires', 'none'],
       ])
     })
 
@@ -736,29 +675,26 @@ describe('DashboardPage', () => {
         },
       })
 
-      const [expensesDonut] = wrapper.findAllComponents({
+      const [incomeDonut] = wrapper.findAllComponents({
         name: 'CategoryPieChart',
       })
-      expensesDonut?.vm.$emit('select', 'cat-Alimentation')
+      incomeDonut?.vm.$emit('select', 'cat-Salaires')
       expect(push).toHaveBeenLastCalledWith({
         path: '/transactions',
         query: {
-          type: 'EXPENSE',
-          category: 'cat-Alimentation',
-          // The page opens « Vie courante »: the slice leaves events out.
-          exceptional: 'exclude',
-          label: 'Alimentation',
+          type: 'INCOME',
+          category: 'cat-Salaires',
+          label: 'Salaires',
           gross: '1',
         },
       })
-      expensesDonut?.vm.$emit('select-others', ['cat-a', 'none'])
+      incomeDonut?.vm.$emit('select-others', ['cat-a', 'none'])
       expect(push).toHaveBeenLastCalledWith({
         path: '/transactions',
         query: {
-          type: 'EXPENSE',
+          type: 'INCOME',
           categories: 'cat-a,none',
-          exceptional: 'exclude',
-          label: 'Dépenses · Autres (2)',
+          label: 'Revenus · Autres (2)',
           gross: '1',
         },
       })
