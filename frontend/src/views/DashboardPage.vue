@@ -708,7 +708,6 @@
               :total="displayedTotalExpenses"
               :mode="breakdownMode"
               :window="linkWindow"
-              color="#ef4444"
             />
           </BaseCard>
         </section>

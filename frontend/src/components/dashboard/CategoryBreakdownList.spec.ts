@@ -472,6 +472,12 @@ describe('CategoryBreakdownList', () => {
         expect(chart.props('data').values).toEqual([0, 400, 0])
       })
 
+      it('draws the months in the blue of the share bars', async () => {
+        const chart = await chartOf('real', 'Logement')
+
+        expect(chart.props('color')).toBe('#60a5fa')
+      })
+
       it('shows the everyday months alone in « Vie courante »', async () => {
         const chart = await chartOf('everyday', 'Voyages')
 

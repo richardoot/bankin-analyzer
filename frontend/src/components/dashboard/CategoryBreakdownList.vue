@@ -25,7 +25,10 @@
       categories: CategoryDataDto[]
       monthLabels: string[]
       total: number
-      /** Color of the drill-down chart; the row's trend line is neutral. */
+      /**
+       * Color of the drill-down chart; the row's trend line is neutral. Defaults
+       * to the bars' blue (`BAR_COLOR`), so the expanded row reads as one.
+       */
       color?: string
       /**
        * 'everyday' strips the share carried by exceptional events (holidays,
@@ -41,7 +44,7 @@
         { from?: string | undefined; to?: string | undefined } | undefined
     }>(),
     {
-      color: '#ef4444',
+      color: '#60a5fa',
       mode: 'real',
       window: undefined,
     }
