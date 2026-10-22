@@ -390,9 +390,11 @@
                 class="h-4 w-4 text-gray-500 dark:text-gray-400 shrink-0 transition-transform"
                 :class="{ 'rotate-90': isExpanded(rowKey(cat)) }"
               />
+              <!-- The donut's dot: on a phone the bar under the name
+                   carries the hue, and the name needs the room. -->
               <span
                 v-if="colors?.get(cat.category)"
-                class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                class="hidden h-2.5 w-2.5 shrink-0 rounded-full sm:inline-block"
                 :style="{ backgroundColor: colors.get(cat.category) }"
                 :data-testid="`category-color-${cat.category}`"
                 aria-hidden="true"
