@@ -206,9 +206,50 @@
     maximumFractionDigits: 1,
   })
 
-  /** « 12,3 % », the way the expanded line and the bar's name say it. */
+  /** « 12,3 % », the way a bar's end and its name say it. */
+  function formatPercent(value: number): string {
+    return `${percentFormat.format(value)}\u202f%`
+  }
+
   function percentLabel(cat: CategoryDataDto): string {
-    return `${percentFormat.format(getPercent(cat))}\u202f%`
+    return formatPercent(getPercent(cat))
+  }
+
+  /**
+   * What a subcategory line weighs in its category, in %. Measured against
+   * the sum of the lines shown, which is the category's displayed amount
+   * in the real reading; in « Vie courante » a line keeps the events the
+   * category's figure leaves out, and the lines must still make one whole.
+   */
+  function subcategoryPercent(
+    cat: CategoryDataDto,
+    sub: SubcategoryDataDto
+  ): number {
+    const whole = subcategoryLines(cat).reduce(
+      (sum, line) => sum + Math.max(0, subcategoryAmount(line)),
+      0
+    )
+    if (whole <= 0) return 0
+    return (Math.max(0, subcategoryAmount(sub)) / whole) * 100
+  }
+
+  function subcategoryBarWidth(
+    cat: CategoryDataDto,
+    sub: SubcategoryDataDto
+  ): number {
+    return Math.min(100, subcategoryPercent(cat, sub))
+  }
+
+  function subcategoryBarLabel(
+    cat: CategoryDataDto,
+    sub: SubcategoryDataDto
+  ): string {
+    return `${formatPercent(subcategoryPercent(cat, sub))} de ${cat.category}`
+  }
+
+  /** « 12 transactions », « 1 transaction ». */
+  function transactionCountLabel(count: number): string {
+    return `${count} transaction${count > 1 ? 's' : ''}`
   }
 
   /**
@@ -320,11 +361,35 @@
     return cat.monthlyAmounts ?? []
   }
 
+  /**
+   * The events' part of each month, stacked hatched on the drill-down
+   * chart — in the real reading only, and only when a month carries any.
+   */
+  function chartOverlay(
+    cat: CategoryDataDto
+  ): { values: number[]; label: string } | undefined {
+    if (isEveryday.value || !cat.monthlyAmounts) return undefined
+    const events = cat.exceptionalMonthlyAmounts
+    if (!events || !events.some(value => value !== 0)) return undefined
+    return { values: events, label: 'événements' }
+  }
+
+  const roundCents = (value: number) => Math.round(value * 100) / 100
+
+  /**
+   * The bars under the overlay: the month's real total less its events, so
+   * the stack adds up to the real total. Not `everydayMonthlyAmounts`: that
+   * one trades a smoothed purchase's month for its slices, and the stack
+   * would no longer be the month the real reading shows.
+   */
   function chartDataFor(cat: CategoryDataDto) {
-    return {
-      labels: displayLabels.value,
-      values: getSparklineData(cat),
-    }
+    const overlay = chartOverlay(cat)
+    const values = overlay
+      ? (cat.monthlyAmounts ?? []).map((amount, i) =>
+          roundCents(amount - (overlay.values[i] ?? 0))
+        )
+      : getSparklineData(cat)
+    return { labels: displayLabels.value, values }
   }
 </script>
 
@@ -493,8 +558,9 @@
             :data-testid="`category-panel-${cat.category}`"
             class="col-span-full min-w-0 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 px-4 py-4"
           >
-            <!-- The facts the row leaves out: the total, the share, and
-                 the events' part with the rows behind it. -->
+            <!-- The facts the row leaves out: the total, the count, and
+                 the events' part with the rows behind it. The share is
+                 written on the bar. -->
             <div
               :data-testid="`category-facts-${cat.category}`"
               class="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 tabular-nums dark:text-gray-400"
@@ -506,14 +572,10 @@
                   >{{ formatCurrency(displayedAmount(cat)) }}</strong
                 >
               </span>
-              <span aria-hidden="true">·</span>
-              <span>
-                Part :
-                <strong
-                  class="font-semibold text-gray-900 dark:text-gray-100"
-                  >{{ percentLabel(cat) }}</strong
-                >
-              </span>
+              <template v-if="cat.transactionCount !== undefined">
+                <span aria-hidden="true">·</span>
+                <span>{{ transactionCountLabel(cat.transactionCount) }}</span>
+              </template>
               <template
                 v-if="cat.exceptionalAmount && cat.exceptionalAmount > 0"
               >
@@ -536,42 +598,73 @@
               </template>
             </div>
 
-            <!-- Subcategories table -->
+            <!-- Subcategories: one grid, each line a subgrid of it, so the
+                 columns fall on one vertical. Name · share of the category ·
+                 count · amount · per month · link; on a phone the count and
+                 the per month step out. -->
             <div v-if="subcategoryLines(cat).length > 0" class="mb-4">
               <SectionLabel as="h4" class="mb-2">
-                Sous-catégories
+                Sous-catégories · part de la catégorie
               </SectionLabel>
-              <div class="space-y-1">
+              <div
+                class="grid grid-cols-[minmax(0,1fr)_minmax(4rem,8rem)_auto_auto] gap-x-3 gap-y-1 sm:grid-cols-[minmax(0,1fr)_minmax(6rem,12rem)_auto_auto_auto_auto]"
+              >
                 <div
                   v-for="sub in subcategoryLines(cat)"
                   :key="sub.subcategoryId ?? '(sans sous-catégorie)'"
-                  class="flex items-center gap-3 py-1.5 pl-3 pr-1 rounded text-sm bg-white dark:bg-slate-900"
+                  class="col-span-full grid grid-cols-subgrid items-center py-1.5 pl-3 pr-1 rounded text-sm bg-white dark:bg-slate-900"
                   :data-testid="`subcategory-line-${cat.category}-${sub.subcategory || 'none'}`"
                 >
-                  <span
-                    v-if="sub.icon"
-                    class="text-base shrink-0 leading-none"
-                    aria-hidden="true"
-                  >
-                    {{ sub.icon }}
+                  <span class="flex min-w-0 items-center gap-3">
+                    <span
+                      v-if="sub.icon"
+                      class="text-base shrink-0 leading-none"
+                      aria-hidden="true"
+                    >
+                      {{ sub.icon }}
+                    </span>
+                    <span class="truncate text-gray-700 dark:text-gray-300">
+                      {{ sub.subcategory || '(sans sous-catégorie)' }}
+                    </span>
+                  </span>
+                  <span class="flex min-w-0 items-center gap-2">
+                    <span
+                      :data-testid="`subcategory-share-${cat.category}-${sub.subcategory || 'none'}`"
+                      role="img"
+                      :aria-label="subcategoryBarLabel(cat, sub)"
+                      :title="subcategoryBarLabel(cat, sub)"
+                      class="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
+                    >
+                      <span
+                        class="block h-full rounded-full"
+                        :style="{
+                          width: `${subcategoryBarWidth(cat, sub)}%`,
+                          minWidth:
+                            subcategoryAmount(sub) > 0 ? '3px' : undefined,
+                          backgroundColor: BAR_COLOR,
+                        }"
+                      />
+                    </span>
+                    <span
+                      :data-testid="`subcategory-share-pct-${cat.category}-${sub.subcategory || 'none'}`"
+                      class="w-[46px] shrink-0 text-right text-xs text-gray-500 tabular-nums dark:text-gray-400"
+                      aria-hidden="true"
+                    >
+                      {{ formatPercent(subcategoryPercent(cat, sub)) }}
+                    </span>
                   </span>
                   <span
-                    class="flex-1 truncate text-gray-700 dark:text-gray-300"
-                  >
-                    {{ sub.subcategory || '(sans sous-catégorie)' }}
-                  </span>
-                  <span
-                    class="hidden text-xs text-gray-500 tabular-nums shrink-0 sm:inline dark:text-gray-400"
+                    class="hidden text-right text-xs text-gray-500 tabular-nums sm:inline dark:text-gray-400"
                   >
                     {{ sub.transactionCount }} tx
                   </span>
                   <span
-                    class="font-medium text-gray-900 dark:text-gray-100 tabular-nums shrink-0"
+                    class="text-right font-medium text-gray-900 dark:text-gray-100 tabular-nums"
                   >
                     {{ formatCurrency(subcategoryAmount(sub)) }}
                   </span>
                   <span
-                    class="text-xs text-gray-500 dark:text-gray-400 tabular-nums shrink-0 hidden sm:inline"
+                    class="hidden text-right text-xs text-gray-500 dark:text-gray-400 tabular-nums sm:inline"
                   >
                     {{ formatCurrency(subcategoryAverage(sub)) }}/mois
                   </span>
@@ -591,12 +684,16 @@
               <SectionLabel as="h4" class="mb-2">
                 Évolution mensuelle
               </SectionLabel>
-              <!-- A bar opens its month; the link above is the keyboard way. -->
+              <!-- A bar opens its month; the link above is the keyboard way.
+                   The dashed line is the row's average; in the real reading
+                   the events stack hatched on the rest of each month. -->
               <MonthlyBarChart
                 :data="chartDataFor(cat)"
                 :title="cat.category"
                 :color="props.color"
                 :months="monthLabels"
+                :reference="displayedAverage(cat)"
+                :overlay="chartOverlay(cat)"
                 @select-month="month => openMonth(cat, month)"
               />
             </div>

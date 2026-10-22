@@ -243,6 +243,51 @@ describe('CategoryBreakdownList', () => {
     expect(wrapper.find('.apexcharts-mock').exists()).toBe(true)
   })
 
+  it('gives each subcategory its share of the category, the shares making one whole', async () => {
+    const wrapper = mount(CategoryBreakdownList, {
+      global: { plugins: [router] },
+      props: { categories, monthLabels, total: 900 },
+    })
+    await wrapper
+      .find('[data-testid="category-row-Alimentation"]')
+      .trigger('click')
+
+    expect(norm(wrapper.text())).toContain(
+      'Sous-catégories · part de la catégorie'
+    )
+    const shares = wrapper.findAll(
+      '[data-testid^="subcategory-share-Alimentation-"]'
+    )
+    expect(shares).toHaveLength(2)
+    const widths = shares.map(share =>
+      widthOf(share.get('span').attributes('style'))
+    )
+    // Courses: 400 of 600; the unfiled: 200 of 600.
+    expect(widths[0]).toBeCloseTo(66.67, 1)
+    expect(widths[1]).toBeCloseTo(33.33, 1)
+    expect(widths.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 1)
+    expect(shares[0]?.get('span').attributes('style')).toContain(
+      'background-color: #60a5fa'
+    )
+    expect(
+      norm(
+        wrapper
+          .get('[data-testid="subcategory-share-pct-Alimentation-Courses"]')
+          .text()
+      )
+    ).toBe('66,7 %')
+    expect(
+      norm(
+        wrapper
+          .get('[data-testid="subcategory-share-pct-Alimentation-none"]')
+          .text()
+      )
+    ).toBe('33,3 %')
+    expect(norm(shares[0]?.attributes('aria-label') ?? '')).toBe(
+      '66,7 % de Alimentation'
+    )
+  })
+
   it('toggles drill-down off when the same row is clicked again', async () => {
     const wrapper = mount(CategoryBreakdownList, {
       global: { plugins: [router] },
@@ -278,6 +323,7 @@ describe('CategoryBreakdownList', () => {
         everydayAmount: 400,
         everydayAveragePerMonth: 133.33,
         everydayMonthlyAmounts: [0, 400, 0],
+        exceptionalMonthlyAmounts: [0, 600, 0],
       },
       {
         categoryId: 'cat-rent',
@@ -290,6 +336,7 @@ describe('CategoryBreakdownList', () => {
         everydayAmount: 2400,
         everydayAveragePerMonth: 800,
         everydayMonthlyAmounts: [800, 800, 800],
+        exceptionalMonthlyAmounts: [0, 0, 0],
       },
     ]
 
@@ -331,7 +378,7 @@ describe('CategoryBreakdownList', () => {
       expect(figureOf(mountIn('real'), 'Logement')).toBe('800,00 € /mois')
     })
 
-    it('states the total, the share and the events once the row is expanded', async () => {
+    it('states the total, the count and the events once the row is expanded', async () => {
       const real = mountIn('real')
       expect(real.find('[data-testid="category-facts-Voyages"]').exists()).toBe(
         false
@@ -342,7 +389,9 @@ describe('CategoryBreakdownList', () => {
         real.get('[data-testid="category-facts-Voyages"]').text()
       )
       expect(facts).toContain('Total sur 3 mois : 1 000,00 €')
-      expect(facts).toContain('Part : 29,4 %')
+      // The share is written on the bar, not repeated here.
+      expect(facts).not.toContain('Part')
+      expect(facts).toContain('4 transactions')
       expect(facts).toContain('Événements : 600,00 € (inclus)')
 
       const everyday = mountIn('everyday')
@@ -393,6 +442,66 @@ describe('CategoryBreakdownList', () => {
           .find('[data-testid="category-share-events-Voyages"]')
           .exists()
       ).toBe(false)
+    })
+
+    describe('the drill-down chart', () => {
+      const chartOf = async (
+        mode: 'real' | 'everyday',
+        name: string,
+        list: CategoryDataDto[] = mixed
+      ) => {
+        const wrapper = mount(CategoryBreakdownList, {
+          global: { plugins: [router] },
+          props: { categories: list, monthLabels, total: 3400, mode },
+        })
+        await wrapper
+          .get(`[data-testid="category-row-${name}"]`)
+          .trigger('click')
+        return wrapper.getComponent({ name: 'MonthlyBarChart' })
+      }
+
+      it('stacks the events on the rest of each month, against the average, in the real reading', async () => {
+        const chart = await chartOf('real', 'Voyages')
+
+        expect(chart.props('reference')).toBe(333.33)
+        expect(chart.props('overlay')).toEqual({
+          values: [0, 600, 0],
+          label: 'événements',
+        })
+        // The stack sums to the real month: 400 under the 600 of events.
+        expect(chart.props('data').values).toEqual([0, 400, 0])
+      })
+
+      it('shows the everyday months alone in « Vie courante »', async () => {
+        const chart = await chartOf('everyday', 'Voyages')
+
+        expect(chart.props('reference')).toBe(133.33)
+        expect(chart.props('overlay')).toBeUndefined()
+        expect(chart.props('data').values).toEqual([0, 400, 0])
+      })
+
+      it('stacks nothing when no month carries an event', async () => {
+        const chart = await chartOf('real', 'Logement')
+
+        expect(chart.props('overlay')).toBeUndefined()
+        expect(chart.props('data').values).toEqual([800, 800, 800])
+        expect(chart.props('reference')).toBe(800)
+      })
+
+      it('keeps the real month under the events when a smoothed purchase shifts the everyday one', async () => {
+        const chart = await chartOf('real', 'Voyages', [
+          {
+            ...(mixed[0] as CategoryDataDto),
+            // A smoothed slice lands in March: the everyday months move,
+            // the real ones do not.
+            everydayMonthlyAmounts: [0, 400, 50],
+            amortizedAmount: 50,
+            amortizedMonthlyAmounts: [0, 0, 50],
+          },
+        ])
+
+        expect(chart.props('data').values).toEqual([0, 400, 0])
+      })
     })
 
     it('computes the share against the total of the active mode', () => {
