@@ -82,10 +82,12 @@
     props.reference === undefined ? null : yOf(props.reference)
   )
 
-  /** From zero the area is the whole series' weight; at 0.14 it is a block. */
-  const areaOpacity = computed(() =>
-    props.baseline === 'zero' ? '0.07' : '0.14'
-  )
+  /**
+   * The area under the line only makes sense between the series' own ends:
+   * measured from zero it is the whole series' weight, and a flat series
+   * draws a solid block. So the zero reading keeps the line alone.
+   */
+  const showArea = computed(() => props.baseline === 'min')
 
   const markColor = computed(() => props.endColor ?? props.color)
 </script>
@@ -100,7 +102,12 @@
     :aria-label="label"
     :aria-hidden="label ? undefined : 'true'"
   >
-    <polygon :points="points.area" :fill="color" :fill-opacity="areaOpacity" />
+    <polygon
+      v-if="showArea"
+      :points="points.area"
+      :fill="color"
+      fill-opacity="0.14"
+    />
     <line
       v-if="referenceY !== null"
       data-testid="sparkline-reference"

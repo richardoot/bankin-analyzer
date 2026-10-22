@@ -33,7 +33,7 @@ describe('SparklineChart', () => {
     })
     const ys = lineYs(wrapper)
     expect(new Set(ys).size).toBe(1)
-    expect(wrapper.find('polygon').attributes('fill-opacity')).toBe('0.07')
+    expect(wrapper.find('polygon').exists()).toBe(false)
   })
 
   it('measures from zero, so a small series stays low', () => {
