@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, type VueWrapper } from '@vue/test-utils'
+import type { ApexOptions } from 'apexcharts'
 import MonthlyBarChart from './MonthlyBarChart.vue'
 
 // Mock vue3-apexcharts
@@ -105,6 +106,107 @@ describe('MonthlyBarChart', () => {
 
       expect(selection(wrapper)).toBeUndefined()
       expect(wrapper.classes().join(' ')).not.toContain('cursor-pointer')
+    })
+  })
+
+  describe('the average line and the stacked overlay', () => {
+    const apex = (wrapper: VueWrapper) =>
+      wrapper.findComponent({ name: 'VueApexCharts' })
+    const optionsOf = (wrapper: VueWrapper) =>
+      apex(wrapper).props('options') as ApexOptions
+    const seriesOf = (wrapper: VueWrapper) =>
+      apex(wrapper).props('series') as { name: string; data: number[] }[]
+
+    it('draws the plain chart, unchanged, without either', () => {
+      const wrapper = mount(MonthlyBarChart, {
+        props: {
+          ...defaultProps,
+          data: { ...defaultProps.data, values: [1500, -200, 1800] },
+        },
+      })
+      const options = optionsOf(wrapper)
+
+      expect(seriesOf(wrapper)).toEqual([
+        { name: 'Dépenses', data: [1500, -200, 1800] },
+      ])
+      expect(options.chart?.stacked).toBeUndefined()
+      expect(options.plotOptions?.bar?.distributed).toBe(true)
+      expect(options.legend?.show).toBe(false)
+      expect(options.colors).toEqual(['#ef4444', '#22c55e', '#ef4444'])
+      expect(options.annotations).toBeUndefined()
+      expect(options.fill).toBeUndefined()
+      expect(options.tooltip?.shared).toBeUndefined()
+    })
+
+    it('draws the reference as a dashed y-axis line at its value', () => {
+      const wrapper = mount(MonthlyBarChart, {
+        props: { ...defaultProps, reference: 1500 },
+      })
+      const options = optionsOf(wrapper)
+      const line = options.annotations?.yaxis?.[0]
+
+      expect(options.annotations?.yaxis).toHaveLength(1)
+      expect(line?.y).toBe(1500)
+      expect(line?.strokeDashArray).toBeGreaterThan(0)
+      expect(line?.label?.text).toBe('moyenne')
+      // The bars themselves stay the plain chart's.
+      expect(seriesOf(wrapper)).toHaveLength(1)
+      expect(options.legend?.show).toBe(false)
+    })
+
+    it('stacks the overlay on the series, hatched, with a legend', () => {
+      const wrapper = mount(MonthlyBarChart, {
+        props: {
+          ...defaultProps,
+          months: ['2024-01', '2024-02', '2024-03'],
+          overlay: { values: [0, 300, 0], label: 'événements' },
+        },
+      })
+      const options = optionsOf(wrapper)
+
+      expect(seriesOf(wrapper)).toEqual([
+        { name: 'Dépenses', data: [1500, 1200, 1800] },
+        { name: 'événements', data: [0, 300, 0] },
+      ])
+      expect(options.chart?.stacked).toBe(true)
+      expect(options.plotOptions?.bar?.distributed).toBe(false)
+      expect(options.colors).toEqual(['#ef4444', '#ef4444'])
+      expect(options.fill?.type).toEqual(['solid', 'pattern'])
+      expect(options.legend?.show).toBe(true)
+      // Still a way to the month, whichever series is clicked.
+      const select = options.chart?.events?.dataPointSelection as (
+        e: unknown,
+        c: unknown,
+        config: { seriesIndex: number; dataPointIndex: number }
+      ) => void
+      select(null, null, { seriesIndex: 1, dataPointIndex: 1 })
+      expect(wrapper.emitted('select-month')).toEqual([['2024-02']])
+    })
+
+    it('reads the month whole in the tooltip, then the overlay’s part', () => {
+      const wrapper = mount(MonthlyBarChart, {
+        props: {
+          ...defaultProps,
+          overlay: { values: [0, 300, 0], label: 'événements' },
+        },
+      })
+      const y = optionsOf(wrapper).tooltip?.y as {
+        formatter: (
+          v: number,
+          o: { seriesIndex: number; dataPointIndex: number }
+        ) => string
+        title: { formatter: (name: string) => string }
+      }
+      const norm = (text: string) => text.replace(/[\s\u202f\u00a0]+/g, ' ')
+
+      expect(
+        norm(y.formatter(1200, { seriesIndex: 0, dataPointIndex: 1 }))
+      ).toBe('1 500,00 €')
+      expect(
+        norm(y.formatter(300, { seriesIndex: 1, dataPointIndex: 1 }))
+      ).toBe('300,00 €')
+      expect(y.title.formatter('événements')).toBe('dont événements')
+      expect(y.title.formatter('Dépenses')).toBe('Dépenses')
     })
   })
 })

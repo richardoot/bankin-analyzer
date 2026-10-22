@@ -25,10 +25,23 @@
        * the keyboard way (a link beside the chart) — a bar cannot be one.
        */
       months?: string[] | undefined
+      /**
+       * A value to draw as a dashed horizontal line across the bars — the
+       * period's monthly average, say.
+       */
+      reference?: number | undefined
+      /**
+       * A second series stacked on top of `data`, in the same hue, hatched:
+       * the share of each month a part of the spending carries (the events).
+       * `data` is then the rest, so a stack sums to the month's total.
+       */
+      overlay?: { values: number[]; label: string } | undefined
     }>(),
     {
       negativeColor: '#22c55e', // green for reimbursements/credits
       months: undefined,
+      reference: undefined,
+      overlay: undefined,
     }
   )
 
@@ -57,7 +70,7 @@
     )
   )
 
-  const chartOptions = computed<ApexOptions>(() => ({
+  const baseOptions = computed<ApexOptions>(() => ({
     chart: {
       type: 'bar',
       toolbar: {
@@ -131,11 +144,126 @@
     },
   }))
 
+  /** The dashed line at `reference`, in the ink of the axis labels. */
+  const referenceAnnotation = computed<ApexOptions['annotations']>(() =>
+    props.reference === undefined
+      ? undefined
+      : {
+          yaxis: [
+            {
+              y: props.reference,
+              borderColor: labelColor.value,
+              strokeDashArray: 4,
+              label: {
+                text: 'moyenne',
+                borderWidth: 0,
+                position: 'left',
+                textAnchor: 'start',
+                offsetX: 4,
+                style: {
+                  color: labelColor.value,
+                  background: 'transparent',
+                  fontSize: '11px',
+                },
+              },
+            },
+          ],
+        }
+  )
+
+  /**
+   * With an overlay the bars stack two series, so they can no longer be
+   * colored one by one (`distributed` colors by data point and turns the
+   * legend into a list of months): one hue per series, the overlay hatched,
+   * a negative month still green through a color range, and the legend
+   * naming both series. The tooltip reads the month's whole stack: the
+   * total first, then « dont » the overlay's part.
+   */
+  const stackedOptions = computed<ApexOptions>(() => {
+    const overlay = props.overlay
+    if (!overlay) return {}
+    const base = baseOptions.value
+    return {
+      chart: { ...base.chart, stacked: true },
+      plotOptions: {
+        bar: {
+          borderRadius: 4,
+          borderRadiusApplication: 'end',
+          borderRadiusWhenStacked: 'last',
+          columnWidth: '60%',
+          distributed: false,
+          colors: {
+            ranges: [
+              {
+                from: Number.MIN_SAFE_INTEGER,
+                to: -0.01,
+                color: props.negativeColor,
+              },
+            ],
+          },
+        },
+      },
+      colors: [props.color, props.color],
+      fill: {
+        type: ['solid', 'pattern'],
+        pattern: {
+          style: 'slantedLines',
+          width: 6,
+          height: 6,
+          strokeWidth: 2,
+        },
+      },
+      legend: {
+        show: true,
+        position: 'top',
+        horizontalAlign: 'left',
+        fontSize: '12px',
+        labels: { colors: labelColor.value },
+      },
+      tooltip: {
+        theme: isDark.value ? 'dark' : 'light',
+        shared: true,
+        intersect: false,
+        y: {
+          formatter: (
+            value: number,
+            opts?: { seriesIndex: number; dataPointIndex: number }
+          ) => {
+            if (opts?.seriesIndex !== 0) return formatCurrency(value)
+            const extra = overlay.values[opts.dataPointIndex] ?? 0
+            return formatCurrency(value + extra)
+          },
+          title: {
+            formatter: (seriesName: string) =>
+              seriesName === overlay.label
+                ? `dont ${overlay.label}`
+                : seriesName,
+          },
+        },
+      },
+    }
+  })
+
+  /**
+   * Without `reference` nor `overlay` the options are exactly the plain
+   * chart's: the pages' monthly charts are drawn as they always were.
+   */
+  const chartOptions = computed<ApexOptions>(() => ({
+    ...baseOptions.value,
+    ...stackedOptions.value,
+    ...(referenceAnnotation.value && {
+      annotations: referenceAnnotation.value,
+    }),
+  }))
+
   const series = computed(() => [
     {
       name: props.title,
       data: props.data.values,
     },
+    ...(props.overlay
+      ? [{ name: props.overlay.label, data: props.overlay.values }]
+      : []),
   ])
 </script>
 
