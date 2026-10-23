@@ -182,7 +182,12 @@ describe('CategoryBreakdownList', () => {
     expect(header).toContain('Catégorie')
     expect(header).toContain('Part des dépenses · sur 900 €')
     expect(header).toContain('Tendance · 3 mois')
+    expect(header).toContain('pointillé : moyenne')
     expect(header).toContain('Moyenne par mois')
+    // The chart sits centered in its column, under its short title.
+    expect(
+      wrapper.get('[data-testid="category-trend-Alimentation"]').classes()
+    ).toContain('sm:justify-center')
 
     const sparkline = wrapper.findAllComponents({ name: 'SparklineChart' })[0]
     expect(sparkline?.props('baseline')).toBe('zero')

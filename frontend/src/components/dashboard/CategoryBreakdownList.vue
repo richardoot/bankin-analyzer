@@ -424,14 +424,19 @@
             · sur {{ totalLabelShort }}</template
           >
         </span>
-        <span v-if="showTrend" class="whitespace-nowrap">
-          Tendance · {{ monthCount }} mois ·
-          <span
-            class="inline-block w-3 border-t border-dashed border-current align-middle"
-            aria-hidden="true"
-          />
-          <span class="sr-only">pointillé :</span>
-          moyenne
+        <!-- A short title over a 130px sparkline, the dashed line's key
+             under it in small type: the column stays as narrow as the
+             chart, which sits centered on the same vertical. -->
+        <span v-if="showTrend" class="whitespace-nowrap text-center">
+          <span class="block">Tendance · {{ monthCount }} mois</span>
+          <span class="block font-normal normal-case tracking-normal">
+            <span
+              class="inline-block w-3 border-t border-dashed border-current align-middle"
+              aria-hidden="true"
+            />
+            <span class="sr-only">pointillé :</span>
+            moyenne
+          </span>
         </span>
         <span class="text-right">
           {{ hasAverages ? 'Moyenne par mois' : 'Montant' }}
@@ -518,7 +523,11 @@
             </div>
 
             <!-- Trend: measured from zero, the dashed line is the figure. -->
-            <div v-if="showTrend" class="hidden sm:block">
+            <div
+              v-if="showTrend"
+              :data-testid="`category-trend-${cat.category}`"
+              class="hidden sm:flex sm:justify-center"
+            >
               <SparklineChart
                 v-if="getSparklineData(cat).length >= 2"
                 :data="getSparklineData(cat)"
