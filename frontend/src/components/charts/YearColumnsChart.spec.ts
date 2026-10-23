@@ -97,20 +97,23 @@ describe('YearColumnsChart', () => {
     const wrapper = mountChart({ envelope: 300 })
     const envelope = wrapper.find('[data-testid="year-envelope"]')
     const line = envelope.find('line')
-    // 300 of a 600 scale: halfway up the 48 px plot, across the 72 px chart.
+    // 300 of a 600 scale: halfway up the 48 px plot, which starts under a
+    // 14 px margin, across the 72 px chart.
     expect(line.attributes()).toMatchObject({
       x1: '0',
       x2: '72',
-      y1: '24',
-      y2: '24',
+      y1: '38',
+      y2: '38',
       'stroke-dasharray': '3 3',
     })
+    // Its name sits in the margin, from the left: the chart is narrower
+    // than the name, which runs over the row's free space.
     const text = envelope.find('text')
     expect(text.text()).toMatch(/^enveloppe 300\s€$/)
     expect(text.attributes()).toMatchObject({
-      x: '72',
-      y: '20',
-      'text-anchor': 'end',
+      x: '0',
+      y: '10',
+      'text-anchor': 'start',
     })
   })
 
@@ -118,9 +121,10 @@ describe('YearColumnsChart', () => {
     const wrapper = mountChart({ envelope: 1200 })
     expect(column(wrapper, 2025).attributes('height')).toBe('24')
     expect(column(wrapper, 2024).attributes('height')).toBe('12')
+    // At the very top of the plot, under the margin.
     expect(
       wrapper.find('[data-testid="year-envelope"] line').attributes('y1')
-    ).toBe('0')
+    ).toBe('14')
   })
 
   it('redraws in red only the part above the line, only where it is crossed', () => {
@@ -135,9 +139,10 @@ describe('YearColumnsChart', () => {
       false
     )
     const over = wrapper.find('[data-testid="year-column-over-2025"]')
-    // 200 over, on a 600 scale: the top 16 px of the 48 px column.
+    // 200 over, on a 600 scale: the top 16 px of the 48 px column, which
+    // starts under the envelope's margin.
     expect(over.attributes()).toMatchObject({
-      y: '0',
+      y: '14',
       height: '16',
       fill: '#ef4444',
     })
@@ -158,6 +163,12 @@ describe('YearColumnsChart', () => {
       width: '30',
       height: '64',
     })
+    // The envelope's margin is only taken when there is one to name.
+    expect(
+      mountChart({ years: [{ year: 2025, amount: 10 }], envelope: 20 })
+        .find('svg')
+        .attributes('height')
+    ).toBe('78')
     const three = mountChart({
       years: [
         { year: 2023, amount: 1 },

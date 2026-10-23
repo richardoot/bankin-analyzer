@@ -160,7 +160,8 @@
       </h2>
       <p class="text-xs text-gray-500 dark:text-gray-400">
         Par famille d'étiquettes, sur toute l'année quelle que soit la période,
-        rangé à l'année de l'événement. Part des dépenses réelles de l'année.
+        rangé à l'année de l'événement. Part des dépenses exceptionnelles de
+        l'année.
       </p>
     </div>
 

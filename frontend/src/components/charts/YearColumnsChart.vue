@@ -31,13 +31,24 @@
   const STEP = 42
   /** The plot's height; the year labels sit below it. */
   const PLOT = 48
-  const HEIGHT = 64
-  const LABEL_Y = 62
+  /**
+   * With an envelope, a margin above the plot holds its name: the chart is
+   * a few columns wide, the name is wider, and the line often sits at the
+   * very top (the envelope is usually the scale). The name starts at the
+   * left and runs over the row's free space, never over the family's name.
+   */
+  const ENVELOPE_MARGIN = 14
+  const LABELS = 16
   /** A year at 0 keeps a sliver, so it still reads as a year. */
   const MIN_HEIGHT = 2
   const OVER_COLOR = '#ef4444' // red-500
 
   const width = computed(() => props.years.length * STEP - 12)
+  const top = computed(() =>
+    props.envelope === undefined ? 0 : ENVELOPE_MARGIN
+  )
+  const height = computed(() => top.value + PLOT + LABELS)
+  const labelY = computed(() => top.value + PLOT + LABELS - 2)
 
   const scale = computed(
     () => Math.max(...props.years.map(y => y.amount), props.envelope ?? 0) || 1
@@ -50,7 +61,7 @@
   const envelopeY = computed(() =>
     props.envelope === undefined
       ? null
-      : +(PLOT - (props.envelope / scale.value) * PLOT).toFixed(1)
+      : +(top.value + PLOT - (props.envelope / scale.value) * PLOT).toFixed(1)
   )
 
   const columns = computed(() =>
@@ -66,7 +77,7 @@
       return {
         year: y.year,
         x: i * STEP,
-        y: +(PLOT - height).toFixed(1),
+        y: +(top.value + PLOT - height).toFixed(1),
         height,
         current,
         title: `${y.year} : ${formatCurrency(y.amount)}`,
@@ -81,7 +92,7 @@
   <svg
     v-if="years.length"
     :width="width"
-    :height="HEIGHT"
+    :height="height"
     class="block overflow-visible"
     role="img"
     :aria-label="label"
@@ -113,7 +124,7 @@
       </rect>
       <text
         :x="col.x + COLUMN / 2"
-        :y="LABEL_Y"
+        :y="labelY"
         text-anchor="middle"
         font-size="10"
         :font-weight="col.current ? 600 : undefined"
@@ -140,9 +151,9 @@
         class="stroke-gray-400 dark:stroke-slate-500"
       />
       <text
-        :x="width"
-        :y="envelopeY - 4"
-        text-anchor="end"
+        x="0"
+        :y="ENVELOPE_MARGIN - 4"
+        text-anchor="start"
         font-size="10"
         class="fill-gray-400 dark:fill-slate-500"
       >
