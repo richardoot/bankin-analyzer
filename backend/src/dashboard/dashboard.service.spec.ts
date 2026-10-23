@@ -141,6 +141,9 @@ describe('DashboardService', () => {
       name: string
       color: string | null
       icon: string | null
+      family_id?: string | null
+      family_name?: string | null
+      family_color?: string | null
       amount: number
     }[] = [],
     pendingReceivables = 0
@@ -1559,6 +1562,10 @@ describe('DashboardService', () => {
           name: 'Vacances Italie',
           color: '#06b6d4',
           icon: null,
+          // A tag in no family.
+          familyId: null,
+          familyName: null,
+          familyColor: null,
           amount: 500,
         },
       ])
@@ -2283,6 +2290,304 @@ describe('DashboardService', () => {
       expect(result.expensesByCategory[0]?.averagePerMonth).toBe(300)
     })
   })
+  describe('the unfolded lines', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      // The 23rd of October 2026: June to September are closed months.
+      vi.setSystemTime(new Date('2026-10-23T10:00:00Z'))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const PERIOD = {
+      startDate: '2026-06-01',
+      endDate: '2026-09-30',
+      includeCategoryBreakdown: true,
+    }
+
+    const expense = (
+      month_key: string,
+      category_name: string,
+      total_amount: number,
+      attributes: {
+        nature: string | null
+        rhythm: string | null
+        is_exceptional?: boolean
+        is_recurring?: boolean
+      }
+    ) => createRow({ month_key, category_name, total_amount, ...attributes })
+
+    const essentialVariable = { nature: 'ESSENTIAL', rhythm: 'VARIABLE' }
+    const essentialCommitted = { nature: 'ESSENTIAL', rhythm: 'COMMITTED' }
+    const pleasureVariable = { nature: 'PLEASURE', rhythm: 'VARIABLE' }
+    const legacy = { nature: null, rhythm: null }
+
+    /**
+     * Four months, June empty: groceries, rent, restaurants, a streaming
+     * subscription committed by its recurrence, a legacy line, and two
+     * events — a trip in July, a hotel in September.
+     */
+    const LEDGER = [
+      expense('2026-07', 'Courses', 400, essentialVariable),
+      expense('2026-07', 'Logement', 800, essentialCommitted),
+      expense('2026-07', 'Restaurants', 200, pleasureVariable),
+      expense('2026-07', 'Ancienne', 50, legacy),
+      expense('2026-07', 'Voyages', 600, {
+        ...pleasureVariable,
+        is_exceptional: true,
+      }),
+      expense('2026-08', 'Courses', 500, essentialVariable),
+      expense('2026-08', 'Logement', 800, essentialCommitted),
+      expense('2026-08', 'Restaurants', 100, pleasureVariable),
+      expense('2026-08', 'Loisirs', 15, {
+        nature: 'PLEASURE',
+        rhythm: 'COMMITTED',
+        is_recurring: true,
+      }),
+      expense('2026-09', 'Courses', 300, essentialVariable),
+      expense('2026-09', 'Logement', 800, essentialCommitted),
+      expense('2026-09', 'Restaurants', 300, pleasureVariable),
+      expense('2026-09', 'Logement', 427, {
+        ...essentialVariable,
+        is_exceptional: true,
+      }),
+      createRow({
+        month_key: '2026-09',
+        category_name: 'Salaires',
+        type: 'INCOME',
+        total_amount: 2500,
+      }),
+    ]
+
+    const EVENTS = [
+      {
+        id: 'tag-japon',
+        name: 'Japon',
+        color: '#ef4444',
+        icon: null,
+        family_id: 'fam-voyages',
+        family_name: 'Voyages',
+        family_color: '#3b82f6',
+        amount: 600,
+      },
+      {
+        id: 'tag-mariage',
+        name: 'Mariage',
+        color: null,
+        icon: null,
+        family_id: null,
+        family_name: null,
+        family_color: null,
+        amount: 427,
+      },
+    ]
+
+    const sum = (rows: { amount: number }[]) =>
+      Math.round(rows.reduce((s, r) => s + r.amount, 0) * 100) / 100
+
+    it('lists the categories of each segment, which add up to the segment, on both readings', async () => {
+      setupMocks(LEDGER, undefined, EVENTS)
+
+      const result = await service.getSummary(mockUserId, PERIOD)
+
+      const breakdown = result.structureBreakdown
+      expect(breakdown).toBeDefined()
+      for (const [reading, structure] of [
+        ['everyday', result.everydaySpendingStructure],
+        ['real', result.spendingStructure],
+      ] as const) {
+        for (const segment of [
+          'essential',
+          'pleasure',
+          'committed',
+          'variable',
+        ] as const) {
+          expect(sum(breakdown?.[reading][segment] ?? [])).toBe(
+            structure[segment]
+          )
+        }
+      }
+      // The heaviest first, averaged over the four closed months; the
+      // events out of the everyday reading, the legacy line out of both.
+      expect(breakdown?.everyday.essential).toEqual([
+        {
+          categoryId: 'cat-Logement',
+          category: 'Logement',
+          icon: null,
+          amount: 2400,
+          averagePerMonth: 600,
+        },
+        {
+          categoryId: 'cat-Courses',
+          category: 'Courses',
+          icon: null,
+          amount: 1200,
+          averagePerMonth: 300,
+        },
+      ])
+      expect(breakdown?.real.pleasure.map(c => [c.category, c.amount])).toEqual(
+        [
+          // A tie reads in alphabetical order.
+          ['Restaurants', 600],
+          ['Voyages', 600],
+          ['Loisirs', 15],
+        ]
+      )
+      expect(breakdown?.real.essential[0]).toMatchObject({
+        category: 'Logement',
+        amount: 2827,
+        averagePerMonth: 706.75,
+      })
+      // A line of a recurrence is committed, whatever its subcategory says.
+      expect(breakdown?.everyday.committed.map(c => c.category)).toEqual([
+        'Logement',
+        'Loisirs',
+      ])
+      const named = Object.values(breakdown?.real ?? {}).flat()
+      expect(named.map(c => c.category)).not.toContain('Ancienne')
+    })
+
+    it('gives each segment its share of every month, a month with nothing spent left blank', async () => {
+      setupMocks(LEDGER, undefined, EVENTS)
+
+      const result = await service.getSummary(mockUserId, PERIOD)
+
+      expect(result.monthLabels).toEqual([
+        '2026-06',
+        '2026-07',
+        '2026-08',
+        '2026-09',
+      ])
+      // Everyday: July 200 of 1 450 (the legacy line in the total), August
+      // 115 of 1 415, September 300 of 1 400.
+      expect(result.structureShareByMonth?.everyday.pleasure).toEqual([
+        null,
+        13.8,
+        8.1,
+        21.4,
+      ])
+      expect(result.structureShareByMonth?.everyday.committed).toEqual([
+        null,
+        55.2,
+        57.6,
+        57.1,
+      ])
+      // Real: the trip in July's pleasure, the hotel in September's total.
+      expect(result.structureShareByMonth?.real.pleasure).toEqual([
+        null,
+        39,
+        8.1,
+        16.4,
+      ])
+      expect(result.structureShareByMonth?.real.essential).toEqual([
+        null,
+        58.5,
+        91.9,
+        83.6,
+      ])
+    })
+
+    it('reads the smoothed purchases by their slices in the everyday composition', async () => {
+      setupMocks([
+        expense('2026-07', 'High-tech', 1300, pleasureVariable),
+        expense('2026-07', 'Courses', 400, essentialVariable),
+      ])
+      mockAmortizedSlices.read.mockResolvedValue([
+        smoothedRow({
+          source_month: '2026-07',
+          source_in_window: true,
+          slices: [
+            { month: '2026-07', amount: 54.17 },
+            { month: '2026-08', amount: 54.17 },
+          ],
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, PERIOD)
+
+      const everyday = result.structureBreakdown?.everyday
+      expect(everyday?.committed).toEqual([
+        expect.objectContaining({ category: 'High-tech', amount: 108.34 }),
+      ])
+      expect(everyday?.variable.map(c => c.category)).toEqual(['Courses'])
+      expect(sum(everyday?.pleasure ?? [])).toBe(
+        result.everydaySpendingStructure.pleasure
+      )
+      expect(result.structureShareByMonth?.everyday.pleasure).toEqual([
+        null,
+        11.9,
+        100,
+        null,
+      ])
+    })
+
+    it('sums the exceptional expenses by category to what the events cost', async () => {
+      setupMocks(LEDGER, undefined, EVENTS)
+
+      const result = await service.getSummary(mockUserId, PERIOD)
+
+      expect(result.exceptionalByCategory).toEqual([
+        {
+          categoryId: 'cat-Voyages',
+          category: 'Voyages',
+          icon: null,
+          amount: 600,
+        },
+        {
+          categoryId: 'cat-Logement',
+          category: 'Logement',
+          icon: null,
+          amount: 427,
+        },
+      ])
+      expect(sum(result.exceptionalByCategory ?? [])).toBe(
+        sum(result.exceptionalEvents)
+      )
+      expect(sum(result.exceptionalByCategory ?? [])).toBe(
+        result.totalExceptionalExpenses
+      )
+    })
+
+    it('names the family of each event', async () => {
+      setupMocks(LEDGER, undefined, EVENTS)
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: PERIOD.startDate,
+        endDate: PERIOD.endDate,
+      })
+
+      expect(result.exceptionalEvents).toEqual([
+        expect.objectContaining({
+          id: 'tag-japon',
+          familyId: 'fam-voyages',
+          familyName: 'Voyages',
+          familyColor: '#3b82f6',
+        }),
+        expect.objectContaining({
+          id: 'tag-mariage',
+          familyId: null,
+          familyName: null,
+          familyColor: null,
+        }),
+      ])
+    })
+
+    it('leaves the unfolded lines out without the breakdown', async () => {
+      setupMocks(LEDGER, undefined, EVENTS)
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: PERIOD.startDate,
+        endDate: PERIOD.endDate,
+      })
+
+      expect(result).not.toHaveProperty('structureBreakdown')
+      expect(result).not.toHaveProperty('structureShareByMonth')
+      expect(result).not.toHaveProperty('exceptionalByCategory')
+    })
+  })
+
   describe('the month band', () => {
     /** The reading day: October 2026 on its 23rd, September the last closed month. */
     const AS_OF = '2026-10-23'

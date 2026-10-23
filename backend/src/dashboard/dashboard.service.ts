@@ -38,6 +38,10 @@ import type {
   SpendingStructureDto,
   SubcategoryDataDto,
   ExceptionalEventDto,
+  ExceptionalCategoryDto,
+  StructureBreakdownDto,
+  StructureCategoryDto,
+  StructureShareDto,
   TagFamilyOfYearDto,
 } from './dto'
 import {
@@ -251,6 +255,9 @@ interface ExceptionalEventRow {
   name: string
   color: string | null
   icon: string | null
+  family_id: string | null
+  family_name: string | null
+  family_color: string | null
   amount: number
 }
 
@@ -553,6 +560,108 @@ function roundStructure(s: SpendingStructureDto): SpendingStructureDto {
   }
 }
 
+/** The four segments of the structure: two per axis, « à migrer » aside. */
+type Segment = 'essential' | 'pleasure' | 'committed' | 'variable'
+
+/**
+ * The segments a line falls in: one per axis, none on an axis it carries no
+ * attribute for — the buckets of `addToStructure`, without « unknown ».
+ */
+function segmentsOf(row: {
+  nature: string | null
+  rhythm: string | null
+}): Segment[] {
+  const segments: Segment[] = []
+  if (row.nature === 'ESSENTIAL') segments.push('essential')
+  else if (row.nature === 'PLEASURE') segments.push('pleasure')
+  if (row.rhythm === 'COMMITTED') segments.push('committed')
+  else if (row.rhythm === 'VARIABLE') segments.push('variable')
+  return segments
+}
+
+/** One category inside one segment, being summed. */
+interface SegmentCategoryAccumulator {
+  amount: number
+  icon: string | null
+  /** `amount` month by month, so an average can leave a month out. */
+  byMonth: Map<string, number>
+}
+
+/** A segment's categories, keyed by category id, on one reading. */
+type StructureComposition = Record<
+  Segment,
+  Map<string, SegmentCategoryAccumulator>
+>
+
+function emptyComposition(): StructureComposition {
+  return {
+    essential: new Map(),
+    pleasure: new Map(),
+    committed: new Map(),
+    variable: new Map(),
+  }
+}
+
+/**
+ * Adds a line to the categories of the segments it falls in: the very rows
+ * and amounts `addToStructure` reads, so a segment's composition sums to
+ * the segment.
+ */
+function addToComposition(
+  target: StructureComposition,
+  row: { nature: string | null; rhythm: string | null },
+  line: { categoryKey: string; icon: string | null; month: string },
+  amount: number
+): void {
+  for (const segment of segmentsOf(row)) {
+    const current = target[segment].get(line.categoryKey) ?? {
+      amount: 0,
+      icon: line.icon,
+      byMonth: new Map<string, number>(),
+    }
+    current.amount += amount
+    current.icon = current.icon ?? line.icon
+    addTo(current.byMonth, line.month, amount)
+    target[segment].set(line.categoryKey, current)
+  }
+}
+
+/** Adds a line to its month's structure, as `addToStructure` reads it. */
+function addToMonthStructure(
+  target: Map<string, SpendingStructureDto>,
+  month: string,
+  row: { nature: string | null; rhythm: string | null; is_recurring: boolean },
+  amount: number
+): void {
+  const structure = target.get(month) ?? emptyStructure()
+  addToStructure(structure, row, amount)
+  target.set(month, structure)
+}
+
+/**
+ * A segment's share of each month's spending, in percent to the tenth,
+ * aligned on `months`: the share trend's series (trend.detection.ts, trend
+ * 4), the segment over the month's total on the same reading. Null on a
+ * month with nothing spent, which has no share — the trend skips it too.
+ */
+function shareByMonth(
+  byMonth: Map<string, SpendingStructureDto>,
+  months: string[]
+): StructureShareDto {
+  const series = (segment: Segment): (number | null)[] =>
+    months.map(m => {
+      const structure = byMonth.get(m)
+      if (!structure || structure.total <= 0) return null
+      return Math.round((structure[segment] / structure.total) * 1000) / 10
+    })
+  return {
+    essential: series('essential'),
+    pleasure: series('pleasure'),
+    committed: series('committed'),
+    variable: series('variable'),
+  }
+}
+
 @Injectable()
 export class DashboardService {
   constructor(
@@ -633,8 +742,12 @@ export class DashboardService {
           tg.name,
           tg.color,
           tg.icon,
+          tf.id AS family_id,
+          tf.name AS family_name,
+          tf.color AS family_color,
           SUM(${netAmount})::float AS amount
         FROM app.tags tg
+        LEFT JOIN app.tag_families tf ON tf.id = tg.family_id
         JOIN app.transaction_tags tt ON tt.tag_id = tg.id
         JOIN app.transactions t ON t.id = tt.transaction_id
         LEFT JOIN app.accounts a ON a.id = t.account_id
@@ -645,7 +758,7 @@ export class DashboardService {
           AND t.date >= ${startDate}
           AND t.date <= ${endDate}
           AND COALESCE(a.is_excluded_from_stats, false) = false
-        GROUP BY tg.id, tg.name, tg.color, tg.icon
+        GROUP BY tg.id, tg.name, tg.color, tg.icon, tf.id, tf.name, tf.color
         ORDER BY amount DESC
       `),
       // Query 4: what is still owed to the user, all debts together. A
@@ -755,6 +868,15 @@ export class DashboardService {
       string,
       Map<string, number>
     >()
+    /**
+     * The structure's four segments category by category, on both readings,
+     * and the structure month by month — what the unfolded lines read. Fed
+     * the very rows and amounts the two structures are, so they agree.
+     */
+    const composition = emptyComposition()
+    const everydayComposition = emptyComposition()
+    const structureByMonth = new Map<string, SpendingStructureDto>()
+    const everydayStructureByMonth = new Map<string, SpendingStructureDto>()
 
     for (const row of rows) {
       const categoryKey = categoryKeyOf(row.category_id)
@@ -819,6 +941,24 @@ export class DashboardService {
 
       // Breakdown aggregation (per-month + per-subcategory by category)
       if (shouldIncludeBreakdown) {
+        if (row.type === 'EXPENSE') {
+          const line = {
+            categoryKey,
+            icon: row.category_icon,
+            month: row.month_key,
+          }
+          addToComposition(composition, row, line, amount)
+          addToMonthStructure(structureByMonth, row.month_key, row, amount)
+          if (!row.is_exceptional) {
+            addToComposition(everydayComposition, row, line, amount)
+            addToMonthStructure(
+              everydayStructureByMonth,
+              row.month_key,
+              row,
+              amount
+            )
+          }
+        }
         const monthlyTarget =
           row.type === 'EXPENSE'
             ? expenseMonthlyByCategory
@@ -884,6 +1024,42 @@ export class DashboardService {
       }
       if (p.source_in_window) {
         addToStructure(everydayStructure, p, -p.net)
+      }
+      if (shouldIncludeBreakdown) {
+        // The same trade, segment by segment and month by month.
+        const sliceRow = {
+          nature: p.nature,
+          rhythm: SLICE_RHYTHM,
+          is_recurring: false,
+        }
+        for (const slice of p.slices) {
+          addToComposition(
+            everydayComposition,
+            sliceRow,
+            { categoryKey, icon: p.category_icon, month: slice.month },
+            slice.amount
+          )
+          addToMonthStructure(
+            everydayStructureByMonth,
+            slice.month,
+            sliceRow,
+            slice.amount
+          )
+        }
+        if (p.source_in_window) {
+          addToComposition(
+            everydayComposition,
+            p,
+            { categoryKey, icon: p.category_icon, month: p.source_month },
+            -p.net
+          )
+          addToMonthStructure(
+            everydayStructureByMonth,
+            p.source_month,
+            p,
+            -p.net
+          )
+        }
       }
 
       let entry = shiftByCategory.get(categoryKey)
@@ -1177,6 +1353,9 @@ export class DashboardService {
         name: r.name,
         color: r.color,
         icon: r.icon,
+        familyId: r.family_id ?? null,
+        familyName: r.family_name ?? null,
+        familyColor: r.family_color ?? null,
         amount: Math.round((r.amount ?? 0) * 100) / 100,
       })
     )
@@ -1224,6 +1403,55 @@ export class DashboardService {
     if (shouldIncludeBreakdown) {
       response.periodMonths = average.months
       response.monthLabels = breakdownMonthLabels
+
+      /** A segment's categories, the heaviest first, averaged as the rest. */
+      const toBreakdown = (c: StructureComposition): StructureBreakdownDto => {
+        const rowsOf = (segment: Segment): StructureCategoryDto[] =>
+          Array.from(c[segment], ([categoryId, acc]) => ({
+            categoryId,
+            category: categoryNameById.get(categoryId) ?? 'Autre',
+            icon: acc.icon,
+            amount: round(acc.amount),
+            averagePerMonth: round(
+              (acc.amount - average.outside(acc.byMonth)) / average.months
+            ),
+          }))
+            // A category a smoothing trade cancels out says nothing.
+            .filter(r => r.amount !== 0)
+            .sort(
+              (a, b) =>
+                b.amount - a.amount ||
+                a.category.localeCompare(b.category, 'fr')
+            )
+        return {
+          essential: rowsOf('essential'),
+          pleasure: rowsOf('pleasure'),
+          committed: rowsOf('committed'),
+          variable: rowsOf('variable'),
+        }
+      }
+      response.structureBreakdown = {
+        everyday: toBreakdown(everydayComposition),
+        real: toBreakdown(composition),
+      }
+      response.structureShareByMonth = {
+        everyday: shareByMonth(everydayStructureByMonth, breakdownMonthLabels),
+        real: shareByMonth(structureByMonth, breakdownMonthLabels),
+      }
+      response.exceptionalByCategory = Array.from(
+        exceptionalExpenseByCategory,
+        ([categoryId, amount]): ExceptionalCategoryDto => ({
+          categoryId,
+          category: categoryNameById.get(categoryId) ?? 'Autre',
+          icon: expenseByCategoryMap.get(categoryId)?.icon ?? null,
+          amount: round(amount),
+        })
+      )
+        .filter(c => c.amount !== 0)
+        .sort(
+          (a, b) =>
+            b.amount - a.amount || a.category.localeCompare(b.category, 'fr')
+        )
     }
 
     return response
