@@ -925,4 +925,83 @@ describe('DashboardPage', () => {
       )
     })
   })
+
+  describe('Ce qui change, compact', () => {
+    const insight = (id: string, score: number) => ({
+      kind: 'amount',
+      unit: {
+        type: 'category',
+        id,
+        categoryId: id,
+        name: id,
+        icon: null,
+      },
+      direction: 'up',
+      tone: 'neutral',
+      current: 300,
+      reference: 200,
+      delta: 100,
+      deltaPct: 50,
+      sentence: `${id} : en hausse.`,
+      windows: {
+        current: { start: '2023-12-01', end: '2023-12-31' },
+        reference: { start: '2023-06-01', end: '2023-11-30' },
+      },
+      series: [200, 200, 200, 200, 200, 200, 300],
+      score,
+    })
+
+    it('reads the lead and three tiles under the top of the page, the rest on /trends', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getSpendingTrends).mockResolvedValueOnce({
+        month: '2023-12',
+        reading: 'everyday',
+        window: 6,
+        completeMonths: 12,
+        insights: [
+          insight('cat-a', 400),
+          insight('cat-b', 300),
+          insight('cat-c', 200),
+          insight('cat-d', 100),
+        ],
+        quietSentence: null,
+        headline: 'Décembre : plus de tout.',
+        availableMonths: ['2023-12', '2023-11'],
+        horizons: [],
+        digest: null,
+      } as never)
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      const card = wrapper.get('[data-testid="spending-trends"]')
+      expect(
+        card.get('#spending-trends-title').text().replace(/\s+/g, ' ')
+      ).toBe('Ce qui change · décembre, contre les 6 mois précédents')
+      expect(card.get('[data-testid="trends-headline"]').text()).toBe(
+        'Décembre : plus de tout.'
+      )
+      expect(card.findAll('[data-testid="trends-list"] article')).toHaveLength(
+        3
+      )
+      const link = card.get('[data-testid="trends-all-link"]')
+      expect(link.text().replace(/\s+/g, ' ')).toBe('Les 4 tendances →')
+      expect(link.attributes('href')).toBe('/trends')
+      for (const id of ['trends-month', 'trends-tabs', 'trends-scope']) {
+        expect(card.find(`[data-testid="${id}"]`).exists(), id).toBe(false)
+      }
+
+      // After the top of the page, before the detail of the period.
+      const order = [
+        'reading-menu',
+        'spending-trends',
+        'dashboard-expenses-section',
+      ].map(id => wrapper.get(`[data-testid="${id}"]`).element)
+      for (let i = 1; i < order.length; i++) {
+        expect(
+          (order[i - 1] as Node).compareDocumentPosition(order[i] as Node) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy()
+      }
+    })
+  })
 })

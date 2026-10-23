@@ -1392,3 +1392,210 @@ describe('SpendingTrendsCard', () => {
     })
   })
 })
+
+describe('SpendingTrendsCard, compact (the dashboard)', () => {
+  const paragraph = {
+    month: '2026-09',
+    reading: 'everyday' as const,
+    window: 6,
+    text: 'En septembre, les restaurants montent à 312 €.',
+    model: 'claude-haiku-5-5',
+    generatedAt: '2026-10-01T09:00:00.000Z',
+    stale: false,
+  }
+
+  beforeEach(() => {
+    getSpendingTrends.mockReset()
+    getSpendingTrends.mockResolvedValue(
+      response({
+        insights: [toFile, savings, delivery, restaurant, groceries],
+      })
+    )
+    resetTrendDigestSession()
+    getTrendDigest.mockReset()
+    getTrendDigest.mockResolvedValue(null)
+    regenerateTrendDigest.mockReset()
+    vi.mocked(localStorage.getItem).mockReturnValue(null)
+  })
+
+  /** The full card reads the paragraph, as the trends page would. */
+  async function readParagraphOnTheTrendsPage(): Promise<void> {
+    getTrendDigest.mockResolvedValue(paragraph)
+    const page = await mountCard()
+    await page.find('[data-testid="trends-digest-toggle"]').trigger('click')
+    await flushPromises()
+    page.unmount()
+  }
+
+  it('names the month and its window in its title, and opens the trends page with their count', async () => {
+    const wrapper = await mountCard({ compact: true })
+
+    expect(
+      wrapper.find('#spending-trends-title').text().replace(/\s+/g, ' ')
+    ).toBe('Ce qui change · septembre, contre les 6 mois précédents')
+    const link = wrapper.get('[data-testid="trends-all-link"]')
+    expect(link.text().replace(/\s+/g, ' ')).toBe('Les 4 tendances →')
+    const stub = wrapper
+      .findAllComponents(RouterLinkStub)
+      .find(l => l.attributes('data-testid') === 'trends-all-link')
+    expect(stub?.props('to')).toBe('/trends')
+  })
+
+  it('counts a lone trend in the singular', async () => {
+    getSpendingTrends.mockResolvedValue(
+      response({ insights: [toFile, restaurant] })
+    )
+    const wrapper = await mountCard({ compact: true })
+
+    expect(
+      wrapper.get('[data-testid="trends-all-link"]').text().replace(/\s+/g, ' ')
+    ).toBe('1 tendance →')
+  })
+
+  it('shows the three largest gaps by score, the lines to file left out', async () => {
+    const wrapper = await mountCard({ compact: true })
+
+    expect(tiles(wrapper)).toEqual([
+      'trend-savings',
+      'trend-frequency',
+      'trend-amount',
+    ])
+  })
+
+  it('has no control: no selector, no tab, no « Voir par groupe », no paragraph, no horizons, no scope', async () => {
+    getSpendingTrends.mockResolvedValue(
+      response({
+        insights: [toFile, savings, delivery, restaurant, groceries, ...LOT_2],
+        horizons: [
+          {
+            kind: 'yearAgo',
+            months: 7,
+            missing: 5,
+            sentence: 'Encore 5 mois pour la comparaison.',
+          },
+        ],
+      })
+    )
+    const wrapper = await mountCard({ compact: true })
+
+    for (const id of [
+      'trends-month',
+      'trends-window-6',
+      'trends-tabs',
+      'trends-more',
+      'trends-more-button',
+      'trends-digest-toggle',
+      'trends-horizons',
+      'trends-scope',
+      'trends-to-file-compact',
+    ]) {
+      expect(wrapper.find(`[data-testid="${id}"]`).exists(), id).toBe(false)
+    }
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false)
+    expect(wrapper.find('select').exists()).toBe(false)
+    expect(getTrendDigest).not.toHaveBeenCalled()
+  })
+
+  it('leads with the headline when no paragraph was read', async () => {
+    const wrapper = await mountCard({ compact: true })
+
+    expect(wrapper.get('[data-testid="trends-headline"]').text()).toBe(
+      'Septembre : vous avez réduit vos achats en fast-food et livraison, et plus de dépenses en restaurant.'
+    )
+    expect(wrapper.find('[data-testid="trends-lead"]').exists()).toBe(false)
+  })
+
+  it('leads with the paragraph once read for the same view, never asking for it', async () => {
+    await readParagraphOnTheTrendsPage()
+    getTrendDigest.mockClear()
+
+    const wrapper = await mountCard({ compact: true })
+
+    const lead = wrapper.get('[data-testid="trends-lead"]')
+    expect(lead.get('[data-testid="trends-digest-text"]').text()).toBe(
+      paragraph.text
+    )
+    expect(lead.get('[data-testid="trends-digest-mention"]').text()).toBe(
+      "Rédigé par l'IA · Claude Haiku 5.5"
+    )
+    expect(wrapper.find('[data-testid="trends-headline"]').exists()).toBe(false)
+    expect(getTrendDigest).not.toHaveBeenCalled()
+  })
+
+  it('keeps the headline when the paragraph read is stale, or for another view', async () => {
+    getTrendDigest.mockResolvedValue({ ...paragraph, stale: true })
+    const page = await mountCard()
+    await page.find('[data-testid="trends-digest-toggle"]').trigger('click')
+    await flushPromises()
+    page.unmount()
+
+    const stale = await mountCard({ compact: true })
+    expect(stale.find('[data-testid="trends-lead"]').exists()).toBe(false)
+    expect(stale.find('[data-testid="trends-headline"]').exists()).toBe(true)
+    stale.unmount()
+
+    resetTrendDigestSession()
+    await readParagraphOnTheTrendsPage()
+    const other = await mountCard({
+      compact: true,
+      deductPendingReimbursements: false,
+    })
+    expect(other.find('[data-testid="trends-lead"]').exists()).toBe(false)
+  })
+
+  it('says only how many months are missing on a short history', async () => {
+    getSpendingTrends.mockResolvedValue(
+      response({
+        completeMonths: 1,
+        window: 1,
+        insights: [restaurant],
+        headline: null,
+      })
+    )
+    const wrapper = await mountCard({ compact: true })
+
+    expect(wrapper.get('[data-testid="trends-short-history"]').text()).toBe(
+      'Encore 2 mois de transactions et les tendances apparaîtront.'
+    )
+    expect(
+      wrapper.find('#spending-trends-title').text().replace(/\s+/g, ' ')
+    ).toBe('Ce qui change · septembre')
+    expect(wrapper.find('[data-testid="trends-list"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="trends-headline"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="trends-all-link"]').exists()).toBe(false)
+  })
+
+  it('says only the quiet sentence when nothing moved', async () => {
+    getSpendingTrends.mockResolvedValue(
+      response({
+        insights: [],
+        headline: null,
+        quietSentence:
+          "Rien de notable en septembre : la vie courante est dans l'habitude.",
+      })
+    )
+    const wrapper = await mountCard({ compact: true })
+
+    expect(wrapper.get('[data-testid="trends-quiet"]').text()).toBe(
+      "Rien de notable en septembre : la vie courante est dans l'habitude."
+    )
+    expect(wrapper.find('[data-testid="trends-list"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="trends-headline"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="trends-all-link"]').exists()).toBe(false)
+  })
+
+  it('keeps the lines to file, in small under the tiles', async () => {
+    const wrapper = await mountCard({ compact: true })
+
+    const toFileLink = wrapper.get('[data-testid="trends-to-file"]')
+    expect(toFileLink.text()).toContain('12 dépenses à classer')
+    expect(toFileLink.classes()).toContain('text-xs')
+    expect(
+      wrapper
+        .get('[data-testid="trends-list"]')
+        .element.compareDocumentPosition(toFileLink.element) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+    expect(wrapper.findAll('[data-testid="trends-to-file"]')).toHaveLength(1)
+  })
+})

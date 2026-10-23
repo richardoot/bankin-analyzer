@@ -72,6 +72,18 @@ describe('router guard', () => {
     expect(router.currentRoute.value.params.id).toBe('abc')
   })
 
+  it('opens the trends page to a signed-in user only', async () => {
+    await router.push('/trends')
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(router.currentRoute.value.query.redirect).toBe('/trends')
+
+    authState.isAuthenticated = true
+    await router.push('/trends')
+    const route = router.currentRoute.value
+    expect(route.name).toBe('trends')
+    expect(route.meta).toMatchObject({ title: 'Tendances', requiresAuth: true })
+  })
+
   it('keeps the legal pages public', async () => {
     await router.push('/privacy')
 
