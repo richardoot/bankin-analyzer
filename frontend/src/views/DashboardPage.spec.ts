@@ -329,8 +329,10 @@ describe('DashboardPage', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Dépenses par mois')
-    expect(wrapper.text()).toContain('Revenus par mois')
+    // One monthly chart: the expenses and the income together.
+    expect(wrapper.text()).toContain('Revenus et dépenses par mois')
+    expect(wrapper.text()).not.toContain('Dépenses par mois')
+    expect(wrapper.text()).not.toContain('Revenus par mois')
   })
 
   it('should render charts when data is available', async () => {
@@ -344,9 +346,9 @@ describe('DashboardPage', () => {
 
     await flushPromises()
 
-    // 2 bar charts (expenses, income) + the income donut: the expenses
-    // shares live in the category list
-    expect(wrapper.findAll('.apexcharts-mock').length).toBe(3)
+    // One chart: the income line over the expenses columns. The shares
+    // live in the category list, no donut.
+    expect(wrapper.findAll('.apexcharts-mock').length).toBe(1)
   })
 
   it('should display empty state when no transactions', async () => {
@@ -383,7 +385,7 @@ describe('DashboardPage', () => {
     expect(importLink).toBeDefined()
   })
 
-  it('should display "no expenses" message when only income', async () => {
+  it('draws the income alone when the period has no expense', async () => {
     vi.mocked(api.getDashboardSummary).mockResolvedValue(mockIncomeOnlySummary)
 
     const wrapper = mount(DashboardPage, {
@@ -394,10 +396,16 @@ describe('DashboardPage', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Aucune dépense enregistrée')
+    const chart = wrapper.findComponent({ name: 'IncomeExpensesChart' })
+    expect(chart.exists()).toBe(true)
+    expect(chart.props('months')).toEqual(mockIncomeOnlySummary.monthlyData)
+    // No category to list.
+    expect(wrapper.find('[data-testid="dashboard-categories"]').exists()).toBe(
+      false
+    )
   })
 
-  it('should display "no income" message when only expenses', async () => {
+  it('reads no income as no income, the expenses still drawn', async () => {
     vi.mocked(api.getDashboardSummary).mockResolvedValue(mockExpenseOnlySummary)
 
     const wrapper = mount(DashboardPage, {
@@ -408,7 +416,15 @@ describe('DashboardPage', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Aucun revenu enregistré')
+    expect(
+      wrapper.findComponent({ name: 'IncomeExpensesChart' }).exists()
+    ).toBe(true)
+    expect(
+      wrapper
+        .get('[data-testid="summary-line-income"]')
+        .text()
+        .replace(/[\s\u202f\u00a0]+/g, ' ')
+    ).toContain('Revenus · 0 € par mois')
   })
 
   describe('one reading for the page', () => {
@@ -497,7 +513,7 @@ describe('DashboardPage', () => {
       ).toContain('background-color: #60a5fa')
     })
 
-    it('has no filters card: the reading in the header, the period above the expenses', async () => {
+    it('has no filters card: the reading in the header, the period in its section', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
       const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
       await flushPromises()
@@ -507,22 +523,23 @@ describe('DashboardPage', () => {
       ).toBe(false)
       const menu = wrapper.get('[data-testid="reading-menu"]').element
       const period = wrapper.get('[data-testid="dashboard-period"]').element
-      const expenses = wrapper.get(
-        '[data-testid="dashboard-expenses-section"]'
-      ).element
+      const where = wrapper.get('[data-testid="dashboard-where-section"]')
+      const card = where.get('[data-testid="dashboard-where-card"]').element
       const banner = wrapper.findComponent({ name: 'LegacyMigrationBanner' })
       expect(banner.exists()).toBe(true)
       const follows = (a: Node, b: Node) =>
         (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
       // The banner (or the comment standing in for it) comes under the menu.
       expect(follows(menu, banner.vm.$el as Node)).toBe(true)
-      expect(follows(period, expenses)).toBe(true)
-      expect(period.nextElementSibling).toBe(expenses)
+      // In the section's header, beside its title, above its card.
+      expect(where.element.contains(period)).toBe(true)
+      expect(period.parentElement?.tagName).toBe('HEADER')
+      expect(follows(period, card)).toBe(true)
     })
   })
 
   describe('pie charts', () => {
-    it('keeps the income donut only: the list carries the expenses shares', async () => {
+    it('draws no donut: the list carries the expenses shares, a line the income sources', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
       const wrapper = mount(DashboardPage, {
@@ -534,10 +551,13 @@ describe('DashboardPage', () => {
       await flushPromises()
 
       expect(wrapper.text()).not.toContain('Dépenses par catégorie')
-      expect(wrapper.text()).toContain('Revenus par catégorie')
-      const donuts = wrapper.findAllComponents({ name: 'CategoryPieChart' })
-      expect(donuts).toHaveLength(1)
-      expect(donuts[0]?.props('title')).toBe('Revenus')
+      expect(wrapper.text()).not.toContain('Revenus par catégorie')
+      expect(
+        wrapper.findAllComponents({ name: 'CategoryPieChart' })
+      ).toHaveLength(0)
+      expect(wrapper.get('[data-testid="income-sources"]').text()).toContain(
+        'Salaires'
+      )
     })
   })
 
@@ -550,98 +570,35 @@ describe('DashboardPage', () => {
       expect(
         wrapper.find('[data-testid="expense-category-filter"]').exists()
       ).toBe(false)
-      const [expensesBars] = wrapper.findAllComponents({
-        name: 'MonthlyBarChart',
-      })
-      expect(expensesBars?.props('title')).toBe('Dépenses')
-      // Every expense of each month, never one category's.
-      expect(expensesBars?.props('data')).toEqual({
-        labels: ['Jan 2024'],
-        values: [845.5],
-      })
+      expect(
+        wrapper.findAllComponents({ name: 'MonthlyBarChart' })
+      ).toHaveLength(0)
+      const chart = wrapper.findComponent({ name: 'IncomeExpensesChart' })
+      // Every expense of each month, never one category's, in the reading.
+      expect(chart.props('months')).toEqual(mockSummary.monthlyData)
+      expect(chart.props('reading')).toBe('everyday')
+      // The habit of « Ce mois-ci », dashed across.
+      expect(chart.props('habit')).toBe(800)
     })
   })
 
   describe('income category filter', () => {
-    it('should display the income category dropdown', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const wrapper = mount(DashboardPage, {
-        global: {
-          plugins: [router],
-        },
-      })
-
-      await flushPromises()
-
-      const incomeSelect = wrapper.find(
-        '[data-testid="income-category-filter"]'
-      )
-      expect(incomeSelect.exists()).toBe(true)
-    })
-
-    it('names the income category select for assistive tech', async () => {
+    it('is gone with the income section: the income is a line of the chart', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
       const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
       await flushPromises()
 
-      const select = wrapper.get('[data-testid="income-category-filter"]')
-      const label = wrapper.get(`label[for="${select.attributes('id')}"]`)
-      expect(label.text()).toBe('Catégorie des revenus par mois')
-    })
-
-    it('should list available income categories in second dropdown', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const wrapper = mount(DashboardPage, {
-        global: {
-          plugins: [router],
-        },
-      })
-
-      await flushPromises()
-
-      const incomeSelect = wrapper.find(
-        '[data-testid="income-category-filter"]'
-      )
-      expect(incomeSelect.text()).toContain('Toutes les catégories')
-      expect(incomeSelect.text()).toContain('Salaires')
-    })
-
-    it('should update income chart when category is selected', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: [],
-        meta: {
-          total: 0,
-          page: 1,
-          limit: 100,
-          totalPages: 0,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const wrapper = mount(DashboardPage, {
-        global: {
-          plugins: [router],
-        },
-      })
-
-      await flushPromises()
-
-      const incomeSelect = wrapper.find(
-        '[data-testid="income-category-filter"]'
-      )
-      await incomeSelect.setValue('Salaires')
-
-      // The component should still render without errors
-      expect(wrapper.findAll('.apexcharts-mock').length).toBeGreaterThan(0)
+      expect(
+        wrapper.find('[data-testid="income-category-filter"]').exists()
+      ).toBe(false)
+      expect(
+        wrapper.find('[data-testid="dashboard-income-section"]').exists()
+      ).toBe(false)
     })
   })
 
   describe('links to the Transactions page', () => {
-    it('offers the period of each monthly chart, the income one narrowed by its select, gross', async () => {
+    it('offers the period of the expenses under the chart, and of the income on its line, gross', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
       const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
       await flushPromises()
@@ -654,46 +611,23 @@ describe('DashboardPage', () => {
         'Voir les transactions de la période'
       )
 
-      const income = wrapper.get('[data-testid="income-transactions-link"]')
-      expect(income.attributes('href')).toContain('type=INCOME')
-      await wrapper
-        .find('[data-testid="income-category-filter"]')
-        .setValue('cat-Salaires')
-      expect(income.attributes('href')).toContain('category=cat-Salaires')
-      expect(income.attributes('href')).toContain('Salaires')
+      const income = wrapper
+        .get('[data-testid="summary-line-income"]')
+        .get('[data-testid="income-transactions-link"]')
+      expect(income.attributes('href')).toBe(
+        '/transactions?type=INCOME&label=Revenus+de+la+p%C3%A9riode&gross=1'
+      )
     })
 
-    it('hands the income donut the ids behind its labels, « sans catégorie » as a word', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue({
-        ...mockSummary,
-        incomeByCategory: [
-          ...mockSummary.incomeByCategory,
-          {
-            categoryId: '__uncategorized__',
-            category: 'Non classé',
-            amount: 1,
-          },
-        ],
-      })
-      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
-      await flushPromises()
-
-      const donuts = wrapper.findAllComponents({ name: 'CategoryPieChart' })
-      expect(donuts.map(d => d.props('ids'))).toEqual([
-        ['cat-Salaires', 'none'],
-      ])
-    })
-
-    it('opens a month from a bar and a category from a slice', async () => {
+    it('opens a month from a column of the chart', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
       const push = vi.spyOn(router, 'push').mockResolvedValue(undefined)
       const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
       await flushPromises()
 
-      const [expensesBars] = wrapper.findAllComponents({
-        name: 'MonthlyBarChart',
-      })
-      expensesBars?.vm.$emit('select-month', '2024-01')
+      wrapper
+        .findComponent({ name: 'IncomeExpensesChart' })
+        .vm.$emit('select-month', '2024-01')
       expect(push).toHaveBeenLastCalledWith({
         path: '/transactions',
         query: {
@@ -704,34 +638,10 @@ describe('DashboardPage', () => {
           gross: '1',
         },
       })
-
-      const [incomeDonut] = wrapper.findAllComponents({
-        name: 'CategoryPieChart',
-      })
-      incomeDonut?.vm.$emit('select', 'cat-Salaires')
-      expect(push).toHaveBeenLastCalledWith({
-        path: '/transactions',
-        query: {
-          type: 'INCOME',
-          category: 'cat-Salaires',
-          label: 'Salaires',
-          gross: '1',
-        },
-      })
-      incomeDonut?.vm.$emit('select-others', ['cat-a', 'none'])
-      expect(push).toHaveBeenLastCalledWith({
-        path: '/transactions',
-        query: {
-          type: 'INCOME',
-          categories: 'cat-a,none',
-          label: 'Revenus · Autres (2)',
-          gross: '1',
-        },
-      })
       push.mockRestore()
     })
 
-    it('links each event chip to its tag over the period, beside the analysis', async () => {
+    it('names the events of the period on their line, each opening its analysis', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue({
         ...mockSummary,
         totalExceptionalExpenses: 300,
@@ -748,13 +658,15 @@ describe('DashboardPage', () => {
       const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
       await flushPromises()
 
-      const link = wrapper.get('[data-testid="event-transactions-link-tag-1"]')
-      expect(link.attributes('href')).toBe(
-        '/transactions?tag=tag-1&label=Vacances&gross=1'
+      const line = wrapper.get('[data-testid="summary-line-events"]')
+      expect(line.text().replace(/[\s\u202f\u00a0]+/g, ' ')).toContain(
+        '1 événement sur la période · 300 € · Vacances'
       )
-      expect(link.attributes('aria-label')).toBe(
-        'Voir les transactions de Vacances'
-      )
+      expect(
+        line.get('[data-testid="summary-event-tag-1"]').attributes('href')
+      ).toBe('/tags/tag-1')
+      // The amber banner is gone: the hatching and this line say it.
+      expect(wrapper.text()).not.toContain('Événements de la période')
     })
   })
 
@@ -784,46 +696,48 @@ describe('DashboardPage', () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(summary)
       const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
       await flushPromises()
-      return wrapper.find('[data-testid="tag-families-of-year"]')
+      // The card lives on the Tags page now: the dashboard keeps one line.
+      expect(
+        wrapper.find('[data-testid="tag-families-of-year"]').exists()
+      ).toBe(false)
+      return wrapper.find('[data-testid="summary-line-episodes"]')
     }
 
-    it('shows the card when an event touches the period and a family spent this year', async () => {
-      const card = await mountWith({
+    it('reads the episodes in one line when an event touches the period and a family spent this year', async () => {
+      const line = await mountWith({
         ...withEvent,
         tagFamiliesOfYear: [family],
         realExpensesOfYear: 6000,
         exceptionalExpensesOfYear: 1000,
       })
 
-      expect(card.exists()).toBe(true)
-      expect(card.text()).toContain("Épisodes de l'année 2026")
-      expect(card.text()).toContain('5 % du réel')
-      // The year's exceptional expenses reach the card: its bar and share.
-      expect(card.text()).toContain("30 % de l'exceptionnel de l'année")
-      expect(card.find('[data-testid="families-of-year-stack"]').exists()).toBe(
-        true
+      expect(line.text().replace(/[\s\u202f\u00a0]+/g, ' ')).toContain(
+        'Épisodes 2026 · 300 € · Voyages 300 €'
+      )
+      expect(line.get('[data-testid="episodes-link"]').attributes('href')).toBe(
+        '/tags'
       )
     })
 
     it('leaves it out without a family', async () => {
-      const card = await mountWith({
+      const line = await mountWith({
         ...withEvent,
         tagFamiliesOfYear: [],
         realExpensesOfYear: null,
         exceptionalExpensesOfYear: null,
       })
 
-      expect(card.exists()).toBe(false)
+      expect(line.exists()).toBe(false)
     })
 
     it('leaves it out when no event touches the period', async () => {
-      const card = await mountWith({
+      const line = await mountWith({
         ...mockSummary,
         tagFamiliesOfYear: [family],
         realExpensesOfYear: 6000,
       })
 
-      expect(card.exists()).toBe(false)
+      expect(line.exists()).toBe(false)
     })
   })
 
@@ -839,7 +753,7 @@ describe('DashboardPage', () => {
       total: 845.5,
     }
 
-    it('sits after the month band and before the structure', async () => {
+    it("sits after the month band and before « Où part l'argent »", async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue({
         ...mockSummary,
         spendingStructure: structure,
@@ -851,8 +765,8 @@ describe('DashboardPage', () => {
       const order = [
         'month-band',
         'spending-trends',
-        'spending-structure',
-        'dashboard-expenses-section',
+        'dashboard-where-section',
+        'structure-lines',
       ].map(id => wrapper.find(`[data-testid="${id}"]`).element)
       for (let i = 1; i < order.length; i++) {
         const before = order[i - 1] as Node
@@ -909,8 +823,7 @@ describe('DashboardPage', () => {
       for (const id of [
         'spending-trends',
         'dashboard-period',
-        'dashboard-expenses-section',
-        'dashboard-income-section',
+        'dashboard-where-section',
       ]) {
         const other = wrapper.get(`[data-testid="${id}"]`).element
         expect(
@@ -966,7 +879,7 @@ describe('DashboardPage', () => {
         false
       )
       expect(
-        wrapper.find('[data-testid="dashboard-expenses-section"]').exists()
+        wrapper.find('[data-testid="dashboard-where-section"]').exists()
       ).toBe(true)
 
       await wrapper.get('[data-testid="month-retry"]').trigger('click')
@@ -1047,7 +960,7 @@ describe('DashboardPage', () => {
       const order = [
         'reading-menu',
         'spending-trends',
-        'dashboard-expenses-section',
+        'dashboard-where-section',
       ].map(id => wrapper.get(`[data-testid="${id}"]`).element)
       for (let i = 1; i < order.length; i++) {
         expect(
@@ -1055,6 +968,179 @@ describe('DashboardPage', () => {
             Node.DOCUMENT_POSITION_FOLLOWING
         ).toBeTruthy()
       }
+    })
+  })
+  describe("Où part l'argent", () => {
+    const structure = {
+      essential: 800,
+      pleasure: 45.5,
+      unknownNature: 0,
+      committed: 800,
+      variable: 45.5,
+      unknownRhythm: 0,
+      recurring: 0,
+      total: 845.5,
+    }
+    const share = (name: string, amount: number) => ({
+      categoryId: `cat-${name}`,
+      category: name,
+      amount,
+      averagePerMonth: amount / 2,
+      everydayAmount: amount,
+      everydayAveragePerMonth: amount / 2,
+      monthlyAmounts: [amount / 2, amount / 2],
+      everydayMonthlyAmounts: [amount / 2, amount / 2],
+    })
+    const summary: DashboardSummaryDto = {
+      ...mockSummary,
+      monthLabels: ['2025-11', '2026-10'],
+      periodMonths: 1,
+      // On 1 000 €: Transport 7,7 %, Cadeaux 2,8 %.
+      expensesByCategory: [
+        share('Logement', 895),
+        share('Transport', 77),
+        share('Cadeaux', 28),
+      ],
+      totalExpenses: 1000,
+      spendingStructure: structure,
+      everydaySpendingStructure: structure,
+    }
+
+    async function mountWhere(over: Partial<DashboardSummaryDto> = {}) {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue({
+        ...summary,
+        ...over,
+      })
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+      return wrapper
+    }
+
+    it('names the period in its title, the selector beside it', async () => {
+      const wrapper = await mountWhere()
+      const section = wrapper.get('[data-testid="dashboard-where-section"]')
+
+      expect(section.get('[data-testid="dashboard-where-title"]').text()).toBe(
+        "Où part l'argent · novembre 2025 à octobre 2026"
+      )
+      expect(
+        section
+          .get('[data-testid="dashboard-period"]')
+          .findComponent({ name: 'TimePeriodSelector' })
+          .exists()
+      ).toBe(true)
+    })
+
+    it('holds one card: the structure, the chart, the list, the summary lines, in that order', async () => {
+      const wrapper = await mountWhere()
+      const cards = wrapper
+        .get('[data-testid="dashboard-where-section"]')
+        .findAll('[data-testid="dashboard-where-card"]')
+      expect(cards).toHaveLength(1)
+      const card = wrapper.get('[data-testid="dashboard-where-card"]')
+
+      const order = [
+        'structure-lines',
+        'income-expenses-chart',
+        'category-breakdown-list',
+        'period-summary-lines',
+      ].map(id => card.get(`[data-testid="${id}"]`).element)
+      for (let i = 1; i < order.length; i++) {
+        expect(
+          (order[i - 1] as Node).compareDocumentPosition(order[i] as Node) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy()
+      }
+    })
+
+    it('heads the list with the total and the count, without the old subtitle', async () => {
+      const wrapper = await mountWhere()
+      const block = wrapper.get('[data-testid="dashboard-categories"]')
+      const text = block.text().replace(/[\s\u202f\u00a0]+/g, ' ')
+
+      expect(text).toContain('Par catégorie · moyenne par mois, sur 1 000 €')
+      expect(text).toContain('Les 3 catégories, les plus lourdes en tête')
+      expect(wrapper.text()).not.toContain('Détail par catégorie')
+      expect(wrapper.text()).not.toContain('Cliquez sur une catégorie')
+    })
+
+    it('keeps the sparklines for the categories at 5 % and above', async () => {
+      const wrapper = await mountWhere()
+      const list = wrapper.findComponent({ name: 'CategoryBreakdownList' })
+      expect(list.props('trendMinShare')).toBe(0.05)
+
+      const sparkline = (name: string) =>
+        wrapper
+          .get(`[data-testid="category-trend-${name}"]`)
+          .findComponent({ name: 'SparklineChart' })
+          .exists()
+      expect(sparkline('Transport')).toBe(true)
+      expect(sparkline('Cadeaux')).toBe(false)
+    })
+
+    it('leaves out what moved or went: the structure card, the income section, the families card', async () => {
+      const wrapper = await mountWhere({
+        totalExceptionalExpenses: 300,
+        exceptionalEvents: [
+          { id: 'tag-1', name: 'Rome', color: null, icon: null, amount: 300 },
+        ],
+        tagFamiliesOfYear: [
+          {
+            id: 'fam-travel',
+            name: 'Voyages',
+            color: null,
+            icon: null,
+            year: 2026,
+            spent: 300,
+            spentByYear: [{ year: 2026, spent: 300 }],
+            annualBudget: null,
+            remaining: null,
+            transactionCount: 2,
+            tagCount: 1,
+          },
+        ],
+      })
+
+      for (const id of [
+        'spending-structure',
+        'savings-reading',
+        'dashboard-income-section',
+        'dashboard-expenses-section',
+        'tag-families-of-year',
+        'income-category-filter',
+      ]) {
+        expect(wrapper.find(`[data-testid="${id}"]`).exists(), id).toBe(false)
+      }
+      expect(
+        wrapper.findAllComponents({ name: 'CategoryPieChart' })
+      ).toHaveLength(0)
+      // What they said has its line now.
+      for (const id of [
+        'summary-line-income',
+        'summary-line-events',
+        'summary-line-episodes',
+      ]) {
+        expect(wrapper.find(`[data-testid="${id}"]`).exists(), id).toBe(true)
+      }
+    })
+
+    it('keeps the period at hand on an empty one, in the same header', async () => {
+      filtersState.timePeriod = '3m'
+      accountsState.accounts = [{ id: 'acc-1' }]
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockEmptySummary)
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      const section = wrapper.get('[data-testid="dashboard-where-section"]')
+      expect(section.find('[data-testid="dashboard-period"]').exists()).toBe(
+        true
+      )
+      expect(
+        section.find('[data-testid="dashboard-empty-period"]').exists()
+      ).toBe(true)
+      expect(wrapper.findAll('[data-testid="dashboard-period"]')).toHaveLength(
+        1
+      )
     })
   })
 })
