@@ -36,6 +36,14 @@ describe('TimePeriodSelector', () => {
     expect(pressed()).toEqual(['period-1y'])
   })
 
+  it('names a year « 12 mois », and opens on it', () => {
+    const wrapper = mount(TimePeriodSelector)
+    const year = wrapper.get('[data-testid="period-1y"]')
+
+    expect(year.text()).toContain('12 mois')
+    expect(year.attributes('aria-checked')).toBe('true')
+  })
+
   it('says when a custom range is inverted', async () => {
     const wrapper = mount(TimePeriodSelector)
     const store = useFiltersStore()

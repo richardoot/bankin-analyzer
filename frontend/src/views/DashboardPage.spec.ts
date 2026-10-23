@@ -60,9 +60,12 @@ vi.mock('@/stores/filters', () => ({
 }))
 
 // Mock the accounts store
+const accountsState = vi.hoisted(() => ({ accounts: [] as { id: string }[] }))
 vi.mock('@/stores/accounts', () => ({
   useAccountsStore: () => ({
-    accounts: [],
+    get accounts() {
+      return accountsState.accounts
+    },
     isLoading: false,
     error: null,
     load: vi.fn().mockResolvedValue(undefined),
@@ -89,6 +92,7 @@ describe('DashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     filtersState.timePeriod = 'all'
+    accountsState.accounts = []
   })
 
   const mockSummary: DashboardSummaryDto = {
@@ -246,9 +250,9 @@ describe('DashboardPage', () => {
     const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
     await flushPromises()
 
-    expect(
-      wrapper.find('[data-testid="dashboard-filters-card"]').exists()
-    ).toBe(true)
+    // The period and the reading stay at hand: a new choice retries too.
+    expect(wrapper.find('[data-testid="dashboard-period"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="reading-menu"]').exists()).toBe(true)
     // A failure is not an empty account: no onboarding.
     expect(wrapper.find('[data-testid="dashboard-onboarding"]').exists()).toBe(
       false
@@ -267,6 +271,7 @@ describe('DashboardPage', () => {
 
   it('tells an empty period apart from an empty account', async () => {
     filtersState.timePeriod = '3m'
+    accountsState.accounts = [{ id: 'acc-1' }]
     vi.mocked(api.getDashboardSummary).mockResolvedValue(mockEmptySummary)
 
     const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
@@ -276,9 +281,44 @@ describe('DashboardPage', () => {
     expect(wrapper.find('[data-testid="dashboard-onboarding"]').exists()).toBe(
       false
     )
+    // The period stays at hand, to pick another.
+    expect(wrapper.find('[data-testid="dashboard-period"]').exists()).toBe(true)
 
     await wrapper.find('[data-testid="dashboard-show-all"]').trigger('click')
     expect(filtersState.setTimePeriod).toHaveBeenCalledWith('all')
+  })
+
+  it('welcomes a newcomer on the twelve months it opens on', async () => {
+    filtersState.timePeriod = '1y'
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(mockEmptySummary)
+
+    const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="dashboard-onboarding"]').exists()).toBe(
+      true
+    )
+    expect(
+      wrapper.find('[data-testid="dashboard-empty-period"]').exists()
+    ).toBe(false)
+  })
+
+  it('says the averages are taken over the closed months', async () => {
+    vi.mocked(api.getDashboardSummary).mockResolvedValue({
+      ...mockSummary,
+      periodMonths: 1,
+      monthLabels: ['2024-01'],
+    })
+
+    const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="kpi-card-expenses"]').text()).toContain(
+      'sur 1 mois clos'
+    )
+    expect(wrapper.get('[data-testid="kpi-card-income"]').text()).toContain(
+      'sur 1 mois clos'
+    )
   })
 
   it('should display monthly average KPI cards (expenses, income, savings)', async () => {
@@ -425,18 +465,27 @@ describe('DashboardPage', () => {
       ],
     }
 
-    it('offers the mode once, in the filters card, and every figure follows it', async () => {
+    it('offers the mode once, in the reading menu, and every figure follows it', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
       const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
       await flushPromises()
 
-      // One control, inside the filters card; none in the cards below.
+      // Behind the menu's button, which says the state.
+      expect(wrapper.get('[data-testid="reading-menu-button"]').text()).toBe(
+        'Lecture : vie courante · remboursements reçus déduits'
+      )
+      expect(wrapper.find('[data-testid="breakdown-mode-real"]').exists()).toBe(
+        false
+      )
+      await wrapper.get('[data-testid="reading-menu-button"]').trigger('click')
+
+      // One control, inside the menu; none in the cards below.
       const controls = wrapper.findAll('[data-testid="breakdown-mode-real"]')
       expect(controls).toHaveLength(1)
       expect(
         wrapper
-          .find('[data-testid="dashboard-filters-card"]')
-          .find('[data-testid="dashboard-breakdown-mode"]')
+          .get('[data-testid="reading-menu"]')
+          .find('[data-testid="breakdown-mode-real"]')
           .exists()
       ).toBe(true)
       expect(wrapper.find('[data-testid="reading-actual"]').exists()).toBe(
@@ -475,19 +524,27 @@ describe('DashboardPage', () => {
       ).toContain('background-color: #60a5fa')
     })
 
-    it('keeps the period bar in place: the migration banner sits below the filters', async () => {
+    it('has no filters card: the reading in the header, the period above the expenses', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
       const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
       await flushPromises()
-      const filters = wrapper.find(
-        '[data-testid="dashboard-filters-card"]'
+
+      expect(
+        wrapper.find('[data-testid="dashboard-filters-card"]').exists()
+      ).toBe(false)
+      const menu = wrapper.get('[data-testid="reading-menu"]').element
+      const period = wrapper.get('[data-testid="dashboard-period"]').element
+      const expenses = wrapper.get(
+        '[data-testid="dashboard-expenses-section"]'
       ).element
       const banner = wrapper.findComponent({ name: 'LegacyMigrationBanner' })
       expect(banner.exists()).toBe(true)
-      // The banner (or the comment standing in for it) comes after the card.
-      expect(
-        filters.compareDocumentPosition(banner.vm.$el as Node) &
-          Node.DOCUMENT_POSITION_FOLLOWING
-      ).toBeTruthy()
+      const follows = (a: Node, b: Node) =>
+        (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+      // The banner (or the comment standing in for it) comes under the menu.
+      expect(follows(menu, banner.vm.$el as Node)).toBe(true)
+      expect(follows(period, expenses)).toBe(true)
+      expect(period.nextElementSibling).toBe(expenses)
     })
   })
 

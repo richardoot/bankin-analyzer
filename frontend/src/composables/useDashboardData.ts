@@ -158,14 +158,69 @@ export function useDashboardData() {
     () => summaryData.value?.exceptionalExpensesOfYear ?? null
   )
 
-  // Number of months in the period (used for averages)
-  const periodMonths = computed(() => monthlyData.value.length || 1)
+  /**
+   * The months the averages read, and their number: the server's
+   * `periodMonths`, the closed months of the period. The current month is
+   * drawn on every chart but averaged nowhere — half a month is not a
+   * month. They are the first `periodMonths` of `monthLabels` (the current
+   * month and any after it come last); a period of the current month alone
+   * averages it over 1. An older server without the field: every month.
+   */
+  const averagedMonths = computed<Set<string> | null>(() => {
+    const labels = summaryData.value?.monthLabels
+    const closed = summaryData.value?.periodMonths
+    if (!labels || closed === undefined) return null
+    return new Set(labels.length > closed ? labels.slice(0, closed) : labels)
+  })
 
-  const averageMonthlyExpenses = computed(
-    () => Math.round((totalExpenses.value / periodMonths.value) * 100) / 100
+  /**
+   * The divisor. The real reading leaves out a month only smoothed slices
+   * reach, as `monthlyData` does: it divides exactly as it did before the
+   * smoothing.
+   */
+  const periodMonths = computed(() => {
+    const closed = summaryData.value?.periodMonths
+    if (closed === undefined) return monthlyData.value.length || 1
+    if (breakdownMode.value === 'everyday') return closed
+    const slicesOnly = (summaryData.value?.monthlyData ?? []).filter(
+      m =>
+        (averagedMonths.value?.has(m.month) ?? false) &&
+        m.amortizedExpenses !== undefined &&
+        m.expenses === 0 &&
+        m.income === 0 &&
+        m.netExpenses === 0
+    ).length
+    return Math.max(1, closed - slicesOnly)
+  })
+  /** Whether the averages read closed months, or the current month alone. */
+  const averagesReadClosedMonths = computed(() => {
+    const labels = summaryData.value?.monthLabels ?? []
+    const last = labels[Math.min(periodMonths.value, labels.length) - 1]
+    if (!last) return true
+    const now = new Date()
+    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    return last < current
+  })
+
+  /** A month series summed over the averaged months, then per month. */
+  function averageOf(
+    pick: (m: DashboardSummaryDto['monthlyData'][number]) => number,
+    total: number
+  ): number {
+    const months = averagedMonths.value
+    const sum = months
+      ? (summaryData.value?.monthlyData ?? [])
+          .filter(m => months.has(m.month))
+          .reduce((acc, m) => acc + pick(m), 0)
+      : total
+    return Math.round((sum / periodMonths.value) * 100) / 100
+  }
+
+  const averageMonthlyExpenses = computed(() =>
+    averageOf(m => m.netExpenses, totalExpenses.value)
   )
-  const averageMonthlyIncome = computed(
-    () => Math.round((totalIncome.value / periodMonths.value) * 100) / 100
+  const averageMonthlyIncome = computed(() =>
+    averageOf(m => m.income, totalIncome.value)
   )
   const averageMonthlySavings = computed(
     () =>
@@ -196,11 +251,13 @@ export function useDashboardData() {
     return Math.round(sum * 100) / 100
   })
 
-  // Same divisor as averageMonthlyExpenses, so the gap between the two figures
-  // is exactly the exceptional spending and nothing else.
-  const averageEverydayMonthlyExpenses = computed(
-    () =>
-      Math.round((totalEverydayExpenses.value / periodMonths.value) * 100) / 100
+  // Same months as averageMonthlyExpenses, so the gap between the two
+  // figures is exactly the exceptional spending and nothing else.
+  const averageEverydayMonthlyExpenses = computed(() =>
+    averageOf(
+      m => m.everydayNetExpenses ?? m.netExpenses,
+      totalEverydayExpenses.value
+    )
   )
 
   const hasExceptionalExpenses = computed(
@@ -226,9 +283,10 @@ export function useDashboardData() {
    */
   const averageExceptionalMonthlyExpenses = computed(() =>
     hasAmortizedExpenses.value
-      ? Math.round(
-          (totalExceptionalExpenses.value / periodMonths.value) * 100
-        ) / 100
+      ? averageOf(
+          m => m.exceptionalExpenses ?? 0,
+          totalExceptionalExpenses.value
+        )
       : Math.round(
           (averageMonthlyExpenses.value -
             averageEverydayMonthlyExpenses.value) *
@@ -426,6 +484,7 @@ export function useDashboardData() {
     totalExpenses,
     totalIncome,
     periodMonths,
+    averagesReadClosedMonths,
     averageMonthlyExpenses,
     averageMonthlyIncome,
     averageMonthlySavings,

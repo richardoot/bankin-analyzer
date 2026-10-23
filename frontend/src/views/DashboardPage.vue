@@ -24,12 +24,12 @@
     transactionsLink,
   } from '@/lib/transactionsLink'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
-  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import InlineAlert from '@/components/ui/InlineAlert.vue'
   import BaseButton from '@/components/ui/BaseButton.vue'
   import BaseField from '@/components/ui/BaseField.vue'
-  import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
+  import ReadingMenu from '@/components/dashboard/ReadingMenu.vue'
+  import { useAccountsStore } from '@/stores/accounts'
 
   const router = useRouter()
 
@@ -50,6 +50,7 @@
     averageMonthlyIncome,
     averageMonthlySavings,
     periodMonths,
+    averagesReadClosedMonths,
     monthlyData,
     incomeCategoriesDetailed,
     spendingStructure,
@@ -82,6 +83,20 @@
     hasLoaded,
   } = useDashboardData()
   const filtersStore = useFiltersStore()
+  const accountsStore = useAccountsStore()
+
+  /** The reading, written through the composable that keeps it. */
+  const breakdownModeModel = computed({
+    get: () => breakdownMode.value,
+    set: setBreakdownMode,
+  })
+
+  /** What the three averages are taken over, said under each of them. */
+  const averagesSpan = computed(() =>
+    averagesReadClosedMonths.value
+      ? `sur ${periodMonths.value} mois clos`
+      : 'sur le mois en cours'
+  )
 
   // A first answer came back: later fetches are refreshes, shown over the
   // current figures, never by swapping the page — and its filters — for a
@@ -98,8 +113,12 @@
   )
 
   // An empty unbounded period means no transaction at all — the onboarding.
-  // Any other empty period only means nothing happened in it.
-  const isEmptyPeriod = computed(() => filtersStore.timePeriod !== 'all')
+  // Any other empty period only means nothing happened in it — unless there
+  // is no account either: the default period is twelve months now, and a
+  // newcomer must still land on the way in, not on « choose another period ».
+  const isEmptyPeriod = computed(
+    () => filtersStore.timePeriod !== 'all' && accountsStore.accounts.length > 0
+  )
 
   function showAllPeriods(): void {
     filtersStore.setTimePeriod('all')
@@ -286,6 +305,17 @@
           </svg>
           <span>Mise à jour...</span>
         </div>
+        <!-- The ways of reading the figures, behind one button that says
+             which one is on. -->
+        <ReadingMenu
+          v-if="!showFullLoader"
+          v-model:breakdown-mode="breakdownModeModel"
+          v-model:deduct-reimbursements="deductReimbursements"
+          v-model:deduct-pending-reimbursements="deductPendingReimbursements"
+          :has-exceptional-expenses="hasExceptionalExpenses"
+          :has-amortized-expenses="hasAmortizedExpenses"
+          :pending-sync-error="pendingPreferenceSyncError"
+        />
       </template>
     </PageHeader>
 
@@ -325,128 +355,8 @@
       class="transition-opacity duration-200"
       :class="isRefreshing ? 'opacity-60' : 'opacity-100'"
     >
-      <!-- Period + reimbursement toggles (harmonized in a single card) -->
-      <BaseCard
-        bordered
-        data-testid="dashboard-filters-card"
-        class="mb-6 space-y-4"
-      >
-        <TimePeriodSelector />
-
-        <div
-          class="grid grid-cols-2 gap-3 border-t border-gray-100 pt-4 sm:flex sm:flex-wrap sm:items-center sm:gap-6 dark:border-slate-700"
-        >
-          <label
-            for="dashboard-deduct-reimbursements"
-            class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-          >
-            <ToggleSwitch
-              id="dashboard-deduct-reimbursements"
-              :checked="deductReimbursements"
-              label="Déduire les remboursements reçus"
-              data-testid="toggle-deduct-reimbursements"
-              @change="deductReimbursements = $event"
-            />
-            <span
-              class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
-            >
-              <span class="sm:hidden">Déduire les remb. reçus</span>
-              <span class="hidden sm:inline"
-                >Déduire les remboursements reçus</span
-              >
-            </span>
-          </label>
-          <label
-            for="dashboard-deduct-pending"
-            class="flex min-h-[44px] cursor-pointer items-center gap-2.5 select-none sm:min-h-0"
-          >
-            <ToggleSwitch
-              id="dashboard-deduct-pending"
-              :checked="deductPendingReimbursements"
-              label="Déduire les remboursements en attente"
-              data-testid="toggle-deduct-pending"
-              @change="deductPendingReimbursements = $event"
-            />
-            <span
-              class="text-left text-xs leading-tight text-gray-700 sm:text-sm dark:text-gray-300"
-            >
-              <span class="sm:hidden">Déduire les remb. en attente</span>
-              <span class="hidden sm:inline"
-                >Déduire les remboursements en attente</span
-              >
-            </span>
-          </label>
-        </div>
-        <!-- The two switches look alike but are not: one is a reading of
-             this screen, the other a preference the budget shares. -->
-        <p class="text-xs text-gray-500 dark:text-gray-400">
-          « En attente » est une préférence enregistrée, partagée avec le Budget
-          ; « reçus » ne vaut que pour cette lecture.
-        </p>
-        <InlineAlert
-          v-if="pendingPreferenceSyncError"
-          variant="warning"
-          data-testid="dashboard-pending-sync-error"
-        >
-          Le réglage « en attente » s'applique ici, mais n'a pas pu être
-          enregistré sur le serveur : {{ pendingPreferenceSyncError }}
-        </InlineAlert>
-
-        <!-- One reading for the whole page: the expenses KPI, the
-             structure, the donut and the list follow it together. -->
-        <div
-          v-if="hasExceptionalExpenses || hasAmortizedExpenses"
-          class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-100 pt-4 dark:border-slate-700"
-          data-testid="dashboard-breakdown-mode"
-        >
-          <span
-            id="dashboard-reading-label"
-            class="text-xs font-medium text-gray-700 dark:text-gray-300"
-          >
-            Lecture des dépenses
-          </span>
-          <SegmentedControl
-            :model-value="breakdownMode"
-            size="sm"
-            labelled-by="dashboard-reading-label"
-            :options="[
-              {
-                value: 'everyday',
-                label: 'Vie courante',
-                testId: 'breakdown-mode-everyday',
-              },
-              { value: 'real', label: 'Tout', testId: 'breakdown-mode-real' },
-            ]"
-            @update:model-value="setBreakdownMode($event)"
-          />
-          <span
-            v-if="hasExceptionalExpenses"
-            class="text-xs text-gray-500 dark:text-gray-400"
-          >
-            {{
-              breakdownMode === 'everyday'
-                ? 'Les dépenses d’événements sont mises à part.'
-                : 'Les dépenses d’événements sont comprises.'
-            }}
-          </span>
-          <!-- A smoothed purchase counts by its slices: the figures are no
-               longer the cash, and the reading says so. -->
-          <span
-            v-if="hasAmortizedExpenses"
-            class="basis-full text-xs text-teal-800 sm:basis-auto dark:text-teal-300"
-            data-testid="dashboard-amortized-note"
-          >
-            {{
-              breakdownMode === 'everyday'
-                ? 'Les achats lissés comptent par tranches mensuelles : un total sur la période ne correspond plus à l’argent sorti du compte.'
-                : 'Les achats lissés comptent en entier à leur date.'
-            }}
-          </span>
-        </div>
-      </BaseCard>
-
-      <!-- Below the filters, not above: it arrives after the first fetch
-           and used to push the period bar down as it was being aimed at. -->
+      <!-- Under the header, not above it: it arrives after the first fetch
+           and must not push the reading menu down as it is being aimed at. -->
       <LegacyMigrationBanner class="mb-6" />
 
       <template v-if="hasAnyData">
@@ -463,6 +373,9 @@
                   class="text-sm font-medium text-gray-500 dark:text-gray-400"
                 >
                   Dépenses moyennes / mois
+                  <span class="block text-xs font-normal">{{
+                    averagesSpan
+                  }}</span>
                 </div>
                 <div
                   class="mt-2 text-2xl font-bold text-red-600 dark:text-red-400"
@@ -517,6 +430,9 @@
                   class="text-sm font-medium text-gray-500 dark:text-gray-400"
                 >
                   Revenus moyens / mois
+                  <span class="block text-xs font-normal">{{
+                    averagesSpan
+                  }}</span>
                 </div>
                 <div
                   class="mt-2 text-2xl font-bold text-green-700 dark:text-green-400"
@@ -546,6 +462,9 @@
                   class="text-sm font-medium text-gray-500 dark:text-gray-400"
                 >
                   Épargne moyenne / mois
+                  <span class="block text-xs font-normal">{{
+                    averagesSpan
+                  }}</span>
                 </div>
                 <div
                   class="mt-2 text-2xl font-bold"
@@ -602,6 +521,12 @@
           :real-expenses="realExpensesOfYear"
           :exceptional-expenses="exceptionalExpensesOfYear"
         />
+
+        <!-- The period, until « Où part l'argent » gives it its place in
+             its header (lot 4): above the expenses it governs. -->
+        <div data-testid="dashboard-period" class="mb-4">
+          <TimePeriodSelector />
+        </div>
 
         <!-- Expenses section (primary) -->
         <section data-testid="dashboard-expenses-section" class="mb-10">
@@ -809,26 +734,33 @@
         </section>
       </template>
 
-      <!-- A quiet period, for a user who has data elsewhere in time -->
-      <BaseCard
-        v-else-if="!error && isEmptyPeriod"
-        padding="none"
-        data-testid="dashboard-empty-period"
-      >
-        <EmptyState
-          title="Aucune transaction sur cette période"
-          description="Choisissez une autre période, ou affichez tout l'historique."
+      <!-- A quiet period, for a user who has data elsewhere in time, or a
+           failed first load: the period stays at hand to pick another —
+           a new period is also a way to try again. -->
+      <div v-else-if="error || isEmptyPeriod">
+        <div data-testid="dashboard-period" class="mb-4">
+          <TimePeriodSelector />
+        </div>
+        <BaseCard
+          v-if="!error"
+          padding="none"
+          data-testid="dashboard-empty-period"
         >
-          <template #action>
-            <BaseButton
-              data-testid="dashboard-show-all"
-              @click="showAllPeriods"
-            >
-              Afficher tout
-            </BaseButton>
-          </template>
-        </EmptyState>
-      </BaseCard>
+          <EmptyState
+            title="Aucune transaction sur cette période"
+            description="Choisissez une autre période, ou affichez tout l'historique."
+          >
+            <template #action>
+              <BaseButton
+                data-testid="dashboard-show-all"
+                @click="showAllPeriods"
+              >
+                Afficher tout
+              </BaseButton>
+            </template>
+          </EmptyState>
+        </BaseCard>
+      </div>
 
       <!-- Zero transactions: one question, two explicit ways in -->
       <BaseCard

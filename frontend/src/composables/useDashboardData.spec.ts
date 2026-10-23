@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useDashboardData } from './useDashboardData'
 import { api } from '@/lib/api'
 import type { DashboardSummaryDto, TransactionDto } from '@/lib/api'
@@ -528,6 +528,14 @@ describe('useDashboardData', () => {
     it('reports no exceptional spending when there is none', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue({
         ...summaryWithEvents,
+        // The averages read the months: they say no event either.
+        monthlyData: summaryWithEvents.monthlyData.map(m => ({
+          ...m,
+          expenses: 800,
+          netExpenses: 800,
+          exceptionalExpenses: 0,
+          everydayNetExpenses: 800,
+        })),
         expensesByCategory: [
           {
             categoryId: 'cat-Logement',
@@ -687,6 +695,110 @@ describe('useDashboardData — smoothed purchases', () => {
 
     // 600 over the three everyday months — not (3400 − 1900) / 3.
     expect(data.averageExceptionalMonthlyExpenses.value).toBe(200)
+  })
+})
+
+describe('useDashboardData — the closed months', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(localStorage.getItem).mockReturnValue(null)
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 9, 23, 12))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const month = (
+    key: string,
+    netExpenses: number,
+    income: number,
+    exceptionalExpenses = 0
+  ) => ({
+    month: key,
+    label: key,
+    expenses: netExpenses,
+    netExpenses,
+    income,
+    exceptionalExpenses,
+    everydayNetExpenses: netExpenses - exceptionalExpenses,
+  })
+
+  /** August and September closed; October on its 23rd. */
+  const summary: DashboardSummaryDto = {
+    monthlyData: [
+      month('2026-08', 1000, 2500, 200),
+      month('2026-09', 1200, 2500),
+      month('2026-10', 400, 0),
+    ],
+    expensesByCategory: [
+      {
+        categoryId: 'cat-a',
+        category: 'A',
+        amount: 2600,
+        everydayAmount: 2400,
+      },
+    ],
+    incomeByCategory: [],
+    totalExpenses: 2600,
+    totalIncome: 5000,
+    allExpenseCategories: [],
+    allIncomeCategories: [],
+    availableAccounts: [],
+    periodMonths: 2,
+    monthLabels: ['2026-08', '2026-09', '2026-10'],
+    totalExceptionalExpenses: 200,
+    exceptionalEvents: [],
+  }
+
+  it('reads periodMonths from the server, not the months it draws', async () => {
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(summary)
+    const data = useDashboardData()
+    await data.fetchData()
+
+    expect(data.monthlyData.value).toHaveLength(3)
+    expect(data.periodMonths.value).toBe(2)
+    expect(data.averagesReadClosedMonths.value).toBe(true)
+  })
+
+  it('leaves the current month out of every average', async () => {
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(summary)
+    const data = useDashboardData()
+    await data.fetchData()
+
+    expect(data.averageMonthlyExpenses.value).toBe(1100)
+    expect(data.averageEverydayMonthlyExpenses.value).toBe(1000)
+    expect(data.averageExceptionalMonthlyExpenses.value).toBe(100)
+    expect(data.averageMonthlyIncome.value).toBe(2500)
+    expect(data.averageMonthlySavings.value).toBe(1400)
+  })
+
+  it('averages the current month alone over 1, and says so', async () => {
+    vi.mocked(api.getDashboardSummary).mockResolvedValue({
+      ...summary,
+      monthlyData: [month('2026-10', 400, 1000)],
+      totalExpenses: 400,
+      totalIncome: 1000,
+      periodMonths: 1,
+      monthLabels: ['2026-10'],
+    })
+    const data = useDashboardData()
+    await data.fetchData()
+
+    expect(data.periodMonths.value).toBe(1)
+    expect(data.averageMonthlyExpenses.value).toBe(400)
+    expect(data.averagesReadClosedMonths.value).toBe(false)
+  })
+
+  it('divides by the months drawn on a server without the field', async () => {
+    const { periodMonths: _omitted, ...older } = summary
+    vi.mocked(api.getDashboardSummary).mockResolvedValue(older)
+    const data = useDashboardData()
+    await data.fetchData()
+
+    expect(data.periodMonths.value).toBe(3)
+    expect(data.averageMonthlyExpenses.value).toBe(866.67)
   })
 })
 
