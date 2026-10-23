@@ -68,7 +68,7 @@ export class SubcategoryDataDto {
   /** Number of transactions */
   transactionCount!: number
 
-  /** Average per month for the subcategory */
+  /** Average per month for the subcategory, over the closed months (`periodMonths`) */
   averagePerMonth!: number
 
   /**
@@ -101,7 +101,11 @@ export class CategoryDataDto {
   /** Number of transactions (only when includeCategoryBreakdown is true) */
   transactionCount?: number
 
-  /** Average per month (only when includeCategoryBreakdown is true) */
+  /**
+   * Average per month over the closed months of the period (see
+   * `DashboardSummaryDto.periodMonths`). Only when includeCategoryBreakdown
+   * is true.
+   */
   averagePerMonth?: number
 
   /** Per-month amounts in chronological order matching monthLabels (only when includeCategoryBreakdown is true) */
@@ -272,7 +276,15 @@ export class DashboardSummaryDto {
   @ApiProperty({ type: [String] })
   availableAccounts!: string[]
 
-  /** Number of months in the period (only when includeCategoryBreakdown is true) */
+  /**
+   * The divisor of every `averagePerMonth` and `everydayAveragePerMonth`:
+   * the months of the period before the current month (in Paris), at least
+   * 1. The current month — and any after it a custom period reaches — stays
+   * in `monthlyData` and `monthlyAmounts` but out of the averages, numerator
+   * and divisor alike: half a month is not a month. A period made of the
+   * current month alone averages it over 1. Only when
+   * includeCategoryBreakdown is true.
+   */
   periodMonths?: number
 
   /** Month labels matching CategoryDataDto.monthlyAmounts indexes (only when includeCategoryBreakdown is true) */

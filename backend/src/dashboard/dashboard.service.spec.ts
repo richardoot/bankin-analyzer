@@ -2146,4 +2146,139 @@ describe('DashboardService', () => {
       ).toHaveLength(1)
     })
   })
+
+  describe('the averages read the closed months', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      // The 23rd of October 2026 in Paris: October is the current month.
+      vi.setSystemTime(new Date('2026-10-23T10:00:00Z'))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const groceries = (month_key: string, total_amount: number) =>
+      createRow({
+        month_key,
+        category_name: 'Courses',
+        subcategory: 'Supermarché',
+        total_amount,
+      })
+    const salary = (month_key: string, total_amount: number) =>
+      createRow({
+        month_key,
+        category_name: 'Salaires',
+        type: 'INCOME',
+        total_amount,
+      })
+
+    it('divides a period ending in the current month by its closed months, the current one left out', async () => {
+      setupMocks([
+        groceries('2026-08', 300),
+        groceries('2026-09', 500),
+        // Halfway through the month: drawn, never averaged.
+        groceries('2026-10', 120),
+        createRow({
+          month_key: '2026-10',
+          category_name: 'Courses',
+          subcategory: 'Supermarché',
+          is_exceptional: true,
+          total_amount: 80,
+        }),
+        salary('2026-08', 2500),
+        salary('2026-09', 2500),
+        salary('2026-10', 1000),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2026-08-01',
+        endDate: '2026-10-23',
+        includeCategoryBreakdown: true,
+      })
+
+      expect(result.periodMonths).toBe(2)
+      expect(result.monthLabels).toEqual(['2026-08', '2026-09', '2026-10'])
+      // The current month stays in the series the charts draw.
+      expect(result.monthlyData.map(m => m.month)).toEqual([
+        '2026-08',
+        '2026-09',
+        '2026-10',
+      ])
+      const courses = result.expensesByCategory[0]
+      expect(courses?.amount).toBe(1000)
+      expect(courses?.monthlyAmounts).toEqual([300, 500, 200])
+      expect(courses?.averagePerMonth).toBe(400)
+      expect(courses?.everydayAveragePerMonth).toBe(400)
+      expect(courses?.subcategories?.[0]?.averagePerMonth).toBe(400)
+      const salaries = result.incomeByCategory[0]
+      expect(salaries?.averagePerMonth).toBe(2500)
+    })
+
+    it('leaves the current month out of a smoothed line too', async () => {
+      setupMocks([])
+      mockAmortizedSlices.read.mockResolvedValue([
+        smoothedRow({
+          slices: [
+            { month: '2026-08', amount: 50 },
+            { month: '2026-09', amount: 50 },
+            { month: '2026-10', amount: 50 },
+          ],
+        }),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2026-08-01',
+        endDate: '2026-10-23',
+        includeCategoryBreakdown: true,
+      })
+
+      const hightech = result.expensesByCategory[0]
+      expect(hightech?.everydayAmount).toBe(150)
+      expect(hightech?.everydayAveragePerMonth).toBe(50)
+      expect(hightech?.subcategories?.[0]?.everydayAveragePerMonth).toBe(50)
+    })
+
+    it('divides a period entirely in the past by all its months', async () => {
+      setupMocks([
+        groceries('2026-06', 300),
+        groceries('2026-07', 300),
+        groceries('2026-08', 600),
+      ])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2026-06-01',
+        endDate: '2026-08-31',
+        includeCategoryBreakdown: true,
+      })
+
+      expect(result.periodMonths).toBe(3)
+      expect(result.expensesByCategory[0]?.averagePerMonth).toBe(400)
+    })
+
+    it('divides a period made of the current month alone by 1', async () => {
+      setupMocks([groceries('2026-10', 120), salary('2026-10', 1000)])
+
+      const result = await service.getSummary(mockUserId, {
+        startDate: '2026-10-01',
+        endDate: '2026-10-23',
+        includeCategoryBreakdown: true,
+      })
+
+      expect(result.periodMonths).toBe(1)
+      expect(result.expensesByCategory[0]?.averagePerMonth).toBe(120)
+      expect(result.incomeByCategory[0]?.averagePerMonth).toBe(1000)
+    })
+
+    it('counts the closed months of an unbounded period from the months it holds', async () => {
+      setupMocks([groceries('2026-07', 300), groceries('2026-10', 90)])
+
+      const result = await service.getSummary(mockUserId, {
+        includeCategoryBreakdown: true,
+      })
+
+      expect(result.periodMonths).toBe(1)
+      expect(result.expensesByCategory[0]?.averagePerMonth).toBe(300)
+    })
+  })
 })

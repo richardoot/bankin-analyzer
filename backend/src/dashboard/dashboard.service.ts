@@ -110,6 +110,20 @@ interface SubcategoryAccumulator {
   count: number
   /** Share of `total` carried by exceptional rows. */
   exceptional: number
+  /** `total` month by month, so an average can leave a month out. */
+  byMonth: Map<string, number>
+  /** `exceptional` month by month. */
+  exceptionalByMonth: Map<string, number>
+}
+
+/**
+ * Which months a per-month average reads: `months` is its divisor, and
+ * `outside` sums a month-by-month series over the months it leaves out
+ * (the current one and any after it), to take them off the numerator.
+ */
+interface AverageWindow {
+  months: number
+  outside: (byMonth: Map<string, number> | undefined) => number
 }
 
 /**
@@ -121,6 +135,8 @@ interface EverydayShift {
   shift: number
   /** Slices falling in the window — the « dont X € lissés ». */
   slices: number
+  /** `shift` month by month, so an average can leave a month out. */
+  shiftByMonth?: Map<string, number>
 }
 
 /** The same per category, month by month and line by line. */
@@ -146,7 +162,7 @@ function addSubcategoryRow(
   row: Pick<
     DashboardAggregatedRow,
     'subcategory_id' | 'subcategory' | 'subcategory_icon' | 'transaction_count'
-  > & { is_exceptional?: boolean },
+  > & { is_exceptional?: boolean; month_key?: string },
   amount: number
 ): void {
   const key = row.subcategory_id ?? NO_SUBCATEGORY_KEY
@@ -157,17 +173,29 @@ function addSubcategoryRow(
     total: 0,
     count: 0,
     exceptional: 0,
+    byMonth: new Map<string, number>(),
+    exceptionalByMonth: new Map<string, number>(),
   }
   current.total += amount
   if (row.is_exceptional) current.exceptional += amount
+  if (row.month_key !== undefined) {
+    addTo(current.byMonth, row.month_key, amount)
+    if (row.is_exceptional) {
+      addTo(current.exceptionalByMonth, row.month_key, amount)
+    }
+  }
   current.count += row.transaction_count ?? 0
   current.icon = current.icon ?? row.subcategory_icon ?? null
   target.set(key, current)
 }
 
+function addTo(map: Map<string, number>, key: string, amount: number): void {
+  map.set(key, (map.get(key) ?? 0) + amount)
+}
+
 function toSubcategoryDtos(
   subMap: Map<string, SubcategoryAccumulator>,
-  periodMonths: number,
+  average: AverageWindow,
   shifts?: Map<string, EverydayShift>
 ): SubcategoryDataDto[] {
   const round = (v: number): number => Math.round(v * 100) / 100
@@ -178,7 +206,9 @@ function toSubcategoryDtos(
         subcategory: sd.name,
         amount: round(sd.total),
         transactionCount: sd.count,
-        averagePerMonth: round(sd.total / periodMonths),
+        averagePerMonth: round(
+          (sd.total - average.outside(sd.byMonth)) / average.months
+        ),
       }
       if (sd.icon) dto.icon = sd.icon
       // Only on a line a smoothed purchase touches: every other line reads
@@ -186,8 +216,14 @@ function toSubcategoryDtos(
       const shift = shifts?.get(key)
       if (shift) {
         const everyday = sd.total - sd.exceptional + shift.shift
+        const everydayOutside =
+          average.outside(sd.byMonth) -
+          average.outside(sd.exceptionalByMonth) +
+          average.outside(shift.shiftByMonth)
         dto.everydayAmount = round(everyday)
-        dto.everydayAveragePerMonth = round(everyday / periodMonths)
+        dto.everydayAveragePerMonth = round(
+          (everyday - everydayOutside) / average.months
+        )
         dto.amortizedAmount = round(shift.slices)
       }
       return dto
@@ -736,8 +772,13 @@ export class DashboardService {
       }
       const lineKey = p.subcategory_id ?? NO_SUBCATEGORY_KEY
       const line = entry.subcategories.get(lineKey) ?? { shift: 0, slices: 0 }
+      const lineByMonth = line.shiftByMonth ?? new Map<string, number>()
       line.shift += shift
       line.slices += slices
+      for (const [month, amount] of everydayShiftByMonth(p)) {
+        addTo(lineByMonth, month, amount)
+      }
+      line.shiftByMonth = lineByMonth
       entry.subcategories.set(lineKey, line)
 
       if (shouldIncludeBreakdown) {
@@ -813,7 +854,6 @@ export class DashboardService {
     // Build breakdown month labels (full range when start/end are explicit,
     // otherwise the union of months actually present in the rows)
     let breakdownMonthLabels: string[] = []
-    let periodMonthsCount = 1
     if (shouldIncludeBreakdown) {
       if (filters.startDate && filters.endDate) {
         const cursor = new Date(
@@ -829,7 +869,26 @@ export class DashboardService {
       } else {
         breakdownMonthLabels = sortedMonths.slice()
       }
-      periodMonthsCount = Math.max(1, breakdownMonthLabels.length)
+    }
+
+    // The averages read the closed months only: those of the period before
+    // the current month (in Paris, as « today » reads everywhere else). The
+    // current month is still drawn, in `monthlyData` and `monthlyAmounts`,
+    // but a month counted whole on the 23rd pulled every average down: the
+    // income of October 2026 read 2 289 € a month instead of 2 497 €. A
+    // period with no closed month — only the current one — averages what it
+    // has, over 1. The months after the current one, which a custom period
+    // may reach, are left out with it.
+    const currentMonth = calendarDayIn(new Date()).slice(0, 7)
+    const closedMonths = breakdownMonthLabels.filter(m => m < currentMonth)
+    const leftOutMonths =
+      closedMonths.length > 0
+        ? breakdownMonthLabels.filter(m => m >= currentMonth)
+        : []
+    const average: AverageWindow = {
+      months: Math.max(1, closedMonths.length),
+      outside: byMonth =>
+        leftOutMonths.reduce((sum, m) => sum + (byMonth?.get(m) ?? 0), 0),
     }
 
     const round = (v: number) => Math.round(v * 100) / 100
@@ -873,7 +932,7 @@ export class DashboardService {
       const shift = shiftByCategory.get(categoryId)
       const subcategories = toSubcategoryDtos(
         subMap,
-        periodMonthsCount,
+        average,
         shift?.subcategories
       )
 
@@ -883,7 +942,9 @@ export class DashboardService {
       )
 
       dto.transactionCount = totalCount
-      dto.averagePerMonth = round(data.amount / periodMonthsCount)
+      dto.averagePerMonth = round(
+        (data.amount - average.outside(monthMap)) / average.months
+      )
 
       // Everyday / exceptional split, exact. Both shares are sums of netted
       // transactions, so a refunded holiday reduces the exceptional side and
@@ -901,9 +962,15 @@ export class DashboardService {
       // the divisor by the event days would move *every* category, and would be
       // plainly wrong for the fixed ones — rent, insurance and subscriptions are
       // still debited while their owner is away.
-      dto.everydayAveragePerMonth = round(everydayAmount / periodMonthsCount)
-
       const excMonthMap = expenseExceptionalMonthlyByCategory.get(categoryId)
+      const everydayOutside =
+        average.outside(monthMap) -
+        average.outside(excMonthMap) +
+        average.outside(shift?.shiftByMonth)
+      dto.everydayAveragePerMonth = round(
+        (everydayAmount - everydayOutside) / average.months
+      )
+
       dto.everydayMonthlyAmounts = breakdownMonthLabels.map((m, i) => {
         const net = dto.monthlyAmounts?.[i] ?? 0
         return round(
@@ -951,7 +1018,7 @@ export class DashboardService {
       const subMap =
         incomeSubcatByCategory.get(categoryId) ??
         new Map<string, SubcategoryAccumulator>()
-      const subcategories = toSubcategoryDtos(subMap, periodMonthsCount)
+      const subcategories = toSubcategoryDtos(subMap, average)
 
       const totalCount = Array.from(subMap.values()).reduce(
         (s, sd) => s + sd.count,
@@ -959,7 +1026,9 @@ export class DashboardService {
       )
 
       dto.transactionCount = totalCount
-      dto.averagePerMonth = round(data.amount / periodMonthsCount)
+      dto.averagePerMonth = round(
+        (data.amount - average.outside(monthMap)) / average.months
+      )
       if (subcategories.length > 0) dto.subcategories = subcategories
 
       return dto
@@ -1047,7 +1116,7 @@ export class DashboardService {
     }
 
     if (shouldIncludeBreakdown) {
-      response.periodMonths = periodMonthsCount
+      response.periodMonths = average.months
       response.monthLabels = breakdownMonthLabels
     }
 
