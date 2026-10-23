@@ -190,6 +190,13 @@ export class TagFamilyOfYearDto {
    */
   spent!: number
 
+  /**
+   * The family's expenses per event year, under the same rules, one entry
+   * per calendar year with expenses up to the current one (whose `spent` is
+   * `spent`), oldest first.
+   */
+  spentByYear!: { year: number; spent: number }[]
+
   /** The family's envelope per year, null when none was decided. */
   annualBudget!: number | null
 
@@ -293,6 +300,14 @@ export class DashboardSummaryDto {
    * a family is its `spent` over this. Null when `tagFamiliesOfYear` is empty.
    */
   realExpensesOfYear!: number | null
+
+  /**
+   * Exceptional expenses of that calendar year — the expenses paid that year
+   * carrying an exceptional tag, net as `realExpensesOfYear`, stats-excluded
+   * accounts ignored. The share of a family in the year's exceptional is its
+   * `spent` over this. Null when `tagFamiliesOfYear` is empty.
+   */
+  exceptionalExpensesOfYear!: number | null
 
   /** The period as it was: every expense, exceptional ones included. */
   spendingStructure!: SpendingStructureDto

@@ -1143,6 +1143,8 @@ export interface TagFamilyOfYearDto {
   year: number
   /** Gross expenses, divided, stats-excluded accounts ignored. */
   spent: number
+  /** Expenses per event year up to this one (its `spent` is `spent`), oldest first. */
+  spentByYear?: { year: number; spent: number }[]
   annualBudget: number | null
   /** `annualBudget - spent`, negative over; null without an envelope. */
   remaining: number | null
@@ -1184,6 +1186,8 @@ export interface DashboardSummaryDto {
   tagFamiliesOfYear?: TagFamilyOfYearDto[]
   /** Real expenses of that year: the share's denominator. Null without families. */
   realExpensesOfYear?: number | null
+  /** Exceptional expenses of that year: the family share's denominator. Null without families. */
+  exceptionalExpensesOfYear?: number | null
 }
 
 // Budget plan DTOs

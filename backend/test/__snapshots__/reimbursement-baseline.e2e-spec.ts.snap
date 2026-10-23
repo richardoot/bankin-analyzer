@@ -669,6 +669,7 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — nothing de
       "name": "Vacances Italie",
     },
   ],
+  "exceptionalExpensesOfYear": null,
   "expensesByCategory": [
     {
       "amount": 1200,
@@ -915,6 +916,7 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — received a
       "name": "Vacances Italie",
     },
   ],
+  "exceptionalExpensesOfYear": null,
   "expensesByCategory": [
     {
       "amount": 1200,
@@ -1164,6 +1166,7 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — received d
       "name": "Vacances Italie",
     },
   ],
+  "exceptionalExpensesOfYear": null,
   "expensesByCategory": [
     {
       "amount": 1200,
@@ -1411,6 +1414,7 @@ exports[`Reimbursement baseline (e2e) > golden master > dashboard — the defaul
       "name": "Vacances Italie",
     },
   ],
+  "exceptionalExpensesOfYear": null,
   "expensesByCategory": [
     {
       "amount": 1200,

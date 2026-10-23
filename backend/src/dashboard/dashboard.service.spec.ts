@@ -1857,6 +1857,16 @@ describe('DashboardService', () => {
       return { sql: call[0].strings.join('?'), values: call[0].values }
     }
 
+    /** The calendar year in Paris, as the service reads it. */
+    function parisYear(): number {
+      return Number(
+        new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Europe/Paris',
+          year: 'numeric',
+        }).format(new Date())
+      )
+    }
+
     const travel = {
       id: 'fam-travel',
       name: 'Voyages',
@@ -1879,6 +1889,7 @@ describe('DashboardService', () => {
 
       expect(result.tagFamiliesOfYear).toEqual([])
       expect(result.realExpensesOfYear).toBeNull()
+      expect(result.exceptionalExpensesOfYear).toBeNull()
       // The four queries of the summary, not one more.
       expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(4)
       expect(mockPrismaService.tagFamily.findMany).toHaveBeenCalledWith(
@@ -1887,22 +1898,27 @@ describe('DashboardService', () => {
     })
 
     it('lists the families with spending, biggest first, with envelope and remainder', async () => {
+      const year = parisYear()
       mockPrismaService.tagFamily.findMany.mockResolvedValue([hyrox, travel])
       setupMocks([createRow({ total_amount: 100 })])
       mockPrismaService.$queryRaw.mockResolvedValueOnce([
         {
           family_id: 'fam-hyrox',
+          event_year: year,
           transaction_count: 2,
           spent: 180.004,
           tag_count: 1,
           real_expenses: 12000.456,
+          exceptional_expenses: 2400.004,
         },
         {
           family_id: 'fam-travel',
+          event_year: year,
           transaction_count: 5,
           spent: 1250.5,
           tag_count: 2,
           real_expenses: 12000.456,
+          exceptional_expenses: 2400.004,
         },
       ])
 
@@ -1911,12 +1927,6 @@ describe('DashboardService', () => {
         endDate: '2026-10-31',
       })
 
-      const year = Number(
-        new Intl.DateTimeFormat('en-CA', {
-          timeZone: 'Europe/Paris',
-          year: 'numeric',
-        }).format(new Date())
-      )
       expect(result.tagFamiliesOfYear).toEqual([
         {
           id: 'fam-travel',
@@ -1925,6 +1935,7 @@ describe('DashboardService', () => {
           icon: 'plane',
           year,
           spent: 1250.5,
+          spentByYear: [{ year, spent: 1250.5 }],
           annualBudget: 1000,
           remaining: -250.5,
           transactionCount: 5,
@@ -1937,6 +1948,7 @@ describe('DashboardService', () => {
           icon: null,
           year,
           spent: 180,
+          spentByYear: [{ year, spent: 180 }],
           annualBudget: null,
           remaining: null,
           transactionCount: 2,
@@ -1944,6 +1956,7 @@ describe('DashboardService', () => {
         },
       ])
       expect(result.realExpensesOfYear).toBe(12000.46)
+      expect(result.exceptionalExpensesOfYear).toBe(2400)
       // The period's own figures are untouched.
       expect(result.totalExpenses).toBe(100)
     })
@@ -1968,6 +1981,7 @@ describe('DashboardService', () => {
       // No family spent anything that year: nothing to show, no share.
       expect(result.tagFamiliesOfYear).toEqual([])
       expect(result.realExpensesOfYear).toBeNull()
+      expect(result.exceptionalExpensesOfYear).toBeNull()
     })
 
     it('counts a line once per family, in event basis, with the family conventions', async () => {
@@ -1980,10 +1994,19 @@ describe('DashboardService', () => {
       const { sql } = familiesQuery()
       // Grouped by transaction and family before anything is summed.
       expect(sql).toContain('GROUP BY tt.transaction_id, tg.family_id')
-      // A line belongs to the year its dated tag starts in.
+      // A line belongs to the year its dated tag starts in, read over
+      // every year up to the current one, grouped by family and year.
       expect(sql).toContain(
+        'EXTRACT(YEAR FROM COALESCE(ft.event_start, t.date))::int AS event_year'
+      )
+      expect(sql).toContain(
+        'EXTRACT(YEAR FROM COALESCE(ft.event_start, t.date))::int <='
+      )
+      expect(sql).not.toContain(
         'EXTRACT(YEAR FROM COALESCE(ft.event_start, t.date))::int ='
       )
+      expect(sql).toContain('GROUP BY y.family_id, y.event_year')
+      expect(sql).toContain('AND y2.event_year = y.event_year')
       // Each family's spend and the year's real expenses are netted alike.
       expect(sql).toContain('ABS(t.amount::numeric) - COALESCE(ec.received, 0)')
       expect(sql).toContain('/ COALESCE(a.divisor, 1)')
@@ -1991,6 +2014,136 @@ describe('DashboardService', () => {
       expect(sql).toContain('COALESCE(a.is_excluded_from_stats, false) = false')
       expect(sql).toContain('expense_credit')
       expect(sql).toContain('LEFT JOIN expense_credit ec')
+    })
+
+    it('counts only the current year in a line, and lists every year oldest first', async () => {
+      const year = parisYear()
+      mockPrismaService.tagFamily.findMany.mockResolvedValue([travel])
+      setupMocks([])
+      mockPrismaService.$queryRaw.mockResolvedValueOnce([
+        {
+          family_id: 'fam-travel',
+          event_year: year,
+          transaction_count: 3,
+          spent: 420.256,
+          tag_count: 1,
+          real_expenses: 9000,
+          exceptional_expenses: 1500,
+        },
+        {
+          family_id: 'fam-travel',
+          event_year: year - 2,
+          transaction_count: 7,
+          spent: 684.004,
+          tag_count: 2,
+          real_expenses: 9000,
+          exceptional_expenses: 1500,
+        },
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.tagFamiliesOfYear).toEqual([
+        expect.objectContaining({
+          id: 'fam-travel',
+          year,
+          spent: 420.26,
+          remaining: 579.74,
+          transactionCount: 3,
+          tagCount: 1,
+          spentByYear: [
+            { year: year - 2, spent: 684 },
+            { year, spent: 420.26 },
+          ],
+        }),
+      ])
+    })
+
+    it('leaves out a family without expenses this year', async () => {
+      const year = parisYear()
+      mockPrismaService.tagFamily.findMany.mockResolvedValue([travel, hyrox])
+      setupMocks([])
+      mockPrismaService.$queryRaw.mockResolvedValueOnce([
+        {
+          family_id: 'fam-travel',
+          event_year: year - 1,
+          transaction_count: 4,
+          spent: 800,
+          tag_count: 1,
+          real_expenses: 9000,
+          exceptional_expenses: 1500,
+        },
+        {
+          family_id: 'fam-hyrox',
+          event_year: year,
+          transaction_count: 1,
+          spent: 90,
+          tag_count: 1,
+          real_expenses: 9000,
+          exceptional_expenses: 1500,
+        },
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.tagFamiliesOfYear.map(f => f.id)).toEqual(['fam-hyrox'])
+      expect(result.tagFamiliesOfYear[0]?.spentByYear).toEqual([
+        { year, spent: 90 },
+      ])
+      expect(result.exceptionalExpensesOfYear).toBe(1500)
+    })
+
+    it("reads the year's exceptional expenses in the same query, by payment date", async () => {
+      const year = parisYear()
+      mockPrismaService.tagFamily.findMany.mockResolvedValue([travel])
+      setupMocks([])
+      mockPrismaService.$queryRaw.mockResolvedValueOnce([
+        {
+          family_id: 'fam-travel',
+          event_year: year,
+          transaction_count: 1,
+          spent: 100,
+          tag_count: 1,
+          real_expenses: 9000,
+          exceptional_expenses: 1530.456,
+        },
+      ])
+
+      const result = await service.getSummary(mockUserId, {})
+
+      expect(result.exceptionalExpensesOfYear).toBe(1530.46)
+      const { sql, values } = familiesQuery()
+      // The rule of query 1: a transaction with one of the user's
+      // exceptional tags.
+      expect(sql).toContain('exceptional_tx AS (')
+      expect(sql).toContain('tg.is_exceptional = true')
+      expect(values).toContain(mockUserId)
+      // Expenses paid that calendar year, joined on that rule, stats-excluded
+      // accounts ignored.
+      const block = sql.slice(
+        sql.indexOf('exceptional_year AS ('),
+        sql.indexOf('SELECT\n        y.family_id')
+      )
+      expect(block).toContain(
+        'JOIN exceptional_tx et ON et.transaction_id = t.id'
+      )
+      expect(block).toContain("t.type = 'EXPENSE'")
+      expect(block).toContain('t.date >= ?')
+      expect(block).toContain('t.date < ?')
+      expect(block).toContain(
+        'COALESCE(a.is_excluded_from_stats, false) = false'
+      )
+      expect(block).toContain('LEFT JOIN expense_credit ec')
+      expect(sql).toContain(
+        '(SELECT expenses FROM exceptional_year) AS exceptional_expenses'
+      )
+      // Still one query for the families.
+      expect(
+        mockPrismaService.$queryRaw.mock.calls.filter(
+          ([q]: [{ strings: string[] }]) =>
+            q.strings.join('?').includes('year_tx AS')
+        )
+      ).toHaveLength(1)
     })
   })
 })

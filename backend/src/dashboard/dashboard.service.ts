@@ -212,20 +212,40 @@ interface AccountRow {
   account: string
 }
 
-/** One family over the current year, and the year's real expenses. */
+/**
+ * One family over one event year with expenses, and the current year's real
+ * and exceptional expenses.
+ */
 interface FamilyOfYearRow {
   family_id: string
+  event_year: number
   transaction_count: number
   spent: number
   tag_count: number
-  /** The same on every row: the year's real expenses. */
+  /** The same on every row: the current year's real expenses. */
   real_expenses: number
+  /** The same on every row: the current year's exceptional expenses. */
+  exceptional_expenses: number
 }
 
 /** The families of the current year and what they are a share of. */
 interface FamiliesOfYear {
   families: TagFamilyOfYearDto[]
   realExpenses: number | null
+  exceptionalExpenses: number | null
+}
+
+/**
+ * The transactions carrying at least one of the user's exceptional tags: the
+ * one rule of « exceptional » across the summary's queries.
+ */
+function exceptionalTxCte(userId: string): Prisma.Sql {
+  return Prisma.sql`exceptional_tx AS (
+          SELECT DISTINCT tt.transaction_id
+          FROM app.transaction_tags tt
+          JOIN app.tags tg ON tg.id = tt.tag_id
+          WHERE tg.user_id = ${userId} AND tg.is_exceptional = true
+        )`
 }
 
 /**
@@ -336,12 +356,7 @@ export class DashboardService {
       // Query 1: Aggregation by month + category + subcategory + type
       // (excludes stats-excluded accounts).
       this.prisma.$queryRaw<DashboardAggregatedRow[]>(Prisma.sql`
-        WITH exceptional_tx AS (
-          SELECT DISTINCT tt.transaction_id
-          FROM app.transaction_tags tt
-          JOIN app.tags tg ON tg.id = tt.tag_id
-          WHERE tg.user_id = ${userId} AND tg.is_exceptional = true
-        ),
+        WITH ${exceptionalTxCte(userId)},
         ${reimbursementCreditCtes(userId)}
         SELECT
           TO_CHAR(t.date, 'YYYY-MM') AS month_key,
@@ -1015,6 +1030,7 @@ export class DashboardService {
       exceptionalEvents,
       tagFamiliesOfYear: familiesOfYear.families,
       realExpensesOfYear: familiesOfYear.realExpenses,
+      exceptionalExpensesOfYear: familiesOfYear.exceptionalExpenses,
       spendingStructure: roundStructure(structure),
       everydaySpendingStructure: roundStructure(everydayStructure),
       savingsTransfers: roundedSavingsTransfers,
@@ -1046,9 +1062,14 @@ export class DashboardService {
    * the family analysis's conventions (expenses in ABS, divided by the
    * account divisor, stats-excluded accounts ignored).
    *
+   * The same read over every past event year gives `spentByYear`; the
+   * figures of a line (`spent`, `transactionCount`, `tagCount`) stay the
+   * current year's. A family without expenses this year is left out.
+   *
    * Alongside, the year's real expenses, read as `totalExpenses` reads a
-   * period (every expense, net as `netAmount` says), so that the share of a
-   * family is a single division on screen.
+   * period (every expense, net as `netAmount` says), and its exceptional
+   * expenses (the same read over the lines carrying an exceptional tag), so
+   * that the share of a family is a single division on screen.
    *
    * One cheap read of the families first: without one, nothing else runs.
    */
@@ -1057,6 +1078,11 @@ export class DashboardService {
     netAmount: Prisma.Sql,
     visible: Prisma.Sql
   ): Promise<FamiliesOfYear> {
+    const none: FamiliesOfYear = {
+      families: [],
+      realExpenses: null,
+      exceptionalExpenses: null,
+    }
     const families = await this.prisma.tagFamily.findMany({
       where: { userId },
       select: {
@@ -1067,7 +1093,7 @@ export class DashboardService {
         annualBudget: true,
       },
     })
-    if (families.length === 0) return { families: [], realExpenses: null }
+    if (families.length === 0) return none
 
     const year = Number(calendarDayIn(new Date()).slice(0, 4))
     const yearStart = new Date(Date.UTC(year, 0, 1))
@@ -1076,11 +1102,13 @@ export class DashboardService {
     const rows = await this.prisma.$queryRaw<FamilyOfYearRow[]>(Prisma.sql`
       WITH ${familyTransactionsCte(userId)},
       ${reimbursementCreditCtes(userId)},
+      ${exceptionalTxCte(userId)},
       year_tx AS (
         SELECT
           ft.family_id,
           ft.tag_ids,
           t.type,
+          ${FAMILY_EVENT_YEAR} AS event_year,
           ${netAmount} AS amount
         FROM family_tx ft
         JOIN app.transactions t ON t.id = ft.transaction_id
@@ -1090,7 +1118,7 @@ export class DashboardService {
           AND t.type IN ('EXPENSE', 'INCOME')
           AND COALESCE(a.is_excluded_from_stats, false) = false
           AND ${visible}
-          AND ${FAMILY_EVENT_YEAR} = ${year}
+          AND ${FAMILY_EVENT_YEAR} <= ${year}
       ),
       real_year AS (
         SELECT COALESCE(SUM(${netAmount}), 0)::float AS expenses
@@ -1102,9 +1130,22 @@ export class DashboardService {
           AND t.date >= ${yearStart}
           AND t.date < ${nextYearStart}
           AND COALESCE(a.is_excluded_from_stats, false) = false
+      ),
+      exceptional_year AS (
+        SELECT COALESCE(SUM(${netAmount}), 0)::float AS expenses
+        FROM app.transactions t
+        JOIN exceptional_tx et ON et.transaction_id = t.id
+        LEFT JOIN app.accounts a ON a.id = t.account_id
+        ${REIMBURSEMENT_CREDIT_JOINS}
+        WHERE t.user_id = ${userId}
+          AND t.type = 'EXPENSE'
+          AND t.date >= ${yearStart}
+          AND t.date < ${nextYearStart}
+          AND COALESCE(a.is_excluded_from_stats, false) = false
       )
       SELECT
         y.family_id,
+        y.event_year,
         COUNT(*)::int AS transaction_count,
         SUM(y.amount) FILTER (WHERE y.type = 'EXPENSE')::float AS spent,
         (
@@ -1112,20 +1153,31 @@ export class DashboardService {
           FROM year_tx y2
           CROSS JOIN LATERAL UNNEST(y2.tag_ids) AS tag_id
           WHERE y2.family_id = y.family_id
+            AND y2.event_year = y.event_year
         )::int AS tag_count,
-        (SELECT expenses FROM real_year) AS real_expenses
+        (SELECT expenses FROM real_year) AS real_expenses,
+        (SELECT expenses FROM exceptional_year) AS exceptional_expenses
       FROM year_tx y
-      GROUP BY y.family_id
+      GROUP BY y.family_id, y.event_year
       HAVING SUM(y.amount) FILTER (WHERE y.type = 'EXPENSE') > 0
     `)
-    if (rows.length === 0) return { families: [], realExpenses: null }
+    if (rows.length === 0) return none
 
     const round = (v: number): number => Math.round(v * 100) / 100
-    const byId = new Map(families.map(f => [f.id, f]))
-    const lines = rows.flatMap((r): TagFamilyOfYearDto[] => {
-      const family = byId.get(r.family_id)
-      if (!family) return []
-      const spent = round(r.spent ?? 0)
+    const byFamily = new Map<string, FamilyOfYearRow[]>()
+    for (const r of rows) {
+      const own = byFamily.get(r.family_id)
+      if (own) own.push(r)
+      else byFamily.set(r.family_id, [r])
+    }
+    const lines = families.flatMap((family): TagFamilyOfYearDto[] => {
+      const own = byFamily.get(family.id) ?? []
+      const current = own.find(r => Number(r.event_year) === year)
+      if (!current) return []
+      const spent = round(current.spent ?? 0)
+      const spentByYear = own
+        .map(r => ({ year: Number(r.event_year), spent: round(r.spent ?? 0) }))
+        .sort((a, b) => a.year - b.year)
       const annualBudget =
         family.annualBudget === null ? null : Number(family.annualBudget)
       return [
@@ -1136,14 +1188,15 @@ export class DashboardService {
           icon: family.icon,
           year,
           spent,
+          spentByYear,
           annualBudget,
           remaining: annualBudget === null ? null : round(annualBudget - spent),
-          transactionCount: r.transaction_count,
-          tagCount: r.tag_count,
+          transactionCount: current.transaction_count,
+          tagCount: current.tag_count,
         },
       ]
     })
-    if (lines.length === 0) return { families: [], realExpenses: null }
+    if (lines.length === 0) return none
     lines.sort(
       (a, b) => b.spent - a.spent || a.name.localeCompare(b.name, 'fr')
     )
@@ -1151,6 +1204,7 @@ export class DashboardService {
     return {
       families: lines,
       realExpenses: round(rows[0]?.real_expenses ?? 0),
+      exceptionalExpenses: round(rows[0]?.exceptional_expenses ?? 0),
     }
   }
 }

@@ -31,7 +31,9 @@
  *   for next year's edition does not; a line carrying two of the family's
  *   tags counts once;
  * - the year's real expenses, the share's denominator, are every expense
- *   dated in that year;
+ *   dated in that year, and its exceptional expenses those of them carrying
+ *   an exceptional tag, in a family or not;
+ * - each family lists its spending per event year, oldest first;
  * - a user without a family reads an empty list.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
@@ -591,6 +593,7 @@ describe('Tag families (e2e)', () => {
       id: string
       year: number
       spent: number
+      spentByYear: { year: number; spent: number }[]
       annualBudget: number | null
       remaining: number | null
       transactionCount: number
@@ -599,6 +602,7 @@ describe('Tag families (e2e)', () => {
     interface DashboardBody {
       tagFamiliesOfYear: FamilyOfYearBody[]
       realExpensesOfYear: number | null
+      exceptionalExpensesOfYear: number | null
       totalExpenses: number
     }
 
@@ -640,6 +644,7 @@ describe('Tag families (e2e)', () => {
 
       expect(body.tagFamiliesOfYear).toEqual([])
       expect(body.realExpensesOfYear).toBeNull()
+      expect(body.exceptionalExpensesOfYear).toBeNull()
       expect(body.totalExpenses).toBe(50)
     })
 
@@ -675,6 +680,23 @@ describe('Tag families (e2e)', () => {
       // Paid this year, for next year's edition: next year.
       await expense([lisbon], { date: `${year}-02-01`, amount: -500 })
       await expense([], { date: `${year}-01-15`, amount: -1000 })
+      // An edition two years ago: in the family's years, not in this year.
+      const seville = await datedTag(
+        `Séville ${year - 2}`,
+        travel.id,
+        `${year - 2}-05-01`,
+        `${year - 2}-05-04`
+      )
+      await expense([seville], { date: `${year - 2}-04-20`, amount: -300 })
+      // Exceptional without a family: in the year's exceptional only.
+      const fine = (
+        await http()
+          .post('/tags')
+          .set(ctx.auth(owner))
+          .send({ name: 'Amende', isExceptional: true })
+          .expect(201)
+      ).body as TagBody
+      await expense([fine.id], { date: `${year}-04-01`, amount: -80 })
       // A family with nothing this year is not listed.
       await createFamily('Concerts')
 
@@ -688,14 +710,21 @@ describe('Tag families (e2e)', () => {
           icon: null,
           year,
           spent: 540,
+          // Next year's deposit is not drawn: up to this year only.
+          spentByYear: [
+            { year: year - 2, spent: 300 },
+            { year, spent: 540 },
+          ],
           annualBudget: 1000,
           remaining: 460,
           transactionCount: 2,
           tagCount: 2,
         },
       ])
-      // Every expense dated this year: 200 + 500 + 1 000.
-      expect(body.realExpensesOfYear).toBe(1700)
+      // Every expense dated this year: 200 + 500 + 1 000 + 80.
+      expect(body.realExpensesOfYear).toBe(1780)
+      // Those with an exceptional tag, by payment date: 200 + 500 + 80.
+      expect(body.exceptionalExpensesOfYear).toBe(780)
       // The period itself is unchanged by the card.
       expect(body.totalExpenses).toBe(1000)
     })
