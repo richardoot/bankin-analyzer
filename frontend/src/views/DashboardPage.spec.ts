@@ -839,11 +839,12 @@ describe('DashboardPage', () => {
       total: 845.5,
     }
 
-    it('sits after the month band and before the structure', async () => {
+    it('sits after the month band and before « À faire » and the structure', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue({
         ...mockSummary,
         spendingStructure: structure,
         everydaySpendingStructure: structure,
+        pendingReceivables: 120,
       })
       const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
       await flushPromises()
@@ -851,6 +852,7 @@ describe('DashboardPage', () => {
       const order = [
         'month-band',
         'spending-trends',
+        'todo-card',
         'spending-structure',
         'dashboard-expenses-section',
       ].map(id => wrapper.find(`[data-testid="${id}"]`).element)
@@ -894,6 +896,107 @@ describe('DashboardPage', () => {
         false
       )
       expect(wrapper.find('[data-testid="month-band"]').exists()).toBe(true)
+    })
+  })
+
+  describe('À faire', () => {
+    const position = (a: Element, b: Element) =>
+      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING
+
+    it('sits between « Ce qui change » and the expenses when something is to do', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue({
+        ...mockSummary,
+        pendingReceivables: 8516,
+      })
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      const card = wrapper.get('[data-testid="todo-card"]')
+      expect(
+        position(
+          wrapper.get('[data-testid="spending-trends"]').element,
+          card.element
+        )
+      ).toBeTruthy()
+      expect(
+        position(
+          card.element,
+          wrapper.get('[data-testid="dashboard-period"]').element
+        )
+      ).toBeTruthy()
+      expect(
+        position(
+          card.element,
+          wrapper.get('[data-testid="dashboard-expenses-section"]').element
+        )
+      ).toBeTruthy()
+      const line = wrapper.get('[data-testid="todo-item-receivables"]')
+      expect(line.text()).toContain('avancés, en attente de remboursement')
+      expect(line.attributes('href')).toBe('/reimbursements')
+    })
+
+    it('reads the lines to file from the trends the card loaded', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getSpendingTrends).mockResolvedValueOnce({
+        month: '2023-12',
+        reading: 'everyday',
+        window: 6,
+        completeMonths: 12,
+        insights: [
+          {
+            kind: 'uncategorized',
+            unit: {
+              type: 'uncategorized',
+              id: 'uncategorized',
+              categoryId: null,
+              name: 'À classer',
+              icon: null,
+            },
+            direction: 'up',
+            tone: 'neutral',
+            current: 3,
+            reference: 0,
+            delta: 3,
+            deltaPct: null,
+            sentence: '3 dépenses de décembre sont à classer.',
+            windows: {
+              current: { start: '2023-12-01', end: '2023-12-31' },
+              reference: { start: '2023-06-01', end: '2023-11-30' },
+            },
+            series: [],
+            score: 0,
+          },
+        ],
+        quietSentence: null,
+        headline: null,
+        availableMonths: ['2023-12'],
+        horizons: [],
+        digest: null,
+      })
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      expect(wrapper.get('[data-testid="todo-item-to-file"]').text()).toContain(
+        '3 lignes à classer'
+      )
+      // The compact card leaves them to « À faire ».
+      expect(wrapper.find('[data-testid="trends-to-file"]').exists()).toBe(
+        false
+      )
+    })
+
+    it('is absent when nothing is to do', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue({
+        ...mockSummary,
+        pendingReceivables: 0,
+      })
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="spending-trends"]').exists()).toBe(
+        true
+      )
+      expect(wrapper.find('[data-testid="todo-card"]').exists()).toBe(false)
     })
   })
 

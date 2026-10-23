@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { onMounted, computed } from 'vue'
+  import { onMounted, computed, ref } from 'vue'
   import { useRouter } from 'vue-router'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import CategoryPieChart from '@/components/charts/CategoryPieChart.vue'
@@ -11,12 +11,14 @@
   import SpendingStructureCard from '@/components/dashboard/SpendingStructureCard.vue'
   import TagFamiliesOfYearCard from '@/components/dashboard/TagFamiliesOfYearCard.vue'
   import SpendingTrendsCard from '@/components/dashboard/SpendingTrendsCard.vue'
+  import TodoCard from '@/components/dashboard/TodoCard.vue'
+  import { todoItems as composeTodoItems } from '@/lib/todo'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
   import EmptyState from '@/components/ui/EmptyState.vue'
   import { useDashboardData } from '@/composables/useDashboardData'
   import { useFiltersStore } from '@/stores/filters'
   import { formatCurrency, formatMonth } from '@/lib/formatters'
-  import { UNCATEGORIZED_CATEGORY_ID } from '@/lib/api'
+  import { UNCATEGORIZED_CATEGORY_ID, type TrendsResponseDto } from '@/lib/api'
   import {
     MAX_LINK_LIST,
     NO_CATEGORY,
@@ -73,6 +75,20 @@
     fetchData,
     hasLoaded,
   } = useDashboardData()
+
+  /** The trends the « Ce qui change » card loaded, for « À faire ». */
+  const trendsData = ref<TrendsResponseDto | null>(null)
+  /** « À faire »: what the summary and the trends ask the user to do. */
+  const todoItems = computed(() =>
+    composeTodoItems(
+      {
+        spendingStructure: spendingStructure.value,
+        pendingReceivables: pendingReceivables.value,
+        tagFamiliesOfYear: tagFamiliesOfYear.value,
+      },
+      trendsData.value
+    )
+  )
   const filtersStore = useFiltersStore()
   const accountsStore = useAccountsStore()
 
@@ -382,7 +398,12 @@
           :deduct-reimbursements="deductReimbursements"
           :deduct-pending-reimbursements="deductPendingReimbursements"
           :category-names="expenseCategoryNames"
+          @loaded="trendsData = $event"
         />
+
+        <!-- « À faire »: the lines to file, the money advanced, an envelope
+             over, a charge that moved. Renders nothing when nothing is to do. -->
+        <TodoCard class="mb-8" :items="todoItems" />
 
         <SpendingStructureCard
           v-if="spendingStructure && everydaySpendingStructure"

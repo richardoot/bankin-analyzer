@@ -1584,18 +1584,26 @@ describe('SpendingTrendsCard, compact (the dashboard)', () => {
     expect(wrapper.find('[data-testid="trends-all-link"]').exists()).toBe(false)
   })
 
-  it('keeps the lines to file, in small under the tiles', async () => {
+  it('leaves the lines to file to « À faire »', async () => {
     const wrapper = await mountCard({ compact: true })
 
-    const toFileLink = wrapper.get('[data-testid="trends-to-file"]')
-    expect(toFileLink.text()).toContain('12 dépenses à classer')
-    expect(toFileLink.classes()).toContain('text-xs')
+    expect(wrapper.find('[data-testid="trends-list"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="trends-to-file"]').exists()).toBe(false)
     expect(
-      wrapper
-        .get('[data-testid="trends-list"]')
-        .element.compareDocumentPosition(toFileLink.element) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy()
-    expect(wrapper.findAll('[data-testid="trends-to-file"]')).toHaveLength(1)
+      wrapper.find('[data-testid="trends-to-file-compact"]').exists()
+    ).toBe(false)
+  })
+
+  it('hands the trends it loaded to the page, in both modes', async () => {
+    for (const compact of [true, false]) {
+      const wrapper = await mountCard({ compact })
+      const emitted = wrapper.emitted('loaded') ?? []
+      // Null before the answer, then the answer itself.
+      expect(emitted[0]).toEqual([null])
+      const last = emitted[emitted.length - 1]?.[0] as
+        { insights: unknown[] } | undefined
+      expect(last?.insights).toHaveLength(5)
+      wrapper.unmount()
+    }
   })
 })

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-  import { computed, nextTick, onMounted, ref } from 'vue'
+  import { computed, nextTick, onMounted, ref, watch } from 'vue'
   import { RouterLink } from 'vue-router'
-  import type { TrendReading, TrendWindow } from '@/lib/api'
+  import type { TrendReading, TrendWindow, TrendsResponseDto } from '@/lib/api'
   import {
     useSpendingTrends,
     type TrendTab,
@@ -35,8 +35,8 @@
    *
    * `compact` is the dashboard's reading (agent-os/product/dashboard-refonte.md,
    * lot 2): the month and its window in the title, a link to the trends
-   * page with their count, the lead sentence, the three largest gaps, and
-   * the lines to file under them in small. No selector, no tab, no
+   * page with their count, the lead sentence, the three largest gaps. The
+   * lines to file are « À faire »'s (lot 3), not this card's. No selector, no tab, no
    * « Voir par groupe », no paragraph to unfold, no horizons, no scope note:
    * the full card lives on /trends.
    */
@@ -49,6 +49,11 @@
     /** The dashboard's short reading; the full card otherwise. */
     compact?: boolean | undefined
   }>()
+  /**
+   * The trends as loaded, for the page around the card: the dashboard
+   * composes « À faire » from them without a second request.
+   */
+  const emit = defineEmits<{ loaded: [data: TrendsResponseDto | null] }>()
 
   const {
     data,
@@ -78,6 +83,9 @@
   onMounted(() => {
     void fetchTrends()
   })
+
+  // The trends as loaded, handed to the page around the card.
+  watch(data, value => emit('loaded', value), { immediate: true })
 
   // The written paragraph (lot 5): folded, and asked at its first unfolding.
   const {
@@ -424,21 +432,6 @@
       >
         {{ data.quietSentence }}
       </p>
-
-      <!-- The lines to file, in small under the rest (lot 3 moves them to
-           « À faire »). -->
-      <RouterLink
-        v-if="toFile && toFileLink"
-        :to="toFileLink"
-        class="mt-3 inline-flex min-h-[44px] items-center gap-1.5 rounded text-xs font-medium text-gray-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 sm:min-h-0 dark:text-gray-400"
-        :aria-label="`${toFileText} : voir les transactions`"
-        data-testid="trends-to-file"
-      >
-        <span aria-hidden="true" class="text-amber-600 dark:text-amber-400"
-          >⚠</span
-        >
-        {{ toFileText }}
-      </RouterLink>
     </div>
 
     <div
