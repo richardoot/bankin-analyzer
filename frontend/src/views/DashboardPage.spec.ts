@@ -1245,5 +1245,86 @@ describe('DashboardPage', () => {
         1
       )
     })
+
+    describe('the unfolded lines', () => {
+      const segment = (name: string, amount: number) => ({
+        categoryId: `cat-${name}`,
+        category: name,
+        icon: null,
+        amount,
+        averagePerMonth: amount,
+      })
+      const breakdown = {
+        essential: [segment('Logement', 800)],
+        pleasure: [segment('Alimentation', 45.5)],
+        committed: [segment('Logement', 800)],
+        variable: [segment('Alimentation', 45.5)],
+      }
+      const shares = {
+        essential: [94.6, null],
+        pleasure: [5.4, null],
+        committed: [94.6, null],
+        variable: [5.4, null],
+      }
+      const unfolding: Partial<DashboardSummaryDto> = {
+        structureBreakdown: { everyday: breakdown, real: breakdown },
+        structureShareByMonth: { everyday: shares, real: shares },
+        totalExceptionalExpenses: 300,
+        exceptionalEvents: [
+          {
+            id: 'tag-1',
+            name: 'Vacances',
+            color: null,
+            icon: null,
+            familyId: 'fam-1',
+            familyName: 'Voyages',
+            familyColor: '#3b82f6',
+            amount: 300,
+          },
+        ],
+        exceptionalByCategory: [
+          {
+            categoryId: 'cat-Transport',
+            category: 'Transport',
+            icon: null,
+            amount: 300,
+          },
+        ],
+      }
+
+      it('passes the structure breakdown, the shares and the months to the lines', async () => {
+        const wrapper = await mountWhere(unfolding)
+
+        const lines = wrapper.findComponent({ name: 'StructureLines' })
+        expect(lines.props('breakdown')).toEqual(unfolding.structureBreakdown)
+        expect(lines.props('shareByMonth')).toEqual(
+          unfolding.structureShareByMonth
+        )
+        expect(lines.props('monthLabels')).toEqual(['2025-11', '2026-10'])
+      })
+
+      it('loads folded, then opens a segment in place, under its line', async () => {
+        const wrapper = await mountWhere(unfolding)
+        const card = wrapper.get('[data-testid="dashboard-where-card"]')
+        expect(card.find('[data-testid^="structure-panel-"]').exists()).toBe(
+          false
+        )
+        expect(card.find('[data-testid="events-panel"]').exists()).toBe(false)
+
+        await card
+          .get('[data-testid="structure-toggle-pleasure"]')
+          .trigger('click')
+
+        const panel = card
+          .get('[data-testid="structure-region-nature"]')
+          .get('[data-testid="structure-panel-pleasure"]')
+        expect(
+          panel
+            .find('[data-testid="structure-panel-row-cat-Alimentation"]')
+            .exists()
+        ).toBe(true)
+        expect(router.currentRoute.value.path).not.toBe('/transactions')
+      })
+    })
   })
 })

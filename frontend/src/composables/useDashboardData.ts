@@ -144,6 +144,18 @@ export function useDashboardData() {
   const tagFamiliesOfYear = computed(
     () => summaryData.value?.tagFamiliesOfYear ?? []
   )
+  // What the unfolded lines of « Où part l'argent » read: each structure
+  // segment by category and its share month by month, on both readings, and
+  // the events by category. Absent on an older server.
+  const structureBreakdown = computed(
+    () => summaryData.value?.structureBreakdown ?? null
+  )
+  const structureShareByMonth = computed(
+    () => summaryData.value?.structureShareByMonth ?? null
+  )
+  const exceptionalByCategory = computed(
+    () => summaryData.value?.exceptionalByCategory ?? []
+  )
 
   /**
    * The months the averages read, and their number: the server's
@@ -404,6 +416,9 @@ export function useDashboardData() {
     savingsRate,
     remainingToLive,
     tagFamiliesOfYear,
+    structureBreakdown,
+    structureShareByMonth,
+    exceptionalByCategory,
     isLoading,
     error,
     fetchData,

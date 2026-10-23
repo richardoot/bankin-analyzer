@@ -7,16 +7,24 @@
    * share bars' blue-400: the fill is the left share, the track the right
    * one, the labels say both.
    *
-   * Each label is a button that will unfold its segment in place (lot 5);
-   * until then it opens the segment's expenses on the Transactions page,
-   * as the arrow beside it does. The rows predating the catalogue carry no
+   * Each label is a button that unfolds its segment in place, under its
+   * line (lot 5): one panel open per line, folded on load, the state kept
+   * nowhere. The arrow beside it opens the segment's expenses on the
+   * Transactions page. The rows predating the catalogue carry no
    * attribute: they stay out of both shares, and a note says how much.
    */
-  import { computed } from 'vue'
-  import { RouterLink, useRouter } from 'vue-router'
-  import type { SpendingStructureDto } from '@/lib/api'
+  import { computed, nextTick, ref } from 'vue'
+  import { RouterLink } from 'vue-router'
+  import type {
+    SpendingStructureDto,
+    StructureBreakdownDto,
+    StructureReadings,
+    StructureSegment,
+    StructureShareDto,
+  } from '@/lib/api'
   import { formatCompactCurrency } from '@/lib/formatters'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import StructurePanel from './StructurePanel.vue'
   import {
     transactionsLink,
     type NatureFilter,
@@ -34,16 +42,20 @@
     periodMonths: number
     /** The period, for the links to the Transactions page. */
     window?: { from?: string | undefined; to?: string | undefined } | undefined
+    /** Each segment's categories, on both readings: what a panel lists. */
+    breakdown?: StructureReadings<StructureBreakdownDto> | null | undefined
+    /** Each segment's share month by month, on both readings. */
+    shareByMonth?: StructureReadings<StructureShareDto> | null | undefined
+    /** The months of the period, `YYYY-MM`, the shares aligned on them. */
+    monthLabels?: string[] | undefined
   }>()
-
-  const router = useRouter()
 
   const structure = computed(() =>
     props.reading === 'everyday' ? props.everyday : props.actual
   )
 
   interface Side {
-    key: string
+    key: StructureSegment
     label: string
     amount: number
     filter: { nature: NatureFilter } | { rhythm: RhythmFilter }
@@ -117,9 +129,32 @@
     })
   }
 
-  /** Lot 4: the label opens the segment's expenses; lot 5 unfolds it. */
-  function openSegment(side: Side): void {
-    void router.push(segmentLink(side))
+  /** The segment unfolded under each line, if any: one at a time. */
+  const open = ref<Record<Line['key'], StructureSegment | null>>({
+    nature: null,
+    rhythm: null,
+  })
+
+  function toggle(line: Line['key'], side: Side): void {
+    open.value[line] = open.value[line] === side.key ? null : side.key
+  }
+
+  /** Échap folds the panel and gives the focus back to its label. */
+  async function close(line: Line['key']): Promise<void> {
+    const segment = open.value[line]
+    open.value[line] = null
+    if (!segment) return
+    await nextTick()
+    document.getElementById(toggleId(segment))?.focus()
+  }
+
+  const panelId = (line: Line['key']) => `structure-panel-region-${line}`
+  const toggleId = (segment: StructureSegment) => `structure-toggle-${segment}`
+
+  /** The side unfolded under a line: none, or one. */
+  function openSides(item: Line): Side[] {
+    const segment = open.value[item.key]
+    return [item.left, item.right].filter(side => side.key === segment)
   }
 
   const percent = (share: number) => `${Math.round(share * 100)}\u202f%`
@@ -133,71 +168,98 @@
 
 <template>
   <div data-testid="structure-lines" class="space-y-3">
-    <div
-      v-for="item in lines"
-      :key="item.key"
-      :data-testid="`structure-line-${item.key}`"
-      class="grid grid-cols-[auto_minmax(3rem,1fr)_auto] items-center gap-x-3 sm:grid-cols-[150px_minmax(0,1fr)_150px]"
-    >
-      <span class="flex min-w-0 items-center gap-1">
-        <button
-          type="button"
-          class="flex min-w-0 items-baseline gap-1.5 rounded py-1 text-left text-sm text-gray-700 hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 dark:text-gray-300 dark:hover:text-gray-100"
-          aria-expanded="false"
-          :data-testid="`structure-toggle-${item.left.key}`"
-          @click="openSegment(item.left)"
-        >
-          <span class="truncate">{{ item.left.label }}</span>
-          <span
-            class="font-semibold text-gray-900 tabular-nums dark:text-gray-100"
-            >{{ percent(item.left.share) }}</span
-          >
-        </button>
-        <TransactionsLink
-          :to="segmentLink(item.left)"
-          :subject="`Dépenses · ${item.left.label}`"
-          icon-only
-          class="-my-1 h-6 w-6"
-          :data-testid="`structure-link-${item.key}-${item.left.key}`"
-        />
-      </span>
-
+    <template v-for="item in lines" :key="item.key">
       <div
-        role="img"
-        :aria-label="`${item.left.label} ${percent(item.left.share)}, ${item.right.label} ${percent(item.right.share)}`"
-        class="h-2.5 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
-        :data-testid="`structure-track-${item.key}`"
+        :data-testid="`structure-line-${item.key}`"
+        class="grid grid-cols-[auto_minmax(3rem,1fr)_auto] items-center gap-x-3 sm:grid-cols-[150px_minmax(0,1fr)_150px]"
       >
+        <span class="flex min-w-0 items-center gap-1">
+          <button
+            :id="toggleId(item.left.key)"
+            type="button"
+            class="flex min-w-0 items-baseline gap-1.5 rounded py-1 text-left text-sm text-gray-700 hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 dark:text-gray-300 dark:hover:text-gray-100"
+            :aria-expanded="open[item.key] === item.left.key"
+            :aria-controls="panelId(item.key)"
+            :data-testid="`structure-toggle-${item.left.key}`"
+            @click="toggle(item.key, item.left)"
+          >
+            <span class="truncate">{{ item.left.label }}</span>
+            <span
+              class="font-semibold text-gray-900 tabular-nums dark:text-gray-100"
+              >{{ percent(item.left.share) }}</span
+            >
+          </button>
+          <TransactionsLink
+            :to="segmentLink(item.left)"
+            :subject="`Dépenses · ${item.left.label}`"
+            icon-only
+            class="-my-1 h-6 w-6"
+            :data-testid="`structure-link-${item.key}-${item.left.key}`"
+          />
+        </span>
+
         <div
-          class="h-full rounded-full bg-blue-400"
-          :data-testid="`structure-fill-${item.key}`"
-          :style="{ width: `${item.left.share * 100}%` }"
-        />
+          role="img"
+          :aria-label="`${item.left.label} ${percent(item.left.share)}, ${item.right.label} ${percent(item.right.share)}`"
+          class="h-2.5 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
+          :data-testid="`structure-track-${item.key}`"
+        >
+          <div
+            class="h-full rounded-full bg-blue-400"
+            :data-testid="`structure-fill-${item.key}`"
+            :style="{ width: `${item.left.share * 100}%` }"
+          />
+        </div>
+
+        <span class="flex min-w-0 items-center justify-end gap-1">
+          <button
+            :id="toggleId(item.right.key)"
+            type="button"
+            class="flex min-w-0 items-baseline gap-1.5 rounded py-1 text-right text-sm text-gray-700 hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 dark:text-gray-300 dark:hover:text-gray-100"
+            :aria-expanded="open[item.key] === item.right.key"
+            :aria-controls="panelId(item.key)"
+            :data-testid="`structure-toggle-${item.right.key}`"
+            @click="toggle(item.key, item.right)"
+          >
+            <span class="truncate">{{ item.right.label }}</span>
+            <span
+              class="font-semibold text-gray-900 tabular-nums dark:text-gray-100"
+              >{{ percent(item.right.share) }}</span
+            >
+          </button>
+          <TransactionsLink
+            :to="segmentLink(item.right)"
+            :subject="`Dépenses · ${item.right.label}`"
+            icon-only
+            class="-my-1 h-6 w-6"
+            :data-testid="`structure-link-${item.key}-${item.right.key}`"
+          />
+        </span>
       </div>
 
-      <span class="flex min-w-0 items-center justify-end gap-1">
-        <button
-          type="button"
-          class="flex min-w-0 items-baseline gap-1.5 rounded py-1 text-right text-sm text-gray-700 hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 dark:text-gray-300 dark:hover:text-gray-100"
-          aria-expanded="false"
-          :data-testid="`structure-toggle-${item.right.key}`"
-          @click="openSegment(item.right)"
-        >
-          <span class="truncate">{{ item.right.label }}</span>
-          <span
-            class="font-semibold text-gray-900 tabular-nums dark:text-gray-100"
-            >{{ percent(item.right.share) }}</span
-          >
-        </button>
-        <TransactionsLink
-          :to="segmentLink(item.right)"
-          :subject="`Dépenses · ${item.right.label}`"
-          icon-only
-          class="-my-1 h-6 w-6"
-          :data-testid="`structure-link-${item.key}-${item.right.key}`"
+      <!-- Where the line unfolds: always there, so a label controls it;
+           out of the flow while folded. -->
+      <div
+        :id="panelId(item.key)"
+        :class="{ hidden: !open[item.key] }"
+        :data-testid="`structure-region-${item.key}`"
+      >
+        <StructurePanel
+          v-for="side in openSides(item)"
+          :key="side.key"
+          :segment="side.key"
+          :label="side.label"
+          :filter="side.filter"
+          :reading="reading"
+          :everyday-categories="breakdown?.everyday[side.key] ?? []"
+          :real-categories="breakdown?.real[side.key] ?? []"
+          :share="shareByMonth?.[reading][side.key] ?? null"
+          :month-labels="monthLabels ?? []"
+          :window="window"
+          @close="close(item.key)"
         />
-      </span>
-    </div>
+      </div>
+    </template>
 
     <p
       class="text-xs text-gray-500 tabular-nums dark:text-gray-400"

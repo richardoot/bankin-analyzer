@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { mount, enableAutoUnmount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import StructureLines from './StructureLines.vue'
 import type { SpendingStructureDto } from '@/lib/api'
@@ -158,30 +159,178 @@ describe('StructureLines', () => {
     ).not.toContain('exceptional')
   })
 
-  it('makes each label a folded button that opens its expenses until it unfolds', async () => {
-    const router = makeRouter()
-    const push = vi.spyOn(router, 'push')
-    const wrapper = mountLines({}, router)
-
-    const buttons = wrapper.findAll('button[aria-expanded]')
-    expect(buttons).toHaveLength(4)
-    for (const button of buttons) {
-      expect(button.attributes('aria-expanded')).toBe('false')
+  describe('unfolding a segment', () => {
+    const row = (categoryId: string, amount: number) => ({
+      categoryId,
+      category: categoryId,
+      icon: null,
+      amount,
+      averagePerMonth: amount / 3,
+    })
+    const segments = (rows: ReturnType<typeof row>[]) => ({
+      essential: rows,
+      pleasure: rows,
+      committed: rows,
+      variable: rows,
+    })
+    const breakdown = {
+      everyday: segments([row('Restaurants', 150), row('Loisirs', 100)]),
+      real: segments([row('Voyages', 250), row('Restaurants', 150)]),
     }
+    const series = [null, 30, 40] as (number | null)[]
+    const shareByMonth = {
+      everyday: {
+        essential: series,
+        pleasure: series,
+        committed: series,
+        variable: series,
+      },
+      real: {
+        essential: series,
+        pleasure: series,
+        committed: series,
+        variable: series,
+      },
+    }
+    const unfolded = (
+      overrides: Partial<InstanceType<typeof StructureLines>['$props']> = {},
+      router = makeRouter()
+    ) =>
+      mountLines(
+        {
+          breakdown,
+          shareByMonth,
+          monthLabels: ['2026-01', '2026-02', '2026-03'],
+          ...overrides,
+        },
+        router
+      )
+    const toggle = (wrapper: ReturnType<typeof mountLines>, key: string) =>
+      wrapper.get(`[data-testid="structure-toggle-${key}"]`)
 
-    await wrapper
-      .get('[data-testid="structure-toggle-variable"]')
-      .trigger('click')
-    expect(push).toHaveBeenCalledWith(
-      expect.objectContaining({
-        path: '/transactions',
-        query: expect.objectContaining({
-          type: 'EXPENSE',
-          rhythm: 'VARIABLE',
-          exceptional: 'exclude',
-        }),
+    it('keeps every panel folded on load, each label controlling its line', () => {
+      const wrapper = unfolded()
+
+      const buttons = wrapper.findAll('button[aria-expanded]')
+      expect(buttons).toHaveLength(4)
+      for (const button of buttons) {
+        expect(button.attributes('aria-expanded')).toBe('false')
+      }
+      expect(wrapper.find('[data-testid^="structure-panel-"]').exists()).toBe(
+        false
+      )
+      // The region a label controls is there, empty, folded or not.
+      const controls = toggle(wrapper, 'pleasure').attributes('aria-controls')
+      expect(controls).toBe('structure-panel-region-nature')
+      expect(
+        wrapper.get('[data-testid="structure-region-nature"]').attributes('id')
+      ).toBe(controls)
+      expect(toggle(wrapper, 'committed').attributes('aria-controls')).toBe(
+        'structure-panel-region-rhythm'
+      )
+    })
+
+    it('opens the segment under its own line, in place, without leaving the page', async () => {
+      const router = makeRouter()
+      const push = vi.spyOn(router, 'push')
+      const wrapper = unfolded({}, router)
+
+      await toggle(wrapper, 'pleasure').trigger('click')
+
+      expect(push).not.toHaveBeenCalled()
+      expect(toggle(wrapper, 'pleasure').attributes('aria-expanded')).toBe(
+        'true'
+      )
+      const region = wrapper.get('[data-testid="structure-region-nature"]')
+      const panel = region.get('[data-testid="structure-panel-pleasure"]')
+      expect(
+        panel.find('[data-testid="structure-panel-row-Restaurants"]').exists()
+      ).toBe(true)
+      expect(
+        wrapper
+          .get('[data-testid="structure-region-rhythm"]')
+          .find('[data-testid^="structure-panel-"]')
+          .exists()
+      ).toBe(false)
+    })
+
+    it('opens one panel per line: the other side takes its place, a second press folds it', async () => {
+      const wrapper = unfolded()
+
+      await toggle(wrapper, 'pleasure').trigger('click')
+      await toggle(wrapper, 'essential').trigger('click')
+      expect(
+        wrapper.findAll('[data-testid="structure-region-nature"] > *')
+      ).toHaveLength(1)
+      expect(
+        wrapper.find('[data-testid="structure-panel-essential"]').exists()
+      ).toBe(true)
+      expect(
+        wrapper.find('[data-testid="structure-panel-pleasure"]').exists()
+      ).toBe(false)
+      expect(toggle(wrapper, 'pleasure').attributes('aria-expanded')).toBe(
+        'false'
+      )
+      expect(toggle(wrapper, 'essential').attributes('aria-expanded')).toBe(
+        'true'
+      )
+
+      // The other line opens on its own, the first stays open.
+      await toggle(wrapper, 'variable').trigger('click')
+      expect(
+        wrapper.find('[data-testid="structure-panel-variable"]').exists()
+      ).toBe(true)
+      expect(
+        wrapper.find('[data-testid="structure-panel-essential"]').exists()
+      ).toBe(true)
+
+      await toggle(wrapper, 'essential').trigger('click')
+      expect(
+        wrapper.find('[data-testid="structure-panel-essential"]').exists()
+      ).toBe(false)
+      expect(toggle(wrapper, 'essential').attributes('aria-expanded')).toBe(
+        'false'
+      )
+    })
+
+    it('lists the composition of the reading', async () => {
+      const wrapper = unfolded({ reading: 'real' })
+
+      await toggle(wrapper, 'pleasure').trigger('click')
+      expect(
+        wrapper.find('[data-testid="structure-panel-row-Voyages"]').exists()
+      ).toBe(true)
+      expect(
+        wrapper.find('[data-testid="structure-panel-row-Loisirs"]').exists()
+      ).toBe(false)
+    })
+
+    it('folds on Échap and gives the focus back to the label', async () => {
+      const wrapper = mount(StructureLines, {
+        props: {
+          actual,
+          everyday,
+          reading: 'everyday',
+          periodMonths: 3,
+          breakdown,
+          shareByMonth,
+          monthLabels: ['2026-01', '2026-02', '2026-03'],
+        },
+        global: { plugins: [makeRouter()] },
+        attachTo: document.body,
       })
-    )
+
+      await toggle(wrapper, 'pleasure').trigger('click')
+      await wrapper
+        .get('[data-testid="structure-panel-pleasure"]')
+        .trigger('keydown', { key: 'Escape' })
+      await nextTick()
+
+      expect(
+        wrapper.find('[data-testid="structure-panel-pleasure"]').exists()
+      ).toBe(false)
+      expect(document.activeElement).toBe(toggle(wrapper, 'pleasure').element)
+    })
   })
 
   it('says what is still to migrate, only when some is', () => {

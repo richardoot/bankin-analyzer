@@ -1019,7 +1019,50 @@ export interface ExceptionalEventDto {
   name: string
   color: string | null
   icon: string | null
+  /** The tag's family, null without one; absent on an older server. */
+  familyId?: string | null
+  familyName?: string | null
+  familyColor?: string | null
   amount: number
+}
+
+/** One category of the period's exceptional expenses. */
+export interface ExceptionalCategoryDto {
+  categoryId: string
+  category: string
+  icon: string | null
+  amount: number
+}
+
+/** One category inside one segment of the structure. */
+export interface StructureCategoryDto {
+  categoryId: string
+  category: string
+  icon: string | null
+  amount: number
+  /** Over the closed months (`periodMonths`). */
+  averagePerMonth: number
+}
+
+export type StructureSegment =
+  'essential' | 'pleasure' | 'committed' | 'variable'
+
+/** Each segment's categories, the heaviest first; they sum to the segment. */
+export type StructureBreakdownDto = Record<
+  StructureSegment,
+  StructureCategoryDto[]
+>
+
+/**
+ * Each segment's share of every month of `monthLabels`, in percent to the
+ * tenth — the share trend's series; null on a month with nothing spent.
+ */
+export type StructureShareDto = Record<StructureSegment, (number | null)[]>
+
+/** Both readings, as the two structures are. */
+export interface StructureReadings<T> {
+  everyday: T
+  real: T
 }
 
 /**
@@ -1188,6 +1231,12 @@ export interface DashboardSummaryDto {
   realExpensesOfYear?: number | null
   /** Exceptional expenses of that year: the family share's denominator. Null without families. */
   exceptionalExpensesOfYear?: number | null
+  /** The categories of each structure segment (only with includeCategoryBreakdown). */
+  structureBreakdown?: StructureReadings<StructureBreakdownDto>
+  /** Each segment's share month by month (only with includeCategoryBreakdown). */
+  structureShareByMonth?: StructureReadings<StructureShareDto>
+  /** The period's exceptional expenses by category (only with includeCategoryBreakdown). */
+  exceptionalByCategory?: ExceptionalCategoryDto[]
 }
 
 // Budget plan DTOs

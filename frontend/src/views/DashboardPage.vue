@@ -51,6 +51,8 @@
     spendingStructure,
     everydaySpendingStructure,
     tagFamiliesOfYear,
+    structureBreakdown,
+    structureShareByMonth,
     pendingReceivables,
     expenseCategoriesDetailed,
     monthLabels,
@@ -341,6 +343,9 @@
               :reading="breakdownMode"
               :period-months="periodMonths"
               :window="linkWindow"
+              :breakdown="structureBreakdown"
+              :share-by-month="structureShareByMonth"
+              :month-labels="monthLabels"
             />
 
             <!-- The months: a column opens its month, the link under the
