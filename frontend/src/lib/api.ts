@@ -1754,6 +1754,57 @@ export interface TrendDigestDto {
   stale: boolean
 }
 
+/** A charge of an active recurrence still expected this month. */
+export interface DashboardUpcomingDto {
+  id: string
+  /** The user's name for the service, else its label's. */
+  name: string
+  /** The user's share of its latest charge, positive. */
+  amount: number
+  /** `YYYY-MM-DD`; before `asOf` when it is late, still to come. */
+  nextExpected: string
+  categoryId: string | null
+}
+
+/**
+ * « Ce mois-ci »: the current month to date against the habit, the median
+ * of the six closed months before it. See the backend DTO for each field.
+ */
+export interface DashboardMonthDto {
+  /** `YYYY-MM` */
+  month: string
+  asOfDay: number
+  daysInMonth: number
+  /** Net expenses to date, in the reading. */
+  spent: number
+  /** The closed months the habit reads, oldest first, then the current one. */
+  spentSeries: number[]
+  /** Null under three closed months of history. */
+  habit: number | null
+  /** `habit × asOfDay / daysInMonth`. */
+  habitToDate: number | null
+  habitMonths: number
+  incomeReceived: number
+  incomeExpected: number | null
+  /** The closed months the habit reads, oldest first. */
+  incomeSeries: number[]
+  /** By date; a late one first, still to come. */
+  upcoming: DashboardUpcomingDto[]
+  upcomingTotal: number
+  /** `incomeExpected − spent − upcomingTotal`. */
+  remainingToLive: number | null
+  /** `remainingToLive / incomeExpected`, 0.25 for 25 %. */
+  remainingShare: number | null
+}
+
+export interface DashboardMonthQuery {
+  reading?: TrendReading | undefined
+  deductReimbursements?: boolean | undefined
+  deductPendingReimbursements?: boolean | undefined
+  /** `YYYY-MM-DD`; today in Paris when absent. */
+  asOf?: string | undefined
+}
+
 export interface TrendsQuery {
   month?: string | undefined
   window?: TrendWindow | undefined
@@ -2582,6 +2633,36 @@ export const api = {
     }
 
     return response.json() as Promise<DashboardSummaryDto>
+  },
+
+  /**
+   * « Ce mois-ci »: its own request, sent beside the summary, never after
+   * it. It follows the reading and the reimbursement switches, never the
+   * period.
+   */
+  async getDashboardMonth(
+    query: DashboardMonthQuery = {}
+  ): Promise<DashboardMonthDto> {
+    const params = new URLSearchParams()
+    if (query.reading) params.set('reading', query.reading)
+    if (query.deductReimbursements !== undefined)
+      params.set('deductReimbursements', String(query.deductReimbursements))
+    if (query.deductPendingReimbursements !== undefined)
+      params.set(
+        'deductPendingReimbursements',
+        String(query.deductPendingReimbursements)
+      )
+    if (query.asOf) params.set('asOf', query.asOf)
+    const search = params.toString()
+    const response = await fetchWithAuth(
+      `${API_BASE_URL}/dashboard/month${search ? `?${search}` : ''}`
+    )
+
+    if (!response.ok) {
+      throw new Error("La lecture du mois n'a pas pu être chargée")
+    }
+
+    return response.json() as Promise<DashboardMonthDto>
   },
 
   /**

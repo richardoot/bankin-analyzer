@@ -6,6 +6,8 @@ import { AmortizedSlicesService } from '../transactions/amortized-slices.service
 import type { SmoothedPurchaseRow } from '../transactions/amortized-slices.service'
 import { FilterPreferencesService } from '../filter-preferences/filter-preferences.service'
 import { RecurrencesService } from '../recurrences/recurrences.service'
+import { netAmountSql } from '../reimbursements/reimbursement-credit.sql'
+import type { RecurrenceOfMonthRow } from './dashboard.service'
 
 /** Brought up to date before every summary; a cache these tests do not read. */
 const mockRecurrences = { refreshQuietly: vi.fn() }
@@ -2279,6 +2281,379 @@ describe('DashboardService', () => {
 
       expect(result.periodMonths).toBe(1)
       expect(result.expensesByCategory[0]?.averagePerMonth).toBe(300)
+    })
+  })
+  describe('the month band', () => {
+    /** The reading day: October 2026 on its 23rd, September the last closed month. */
+    const AS_OF = '2026-10-23'
+
+    /**
+     * A small ledger, month by month: the everyday spending, the events on
+     * top of it, the income. Read back as the aggregation rows query 1
+     * returns, already net.
+     */
+    const LEDGER: Record<
+      string,
+      { everyday: number; events?: number; income?: number }
+    > = {
+      '2026-04': { everyday: 1500, income: 2500 },
+      '2026-05': { everyday: 1700, income: 2500 },
+      '2026-06': { everyday: 1600, events: 600, income: 2500 },
+      '2026-07': { everyday: 1400, income: 2600 },
+      '2026-08': { everyday: 1800, events: 900, income: 2500 },
+      '2026-09': { everyday: 1650, income: 2500 },
+      // To date, and no salary yet: it lands on the 28th.
+      '2026-10': { everyday: 1000, events: 300 },
+    }
+
+    function ledgerRows(
+      ledger: typeof LEDGER = LEDGER
+    ): ReturnType<typeof createRow>[] {
+      return Object.entries(ledger).flatMap(([month, m]) => [
+        createRow({
+          month_key: month,
+          category_name: 'Alimentation',
+          total_amount: m.everyday,
+        }),
+        ...(m.events
+          ? [
+              createRow({
+                month_key: month,
+                category_name: 'Voyages',
+                is_exceptional: true,
+                total_amount: m.events,
+              }),
+            ]
+          : []),
+        ...(m.income
+          ? [
+              createRow({
+                month_key: month,
+                category_name: 'Salaires',
+                type: 'INCOME',
+                total_amount: m.income,
+              }),
+            ]
+          : []),
+        // A transfer to savings moves nothing.
+        createRow({
+          month_key: month,
+          category_name: 'Épargne',
+          type: 'TRANSFER',
+          total_amount: -400,
+        }),
+      ])
+    }
+
+    function recurrence(
+      overrides: Partial<RecurrenceOfMonthRow>
+    ): RecurrenceOfMonthRow {
+      return {
+        id: 'rec',
+        name: 'Série',
+        status: 'ACTIVE',
+        amount: 10,
+        next_expected: '2026-10-28',
+        category_id: 'cat-Abonnements',
+        charged_this_month: false,
+        excluded: false,
+        ...overrides,
+      }
+    }
+
+    const RECURRENCES: RecurrenceOfMonthRow[] = [
+      recurrence({ id: 'netflix', name: 'Netflix', amount: 13.49 }),
+      // Late: due on the 5th, not charged yet — still to come.
+      recurrence({
+        id: 'rent',
+        name: 'Loyer',
+        amount: 700,
+        next_expected: '2026-10-05',
+      }),
+      // Due today, whatever fell earlier this month.
+      recurrence({
+        id: 'edf',
+        name: 'EDF',
+        amount: 80,
+        next_expected: AS_OF,
+        charged_this_month: true,
+      }),
+      // Due earlier and already charged this month: nothing more to come.
+      recurrence({
+        id: 'spotify',
+        name: 'Spotify',
+        next_expected: '2026-10-10',
+        charged_this_month: true,
+      }),
+      recurrence({ id: 'gym', name: 'Salle', status: 'STOPPED' }),
+      recurrence({ id: 'trial', name: 'Essai', status: 'CANDIDATE' }),
+      recurrence({
+        id: 'insurance',
+        name: 'Assurance',
+        next_expected: '2026-11-02',
+      }),
+      recurrence({ id: 'pro', name: 'Outil pro', excluded: true }),
+    ]
+
+    function setupMonth(
+      rows = ledgerRows(),
+      historyStart: string | null = '2025-01-05',
+      recurrences = RECURRENCES
+    ): void {
+      mockPrismaService.$queryRaw
+        .mockResolvedValueOnce(rows)
+        .mockResolvedValueOnce([{ start: historyStart }])
+        .mockResolvedValueOnce(recurrences)
+    }
+
+    it('reads the habit as the median of the six closed months, prorated to the day', async () => {
+      setupMonth()
+
+      const result = await service.getMonth(mockUserId, { asOf: AS_OF })
+
+      expect(mockRecurrences.refreshQuietly).toHaveBeenCalledWith(mockUserId)
+      expect(result.month).toBe('2026-10')
+      expect(result.asOfDay).toBe(23)
+      expect(result.daysInMonth).toBe(31)
+      // Vie courante by default: the events are out.
+      expect(result.spent).toBe(1000)
+      expect(result.spentSeries).toEqual([
+        1500, 1700, 1600, 1400, 1800, 1650, 1000,
+      ])
+      // 1400 1500 1600 | 1650 1700 1800.
+      expect(result.habit).toBe(1625)
+      expect(result.habitMonths).toBe(6)
+      // 1625 × 23 / 31.
+      expect(result.habitToDate).toBe(1205.65)
+    })
+
+    it('reads the current month without its salary yet against the expected income', async () => {
+      setupMonth()
+
+      const result = await service.getMonth(mockUserId, { asOf: AS_OF })
+
+      expect(result.incomeReceived).toBe(0)
+      expect(result.incomeSeries).toEqual([2500, 2500, 2500, 2600, 2500, 2500])
+      expect(result.incomeExpected).toBe(2500)
+      // 2500 − 1000 − 793.49.
+      expect(result.remainingToLive).toBe(706.51)
+      expect(result.remainingShare).toBe(0.2826)
+    })
+
+    it('counts the active recurrences still due this month, late ones included, by date', async () => {
+      setupMonth()
+
+      const result = await service.getMonth(mockUserId, { asOf: AS_OF })
+
+      expect(result.upcoming).toEqual([
+        {
+          id: 'rent',
+          name: 'Loyer',
+          amount: 700,
+          nextExpected: '2026-10-05',
+          categoryId: 'cat-Abonnements',
+        },
+        {
+          id: 'edf',
+          name: 'EDF',
+          amount: 80,
+          nextExpected: AS_OF,
+          categoryId: 'cat-Abonnements',
+        },
+        {
+          id: 'netflix',
+          name: 'Netflix',
+          amount: 13.49,
+          nextExpected: '2026-10-28',
+          categoryId: 'cat-Abonnements',
+        },
+      ])
+      // Neither the stopped series, the candidate, next month's insurance,
+      // the one already charged nor the stats-excluded one.
+      expect(result.upcomingTotal).toBe(793.49)
+    })
+
+    it('reads everything in « Tout », events included, habit and month alike', async () => {
+      setupMonth()
+
+      const result = await service.getMonth(mockUserId, {
+        asOf: AS_OF,
+        reading: 'real',
+      })
+
+      expect(result.spent).toBe(1300)
+      expect(result.spentSeries).toEqual([
+        1500, 1700, 2200, 1400, 2700, 1650, 1300,
+      ])
+      // 1400 1500 1650 | 1700 2200 2700.
+      expect(result.habit).toBe(1675)
+      expect(result.habitToDate).toBe(1242.74)
+      expect(result.remainingToLive).toBe(406.51)
+    })
+
+    it('spreads a smoothed purchase into its slices in the everyday reading only', async () => {
+      setupMonth()
+      mockAmortizedSlices.read.mockResolvedValue([
+        smoothedRow({
+          net: 1200,
+          source_month: '2026-10',
+          source_in_window: true,
+          slices: [{ month: '2026-10', amount: 100 }],
+        }),
+      ])
+      const everyday = await service.getMonth(mockUserId, { asOf: AS_OF })
+      // The month spent the 1 200 € it carries? No: a slice of 100 €.
+      expect(everyday.spent).toBe(1000 - 1200 + 100)
+
+      setupMonth()
+      const real = await service.getMonth(mockUserId, {
+        asOf: AS_OF,
+        reading: 'real',
+      })
+      expect(real.spent).toBe(1300)
+    })
+
+    it('has no habit under three closed months, and keeps the figures', async () => {
+      // The first transaction on 10 July: July is not whole, August and
+      // September are.
+      setupMonth(ledgerRows(), '2026-07-10')
+
+      const result = await service.getMonth(mockUserId, { asOf: AS_OF })
+
+      expect(result.habitMonths).toBe(2)
+      expect(result.habit).toBeNull()
+      expect(result.habitToDate).toBeNull()
+      expect(result.incomeExpected).toBeNull()
+      expect(result.remainingToLive).toBeNull()
+      expect(result.remainingShare).toBeNull()
+      expect(result.spent).toBe(1000)
+      expect(result.spentSeries).toEqual([1800, 1650, 1000])
+      expect(result.incomeSeries).toEqual([2500, 2500])
+      expect(result.upcomingTotal).toBe(793.49)
+    })
+
+    it('counts a month the history covers but nothing was spent in as zero', async () => {
+      const { '2026-05': _quiet, ...rest } = LEDGER
+      setupMonth(ledgerRows(rest))
+
+      const result = await service.getMonth(mockUserId, { asOf: AS_OF })
+
+      expect(result.spentSeries).toEqual([
+        1500, 0, 1600, 1400, 1800, 1650, 1000,
+      ])
+      // 0 1400 1500 | 1600 1650 1800.
+      expect(result.habit).toBe(1550)
+    })
+
+    it('reads the window up to the end of the day it is read at, in the summary scope', async () => {
+      setupMonth()
+
+      await service.getMonth(mockUserId, { asOf: AS_OF })
+
+      const [aggregation] = mockPrismaService.$queryRaw.mock.calls[0] as [
+        { strings: string[]; values: unknown[] },
+      ]
+      expect(aggregation.strings.join('')).toContain('is_excluded_from_stats')
+      expect(aggregation.values).toContainEqual(
+        new Date('2026-04-01T00:00:00.000Z')
+      )
+      expect(aggregation.values).toContainEqual(
+        new Date('2026-10-23T23:59:59.999Z')
+      )
+      const [slices] = mockAmortizedSlices.read.mock.calls[0] as [
+        { firstMonth: string; lastMonth: string },
+      ]
+      expect(slices.firstMonth).toBe('2026-04-01')
+      expect(slices.lastMonth).toBe('2026-10-01')
+    })
+
+    it('reads today in Paris when no day is given', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      // 23:30 UTC on 31 October is already 1 November in Paris.
+      vi.setSystemTime(new Date('2026-10-31T23:30:00.000Z'))
+      try {
+        setupMonth()
+        const result = await service.getMonth(mockUserId, {})
+        expect(result.month).toBe('2026-11')
+        expect(result.asOfDay).toBe(1)
+        expect(result.daysInMonth).toBe(30)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    describe('the reimbursements', () => {
+      const netAmountOf = (): string => {
+        const [query] = mockAmortizedSlices.read.mock.calls[0] as [
+          { netAmount: { sql: string } },
+        ]
+        return query.netAmount.sql
+      }
+      const aggregationOf = (): string => {
+        const [aggregation] = mockPrismaService.$queryRaw.mock.calls[0] as [
+          { sql: string },
+        ]
+        return aggregation.sql
+      }
+
+      it('deducts both by default, the debts still owed as the preference says', async () => {
+        mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
+          true
+        )
+        setupMonth()
+
+        await service.getMonth(mockUserId, { asOf: AS_OF })
+
+        expect(
+          mockFilterPreferencesService.deductsPendingByDefault
+        ).toHaveBeenCalledWith(mockUserId)
+        const expected = netAmountSql({
+          deductReceived: true,
+          deductPending: true,
+        }).sql
+        expect(netAmountOf()).toBe(expected)
+        expect(aggregationOf()).toContain(expected)
+      })
+
+      it('follows the switches when the request says them', async () => {
+        mockFilterPreferencesService.deductsPendingByDefault.mockResolvedValue(
+          true
+        )
+        setupMonth()
+
+        await service.getMonth(mockUserId, {
+          asOf: AS_OF,
+          deductReimbursements: false,
+          deductPendingReimbursements: false,
+        })
+
+        expect(
+          mockFilterPreferencesService.deductsPendingByDefault
+        ).not.toHaveBeenCalled()
+        const expected = netAmountSql({
+          deductReceived: false,
+          deductPending: false,
+        }).sql
+        expect(netAmountOf()).toBe(expected)
+        expect(aggregationOf()).toContain(expected)
+      })
+
+      it('reads the rows as they come, already net', async () => {
+        // 3 700 lent and claimed back: the row arrives at zero.
+        setupMonth([
+          ...ledgerRows(),
+          createRow({
+            month_key: '2026-10',
+            category_name: 'Famille et amis',
+            total_amount: 0,
+            pending_credit: 3700,
+          }),
+        ])
+
+        const result = await service.getMonth(mockUserId, { asOf: AS_OF })
+
+        expect(result.spent).toBe(1000)
+      })
     })
   })
 })

@@ -7,7 +7,7 @@ import { TREND_RULES } from '../trend.detection'
  * A query string carries `true` and `false` as text, and `Boolean('false')`
  * is true: only the two words, and real booleans, are read.
  */
-const toBoolean = ({ value }: { value: unknown }): unknown => {
+export const toBoolean = ({ value }: { value: unknown }): unknown => {
   if (value === 'true') return true
   if (value === 'false') return false
   return value

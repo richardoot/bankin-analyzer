@@ -44,7 +44,7 @@ export function useDashboardData() {
   const accountsStore = useAccountsStore()
 
   /**
-   * One reading for the whole page — the expenses KPI, the
+   * One reading for the whole page — the month band, the
    * structure card and the category list follow it together. Persisted:
    * it is a way of looking at the figures, not a question of the moment.
    * Defaults to « Vie courante », as the budget does: a holiday must not
@@ -251,15 +251,6 @@ export function useDashboardData() {
     return Math.round(sum * 100) / 100
   })
 
-  // Same months as averageMonthlyExpenses, so the gap between the two
-  // figures is exactly the exceptional spending and nothing else.
-  const averageEverydayMonthlyExpenses = computed(() =>
-    averageOf(
-      m => m.everydayNetExpenses ?? m.netExpenses,
-      totalEverydayExpenses.value
-    )
-  )
-
   const hasExceptionalExpenses = computed(
     () => totalExceptionalExpenses.value > 0
   )
@@ -270,39 +261,6 @@ export function useDashboardData() {
   // are: money is money, only the expenses have an exceptional share.
   const displayedTotalExpenses = computed(() =>
     isEverydayMode.value ? totalEverydayExpenses.value : totalExpenses.value
-  )
-  const displayedAverageMonthlyExpenses = computed(() =>
-    isEverydayMode.value
-      ? averageEverydayMonthlyExpenses.value
-      : averageMonthlyExpenses.value
-  )
-  /**
-   * The events, per month. Read from their own total: the everyday reading
-   * also spreads smoothed purchases, so the gap between the two readings is
-   * no longer the events alone once one is smoothed.
-   */
-  const averageExceptionalMonthlyExpenses = computed(() =>
-    hasAmortizedExpenses.value
-      ? averageOf(
-          m => m.exceptionalExpenses ?? 0,
-          totalExceptionalExpenses.value
-        )
-      : Math.round(
-          (averageMonthlyExpenses.value -
-            averageEverydayMonthlyExpenses.value) *
-            100
-        ) / 100
-  )
-
-  // Per-month series for sparklines
-  const expensesSparkline = computed(() =>
-    monthlyData.value.map(d => d.netExpenses)
-  )
-  const incomeSparkline = computed(() => monthlyData.value.map(d => d.income))
-  const savingsSparkline = computed(() =>
-    monthlyData.value.map(
-      d => Math.round((d.income - d.netExpenses) * 100) / 100
-    )
   )
 
   const expensesByCategory = computed<ChartData>(() => {
@@ -475,8 +433,6 @@ export function useDashboardData() {
     breakdownMode,
     setBreakdownMode,
     displayedTotalExpenses,
-    displayedAverageMonthlyExpenses,
-    averageExceptionalMonthlyExpenses,
     pendingPreferenceSyncError,
     monthlyData,
     expensesByMonth,
@@ -490,13 +446,9 @@ export function useDashboardData() {
     averageMonthlySavings,
     totalExceptionalExpenses,
     totalEverydayExpenses,
-    averageEverydayMonthlyExpenses,
     exceptionalEvents,
     hasExceptionalExpenses,
     hasAmortizedExpenses,
-    expensesSparkline,
-    incomeSparkline,
-    savingsSparkline,
     expensesByCategory,
     incomeByCategory,
     expenseCategoriesDetailed,

@@ -328,6 +328,36 @@ describe('api', () => {
     })
   })
 
+  describe('getDashboardMonth', () => {
+    it('sends only the parameters given, booleans included when false', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+
+      await api.getDashboardMonth()
+      await api.getDashboardMonth({
+        reading: 'real',
+        deductReimbursements: false,
+        deductPendingReimbursements: true,
+        asOf: '2026-10-23',
+      })
+
+      expect(mockFetch.mock.calls.map(([url]) => url)).toEqual([
+        'http://localhost:3000/dashboard/month',
+        'http://localhost:3000/dashboard/month?reading=real&deductReimbursements=false&deductPendingReimbursements=true&asOf=2026-10-23',
+      ])
+    })
+
+    it('says the month could not be read', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 500 })
+
+      await expect(api.getDashboardMonth()).rejects.toThrow(
+        "La lecture du mois n'a pas pu être chargée"
+      )
+    })
+  })
+
   describe('getSpendingTrends', () => {
     it('sends only the filters given, booleans included when false', async () => {
       mockFetch.mockResolvedValue({

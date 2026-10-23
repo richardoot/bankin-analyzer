@@ -456,30 +456,6 @@ describe('useDashboardData', () => {
       expect(totalExceptionalExpenses.value).toBe(600)
     })
 
-    it('uses the same divisor as the real average', async () => {
-      // The regression: dividing the everyday total by a shrunken number of
-      // "everyday months" moved figures that carried no event at all.
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
-
-      const {
-        fetchData,
-        averageMonthlyExpenses,
-        averageEverydayMonthlyExpenses,
-        periodMonths,
-      } = useDashboardData()
-      await fetchData()
-
-      expect(periodMonths.value).toBe(2)
-      expect(averageMonthlyExpenses.value).toBe(1100) // 2200 / 2
-      expect(averageEverydayMonthlyExpenses.value).toBe(800) // 1600 / 2
-
-      // The gap between both figures is exactly the exceptional spending.
-      const gap =
-        (averageMonthlyExpenses.value - averageEverydayMonthlyExpenses.value) *
-        periodMonths.value
-      expect(gap).toBeCloseTo(totalExceptionalOf(summaryWithEvents), 2)
-    })
-
     it('exposes the events of the period', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
 
@@ -500,20 +476,14 @@ describe('useDashboardData', () => {
         fetchData,
         breakdownMode,
         setBreakdownMode,
-        displayedAverageMonthlyExpenses,
         displayedTotalExpenses,
-        averageExceptionalMonthlyExpenses,
       } = useDashboardData()
       await fetchData()
 
       expect(breakdownMode.value).toBe('everyday')
-      // 1600 everyday over 2 months.
-      expect(displayedAverageMonthlyExpenses.value).toBe(800)
       expect(displayedTotalExpenses.value).toBe(1600)
-      expect(averageExceptionalMonthlyExpenses.value).toBe(300)
 
       setBreakdownMode('real')
-      expect(displayedAverageMonthlyExpenses.value).toBe(1100)
       expect(displayedTotalExpenses.value).toBe(2200)
       expect(localStorage.setItem).toHaveBeenCalledWith(
         'dashboard-breakdown-mode',
@@ -550,19 +520,13 @@ describe('useDashboardData', () => {
         exceptionalEvents: [],
       })
 
-      const {
-        fetchData,
-        hasExceptionalExpenses,
-        averageMonthlyExpenses,
-        averageEverydayMonthlyExpenses,
-      } = useDashboardData()
+      const { fetchData, hasExceptionalExpenses, totalEverydayExpenses } =
+        useDashboardData()
       await fetchData()
 
       expect(hasExceptionalExpenses.value).toBe(false)
-      // With no event, both averages must be strictly identical.
-      expect(averageEverydayMonthlyExpenses.value).toBe(
-        averageMonthlyExpenses.value
-      )
+      // With no event, both readings are strictly identical.
+      expect(totalEverydayExpenses.value).toBe(1600)
     })
 
     it('falls back to the real amounts when the everyday share is absent', async () => {
@@ -687,15 +651,6 @@ describe('useDashboardData — smoothed purchases', () => {
       'Logement',
     ])
   })
-
-  it('reads the events from their own total, not the gap of the readings', async () => {
-    vi.mocked(api.getDashboardSummary).mockResolvedValue(summary)
-    const data = useDashboardData()
-    await data.fetchData()
-
-    // 600 over the three everyday months — not (3400 − 1900) / 3.
-    expect(data.averageExceptionalMonthlyExpenses.value).toBe(200)
-  })
 })
 
 describe('useDashboardData — the closed months', () => {
@@ -768,8 +723,6 @@ describe('useDashboardData — the closed months', () => {
     await data.fetchData()
 
     expect(data.averageMonthlyExpenses.value).toBe(1100)
-    expect(data.averageEverydayMonthlyExpenses.value).toBe(1000)
-    expect(data.averageExceptionalMonthlyExpenses.value).toBe(100)
     expect(data.averageMonthlyIncome.value).toBe(2500)
     expect(data.averageMonthlySavings.value).toBe(1400)
   })
@@ -801,11 +754,3 @@ describe('useDashboardData — the closed months', () => {
     expect(data.averageMonthlyExpenses.value).toBe(866.67)
   })
 })
-
-/** Total exceptional spending declared by a summary fixture. */
-function totalExceptionalOf(summary: DashboardSummaryDto): number {
-  return summary.expensesByCategory.reduce(
-    (acc, c) => acc + (c.exceptionalAmount ?? 0),
-    0
-  )
-}
