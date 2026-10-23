@@ -146,7 +146,7 @@ font-family:
 - Séparateur décimal : virgule (format français)
 - Devise après le montant : `1 234,56 €`
 - Signe négatif devant : `-125,00 €`
-- Couleur : vert pour positif, rouge pour négatif
+- Couleur : vert pour positif, rouge pour négatif, hors tableau de bord (voir 5.5 : un chiffre y reste à l'encre du texte)
 
 ---
 
@@ -342,10 +342,12 @@ font-family:
 ### 5.3 Indicateurs de Tendance
 
 ```
-↑ +15% vs mois dernier   (vert)
-↓ -8% vs mois dernier    (rouge)
-→ Stable                  (gris)
+↑ +15 % contre l'habitude   (ambre)
+↓ −8 % contre l'habitude    (teal)
+→ dans l'habitude           (gris)
 ```
+
+Une hausse n'est pas un reproche ni une baisse une victoire : ni rouge ni vert, les teintes d'état de la section 5.5.
 
 ### 5.4 Microinteractions
 
@@ -354,6 +356,23 @@ font-family:
 - **Changement de filtre** : Transition smooth 300ms
 - **Hover sur chart** : Tooltip avec détails
 - **Sélection segment** : Highlight + zoom léger
+
+### 5.5 Teintes d'état (tableau de bord)
+
+Règle du 2026-10-24 (refonte du tableau de bord, lot 6). Les chiffres sont à l'encre du texte ; la couleur ne porte que l'état d'un chiffre, son écart à l'habitude ou un dépassement, en trois teintes et pas une de plus.
+
+| État                                         | Teinte | Badge                        | Point de sparkline |
+| -------------------------------------------- | ------ | ---------------------------- | ------------------ |
+| **Sous l'habitude**, une baisse              | Teal   | `bg-teal-50 text-teal-800`   | `#14B8A6`          |
+| **Au-dessus**, une hausse, un dépassement    | Ambre  | `bg-amber-50 text-amber-800` | `#F59E0B`          |
+| **Neutre** : à ±5 % près, ou rien à comparer | Gris   | `bg-gray-100 text-gray-700`  | `#9CA3AF`          |
+
+- **Une seule teinte de donnée** : le `blue-400` (`#60A5FA`) des barres de part, des colonnes et de la ligne des sparklines. Les événements se lisent en hachures de la même teinte, jamais dans une autre couleur.
+- **L'ambre est réservé** : « À faire », les badges de hausse et les dépassements (reste à vivre négatif, enveloppe dépassée). Il ne décore rien d'autre.
+- **Jamais de rouge ni de vert sur une donnée** : un mois au-dessus de l'habitude n'est pas une faute, un mois remboursé n'est pas un gain. Un mois que les remboursements font passer sous zéro est gris. Le rouge reste aux erreurs et aux actions destructrices.
+- **L'épargne et un report** entre deux sous-catégories ne sont pas des dépenses au-dessus ou au-dessous d'une habitude : gris.
+- **Le texte dit l'état**, la couleur le double : « +16 % », « dans l'habitude », « dépassé ». Aucun état ne repose sur la seule couleur (WCAG 1.4.1).
+- **Une source** : `frontend/src/lib/stateTints.ts` (`STATE_BADGE_CLASSES`, `STATE_COLORS`, `DATA_HUE`), lue par la bande du mois, les tendances et les graphiques. Une spec relit les sources du tableau de bord et échoue sur `text-red-*`, `text-green-*`, `text-emerald-*` ou une bordure `border-l-4`. La page `/design` (développement) montre les teintes et les briques du tableau de bord dans leurs états.
 
 ---
 
