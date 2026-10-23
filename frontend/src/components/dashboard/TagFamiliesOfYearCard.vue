@@ -5,13 +5,17 @@
    * the dashboard reads: an envelope is per year, and so is the question.
    *
    * The year is the event's: a trip paid in November for January belongs to
-   * January's year. Each family names its share of the year's real
-   * expenses, and its envelope when it has one — red, with the overrun in
-   * words, once spent.
+   * January's year. The head says the families' weight once, in figures —
+   * their total, their share of the year's exceptional expenses, their share
+   * of the real ones — then draws one stacked bar over the exceptional
+   * expenses: a family only holds exceptional tags, so the slices are a true
+   * composition, and the gray left over is the exceptional spending no
+   * family holds yet. The real expenses would leave every slice a sliver.
    *
-   * The bars share one euro scale, so families compare at a glance; an
-   * envelope draws its own length behind the bar. They are decorative: the
-   * figures are all in the text.
+   * Each family then shows its years side by side on its own scale, its
+   * envelope dashed across them, so the question it answers is whether this
+   * edition costs as usual; the facts below say its share, its average so
+   * far and what its envelope has left — red, with the overrun in words.
    */
   import { computed } from 'vue'
   import { RouterLink } from 'vue-router'
@@ -20,35 +24,117 @@
   import { transactionsLink } from '@/lib/transactionsLink'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import YearColumnsChart from '@/components/charts/YearColumnsChart.vue'
 
   const props = defineProps<{
     /** Biggest first, each with spending this year. */
     families: TagFamilyOfYearDto[]
     /** The year's real expenses, every expense included. */
     realExpenses: number | null
+    /** The year's exceptional expenses: the bar's and the shares' denominator. */
+    exceptionalExpenses: number | null
   }>()
+
+  /** At most this many years per family, the most recent ones. */
+  const MAX_YEARS = 6
+  const NO_COLOR = '#9ca3af'
 
   const year = computed(
     () => props.families[0]?.year ?? new Date().getFullYear()
   )
 
-  /** The longest bar or envelope: the card's one scale. */
-  const scale = computed(() =>
-    props.families.reduce(
-      (max, f) => Math.max(max, f.spent, f.annualBudget ?? 0),
-      0
-    )
+  function percent(part: number, whole: number): string {
+    const value = (part / whole) * 100
+    // Below one percent, a rounded « 0 % » would read as nothing.
+    if (value > 0 && value < 1) return '< 1 %'
+    return `${Math.round(value)} %`
+  }
+
+  const exceptional = computed(() =>
+    props.exceptionalExpenses !== null && props.exceptionalExpenses > 0
+      ? props.exceptionalExpenses
+      : null
   )
 
-  const width = (amount: number): string =>
-    `${scale.value > 0 ? Math.min(1, amount / scale.value) * 100 : 0}%`
+  const real = computed(() =>
+    props.realExpenses !== null && props.realExpenses > 0
+      ? props.realExpenses
+      : null
+  )
 
-  function share(family: TagFamilyOfYearDto): string | null {
-    if (!props.realExpenses || props.realExpenses <= 0) return null
-    const percent = (family.spent / props.realExpenses) * 100
-    // Below one percent, a rounded « 0 % » would read as nothing.
-    if (percent > 0 && percent < 1) return '< 1 %'
-    return `${Math.round(percent)} %`
+  const total = computed(() =>
+    props.families.reduce((sum, f) => sum + f.spent, 0)
+  )
+
+  /** The exceptional spending no family holds, never below 0. */
+  const rest = computed(() =>
+    exceptional.value === null
+      ? 0
+      : Math.max(0, +(exceptional.value - total.value).toFixed(2))
+  )
+
+  const colorOf = (family: TagFamilyOfYearDto): string =>
+    family.color ?? NO_COLOR
+
+  function shareOfExceptional(family: TagFamilyOfYearDto): string | null {
+    return exceptional.value === null
+      ? null
+      : percent(family.spent, exceptional.value)
+  }
+
+  function sliceWidth(family: TagFamilyOfYearDto): string {
+    const whole = exceptional.value ?? 1
+    return `${Math.min(100, (family.spent / whole) * 100)}%`
+  }
+
+  const stackLabel = computed(() => {
+    if (exceptional.value === null) return ''
+    const whole = exceptional.value
+    const slices = props.families
+      .map(f => `${f.name} ${percent(f.spent, whole)}`)
+      .join(', ')
+    const restPart =
+      rest.value > 0 ? `, ${percent(rest.value, whole)} sans famille` : ''
+    return `${slices} des dépenses exceptionnelles de l'année${restPart}`
+  })
+
+  /**
+   * The family's years from its first one to this one, without a gap — a
+   * year without spending is a column at 0 — and the most recent six only.
+   */
+  function yearsOf(
+    family: TagFamilyOfYearDto
+  ): { year: number; amount: number }[] {
+    const byYear = new Map(family.spentByYear.map(y => [y.year, y.spent]))
+    byYear.set(family.year, byYear.get(family.year) ?? family.spent)
+    const first = Math.max(
+      Math.min(...byYear.keys()),
+      family.year - MAX_YEARS + 1
+    )
+    const years: { year: number; amount: number }[] = []
+    for (let y = first; y <= family.year; y++) {
+      years.push({ year: y, amount: byYear.get(y) ?? 0 })
+    }
+    return years
+  }
+
+  function yearsLabel(family: TagFamilyOfYearDto): string {
+    const years = yearsOf(family)
+      .filter(y => y.amount > 0)
+      .map(y => `${y.year} ${formatCurrency(y.amount)}`)
+      .join(', ')
+    const envelope =
+      family.annualBudget !== null
+        ? `, enveloppe ${formatCompactCurrency(family.annualBudget)} par an`
+        : ''
+    return `${family.name} : ${years}${envelope}`
+  }
+
+  /** The mean of the years before this one that spent; null on a first year. */
+  function pastAverage(family: TagFamilyOfYearDto): number | null {
+    const past = family.spentByYear.filter(y => y.year < family.year)
+    if (past.length === 0) return null
+    return past.reduce((sum, y) => sum + y.spent, 0) / past.length
   }
 
   const isOver = (family: TagFamilyOfYearDto): boolean =>
@@ -78,17 +164,75 @@
       </p>
     </div>
 
-    <ul class="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
+    <div class="mb-5">
+      <p
+        class="text-sm text-gray-700 dark:text-gray-300"
+        data-testid="families-of-year-header"
+      >
+        <span
+          class="font-semibold text-gray-900 tabular-nums dark:text-gray-100"
+        >
+          {{ formatCurrency(total) }}
+        </span>
+        d'épisodes cette année
+        <template v-if="exceptional !== null">
+          · {{ percent(total, exceptional) }} de l'exceptionnel de l'année ({{
+            formatCurrency(exceptional)
+          }})
+        </template>
+        <template v-if="real !== null">
+          · {{ percent(total, real) }} du réel
+        </template>
+      </p>
+
+      <template v-if="exceptional !== null">
+        <div
+          class="mt-2 flex h-2.5 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
+          role="img"
+          :aria-label="stackLabel"
+          data-testid="families-of-year-stack"
+        >
+          <div
+            v-for="family in families"
+            :key="family.id"
+            class="h-full shrink-0"
+            :style="{
+              width: sliceWidth(family),
+              minWidth: '3px',
+              backgroundColor: colorOf(family),
+            }"
+            :title="`${family.name} : ${formatCurrency(family.spent)}, ${shareOfExceptional(family)} de l'exceptionnel`"
+            :data-testid="`families-of-year-stack-slice-${family.id}`"
+          ></div>
+          <div
+            v-if="rest > 0"
+            class="h-full flex-1"
+            :title="`Sans famille : ${formatCurrency(rest)}`"
+            data-testid="families-of-year-stack-rest"
+          ></div>
+        </div>
+        <p
+          v-if="rest > 0"
+          class="mt-1 text-xs text-gray-500 dark:text-gray-400"
+          data-testid="families-of-year-rest-note"
+        >
+          Le gris : {{ formatCurrency(rest) }} d'exceptionnel sans famille.
+        </p>
+      </template>
+    </div>
+
+    <ul class="grid grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-2">
       <li
         v-for="family in families"
         :key="family.id"
+        class="min-w-0"
         :data-testid="`family-of-year-${family.id}`"
       >
         <div class="flex items-center justify-between gap-2 text-sm">
           <span class="flex min-w-0 items-center gap-2">
             <span
               class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-              :style="{ backgroundColor: family.color ?? '#9ca3af' }"
+              :style="{ backgroundColor: colorOf(family) }"
               aria-hidden="true"
             ></span>
             <RouterLink
@@ -101,7 +245,7 @@
           </span>
           <span class="flex shrink-0 items-center gap-1 tabular-nums">
             <span
-              class="font-semibold"
+              class="font-semibold whitespace-nowrap"
               :class="
                 isOver(family)
                   ? 'text-red-600 dark:text-red-400'
@@ -121,34 +265,34 @@
           </span>
         </div>
 
-        <div
-          class="relative mt-1.5 h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
-          aria-hidden="true"
-          :data-testid="`family-of-year-bar-${family.id}`"
-        >
-          <div
-            v-if="family.annualBudget !== null"
-            class="absolute inset-y-0 left-0 rounded-full bg-amber-100 dark:bg-amber-900/40"
-            :style="{ width: width(family.annualBudget) }"
-          ></div>
-          <div
-            class="absolute inset-y-0 left-0 rounded-full"
-            :class="isOver(family) ? 'bg-red-500' : 'bg-amber-500'"
-            :style="{ width: width(family.spent) }"
-          ></div>
+        <div class="mt-2" :data-testid="`family-of-year-years-${family.id}`">
+          <YearColumnsChart
+            :years="yearsOf(family)"
+            :current-year="family.year"
+            :color="colorOf(family)"
+            :envelope="family.annualBudget ?? undefined"
+            :label="yearsLabel(family)"
+          />
         </div>
 
         <p
           class="mt-1 text-xs text-gray-500 dark:text-gray-400"
           :data-testid="`family-of-year-details-${family.id}`"
         >
-          <template v-if="share(family)">
-            {{ share(family) }} du réel ·
+          <template v-if="shareOfExceptional(family)">
+            {{ shareOfExceptional(family) }} de l'exceptionnel ·
           </template>
           {{ family.tagCount }}
-          {{ family.tagCount > 1 ? 'étiquettes' : 'étiquette' }}
+          {{ family.tagCount > 1 ? 'étiquettes' : 'étiquette' }} ·
+          {{ family.transactionCount }}
+          {{ family.transactionCount > 1 ? 'transactions' : 'transaction' }} ·
+          <template v-if="pastAverage(family) !== null">
+            {{ formatCompactCurrency(pastAverage(family) ?? 0) }} par an
+            jusqu'ici
+          </template>
+          <template v-else>première année</template>
           <template v-if="family.annualBudget !== null">
-            · sur {{ formatCompactCurrency(family.annualBudget) }} par an ·
+            ·
             <span
               v-if="isOver(family)"
               class="font-semibold text-red-600 dark:text-red-400"
@@ -158,6 +302,7 @@
             <span v-else
               >reste {{ formatCurrency(family.remaining ?? 0) }}</span
             >
+            sur {{ formatCompactCurrency(family.annualBudget) }} par an
           </template>
         </p>
       </li>

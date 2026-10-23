@@ -736,6 +736,7 @@ describe('DashboardPage', () => {
       icon: null,
       year: 2026,
       spent: 300,
+      spentByYear: [{ year: 2026, spent: 300 }],
       annualBudget: null,
       remaining: null,
       transactionCount: 2,
@@ -761,11 +762,17 @@ describe('DashboardPage', () => {
         ...withEvent,
         tagFamiliesOfYear: [family],
         realExpensesOfYear: 6000,
+        exceptionalExpensesOfYear: 1000,
       })
 
       expect(card.exists()).toBe(true)
       expect(card.text()).toContain("Épisodes de l'année 2026")
       expect(card.text()).toContain('5 % du réel')
+      // The year's exceptional expenses reach the card: its bar and share.
+      expect(card.text()).toContain("30 % de l'exceptionnel de l'année")
+      expect(card.find('[data-testid="families-of-year-stack"]').exists()).toBe(
+        true
+      )
     })
 
     it('leaves it out without a family', async () => {
@@ -773,6 +780,7 @@ describe('DashboardPage', () => {
         ...withEvent,
         tagFamiliesOfYear: [],
         realExpensesOfYear: null,
+        exceptionalExpensesOfYear: null,
       })
 
       expect(card.exists()).toBe(false)

@@ -154,6 +154,9 @@ export function useDashboardData() {
   const realExpensesOfYear = computed(
     () => summaryData.value?.realExpensesOfYear ?? null
   )
+  const exceptionalExpensesOfYear = computed(
+    () => summaryData.value?.exceptionalExpensesOfYear ?? null
+  )
 
   // Number of months in the period (used for averages)
   const periodMonths = computed(() => monthlyData.value.length || 1)
@@ -456,6 +459,7 @@ export function useDashboardData() {
     remainingToLive,
     tagFamiliesOfYear,
     realExpensesOfYear,
+    exceptionalExpensesOfYear,
     isLoading,
     error,
     fetchData,

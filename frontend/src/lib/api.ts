@@ -1144,7 +1144,7 @@ export interface TagFamilyOfYearDto {
   /** Gross expenses, divided, stats-excluded accounts ignored. */
   spent: number
   /** Expenses per event year up to this one (its `spent` is `spent`), oldest first. */
-  spentByYear?: { year: number; spent: number }[]
+  spentByYear: { year: number; spent: number }[]
   annualBudget: number | null
   /** `annualBudget - spent`, negative over; null without an envelope. */
   remaining: number | null

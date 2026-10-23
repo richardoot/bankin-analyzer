@@ -61,6 +61,7 @@
     remainingToLive,
     tagFamiliesOfYear,
     realExpensesOfYear,
+    exceptionalExpensesOfYear,
     expensesSparkline,
     incomeSparkline,
     savingsSparkline,
@@ -599,6 +600,7 @@
           class="mb-8"
           :families="tagFamiliesOfYear"
           :real-expenses="realExpensesOfYear"
+          :exceptional-expenses="exceptionalExpensesOfYear"
         />
 
         <!-- Expenses section (primary) -->

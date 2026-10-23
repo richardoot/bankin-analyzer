@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { mount, enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import TagFamiliesOfYearCard from './TagFamiliesOfYearCard.vue'
+import YearColumnsChart from '@/components/charts/YearColumnsChart.vue'
 import type { TagFamilyOfYearDto } from '@/lib/api'
 
 enableAutoUnmount(afterEach)
@@ -13,6 +14,12 @@ const travel: TagFamilyOfYearDto = {
   icon: null,
   year: 2026,
   spent: 1250.5,
+  // 2025 spent nothing: the chart draws it at 0.
+  spentByYear: [
+    { year: 2023, spent: 900 },
+    { year: 2024, spent: 1100 },
+    { year: 2026, spent: 1250.5 },
+  ],
   annualBudget: 1000,
   remaining: -250.5,
   transactionCount: 5,
@@ -26,6 +33,7 @@ const hyrox: TagFamilyOfYearDto = {
   icon: null,
   year: 2026,
   spent: 600,
+  spentByYear: [{ year: 2026, spent: 600 }],
   annualBudget: 1500,
   remaining: 900,
   transactionCount: 3,
@@ -39,6 +47,10 @@ const concerts: TagFamilyOfYearDto = {
   icon: null,
   year: 2026,
   spent: 45,
+  // Every year since 2018: only the six most recent are drawn.
+  spentByYear: [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026].map(
+    year => ({ year, spent: year === 2026 ? 45 : 30 })
+  ),
   annualBudget: null,
   remaining: null,
   transactionCount: 1,
@@ -47,7 +59,8 @@ const concerts: TagFamilyOfYearDto = {
 
 async function mountCard(
   families: TagFamilyOfYearDto[] = [travel, hyrox, concerts],
-  realExpenses: number | null = 10000
+  realExpenses: number | null = 10000,
+  exceptionalExpenses: number | null = 2500
 ) {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -55,14 +68,17 @@ async function mountCard(
   })
   await router.push('/dashboard')
   const wrapper = mount(TagFamiliesOfYearCard, {
-    props: { families, realExpenses },
+    props: { families, realExpenses, exceptionalExpenses },
     global: { plugins: [router] },
   })
   await flushPromises()
   return wrapper
 }
 
-const text = (s: string) => s.replace(/\s+/g, ' ')
+const text = (s: string) => s.replace(/\s+/g, ' ').trim()
+
+const widthOf = (el: { attributes: (n: string) => string | undefined }) =>
+  parseFloat(/width:\s*([\d.]+)%/.exec(el.attributes('style') ?? '')?.[1] ?? '')
 
 describe('TagFamiliesOfYearCard', () => {
   it('titles the card with the year and lists one line per family, in order', async () => {
@@ -78,45 +94,118 @@ describe('TagFamiliesOfYearCard', () => {
     ])
   })
 
-  it('names each family’s share of the year’s real expenses', async () => {
+  it('says the families’ total, their share of the exceptional and of the real', async () => {
     const wrapper = await mountCard()
 
-    const details = ['fam-travel', 'fam-hyrox', 'fam-concerts'].map(id =>
-      text(wrapper.get(`[data-testid="family-of-year-details-${id}"]`).text())
+    // 1 895,50 over 2 500 and over 10 000.
+    expect(
+      text(wrapper.get('[data-testid="families-of-year-header"]').text())
+    ).toMatch(
+      /^1\s895,50\s€ d'épisodes cette année · 76 % de l'exceptionnel de l'année \(2\s500,00\s€\) · 19 % du réel$/
     )
-    // 1 250,50 / 10 000, 600 / 10 000, and below one percent said so.
-    expect(details.map(d => d.split(' du réel')[0])).toEqual([
-      '13 %',
-      '6 %',
-      '< 1 %',
-    ])
   })
 
-  it('leaves the share out when there is nothing to divide by', async () => {
+  it('draws one slice per family over the exceptional, the rest as its complement', async () => {
+    const wrapper = await mountCard()
+
+    const stack = wrapper.get('[data-testid="families-of-year-stack"]')
+    expect(stack.attributes('role')).toBe('img')
+    expect(stack.attributes('aria-label')).toBe(
+      "Voyages 50 %, HYROX 24 %, Concerts 2 % des dépenses exceptionnelles de l'année, 24 % sans famille"
+    )
+
+    const slice = wrapper.get(
+      '[data-testid="families-of-year-stack-slice-fam-travel"]'
+    )
+    expect(widthOf(slice)).toBeCloseTo((1250.5 / 2500) * 100)
+    expect(slice.attributes('style')).toContain('min-width: 3px')
+    expect(text(slice.attributes('title') ?? '')).toMatch(
+      /^Voyages : 1\s250,50\s€, 50 % de l'exceptionnel$/
+    )
+    // A family without a color reads gray.
+    expect(
+      wrapper
+        .get('[data-testid="families-of-year-stack-slice-fam-hyrox"]')
+        .attributes('style')
+    ).toContain('background-color: #9ca3af')
+
+    // 2 500 − 1 895,50.
+    expect(
+      text(
+        wrapper
+          .get('[data-testid="families-of-year-stack-rest"]')
+          .attributes('title') ?? ''
+      )
+    ).toMatch(/^Sans famille : 604,50\s€$/)
+    expect(text(wrapper.text())).toMatch(
+      /Le gris : 604,50\s€ d'exceptionnel sans famille\./
+    )
+  })
+
+  it('bounds a slice at the whole bar and drops the rest when nothing is left', async () => {
+    const wrapper = await mountCard([travel], 10000, 1000)
+
+    expect(
+      widthOf(
+        wrapper.get('[data-testid="families-of-year-stack-slice-fam-travel"]')
+      )
+    ).toBe(100)
+    expect(
+      wrapper.find('[data-testid="families-of-year-stack-rest"]').exists()
+    ).toBe(false)
+    expect(wrapper.text()).not.toContain('Le gris')
+  })
+
+  it('draws neither bar nor share without exceptional expenses', async () => {
+    const wrapper = await mountCard([hyrox], 10000, null)
+
+    expect(
+      wrapper.find('[data-testid="families-of-year-stack"]').exists()
+    ).toBe(false)
+    const header = text(
+      wrapper.get('[data-testid="families-of-year-header"]').text()
+    )
+    expect(header).not.toContain("l'exceptionnel")
+    expect(header).toContain('6 % du réel')
+    expect(
+      wrapper.get('[data-testid="family-of-year-details-fam-hyrox"]').text()
+    ).not.toContain("l'exceptionnel")
+  })
+
+  it('leaves the real share out when there is nothing to divide by', async () => {
     const wrapper = await mountCard([hyrox], null)
 
     expect(
-      wrapper.get('[data-testid="family-of-year-details-fam-hyrox"]').text()
+      wrapper.get('[data-testid="families-of-year-header"]').text()
     ).not.toContain('du réel')
   })
 
-  it('reads an envelope and its remainder, and says nothing of one it lacks', async () => {
+  it('reads a first year, its share and an envelope with its remainder', async () => {
     const wrapper = await mountCard()
 
-    const hyroxDetails = text(
-      wrapper.get('[data-testid="family-of-year-details-fam-hyrox"]').text()
+    expect(
+      text(
+        wrapper.get('[data-testid="family-of-year-details-fam-hyrox"]').text()
+      )
+    ).toMatch(
+      /^24 % de l'exceptionnel · 1 étiquette · 3 transactions · première année · reste 900,00\s€ sur 1\s500\s€ par an$/
     )
-    expect(hyroxDetails).toMatch(/sur 1\s500\s€ par an/)
-    expect(hyroxDetails).toMatch(/reste 900,00\s€/)
     expect(
       wrapper.get('[data-testid="family-of-year-spent-fam-hyrox"]').classes()
     ).not.toContain('text-red-600')
+  })
 
-    const concertDetails = wrapper
-      .get('[data-testid="family-of-year-details-fam-concerts"]')
-      .text()
-    expect(concertDetails).not.toContain('par an')
-    expect(concertDetails).not.toContain('reste')
+  it('averages the past years that spent, and says nothing of an envelope it lacks', async () => {
+    const wrapper = await mountCard()
+
+    // Eight past years at 30 €; below one percent said so.
+    const details = text(
+      wrapper.get('[data-testid="family-of-year-details-fam-concerts"]').text()
+    )
+    expect(details).toMatch(
+      /^2 % de l'exceptionnel · 1 étiquette · 1 transaction · 30\s€ par an jusqu'ici$/
+    )
+    expect(details).not.toContain('reste')
   })
 
   it('turns red on an overrun and says it in words', async () => {
@@ -125,15 +214,58 @@ describe('TagFamiliesOfYearCard', () => {
     expect(
       wrapper.get('[data-testid="family-of-year-spent-fam-travel"]').classes()
     ).toContain('text-red-600')
-    const details = text(
-      wrapper.get('[data-testid="family-of-year-details-fam-travel"]').text()
+    const details = wrapper.get(
+      '[data-testid="family-of-year-details-fam-travel"]'
     )
-    expect(details).toMatch(/dépassement de 250,50\s€/)
-    expect(details).not.toContain('reste')
-    // The bar is decoration: the figures are in the text.
-    const bar = wrapper.get('[data-testid="family-of-year-bar-fam-travel"]')
-    expect(bar.attributes('aria-hidden')).toBe('true')
-    expect(bar.find('.bg-red-500').exists()).toBe(true)
+    // 900 and 1 100: 2025 spent nothing and does not count.
+    expect(text(details.text())).toMatch(
+      /^50 % de l'exceptionnel · 2 étiquettes · 5 transactions · 1\s000\s€ par an jusqu'ici · dépassement de 250,50\s€ sur 1\s000\s€ par an$/
+    )
+    expect(details.get('.text-red-600').text()).toMatch(/dépassement de 250,50/)
+    expect(details.text()).not.toContain('reste')
+  })
+
+  it('hands the chart continuous years, a gap at 0, and the envelope', async () => {
+    const wrapper = await mountCard()
+
+    const chart = wrapper
+      .get('[data-testid="family-of-year-years-fam-travel"]')
+      .findComponent(YearColumnsChart)
+    expect(chart.props()).toMatchObject({
+      years: [
+        { year: 2023, amount: 900 },
+        { year: 2024, amount: 1100 },
+        { year: 2025, amount: 0 },
+        { year: 2026, amount: 1250.5 },
+      ],
+      currentYear: 2026,
+      color: '#22c55e',
+      envelope: 1000,
+    })
+    expect(text(chart.props('label'))).toMatch(
+      /^Voyages : 2023 900,00\s€, 2024 1\s100,00\s€, 2026 1\s250,50\s€, enveloppe 1\s000\s€ par an$/
+    )
+  })
+
+  it('draws six years at most, the most recent, and no envelope without one', async () => {
+    const wrapper = await mountCard()
+
+    const chart = wrapper
+      .get('[data-testid="family-of-year-years-fam-concerts"]')
+      .findComponent(YearColumnsChart)
+    expect(
+      (chart.props('years') as { year: number }[]).map(y => y.year)
+    ).toEqual([2021, 2022, 2023, 2024, 2025, 2026])
+    expect(chart.props('envelope')).toBeUndefined()
+    expect(chart.props('color')).toBe('#9ca3af')
+  })
+
+  it('no longer draws a bar per family', async () => {
+    const wrapper = await mountCard()
+
+    expect(wrapper.find('[data-testid^="family-of-year-bar-"]').exists()).toBe(
+      false
+    )
   })
 
   it('links the name to the family page and the arrow to its rows of the year', async () => {
