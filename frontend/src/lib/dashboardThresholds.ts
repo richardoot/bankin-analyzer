@@ -15,4 +15,10 @@ export const DASHBOARD_THRESHOLDS = {
    * than a gap.
    */
   incomeExpectedShare: 0.8,
+  /**
+   * « Où part l'argent »: the share of the period's spending a category
+   * needs for its sparkline to be drawn in the list — the small lines'
+   * trends are noise. An expanded row always draws it.
+   */
+  sparklineMinShare: 0.05,
 } as const

@@ -5,6 +5,7 @@ import {
   formatDate,
   formatDateTime,
   formatMonth,
+  formatMonthRange,
   MONTHS_FR,
   MONTHS_FR_LONG,
   parseDecimal,
@@ -132,6 +133,25 @@ describe('formatDateTime', () => {
 
   it('shows a dash for nothing', () => {
     expect(formatDateTime(null)).toBe('—')
+  })
+})
+
+describe('formatMonthRange', () => {
+  it('names a span over two years with both years', () => {
+    expect(formatMonthRange('2025-11', '2026-10')).toBe(
+      'novembre 2025 à octobre 2026'
+    )
+  })
+
+  it('says the year once within one year, and a single month alone', () => {
+    expect(formatMonthRange('2026-03', '2026-10')).toBe('mars à octobre 2026')
+    expect(formatMonthRange('2026-10', '2026-10')).toBe('octobre 2026')
+  })
+
+  it('reads ISO dates as their months', () => {
+    expect(formatMonthRange('2025-11-01', '2026-10-24')).toBe(
+      'novembre 2025 à octobre 2026'
+    )
   })
 })
 

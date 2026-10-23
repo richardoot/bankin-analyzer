@@ -7,6 +7,7 @@ import {
 import { useFiltersStore } from '@/stores/filters'
 import { useAccountsStore } from '@/stores/accounts'
 import { isAmortizationCarrier } from '@/lib/amortization'
+import { formatMonthRange } from '@/lib/formatters'
 
 export interface MonthlyData {
   month: string // "2024-01", "2024-02", ...
@@ -14,6 +15,8 @@ export interface MonthlyData {
   expenses: number // dépenses brutes (valeur absolue)
   netExpenses: number // dépenses nettes (après déduction des remboursements)
   income: number // somme des revenus
+  /** netExpenses without the events, smoothed purchases sliced. */
+  everydayNetExpenses: number
 }
 
 export interface ChartData {
@@ -68,7 +71,6 @@ export function useDashboardData() {
 
   const isLoading = ref(false)
   const error = ref<string | null>(null)
-  const selectedIncomeCategory = ref<string | null>(null)
 
   // Reimbursement toggles. Received reimbursements are a reading of the
   // screen; a debt still owed is a preference shared with the budget, kept
@@ -109,16 +111,6 @@ export function useDashboardData() {
     )
   )
 
-  const expensesByMonth = computed<ChartData>(() => ({
-    labels: monthlyData.value.map(d => d.label),
-    values: monthlyData.value.map(d => d.netExpenses),
-  }))
-
-  const incomeByMonth = computed<ChartData>(() => ({
-    labels: monthlyData.value.map(d => d.label),
-    values: monthlyData.value.map(d => d.income),
-  }))
-
   const totalExpenses = computed(() => summaryData.value?.totalExpenses ?? 0)
   const totalIncome = computed(() => summaryData.value?.totalIncome ?? 0)
 
@@ -147,15 +139,10 @@ export function useDashboardData() {
   const pendingReceivables = computed(
     () => summaryData.value?.pendingReceivables ?? 0
   )
-  // The tag families over the current calendar year, whatever the period.
+  // The tag families over the current calendar year, whatever the period:
+  // the « Épisodes » line names them; their card is on the Tags page.
   const tagFamiliesOfYear = computed(
     () => summaryData.value?.tagFamiliesOfYear ?? []
-  )
-  const realExpensesOfYear = computed(
-    () => summaryData.value?.realExpensesOfYear ?? null
-  )
-  const exceptionalExpensesOfYear = computed(
-    () => summaryData.value?.exceptionalExpensesOfYear ?? null
   )
 
   /**
@@ -271,14 +258,6 @@ export function useDashboardData() {
     }
   })
 
-  const incomeByCategory = computed<ChartData>(() => {
-    const data = summaryData.value?.incomeByCategory ?? []
-    return {
-      labels: data.map(d => d.category),
-      values: data.map(d => d.amount),
-    }
-  })
-
   // Detailed category breakdown (with monthlyAmounts, subcategories, etc.)
   // The real reading leaves out a category only slices reach.
   const expenseCategoriesDetailed = computed(() => {
@@ -291,6 +270,25 @@ export function useDashboardData() {
     () => summaryData.value?.incomeByCategory ?? []
   )
   const monthLabels = computed(() => summaryData.value?.monthLabels ?? [])
+
+  /**
+   * The period in months, for the heading of « Où part l'argent »:
+   * « novembre 2025 à octobre 2026 ». Read off the months the summary
+   * covers, so it names what the figures are; before any answer, off the
+   * selected range. Null when neither says (an unbounded period not
+   * loaded yet).
+   */
+  const periodRangeLabel = computed<string | null>(() => {
+    const labels = monthLabels.value
+    let first: string | null | undefined = labels[0]
+    let last: string | null | undefined = labels.at(-1)
+    if (!first || !last) {
+      const range = filtersStore.getDateRangeFromPeriod(filtersStore.timePeriod)
+      first = range.startDate
+      last = range.endDate
+    }
+    return first && last ? formatMonthRange(first, last) : null
+  })
 
   // Every expense category the period carries, each with its id
   const allExpenseCategories = computed<CategoryOptionDto[]>(
@@ -305,64 +303,6 @@ export function useDashboardData() {
   const allIncomeCategories = computed<CategoryOptionDto[]>(
     () => summaryData.value?.allIncomeCategories ?? []
   )
-
-  /**
-   * The server's per-category monthly series, keyed by month.
-   *
-   * `monthlyAmounts` is aligned with `monthLabels`, which spans the whole
-   * requested period, while the chart axis follows `monthlyData` — the months
-   * that actually carry something. Going through a map rather than a shared
-   * index keeps the two from silently drifting apart.
-   */
-  function monthlySeriesOf(
-    categories: { categoryId: string; monthlyAmounts?: number[] }[],
-    categoryId: string
-  ): ChartData {
-    const category = categories.find(c => c.categoryId === categoryId)
-    const labels = monthLabels.value
-    const byMonth = new Map<string, number>(
-      (category?.monthlyAmounts ?? []).map((amount, index) => [
-        labels[index] ?? String(index),
-        amount,
-      ])
-    )
-
-    // The axis carries its own formatted label already; reusing it keeps the
-    // drill-down chart aligned with the overview above it.
-    return {
-      labels: monthlyData.value.map(d => d.label),
-      values: monthlyData.value.map(d => byMonth.get(d.month) ?? 0),
-    }
-  }
-
-  // The income drill-down chart reads the series the server already computed.
-  // (The expenses chart lost its selector: each expanded category row draws
-  // its own monthly chart.)
-  //
-  // Drill-down charts used to be recalculated here from every transaction of the account,
-  // which meant the chart and the category breakdown right next to it applied
-  // *different* rules: this one deducted a refund in the month it was received,
-  // through the category association, while the server now nets it against the
-  // expense it repays. Same screen, two answers. Reading the server's own
-  // figures makes them agree by construction — and drops the full paginated
-  // transaction fetch that existed only to feed this.
-  const filteredIncomeByMonth = computed<ChartData>(() => {
-    if (!selectedIncomeCategory.value) {
-      return incomeByMonth.value
-    }
-    return monthlySeriesOf(
-      incomeCategoriesDetailed.value,
-      selectedIncomeCategory.value
-    )
-  })
-
-  // Selecting a category no longer fetches anything: the summary already
-  // carries its monthly series. What used to happen here was a full paginated
-  // walk of every transaction on the account, on the first drill-down, purely
-  // to redraw a chart the server had already computed.
-  function setSelectedIncomeCategory(category: string | null): void {
-    selectedIncomeCategory.value = category
-  }
 
   async function fetchData() {
     isLoading.value = true
@@ -435,8 +375,6 @@ export function useDashboardData() {
     displayedTotalExpenses,
     pendingPreferenceSyncError,
     monthlyData,
-    expensesByMonth,
-    incomeByMonth,
     totalExpenses,
     totalIncome,
     periodMonths,
@@ -450,15 +388,12 @@ export function useDashboardData() {
     hasExceptionalExpenses,
     hasAmortizedExpenses,
     expensesByCategory,
-    incomeByCategory,
     expenseCategoriesDetailed,
     incomeCategoriesDetailed,
     monthLabels,
+    periodRangeLabel,
     allExpenseCategories,
     allIncomeCategories,
-    selectedIncomeCategory,
-    filteredIncomeByMonth,
-    setSelectedIncomeCategory,
     deductReimbursements,
     deductPendingReimbursements,
     spendingStructure,
@@ -469,8 +404,6 @@ export function useDashboardData() {
     savingsRate,
     remainingToLive,
     tagFamiliesOfYear,
-    realExpensesOfYear,
-    exceptionalExpensesOfYear,
     isLoading,
     error,
     fetchData,

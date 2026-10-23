@@ -2,7 +2,12 @@ import { describe, it, expect, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import TagsPage from './TagsPage.vue'
 import { api } from '@/lib/api'
-import type { TagDto, TagFamilyDto } from '@/lib/api'
+import type {
+  DashboardSummaryDto,
+  TagDto,
+  TagFamilyDto,
+  TagFamilyOfYearDto,
+} from '@/lib/api'
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({
@@ -72,11 +77,38 @@ const TAGS: TagDto[] = [
   }),
 ]
 
-async function mountPage(tags: TagDto[] = TAGS, families: TagFamilyDto[] = []) {
+/** The summary over the year so far: only its families matter here. */
+function yearSummary(
+  overrides: Partial<DashboardSummaryDto> = {}
+): DashboardSummaryDto {
+  return {
+    monthlyData: [],
+    expensesByCategory: [],
+    incomeByCategory: [],
+    totalExpenses: 0,
+    totalIncome: 0,
+    allExpenseCategories: [],
+    allIncomeCategories: [],
+    availableAccounts: [],
+    totalExceptionalExpenses: 0,
+    exceptionalEvents: [],
+    tagFamiliesOfYear: [],
+    realExpensesOfYear: null,
+    exceptionalExpensesOfYear: null,
+    ...overrides,
+  }
+}
+
+async function mountPage(
+  tags: TagDto[] = TAGS,
+  families: TagFamilyDto[] = [],
+  summary: Promise<DashboardSummaryDto> = Promise.resolve(yearSummary())
+) {
   // Copies: the store edits what it holds, which must not leak into the
   // fixtures of the next test.
   vi.spyOn(api, 'getTags').mockResolvedValue(structuredClone(tags))
   vi.spyOn(api, 'getTagFamilies').mockResolvedValue(structuredClone(families))
+  vi.spyOn(api, 'getDashboardSummary').mockReturnValue(summary)
   // Dialogs render in place, so their content can be read and clicked.
   const wrapper = mount(TagsPage, { global: { stubs: { Teleport: true } } })
   await flushPromises()
@@ -636,6 +668,76 @@ describe('TagsPage', () => {
             .element as HTMLInputElement
         ).value
       ).toBe('Fêtes de Bayonne')
+    })
+  })
+  describe('the episodes of the year', () => {
+    const travel: TagFamilyOfYearDto = {
+      id: 'fam-travel',
+      name: 'Voyages',
+      color: null,
+      icon: null,
+      year: 2026,
+      spent: 300,
+      spentByYear: [{ year: 2026, spent: 300 }],
+      annualBudget: null,
+      remaining: null,
+      transactionCount: 2,
+      tagCount: 1,
+    }
+
+    it('opens the page with the families of the year, over the year so far', async () => {
+      const wrapper = await mountPage(
+        TAGS,
+        [],
+        Promise.resolve(
+          yearSummary({
+            tagFamiliesOfYear: [travel],
+            realExpensesOfYear: 6000,
+            exceptionalExpensesOfYear: 1000,
+          })
+        )
+      )
+
+      const card = wrapper.get('[data-testid="tag-families-of-year"]')
+      expect(card.text()).toContain("Épisodes de l'année 2026")
+      expect(card.text()).toContain('5 % du réel')
+      expect(card.text()).toContain("30 % de l'exceptionnel de l'année")
+      // First on the page: before the creation form and the sections.
+      const form = wrapper.get('[data-testid="new-tag-name"]').element
+      expect(
+        card.element.compareDocumentPosition(form) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy()
+
+      const year = new Date().getFullYear()
+      expect(api.getDashboardSummary).toHaveBeenCalledWith(
+        expect.objectContaining({
+          startDate: `${year}-01-01`,
+          includeCategoryBreakdown: false,
+          deductReimbursements: true,
+        })
+      )
+    })
+
+    it('leaves the card out without a family', async () => {
+      const wrapper = await mountPage()
+      expect(
+        wrapper.find('[data-testid="tag-families-of-year"]').exists()
+      ).toBe(false)
+    })
+
+    it('leaves the card out, the page standing, when the summary fails', async () => {
+      const wrapper = await mountPage(
+        TAGS,
+        [],
+        Promise.reject(new Error('Impossible de charger le tableau de bord'))
+      )
+      expect(
+        wrapper.find('[data-testid="tag-families-of-year"]').exists()
+      ).toBe(false)
+      expect(wrapper.find('[data-testid="tags-section-events"]').exists()).toBe(
+        true
+      )
     })
   })
 })

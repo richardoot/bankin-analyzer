@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useDashboardData } from './useDashboardData'
 import { api } from '@/lib/api'
-import type { DashboardSummaryDto, TransactionDto } from '@/lib/api'
+import type { DashboardSummaryDto } from '@/lib/api'
 
 vi.mock('@/lib/api', () => ({
   UNCATEGORIZED_CATEGORY_ID: '__uncategorized__',
@@ -173,37 +173,26 @@ describe('useDashboardData', () => {
 
       vi.mocked(api.getDashboardSummary).mockResolvedValue(emptySummary)
 
-      const { fetchData, monthlyData, expensesByMonth, incomeByMonth } =
-        useDashboardData()
+      const { fetchData, monthlyData, periodRangeLabel } = useDashboardData()
       await fetchData()
 
       expect(monthlyData.value).toHaveLength(0)
-      expect(expensesByMonth.value.labels).toEqual([])
-      expect(expensesByMonth.value.values).toEqual([])
-      expect(incomeByMonth.value.labels).toEqual([])
-      expect(incomeByMonth.value.values).toEqual([])
+      // An unbounded period with nothing in it names no range.
+      expect(periodRangeLabel.value).toBeNull()
     })
   })
 
   describe('computed properties from summary', () => {
-    it('should compute expensesByMonth from summary', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+    it('names the months the summary covers, for the section heading', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue({
+        ...mockSummary,
+        monthLabels: ['2025-11', '2025-12', '2026-01', '2026-10'],
+      })
 
-      const { fetchData, expensesByMonth } = useDashboardData()
+      const { fetchData, periodRangeLabel } = useDashboardData()
       await fetchData()
 
-      expect(expensesByMonth.value.labels).toEqual(['Jan 2024', 'Fév 2024'])
-      expect(expensesByMonth.value.values).toEqual([165.5, 800])
-    })
-
-    it('should compute incomeByMonth from summary', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, incomeByMonth } = useDashboardData()
-      await fetchData()
-
-      expect(incomeByMonth.value.labels).toEqual(['Jan 2024', 'Fév 2024'])
-      expect(incomeByMonth.value.values).toEqual([2500, 2500])
+      expect(periodRangeLabel.value).toBe('novembre 2025 à octobre 2026')
     })
 
     it('should compute totalExpenses from summary', async () => {
@@ -253,16 +242,6 @@ describe('useDashboardData', () => {
       expect(expensesByCategory.value.values).toEqual([800, 165.5])
     })
 
-    it('should compute incomeByCategory from summary', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, incomeByCategory } = useDashboardData()
-      await fetchData()
-
-      expect(incomeByCategory.value.labels).toEqual(['Salaires'])
-      expect(incomeByCategory.value.values).toEqual([5000])
-    })
-
     it('should return all expense categories from summary', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
@@ -282,95 +261,6 @@ describe('useDashboardData', () => {
       await fetchData()
 
       expect(allIncomeCategories.value.map(c => c.name)).toEqual(['Salaires'])
-    })
-  })
-
-  describe('income drill-down', () => {
-    const mockIncomeTransactions: TransactionDto[] = [
-      {
-        id: '3',
-        date: '2024-01-25T00:00:00.000Z',
-        description: 'Salaire',
-        amount: 2500.0,
-        type: 'INCOME',
-        accountId: 'Compte Courant',
-        account: 'Compte Courant',
-        categoryId: 'cat-Salaires',
-        categoryName: 'Salaires',
-        isPointed: true,
-        createdAt: '2024-01-25T00:00:00.000Z',
-      },
-      {
-        id: '5',
-        date: '2024-02-25T00:00:00.000Z',
-        description: 'Salaire',
-        amount: 2500.0,
-        type: 'INCOME',
-        accountId: 'Compte Courant',
-        account: 'Compte Courant',
-        categoryId: 'cat-Salaires',
-        categoryName: 'Salaires',
-        isPointed: true,
-        createdAt: '2024-02-25T00:00:00.000Z',
-      },
-    ]
-
-    it('should return overall income when no category is selected', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, filteredIncomeByMonth, selectedIncomeCategory } =
-        useDashboardData()
-      await fetchData()
-
-      expect(selectedIncomeCategory.value).toBeNull()
-      expect(filteredIncomeByMonth.value.labels).toEqual([
-        'Jan 2024',
-        'Fév 2024',
-      ])
-      expect(filteredIncomeByMonth.value.values).toEqual([2500, 2500])
-    })
-
-    it('shows the selected income category monthly series', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, filteredIncomeByMonth, setSelectedIncomeCategory } =
-        useDashboardData()
-      await fetchData()
-
-      setSelectedIncomeCategory('cat-Salaires')
-
-      expect(filteredIncomeByMonth.value.labels).toEqual([
-        'Jan 2024',
-        'Fév 2024',
-      ])
-      expect(filteredIncomeByMonth.value.values).toEqual([2500, 2500])
-    })
-
-    it('should update selected income category', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      vi.mocked(api.getTransactions).mockResolvedValue({
-        data: mockIncomeTransactions,
-        meta: {
-          total: 2,
-          page: 1,
-          limit: 100,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false,
-        },
-      })
-
-      const { fetchData, selectedIncomeCategory, setSelectedIncomeCategory } =
-        useDashboardData()
-      await fetchData()
-
-      expect(selectedIncomeCategory.value).toBeNull()
-
-      await setSelectedIncomeCategory('cat-Salaires')
-      expect(selectedIncomeCategory.value).toBe('cat-Salaires')
-
-      await setSelectedIncomeCategory(null)
-      expect(selectedIncomeCategory.value).toBeNull()
     })
   })
 

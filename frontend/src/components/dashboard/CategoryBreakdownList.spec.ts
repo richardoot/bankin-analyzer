@@ -774,4 +774,62 @@ describe('CategoryBreakdownList', () => {
       ).toBe(true)
     })
   })
+  describe('the trend threshold', () => {
+    const months = ['2026-01', '2026-02', '2026-03']
+    const row = (name: string, amount: number): CategoryDataDto => ({
+      categoryId: `cat-${name}`,
+      category: name,
+      amount,
+      averagePerMonth: amount / 3,
+      monthlyAmounts: [amount / 3, amount / 3, amount / 3],
+    })
+    // On 1 000 €: Transport 7,7 %, Cadeaux 2,8 %.
+    const rows = [
+      row('Logement', 895),
+      row('Transport', 77),
+      row('Cadeaux', 28),
+    ]
+
+    function mountList(trendMinShare?: number) {
+      return mount(CategoryBreakdownList, {
+        global: { plugins: [router] },
+        props: {
+          categories: rows,
+          monthLabels: months,
+          total: 1000,
+          ...(trendMinShare !== undefined && { trendMinShare }),
+        },
+      })
+    }
+
+    const sparkline = (wrapper: ReturnType<typeof mountList>, name: string) =>
+      wrapper
+        .get(`[data-testid="category-trend-${name}"]`)
+        .findComponent({ name: 'SparklineChart' })
+        .exists()
+
+    it('draws the trend of a row at 7,7 %, not at 2,8 %, against 5 %', () => {
+      const wrapper = mountList(0.05)
+      expect(sparkline(wrapper, 'Logement')).toBe(true)
+      expect(sparkline(wrapper, 'Transport')).toBe(true)
+      // The cell stays, empty: the columns keep their vertical.
+      expect(sparkline(wrapper, 'Cadeaux')).toBe(false)
+      expect(
+        wrapper.find('[data-testid="category-trend-Cadeaux"]').exists()
+      ).toBe(true)
+    })
+
+    it('draws it once the small row is expanded', async () => {
+      const wrapper = mountList(0.05)
+      await wrapper.get('[data-testid="category-row-Cadeaux"]').trigger('click')
+      expect(sparkline(wrapper, 'Cadeaux')).toBe(true)
+    })
+
+    it('draws every row by default, as the pages without a threshold do', () => {
+      const wrapper = mountList()
+      for (const name of ['Logement', 'Transport', 'Cadeaux']) {
+        expect(sparkline(wrapper, name), name).toBe(true)
+      }
+    })
+  })
 })
