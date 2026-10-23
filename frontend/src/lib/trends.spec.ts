@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import type { TrendInsightDto, TrendKind, TrendUnitDto } from '@/lib/api'
 import {
   BADGE_CLASSES,
+  SPARK_COLORS,
+  arrowOf,
   TREND_GROUPS,
   badgeLabel,
   badgeText,
@@ -499,14 +501,35 @@ describe('tileOf', () => {
 })
 
 describe('the badge', () => {
-  it('colours a rise blue, a chosen drop green, any other drop grey, the lines to file amber', () => {
-    expect(hueOf(trend('amount'))).toBe('up')
+  it('tints a drop teal, a rise amber, the savings and a shift grey, the lines to file amber', () => {
+    expect(hueOf(trend('amount'))).toBe('over')
     expect(hueOf(trend('amount', { direction: 'down', tone: 'success' }))).toBe(
-      'success'
+      'under'
     )
-    expect(hueOf(trend('amount', { direction: 'down' }))).toBe('down')
+    expect(hueOf(trend('amount', { direction: 'down' }))).toBe('under')
+    expect(hueOf(trend('savings', { direction: 'up' }))).toBe('neutral')
+    expect(hueOf(trend('shift'))).toBe('neutral')
     expect(hueOf(trend('uncategorized'))).toBe('todo')
-    expect(BADGE_CLASSES.up).toContain('bg-sky-50')
+    expect(BADGE_CLASSES.over).toContain('bg-amber-50')
+    expect(BADGE_CLASSES.under).toContain('bg-teal-50')
+    expect(BADGE_CLASSES.neutral).toContain('bg-gray-100')
+    expect(BADGE_CLASSES.todo).toBe(BADGE_CLASSES.over)
+  })
+
+  it('never puts red, green or blue on a badge', () => {
+    for (const classes of Object.values(BADGE_CLASSES)) {
+      expect(classes).not.toMatch(/(red|green|emerald|sky)-/)
+    }
+    expect(Object.values(SPARK_COLORS)).toEqual(
+      expect.arrayContaining(['#14b8a6', '#f59e0b', '#9ca3af'])
+    )
+  })
+
+  it('arrows a gap by its direction, never a word badge nor the lines to file', () => {
+    expect(arrowOf(trend('amount'))).toBe('↑')
+    expect(arrowOf(trend('savings', { direction: 'down' }))).toBe('↓')
+    expect(arrowOf(trend('subscription', { unit: series }))).toBe('')
+    expect(arrowOf(trend('uncategorized'))).toBe('')
   })
 
   it('says a gap in its own terms', () => {

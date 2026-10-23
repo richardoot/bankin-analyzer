@@ -18,6 +18,7 @@
   } from '@/lib/formatters'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
   import SectionLabel from '@/components/ui/SectionLabel.vue'
+  import { DATA_HUE, STATE_COLORS } from '@/lib/stateTints'
   import { useChartTheme } from '@/composables/useChartTheme'
 
   const props = withDefaults(
@@ -51,7 +52,7 @@
       trendMinShare?: number
     }>(),
     {
-      color: '#60a5fa',
+      color: DATA_HUE,
       mode: 'real',
       window: undefined,
       trendMinShare: 0,
@@ -301,7 +302,7 @@
    * One hue for every bar: the length carries the amount, the emoji and
    * the name carry the category. blue-400 reads on both themes.
    */
-  const BAR_COLOR = '#60a5fa'
+  const BAR_COLOR = DATA_HUE
 
   /** Stripes over the bar's blue, in the color of the card. */
   const hatch = computed(() => {
@@ -726,6 +727,7 @@
                 :data="chartDataFor(cat)"
                 :title="cat.category"
                 :color="props.color"
+                :negative-color="STATE_COLORS.neutral"
                 :months="monthLabels"
                 :reference="displayedAverage(cat)"
                 :overlay="chartOverlay(cat)"

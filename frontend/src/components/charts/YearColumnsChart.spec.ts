@@ -144,7 +144,7 @@ describe('YearColumnsChart', () => {
     expect(over.attributes()).toMatchObject({
       y: '14',
       height: '16',
-      fill: '#ef4444',
+      fill: '#f59e0b', // amber-500: an overrun is a state, never red
     })
     expect(over.find('title').text()).toBe(
       `2025 : dépassement de ${formatCurrency(200)}`

@@ -691,7 +691,7 @@ describe('SpendingTrendsCard', () => {
       )
     })
 
-    it('badges each gap signed, coloured by direction and tone', async () => {
+    it('badges each gap signed, teal for a drop and amber for a rise', async () => {
       const wrapper = await mountCard()
 
       const badges = wrapper.findAll('[data-testid="trend-badge"]')
@@ -703,7 +703,7 @@ describe('SpendingTrendsCard', () => {
       ])
       expect(
         badges.map(b => b.classes().find(c => c.startsWith('bg-')))
-      ).toEqual(['bg-emerald-50', 'bg-sky-50', 'bg-gray-100', 'bg-sky-50'])
+      ).toEqual(['bg-teal-50', 'bg-amber-50', 'bg-teal-50', 'bg-amber-50'])
       expect(badges[1]?.attributes('aria-label')).toBe('En hausse : +38 %')
     })
 
@@ -978,10 +978,10 @@ describe('SpendingTrendsCard', () => {
         'Abonnement arrêté',
         expect.stringMatching(/^Prix en hausse : \+2,50\s€$/),
       ])
-      // A charge is never a reproach nor a success: blue up, grey down.
+      // A charge that came or rose reads amber, one that stopped teal.
       expect(
         badges.map(b => b.classes().find(c => c.startsWith('bg-')))
-      ).toEqual(['bg-sky-50', 'bg-gray-100', 'bg-sky-50'])
+      ).toEqual(['bg-amber-50', 'bg-teal-50', 'bg-amber-50'])
 
       await wrapper
         .find('[data-testid="trends-tab-merchants"]')
