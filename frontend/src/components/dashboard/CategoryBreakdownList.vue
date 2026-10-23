@@ -42,11 +42,19 @@
        */
       window?:
         { from?: string | undefined; to?: string | undefined } | undefined
+      /**
+       * The share of the total, as a fraction, a row needs for its trend
+       * to be drawn in the Tendance column: a small line's sparkline is
+       * noise among the big ones. An expanded row always draws it. 0, the
+       * default, draws every row's.
+       */
+      trendMinShare?: number
     }>(),
     {
       color: '#60a5fa',
       mode: 'real',
       window: undefined,
+      trendMinShare: 0,
     }
   )
 
@@ -315,6 +323,16 @@
   /** A trend needs two months; a one-month period has no column for it. */
   const showTrend = computed(() => monthCount.value >= 2)
 
+  /**
+   * Whether a row draws its sparkline: two months at least, and a share of
+   * the total above `trendMinShare` — or the row expanded.
+   */
+  function showsSparkline(cat: CategoryDataDto): boolean {
+    if (getSparklineData(cat).length < 2) return false
+    if (isExpanded(rowKey(cat))) return true
+    return getPercent(cat) / 100 >= props.trendMinShare
+  }
+
   /** « Moyenne par mois », or the plain amount over a single month. */
   const hasAverages = computed(() =>
     props.categories.some(cat => displayedAverage(cat) !== undefined)
@@ -529,7 +547,7 @@
               class="hidden sm:flex sm:justify-center"
             >
               <SparklineChart
-                v-if="getSparklineData(cat).length >= 2"
+                v-if="showsSparkline(cat)"
                 :data="getSparklineData(cat)"
                 :width="130"
                 baseline="zero"
