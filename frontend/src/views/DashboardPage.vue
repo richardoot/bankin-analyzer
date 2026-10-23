@@ -53,6 +53,7 @@
     tagFamiliesOfYear,
     structureBreakdown,
     structureShareByMonth,
+    exceptionalByCategory,
     pendingReceivables,
     expenseCategoriesDetailed,
     monthLabels,
@@ -406,6 +407,8 @@
               :events="hasExceptionalExpenses ? exceptionalEvents : []"
               :families="tagFamiliesOfYear"
               :has-exceptional-expenses="hasExceptionalExpenses"
+              :events-by-category="exceptionalByCategory"
+              :window="linkWindow"
             />
           </BaseCard>
         </section>

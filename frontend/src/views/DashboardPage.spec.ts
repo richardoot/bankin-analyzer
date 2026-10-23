@@ -1301,6 +1301,16 @@ describe('DashboardPage', () => {
           unfolding.structureShareByMonth
         )
         expect(lines.props('monthLabels')).toEqual(['2025-11', '2026-10'])
+        const summaryLines = wrapper.findComponent({
+          name: 'PeriodSummaryLines',
+        })
+        expect(summaryLines.props('eventsByCategory')).toEqual(
+          unfolding.exceptionalByCategory
+        )
+        expect(summaryLines.props('window')).toEqual({
+          from: undefined,
+          to: undefined,
+        })
       })
 
       it('loads folded, then opens a segment in place, under its line', async () => {
@@ -1324,6 +1334,25 @@ describe('DashboardPage', () => {
             .exists()
         ).toBe(true)
         expect(router.currentRoute.value.path).not.toBe('/transactions')
+      })
+
+      it('opens the events in place, under their line', async () => {
+        const wrapper = await mountWhere(unfolding)
+
+        await wrapper.get('[data-testid="events-toggle"]').trigger('click')
+
+        const panel = wrapper
+          .get('[data-testid="summary-line-events"]')
+          .get('[data-testid="events-panel"]')
+        expect(
+          panel.find('[data-testid="events-panel-row-tag-1"]').exists()
+        ).toBe(true)
+        expect(
+          panel
+            .get('[data-testid="events-panel-by-category"]')
+            .text()
+            .replace(/[\s\u202f\u00a0]+/g, ' ')
+        ).toContain('Transport 300 €')
       })
     })
   })

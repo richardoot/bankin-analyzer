@@ -4,21 +4,23 @@
    * dashboard-refonte.md, lot 4): what came in and what the period kept,
    * the events it carried, the families' episodes of the year. Each says
    * its figure in a sentence; the detail is a link away, or unfolds in
-   * place (the events, lot 5).
+   * place (the events, lot 5: folded on load, the state kept nowhere).
    *
    * What the period kept is income less every expense — never a rate on
    * the transfers to savings (the product rule of 2026-10-21) — over the
    * same closed months as the income it is read against.
    */
-  import { computed } from 'vue'
+  import { computed, nextTick, ref } from 'vue'
   import { RouterLink, type RouteLocationRaw } from 'vue-router'
   import type {
     CategoryDataDto,
+    ExceptionalCategoryDto,
     ExceptionalEventDto,
     TagFamilyOfYearDto,
   } from '@/lib/api'
   import { formatCompactCurrency } from '@/lib/formatters'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
+  import EventsPanel from './EventsPanel.vue'
 
   const props = withDefaults(
     defineProps<{
@@ -40,9 +42,25 @@
       families: TagFamilyOfYearDto[]
       /** Whether an event touches the period: the episodes line needs one. */
       hasExceptionalExpenses: boolean
+      /** The events' expenses by category: the foot of their panel. */
+      eventsByCategory?: ExceptionalCategoryDto[]
+      /** The period, for the links of the events' panel. */
+      window?:
+        { from?: string | undefined; to?: string | undefined } | undefined
     }>(),
-    { closedMonths: true }
+    { closedMonths: true, eventsByCategory: () => [], window: undefined }
   )
+
+  /** Whether the events are unfolded: folded on load, remembered nowhere. */
+  const eventsOpen = ref(false)
+  const eventsToggle = ref<HTMLButtonElement | null>(null)
+
+  /** Échap folds the panel and gives the focus back to its button. */
+  async function closeEvents(): Promise<void> {
+    eventsOpen.value = false
+    await nextTick()
+    eventsToggle.value?.focus()
+  }
 
   /** Above this share a second source of income earns a bar of its own. */
   const SECOND_SOURCE_SHARE = 0.05
@@ -220,14 +238,30 @@
         >
       </p>
       <button
+        ref="eventsToggle"
         type="button"
         data-testid="events-toggle"
-        class="text-xs font-medium text-gray-400 dark:text-gray-500"
-        aria-expanded="false"
-        disabled
+        class="rounded text-xs font-medium text-primary-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 dark:text-primary-400"
+        :aria-expanded="eventsOpen"
+        aria-controls="events-panel-region"
+        @click="eventsOpen = !eventsOpen"
       >
-        Déplier
+        {{ eventsOpen ? 'Replier' : 'Déplier' }}
       </button>
+      <div
+        id="events-panel-region"
+        class="w-full"
+        :class="{ hidden: !eventsOpen }"
+      >
+        <EventsPanel
+          v-if="eventsOpen"
+          class="mt-1.5"
+          :events="events"
+          :by-category="eventsByCategory"
+          :window="window"
+          @close="closeEvents"
+        />
+      </div>
     </div>
 
     <!-- The families over the calendar year, whatever the period. -->
