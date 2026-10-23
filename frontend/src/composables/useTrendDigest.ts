@@ -1,4 +1,10 @@
-import { ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
+import {
+  ref,
+  shallowReactive,
+  toValue,
+  watch,
+  type MaybeRefOrGetter,
+} from 'vue'
 import {
   api,
   type TrendDigestDto,
@@ -24,9 +30,52 @@ export interface TrendDigestInputs {
  */
 const failedThisSession = new Set<string>()
 
-/** Only for specs: forget what failed. */
+/**
+ * The paragraphs read in this session, by the view they were asked for.
+ * The dashboard's compact card never asks for one (most openings never
+ * read it, and each call not made is a model call saved), but it leads with
+ * the paragraph once the trends page has unfolded it for the same view.
+ * Reactive and module-level: it outlives the card that asked.
+ */
+const readThisSession = shallowReactive(new Map<string, TrendDigestDto>())
+
+/** Only for specs: forget what failed and what was read. */
 export function resetTrendDigestSession(): void {
   failedThisSession.clear()
+  readThisSession.clear()
+}
+
+/** What a paragraph is asked for: the list's month and reading, the window asked. */
+export interface TrendDigestView {
+  month: string
+  reading: TrendReading
+  window: TrendWindow
+  deductReimbursements: boolean
+  deductPendingReimbursements: boolean
+}
+
+const keyOf = (view: TrendDigestView): string =>
+  [
+    view.month,
+    view.reading,
+    view.window,
+    view.deductReimbursements,
+    view.deductPendingReimbursements,
+  ].join('|')
+
+function remember(view: TrendDigestView, digest: TrendDigestDto | null): void {
+  if (digest) readThisSession.set(keyOf(view), digest)
+  else readThisSession.delete(keyOf(view))
+}
+
+/**
+ * The paragraph already read in this session for this view, null when none
+ * was. Never asks the server: reactive, it appears when another card reads it.
+ */
+export function rememberedTrendDigest(
+  view: TrendDigestView
+): TrendDigestDto | null {
+  return readThisSession.get(keyOf(view)) ?? null
 }
 
 const MODEL_NAMES: Record<string, string> = {
@@ -66,7 +115,7 @@ export function useTrendDigest(inputs: TrendDigestInputs) {
   let sequence = 0
 
   /** What the paragraph is asked for, or null when there is nothing to tell. */
-  function currentQuery() {
+  function currentQuery(): TrendDigestView | null {
     const trends = toValue(inputs.trends)
     // Too short a history or nothing that moved: the server would answer
     // null anyway, without a word the card does not already say.
@@ -79,15 +128,6 @@ export function useTrendDigest(inputs: TrendDigestInputs) {
       deductPendingReimbursements: toValue(inputs.deductPendingReimbursements),
     }
   }
-
-  const keyOf = (query: NonNullable<ReturnType<typeof currentQuery>>) =>
-    [
-      query.month,
-      query.reading,
-      query.window,
-      query.deductReimbursements,
-      query.deductPendingReimbursements,
-    ].join('|')
 
   async function fetchDigest(): Promise<void> {
     const request = ++sequence
@@ -103,6 +143,7 @@ export function useTrendDigest(inputs: TrendDigestInputs) {
     const result = await api.getTrendDigest(query).catch(() => null)
     if (request !== sequence) return
     if (result === null) failedThisSession.add(keyOf(query))
+    remember(query, result)
     digest.value = result
     isLoading.value = false
     hasAnswered.value = true
@@ -137,6 +178,7 @@ export function useTrendDigest(inputs: TrendDigestInputs) {
     if (request === sequence) {
       if (result) {
         failedThisSession.delete(keyOf(query))
+        remember(query, result)
         digest.value = result
       }
     }

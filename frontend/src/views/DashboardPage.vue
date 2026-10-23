@@ -488,9 +488,11 @@
 
         <!-- What changes: after the totals, before their detail. Its own
              request, sent once the summary is on screen; it follows the
-             reading and the reimbursement switches, never the period. -->
+             reading and the reimbursement switches, never the period.
+             Compact here: the lead and three tiles, the rest on /trends. -->
         <SpendingTrendsCard
           class="mb-8"
+          compact
           :reading="breakdownMode"
           :deduct-reimbursements="deductReimbursements"
           :deduct-pending-reimbursements="deductPendingReimbursements"
