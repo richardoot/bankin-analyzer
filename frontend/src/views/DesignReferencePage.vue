@@ -29,6 +29,19 @@
   import { transactionsLink } from '@/lib/transactionsLink'
   import type { FilterChip } from '@/components/ui/FilterChips.vue'
   import * as icons from '@/components/icons'
+  import MonthBand from '@/components/dashboard/MonthBand.vue'
+  import TodoCard from '@/components/dashboard/TodoCard.vue'
+  import StructureLines from '@/components/dashboard/StructureLines.vue'
+  import PeriodSummaryLines from '@/components/dashboard/PeriodSummaryLines.vue'
+  import { DATA_HUE, STATE_BADGE_CLASSES } from '@/lib/stateTints'
+  import {
+    MONTH_SAMPLES,
+    MONTH_SAMPLE_OPTIONS,
+    STRUCTURE_SAMPLE,
+    SUMMARY_SAMPLE,
+    TODO_SAMPLE,
+    type MonthSampleState,
+  } from './designReferenceSamples'
   import {
     formatCompactCurrency,
     formatCurrency,
@@ -69,7 +82,8 @@
       hue: 'red',
       cls: 'bg-red-600',
       use: 'Danger et négatif : destruction, erreurs, dépenses, tout dépassement (enveloppe, mois, réserve, épargne sous zéro).',
-      never: 'réinitialiser un filtre ou un brouillon, réessayer.',
+      never:
+        'réinitialiser un filtre ou un brouillon, réessayer ; un chiffre ou un dépassement du tableau de bord (teintes d’état).',
       sample: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
       sampleLabel: '⚠ Dépassé',
     },
@@ -77,7 +91,8 @@
       hue: 'green',
       cls: 'bg-green-600',
       use: 'Donnée positive : revenus, argent reçu, dette réglée, épargne ou marge positive, import réussi, succès.',
-      never: 'une action (« Valider », « Pointer » sont primary).',
+      never:
+        'une action (« Valider », « Pointer » sont primary) ; un chiffre du tableau de bord (teintes d’état).',
       sample:
         'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
       sampleLabel: 'Réglé',
@@ -90,6 +105,14 @@
       sample:
         'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
       sampleLabel: 'Exceptionnel',
+    },
+    {
+      hue: 'teal',
+      cls: 'bg-teal-500',
+      use: 'Tableau de bord : l’état « sous l’habitude » ou une baisse (teintes d’état). Ailleurs : un achat lissé, ses tranches.',
+      never: 'une action ; un chiffre lui-même (il reste à l’encre du texte).',
+      sample: STATE_BADGE_CLASSES.under,
+      sampleLabel: '−17 %',
     },
     {
       hue: 'debt',
@@ -210,6 +233,7 @@
   const demoPeriod = ref('6m')
   const demoReading = ref<'everyday' | 'actual'>('everyday')
   const demoRetrying = ref(false)
+  const demoMonthState = ref<MonthSampleState>('under')
 
   const demoChips = ref<FilterChip[]>([
     { key: 'type', label: 'Dépenses' },
@@ -801,6 +825,120 @@
           </li>
           <li>Les modales et les toasts passent toujours par-dessus.</li>
         </ul>
+      </BaseCard>
+
+      <!-- Dashboard: the state tints and the bricks of the page -->
+      <BaseCard as="section" padding="lg" data-testid="design-state-tints">
+        <h2 class="mb-1 text-xl font-semibold text-gray-900 dark:text-gray-100">
+          Teintes d'état
+        </h2>
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          Sur le tableau de bord, les chiffres sont à l'encre du texte ; la
+          couleur ne dit qu'un état, en trois teintes tirées de
+          <code class="font-mono text-xs">lib/stateTints</code>. L'ambre sert
+          aussi « À faire », et rien d'autre ; jamais de rouge ni de vert sur
+          une donnée. La donnée elle-même (une barre, la ligne d'une sparkline)
+          a une seule teinte.
+        </p>
+        <ul class="grid gap-3 text-sm sm:grid-cols-2">
+          <li class="flex items-center gap-3">
+            <span
+              class="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap tabular-nums"
+              :class="STATE_BADGE_CLASSES.under"
+              >−17 %</span
+            >
+            <span class="text-gray-700 dark:text-gray-300"
+              >teal : sous l'habitude, une baisse</span
+            >
+          </li>
+          <li class="flex items-center gap-3">
+            <span
+              class="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap tabular-nums"
+              :class="STATE_BADGE_CLASSES.over"
+              >+16 %</span
+            >
+            <span class="text-gray-700 dark:text-gray-300"
+              >ambre : au-dessus, une hausse, un dépassement, « À faire »</span
+            >
+          </li>
+          <li class="flex items-center gap-3">
+            <span
+              class="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap"
+              :class="STATE_BADGE_CLASSES.neutral"
+              >dans l'habitude</span
+            >
+            <span class="text-gray-700 dark:text-gray-300"
+              >gris : à ±5 % près, ou rien à comparer</span
+            >
+          </li>
+          <li class="flex items-center gap-3">
+            <span
+              class="h-3 w-10 shrink-0 rounded-full"
+              :style="{ backgroundColor: DATA_HUE }"
+            ></span>
+            <span class="text-gray-700 dark:text-gray-300"
+              ><code class="font-mono text-xs">blue-400</code> : la donnée, les
+              événements en hachures de la même teinte</span
+            >
+          </li>
+        </ul>
+      </BaseCard>
+
+      <BaseCard as="section" padding="lg" data-testid="design-dashboard">
+        <h2 class="mb-1 text-xl font-semibold text-gray-900 dark:text-gray-100">
+          Tableau de bord
+        </h2>
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          Les briques de la page, sur des chiffres inventés.
+          <code class="font-mono text-xs">MonthBand</code> dans chacun de ses
+          états : la page possède la requête, une erreur reste dans la bande.
+        </p>
+        <SegmentedControl
+          v-model="demoMonthState"
+          label="État de la bande du mois"
+          size="sm"
+          scrollable
+          class="mb-4"
+          :options="MONTH_SAMPLE_OPTIONS"
+        />
+        <MonthBand
+          :data="MONTH_SAMPLES[demoMonthState].data"
+          :error="MONTH_SAMPLES[demoMonthState].error"
+          reading="everyday"
+        />
+
+        <SectionLabel as="h3" class="mt-8 mb-2">TodoCard</SectionLabel>
+        <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          Quatre lignes, puis « et N autres » ; absente quand rien n'est à
+          faire.
+        </p>
+        <TodoCard :items="TODO_SAMPLE" />
+
+        <SectionLabel as="h3" class="mt-8 mb-2">
+          StructureLines · PeriodSummaryLines
+        </SectionLabel>
+        <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          Le haut et le bas de « Où part l'argent », sur douze mois dont onze
+          clos.
+        </p>
+        <div class="space-y-6">
+          <StructureLines
+            :actual="STRUCTURE_SAMPLE.actual"
+            :everyday="STRUCTURE_SAMPLE.everyday"
+            reading="everyday"
+            :period-months="STRUCTURE_SAMPLE.periodMonths"
+          />
+          <PeriodSummaryLines
+            :average-income="SUMMARY_SAMPLE.averageIncome"
+            :average-savings="SUMMARY_SAMPLE.averageSavings"
+            :period-months="SUMMARY_SAMPLE.periodMonths"
+            :income-sources="SUMMARY_SAMPLE.incomeSources"
+            :income-link="transactionsLink({ type: 'INCOME' })"
+            :events="SUMMARY_SAMPLE.events"
+            :families="SUMMARY_SAMPLE.families"
+            has-exceptional-expenses
+          />
+        </div>
       </BaseCard>
 
       <!-- Formatters -->

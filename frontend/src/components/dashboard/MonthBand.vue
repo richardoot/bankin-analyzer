@@ -3,6 +3,12 @@
   import { RouterLink } from 'vue-router'
   import type { DashboardMonthDto, TrendReading } from '@/lib/api'
   import { DASHBOARD_THRESHOLDS } from '@/lib/dashboardThresholds'
+  import {
+    DATA_HUE,
+    STATE_BADGE_CLASSES,
+    STATE_COLORS,
+    type StateTone,
+  } from '@/lib/stateTints'
   import { formatCompactCurrency, formatMonth } from '@/lib/formatters'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import SkeletonBlock from '@/components/ui/SkeletonBlock.vue'
@@ -31,24 +37,6 @@
   )
 
   const emit = defineEmits<{ retry: [] }>()
-
-  /** The three states a badge can say, and nothing else. */
-  type Tone = 'under' | 'over' | 'neutral'
-
-  const BADGE: Record<Tone, string> = {
-    under: 'bg-teal-50 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
-    over: 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-    neutral: 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-gray-300',
-  }
-
-  /** The end of a sparkline takes the state's hue; the line, the data's. */
-  const SPARK_END: Record<Tone, string> = {
-    under: '#14b8a6', // teal-500
-    over: '#f59e0b', // amber-500
-    neutral: '#9ca3af', // gray-400
-  }
-  /** The one data hue of the page, the share bars' blue-400. */
-  const SPARK_LINE = '#60a5fa'
 
   const PERCENT = new Intl.NumberFormat('fr-FR', {
     style: 'percent',
@@ -83,7 +71,7 @@
   function gapOf(
     value: number,
     reference: number
-  ): { tone: Tone; ratio: number } {
+  ): { tone: StateTone; ratio: number } {
     if (reference <= 0) return { tone: 'neutral', ratio: 0 }
     const ratio = (value - reference) / reference
     if (Math.abs(ratio) <= DASHBOARD_THRESHOLDS.neutralGap) {
@@ -101,7 +89,7 @@
     if (d.habit === null || d.habitToDate === null) {
       return {
         label,
-        tone: 'neutral' as Tone,
+        tone: 'neutral' as StateTone,
         badge: NO_HABIT,
         badgeNote: null,
         detail: `${d.habitMonths} mois clos d'historique, l'habitude en demande 3`,
@@ -260,7 +248,7 @@
         <p class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
           <span
             class="inline-flex items-center rounded-full px-2 py-0.5 font-semibold whitespace-nowrap tabular-nums"
-            :class="BADGE[spentTile.tone]"
+            :class="STATE_BADGE_CLASSES[spentTile.tone]"
             :data-tone="spentTile.tone"
             data-testid="month-badge-spent"
             >{{ spentTile.badge }}</span
@@ -282,8 +270,8 @@
           :data="data.spentSeries"
           :reference="data.habit ?? undefined"
           baseline="zero"
-          :color="SPARK_LINE"
-          :end-color="SPARK_END[spentTile.tone]"
+          :color="DATA_HUE"
+          :end-color="STATE_COLORS[spentTile.tone]"
           :width="120"
           :label="`${spentTile.label} des mois clos et du mois en cours`"
           data-testid="month-sparkline-spent"
@@ -308,7 +296,7 @@
         <p class="text-xs">
           <span
             class="inline-flex items-center rounded-full px-2 py-0.5 font-semibold whitespace-nowrap tabular-nums"
-            :class="BADGE.neutral"
+            :class="STATE_BADGE_CLASSES.neutral"
             data-tone="neutral"
             data-testid="month-badge-income"
             >{{ incomeTile.badge }}</span
@@ -325,8 +313,8 @@
           :data="data.incomeSeries"
           :reference="data.incomeExpected ?? undefined"
           baseline="zero"
-          :color="SPARK_LINE"
-          :end-color="SPARK_END.neutral"
+          :color="DATA_HUE"
+          :end-color="STATE_COLORS.neutral"
           :width="120"
           label="Revenus des mois clos"
           data-testid="month-sparkline-income"
@@ -351,7 +339,7 @@
         <p class="text-xs">
           <span
             class="inline-flex items-center rounded-full px-2 py-0.5 font-semibold whitespace-nowrap tabular-nums"
-            :class="BADGE.neutral"
+            :class="STATE_BADGE_CLASSES.neutral"
             data-tone="neutral"
             data-testid="month-badge-upcoming"
             >{{ upcomingTile.badge }}</span
@@ -412,7 +400,11 @@
         <p v-if="remainingTile.badge" class="text-xs">
           <span
             class="inline-flex items-center rounded-full px-2 py-0.5 font-semibold whitespace-nowrap tabular-nums"
-            :class="remainingTile.overspent ? BADGE.over : BADGE.neutral"
+            :class="
+              remainingTile.overspent
+                ? STATE_BADGE_CLASSES.over
+                : STATE_BADGE_CLASSES.neutral
+            "
             :data-tone="remainingTile.overspent ? 'over' : 'neutral'"
             data-testid="month-badge-remaining"
             >{{ remainingTile.badge }}</span

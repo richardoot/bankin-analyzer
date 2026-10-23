@@ -213,35 +213,6 @@ describe('useDashboardData', () => {
       expect(totalIncome.value).toBe(5000)
     })
 
-    it('reads the savings as income less expenses, the server first', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue({
-        ...mockSummary,
-        savings: 4034.5,
-      })
-      const fromServer = useDashboardData()
-      await fromServer.fetchData()
-      expect(fromServer.savings.value).toBe(4034.5)
-
-      // An older server without the field: the same definition, locally.
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-      const local = useDashboardData()
-      await local.fetchData()
-      expect(local.savings.value).toBe(4034.5)
-    })
-
-    it('should compute expensesByCategory from summary', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, expensesByCategory } = useDashboardData()
-      await fetchData()
-
-      expect(expensesByCategory.value.labels).toEqual([
-        'Logement',
-        'Alimentation',
-      ])
-      expect(expensesByCategory.value.values).toEqual([800, 165.5])
-    })
-
     it('should return all expense categories from summary', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
 
@@ -252,15 +223,6 @@ describe('useDashboardData', () => {
         'Alimentation',
         'Logement',
       ])
-    })
-
-    it('should return all income categories from summary', async () => {
-      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-      const { fetchData, allIncomeCategories } = useDashboardData()
-      await fetchData()
-
-      expect(allIncomeCategories.value.map(c => c.name)).toEqual(['Salaires'])
     })
   })
 
@@ -336,14 +298,15 @@ describe('useDashboardData', () => {
     }
 
     it('sums the everyday share across categories', async () => {
+      vi.mocked(localStorage.getItem).mockReturnValue(null)
       vi.mocked(api.getDashboardSummary).mockResolvedValue(summaryWithEvents)
 
-      const { fetchData, totalEverydayExpenses, totalExceptionalExpenses } =
+      const { fetchData, displayedTotalExpenses, hasExceptionalExpenses } =
         useDashboardData()
       await fetchData()
 
-      expect(totalEverydayExpenses.value).toBe(1600)
-      expect(totalExceptionalExpenses.value).toBe(600)
+      expect(displayedTotalExpenses.value).toBe(1600)
+      expect(hasExceptionalExpenses.value).toBe(true)
     })
 
     it('exposes the events of the period', async () => {
@@ -410,13 +373,20 @@ describe('useDashboardData', () => {
         exceptionalEvents: [],
       })
 
-      const { fetchData, hasExceptionalExpenses, totalEverydayExpenses } =
-        useDashboardData()
+      vi.mocked(localStorage.getItem).mockReturnValue(null)
+      const {
+        fetchData,
+        hasExceptionalExpenses,
+        displayedTotalExpenses,
+        setBreakdownMode,
+      } = useDashboardData()
       await fetchData()
 
       expect(hasExceptionalExpenses.value).toBe(false)
       // With no event, both readings are strictly identical.
-      expect(totalEverydayExpenses.value).toBe(1600)
+      expect(displayedTotalExpenses.value).toBe(1600)
+      setBreakdownMode('real')
+      expect(displayedTotalExpenses.value).toBe(1600)
     })
 
     it('falls back to the real amounts when the everyday share is absent', async () => {
@@ -438,10 +408,12 @@ describe('useDashboardData', () => {
         totalExceptionalExpenses: 0,
       })
 
-      const { fetchData, totalEverydayExpenses } = useDashboardData()
+      vi.mocked(localStorage.getItem).mockReturnValue(null)
+      const { fetchData, displayedTotalExpenses } = useDashboardData()
       await fetchData()
 
-      expect(totalEverydayExpenses.value).toBe(2200)
+      // « Vie courante », read off the real amounts.
+      expect(displayedTotalExpenses.value).toBe(2200)
     })
   })
 })

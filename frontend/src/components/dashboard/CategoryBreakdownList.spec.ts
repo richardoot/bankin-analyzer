@@ -477,10 +477,12 @@ describe('CategoryBreakdownList', () => {
         expect(chart.props('data').values).toEqual([0, 400, 0])
       })
 
-      it('draws the months in the blue of the share bars', async () => {
-        const chart = await chartOf('real', 'Logement')
+      it('draws the months in the blue of the share bars, and a refunded month in grey', async () => {
+        const chart = await chartOf('real', 'Voyages')
 
         expect(chart.props('color')).toBe('#60a5fa')
+        // A month the refunds took below zero is no gain: grey, not green.
+        expect(chart.props('negativeColor')).toBe('#9ca3af')
       })
 
       it('shows the everyday months alone in « Vie courante »', async () => {

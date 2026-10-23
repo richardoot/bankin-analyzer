@@ -17,6 +17,7 @@
   import VueApexCharts from 'vue3-apexcharts/core'
   import '@/lib/apexcharts-features'
   import type { ApexOptions } from 'apexcharts'
+  import { DATA_HUE } from '@/lib/stateTints'
   import { useChartTheme } from '@/composables/useChartTheme'
   import { useIsMobile } from '@/composables/useMediaQuery'
   import { formatCompactCurrency, formatCurrency } from '@/lib/formatters'
@@ -56,7 +57,7 @@
   const isMobile = useIsMobile()
 
   /** The one data hue of the page, the share bars' blue-400. */
-  const BAR_COLOR = '#60a5fa'
+  const BAR_COLOR = DATA_HUE
   /** The same blue, lighter: the current month. */
   const BAR_COLOR_CURRENT = 'rgba(96, 165, 250, 0.4)'
 

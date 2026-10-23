@@ -16,6 +16,7 @@
     trendPartLink,
     trendReferenceLink,
   } from '@/lib/trends'
+  import { DATA_HUE } from '@/lib/stateTints'
   import { formatMonth } from '@/lib/formatters'
   import TransactionsLink from '@/components/ui/TransactionsLink.vue'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
@@ -165,7 +166,8 @@
           :data="insight.series"
           :width="72"
           :height="28"
-          :color="SPARK_COLORS[hue]"
+          :color="DATA_HUE"
+          :end-color="SPARK_COLORS[hue]"
         />
       </div>
     </div>

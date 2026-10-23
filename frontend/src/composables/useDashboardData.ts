@@ -19,11 +19,6 @@ export interface MonthlyData {
   everydayNetExpenses: number
 }
 
-export interface ChartData {
-  labels: string[]
-  values: number[]
-}
-
 /**
  * The two readings of a period: as it was (« Tout »), or the lifestyle
  * once the exceptional events are set aside (« Vie courante »).
@@ -114,27 +109,13 @@ export function useDashboardData() {
   const totalExpenses = computed(() => summaryData.value?.totalExpenses ?? 0)
   const totalIncome = computed(() => summaryData.value?.totalIncome ?? 0)
 
-  // The structure of spending and the savings reading, straight from the
-  // server; absent on an older server, so every consumer guards for it.
+  // The structure of spending, straight from the server; absent on an
+  // older server, so every consumer guards for it.
   const spendingStructure = computed(
     () => summaryData.value?.spendingStructure ?? null
   )
   const everydaySpendingStructure = computed(
     () => summaryData.value?.everydaySpendingStructure ?? null
-  )
-  // What the period kept: income less every expense, the server's figure.
-  const savings = computed(
-    () =>
-      summaryData.value?.savings ??
-      Math.round((totalIncome.value - totalExpenses.value) * 100) / 100
-  )
-  // Where some of it went: informational, it carries no rate.
-  const savingsTransfers = computed(
-    () => summaryData.value?.savingsTransfers ?? 0
-  )
-  const savingsRate = computed(() => summaryData.value?.savingsRate ?? null)
-  const remainingToLive = computed(
-    () => summaryData.value?.remainingToLive ?? null
   )
   const pendingReceivables = computed(
     () => summaryData.value?.pendingReceivables ?? 0
@@ -262,14 +243,6 @@ export function useDashboardData() {
     isEverydayMode.value ? totalEverydayExpenses.value : totalExpenses.value
   )
 
-  const expensesByCategory = computed<ChartData>(() => {
-    const data = summaryData.value?.expensesByCategory ?? []
-    return {
-      labels: data.map(d => d.category),
-      values: data.map(d => d.amount),
-    }
-  })
-
   // Detailed category breakdown (with monthlyAmounts, subcategories, etc.)
   // The real reading leaves out a category only slices reach.
   const expenseCategoriesDetailed = computed(() => {
@@ -305,15 +278,6 @@ export function useDashboardData() {
   // Every expense category the period carries, each with its id
   const allExpenseCategories = computed<CategoryOptionDto[]>(
     () => summaryData.value?.allExpenseCategories ?? []
-  )
-
-  // Every income category the period carries. Those linked to an expense
-  // category used to be filtered out here, because the server excluded them
-  // from income wholesale. It no longer does: a transfer is now netted by the
-  // cash it actually paid back, so a mixed one — salary plus a refund — still
-  // reports its salary, and hiding the category would hide real income.
-  const allIncomeCategories = computed<CategoryOptionDto[]>(
-    () => summaryData.value?.allIncomeCategories ?? []
   )
 
   async function fetchData() {
@@ -394,27 +358,19 @@ export function useDashboardData() {
     averageMonthlyExpenses,
     averageMonthlyIncome,
     averageMonthlySavings,
-    totalExceptionalExpenses,
-    totalEverydayExpenses,
     exceptionalEvents,
     hasExceptionalExpenses,
     hasAmortizedExpenses,
-    expensesByCategory,
     expenseCategoriesDetailed,
     incomeCategoriesDetailed,
     monthLabels,
     periodRangeLabel,
     allExpenseCategories,
-    allIncomeCategories,
     deductReimbursements,
     deductPendingReimbursements,
     spendingStructure,
     everydaySpendingStructure,
-    savings,
-    savingsTransfers,
     pendingReceivables,
-    savingsRate,
-    remainingToLive,
     tagFamiliesOfYear,
     structureBreakdown,
     structureShareByMonth,

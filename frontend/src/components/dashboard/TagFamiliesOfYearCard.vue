@@ -245,12 +245,7 @@
           </span>
           <span class="flex shrink-0 items-center gap-1 tabular-nums">
             <span
-              class="font-semibold whitespace-nowrap"
-              :class="
-                isOver(family)
-                  ? 'text-red-600 dark:text-red-400'
-                  : 'text-gray-900 dark:text-gray-100'
-              "
+              class="font-semibold whitespace-nowrap text-gray-900 dark:text-gray-100"
               :data-testid="`family-of-year-spent-${family.id}`"
             >
               {{ formatCurrency(family.spent) }}
@@ -295,7 +290,7 @@
             ·
             <span
               v-if="isOver(family)"
-              class="font-semibold text-red-600 dark:text-red-400"
+              class="font-semibold text-amber-700 dark:text-amber-400"
             >
               dépassement de {{ formatCurrency(-(family.remaining ?? 0)) }}
             </span>

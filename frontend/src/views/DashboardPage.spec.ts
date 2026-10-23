@@ -934,13 +934,6 @@ describe('DashboardPage', () => {
             Node.DOCUMENT_POSITION_FOLLOWING
         ).toBeTruthy()
       }
-      for (const id of [
-        'kpi-card-expenses',
-        'kpi-card-income',
-        'kpi-card-savings',
-      ]) {
-        expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(false)
-      }
       expect(wrapper.text()).not.toContain('moyennes / mois')
     })
 
@@ -1205,8 +1198,6 @@ describe('DashboardPage', () => {
       })
 
       for (const id of [
-        'spending-structure',
-        'savings-reading',
         'dashboard-income-section',
         'dashboard-expenses-section',
         'tag-families-of-year',
