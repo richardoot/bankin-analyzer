@@ -18,6 +18,23 @@ vi.mock('@/lib/api', () => ({
   UNCATEGORIZED_CATEGORY_ID: '__uncategorized__',
   api: {
     getDashboardSummary: vi.fn(),
+    getDashboardMonth: vi.fn().mockResolvedValue({
+      month: '2024-01',
+      asOfDay: 23,
+      daysInMonth: 31,
+      spent: 600,
+      spentSeries: [800, 820, 790, 600],
+      habit: 800,
+      habitToDate: 593.55,
+      habitMonths: 3,
+      incomeReceived: 0,
+      incomeExpected: 2500,
+      incomeSeries: [2500, 2500, 2500],
+      upcoming: [],
+      upcomingTotal: 0,
+      remainingToLive: 1900,
+      remainingShare: 0.76,
+    }),
     getSpendingTrends: vi.fn().mockResolvedValue({
       month: '2023-12',
       reading: 'everyday',
@@ -264,9 +281,7 @@ describe('DashboardPage', () => {
 
     expect(api.getDashboardSummary).toHaveBeenCalledTimes(2)
     expect(wrapper.find('[data-testid="dashboard-error"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="kpi-card-expenses"]').exists()).toBe(
-      true
-    )
+    expect(wrapper.find('[data-testid="month-band"]').exists()).toBe(true)
   })
 
   it('tells an empty period apart from an empty account', async () => {
@@ -301,45 +316,6 @@ describe('DashboardPage', () => {
     expect(
       wrapper.find('[data-testid="dashboard-empty-period"]').exists()
     ).toBe(false)
-  })
-
-  it('says the averages are taken over the closed months', async () => {
-    vi.mocked(api.getDashboardSummary).mockResolvedValue({
-      ...mockSummary,
-      periodMonths: 1,
-      monthLabels: ['2024-01'],
-    })
-
-    const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
-    await flushPromises()
-
-    expect(wrapper.get('[data-testid="kpi-card-expenses"]').text()).toContain(
-      'sur 1 mois clos'
-    )
-    expect(wrapper.get('[data-testid="kpi-card-income"]').text()).toContain(
-      'sur 1 mois clos'
-    )
-  })
-
-  it('should display monthly average KPI cards (expenses, income, savings)', async () => {
-    vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
-
-    const wrapper = mount(DashboardPage, {
-      global: {
-        plugins: [router],
-      },
-    })
-
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('Dépenses moyennes / mois')
-    expect(wrapper.text()).toContain('Revenus moyens / mois')
-    expect(wrapper.text()).toContain('Épargne moyenne / mois')
-    expect(wrapper.find('[data-testid="kpi-card-expenses"]').exists()).toBe(
-      true
-    )
-    expect(wrapper.find('[data-testid="kpi-card-income"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="kpi-card-savings"]').exists()).toBe(true)
   })
 
   it('should display chart sections', async () => {
@@ -492,21 +468,18 @@ describe('DashboardPage', () => {
         false
       )
 
-      // Everyday by default: the KPI reads 800, with the full figure beside.
-      expect(wrapper.find('[data-testid="kpi-expenses-value"]').text()).toMatch(
-        /800/
-      )
-      const other = wrapper.find('[data-testid="kpi-expenses-other-reading"]')
-      expect(other.text()).toContain('hors événements')
-      expect(other.text()).toMatch(/1\s100/)
+      // Everyday by default: the month band names it, and asks again on
+      // « Tout ».
+      const spentTitle = () =>
+        wrapper.get('[data-testid="month-tile-spent"] h3').text()
+      expect(spentTitle()).toBe('Vie courante')
 
       await wrapper.find('[data-testid="breakdown-mode-real"]').trigger('click')
-      expect(wrapper.find('[data-testid="kpi-expenses-value"]').text()).toMatch(
-        /1\s100/
+      await flushPromises()
+      expect(spentTitle()).toBe('Dépenses')
+      expect(api.getDashboardMonth).toHaveBeenLastCalledWith(
+        expect.objectContaining({ reading: 'real' })
       )
-      expect(
-        wrapper.find('[data-testid="kpi-expenses-other-reading"]').text()
-      ).toContain('dont vie courante')
     })
 
     it('draws the list in one blue, with no donut dot by the name', async () => {
@@ -866,7 +839,7 @@ describe('DashboardPage', () => {
       total: 845.5,
     }
 
-    it('sits after the three indicators and before the structure', async () => {
+    it('sits after the month band and before the structure', async () => {
       vi.mocked(api.getDashboardSummary).mockResolvedValue({
         ...mockSummary,
         spendingStructure: structure,
@@ -876,7 +849,7 @@ describe('DashboardPage', () => {
       await flushPromises()
 
       const order = [
-        'kpi-card-savings',
+        'month-band',
         'spending-trends',
         'spending-structure',
         'dashboard-expenses-section',
@@ -920,7 +893,87 @@ describe('DashboardPage', () => {
       expect(wrapper.find('[data-testid="dashboard-error"]').exists()).toBe(
         false
       )
-      expect(wrapper.find('[data-testid="kpi-card-expenses"]').exists()).toBe(
+      expect(wrapper.find('[data-testid="month-band"]').exists()).toBe(true)
+    })
+  })
+
+  describe('Ce mois-ci', () => {
+    it('opens the page, right under the header, in place of the three averages', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      const band = wrapper.get('[data-testid="month-band"]')
+      expect(band.text()).toContain('Ce mois-ci · janvier, au 23')
+      // Nothing of the page's content before it.
+      for (const id of [
+        'spending-trends',
+        'dashboard-period',
+        'dashboard-expenses-section',
+        'dashboard-income-section',
+      ]) {
+        const other = wrapper.get(`[data-testid="${id}"]`).element
+        expect(
+          band.element.compareDocumentPosition(other) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy()
+      }
+      for (const id of [
+        'kpi-card-expenses',
+        'kpi-card-income',
+        'kpi-card-savings',
+      ]) {
+        expect(wrapper.find(`[data-testid="${id}"]`).exists()).toBe(false)
+      }
+      expect(wrapper.text()).not.toContain('moyennes / mois')
+    })
+
+    it('asks for the month beside the summary, with the reading and the switches, never the period', async () => {
+      let resolveSummary: (value: DashboardSummaryDto) => void = () => {}
+      vi.mocked(api.getDashboardSummary).mockImplementationOnce(
+        () =>
+          new Promise<DashboardSummaryDto>(resolve => {
+            resolveSummary = resolve
+          })
+      )
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+
+      // Sent before the summary has answered.
+      expect(api.getDashboardMonth).toHaveBeenCalledTimes(1)
+      expect(api.getDashboardMonth).toHaveBeenCalledWith({
+        reading: 'everyday',
+        deductReimbursements: true,
+        deductPendingReimbursements: false,
+      })
+
+      resolveSummary(mockSummary)
+      await flushPromises()
+      expect(wrapper.find('[data-testid="month-tile-spent"]').exists()).toBe(
+        true
+      )
+    })
+
+    it('keeps its failure inside the band, with a retry, the page standing', async () => {
+      vi.mocked(api.getDashboardSummary).mockResolvedValue(mockSummary)
+      vi.mocked(api.getDashboardMonth).mockRejectedValueOnce(
+        new Error("La lecture du mois n'a pas pu être chargée")
+      )
+      const wrapper = mount(DashboardPage, { global: { plugins: [router] } })
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="month-error"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="dashboard-error"]').exists()).toBe(
+        false
+      )
+      expect(
+        wrapper.find('[data-testid="dashboard-expenses-section"]').exists()
+      ).toBe(true)
+
+      await wrapper.get('[data-testid="month-retry"]').trigger('click')
+      await flushPromises()
+      expect(api.getDashboardMonth).toHaveBeenCalledTimes(2)
+      expect(wrapper.find('[data-testid="month-error"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="month-tile-spent"]').exists()).toBe(
         true
       )
     })

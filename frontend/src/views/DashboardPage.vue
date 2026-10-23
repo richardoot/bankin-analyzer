@@ -4,7 +4,6 @@
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import CategoryPieChart from '@/components/charts/CategoryPieChart.vue'
   import TimePeriodSelector from '@/components/filters/TimePeriodSelector.vue'
-  import SparklineChart from '@/components/budget/SparklineChart.vue'
   import CategoryBreakdownList from '@/components/dashboard/CategoryBreakdownList.vue'
   import PageShell from '@/components/ui/PageShell.vue'
   import PageHeader from '@/components/ui/PageHeader.vue'
@@ -29,6 +28,8 @@
   import BaseField from '@/components/ui/BaseField.vue'
   import BaseCard from '@/components/ui/BaseCard.vue'
   import ReadingMenu from '@/components/dashboard/ReadingMenu.vue'
+  import MonthBand from '@/components/dashboard/MonthBand.vue'
+  import { useMonthData } from '@/composables/useMonthData'
   import { useAccountsStore } from '@/stores/accounts'
 
   const router = useRouter()
@@ -36,21 +37,14 @@
   const {
     totalExpenses,
     totalIncome,
-    averageMonthlyExpenses,
-    averageEverydayMonthlyExpenses,
-    averageExceptionalMonthlyExpenses,
     breakdownMode,
     setBreakdownMode,
     displayedTotalExpenses,
-    displayedAverageMonthlyExpenses,
     pendingPreferenceSyncError,
     exceptionalEvents,
     hasExceptionalExpenses,
     hasAmortizedExpenses,
-    averageMonthlyIncome,
-    averageMonthlySavings,
     periodMonths,
-    averagesReadClosedMonths,
     monthlyData,
     incomeCategoriesDetailed,
     spendingStructure,
@@ -63,9 +57,6 @@
     tagFamiliesOfYear,
     realExpensesOfYear,
     exceptionalExpensesOfYear,
-    expensesSparkline,
-    incomeSparkline,
-    savingsSparkline,
     incomeByCategory,
     expenseCategoriesDetailed,
     monthLabels,
@@ -91,12 +82,20 @@
     set: setBreakdownMode,
   })
 
-  /** What the three averages are taken over, said under each of them. */
-  const averagesSpan = computed(() =>
-    averagesReadClosedMonths.value
-      ? `sur ${periodMonths.value} mois clos`
-      : 'sur le mois en cours'
-  )
+  /**
+   * « Ce mois-ci »: its own request, sent with the summary, following the
+   * reading and the switches, never the period.
+   */
+  const {
+    data: monthData,
+    isLoading: isMonthLoading,
+    error: monthError,
+    fetchMonth,
+  } = useMonthData({
+    reading: breakdownMode,
+    deductReimbursements,
+    deductPendingReimbursements,
+  })
 
   // A first answer came back: later fetches are refreshes, shown over the
   // current figures, never by swapping the page — and its filters — for a
@@ -276,6 +275,7 @@
 
   onMounted(() => {
     fetchData()
+    void fetchMonth()
   })
 </script>
 
@@ -340,8 +340,8 @@
     <!-- Initial load: the page's own shape, not a spinner. -->
     <div v-if="showFullLoader" class="space-y-6" aria-busy="true">
       <SkeletonBlock class="h-24 rounded-xl" />
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-        <SkeletonBlock v-for="n in 3" :key="n" class="h-28 rounded-xl" />
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <SkeletonBlock v-for="n in 4" :key="n" class="h-28 rounded-xl" />
       </div>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <SkeletonBlock class="h-80 rounded-xl" />
@@ -360,131 +360,16 @@
       <LegacyMigrationBanner class="mb-6" />
 
       <template v-if="hasAnyData">
-        <!-- KPI cards: monthly averages -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-8">
-          <!-- Average monthly expenses -->
-          <BaseCard
-            data-testid="kpi-card-expenses"
-            class="border-l-4 border-red-500"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <div
-                  class="text-sm font-medium text-gray-500 dark:text-gray-400"
-                >
-                  Dépenses moyennes / mois
-                  <span class="block text-xs font-normal">{{
-                    averagesSpan
-                  }}</span>
-                </div>
-                <div
-                  class="mt-2 text-2xl font-bold text-red-600 dark:text-red-400"
-                  data-testid="kpi-expenses-value"
-                >
-                  {{ formatCurrency(displayedAverageMonthlyExpenses) }}
-                </div>
-                <!-- The other reading, so the gap between the two — the
-                     events — is always on screen. -->
-                <div
-                  v-if="hasExceptionalExpenses"
-                  class="mt-1 text-xs text-gray-500 dark:text-gray-400"
-                  data-testid="kpi-expenses-other-reading"
-                >
-                  <template v-if="breakdownMode === 'everyday'">
-                    hors événements ·
-                    <span
-                      class="font-semibold text-gray-700 dark:text-gray-300"
-                    >
-                      {{ formatCurrency(averageMonthlyExpenses) }}
-                    </span>
-                    / mois tout compris
-                  </template>
-                  <template v-else>
-                    dont vie courante
-                    <span
-                      class="font-semibold text-gray-700 dark:text-gray-300"
-                    >
-                      {{ formatCurrency(averageEverydayMonthlyExpenses) }}
-                    </span>
-                    / mois, événements
-                    {{ formatCurrency(averageExceptionalMonthlyExpenses) }}
-                  </template>
-                </div>
-              </div>
-              <SparklineChart
-                v-if="expensesSparkline.length >= 2"
-                :data="expensesSparkline"
-                color="#ef4444"
-              />
-            </div>
-          </BaseCard>
-
-          <!-- Average monthly income -->
-          <BaseCard
-            data-testid="kpi-card-income"
-            class="border-l-4 border-green-500"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <div
-                  class="text-sm font-medium text-gray-500 dark:text-gray-400"
-                >
-                  Revenus moyens / mois
-                  <span class="block text-xs font-normal">{{
-                    averagesSpan
-                  }}</span>
-                </div>
-                <div
-                  class="mt-2 text-2xl font-bold text-green-700 dark:text-green-400"
-                >
-                  {{ formatCurrency(averageMonthlyIncome) }}
-                </div>
-              </div>
-              <SparklineChart
-                v-if="incomeSparkline.length >= 2"
-                :data="incomeSparkline"
-                color="#22c55e"
-              />
-            </div>
-          </BaseCard>
-
-          <!-- Average monthly savings -->
-          <BaseCard
-            data-testid="kpi-card-savings"
-            class="border-l-4"
-            :class="
-              averageMonthlySavings >= 0 ? 'border-green-500' : 'border-red-500'
-            "
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <div
-                  class="text-sm font-medium text-gray-500 dark:text-gray-400"
-                >
-                  Épargne moyenne / mois
-                  <span class="block text-xs font-normal">{{
-                    averagesSpan
-                  }}</span>
-                </div>
-                <div
-                  class="mt-2 text-2xl font-bold"
-                  :class="
-                    averageMonthlySavings >= 0
-                      ? 'text-green-700 dark:text-green-400'
-                      : 'text-red-600 dark:text-red-400'
-                  "
-                >
-                  {{ formatCurrency(averageMonthlySavings) }}
-                </div>
-              </div>
-              <SparklineChart
-                v-if="savingsSparkline.length >= 2"
-                :data="savingsSparkline"
-                :color="averageMonthlySavings >= 0 ? '#22c55e' : '#ef4444'"
-              />
-            </div>
-          </BaseCard>
-        </div>
+        <!-- « Ce mois-ci »: the current month to date, first; the period
+             governs only what comes below it. -->
+        <MonthBand
+          class="mb-8"
+          :data="monthData"
+          :reading="breakdownMode"
+          :is-loading="isMonthLoading"
+          :error="monthError"
+          @retry="fetchMonth()"
+        />
 
         <!-- What changes: after the totals, before their detail. Its own
              request, sent once the summary is on screen; it follows the
