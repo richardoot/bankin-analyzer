@@ -1635,6 +1635,39 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
+    it('stacks the events hatched on the drill-down chart in the real reading only', async () => {
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const foodProps = () =>
+        wrapper
+          .findAllComponents({ name: 'BudgetCategoryRow' })
+          .find(row => row.props('category').categoryName === 'Alimentation')
+          ?.props()
+
+      // « Vie courante »: the events are out of the figures, out of the chart.
+      expect(foodProps()?.chartOverlay).toBeUndefined()
+      expect(foodProps()?.chartData.values).toEqual([200])
+
+      await readAll(wrapper)
+
+      // « Tout »: the rest of the month, the events stacked on it.
+      expect(foodProps()?.chartOverlay).toEqual({
+        values: [120],
+        label: 'événements',
+      })
+      expect(foodProps()?.chartData.values).toEqual([200])
+      // Never on a category no event touched.
+      expect(
+        wrapper
+          .findAllComponents({ name: 'BudgetCategoryRow' })
+          .find(row => row.props('category').categoryName === 'Transport')
+          ?.props('chartOverlay')
+      ).toBeUndefined()
+
+      wrapper.unmount()
+    })
+
     it('offers the reading in the « Lecture » menu of the header, not in a band of the table', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
@@ -1830,6 +1863,13 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
+      // The projects wait folded under the envelopes.
+      expect(
+        wrapper.find('[data-testid="project-Vacances Italie"]').exists()
+      ).toBe(false)
+      await wrapper
+        .get('[data-testid="budget-projects-toggle"]')
+        .trigger('click')
       const chip = wrapper.get('[data-testid="project-Vacances Italie"]')
       // A project with no envelope is shown as such, not as a zero.
       expect(chip.text()).toContain('sans enveloppe')
@@ -1840,13 +1880,67 @@ describe('BudgetPage', () => {
       wrapper.unmount()
     })
 
-    it('hides the projects band when nothing overlaps the plan', async () => {
+    it('hides the projects line when nothing overlaps the plan', async () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      expect(wrapper.find('[data-testid="budget-projects"]').exists()).toBe(
-        false
-      )
+      expect(
+        wrapper.find('[data-testid="budget-projects-line"]').exists()
+      ).toBe(false)
+
+      wrapper.unmount()
+    })
+
+    it('lists the plan’s events in the projects line, the others left out', async () => {
+      vi.mocked(api.getTags).mockResolvedValue([
+        {
+          id: 'tag-trip',
+          name: 'Vacances Italie',
+          color: '#06b6d4',
+          isExceptional: true,
+          eventStartDate: '2026-05-10',
+          eventEndDate: '2026-05-14',
+        },
+        {
+          id: 'tag-old',
+          name: 'Noël 2025',
+          color: null,
+          isExceptional: true,
+          eventStartDate: '2025-12-20',
+          eventEndDate: '2025-12-26',
+        },
+        {
+          id: 'tag-party',
+          name: 'Soirée',
+          color: null,
+          isExceptional: true,
+          eventStartDate: null,
+          eventEndDate: null,
+        },
+        {
+          id: 'tag-plain',
+          name: 'Courses',
+          color: null,
+          isExceptional: false,
+          eventStartDate: '2026-05-01',
+          eventEndDate: '2026-05-02',
+        },
+      ] as Awaited<ReturnType<typeof api.getTags>>)
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      const line = wrapper.get('[data-testid="budget-projects-line"]')
+      await line.get('[data-testid="budget-projects-toggle"]').trigger('click')
+      expect(
+        line
+          .findAll('[data-testid^="project-event-"]')
+          .map(el => el.attributes('data-testid'))
+      ).toEqual(['project-event-Vacances Italie'])
+      await line
+        .get('[data-testid="project-event-Vacances Italie"]')
+        .trigger('click')
+      expect(routerPush).toHaveBeenCalledWith('/tags/tag-trip')
 
       wrapper.unmount()
     })
@@ -1873,13 +1967,16 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      // The band still lists the project…
-      expect(wrapper.find('[data-testid="budget-projects"]').exists()).toBe(
-        true
-      )
+      // The line still lists the project…
+      expect(
+        wrapper.find('[data-testid="budget-projects-line"]').exists()
+      ).toBe(true)
       // …but there is no reserve to charge it against.
       expect(wrapper.find('[data-testid="reserve-remaining"]').exists()).toBe(
         false
+      )
+      expect(wrapper.get('[data-testid="projects-no-reserve"]').text()).toBe(
+        'pas de réserve'
       )
 
       wrapper.unmount()
@@ -2364,8 +2461,15 @@ describe('BudgetPage', () => {
       const wrapper = mount(BudgetPage)
       await flushPromises()
 
-      const section = wrapper.get('[data-testid="budget-amortized"]')
+      const section = wrapper.get('[data-testid="budget-amortized-line"]')
       expect(section.text()).toContain('Achats lissés en cours')
+      // Folded on load: the list waits behind « Déplier ».
+      expect(
+        wrapper.find('[data-testid="budget-amortized-tx-phone"]').exists()
+      ).toBe(false)
+      await section
+        .get('[data-testid="budget-amortized-toggle"]')
+        .trigger('click')
       const phone = wrapper.get('[data-testid="budget-amortized-tx-phone"]')
       expect(phone.text()).toMatch(/54,17/)
       expect(phone.text()).toContain('21 mois restants')
@@ -2373,6 +2477,66 @@ describe('BudgetPage', () => {
         linkOf(wrapper.get('[data-testid="budget-amortized-link-tx-phone"]'))
           .query
       ).toMatchObject({ ids: 'tx-phone' })
+      wrapper.unmount()
+    })
+
+    it('folds the projects and the smoothed purchases under the envelopes, in that order', async () => {
+      vi.mocked(api.getTagBudgetSummary).mockResolvedValue({
+        items: [
+          {
+            id: 'tag-trip',
+            name: 'Vacances Italie',
+            color: null,
+            icon: null,
+            eventStartDate: '2026-05-10',
+            eventEndDate: '2026-05-14',
+            budgetAmount: 500,
+            spent: 450,
+          },
+        ],
+        families: [],
+        totalBudget: 500,
+        totalSpent: 450,
+      })
+
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Les enveloppes')
+      expect(
+        wrapper.get('[data-testid="budget-envelopes-subtitle"]').text()
+      ).toBe('Toutes les catégories du plan, les plus lourdes en tête')
+
+      // The list, then Projets, then Achats lissés.
+      const order = wrapper
+        .findAll(
+          '[data-testid="budget-table"], [data-testid="budget-projects-line"], [data-testid="budget-amortized-line"]'
+        )
+        .map(el => el.attributes('data-testid'))
+      expect(order).toEqual([
+        'budget-table',
+        'budget-projects-line',
+        'budget-amortized-line',
+      ])
+      // Both folded on load.
+      expect(
+        wrapper
+          .findAll(
+            '[data-testid="budget-projects-toggle"], [data-testid="budget-amortized-toggle"]'
+          )
+          .map(el => el.attributes('aria-expanded'))
+      ).toEqual(['false', 'false'])
+      // The coloured boxes are gone.
+      expect(wrapper.find('[data-testid="budget-projects"]').exists()).toBe(
+        false
+      )
+      expect(wrapper.find('[data-testid="budget-amortized"]').exists()).toBe(
+        false
+      )
+      // Each row carries its anchor, for « Voir la ligne » and « À faire ».
+      expect(
+        wrapper.get('[data-testid="budget-row-Maison"]').attributes('id')
+      ).toMatch(/^budget-row-cat-/)
       wrapper.unmount()
     })
 
@@ -2445,9 +2609,9 @@ describe('BudgetPage', () => {
       expect(
         wrapper.find('[data-testid="matrix-row-High-tech"]').exists()
       ).toBe(false)
-      expect(wrapper.find('[data-testid="budget-amortized"]').exists()).toBe(
-        false
-      )
+      expect(
+        wrapper.find('[data-testid="budget-amortized-line"]').exists()
+      ).toBe(false)
       expect(wrapper.text()).not.toMatch(/dont [^€]*€ lissés/)
       expect(
         wrapper.get('[data-testid="matrix-cell-Maison-2026-05"]').text()

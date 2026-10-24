@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import { computed } from 'vue'
+  import { DATA_HUE, STATE_COLORS } from '@/lib/stateTints'
 
   /**
    * A budget row's months against its envelope: one column per month, the
@@ -8,9 +9,10 @@
    * Plain SVG — a row is too small for a tooltip, and a page of rows does
    * not need a chart library each. Every column is measured from zero on one
    * scale that keeps the envelope in view, so the columns compare with each
-   * other and with the line. A month above the envelope takes the state red;
-   * every other one stays neutral gray. The running month is drawn lighter,
-   * being incomplete, and the month the page isolated sits on a band.
+   * other and with the line. The columns carry the data hue (`DATA_HUE`); a
+   * month above the envelope takes the state amber (`STATE_COLORS.over`).
+   * The running month is drawn in a lighter blue, being incomplete, and the
+   * month the page isolated sits on a grey band.
    * Without an envelope (`budget` at 0) the columns stand alone.
    */
   const props = withDefaults(
@@ -81,6 +83,15 @@
     })
   })
 
+  /** blue-300: the data hue, lighter, for a month not finished yet. */
+  const RUNNING_HUE = '#93c5fd'
+
+  /** A column's fill: above the envelope first, then running, then data. */
+  function fillOf(col: { over: boolean; running: boolean }): string {
+    if (col.over) return STATE_COLORS.over
+    return col.running ? RUNNING_HUE : DATA_HUE
+  }
+
   const budgetY = computed(() => (hasBudget.value ? yOf(props.budget) : null))
 </script>
 
@@ -118,12 +129,7 @@
       :width="col.width"
       :height="col.height"
       rx="1"
-      :class="[
-        col.over
-          ? 'fill-red-500 dark:fill-red-400'
-          : 'fill-gray-500 dark:fill-slate-400',
-        { 'opacity-40': col.running },
-      ]"
+      :fill="fillOf(col)"
     />
     <line
       v-if="budgetY !== null"
@@ -134,7 +140,7 @@
       :y2="budgetY"
       stroke-width="1"
       stroke-dasharray="3 2"
-      class="stroke-gray-900 dark:stroke-gray-100"
+      class="stroke-gray-700 dark:stroke-slate-300"
     />
   </svg>
 </template>

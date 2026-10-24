@@ -15,6 +15,7 @@
     BudgetStatisticsDto,
     CategoryAverageDto,
     TagBudgetSummaryDto,
+    TagDto,
   } from '@/lib/api'
   import { useFiltersStore } from '@/stores/filters'
   import BudgetMonthBand from '@/components/budget/BudgetMonthBand.vue'
@@ -23,8 +24,8 @@
   import NewBudgetPlanModal from '@/components/budget/NewBudgetPlanModal.vue'
   import BudgetPlansHistoryModal from '@/components/budget/BudgetPlansHistoryModal.vue'
   import BudgetPlanHeader from '@/components/budget/BudgetPlanHeader.vue'
-  import BudgetProjectsSection from '@/components/budget/BudgetProjectsSection.vue'
-  import BudgetAmortizedSection from '@/components/budget/BudgetAmortizedSection.vue'
+  import BudgetProjectsLine from '@/components/budget/BudgetProjectsLine.vue'
+  import BudgetAmortizedLine from '@/components/budget/BudgetAmortizedLine.vue'
   import {
     isAmortizationCarrier,
     purchasesWithSlicesIn,
@@ -153,6 +154,9 @@
 
   /** Projects overlapping the plan, with spend vs envelope. */
   const projects = ref<TagBudgetSummaryDto | null>(null)
+
+  /** Exceptional tags owned by the user, for the events of the period. */
+  const exceptionalTags = ref<TagDto[]>([])
 
   const isModalOpen = ref(false)
   const isHistoryOpen = ref(false)
@@ -490,6 +494,23 @@
     visibleExpenseCategories.value.some(c => getExceptionalAverage(c) > 0.005)
   )
 
+  /**
+   * Exceptional events whose declared period overlaps the plan, listed in
+   * « Projets de la période ». Tags without a period (a party at home)
+   * cannot be placed in time and are therefore not listed — their spending
+   * still shows in the rows' facts.
+   */
+  const planEvents = computed(() => {
+    const current = plan.value
+    if (!current) return []
+    const start = current.startDate.slice(0, 10)
+    const end = current.endDate.slice(0, 10)
+    return exceptionalTags.value.filter(t => {
+      if (!t.eventStartDate || !t.eventEndDate) return false
+      return t.eventStartDate <= end && t.eventEndDate >= start
+    })
+  })
+
   function openTagAnalysis(tagId: string): void {
     void router.push(`/tags/${tagId}`)
   }
@@ -799,11 +820,38 @@
   /** One column is just the row list again — the grid earns its space at two. */
   const showMonthlyMatrix = computed(() => matrixMonths.value.length >= 2)
 
+  /**
+   * The events' part of each month, stacked hatched on a row's drill-down
+   * chart — in the real reading only, and only when a month carries any,
+   * as on the dashboard's rows. « Vie courante » leaves them out of the
+   * figures, so out of the chart.
+   */
+  function categoryChartOverlay(
+    cat: CategoryAverageDto
+  ): { values: number[]; label: string } | undefined {
+    if (breakdownMode.value !== 'real' || !cat.monthlyAmounts) return undefined
+    const events = comparison.exceptionalSeriesFor(cat)
+    if (!events || !events.some(value => value !== 0)) return undefined
+    return { values: events, label: 'événements' }
+  }
+
+  /**
+   * A row's drill-down chart: the month in the active reading — under the
+   * overlay, the real month less its events, so the stack adds up to the
+   * real month.
+   */
   function categoryChartData(cat: CategoryAverageDto) {
     const labels = (statistics.value?.monthLabels ?? []).map(ym =>
       formatMonth(ym, { year: false })
     )
-    return { labels, values: comparison.seriesFor(cat) ?? [] }
+    const overlay = categoryChartOverlay(cat)
+    const values = overlay
+      ? (cat.monthlyAmounts ?? []).map(
+          (amount, i) =>
+            Math.round((amount - (overlay.values[i] ?? 0)) * 100) / 100
+        )
+      : (comparison.seriesFor(cat) ?? [])
+    return { labels, values }
   }
 
   // ── Data loading ─────────────────────────────────────────────────────────
@@ -825,6 +873,19 @@
       deductPendingReimbursements: deductPendingReimbursements.value,
       includeMonthlyBreakdown: true,
     })
+  }
+
+  /**
+   * Exceptional tags, to list the period's events under the projects.
+   * Non-fatal: without them the rest of the page still reads.
+   */
+  async function fetchExceptionalTags() {
+    try {
+      const tags = await api.getTags()
+      exceptionalTags.value = tags.filter(t => t.isExceptional)
+    } catch {
+      exceptionalTags.value = []
+    }
   }
 
   /** Projects overlapping the plan, weighed against their envelopes. */
@@ -899,6 +960,7 @@
         fetchPlanCount(),
         checkYearAgoAvailability(),
         fetchProjects(),
+        fetchExceptionalTags(),
       ])
     } catch (err) {
       error.value =
@@ -1416,17 +1478,6 @@
           </template>
         </BudgetTableControls>
 
-        <BudgetProjectsSection
-          :projects="projects"
-          :plan="plan"
-          @open-tag="openTagAnalysis"
-        />
-
-        <BudgetAmortizedSection
-          :purchases="planSmoothedPurchases"
-          :current-month="currentYearMonth()"
-        />
-
         <!-- One grid for the whole table: the header and every row are
              subgrids of it, so each `auto` track is sized over all the rows
              and a column falls on one vertical. Below `sm` the rows keep
@@ -1498,7 +1549,6 @@
           >
             <BudgetCategoryRow
               v-for="cat in sortedCategories"
-              :id="`budget-row-${cat.categoryId}`"
               :key="cat.categoryId"
               :category="cat"
               :expanded="isCategoryExpanded(cat.categoryId)"
@@ -1520,6 +1570,7 @@
               :running-month="currentYearMonth()"
               :selected-month="rowSelectedMonth"
               :chart-data="categoryChartData(cat)"
+              :chart-overlay="categoryChartOverlay(cat)"
               :breakdown-mode="breakdownMode"
               :historical-window="historicalWindow"
               :actual-window="actualWindow"
@@ -1537,6 +1588,21 @@
               @apply-budget="amount => setBudgetValue(cat.categoryId, amount)"
             />
           </div>
+        </div>
+
+        <!-- Under the envelopes, folded: the projects charged against the
+             reserve, then the smoothed purchases (everyday reading only). -->
+        <div data-testid="budget-folded-lines" class="mt-2">
+          <BudgetProjectsLine
+            :projects="projects"
+            :plan="plan"
+            :events="planEvents"
+            @open-tag="openTagAnalysis"
+          />
+          <BudgetAmortizedLine
+            :purchases="planSmoothedPurchases"
+            :current-month="currentYearMonth()"
+          />
         </div>
       </BaseCard>
 

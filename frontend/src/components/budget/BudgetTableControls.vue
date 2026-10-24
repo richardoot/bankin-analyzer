@@ -4,10 +4,10 @@
   import IconPencil from '@/components/icons/IconPencil.vue'
 
   /**
-   * Everything that steers the category table without being a row of it:
-   * entering edit mode, sorting, the comparison (the `comparison` slot,
-   * which the page fills in edit mode only), the closed-period warning and
-   * the edit-mode quick actions. The reading (Vie courante / Tout) is the
+   * The header of « Les enveloppes »: its title, the sort, the way into
+   * edit mode. In edit mode only, the comparison (the `comparison` slot,
+   * which the page fills then), the closed-period warning and the quick
+   * actions join it. The reading (Vie courante / Tout) is the
    * page's « Lecture » menu, and the month read is « Mois lu » in the band
    * of the month (BudgetMonthBand): neither is a control of the table.
    * Pure controls — every decision leaves as an event, every
@@ -36,9 +36,20 @@
     <div
       class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3"
     >
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        Dépenses par catégorie
-      </h2>
+      <div class="min-w-0">
+        <h2
+          id="budget-envelopes-title"
+          class="text-lg font-semibold text-gray-900 dark:text-gray-100"
+        >
+          Les enveloppes
+        </h2>
+        <p
+          data-testid="budget-envelopes-subtitle"
+          class="mt-0.5 text-xs text-gray-500 dark:text-gray-400"
+        >
+          Toutes les catégories du plan, les plus lourdes en tête
+        </p>
+      </div>
       <div class="flex flex-wrap items-center gap-2">
         <BaseButton
           v-if="!editing"

@@ -18,6 +18,11 @@ const dashboardSources = import.meta.glob<string>(
     '../components/charts/IncomeExpensesChart.vue',
     '../components/charts/YearColumnsChart.vue',
     '../components/budget/BudgetMonthBand.vue',
+    '../components/budget/BudgetCategoryRow.vue',
+    '../components/budget/MonthsVsBudgetChart.vue',
+    '../components/budget/BudgetProjectsLine.vue',
+    '../components/budget/BudgetAmortizedLine.vue',
+    '../components/budget/BudgetTableControls.vue',
   ],
   { query: '?raw', import: 'default', eager: true }
 )
@@ -51,6 +56,11 @@ describe('the state tints', () => {
         '../views/DashboardPage.vue',
         '../components/dashboard/MonthBand.vue',
         '../components/budget/BudgetMonthBand.vue',
+        '../components/budget/BudgetCategoryRow.vue',
+        '../components/budget/MonthsVsBudgetChart.vue',
+        '../components/budget/BudgetProjectsLine.vue',
+        '../components/budget/BudgetAmortizedLine.vue',
+        '../components/budget/BudgetTableControls.vue',
       ])
     )
   })
