@@ -9,8 +9,10 @@
   import {
     formatCompactCurrency,
     formatCurrency,
+    formatEuros,
     formatMonth,
   } from '@/lib/formatters'
+  import { useMediaQuery } from '@/composables/useMediaQuery'
   import MonthsVsBudgetChart from '@/components/budget/MonthsVsBudgetChart.vue'
   import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
   import IconChevronRight from '@/components/icons/IconChevronRight.vue'
@@ -347,6 +349,41 @@
     props.budget > TOLERANCE ? props.budget : undefined
   )
 
+  // ── A phone (budget-refonte.md, lot 7) ────────────────────────────────
+  // Tracking, the row is two lines: the name and its badge with « 162 € /
+  // 150 € », then a bar of what the envelope has taken — the data hue,
+  // amber past it — with the envelope's share to date as a tick on a
+  // running month. No mini-columns: they wait on a desk. Editing, the
+  // field stands under the name, the whole width.
+  const isPhone = useMediaQuery('(max-width: 639.98px)')
+
+  /** The bar is the envelope consumed: only with an actual and an envelope. */
+  const showBar = computed(
+    () => !props.editing && props.showActual && props.budget > TOLERANCE
+  )
+  const isOver = computed(() => props.actualAverage > props.budget + TOLERANCE)
+  const barWidth = computed(() =>
+    Math.min(100, Math.max(0, (props.actualAverage / props.budget) * 100))
+  )
+  const barColor = computed(() => (isOver.value ? STATE_COLORS.over : DATA_HUE))
+  /** Where the envelope to date falls on the bar, on a running month. */
+  const barTick = computed(() =>
+    props.proratedBudget === null
+      ? null
+      : Math.min(100, (props.proratedBudget / props.budget) * 100)
+  )
+  /** The bar said in words: « 162 € sur 150 €, 12 € au-dessus ». */
+  const barLabel = computed(() => {
+    const parts = [
+      `${formatEuros(props.actualAverage)} sur ${formatEuros(props.budget)}`,
+    ]
+    if (isOver.value)
+      parts.push(`${formatEuros(props.actualAverage - props.budget)} au-dessus`)
+    if (props.proratedBudget !== null)
+      parts.push(`${formatEuros(props.proratedBudget)} d’enveloppe à ce jour`)
+    return parts.join(', ')
+  })
+
   const showHistoricalLink = computed(
     () =>
       props.showHistorical &&
@@ -369,13 +406,17 @@
          name, then the three numbers side by side. -->
     <div
       class="col-span-full grid sm:grid-cols-subgrid sm:gap-x-6 gap-x-3 gap-y-2 sm:gap-y-0 items-center py-3 sm:py-4 px-4 hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors"
-      :class="editing ? 'grid-cols-3' : 'grid-cols-[minmax(0,1fr)_auto_auto]'"
+      :class="
+        editing
+          ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+          : 'grid-cols-[minmax(0,1fr)_auto_auto]'
+      "
     >
       <!-- Name + chevron + status badge -->
       <button
         type="button"
         class="flex items-center gap-2 min-w-0 text-left sm:col-span-1 sm:col-start-auto sm:row-start-auto"
-        :class="editing ? 'col-span-2' : 'col-start-1 row-start-1'"
+        :class="editing ? 'col-span-2 row-start-1' : 'col-start-1 row-start-1'"
         :aria-expanded="expanded"
         @click="emit('toggle-expand')"
       >
@@ -421,7 +462,7 @@
         class="text-sm tabular-nums leading-tight sm:block sm:text-right sm:col-span-1 sm:row-start-auto"
         :class="
           editing
-            ? 'text-right'
+            ? 'col-start-1 row-start-3 sm:col-start-auto'
             : 'col-span-3 row-start-2 flex items-baseline justify-between gap-2'
         "
       >
@@ -451,7 +492,10 @@
 
       <!-- Editing: the envelope field, then « Réel » beside it. -->
       <template v-if="editing">
-        <div class="text-right">
+        <!-- On a phone the field stands under the name, the whole width. -->
+        <div
+          class="col-span-full row-start-2 text-right sm:col-span-1 sm:row-start-auto"
+        >
           <span
             class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
             >Enveloppe</span
@@ -493,7 +537,8 @@
 
         <div
           v-if="showActual"
-          class="text-right text-sm tabular-nums leading-tight"
+          class="row-start-3 text-sm tabular-nums leading-tight sm:col-start-auto sm:row-start-auto sm:text-right"
+          :class="showHistorical ? 'col-start-2' : 'col-start-1'"
         >
           <span
             class="block text-[10px] uppercase tracking-wide text-gray-500 sm:hidden dark:text-gray-400"
@@ -526,9 +571,28 @@
         v-else
         class="col-start-2 row-start-1 text-right text-sm tabular-nums leading-tight whitespace-nowrap sm:col-start-auto sm:row-start-auto"
       >
-        <!-- « 162 € sur 150 € », one figure in the ink. -->
+        <!-- « 162 € sur 150 € », one figure in the ink; on a phone in
+             whole euros, « 162 € / 150 € », the bar under it. -->
         <span
-          v-if="showActual"
+          v-if="showActual && isPhone"
+          class="block text-gray-900 dark:text-gray-100"
+          :data-testid="`budget-figure-${category.categoryName}`"
+        >
+          <span class="font-semibold">{{
+            actualAverage > 0 ? formatEuros(actualAverage) : '—'
+          }}</span>
+          <span
+            class="text-xs text-gray-500 dark:text-gray-400"
+            :data-testid="`budget-value-${category.categoryName}`"
+            >{{
+              budget > TOLERANCE
+                ? ` / ${formatEuros(budget)}`
+                : ' · sans enveloppe'
+            }}</span
+          >
+        </span>
+        <span
+          v-else-if="showActual"
           class="block text-gray-900 dark:text-gray-100"
           :data-testid="`budget-figure-${category.categoryName}`"
         >
@@ -559,7 +623,7 @@
         <!-- On a month still running, the envelope's fair share to date —
              so a half-finished month is judged on pace. -->
         <span
-          v-if="proratedBudget !== null"
+          v-if="proratedBudget !== null && !isPhone"
           :data-testid="`budget-prorata-${category.categoryName}`"
           class="block text-xs text-gray-500 dark:text-gray-400"
           title="Part du budget correspondant aux jours écoulés"
@@ -578,6 +642,28 @@
           :running-month="runningMonth"
           :selected-month="selectedMonth ?? undefined"
           :label="chartLabel"
+        />
+      </div>
+
+      <!-- A phone: what the envelope has taken, the second line. -->
+      <div
+        v-if="showBar && isPhone"
+        role="img"
+        :aria-label="barLabel"
+        :data-testid="`budget-bar-${category.categoryName}`"
+        class="relative col-span-3 row-start-2 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
+      >
+        <span
+          class="block h-full rounded-full"
+          :style="{ width: `${barWidth}%`, backgroundColor: barColor }"
+          :data-tone="isOver ? 'over' : 'data'"
+          :data-testid="`budget-bar-fill-${category.categoryName}`"
+        />
+        <span
+          v-if="barTick !== null"
+          class="absolute inset-y-0 w-0.5 bg-gray-700 dark:bg-gray-300"
+          :style="{ left: `${barTick}%` }"
+          :data-testid="`budget-bar-tick-${category.categoryName}`"
         />
       </div>
 

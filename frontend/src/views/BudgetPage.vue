@@ -1426,6 +1426,7 @@
           :has-exceptional-expenses="hasExceptionalInPlan"
           :has-amortized-expenses="hasAmortizedInPlan"
           :pending-sync-error="filtersStore.lastSyncError"
+          compact
         />
       </template>
     </BudgetPlanHeader>

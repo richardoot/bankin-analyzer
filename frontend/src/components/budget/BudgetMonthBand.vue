@@ -28,8 +28,8 @@
     figureClass,
   } from '@/components/budget/bandTiles'
   import BaseCard from '@/components/ui/BaseCard.vue'
-  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
+  import BudgetMonthRead from '@/components/budget/BudgetMonthRead.vue'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import { useMediaQuery } from '@/composables/useMediaQuery'
 
@@ -134,11 +134,9 @@
       : []),
   ])
 
-  const runningMonths = computed(
-    () =>
-      new Set<string | null>(
-        props.monthOptions.filter(m => m.isRunning).map(m => m.ym)
-      )
+  /** The month still running, marked with a dot in « Mois lu ». */
+  const runningMonth = computed(
+    () => props.monthOptions.find(m => m.isRunning)?.ym
   )
 
   // ── Tiles ───────────────────────────────────────────────────────────────
@@ -241,7 +239,7 @@
     aria-labelledby="budget-month-title"
   >
     <header
-      class="mb-3 flex flex-col gap-3 sm:mb-4 lg:flex-row lg:items-start lg:justify-between"
+      class="mb-3 flex flex-col gap-3 max-sm:flex-row max-sm:items-start max-sm:justify-between sm:mb-4 lg:flex-row lg:items-start lg:justify-between"
     >
       <div class="min-w-0">
         <h2
@@ -258,37 +256,12 @@
 
       <!-- « Mois lu »: the started months of the plan, then the average.
            It steers the band and the figures of the rows. -->
-      <div
-        v-if="monthOptions.length > 0"
-        data-testid="budget-month-selector"
-        class="flex min-w-0 items-center gap-2"
-      >
-        <span
-          id="budget-month-read-label"
-          class="shrink-0 text-xs text-gray-500 dark:text-gray-400"
-        >
-          Mois lu
-        </span>
-        <SegmentedControl
-          :model-value="selectedMonth"
-          :options="monthSegments"
-          size="sm"
-          scrollable
-          labelled-by="budget-month-read-label"
-          data-testid="budget-month-read"
-          @update:model-value="emit('select-month', $event)"
-        >
-          <template #option="{ option }">
-            <span
-              v-if="runningMonths.has(option.value)"
-              class="ml-1 opacity-70"
-              aria-hidden="true"
-              data-testid="budget-month-running-mark"
-              >•</span
-            >
-          </template>
-        </SegmentedControl>
-      </div>
+      <BudgetMonthRead
+        :model-value="selectedMonth"
+        :options="monthSegments"
+        :running-value="runningMonth"
+        @update:model-value="emit('select-month', $event)"
+      />
     </header>
 
     <div :class="TILES_GRID" data-testid="budget-month-tiles">

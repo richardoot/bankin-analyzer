@@ -8,11 +8,17 @@ import {
 } from '@/lib/budgetMonth'
 import BudgetMonthBand from './BudgetMonthBand.vue'
 
+/** Below `sm`, when set: « Mois lu » becomes a link and a sheet. */
+const phone = vi.hoisted(() => ({ value: false }))
 vi.mock('@/composables/useMediaQuery', () => ({
-  useMediaQuery: () => ref(false),
+  useMediaQuery: () => ref(phone.value),
 }))
 
 enableAutoUnmount(afterEach)
+afterEach(() => {
+  phone.value = false
+  document.body.innerHTML = ''
+})
 
 /**
  * « Automne 2026 », 1 850 € a month on two envelopes, read on 23 October:
@@ -403,5 +409,67 @@ describe('BudgetMonthBand', () => {
     expect(
       text(wrapper.get('[data-testid="budget-month-value-savings"]').text())
     ).toBe('615 € par mois prévus')
+  })
+
+  describe('on a phone (sm)', () => {
+    it('stands the tiles two by two, the figures at 22 px', () => {
+      phone.value = true
+      const wrapper = mountBand()
+      const tiles = wrapper.get('[data-testid="budget-month-tiles"]')
+      expect(tiles.classes()).toEqual(
+        expect.arrayContaining(['grid-cols-2', 'md:grid-cols-4'])
+      )
+      expect(
+        wrapper.get('[data-testid="budget-month-value-spent"]').classes()
+      ).toContain('text-[22px]')
+    })
+
+    it('says « Mois lu » as a link that opens a sheet of the months', async () => {
+      phone.value = true
+      const wrapper = mount(BudgetMonthBand, {
+        props: {
+          reading: budgetMonthReading(input()),
+          planStart: '2026-07-01',
+          monthOptions: OPTIONS,
+          selectedMonth: '2026-10',
+          completeMonthsCount: 3,
+        },
+        attachTo: document.body,
+      })
+      // No segment of six months scrolling out of sight.
+      expect(wrapper.find('[data-testid="budget-month-read"]').exists()).toBe(
+        false
+      )
+      const trigger = wrapper.get('[data-testid="budget-month-read-trigger"]')
+      expect(text(trigger.text())).toBe('Mois lu : oct. ▾')
+
+      await trigger.trigger('click')
+      const sheet = document.body.querySelector(
+        '[data-testid="budget-month-read-sheet"]'
+      )
+      expect(sheet).not.toBeNull()
+      const options = Array.from(
+        sheet?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? []
+      )
+      // The four started months, then the average, one per line.
+      expect(options.map(o => o.textContent?.trim())).toEqual([
+        'Juillet 2026',
+        'Août 2026',
+        'Septembre 2026',
+        'Octobre 2026, en cours',
+        'Moyenne des 3 mois clos',
+      ])
+      expect(
+        options.find(o => o.getAttribute('aria-checked') === 'true')
+          ?.textContent
+      ).toContain('Octobre 2026')
+
+      sheet
+        ?.querySelector<HTMLButtonElement>(
+          '[data-testid="budget-month-2026-08"]'
+        )
+        ?.click()
+      expect(wrapper.emitted('select-month')).toEqual([['2026-08']])
+    })
   })
 })

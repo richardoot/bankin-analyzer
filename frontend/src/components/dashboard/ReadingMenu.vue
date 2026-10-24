@@ -7,6 +7,7 @@
   import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
   import ToggleSwitch from '@/components/ui/ToggleSwitch.vue'
   import IconChevronDown from '@/components/icons/IconChevronDown.vue'
+  import IconFilter from '@/components/icons/IconFilter.vue'
   import { useMediaQuery } from '@/composables/useMediaQuery'
   import type { BreakdownMode } from '@/composables/useDashboardData'
 
@@ -21,7 +22,9 @@
    * trends and the budget.
    *
    * A popover hanging under the button on a desk, a sheet (BaseModal)
-   * under `sm`. Escape, a click elsewhere or Tab out closes the popover
+   * under `sm`. `compact` reduces the button to its icon under `sm`, for a
+   * header that already holds other actions (the budget's): the line it
+   * would say stays its accessible name. Escape, a click elsewhere or Tab out closes the popover
    * and hands the keyboard back to the button.
    */
   const props = withDefaults(
@@ -36,11 +39,14 @@
       hasAmortizedExpenses?: boolean | undefined
       /** Why the « en attente » preference could not be kept, if it could not. */
       pendingSyncError?: string | null | undefined
+      /** Under `sm`, the button is its icon alone. */
+      compact?: boolean | undefined
     }>(),
     {
       hasExceptionalExpenses: false,
       hasAmortizedExpenses: false,
       pendingSyncError: null,
+      compact: false,
     }
   )
 
@@ -88,6 +94,9 @@
   })
 
   const isPhone = useMediaQuery('(max-width: 639.98px)')
+
+  /** The icon alone: a compact menu, on a phone. */
+  const iconOnly = computed(() => props.compact && isPhone.value)
 
   const open = ref(false)
   const root = ref<HTMLElement | null>(null)
@@ -164,10 +173,17 @@
       :aria-controls="open ? panelId : undefined"
       data-testid="reading-menu-button"
       class="max-w-full text-left"
+      :class="iconOnly ? 'min-h-10 min-w-10 justify-center !px-2.5' : ''"
       @click="toggle"
     >
-      <span class="min-w-0 truncate">{{ stateLabel }}</span>
+      <IconFilter v-if="iconOnly" class="h-5 w-5 shrink-0" />
+      <span
+        :class="iconOnly ? 'sr-only' : 'min-w-0 truncate'"
+        data-testid="reading-menu-label"
+        >{{ stateLabel }}</span
+      >
       <IconChevronDown
+        v-if="!iconOnly"
         class="h-4 w-4 shrink-0 transition-transform"
         :class="open ? 'rotate-180' : ''"
       />

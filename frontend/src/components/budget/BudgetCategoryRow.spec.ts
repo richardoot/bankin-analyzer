@@ -1,11 +1,12 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import BudgetCategoryRow from './BudgetCategoryRow.vue'
 import MonthsVsBudgetChart from './MonthsVsBudgetChart.vue'
 import MonthlyBarChart from '@/components/charts/MonthlyBarChart.vue'
 import type { CategoryAverageDto } from '@/lib/api'
-import { DATA_HUE, STATE_BADGE_CLASSES } from '@/lib/stateTints'
+import { DATA_HUE, STATE_BADGE_CLASSES, STATE_COLORS } from '@/lib/stateTints'
 
 // The row links to the Transactions page: RouterLink needs a router.
 const router = createRouter({
@@ -14,6 +15,16 @@ const router = createRouter({
     { path: '/', component: { template: '<div />' } },
     { path: '/transactions', component: { template: '<div />' } },
   ],
+})
+
+/** Below `sm`, when set: the row in two lines and a bar. */
+const phone = vi.hoisted(() => ({ value: false }))
+vi.mock('@/composables/useMediaQuery', () => ({
+  useMediaQuery: () => ref(phone.value),
+  useIsMobile: () => ref(phone.value),
+}))
+afterEach(() => {
+  phone.value = false
 })
 
 vi.mock('vue3-apexcharts/core', () => ({
@@ -302,6 +313,78 @@ describe('BudgetCategoryRow', () => {
       }).findComponent(MonthlyBarChart)
       expect(chart.props('reference')).toBeUndefined()
       expect(chart.props('overlay')).toBeUndefined()
+    })
+  })
+
+  describe('on a phone (sm)', () => {
+    it('reads « 130 € / 133 € » in whole euros, a bar of the envelope under it', () => {
+      phone.value = true
+      const row = mountRow()
+      const figure = row.get('[data-testid="budget-figure-Alimentation"]')
+      expect(figure.text().replace(/\s+/g, ' ')).toBe('130 € / 133 €')
+      const bar = row.get('[data-testid="budget-bar-Alimentation"]')
+      expect(bar.attributes('role')).toBe('img')
+      expect(bar.attributes('aria-label')?.replace(/\s+/g, ' ')).toBe(
+        '130 € sur 133 €'
+      )
+      const fill = row.get('[data-testid="budget-bar-fill-Alimentation"]')
+      expect(fill.attributes('style')).toContain('width: 97.')
+      expect(fill.attributes('style')).toContain(DATA_HUE)
+      // No mini-columns on a phone: the chart is a desk's.
+      expect(
+        row.findComponent(MonthsVsBudgetChart).element.parentElement?.className
+      ).toContain('hidden sm:flex')
+    })
+
+    it('fills the bar in amber past the envelope, full', () => {
+      phone.value = true
+      const row = mountRow({
+        actualAverage: 162,
+        budget: 150,
+        rowStatus: 'over',
+      })
+      const fill = row.get('[data-testid="budget-bar-fill-Alimentation"]')
+      expect(fill.attributes('data-tone')).toBe('over')
+      expect(fill.attributes('style')).toContain('width: 100%')
+      expect(fill.attributes('style')).toContain(STATE_COLORS.over)
+      expect(
+        row
+          .get('[data-testid="budget-bar-Alimentation"]')
+          .attributes('aria-label')
+      ).toMatch(/12\s€ au-dessus/)
+    })
+
+    it('marks the envelope to date as a tick on a running month, not a line', () => {
+      phone.value = true
+      const row = mountRow({ proratedBudget: 100 })
+      expect(
+        row.find('[data-testid="budget-prorata-Alimentation"]').exists()
+      ).toBe(false)
+      const tick = row.get('[data-testid="budget-bar-tick-Alimentation"]')
+      expect(tick.attributes('style')).toContain('left: 75.')
+    })
+
+    it('draws no bar without an envelope, nor while editing', () => {
+      phone.value = true
+      expect(
+        mountRow({ budget: 0, savedBudget: 0 })
+          .find('[data-testid="budget-bar-Alimentation"]')
+          .exists()
+      ).toBe(false)
+      expect(
+        mountRow({ editing: true })
+          .find('[data-testid="budget-bar-Alimentation"]')
+          .exists()
+      ).toBe(false)
+    })
+
+    it('stands the field under the name, the whole width, while editing', () => {
+      phone.value = true
+      const row = mountRow({ editing: true })
+      const field = row.get('[data-testid="budget-input-Alimentation"]')
+      const cell = field.element.closest('.row-start-2')
+      expect(cell?.className).toContain('col-span-full')
+      expect(field.classes()).toContain('w-full')
     })
   })
 })

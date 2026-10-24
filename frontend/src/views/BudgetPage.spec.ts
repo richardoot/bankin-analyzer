@@ -566,6 +566,144 @@ describe('BudgetPage', () => {
     })
   })
 
+  describe('on a phone (« Budget · suivi sur téléphone »)', () => {
+    const originalMatchMedia = window.matchMedia
+
+    beforeEach(() => {
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue(samplePlan)
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue(sampleStatistics)
+      vi.mocked(api.getBudgetPlans).mockResolvedValue([
+        {
+          id: 'plan-old',
+          name: 'Avril 2026',
+          startDate: '2026-04-01',
+          endDate: '2026-04-30',
+          monthCount: 1,
+          totalAmount: 200,
+          entryCount: 1,
+          createdAt: '2026-03-20T00:00:00Z',
+        },
+      ])
+      // Every width query answers « narrower »: a 390 px phone.
+      Object.defineProperty(window, 'matchMedia', {
+        value: vi.fn(() => ({
+          matches: true,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        })),
+        writable: true,
+        configurable: true,
+      })
+    })
+
+    afterEach(() => {
+      Object.defineProperty(window, 'matchMedia', {
+        value: originalMatchMedia,
+        writable: true,
+        configurable: true,
+      })
+      document.body.innerHTML = ''
+    })
+
+    it('puts Historique and Nouveau budget behind « … », next to « Lecture » as an icon', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+
+      expect(
+        wrapper.find('[data-testid="header-history-button"]').exists()
+      ).toBe(false)
+      expect(
+        wrapper.find('[data-testid="header-new-plan-button"]').exists()
+      ).toBe(false)
+      const more = wrapper.get('[data-testid="header-more-button"]')
+      expect(more.attributes('aria-haspopup')).toBe('menu')
+      expect(more.attributes('aria-label')).toContain('Plus d’actions')
+      expect(
+        wrapper.get('[data-testid="reading-menu-label"]').classes()
+      ).toContain('sr-only')
+
+      await more.trigger('click')
+      const sheet = document.body.querySelector(
+        '[data-testid="header-more-sheet"]'
+      )
+      expect(sheet).not.toBeNull()
+      const items = Array.from(
+        sheet?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []
+      )
+      expect(items.map(i => i.textContent?.trim())).toEqual([
+        'Historique des budgets',
+        'Nouveau budget',
+      ])
+
+      items[1]?.click()
+      await flushPromises()
+      expect(
+        document.body.querySelector('[data-testid="header-more-sheet"]')
+      ).toBeNull()
+      expect(
+        document.body.querySelector('[data-testid="new-budget-plan-modal"]')
+      ).not.toBeNull()
+    })
+
+    it('opens the history from « … »', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+
+      await wrapper.get('[data-testid="header-more-button"]').trigger('click')
+      document.body
+        .querySelector<HTMLButtonElement>('[data-testid="header-more-history"]')
+        ?.click()
+      await flushPromises()
+      expect(
+        wrapper.findComponent({ name: 'BudgetPlansHistoryModal' }).props('open')
+      ).toBe(true)
+    })
+
+    it('locks « … » while the envelopes are edited', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+
+      expect(
+        (
+          wrapper.get('[data-testid="header-more-button"]')
+            .element as HTMLButtonElement
+        ).disabled
+      ).toBe(true)
+    })
+
+    it('says « Mois lu » as a link, keeps the four lines folded and the rows without mini-columns', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+
+      expect(
+        wrapper
+          .get('[data-testid="budget-month-read-trigger"]')
+          .text()
+          .replace(/\s+/g, ' ')
+      ).toBe('Mois lu : le plan ▾')
+      expect(wrapper.find('[data-testid="budget-month-read"]').exists()).toBe(
+        false
+      )
+      // Projets, Achats lissés, the chart and the grid: all folded.
+      const folded = wrapper.get('[data-testid="budget-folded-lines"]')
+      for (const button of folded.findAll('button[aria-expanded]')) {
+        expect(button.attributes('aria-expanded')).toBe('false')
+      }
+      for (const details of folded.findAll('details')) {
+        expect((details.element as HTMLDetailsElement).open).toBe(false)
+      }
+      // Each envelope: its figure and a bar, no chart of months.
+      const food = wrapper.get('[data-testid="budget-row-Alimentation"]')
+      expect(
+        food.find('[data-testid="budget-bar-Alimentation"]').exists()
+      ).toBe(true)
+      expect(
+        food.findComponent(MonthsVsBudgetChart).element.parentElement?.className
+      ).toContain('hidden')
+    })
+  })
+
   describe('history & plan switching', () => {
     const planSummaries = [
       {

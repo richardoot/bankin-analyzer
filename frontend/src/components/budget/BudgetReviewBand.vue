@@ -29,8 +29,8 @@
     figureClass,
   } from '@/components/budget/bandTiles'
   import BaseCard from '@/components/ui/BaseCard.vue'
-  import SegmentedControl from '@/components/ui/SegmentedControl.vue'
   import type { SegmentedOption } from '@/components/ui/SegmentedControl.vue'
+  import BudgetMonthRead from '@/components/budget/BudgetMonthRead.vue'
   import SparklineChart from '@/components/budget/SparklineChart.vue'
   import { useMediaQuery } from '@/composables/useMediaQuery'
 
@@ -230,7 +230,7 @@
     aria-labelledby="budget-review-title"
   >
     <header
-      class="mb-3 flex flex-col gap-3 sm:mb-4 lg:flex-row lg:items-start lg:justify-between"
+      class="mb-3 flex flex-col gap-3 max-sm:flex-row max-sm:items-start max-sm:justify-between sm:mb-4 lg:flex-row lg:items-start lg:justify-between"
     >
       <div class="min-w-0">
         <h2
@@ -247,26 +247,11 @@
 
       <!-- « Mois lu »: the plan as a whole, then each of its months. It
            steers the band and the figures of the rows. -->
-      <div
-        data-testid="budget-month-selector"
-        class="flex min-w-0 items-center gap-2"
-      >
-        <span
-          id="budget-month-read-label"
-          class="shrink-0 text-xs text-gray-500 dark:text-gray-400"
-        >
-          Mois lu
-        </span>
-        <SegmentedControl
-          :model-value="selectedMonth"
-          :options="monthSegments"
-          size="sm"
-          scrollable
-          labelled-by="budget-month-read-label"
-          data-testid="budget-month-read"
-          @update:model-value="emit('select-month', $event)"
-        />
-      </div>
+      <BudgetMonthRead
+        :model-value="selectedMonth"
+        :options="monthSegments"
+        @update:model-value="emit('select-month', $event)"
+      />
     </header>
 
     <div :class="TILES_GRID" data-testid="budget-review-tiles">
