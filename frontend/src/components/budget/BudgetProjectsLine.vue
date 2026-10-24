@@ -202,7 +202,7 @@
         data-testid="budget-projects-toggle"
         class="inline-flex min-h-[40px] items-center gap-1 rounded px-2 font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 dark:text-gray-300 dark:hover:bg-slate-800"
         :aria-expanded="expanded"
-        :aria-controls="panelId"
+        :aria-controls="expanded ? panelId : undefined"
         @click="expanded = !expanded"
       >
         {{ expanded ? 'Replier' : 'Déplier' }}

@@ -82,8 +82,10 @@ describe('BudgetAmortizedLine', () => {
 
   it('unfolds on the button: each purchase, its slice, what is left, its link', async () => {
     const wrapper = mountLine([purchase()])
-    await unfold(wrapper)
     const toggle = wrapper.get('[data-testid="budget-amortized-toggle"]')
+    // Folded, the panel is not in the page: nothing for the button to name.
+    expect(toggle.attributes('aria-controls')).toBeUndefined()
+    await unfold(wrapper)
     expect(toggle.attributes('aria-expanded')).toBe('true')
     expect(toggle.attributes('aria-controls')).toBe(
       wrapper.get('[data-testid="budget-amortized-panel"]').attributes('id')

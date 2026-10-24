@@ -149,8 +149,10 @@ describe('BudgetProjectsLine', () => {
 
   it('unfolds on the button, which says so', async () => {
     const wrapper = mountLine(looseMove)
-    await unfold(wrapper)
     const toggle = wrapper.get('[data-testid="budget-projects-toggle"]')
+    // Folded, the panel is not in the page: nothing for the button to name.
+    expect(toggle.attributes('aria-controls')).toBeUndefined()
+    await unfold(wrapper)
     expect(toggle.attributes('aria-expanded')).toBe('true')
     expect(toggle.text()).toContain('Replier')
     const panel = wrapper.get('[data-testid="budget-projects-panel"]')
@@ -162,6 +164,7 @@ describe('BudgetProjectsLine', () => {
     expect(wrapper.find('[data-testid="budget-projects-panel"]').exists()).toBe(
       false
     )
+    expect(toggle.attributes('aria-controls')).toBeUndefined()
   })
 
   it('shows a family with an envelope as one line: prorata, spend, its tags', async () => {
