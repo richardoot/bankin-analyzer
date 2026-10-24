@@ -20,6 +20,7 @@
   import { useFiltersStore } from '@/stores/filters'
   import BudgetMonthBand from '@/components/budget/BudgetMonthBand.vue'
   import BudgetReviewBand from '@/components/budget/BudgetReviewBand.vue'
+  import BudgetPlanningBand from '@/components/budget/BudgetPlanningBand.vue'
   import { budgetMonthReading, budgetReviewReading } from '@/lib/budgetMonth'
   import MonthlyExpensesChart from '@/components/budget/MonthlyExpensesChart.vue'
   import NewBudgetPlanModal from '@/components/budget/NewBudgetPlanModal.vue'
@@ -124,6 +125,11 @@
    */
   const budgetInputs = ref<Map<string, number>>(new Map())
   const savedBudgets = ref<Map<string, number>>(new Map())
+  /**
+   * The reference income being edited, in « Planification »: a draft like
+   * the envelopes, saved with them, restored by « Annuler ».
+   */
+  const referenceIncomeInput = ref<number | null>(null)
   const isEditing = ref(false)
   // The edit bar takes the tab bar's place below lg while it shows.
   useSuppressTabBar(() => isEditing.value || saveStatus.value === 'saved')
@@ -1133,16 +1139,43 @@
     saveError.value = null
   }
 
-  function enterEditMode(): void {
+  /**
+   * Edit mode changes the page's question: « Planification » takes the
+   * place of « Ce mois-ci », and the page brings it into view (lot 4).
+   * `focusIncome` lands on the reference income's field, the way « Ce
+   * mois-ci » offers when the plan has none.
+   */
+  function enterEditMode(options: { focusIncome?: boolean } = {}): void {
     clearSaveStatus()
     budgetInputs.value = new Map(savedBudgets.value)
+    referenceIncomeInput.value = savedReferenceIncome.value
     isEditing.value = true
+    void nextTick(() => {
+      document
+        .querySelector('[data-testid="budget-planning-band"]')
+        ?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+      if (options.focusIncome) {
+        document
+          .getElementById('budget-reference-income')
+          ?.focus({ preventScroll: true })
+      }
+    })
   }
 
   function cancelEdit(): void {
     clearSaveStatus()
     budgetInputs.value = new Map(savedBudgets.value)
+    referenceIncomeInput.value = savedReferenceIncome.value
     isEditing.value = false
+  }
+
+  /** « Choisir une comparaison »: « Comparer avec » brought to hand. */
+  function chooseComparison(): void {
+    const slot = document.getElementById('budget-comparison')
+    slot?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    slot
+      ?.querySelector<HTMLElement>('[data-testid^="comparison-option-"]')
+      ?.focus({ preventScroll: true })
   }
 
   /** Categories whose draft envelope differs from what the server holds. */
@@ -1160,7 +1193,17 @@
     return changed
   })
 
-  const hasUnsavedChanges = computed(() => dirtyCategoryIds.value.length > 0)
+  /** The reference income the server holds, the « before » of its field. */
+  const savedReferenceIncome = computed(
+    () => plan.value?.referenceIncome ?? null
+  )
+  const referenceIncomeDirty = computed(
+    () => referenceIncomeInput.value !== savedReferenceIncome.value
+  )
+
+  const hasUnsavedChanges = computed(
+    () => dirtyCategoryIds.value.length > 0 || referenceIncomeDirty.value
+  )
 
   /** Envelope the server holds for a category — the "before" of the diff. */
   function getSavedBudget(categoryId: string): number {
@@ -1187,12 +1230,24 @@
   const draftPlanTotal = computed(() => sumOf(budgetInputs.value))
   const draftDelta = computed(() => draftPlanTotal.value - savedPlanTotal.value)
 
+  /**
+   * The comparison's monthly spending, the history « Marge vs historique »
+   * weighs the draft against; null while no comparison is chosen.
+   */
+  const comparisonExpenseAvg = computed(() =>
+    comparisonRange.value
+      ? comparison.aggregatesFor(visibleExpenseCategories.value)
+          .comparisonExpenseAvg
+      : null
+  )
+
   /** Take the entries of a freshly loaded plan as the new saved reference. */
   function adoptPlanEntries(loaded: BudgetPlanDto | null): void {
     savedBudgets.value = new Map(
       (loaded?.entries ?? []).map(e => [e.categoryId, e.amount])
     )
     budgetInputs.value = new Map(savedBudgets.value)
+    referenceIncomeInput.value = loaded?.referenceIncome ?? null
     isEditing.value = false
   }
 
@@ -1204,7 +1259,13 @@
     try {
       isSaving.value = true
       clearSaveStatus()
-      const updated = await api.updateBudgetPlan(plan.value.id, { entries })
+      const updated = await api.updateBudgetPlan(plan.value.id, {
+        entries,
+        // Sent only when changed: null clears it, as the API reads it.
+        ...(referenceIncomeDirty.value
+          ? { referenceIncome: referenceIncomeInput.value }
+          : {}),
+      })
       plan.value = updated
       adoptPlanEntries(updated)
       saveStatus.value = 'saved'
@@ -1467,8 +1528,27 @@
            opened for. « Mois lu » lives in its header and steers the rows. -->
       <!-- A finished plan reads its review instead: « Bilan du plan »,
            « Le plan » by default in « Mois lu », or one of its months. -->
+      <!-- Editing, the page asks what the plan foresees: « Planification »,
+           the draft's figures, the edit bar's total. -->
+      <BudgetPlanningBand
+        v-if="isEditing"
+        class="mb-6 scroll-mt-4"
+        :plan-name="plan.name"
+        :month-count="plan.monthCount"
+        :reference-income="referenceIncomeInput"
+        :saved-reference-income="savedReferenceIncome"
+        :draft-total="draftPlanTotal"
+        :saved-total="savedPlanTotal"
+        :delta="draftDelta"
+        :dirty-count="dirtyCategoryIds.length"
+        :savings-target="plan.savingsTarget ?? null"
+        :comparison-expense-avg="comparisonExpenseAvg"
+        :comparison-label="comparisonRange?.label ?? null"
+        @update:reference-income="referenceIncomeInput = $event"
+        @choose-comparison="chooseComparison"
+      />
       <BudgetReviewBand
-        v-if="reviewReading"
+        v-else-if="reviewReading"
         class="mb-6"
         :reading="reviewReading"
         :plan-name="plan.name"
@@ -1491,7 +1571,7 @@
         :complete-months-count="comparison.completePlanMonthsCount.value"
         @select-month="selectMonth"
         @show-envelope="showEnvelope"
-        @edit="enterEditMode"
+        @edit="enterEditMode({ focusIncome: true })"
       />
 
       <!-- « À faire »: an envelope over, the project reserve overdrawn, a
@@ -1506,7 +1586,7 @@
           :editing="isEditing"
           :plan-is-past="planStatus(plan) === 'past'"
           :averages-source="averagesSource"
-          @enter-edit="enterEditMode"
+          @enter-edit="enterEditMode()"
           @apply-averages="applyAverageToAll"
           @adjust-percent="adjustAllByPercent"
           @reset="resetAllBudgets"
@@ -1515,6 +1595,7 @@
                against a past. -->
           <template v-if="isEditing" #comparison>
             <ComparisonSelector
+              id="budget-comparison"
               :plan="plan"
               :year-ago-available="yearAgoAvailable"
               :preset="comparisonPreset"
@@ -1729,6 +1810,7 @@
       <BudgetEditBar
         v-if="isEditing || saveStatus === 'saved'"
         :dirty-count="dirtyCategoryIds.length"
+        :income-changed="referenceIncomeDirty"
         :saved-total="savedPlanTotal"
         :draft-total="draftPlanTotal"
         :delta="draftDelta"

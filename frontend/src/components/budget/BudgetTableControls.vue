@@ -5,9 +5,10 @@
 
   /**
    * The header of « Les enveloppes »: its title, the sort, the way into
-   * edit mode. In edit mode only, the comparison (the `comparison` slot,
-   * which the page fills then), the closed-period warning and the quick
-   * actions join it. The reading (Vie courante / Tout) is the
+   * edit mode. In edit mode only (budget-refonte.md, lot 4), the
+   * closed-period warning stands above it, the comparison (the
+   * `comparison` slot, which the page fills then) on the title's line,
+   * and the quick actions under it. The reading (Vie courante / Tout) is the
    * page's « Lecture » menu, and the month read is « Mois lu » in the band
    * of the month (BudgetMonthBand): neither is a control of the table.
    * Pure controls — every decision leaves as an event, every
@@ -33,6 +34,17 @@
 
 <template>
   <div>
+    <!-- Rewriting the envelopes of a closed period moves the gap on a
+         bilan that has already been read. Allowed, but never silent. -->
+    <div
+      v-if="editing && planIsPast"
+      data-testid="budget-past-plan-warning"
+      class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300"
+    >
+      Ce plan est terminé. Modifier ses enveloppes change le bilan d'une période
+      déjà écoulée.
+    </div>
+
     <div
       class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3"
     >
@@ -50,7 +62,16 @@
           Toutes les catégories du plan, les plus lourdes en tête
         </p>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+        <!-- « Comparer avec », when the page gives it (edit mode only): on
+             the title's line, the past the envelopes are set against. -->
+        <div
+          v-if="$slots.comparison"
+          class="w-full min-w-0 sm:w-auto"
+          data-testid="budget-comparison-slot"
+        >
+          <slot name="comparison" />
+        </div>
         <BaseButton
           v-if="!editing"
           variant="tinted"
@@ -82,22 +103,6 @@
           </option>
         </select>
       </div>
-    </div>
-
-    <!-- « Comparer avec », when the page gives it: in edit mode only. -->
-    <div v-if="$slots.comparison" class="mb-4">
-      <slot name="comparison" />
-    </div>
-
-    <!-- Rewriting the envelopes of a closed period moves the gap on a
-         bilan that has already been read. Allowed, but never silent. -->
-    <div
-      v-if="editing && planIsPast"
-      data-testid="budget-past-plan-warning"
-      class="mb-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-300"
-    >
-      Ce plan est terminé. Modifier ses enveloppes change le bilan d'une période
-      déjà écoulée.
     </div>
 
     <!-- Quick actions — edit mode only. Applying an average or shaving

@@ -865,7 +865,7 @@ describe('BudgetPage', () => {
 
       expect(
         wrapper.find('[data-testid="budget-dirty-count"]').text()
-      ).toContain('1 catégorie')
+      ).toContain('1 enveloppe modifiée')
       expect(
         wrapper.find('[data-testid="budget-draft-delta"]').text()
       ).toContain('+')
@@ -1020,6 +1020,214 @@ describe('BudgetPage', () => {
       const input = wrapper.find('[data-testid="budget-input-Alimentation"]')
         .element as HTMLInputElement
       expect(input.value).toBe('300')
+    })
+
+    it('reads « Planification » in place of « Ce mois-ci » while editing', async () => {
+      // Within the plan's month, so the band of the month reads.
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-05-20T12:00:00Z'))
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        true
+      )
+      expect(
+        wrapper.find('[data-testid="budget-planning-band"]').exists()
+      ).toBe(false)
+
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        false
+      )
+      const band = wrapper.get('[data-testid="budget-planning-band"]')
+      expect(band.text()).toContain('Planification · Mai 2026')
+      for (const tile of [
+        'reference-income',
+        'total',
+        'savings-planned',
+        'margin',
+      ]) {
+        expect(band.find(`[data-testid="budget-tile-${tile}"]`).exists()).toBe(
+          true
+        )
+      }
+
+      // Back to the month on « Annuler ».
+      await wrapper.get('[data-testid="budget-cancel-button"]').trigger('click')
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        true
+      )
+      expect(
+        wrapper.find('[data-testid="budget-planning-band"]').exists()
+      ).toBe(false)
+
+      // And on « Enregistrer ».
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      await wrapper
+        .get('[data-testid="budget-input-Alimentation"]')
+        .setValue('300')
+      vi.mocked(api.updateBudgetPlan).mockResolvedValue(samplePlan)
+      await wrapper.get('[data-testid="budget-save-button"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.find('[data-testid="budget-month-band"]').exists()).toBe(
+        true
+      )
+      expect(
+        wrapper.find('[data-testid="budget-planning-band"]').exists()
+      ).toBe(false)
+    })
+
+    it('says the same total in the band and the bar, at each keystroke', async () => {
+      const wrapper = await mountEditing()
+      const bandTotal = () =>
+        wrapper.get('[data-testid="budget-planning-value-total"]').text()
+      expect(bandTotal()).toContain('250')
+
+      await wrapper
+        .get('[data-testid="budget-input-Alimentation"]')
+        .setValue('300')
+      await wrapper.get('[data-testid="budget-input-Transport"]').setValue('80')
+
+      // 300 + 80, over every entry: one sum for both.
+      expect(bandTotal()).toContain('380')
+      expect(
+        wrapper.get('[data-testid="budget-edit-draft-total"]').text()
+      ).toContain('380')
+      const bandBadge = wrapper.get('[data-testid="budget-badge-total"]')
+      const barBadge = wrapper.get('[data-testid="budget-draft-delta"]')
+      expect(bandBadge.text()).toContain('+130')
+      expect(barBadge.text()).toContain('+130')
+      expect(bandBadge.attributes('data-tone')).toBe('over')
+      expect(barBadge.attributes('data-tone')).toBe('over')
+      expect(
+        wrapper.get('[data-testid="budget-detail-total"]').text()
+      ).toContain('2 enveloppes modifiées')
+    })
+
+    it('saves a reference income typed in « Planification », and « Annuler » drops it', async () => {
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue({
+        ...samplePlan,
+        savingsTarget: 400,
+        referenceIncome: null,
+      })
+      const wrapper = await mountEditing()
+      const income = () =>
+        wrapper.get('[data-testid="budget-reference-income-input"]')
+      expect(
+        wrapper.get('[data-testid="budget-tile-reference-income"]').text()
+      ).toContain('non renseignés')
+      expect(
+        wrapper
+          .find('[data-testid="budget-savings-planned-no-income"]')
+          .exists()
+      ).toBe(true)
+
+      await income().setValue('2000')
+      // 2 000 − 250 planned, 1 350 left for projects a month.
+      expect(
+        wrapper.get('[data-testid="budget-planning-value-savings"]').text()
+      ).toMatch(/1\s750/)
+      expect(
+        wrapper.get('[data-testid="budget-detail-savings-planned"]').text()
+      ).toMatch(/réserve projets 1\s350\s€ × 1 mois = 1\s350\s€/)
+
+      // The income alone is a change worth saving.
+      const save = wrapper.get('[data-testid="budget-save-button"]')
+      expect((save.element as HTMLButtonElement).disabled).toBe(false)
+
+      await wrapper.get('[data-testid="budget-cancel-button"]').trigger('click')
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      expect((income().element as HTMLInputElement).value).toBe('')
+
+      await income().setValue('2000')
+      vi.mocked(api.updateBudgetPlan).mockResolvedValue({
+        ...samplePlan,
+        referenceIncome: 2000,
+      })
+      await wrapper.get('[data-testid="budget-save-button"]').trigger('click')
+      await flushPromises()
+      expect(vi.mocked(api.updateBudgetPlan).mock.calls[0]?.[1]).toEqual(
+        expect.objectContaining({ referenceIncome: 2000 })
+      )
+    })
+
+    it('leaves the reference income out of a save that does not change it', async () => {
+      const wrapper = await mountEditing()
+      await wrapper
+        .get('[data-testid="budget-input-Alimentation"]')
+        .setValue('300')
+      vi.mocked(api.updateBudgetPlan).mockResolvedValue(samplePlan)
+      await wrapper.get('[data-testid="budget-save-button"]').trigger('click')
+      await flushPromises()
+      expect(
+        vi.mocked(api.updateBudgetPlan).mock.calls[0]?.[1]
+      ).not.toHaveProperty('referenceIncome')
+    })
+
+    it('weighs the draft against the comparison in « Marge vs historique »', async () => {
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      expect(
+        wrapper.get('[data-testid="budget-tile-margin"]').text()
+      ).toContain('Aucune comparaison choisie')
+      expect(
+        wrapper.find('[data-testid="budget-choose-comparison"]').exists()
+      ).toBe(true)
+      await wrapper.get('[data-testid="budget-cancel-button"]').trigger('click')
+
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...sampleStatistics,
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            categoryIcon: '🍽️',
+            totalAmount: 1220,
+            transactionCount: 20,
+            averagePerMonth: 305,
+            monthlyAmounts: [300, 300, 300, 320],
+          },
+          {
+            categoryId: 'cat-transport',
+            categoryName: 'Transport',
+            categoryIcon: '🚗',
+            totalAmount: 400,
+            transactionCount: 8,
+            averagePerMonth: 100,
+            monthlyAmounts: [100, 100, 100, 100],
+          },
+        ],
+        monthLabels: ['2026-02', '2026-03', '2026-04', '2026-05'],
+      })
+      await compareWith(wrapper, '3m')
+
+      // History 400 € a month, the plan 250 €: 150 € tighter, said amber.
+      expect(
+        wrapper.get('[data-testid="budget-planning-value-margin"]').text()
+      ).toContain('−150')
+      const badge = wrapper.get('[data-testid="budget-badge-margin"]')
+      expect(badge.attributes('data-tone')).toBe('over')
+      expect(
+        wrapper.get('[data-testid="budget-detail-margin"]').text()
+      ).toContain('historique 400')
+      wrapper.unmount()
+    })
+
+    it('brings « Planification » into view on entering edit mode', async () => {
+      const scroll = vi.fn()
+      const original = Element.prototype.scrollIntoView
+      Element.prototype.scrollIntoView = scroll
+      const wrapper = mount(BudgetPage, { attachTo: document.body })
+      await flushPromises()
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      await flushPromises()
+      expect(scroll).toHaveBeenCalled()
+      expect(scroll.mock.contexts[0]).toBe(
+        wrapper.get('[data-testid="budget-planning-band"]').element
+      )
+      Element.prototype.scrollIntoView = original
+      wrapper.unmount()
     })
 
     it('warns before editing the envelopes of a finished plan', async () => {
@@ -1934,6 +2142,10 @@ describe('BudgetPage', () => {
       await tile.get('[data-testid="budget-savings-edit"]').trigger('click')
       expect(
         wrapper.find('[data-testid="budget-input-Alimentation"]').exists()
+      ).toBe(true)
+      // The way leads to the field: « Planification » carries it.
+      expect(
+        wrapper.find('[data-testid="budget-reference-income-input"]').exists()
       ).toBe(true)
 
       wrapper.unmount()

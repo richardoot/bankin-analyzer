@@ -50,3 +50,13 @@ export function gapOf(
   }
   return { tone: ratio < 0 ? 'under' : 'over', ratio }
 }
+
+/**
+ * The tone of a change of a total, said by the edit mode's band and bar
+ * alike (budget-refonte.md, lot 4): teal for a drop, amber for a rise,
+ * grey when it rounds to nothing.
+ */
+export function deltaTone(delta: number): StateTone {
+  if (Math.round(delta) === 0) return 'neutral'
+  return delta < 0 ? 'under' : 'over'
+}

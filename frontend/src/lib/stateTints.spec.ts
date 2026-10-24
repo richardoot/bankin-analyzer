@@ -3,6 +3,7 @@ import {
   DATA_HUE,
   STATE_BADGE_CLASSES,
   STATE_COLORS,
+  deltaTone,
   gapOf,
 } from './stateTints'
 
@@ -19,6 +20,8 @@ const dashboardSources = import.meta.glob<string>(
     '../components/charts/YearColumnsChart.vue',
     '../components/budget/BudgetMonthBand.vue',
     '../components/budget/BudgetReviewBand.vue',
+    '../components/budget/BudgetPlanningBand.vue',
+    '../components/budget/BudgetEditBar.vue',
     '../components/budget/BudgetCategoryRow.vue',
     '../components/budget/MonthsVsBudgetChart.vue',
     '../components/budget/BudgetProjectsLine.vue',
@@ -53,6 +56,14 @@ describe('the state tints', () => {
     expect(gapOf(50, 0)).toEqual({ tone: 'neutral', ratio: 0 })
   })
 
+  it('tones a change of a total: a drop teal, a rise amber, none grey', () => {
+    expect(deltaTone(-30)).toBe('under')
+    expect(deltaTone(30)).toBe('over')
+    expect(deltaTone(0)).toBe('neutral')
+    // Under half a euro, nothing a whole-euro figure would show.
+    expect(deltaTone(0.4)).toBe('neutral')
+  })
+
   it('reads the dashboard sources it guards', () => {
     expect(Object.keys(dashboardSources)).toEqual(
       expect.arrayContaining([
@@ -60,6 +71,8 @@ describe('the state tints', () => {
         '../components/dashboard/MonthBand.vue',
         '../components/budget/BudgetMonthBand.vue',
         '../components/budget/BudgetReviewBand.vue',
+        '../components/budget/BudgetPlanningBand.vue',
+        '../components/budget/BudgetEditBar.vue',
         '../components/budget/BudgetCategoryRow.vue',
         '../components/budget/MonthsVsBudgetChart.vue',
         '../components/budget/BudgetProjectsLine.vue',
