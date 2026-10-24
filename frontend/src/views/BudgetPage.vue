@@ -430,6 +430,19 @@
   })
 
   /**
+   * The income of each complete plan month: the base of the planned
+   * savings in « Planification », as in « Ce mois-ci ».
+   */
+  const completeMonthsIncome = computed(() =>
+    comparison.completePlanIndices.value.map(i =>
+      visibleIncomeCategories.value.reduce(
+        (total, cat) => total + (cat.monthlyAmounts?.[i] ?? 0),
+        0
+      )
+    )
+  )
+
+  /**
    * Income averaged over the complete plan months, whichever month is read:
    * a running month has received part of its income only.
    */
@@ -1471,6 +1484,7 @@
         :saved-total="savedPlanTotal"
         :delta="draftDelta"
         :dirty-count="dirtyCategoryIds.length"
+        :complete-months-income="completeMonthsIncome"
         :savings-target="plan.savingsTarget ?? null"
         :comparison-expense-avg="comparisonExpenseAvg"
         :comparison-label="comparisonRange?.label ?? null"

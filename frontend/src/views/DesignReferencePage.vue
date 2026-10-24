@@ -996,6 +996,7 @@
           :saved-total="1850"
           :delta="-30"
           :dirty-count="2"
+          :complete-months-income="[2600, 2600, 2600]"
           :savings-target="500"
           :comparison-expense-avg="1853"
           comparison-label="janv. → juin 2026"

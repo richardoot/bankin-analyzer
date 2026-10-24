@@ -1255,6 +1255,10 @@ describe('BudgetPage', () => {
     })
 
     it('saves a reference income typed in « Planification », and « Annuler » drops it', async () => {
+      // May still running: no closed month, the savings read the
+      // reference income typed.
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-05-15T12:00:00Z'))
       vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue({
         ...samplePlan,
         savingsTarget: 400,
@@ -1299,6 +1303,70 @@ describe('BudgetPage', () => {
       expect(vi.mocked(api.updateBudgetPlan).mock.calls[0]?.[1]).toEqual(
         expect.objectContaining({ referenceIncome: 2000 })
       )
+    })
+
+    it('plans the savings on the closed months’ income, whatever reference income is typed', async () => {
+      // A May → June plan read mid-June: May closed with 2 500 received,
+      // 2 000 typed as the reference.
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-06-15T12:00:00Z'))
+      vi.mocked(api.getCurrentBudgetPlan).mockResolvedValue({
+        ...samplePlan,
+        endDate: '2026-06-30',
+        monthCount: 2,
+        savingsTarget: 400,
+        referenceIncome: 2000,
+      })
+      vi.mocked(api.getBudgetStatistics).mockResolvedValue({
+        ...sampleStatistics,
+        periodMonths: 2,
+        monthLabels: ['2026-05', '2026-06'],
+        expensesByCategory: [
+          {
+            categoryId: 'cat-food',
+            categoryName: 'Alimentation',
+            categoryIcon: '🍽️',
+            totalAmount: 400,
+            transactionCount: 5,
+            averagePerMonth: 200,
+            monthlyAmounts: [320, 80],
+          },
+        ],
+        incomeByCategory: [
+          {
+            categoryId: 'cat-salary',
+            categoryName: 'Salaire',
+            totalAmount: 2500,
+            transactionCount: 1,
+            averagePerMonth: 1250,
+            monthlyAmounts: [2500, 0],
+          },
+        ],
+      })
+      const wrapper = mount(BudgetPage)
+      await flushPromises()
+      // « Ce mois-ci »: 2 500 − 250.
+      expect(
+        wrapper.get('[data-testid="budget-month-value-savings"]').text()
+      ).toMatch(/2\s250/)
+      expect(
+        wrapper.get('[data-testid="budget-savings-basis"]').text()
+      ).toMatch(/revenus moyens de 1 mois clos \(2\s500\s€\)/)
+
+      await wrapper.get('[data-testid="budget-edit-button"]').trigger('click')
+      expect(
+        wrapper.get('[data-testid="budget-planning-value-savings"]').text()
+      ).toMatch(/2\s250/)
+      await wrapper
+        .get('[data-testid="budget-reference-income-input"]')
+        .setValue('3000')
+      // The typed income does not move the savings: the real one does.
+      expect(
+        wrapper.get('[data-testid="budget-planning-value-savings"]').text()
+      ).toMatch(/2\s250/)
+      expect(
+        wrapper.get('[data-testid="budget-savings-planned-basis"]').text()
+      ).toContain('revenus moyens de 1 mois clos')
     })
 
     it('leaves the reference income out of a save that does not change it', async () => {

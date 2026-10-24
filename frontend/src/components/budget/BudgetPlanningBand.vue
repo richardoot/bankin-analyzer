@@ -25,6 +25,7 @@
     figureClass,
   } from '@/components/budget/bandTiles'
   import BaseCard from '@/components/ui/BaseCard.vue'
+  import { savingsIncomeBase } from '@/lib/budgetMonth'
 
   /**
    * « Planification » of the Budget page (agent-os/product/budget-refonte.md,
@@ -54,6 +55,12 @@
     delta: number
     /** The envelopes the draft changes. */
     dirtyCount: number
+    /**
+     * The income of each complete plan month: once there is one, the
+     * planned savings are drawn from their average, not from the
+     * reference income (Richard, 2026-10-24).
+     */
+    completeMonthsIncome: number[]
     /** The monthly savings decided at creation, null when none. */
     savingsTarget: number | null
     /** The comparison's monthly spending; null while none is chosen. */
@@ -115,8 +122,14 @@
 
   // ── Épargne prévue ──────────────────────────────────────────────────────
   const savingsTile = computed(() => {
-    const income = props.referenceIncome
-    if (income === null) return null
+    // The real income of the complete months, the reference income
+    // (the draft's) before any month is complete.
+    const base = savingsIncomeBase(
+      props.referenceIncome,
+      props.completeMonthsIncome
+    )
+    if (base === null) return null
+    const income = base.amount
     const planned = income - props.draftTotal
     const negative = planned < 0
     const target = props.savingsTarget
@@ -134,14 +147,19 @@
     // The backend's rule for `projectReserve` (budget-plans.service.ts,
     // `toDto`): (referenceIncome − savingsTarget − totalAmount) × monthCount,
     // rounded, never clamped, null without a savings target. Here on the
-    // draft, so it follows the typing.
+    // draft and on the same income as the savings, so it follows the
+    // typing; the saved reserve keeps reading the reference income.
     let detail = 'Revenus − budget total'
     if (target !== null) {
       const monthly = income - target - props.draftTotal
       const reserve = Math.round(monthly * props.monthCount * 100) / 100
       detail = `réserve projets ${euros(monthly)} × ${props.monthCount} mois = ${euros(reserve)}`
     }
-    return { value: planned, negative, badge, detail }
+    const basis =
+      base.source === 'actual'
+        ? `sur les revenus moyens de ${base.months} mois clos (${euros(base.amount)}), pas les revenus de référence`
+        : 'sur les revenus de référence saisis'
+    return { value: planned, negative, badge, detail, basis }
   })
 
   // ── Marge vs historique ─────────────────────────────────────────────────
@@ -247,7 +265,8 @@
         </p>
       </article>
 
-      <!-- The savings the draft plans: reference income − total. -->
+      <!-- The savings the draft plans: the complete months' income (the
+           reference income before any) − total. -->
       <article :class="TILE" data-testid="budget-tile-savings-planned">
         <h3 :class="TILE_TITLE">Épargne prévue</h3>
         <template v-if="savingsTile">
@@ -265,6 +284,9 @@
               data-testid="budget-badge-savings-planned"
               >{{ savingsTile.badge.text }}</span
             >
+          </p>
+          <p :class="DETAIL" data-testid="budget-savings-planned-basis">
+            {{ savingsTile.basis }}
           </p>
           <p :class="DETAIL" data-testid="budget-detail-savings-planned">
             {{ savingsTile.detail }}

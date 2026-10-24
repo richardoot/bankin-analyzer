@@ -48,6 +48,38 @@ export interface BudgetMonthInput {
   income: number[]
 }
 
+/**
+ * The income the planned savings are drawn from (Richard, 2026-10-24): the
+ * real income averaged over the plan's complete months, or — before any
+ * month is complete — the reference income typed at creation. `months` is
+ * how many complete months `amount` averages, 0 on the reference.
+ */
+export interface SavingsIncomeBase {
+  source: 'actual' | 'reference'
+  amount: number
+  months: number
+}
+
+/**
+ * The base of the planned savings: the real income of the complete months
+ * when there is one, the reference income otherwise, null with neither.
+ * The backend's `projectReserve` keeps reading the reference income.
+ */
+export function savingsIncomeBase(
+  referenceIncome: number | null | undefined,
+  completeMonthsIncome: readonly number[]
+): SavingsIncomeBase | null {
+  if (completeMonthsIncome.length > 0) {
+    return {
+      source: 'actual',
+      amount: mean([...completeMonthsIncome]),
+      months: completeMonthsIncome.length,
+    }
+  }
+  if (referenceIncome === null || referenceIncome === undefined) return null
+  return { source: 'reference', amount: referenceIncome, months: 0 }
+}
+
 /** An envelope the month read spends past. */
 export interface BudgetEnvelopeOver {
   categoryId: string
@@ -88,8 +120,14 @@ export interface BudgetMonthReading {
   remaining: number | null
   /** Days left in the running month after today; null otherwise. */
   daysLeft: number | null
-  /** `referenceIncome − envelope`; null without `referenceIncome`. */
+  /**
+   * `income − envelope`, the income being `savingsBase`: the real income
+   * of the complete months, or the reference income before any; null
+   * with neither.
+   */
   savingsPlanned: number | null
+  /** What `savingsPlanned` is drawn from; null when it cannot be. */
+  savingsBase: SavingsIncomeBase | null
   /** `savingsTarget`, when one was decided. */
   savingsDecided: number | null
   /**
@@ -135,9 +173,19 @@ export function budgetMonthReading(
   const envelope = sum([...envelopes.values()])
   const envelopesCount = [...envelopes.values()].filter(v => v > 0).length
 
-  const referenceIncome = plan.referenceIncome ?? null
+  const spentSeries = months.map((_, i) =>
+    sum(categories.map(c => c.amounts[i] ?? 0))
+  )
+  const completeIndices = months.slice(0, completeCount).map((_, i) => i)
+
+  // The savings the plan makes on the income actually received, once a
+  // month is complete; the reference income typed at creation until then.
+  const savingsBase = savingsIncomeBase(
+    plan.referenceIncome,
+    completeIndices.map(i => income[i] ?? 0)
+  )
   const savingsPlanned =
-    referenceIncome === null ? null : referenceIncome - envelope
+    savingsBase === null ? null : savingsBase.amount - envelope
   const savingsDecided = plan.savingsTarget ?? null
   const savingsGap =
     savingsPlanned !== null && savingsDecided !== null && savingsDecided > 0
@@ -147,14 +195,9 @@ export function budgetMonthReading(
         }
       : null
 
-  const spentSeries = months.map((_, i) =>
-    sum(categories.map(c => c.amounts[i] ?? 0))
-  )
-
   // Savings actually made: income − spending, over the complete months
   // only — a running month has spent part of its money and received part
   // of its income, whichever month is read.
-  const completeIndices = months.slice(0, completeCount).map((_, i) => i)
   const savingsActual =
     completeIndices.length === 0
       ? null
@@ -165,6 +208,7 @@ export function budgetMonthReading(
     envelope,
     spentSeries,
     savingsPlanned,
+    savingsBase,
     savingsDecided,
     savingsGap,
     savingsActual,

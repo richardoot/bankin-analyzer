@@ -219,15 +219,19 @@ describe('BudgetMonthBand', () => {
     expect(badge.attributes('data-tone')).toBe('over')
   })
 
-  it('weighs the planned savings against the decided ones', () => {
+  it('weighs the planned savings, on the closed months’ income, against the decided ones', () => {
     const wrapper = mountBand()
     const tile = wrapper.get('[data-testid="budget-tile-savings"]')
+    // 2 600 received on average over three closed months − 1 850.
     expect(
       text(tile.get('[data-testid="budget-month-value-savings"]').text())
-    ).toBe('615 € par mois prévus')
+    ).toBe('750 € par mois prévus')
     const badge = tile.get('[data-testid="budget-badge-savings"]')
-    expect(text(badge.text())).toBe('+115 € vs 500 € décidés')
+    expect(text(badge.text())).toBe('+250 € vs 500 € décidés')
     expect(badge.attributes('data-tone')).toBe('under')
+    expect(text(tile.get('[data-testid="budget-savings-basis"]').text())).toBe(
+      'sur les revenus moyens de 3 mois clos (2 600 €)'
+    )
     // (2 600 − 5 380 / 3) ≈ 807 over the three closed months.
     expect(text(tile.get('[data-testid="budget-detail-savings"]').text())).toBe(
       '807 €/mois réalisés sur 3 mois clos'
@@ -259,13 +263,33 @@ describe('BudgetMonthBand', () => {
     expect(wrapper.get('[data-testid="budget-detail-savings"]').text()).toBe(
       'pas encore de mois clos'
     )
+    // No closed month: the reference income typed at creation, said so.
+    expect(
+      text(wrapper.get('[data-testid="budget-month-value-savings"]').text())
+    ).toBe('615 € par mois prévus')
+    expect(
+      text(wrapper.get('[data-testid="budget-savings-basis"]').text())
+    ).toBe('sur les revenus de référence saisis (2 465 €)')
   })
 
-  it('points to the edit mode without a reference income', async () => {
+  it('points to the edit mode with neither a closed month nor a reference income', async () => {
     const wrapper = mountBand(
       budgetMonthReading(
-        input({ plan: { ...input().plan, referenceIncome: null } })
-      )
+        input({
+          plan: { ...input().plan, referenceIncome: null },
+          months: ['2026-10'],
+          completeMonthsCount: 0,
+          categories: [
+            {
+              categoryId: 'food',
+              categoryName: 'Alimentation',
+              amounts: [867],
+            },
+          ],
+          income: [0],
+        })
+      ),
+      { completeMonthsCount: 0, monthOptions: OPTIONS.slice(3) }
     )
     const tile = wrapper.get('[data-testid="budget-tile-savings"]')
     expect(tile.text()).toContain('Revenus de référence non renseignés')

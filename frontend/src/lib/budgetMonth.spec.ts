@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   budgetMonthReading,
   budgetReviewReading,
+  savingsIncomeBase,
   type BudgetMonthInput,
 } from './budgetMonth'
 
@@ -128,38 +129,77 @@ describe('budgetMonthReading', () => {
     expect(real.envelopesOver.map(e => e.categoryId)).toEqual(['bars'])
   })
 
-  it('says the planned savings against the decided ones', () => {
+  it('plans the savings on the income of the complete months', () => {
     const r = budgetMonthReading(input())
-    // 2 465 − 1 850 = 615, 115 above the 500 decided: teal.
-    expect(r.savingsPlanned).toBe(615)
+    // 2 600 received on average over July → September, − 1 850 = 750,
+    // 250 above the 500 decided: teal. The 2 465 typed at creation give
+    // way to the income actually received (Richard, 2026-10-24).
+    expect(r.savingsBase).toEqual({ source: 'actual', amount: 2600, months: 3 })
+    expect(r.savingsPlanned).toBe(750)
     expect(r.savingsDecided).toBe(500)
-    expect(r.savingsGap).toEqual({ tone: 'under', amount: 115 })
+    expect(r.savingsGap).toEqual({ tone: 'under', amount: 250 })
     // Over July → September: 2 600 − 5 380 / 3.
     expect(r.savingsActual).toBeCloseTo(2600 - 5380 / 3, 6)
     expect(r.savingsActualMonths).toBe(3)
   })
 
-  it('turns amber when the plan saves less than decided', () => {
+  it('leaves the running month’s income out of the base', () => {
+    const r = budgetMonthReading(input({ income: [2400, 2600, 2800, 9000] }))
+    expect(r.savingsBase).toEqual({ source: 'actual', amount: 2600, months: 3 })
+    expect(r.savingsPlanned).toBe(750)
+  })
+
+  it('falls back on the reference income before any month is complete', () => {
     const r = budgetMonthReading(
       input({
-        plan: { ...input().plan, referenceIncome: 2200, savingsTarget: 500 },
+        months: ['2026-10'],
+        completeMonthsCount: 0,
+        categories: [
+          { categoryId: 'food', categoryName: 'Alimentation', amounts: [867] },
+        ],
+        income: [1200],
       })
     )
+    // 2 465 − 1 850 = 615, 115 above the 500 decided.
+    expect(r.savingsBase).toEqual({
+      source: 'reference',
+      amount: 2465,
+      months: 0,
+    })
+    expect(r.savingsPlanned).toBe(615)
+    expect(r.savingsGap).toEqual({ tone: 'under', amount: 115 })
+  })
+
+  it('turns amber when the plan saves less than decided', () => {
+    const r = budgetMonthReading(input({ income: [2200, 2200, 2200, 0] }))
     expect(r.savingsPlanned).toBe(350)
     expect(r.savingsGap).toEqual({ tone: 'over', amount: -150 })
   })
 
-  it('has no planned savings without a reference income', () => {
+  it('still plans the savings on the real income without a reference income', () => {
     const r = budgetMonthReading(
       input({
         plan: { ...input().plan, referenceIncome: null, savingsTarget: null },
       })
     )
-    expect(r.savingsPlanned).toBeNull()
+    expect(r.savingsPlanned).toBe(750)
     expect(r.savingsDecided).toBeNull()
     expect(r.savingsGap).toBeNull()
-    // What was saved is still read off the months.
     expect(r.savingsActual).not.toBeNull()
+  })
+
+  it('has no planned savings with neither a complete month nor a reference income', () => {
+    const r = budgetMonthReading(
+      input({
+        plan: { ...input().plan, referenceIncome: null, savingsTarget: null },
+        months: ['2026-10'],
+        completeMonthsCount: 0,
+        income: [0],
+      })
+    )
+    expect(r.savingsBase).toBeNull()
+    expect(r.savingsPlanned).toBeNull()
+    expect(r.savingsGap).toBeNull()
   })
 
   it('has no gap without a decided target', () => {
@@ -168,7 +208,7 @@ describe('budgetMonthReading', () => {
     const r = budgetMonthReading(
       input({ plan: { entries, referenceIncome: referenceIncome ?? null } })
     )
-    expect(r.savingsPlanned).toBe(615)
+    expect(r.savingsPlanned).toBe(750)
     expect(r.savingsGap).toBeNull()
   })
 
@@ -245,7 +285,9 @@ describe('budgetMonthReading', () => {
     expect(r.remaining).toBeNull()
     expect(r.spentGap).toBeNull()
     expect(r.envelope).toBe(1850)
+    // No month complete: the reference income.
     expect(r.savingsPlanned).toBe(615)
+    expect(r.savingsBase?.source).toBe('reference')
     expect(r.envelopesOver).toEqual([])
   })
 })
@@ -345,5 +387,22 @@ describe('budgetReviewReading', () => {
     expect(r.spentTotal).toBeNull()
     expect(r.savingsRealized).toBeNull()
     expect(r.savingsRealizedGap).toBeNull()
+  })
+})
+
+describe('savingsIncomeBase', () => {
+  it('averages the complete months, else takes the reference income', () => {
+    expect(savingsIncomeBase(2465, [2400, 2800])).toEqual({
+      source: 'actual',
+      amount: 2600,
+      months: 2,
+    })
+    expect(savingsIncomeBase(2465, [])).toEqual({
+      source: 'reference',
+      amount: 2465,
+      months: 0,
+    })
+    expect(savingsIncomeBase(null, [])).toBeNull()
+    expect(savingsIncomeBase(undefined, [])).toBeNull()
   })
 })

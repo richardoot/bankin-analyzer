@@ -25,6 +25,8 @@ function mountBand(props: Partial<Props> = {}) {
       savedTotal: 1850,
       delta: -30,
       dirtyCount: 2,
+      // No closed month yet: the savings read the reference income.
+      completeMonthsIncome: [],
       savingsTarget: 500,
       comparisonExpenseAvg: 1853,
       comparisonLabel: 'janv. → juin 2026',
@@ -120,6 +122,36 @@ describe('BudgetPlanningBand', () => {
     expect(
       text(w.get('[data-testid="budget-detail-savings-planned"]').text())
     ).toBe('réserve projets 145 € × 6 mois = 870 €')
+    expect(w.get('[data-testid="budget-savings-planned-basis"]').text()).toBe(
+      'sur les revenus de référence saisis'
+    )
+  })
+
+  it('plans the savings on the closed months’ income once there is one', () => {
+    // 2 400 and 2 800 received: 2 600 on average, not the 2 465 typed.
+    const w = mountBand({ completeMonthsIncome: [2400, 2800] })
+    expect(
+      text(w.get('[data-testid="budget-planning-value-savings"]').text())
+    ).toBe('780 € par mois')
+    expect(
+      text(w.get('[data-testid="budget-badge-savings-planned"]').text())
+    ).toBe('+280 € vs 500 € décidés')
+    // The reserve line on the same income: (2 600 − 500 − 1 820) × 6.
+    expect(
+      text(w.get('[data-testid="budget-detail-savings-planned"]').text())
+    ).toBe('réserve projets 280 € × 6 mois = 1 680 €')
+    expect(
+      text(w.get('[data-testid="budget-savings-planned-basis"]').text())
+    ).toBe(
+      'sur les revenus moyens de 2 mois clos (2 600 €), pas les revenus de référence'
+    )
+    // The field keeps the reference income as typed.
+    expect(
+      (
+        w.get('[data-testid="budget-reference-income-input"]')
+          .element as HTMLInputElement
+      ).value
+    ).toBe('2465')
   })
 
   it('says a plan past its income in amber', () => {

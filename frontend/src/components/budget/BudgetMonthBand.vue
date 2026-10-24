@@ -191,11 +191,19 @@
       r.savingsActual === null
         ? 'pas encore de mois clos'
         : `${euros(r.savingsActual)}/mois réalisés sur ${r.savingsActualMonths} mois clos`
+    // Which income the savings are drawn from: the real one once a month
+    // is complete, the one typed at creation until then.
+    const base = r.savingsBase
+    const basis =
+      base?.source === 'actual'
+        ? `sur les revenus moyens de ${base.months} mois clos (${euros(base.amount)})`
+        : `sur les revenus de référence saisis (${euros(base?.amount ?? 0)})`
     return {
       value: r.savingsPlanned,
       negative: r.savingsPlanned < 0,
       badge,
       detail,
+      basis,
     }
   })
 
@@ -338,7 +346,8 @@
         <p :class="DETAIL">Enveloppe du mois − dépensé</p>
       </article>
 
-      <!-- The savings the plan makes: reference income − envelope. -->
+      <!-- The savings the plan makes: the income of the complete months
+           (the reference income before any) − envelope. -->
       <article :class="TILE" data-testid="budget-tile-savings">
         <h3 :class="TILE_TITLE">Épargne</h3>
         <template v-if="savingsTile">
@@ -356,6 +365,9 @@
               data-testid="budget-badge-savings"
               >{{ savingsTile.badge.text }}</span
             >
+          </p>
+          <p :class="DETAIL" data-testid="budget-savings-basis">
+            {{ savingsTile.basis }}
           </p>
           <p :class="DETAIL" data-testid="budget-detail-savings">
             {{ savingsTile.detail }}
