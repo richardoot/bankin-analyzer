@@ -30,6 +30,28 @@ export const BUDGET_NEW_ROUTE: RouteLocationRaw = {
 export const budgetRowAnchor = (categoryId: string): string =>
   `budget-row-${categoryId}`
 export const BUDGET_PROJECTS_ANCHOR = 'budget-projects'
+/** The title of « Les enveloppes », the list's anchor. */
+export const BUDGET_ENVELOPES_ANCHOR = 'budget-envelopes-title'
+
+/** How many envelopes the finished plan's line names before « et N autres ». */
+const ENVELOPES_NAMED = 3
+
+const COUNT_WORDS = [
+  'Zéro',
+  'Une',
+  'Deux',
+  'Trois',
+  'Quatre',
+  'Cinq',
+  'Six',
+  'Sept',
+  'Huit',
+  'Neuf',
+  'Dix',
+]
+
+/** « Trois », as the sentence opens; the digits past ten. */
+const countWord = (count: number): string => COUNT_WORDS[count] ?? String(count)
 
 /** A category that spends over the plan with no envelope to hold it. */
 export interface BudgetCategoryWithoutEnvelope {
@@ -131,13 +153,50 @@ export function categoriesWithoutEnvelope(input: {
  * no envelope, the plan ending (or none running), the plan that does not
  * fit in the reference income. Empty when nothing is to do: the card then
  * renders nothing.
+ *
+ * A finished plan (lot 6) is read as a review: the next plan comes first,
+ * then one line for the envelopes it spent past on average — `reading`
+ * must then be the plan's average, whichever month the band reads — that
+ * scrolls to the list rather than to each row.
  */
 export function budgetTodoItems(input: BudgetTodoInput): TodoItem[] {
   const { plan, status, reading, projects } = input
   const items: TodoItem[] = []
+  const finished = status === 'past'
+
+  if (finished) {
+    // 4, first on a finished plan: what it asks for is the next one.
+    if (!input.hasCurrentPlan) {
+      items.push(
+        item(
+          'no-current-plan',
+          'Aucun plan en cours : créer le suivant',
+          BUDGET_NEW_ROUTE
+        )
+      )
+    }
+    // 1, as one line: the envelopes spent past on average over the plan.
+    const over = reading?.envelopesOver ?? []
+    if (over.length > 0) {
+      const count = over.length
+      const names = over.map(o => o.categoryName)
+      const shown =
+        names.length > ENVELOPES_NAMED
+          ? `${names.slice(0, ENVELOPES_NAMED).join(', ')} et ${names.length - ENVELOPES_NAMED} autres`
+          : names.join(', ')
+      items.push(
+        item(
+          'envelopes-over-average',
+          `${countWord(count)} ${count > 1 ? 'enveloppes dépassées' : 'enveloppe dépassée'} en moyenne : ${shown}`,
+          { hash: `#${BUDGET_ENVELOPES_ANCHOR}` },
+          over.reduce((total, o) => total + o.overBy, 0)
+        )
+      )
+    }
+  }
 
   // 1. Each envelope the month read spends past, the largest overrun first.
-  for (const over of reading?.envelopesOver ?? []) {
+  for (const over of finished ? [] : (reading?.envelopesOver ?? [])) {
     items.push(
       item(
         `envelope-${over.categoryId}`,
@@ -186,14 +245,6 @@ export function budgetTodoItems(input: BudgetTodoInput): TodoItem[] {
       item(
         'plan-ending',
         `Le plan se termine le ${dayMonth(plan.endDate)} : préparer le suivant`,
-        BUDGET_NEW_ROUTE
-      )
-    )
-  } else if (status === 'past' && !input.hasCurrentPlan) {
-    items.push(
-      item(
-        'no-current-plan',
-        'Aucun plan en cours : créer le suivant',
         BUDGET_NEW_ROUTE
       )
     )

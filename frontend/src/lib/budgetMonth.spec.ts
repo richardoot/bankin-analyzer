@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { budgetMonthReading, type BudgetMonthInput } from './budgetMonth'
+import {
+  budgetMonthReading,
+  budgetReviewReading,
+  type BudgetMonthInput,
+} from './budgetMonth'
 
 /**
  * A plan of 1 850 € a month on two envelopes, read on 23 October: July,
@@ -243,5 +247,103 @@ describe('budgetMonthReading', () => {
     expect(r.envelope).toBe(1850)
     expect(r.savingsPlanned).toBe(615)
     expect(r.envelopesOver).toEqual([])
+  })
+})
+
+describe('budgetReviewReading', () => {
+  /**
+   * The same plan, finished: January → March 2026, all three months
+   * complete. Alimentation spends past its envelope on average, Restaurants
+   * et bars holds.
+   */
+  function finished(
+    overrides: Partial<BudgetMonthInput> = {}
+  ): BudgetMonthInput {
+    return input({
+      months: ['2026-01', '2026-02', '2026-03'],
+      completeMonthsCount: 3,
+      selectedMonth: null,
+      progress: null,
+      categories: [
+        {
+          categoryId: 'food',
+          categoryName: 'Alimentation',
+          amounts: [1600, 1800, 1900],
+        },
+        {
+          categoryId: 'bars',
+          categoryName: 'Restaurants et bars',
+          amounts: [100, 140, 150],
+        },
+      ],
+      income: [2600, 2600, 2600],
+      ...overrides,
+    })
+  }
+
+  it('reads the whole plan by default: its average and its totals', () => {
+    const r = budgetReviewReading(finished())
+    expect(r.kind).toBe('average')
+    expect(r.monthsCount).toBe(3)
+    expect(r.spent).toBeCloseTo(5690 / 3)
+    expect(r.spentTotal).toBeCloseTo(5690)
+    expect(r.envelopeTotal).toBe(5550)
+    expect(r.spentGap?.tone).toBe('neutral') // +2.5 %
+    expect(r.spentSeries).toEqual([1700, 1940, 2050])
+  })
+
+  it('says the savings actually made against the decided ones', () => {
+    const r = budgetReviewReading(finished())
+    expect(r.incomeRead).toBe(2600)
+    expect(r.savingsRealized).toBeCloseTo(2600 - 5690 / 3)
+    expect(r.savingsRealizedTotal).toBeCloseTo(7800 - 5690)
+    // 703 € saved a month against 500 € decided: more is better, teal.
+    expect(r.savingsRealizedGap?.tone).toBe('under')
+    expect(r.savingsRealizedGap?.amount).toBeCloseTo(2600 - 5690 / 3 - 500)
+
+    const short = budgetReviewReading(finished({ income: [2200, 2200, 2200] }))
+    expect(short.savingsRealizedGap?.tone).toBe('over')
+
+    const undecided = budgetReviewReading(
+      finished({
+        plan: { ...input().plan, savingsTarget: null },
+      })
+    )
+    expect(undecided.savingsRealizedGap).toBeNull()
+  })
+
+  it('counts the envelopes held on average', () => {
+    const r = budgetReviewReading(finished())
+    expect(r.envelopesCount).toBe(2)
+    expect(r.envelopesOver.map(e => e.categoryId)).toEqual(['food'])
+    expect(r.envelopesHeld).toBe(1)
+  })
+
+  it('reads one month of the plan when one is chosen', () => {
+    const r = budgetReviewReading(finished({ selectedMonth: '2026-01' }))
+    expect(r.kind).toBe('month')
+    expect(r.month).toBe('2026-01')
+    expect(r.isRunning).toBe(false)
+    expect(r.monthsCount).toBe(1)
+    expect(r.spent).toBe(1700)
+    expect(r.spentTotal).toBe(1700)
+    expect(r.envelopeTotal).toBe(1850)
+    expect(r.savingsRealized).toBe(900)
+    expect(r.envelopesHeld).toBe(2)
+  })
+
+  it('has nothing to total without a complete month', () => {
+    const r = budgetReviewReading(
+      finished({
+        months: [],
+        completeMonthsCount: 0,
+        categories: [],
+        income: [],
+      })
+    )
+    expect(r.monthsCount).toBe(0)
+    expect(r.spentTotal).toBeNull()
+    expect(r.savingsRealized).toBeNull()
+    expect(r.savingsRealizedGap).toBeNull()
   })
 })

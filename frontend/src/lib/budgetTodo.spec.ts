@@ -203,11 +203,97 @@ describe('budgetTodoItems', () => {
         },
       })
     )
+    // A finished plan reads as a review: the next plan first, then the
+    // envelopes over on average in one line.
     expect(unfunded.map(i => i.key)).toEqual([
-      'envelope-cat-rest',
       'no-current-plan',
+      'envelopes-over-average',
       'plan-unfunded',
     ])
+  })
+
+  describe('a finished plan', () => {
+    const past = {
+      status: 'past' as const,
+      currentMonth: '2026-10',
+      plan: { endDate: '2026-06-30', projectReserve: 900 },
+    }
+
+    it('says the envelopes over on average in one line, to the list', () => {
+      const items = budgetTodoItems(
+        input({
+          ...past,
+          reading: {
+            envelopesOver: [
+              over('cat-food', 'Alimentation', 53),
+              over('cat-fun', 'Loisirs', 50),
+              over('cat-shop', 'Shopping', 45),
+            ],
+          },
+        })
+      )
+      expect(items.map(i => [i.key, i.text, i.to, i.amount, i.testId])).toEqual(
+        [
+          [
+            'envelopes-over-average',
+            'Trois enveloppes dépassées en moyenne : Alimentation, Loisirs, Shopping',
+            { hash: '#budget-envelopes-title' },
+            148,
+            'todo-item-envelopes-over-average',
+          ],
+        ]
+      )
+    })
+
+    it('names three envelopes, then counts the others', () => {
+      const items = budgetTodoItems(
+        input({
+          ...past,
+          reading: {
+            envelopesOver: [
+              over('a', 'A', 5),
+              over('b', 'B', 4),
+              over('c', 'C', 3),
+              over('d', 'D', 2),
+              over('e', 'E', 1),
+            ],
+          },
+        })
+      )
+      expect(items.map(i => i.text)).toEqual([
+        'Cinq enveloppes dépassées en moyenne : A, B, C et 2 autres',
+      ])
+    })
+
+    it('says a single envelope in the singular', () => {
+      const items = budgetTodoItems(
+        input({
+          ...past,
+          reading: { envelopesOver: [over('cat-food', 'Alimentation', 53)] },
+        })
+      )
+      expect(items.map(i => i.text)).toEqual([
+        'Une enveloppe dépassée en moyenne : Alimentation',
+      ])
+    })
+
+    it('asks for the next plan first when none runs', () => {
+      const items = budgetTodoItems(
+        input({
+          ...past,
+          hasCurrentPlan: false,
+          reading: { envelopesOver: [over('cat-food', 'Alimentation', 53)] },
+        })
+      )
+      expect(items.map(i => [i.key, i.to])).toEqual([
+        ['no-current-plan', BUDGET_NEW_ROUTE],
+        ['envelopes-over-average', { hash: '#budget-envelopes-title' }],
+      ])
+    })
+
+    it('says nothing of the envelopes when all held', () => {
+      expect(budgetTodoItems(input({ ...past }))).toEqual([])
+    })
   })
 
   it('reads no envelope over before the plan starts', () => {
