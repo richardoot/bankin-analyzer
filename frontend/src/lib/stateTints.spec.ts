@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { DATA_HUE, STATE_BADGE_CLASSES, STATE_COLORS } from './stateTints'
+import {
+  DATA_HUE,
+  STATE_BADGE_CLASSES,
+  STATE_COLORS,
+  gapOf,
+} from './stateTints'
 
 /**
  * The dashboard's sources, read as text: the rule of the state tints
@@ -27,6 +32,16 @@ describe('the state tints', () => {
       neutral: '#9ca3af',
     })
     expect(DATA_HUE).toBe('#60a5fa')
+  })
+
+  it('reads a gap to a reference in three tones, ±5 % neutral', () => {
+    expect(gapOf(80, 100)).toEqual({ tone: 'under', ratio: -0.2 })
+    expect(gapOf(120, 100)).toEqual({ tone: 'over', ratio: 0.2 })
+    expect(gapOf(104, 100).tone).toBe('neutral')
+    expect(gapOf(96, 100).tone).toBe('neutral')
+    expect(gapOf(105, 100).tone).toBe('neutral')
+    // Nothing to compare with: neutral, no ratio.
+    expect(gapOf(50, 0)).toEqual({ tone: 'neutral', ratio: 0 })
   })
 
   it('reads the dashboard sources it guards', () => {

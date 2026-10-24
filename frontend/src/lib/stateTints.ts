@@ -10,6 +10,8 @@
  * share bars' blue-400.
  */
 
+import { DASHBOARD_THRESHOLDS } from './dashboardThresholds'
+
 /** The three states a badge can say, and nothing else. */
 export type StateTone = 'under' | 'over' | 'neutral'
 
@@ -29,3 +31,22 @@ export const STATE_COLORS: Readonly<Record<StateTone, string>> = {
 
 /** The one data hue of the dashboard: the share bars' blue-400. */
 export const DATA_HUE = '#60a5fa'
+
+/**
+ * A gap to a reference, as a share of it: `under` below it, `over` above
+ * it, `neutral` within ±5 % (`DASHBOARD_THRESHOLDS.neutralGap`) or when
+ * there is no reference to compare with. Shared by « Ce mois-ci » on the
+ * dashboard (spending against the habit) and on the budget (spending
+ * against the envelope to date).
+ */
+export function gapOf(
+  value: number,
+  reference: number
+): { tone: StateTone; ratio: number } {
+  if (reference <= 0) return { tone: 'neutral', ratio: 0 }
+  const ratio = (value - reference) / reference
+  if (Math.abs(ratio) <= DASHBOARD_THRESHOLDS.neutralGap) {
+    return { tone: 'neutral', ratio }
+  }
+  return { tone: ratio < 0 ? 'under' : 'over', ratio }
+}

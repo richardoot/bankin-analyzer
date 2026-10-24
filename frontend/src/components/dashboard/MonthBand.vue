@@ -7,6 +7,7 @@
     DATA_HUE,
     STATE_BADGE_CLASSES,
     STATE_COLORS,
+    gapOf,
     type StateTone,
   } from '@/lib/stateTints'
   import { formatCompactCurrency, formatMonth } from '@/lib/formatters'
@@ -67,19 +68,6 @@
     })
     return `Ce mois-ci · ${name}, au ${dayLabel(props.data.asOfDay)}`
   })
-
-  /** A gap to a reference, as a share of it, within ±5 % neutral. */
-  function gapOf(
-    value: number,
-    reference: number
-  ): { tone: StateTone; ratio: number } {
-    if (reference <= 0) return { tone: 'neutral', ratio: 0 }
-    const ratio = (value - reference) / reference
-    if (Math.abs(ratio) <= DASHBOARD_THRESHOLDS.neutralGap) {
-      return { tone: 'neutral', ratio }
-    }
-    return { tone: ratio < 0 ? 'under' : 'over', ratio }
-  }
 
   const NO_HABIT = "pas encore d'habitude"
 
